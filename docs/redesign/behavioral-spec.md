@@ -546,6 +546,36 @@ closure, vector/register function-signature rendering in the project pipeline,
 real AVX/NEON build verification, or runtime dependencies on `frozen` or
 `tslgenold`.
 
+### M248 Generic Selected Primitive Project Intrinsic Rendering
+
+Milestone 248 connects the selected implementation render context from M247 to
+the generic selected primitive project pipeline. The pipeline can render the
+real `tsldata/primitives/arithmetic/fundamental.tsl` `add` implementation for
+selector `("avx2", "f?")`, selected extension `avx2`, selected type `f32`,
+and requested profile `avx2` for both C++ and Rust through the normal generated
+project artifact composition path.
+
+For non-scalar selected entries, result and parameter type spellings are
+translated through M245 `CurrentVector(extension, type_tag)` and a supplied
+`ExtensionCatalog`. The pipeline does not keep local vector register spelling
+tables. C++ profile includes may include extension-owned headers from the same
+catalog metadata. Scalar selected entries continue to use the accepted scalar
+type identity path.
+
+Exact `emit_return(PAYLOAD);` bodies remain the only accepted project-pipeline
+body envelope. The payload may be a sequence of raw fragments and nested TSIL
+keyword regions. If the payload contains backend intrinsic request islands, the
+pipeline uses the existing intrinsic discovery/lowering/handoff path and the
+M247 bridge with selected backend, extension, type tag, and extension catalog
+context. This is not a pairwise `emit_return + intrin_compose` handler; nested
+keyword regions are consumed through the accepted token/handoff boundaries.
+
+M248 does not add new lowering semantics, primitive-call expansion, dependency
+closure, target-language expression parsing, fixture-specific sibling
+pipelines, Python-owned C++/Rust primitive bodies, template-side type or
+intrinsic decisions, real vector build verification, or runtime dependencies on
+`frozen` or `tslgenold`.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

@@ -5,17 +5,28 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from tslgen.analysis.selection import SelectedImplementation, Target
 from tslgen.backends.type_spelling import translate_backend_type_spelling_request
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.backend_metadata import BackendMetadataCatalog
-from tslgen.domain.catalog import TypeTag
+from tslgen.domain.catalog import (
+    ExtensionCatalog,
+    ExtensionName,
+    Implementation,
+    ImplementationBody,
+    Primitive,
+    TypeTag,
+)
 from tslgen.domain.generated_project import (
     BackendProfileRenderModel,
     BackendProjectRenderModel,
     GeneratedProfileSet,
     GeneratedProjectRenderModel,
 )
-from tslgen.domain.machine_profiles import MachineFeatureProfileCatalog
+from tslgen.domain.machine_profiles import (
+    FeatureFlagNormalizationCatalog,
+    MachineFeatureProfileCatalog,
+)
 from tslgen.domain.signatures import (
     PrimitiveSignature,
     parse_primitive_signature,
@@ -23,21 +34,30 @@ from tslgen.domain.signatures import (
 )
 from tslgen.io.artifacts import ArtifactSet
 from tslgen.io.sources import SourceDocument
-from tslgen.lowering import BackendTypeSpellingRequest, LoweredScalarTypeIdentity
+from tslgen.lowering import (
+    BackendTypeSpellingRequest,
+    CurrentVector,
+    LoweredScalarTypeIdentity,
+    Lowerer,
+    discover_backend_intrinsic_requests_in_text,
+)
 from tslgen.lowering.source_body_fragments import (
     KeywordRegionFragment,
     RawSourceFragment,
+    SourceBodyFragmentSequence,
     lower_source_body_fragments,
 )
 from tslgen.pipeline.generated_profiles import select_generated_profiles
 from tslgen.rendering import (
     CppPrimitiveProfileInclude,
+    IntrinsicBodyTokenProfileRenderContext,
     PrimitiveArtifactLogicalPath,
     PrimitiveBackendId,
     PrimitiveFunctionBodyText,
     PrimitiveFunctionNameText,
     PrimitiveFunctionParameterListText,
     PrimitiveFunctionResultTypeText,
+    PrimitiveFunctionShapeKey,
     PrimitiveFunctionShapeRenderContext,
     PrimitiveProfileArtifactRenderContext,
     PrimitiveProfileName,
@@ -47,10 +67,12 @@ from tslgen.rendering import (
     PrimitiveRenderPlanSource,
     PrimitiveRenderSortKey,
     RenderedPrimitiveDefinitionText,
+    SelectedImplementationRenderContext,
     adapt_primitive_render_plans,
     build_generated_project_render_model,
     compose_generated_primitive_project_artifacts,
     render_generated_project_skeleton,
+    render_intrinsic_body_token_profile_artifact,
     render_primitive_function_shape,
     render_primitive_profile_artifacts,
     select_primitive_function_shape,
@@ -70,8 +92,10 @@ class SelectedPrimitiveBodyRenderSelection:
     primitive: ParsedPrimitiveDeclaration
     body_envelope: ParsedImplementationBodyEnvelope
     signature: PrimitiveSignature
+    extension: ExtensionName
     type_tag: TypeTag
     payload_text: str
+    payload_source: SourceLocation
     function_name: str
 
 
@@ -82,6 +106,7 @@ class SelectedPrimitiveBodyRenderEntry:
     type_tag: str
     function_name: str
     parameters: tuple[str, ...]
+    extension: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,11 +120,6 @@ class SelectedPrimitiveProjectResult:
     render_plans: tuple[PrimitiveRenderPlan, ...] = ()
 
 
-_SUPPORTED_PROFILE = "scalar"
-_CPP_SCALAR_PROFILE_PATH = "cpp/include/profiles/scalar.hpp"
-_RUST_SCALAR_PROFILE_PATH = "rust/src/profiles/scalar.rs"
-
-
 def build_primitive_project_artifacts_from_selected_body(
     *,
     supplementary_root: Path,
@@ -108,6 +128,8 @@ def build_primitive_project_artifacts_from_selected_body(
     backend_metadata: BackendMetadataCatalog | None,
     selected_entry: SelectedPrimitiveBodyRenderEntry,
     requested_profiles: tuple[str, ...] | None = None,
+    extension_catalog: ExtensionCatalog | None = None,
+    flag_catalog: FeatureFlagNormalizationCatalog | None = None,
 ) -> SelectedPrimitiveProjectResult:
     """Build generated artifacts from one selected real primitive body."""
 
@@ -118,6 +140,8 @@ def build_primitive_project_artifacts_from_selected_body(
         backend_metadata=backend_metadata,
         selected_entries=(selected_entry,),
         requested_profiles=requested_profiles,
+        extension_catalog=extension_catalog,
+        flag_catalog=flag_catalog,
     )
 
 
@@ -129,6 +153,8 @@ def build_primitive_project_artifacts_from_selected_bodies(
     backend_metadata: BackendMetadataCatalog | None,
     selected_entries: tuple[SelectedPrimitiveBodyRenderEntry, ...],
     requested_profiles: tuple[str, ...] | None = None,
+    extension_catalog: ExtensionCatalog | None = None,
+    flag_catalog: FeatureFlagNormalizationCatalog | None = None,
 ) -> SelectedPrimitiveProjectResult:
     """Build artifacts from explicit selected real primitive bodies."""
 
@@ -141,7 +167,10 @@ def build_primitive_project_artifacts_from_selected_bodies(
     if diagnostics or profile_selection.profile_set is None:
         return _result(diagnostics)
 
-    model_result = build_generated_project_render_model(profile_selection.profile_set)
+    model_result = build_generated_project_render_model(
+        profile_selection.profile_set,
+        flag_catalog=flag_catalog,
+    )
     diagnostics.extend(model_result.diagnostics)
     if diagnostics or model_result.model is None:
         return _result(diagnostics)
@@ -166,6 +195,7 @@ def build_primitive_project_artifacts_from_selected_bodies(
         model,
         supplementary_root=supplementary_root,
         backend_metadata=backend_metadata,
+        extension_catalog=extension_catalog,
     )
     diagnostics.extend(plan_diagnostics)
     if diagnostics:
@@ -191,6 +221,8 @@ def build_primitive_project_artifacts_from_selected_bodies(
     profile_contexts, profile_diagnostics = _profile_artifact_contexts(
         model,
         plan_result.plans,
+        selections,
+        extension_catalog=extension_catalog,
     )
     diagnostics.extend(profile_diagnostics)
     if diagnostics:
@@ -313,13 +345,16 @@ def _select_primitive_body_render_entry(
     if body_diagnostics or payload_text is None:
         return None, body_diagnostics
 
+    extension = ExtensionName(entry.extension or entry.selector_path[0])
     return (
         SelectedPrimitiveBodyRenderSelection(
             primitive=primitive,
             body_envelope=envelopes[0],
             signature=signature_result.signature,
+            extension=extension,
             type_tag=TypeTag(entry.type_tag),
             payload_text=payload_text,
+            payload_source=envelopes[0].payload_source.start,
             function_name=entry.function_name,
         ),
         (),
@@ -356,16 +391,21 @@ def _exact_single_emit_return_payload(
     return_fragment = keyword_fragments[0]
     if return_fragment.payload_fragments is None:
         return None, (_unsupported_body_diagnostic(envelope),)
-    if return_fragment.payload_fragments.keyword_fragments:
-        return None, (_unsupported_payload_diagnostic(envelope),)
 
-    payload_text = "".join(
-        fragment.span.text
-        for fragment in return_fragment.payload_fragments.raw_fragments
-    )
+    payload_text = _fragment_sequence_text(return_fragment.payload_fragments)
     if not payload_text.strip():
         return None, (_unsupported_payload_diagnostic(envelope),)
     return payload_text.strip(), ()
+
+
+def _fragment_sequence_text(sequence: SourceBodyFragmentSequence) -> str:
+    parts: list[str] = []
+    for fragment in sequence.fragments:
+        if isinstance(fragment, RawSourceFragment):
+            parts.append(fragment.span.text)
+        else:
+            parts.append(fragment.source_region.full_span.text)
+    return "".join(parts)
 
 
 def _duplicate_selection_diagnostics(
@@ -414,6 +454,7 @@ def _render_plans_from_selections(
     *,
     supplementary_root: Path,
     backend_metadata: BackendMetadataCatalog | None,
+    extension_catalog: ExtensionCatalog | None,
 ) -> tuple[tuple[PrimitiveRenderPlan, ...], tuple[Diagnostic, ...]]:
     plans: list[PrimitiveRenderPlan] = []
     diagnostics: list[Diagnostic] = []
@@ -424,6 +465,7 @@ def _render_plans_from_selections(
             backend_id,
             supplementary_root=supplementary_root,
             backend_metadata=backend_metadata,
+            extension_catalog=extension_catalog,
         )
         diagnostics.extend(plan_diagnostics)
         if plan is not None:
@@ -438,6 +480,7 @@ def _render_plan_for_backend(
     *,
     supplementary_root: Path,
     backend_metadata: BackendMetadataCatalog | None,
+    extension_catalog: ExtensionCatalog | None,
 ) -> tuple[PrimitiveRenderPlan | None, tuple[Diagnostic, ...]]:
     profile = _profile_for_backend(model, backend_id)
     if profile is None:
@@ -449,8 +492,10 @@ def _render_plan_for_backend(
         definition, definition_diagnostics = _render_function_definition(
             selection,
             backend_id,
+            profile,
             supplementary_root=supplementary_root,
             backend_metadata=backend_metadata,
+            extension_catalog=extension_catalog,
         )
         diagnostics.extend(definition_diagnostics)
         if definition is None:
@@ -467,23 +512,12 @@ def _render_plan_for_backend(
     if diagnostics:
         return None, _sort_diagnostics(diagnostics)
 
-    if backend_id == "cpp":
+    if backend_id in {"cpp", "rust"}:
         return (
             PrimitiveRenderPlan(
-                backend_id=PrimitiveBackendId("cpp"),
-                profile_name=PrimitiveProfileName(_SUPPORTED_PROFILE),
-                logical_path=PrimitiveArtifactLogicalPath(_CPP_SCALAR_PROFILE_PATH),
-                primitives=tuple(records),
-                source=_plan_source(selections),
-            ),
-            (),
-        )
-    if backend_id == "rust":
-        return (
-            PrimitiveRenderPlan(
-                backend_id=PrimitiveBackendId("rust"),
-                profile_name=PrimitiveProfileName(_SUPPORTED_PROFILE),
-                logical_path=PrimitiveArtifactLogicalPath(_RUST_SCALAR_PROFILE_PATH),
+                backend_id=PrimitiveBackendId(backend_id),
+                profile_name=PrimitiveProfileName(str(profile.profile_name)),
+                logical_path=_profile_logical_path(backend_id, profile),
                 primitives=tuple(records),
                 source=_plan_source(selections),
             ),
@@ -495,9 +529,11 @@ def _render_plan_for_backend(
 def _render_function_definition(
     selection: SelectedPrimitiveBodyRenderSelection,
     backend_id: str,
+    profile: BackendProfileRenderModel,
     *,
     supplementary_root: Path,
     backend_metadata: BackendMetadataCatalog | None,
+    extension_catalog: ExtensionCatalog | None,
 ) -> tuple[RenderedPrimitiveDefinitionText | None, tuple[Diagnostic, ...]]:
     shape_selection = select_primitive_function_shape(
         selection.signature,
@@ -506,7 +542,12 @@ def _render_function_definition(
     if shape_selection.diagnostics or shape_selection.shape_key is None:
         return None, shape_selection.diagnostics
 
-    spelling = _scalar_type_spelling(selection, backend_id, backend_metadata)
+    spelling = _selected_type_spelling(
+        selection,
+        backend_id,
+        backend_metadata,
+        extension_catalog,
+    )
     if isinstance(spelling, Diagnostic):
         return None, (spelling,)
 
@@ -514,13 +555,126 @@ def _render_function_definition(
     if isinstance(parameters, Diagnostic):
         return None, (parameters,)
 
+    intrinsic_definition = _render_intrinsic_payload_definition(
+        selection,
+        backend_id,
+        profile,
+        spelling,
+        parameters,
+        shape_selection.shape_key,
+        supplementary_root=supplementary_root,
+        extension_catalog=extension_catalog,
+    )
+    if isinstance(intrinsic_definition, tuple):
+        return None, intrinsic_definition
+    if intrinsic_definition is not None:
+        return intrinsic_definition, ()
+
+    return _render_raw_payload_definition(
+        selection,
+        backend_id,
+        spelling,
+        parameters,
+        shape_selection.shape_key,
+        supplementary_root=supplementary_root,
+    )
+
+
+def _selected_type_spelling(
+    selection: SelectedPrimitiveBodyRenderSelection,
+    backend_id: str,
+    backend_metadata: BackendMetadataCatalog | None,
+    extension_catalog: ExtensionCatalog | None,
+) -> str | Diagnostic:
+    value = (
+        LoweredScalarTypeIdentity(selection.type_tag)
+        if str(selection.extension) == "scalar"
+        else CurrentVector(extension=selection.extension, type_tag=selection.type_tag)
+    )
+    request = BackendTypeSpellingRequest(
+        backend=backend_id,
+        value=value,
+        source_text=str(selection.type_tag),
+        source=selection.primitive.header_source.start,
+    )
+    result = translate_backend_type_spelling_request(
+        request,
+        backend_metadata,
+        extension_catalog=extension_catalog,
+    )
+    if result.diagnostics or result.spelling is None:
+        return result.diagnostics[0]
+    return str(result.spelling.spelling)
+
+
+def _render_intrinsic_payload_definition(
+    selection: SelectedPrimitiveBodyRenderSelection,
+    backend_id: str,
+    profile: BackendProfileRenderModel,
+    result_type: str,
+    parameters: str,
+    shape_key: PrimitiveFunctionShapeKey,
+    *,
+    supplementary_root: Path,
+    extension_catalog: ExtensionCatalog | None,
+) -> RenderedPrimitiveDefinitionText | tuple[Diagnostic, ...] | None:
+    discovery = discover_backend_intrinsic_requests_in_text(
+        selection.payload_text,
+        selection.payload_source,
+    )
+    if discovery.discovery is None:
+        if _is_no_intrinsic_result(discovery.diagnostics):
+            return None
+        return discovery.diagnostics
+
+    selected = _selected_for_intrinsic_lowering(selection, backend_id)
+    handoff = Lowerer().lower_backend_intrinsic_discovery(
+        selected,
+        discovery.discovery,
+    )
+    if handoff.diagnostics or handoff.handoff is None:
+        return handoff.diagnostics
+
+    render = render_intrinsic_body_token_profile_artifact(
+        supplementary_root,
+        IntrinsicBodyTokenProfileRenderContext(
+            backend_id=PrimitiveBackendId(backend_id),
+            logical_path=_profile_logical_path(backend_id, profile),
+            profile_name=PrimitiveProfileName(str(profile.profile_name)),
+            handoff=handoff.handoff,
+            function_name=PrimitiveFunctionNameText(selection.function_name),
+            result_type=PrimitiveFunctionResultTypeText(result_type),
+            parameters=PrimitiveFunctionParameterListText(parameters),
+            shape_key=shape_key,
+            selected_implementation=SelectedImplementationRenderContext(
+                backend_id=PrimitiveBackendId(backend_id),
+                extension=selection.extension,
+                type_tag=selection.type_tag,
+                extension_catalog=extension_catalog,
+            ),
+        ),
+    )
+    if render.diagnostics or render.definition is None:
+        return render.diagnostics
+    return render.definition
+
+
+def _render_raw_payload_definition(
+    selection: SelectedPrimitiveBodyRenderSelection,
+    backend_id: str,
+    result_type: str,
+    parameters: str,
+    shape_key: PrimitiveFunctionShapeKey,
+    *,
+    supplementary_root: Path,
+) -> tuple[RenderedPrimitiveDefinitionText | None, tuple[Diagnostic, ...]]:
     render = render_primitive_function_shape(
         supplementary_root,
         PrimitiveFunctionShapeRenderContext(
             backend_id=PrimitiveBackendId(backend_id),
-            shape_key=shape_selection.shape_key,
+            shape_key=shape_key,
             function_name=PrimitiveFunctionNameText(selection.function_name),
-            result_type=PrimitiveFunctionResultTypeText(spelling),
+            result_type=PrimitiveFunctionResultTypeText(result_type),
             parameters=PrimitiveFunctionParameterListText(parameters),
             body_text=PrimitiveFunctionBodyText(selection.payload_text),
         ),
@@ -530,21 +684,41 @@ def _render_function_definition(
     return render.definition, ()
 
 
-def _scalar_type_spelling(
+def _selected_for_intrinsic_lowering(
     selection: SelectedPrimitiveBodyRenderSelection,
     backend_id: str,
-    backend_metadata: BackendMetadataCatalog | None,
-) -> str | Diagnostic:
-    request = BackendTypeSpellingRequest(
-        backend=backend_id,
-        value=LoweredScalarTypeIdentity(selection.type_tag),
-        source_text=str(selection.type_tag),
+) -> SelectedImplementation:
+    source = selection.body_envelope.payload_source.start
+    implementation = Implementation(
+        extension=str(selection.extension),
+        type_tag=str(selection.type_tag),
+        body=ImplementationBody(tokens=(), source=source),
+        source=source,
+    )
+    primitive = Primitive(
+        name=selection.primitive.name,
+        signature=selection.primitive.signature,
+        parameters=selection.primitive.parameters,
+        template="selected-project-render",
+        implementations=(implementation,),
         source=selection.primitive.header_source.start,
     )
-    result = translate_backend_type_spelling_request(request, backend_metadata)
-    if result.diagnostics or result.spelling is None:
-        return result.diagnostics[0]
-    return str(result.spelling.spelling)
+    return SelectedImplementation(
+        target=Target(
+            backend=backend_id,
+            primitive_name=selection.primitive.name,
+            extension=str(selection.extension),
+            type_tag=str(selection.type_tag),
+        ),
+        primitive=primitive,
+        implementation=implementation,
+    )
+
+
+def _is_no_intrinsic_result(diagnostics: tuple[Diagnostic, ...]) -> bool:
+    return tuple(diagnostic.code for diagnostic in diagnostics) == (
+        "TSL-LOWER-NO-BACKEND-INTRINSIC",
+    )
 
 
 def _parameter_list(
@@ -578,6 +752,9 @@ def _plan_source(
 def _profile_artifact_contexts(
     model: GeneratedProjectRenderModel,
     plans: tuple[PrimitiveRenderPlan, ...],
+    selections: tuple[SelectedPrimitiveBodyRenderSelection, ...],
+    *,
+    extension_catalog: ExtensionCatalog | None,
 ) -> tuple[tuple[PrimitiveProfileArtifactRenderContext, ...], tuple[Diagnostic, ...]]:
     contexts: list[PrimitiveProfileArtifactRenderContext] = []
     diagnostics: list[Diagnostic] = []
@@ -592,10 +769,10 @@ def _profile_artifact_contexts(
                 logical_path=plan.logical_path,
                 profile_name=plan.profile_name,
                 profile=profile,
-                cpp_includes=(
-                    (CppPrimitiveProfileInclude("cstdint"),)
-                    if plan.backend_id.text == "cpp"
-                    else ()
+                cpp_includes=_cpp_profile_includes(
+                    plan,
+                    selections,
+                    extension_catalog,
                 ),
                 primitive_definitions=tuple(
                     definition
@@ -615,9 +792,38 @@ def _profile_for_backend(
     if project is None:
         return None
     for profile in project.profiles:
-        if str(profile.profile_name) == _SUPPORTED_PROFILE:
+        if str(profile.profile_name) == str(project.default_profile):
             return profile
     return None
+
+
+def _profile_logical_path(
+    backend_id: str,
+    profile: BackendProfileRenderModel,
+) -> PrimitiveArtifactLogicalPath:
+    if backend_id == "cpp":
+        return PrimitiveArtifactLogicalPath(
+            f"cpp/include/profiles/{profile.file_stem}.hpp"
+        )
+    return PrimitiveArtifactLogicalPath(f"rust/src/profiles/{profile.file_stem}.rs")
+
+
+def _cpp_profile_includes(
+    plan: PrimitiveRenderPlan,
+    selections: tuple[SelectedPrimitiveBodyRenderSelection, ...],
+    extension_catalog: ExtensionCatalog | None,
+) -> tuple[CppPrimitiveProfileInclude, ...]:
+    if plan.backend_id.text != "cpp":
+        return ()
+
+    headers = ["cstdint"]
+    if extension_catalog is not None:
+        for extension_name in sorted({str(selection.extension) for selection in selections}):
+            extension = extension_catalog.get(extension_name)
+            if extension is not None:
+                headers.extend(extension.cpp.headers)
+
+    return tuple(CppPrimitiveProfileInclude(header) for header in dict.fromkeys(headers))
 
 
 def _project_for_backend(
@@ -635,15 +841,15 @@ def _unsupported_profile_diagnostics(
     profile_set: GeneratedProfileSet,
 ) -> tuple[Diagnostic, ...]:
     profiles = profile_set.profiles
-    if len(profiles) == 1 and str(profiles[0].name) == _SUPPORTED_PROFILE:
+    if len(profiles) == 1:
         return ()
     return (
         Diagnostic(
             severity="error",
             code="TSL-REAL-SCALAR-EMIT-RETURN-UNSUPPORTED-PROFILE-SET",
             message=(
-                "real scalar emit-return project bridge supports only the "
-                "single scalar generated profile"
+                "selected primitive project bridge currently supports exactly "
+                "one requested generated profile"
             ),
         ),
     )
@@ -727,8 +933,8 @@ def _unsupported_payload_diagnostic(
         severity="error",
         code="TSL-REAL-SCALAR-EMIT-RETURN-UNSUPPORTED-PAYLOAD",
         message=(
-            "real scalar emit-return project bridge currently accepts only "
-            "raw payload text without nested TSIL keyword regions"
+            "selected primitive project bridge requires a non-empty "
+            "`emit_return(...)` payload"
         ),
         location=envelope.payload_source.start,
     )
@@ -739,8 +945,8 @@ def _missing_profile_diagnostic(backend_id: str) -> Diagnostic:
         severity="error",
         code="TSL-REAL-SCALAR-EMIT-RETURN-MISSING-PROFILE",
         message=(
-            f"real scalar emit-return project bridge cannot find scalar "
-            f"profile for backend {backend_id!r}"
+            "selected primitive project bridge cannot find the requested "
+            f"default profile for backend {backend_id!r}"
         ),
     )
 

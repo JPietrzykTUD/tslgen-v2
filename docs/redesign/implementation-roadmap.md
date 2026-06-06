@@ -16507,7 +16507,7 @@ new lowering.
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted after execution-review. Execution-review loop prompt:
 `docs/agent/runs/m248-generic-selected-primitive-project-intrinsic-rendering-execution-review-loop-prompt.md`.
 
 Goal:
@@ -16562,49 +16562,114 @@ find tslgen -type d -name __pycache__ -print
 
 Result:
 
-M221 added `tslgen.backends.type_value_body_tokens`, a focused shared
-substitution boundary for the complete currently eligible backend type/value
-subset. The evidence gate is satisfied for `BackendTypeQueryHandoff` plus
-`BackendTranslatedTypeSpelling` and for `BackendValueQueryHandoff` plus
-`BackendTranslatedValue`: both have typed lowered handoff streams and
-already-rendered backend values carrying backend id, emitted text, request
-provenance, and source provenance.
+M248 connected the M247 context-aware intrinsic body-token bridge to the
+generic selected primitive project pipeline. The pipeline can now render the
+real `tsldata/primitives/arithmetic/fundamental.tsl` `add` implementation for
+selector `("avx2", "f?")`, selected extension `avx2`, selected type `f32`,
+and requested profile `avx2` through the same in-memory artifact path as the
+accepted scalar project slice.
 
-M221 added C++ and Rust wrapper APIs for type query and value query body-token
-substitution. The wrappers preserve backend-specific text newtypes,
-concrete translated type/value objects, handoff/source provenance, and
-deterministic request order. They substitute only matching request segments by
-typed request-object identity, preserve opaque text segments exactly, and
-diagnose missing, extra, duplicate, backend-mismatched, kind-mismatched, and
-opaque non-renderable token segments.
+The selected project pipeline now accepts explicit `ExtensionCatalog` and flag
+normalization catalog inputs. Non-scalar selected entries translate result and
+parameter type spellings through M245 `CurrentVector(extension, type_tag)`
+using the extension catalog; scalar entries continue to use the accepted scalar
+type identity path. The generated project render model receives the flag
+catalog needed for non-scalar profile build metadata.
 
-M221 deliberately does not reopen lowering, rescan raw TSIL, parse
-surrounding C++/Rust syntax, implement source-operation substitution, control
-directive substitution, loop substitution, primitive-call substitution,
-signature rendering, intrinsic rendering beyond M220, whole primitive body
-rendering, generated project rendering/writing/build verification, or
-template-side semantic decisions.
+Exact `emit_return(PAYLOAD);` bodies now preserve ordered payload fragments
+when the payload contains nested TSIL keyword regions. Payloads with backend
+intrinsic islands are discovered/lowered through the existing backend intrinsic
+handoff path and rendered through the M247 bridge with selected backend,
+extension, type tag, and extension catalog context. Raw scalar payloads remain
+raw and continue to render through the existing shape templates.
+
+M248 deliberately does not add new lowering semantics, broad TSIL parsing,
+primitive-call expansion, dependency closure, pairwise `emit_return +
+intrin_compose` handlers, template-side type/intrinsic decisions, Python-owned
+C++/Rust primitive bodies, fixture sibling pipelines, or runtime dependencies
+on `frozen`/`tslgenold`.
+
+Tests added:
+
+- `tslgen/tests/test_m248_generic_selected_primitive_project_intrinsic_rendering.py`
+  covers real `add` `avx2/f32` C++ and Rust artifact rendering, extension
+  register type spellings, extension-owned C++ headers, C++ `_mm256_add_ps`,
+  Rust single fully-qualified `core::arch::x86_64::_mm256_add_ps`, no raw
+  TSIL leakage, determinism, missing extension-catalog diagnostics, and
+  guardrails against fixture pipelines or local intrinsic spelling tables.
 
 Review/audit verdict:
 
-Accepted after executor-review loop. Architecture/boundary, evidence, test,
-documentation, and validation reviewers accepted the type/value-only scope and
-the exclusion of source operations and other body-token families.
+Accepted after executor-review loop with follow-ups. Architecture/boundary
+review returned Accept With Follow-Ups, noting that `entry.extension or
+entry.selector_path[0]` should eventually become an explicit selected
+extension requirement rather than selector-path inference. Evidence review
+returned Accept. Test review returned Accept With Follow-Ups, noting that Rust
+AVX2 text rendering is covered but Rust vector compile viability remains the
+next risk because unsafe/target-feature policy is still outside M248.
+Documentation and validation auditors initially returned Needs Revision for
+closeout/state/cache hygiene only; those items were addressed before final
+state update.
 
 Validation result:
 
-- `git diff --check`: exit 0, no output.
-- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0, no
-  output.
-- `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m221_backend_type_value_body_token_substitution_parity.py`:
-  exit 0, `13 passed`.
-- Initial `find tslgen -type d -name __pycache__ -print` after compile/test:
-  exit 0, printed compile/test-created `__pycache__` directories.
-- After removing those directories, final
-  `find tslgen -type d -name __pycache__ -print`: exit 0, no output.
+- `git diff --check`: exit 0 with no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with
+  no output.
+- Required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py tslgen/tests/test_m244_5_real_primitive_project_pipeline_consolidation.py tslgen/tests/test_m245_extension_register_type_spelling_boundary.py tslgen/tests/test_m247_selected_implementation_render_context.py tslgen/tests/test_m248_generic_selected_primitive_project_intrinsic_rendering.py`
+  exited 0 with 40 tests passed in 22.18s during final validation.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and printed
+  validation-created `__pycache__` directories. After cleanup, the final rerun
+  exited 0 with no output.
+- Broader cache check:
+  `find . -maxdepth 3 \( -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -print`
+  exited 0 with no output.
 
 Next concrete prompt:
-`docs/agent/runs/m222-primitive-render-plan-execution-review-loop-prompt.md`.
+`docs/agent/runs/m249-real-avx2-selected-primitive-build-verification-execution-review-loop-prompt.md`.
+
+### Milestone 249: Real AVX2 Selected Primitive Build Verification
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m249-real-avx2-selected-primitive-build-verification-execution-review-loop-prompt.md`.
+
+Goal:
+
+Make the M248 real selected `add` `avx2/f32` generated project compile through
+the existing after-write verification path for both C++ and Rust.
+
+Scope:
+
+- Render the real `add` `avx2/f32` project through the generic
+  `primitive_project_pipeline.py`.
+- Write artifacts through `ArtifactWriter` into a temporary generated output
+  tree.
+- Run `verify_generated_project` for the selected `avx2` profile and expect
+  C++ configure/build/test plus Rust test to succeed.
+- If Rust requires unsafe call-boundary or target-feature presentation for the
+  already-lowered intrinsic call, add only the smallest typed backend rendering
+  policy needed. Keep templates presentation-only.
+- Preserve M243/M244 scalar build behavior and M248 text-rendering behavior.
+
+Out of scope:
+
+New source lowering; broad TSIL parsing; dependency closure; primitive-call
+expansion; mask/generic/SVE/NEON/AVX512 build verification; generated
+semantic vector tests; host feature detection; compiler capability modeling;
+fixture-shaped sibling pipelines; runtime dependencies on `frozen` or
+`tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py tslgen/tests/test_m244_5_real_primitive_project_pipeline_consolidation.py tslgen/tests/test_m245_extension_register_type_spelling_boundary.py tslgen/tests/test_m247_selected_implementation_render_context.py tslgen/tests/test_m248_generic_selected_primitive_project_intrinsic_rendering.py tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py
+find tslgen -type d -name __pycache__ -print
+```
 
 ### Milestone 222: Primitive Render Plan
 

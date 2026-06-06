@@ -3534,6 +3534,6 @@ Consequences:
   intrinsic body-token bridge; it does not add a sibling fixture bridge.
 - M246 extension-owned policy can now drive C++ and Rust body-token rendering
   without Python intrinsic spelling tables or template-side semantic logic.
-- The next project-pipeline milestone can connect real selected primitive
-  rendering to this bridge, using the same selected context and existing type
-  spelling boundaries.
+- M248 connects real selected primitive rendering to this bridge through the
+  generic selected primitive project pipeline, using the same selected context
+  and M245 type spelling boundaries.

@@ -15,7 +15,7 @@ Milestone 238 is accepted. Milestone 239 is accepted. Milestone 240 is
 accepted. Milestone 241 is accepted. Milestone 242 is accepted.
 Milestone 243 is accepted. Milestone 244 is accepted. Milestone 244.5 is
 accepted. Milestone 245 is accepted. Milestone 246 is accepted. Milestone
-247 is accepted.
+247 is accepted. Milestone 248 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -951,60 +951,75 @@ did not add new lowering, a sibling fixture pipeline, pairwise
 `emit_return + intrin_compose` handling, template-side intrinsic naming, or a
 runtime dependency on `frozen`/`tslgenold`.
 
+M248 connected the M247 context-aware intrinsic body-token bridge to the
+generic selected primitive project pipeline. The real `add` `avx2/f32`
+implementation from `tsldata/primitives/arithmetic/fundamental.tsl` now
+renders through the generic project pipeline for C++ and Rust with M245
+`CurrentVector(extension, type_tag)` type spelling, extension-owned C++
+headers, extension-owned default `intrin_compose` policy, and deterministic
+artifact composition. The pipeline accepts explicit `ExtensionCatalog` and
+flag normalization catalog inputs for this non-scalar slice. Exact
+`emit_return(PAYLOAD);` bodies may preserve nested payload keyword islands and
+route backend intrinsic islands through the existing discovery/lowering/handoff
+path and M247 bridge; raw scalar payload behavior remains compatible. M248 did
+not add new source lowering, a sibling fixture pipeline, pairwise
+`emit_return + intrin_compose` handling, primitive-call expansion, dependency
+closure, template-side type/intrinsic decisions, Python-owned C++/Rust
+primitive bodies, or runtime dependencies on `frozen`/`tslgenold`.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M248 generic selected primitive project intrinsic rendering execution-review loop.
+Run M249 real AVX2 selected primitive build verification execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m248-generic-selected-primitive-project-intrinsic-rendering-execution-review-loop-prompt.md
+docs/agent/runs/m249-real-avx2-selected-primitive-build-verification-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 248: Generic Selected Primitive Project Intrinsic Rendering Integration.
+Milestone 249: Real AVX2 Selected Primitive Build Verification.
 ```
 
 Latest review verdict:
 
 ```text
-M247 execution-review returned Accept after focused revision. The initial
-architecture and test reviews found that the bridge resolved full default
-compose policy even when only one part was missing, and that bridge-level
-missing policy/prefix diagnostics were not covered. The revision made default
-policy resolution part-specific, added C++ explicit suffix/default prefix
-coverage, and added bridge-level missing policy and missing backend prefix
-coverage. Focused re-review returned Accept; evidence/legacy-leak review
-returned Accept; documentation/state closeout is recorded. Final validation:
-`git diff --check` exit 0 with no output; `python -B -m compileall -q
-tslgen/src/tslgen tslgen/tests` exit 0 with no output; required pytest bundle
-exit 0 with 68 tests passed in 14.20s; initial cache check printed
+M248 execution-review returned Accept With Follow-Ups after closeout revision.
+Architecture/boundary review returned Accept With Follow-Ups and noted that
+selected extension should eventually be required explicitly instead of inferred
+from selector path for scalar compatibility. Evidence review returned Accept.
+Test review returned Accept With Follow-Ups and noted that Rust AVX2 text
+rendering is covered but Rust vector compile viability remains the next real
+risk. Documentation and validation auditors initially returned Needs Revision
+for state/roadmap/behavioral-spec/next-prompt and cache hygiene only; the
+closeout updated those docs and removed validation-created caches. Final
+validation: `git diff --check` exit 0 with no output; `python -B -m compileall
+-q tslgen/src/tslgen tslgen/tests` exit 0 with no output; required pytest
+bundle exit 0 with 40 tests passed in 22.18s; initial cache check printed
 validation-created `__pycache__` directories; after cleanup, final
-`find tslgen -type d -name __pycache__ -print` exited 0 with no output. M248
-generic selected primitive project intrinsic rendering integration is
-selected next.
+`find tslgen -type d -name __pycache__ -print` exited 0 with no output.
+M249 real AVX2 selected primitive build verification is selected next.
 ```
 
 Next expected action:
 
 ```text
-Run the active M248 execution-review loop. Integrate M247 context-aware
-intrinsic body-token rendering into the generic
-`primitive_project_pipeline.py` for one representative real selected
-vector/intrinsic primitive such as `add` `avx2/f32` from
-`tsldata/primitives/arithmetic/fundamental.tsl`. Use typed selected extension,
-type tag, extension catalog, M245 `CurrentVector` type spelling, M247 body
-token rendering, and existing supplementary templates/artifact composition.
-Preserve scalar M243/M244 behavior. Do not add new lowering, broad TSIL
-parsing, pairwise keyword handlers, fixture-shaped sibling pipelines,
-template-side intrinsic/type decisions, Python-owned C++/Rust primitive bodies,
-or runtime dependencies on `frozen`/`tslgenold`.
+Run the active M249 execution-review loop. Use the M248 generic selected
+project pipeline to render the real `add` `avx2/f32` project, write artifacts
+through `ArtifactWriter`, and verify the generated C++ and Rust projects
+through `verify_generated_project` for requested profile `avx2`. If Rust
+requires an unsafe call boundary or target-feature presentation for the
+already-lowered intrinsic call, add only the smallest typed backend rendering
+policy needed. Do not reopen source lowering, add broad TSIL parsing, add
+pairwise keyword handlers, create fixture-shaped sibling pipelines, move
+semantic decisions into templates, or add runtime dependencies on
+`frozen`/`tslgenold`.
 ```
 
 Previous review verdict:
@@ -1118,13 +1133,20 @@ to remove fixture-shaped pipeline ownership. M244.5 execution-review returned
 Accept with no focused revision required and selected M245 extension register
 type spelling boundary execution-review again. M245 execution-review returned
 Accept with no focused revision required and selected M246 extension-owned
-default intrin compose policy execution-review.
+default intrin compose policy execution-review. M246 execution-review returned
+Accept after documentation closeout and selected M247 selected implementation
+render context propagation execution-review. M247 execution-review returned
+Accept after focused revision and selected M248 generic selected primitive
+project intrinsic rendering integration execution-review. M248
+execution-review returned Accept With Follow-Ups after closeout revision and
+selected M249 real AVX2 selected primitive build verification
+execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m245-extension-register-type-spelling-boundary-execution-review-loop-prompt.md
+docs/agent/runs/m248-generic-selected-primitive-project-intrinsic-rendering-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.
