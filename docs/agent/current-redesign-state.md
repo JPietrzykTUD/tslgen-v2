@@ -17,7 +17,7 @@ Milestone 243 is accepted. Milestone 244 is accepted. Milestone 244.5 is
 accepted. Milestone 245 is accepted. Milestone 246 is accepted. Milestone
 247 is accepted. Milestone 248 is accepted. Milestone 249 is accepted.
 Milestone 250 is accepted. Milestone 251 is accepted. Milestone 252 is
-accepted.
+accepted. Milestone 253 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -1029,68 +1029,84 @@ lowering semantics, production code, fixture-shaped pipelines, template-side
 semantic decisions, Python-owned intrinsic/type/suffix tables, or runtime
 dependencies on `frozen`/`tslgenold`.
 
+M253 fixed the shared machine-profile feature option spelling boundary and
+then build-verified the real AVX512 unmasked binary arithmetic matrix through
+the generic selected primitive project pipeline. Explicit
+`machine_profiles.json` alternatives still win, and otherwise generated
+project rendering prefers an exact self-normalized spelling from
+`tsldata/detail/flags.tsl` before falling back to aliases. `flags.tsl` now
+contains self-normalized canonical AVX512 spellings for all AVX512 product
+profile features currently observed. The real `add`/`sub` AVX512 matrix now
+renders and build-verifies for integer selector `("avx512", "?i?")`,
+floating selector `("avx512", "f?")`, concrete type tags `si8`, `si16`,
+`si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, and `f64`, selected
+extension `avx512`, and generated profile `skylake`. M253 did not add TSIL
+lowering semantics, fixture-shaped pipelines, template-side semantic
+decisions, Python-owned intrinsic/type/suffix tables, compiler capability
+modeling, host autodetection, or runtime dependencies on `frozen`/`tslgenold`.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M253 AVX512 feature option spelling and unmasked binary arithmetic matrix build verification execution-review loop.
+Run M254 real generic unmasked binary arithmetic body lowering execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m253-avx512-feature-option-spelling-and-unmasked-binary-arithmetic-matrix-build-verification-execution-review-loop-prompt.md
+docs/agent/runs/m254-real-generic-unmasked-binary-arithmetic-body-lowering-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 253: AVX512 Feature Option Spelling And Unmasked Binary Arithmetic Matrix Build Verification.
+Milestone 254: Real Generic Unmasked Binary Arithmetic Body Lowering.
 ```
 
 Latest review verdict:
 
 ```text
-M252 execution-review returned Accept With Follow-Up. Architecture/boundary
-review initially returned Needs Revision because the state file still pointed
-to M252 and the new M253 prompt had not yet been added with intent-to-add; the
-orchestrator fixed both closeout issues. Architecture/boundary otherwise
-confirmed that the diff adds the M252 test plus documentation only, with no
-production code, templates, parser, lowering, or pipeline changes. Evidence
-review returned Accept and confirmed that selected source bodies, suffix
-behavior, type spellings, headers, profile flags, and target features come
-from real `tsldata` and accepted catalogs/models. Test review returned Accept
-With Follow-Up, noting only that future milestones with production changes
-should broaden the guardrail from `primitive_project_pipeline.py` to relevant
-production modules. Validation audit returned Pass and confirmed validation
-scope and cache hygiene. Final validation: `git diff --check` exit 0 with no
-output; `python -B -m compileall -q tslgen/src/tslgen tslgen/tests` exit 0
-with no output; required pytest bundle exit 0 with 109 tests passed in
-40.94s after final closeout validation; initial cache check printed validation-created `__pycache__`
+M253 execution-review returned Accept after focused test revision.
+Architecture/boundary review returned Accept and confirmed the implementation
+stays at the typed feature-option boundary plus generic selected project
+pipeline, with no new TSIL lowering, fixture pipeline, compiler capability
+model, broad flag database, or runtime `frozen`/`tslgenold` dependency.
+Evidence review returned Accept and confirmed feature spellings come from
+`tsldata/detail/flags.tsl` and typed profile alternatives, while selected
+AVX512 source bodies, headers, register spellings, and compose policy come
+from real `tsldata` and accepted catalogs. Test review initially returned
+Needs Revision because AVX512 alias rejection covered only `skylake`; focused
+revision added canonical flag entries for the remaining observed AVX512
+features and cross-profile no-`avx3` coverage, and focused re-review returned
+Accept. Validation audit returned Accept. Final validation: `git diff
+--check` exit 0 with no output; `python -B -m compileall -q
+tslgen/src/tslgen tslgen/tests` exit 0 with no output; corrected required
+pytest bundle exit 0 with 42 tests passed in 40.31s after final closeout
+validation; initial cache check printed validation-created `__pycache__`
 directories; after cleanup, final
 `find tslgen -type d -name __pycache__ -print` exited 0 with no output.
 Broader cache check for `.pytest_cache`, `.mypy_cache`, and `.ruff_cache`
-exited 0 with no output. M253 AVX512 feature option spelling and unmasked
-binary arithmetic matrix build verification is selected next.
+exited 0 with no output. M254 real generic unmasked binary arithmetic body
+lowering is selected next.
 ```
 
 Next expected action:
 
 ```text
-Run the active M253 execution-review loop. First fix or prove the typed
-machine-profile feature-to-backend-build-option spelling boundary so generated
-C++ AVX512 profiles use canonical options such as `-mavx512f` instead of
-alias spellings such as `-mavx3f`, while preserving explicit alternatives.
-Then use the generic selected primitive project pipeline to render and
-build-verify the real unmasked `add` and `sub` AVX512 matrix for integer
-selector `("avx512", "?i?")`, floating selector `("avx512", "f?")`, selected
-extension `avx512`, requested profile `skylake`, and parameters
-`("left", "right")`. Do not add new TSIL lowering semantics, raw source
-matching, masks, primitive-call expansion, fixture-shaped sibling pipelines,
-template-side semantic decisions, Python-owned intrinsic/type/suffix tables,
-compiler capability modeling, host CPU autodetection, or runtime dependencies
-on `frozen`/`tslgenold`.
+Run the active M254 execution-review loop. Focus on lowering the real generic
+unmasked `add` and `sub` body shape from
+`tsldata/primitives/arithmetic/fundamental.tsl` through the accepted recursive
+TSIL token/region boundary. Recognize lowerable islands such as
+`var<init_register>`, `loop<unroll>`, `loop<range>`, nested
+`value<generation>(vector::length)`, nested `call<primitive=...>`, nested
+`type<backend>(...)`, and `emit_return(result);`, while preserving
+non-lowerable assignment/indexing punctuation as raw source-owned tokens. Do
+not add backend rendering/build verification, primitive-call dependency
+closure, semantic `@self` resolution, broad assignment/indexed expression
+parsing, pairwise keyword-combination paths, source repair, fixture-shaped
+pipelines, or runtime dependencies on `frozen`/`tslgenold`.
 ```
 
 Previous review verdict:
@@ -1221,13 +1237,15 @@ selected M252 real SSE/SSE2 unmasked binary arithmetic matrix build
 verification execution-review. M252 execution-review returned Accept With
 Follow-Up after closeout revision and selected M253 AVX512 feature option
 spelling and unmasked binary arithmetic matrix build verification
-execution-review.
+execution-review. M253 execution-review returned Accept after focused test
+revision and selected M254 real generic unmasked binary arithmetic body
+lowering execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m252-real-sse-unmasked-binary-arithmetic-matrix-build-verification-execution-review-loop-prompt.md
+docs/agent/runs/m253-avx512-feature-option-spelling-and-unmasked-binary-arithmetic-matrix-build-verification-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

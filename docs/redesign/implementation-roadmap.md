@@ -17118,7 +17118,7 @@ Next concrete prompt:
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m253-avx512-feature-option-spelling-and-unmasked-binary-arithmetic-matrix-build-verification-execution-review-loop-prompt.md`.
 
 Goal:
@@ -17169,7 +17169,139 @@ Validation:
 ```bash
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m189_machine_feature_profiles.py tslgen/tests/test_m191_generated_profile_project_skeleton.py tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py tslgen/tests/test_m251_real_avx2_unmasked_binary_arithmetic_matrix_build_verification.py tslgen/tests/test_m252_real_sse_unmasked_binary_arithmetic_matrix_build_verification.py tslgen/tests/test_m253_avx512_feature_option_spelling_and_unmasked_binary_arithmetic_matrix_build_verification.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m189_machine_feature_profiles.py tslgen/tests/test_m191_generated_project_smoke_boundary.py tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py tslgen/tests/test_m251_real_avx2_unmasked_binary_arithmetic_matrix_build_verification.py tslgen/tests/test_m252_real_sse_unmasked_binary_arithmetic_matrix_build_verification.py tslgen/tests/test_m253_avx512_feature_option_spelling_and_unmasked_binary_arithmetic_matrix_build_verification.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M253 fixed the shared machine-profile feature option spelling boundary and
+then build-verified the real AVX512 unmasked binary arithmetic matrix through
+the generic selected primitive project pipeline. The production code change is
+one typed spelling-choice rule in
+`tslgen/src/tslgen/rendering/generated_project.py`: explicit
+`machine_profiles.json` alternatives still win, and otherwise the renderer
+prefers an exact self-normalized spelling from the typed flag catalog before
+falling back to aliases.
+
+`tsldata/detail/flags.tsl` now includes self-normalized canonical AVX512
+spellings for all AVX512 product-profile features currently observed in
+`supplementary/buildsystem/machine_profiles.json`. This keeps aliases such as
+`avx3f` as input normalization evidence while preventing generated C++ and Rust
+profile options from emitting `avx3*` spellings. Explicit profile
+alternatives such as `vpclmulqdq`, `gfni`, and `vaes` remain deliberate output
+spelling overrides.
+
+The real generated-project proof renders and build-verifies unmasked `add` and
+`sub` from `tsldata/primitives/arithmetic/fundamental.tsl` for selector
+`("avx512", "?i?")`, selector `("avx512", "f?")`, concrete type tags `si8`,
+`si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, `ui64`, `f32`, and `f64`,
+selected extension `avx512`, and requested profile `skylake`.
+
+Tests added:
+
+- `tslgen/tests/test_m253_avx512_feature_option_spelling_and_unmasked_binary_arithmetic_matrix_build_verification.py`
+  covers canonical AVX512 feature options, all known x86 AVX512 profile models
+  avoiding `avx3*` output, explicit alternatives, the full real `add`/`sub`
+  AVX512 matrix, unsigned-to-signed suffix behavior, default floating suffix
+  behavior, deterministic artifacts, manifest-clean writing, C++/Rust build
+  verification, and guardrails against fixture pipelines or local spelling
+  tables.
+
+Review/audit verdict:
+
+Accepted. Architecture/boundary review returned Accept and confirmed the
+implementation stays at the typed feature-option boundary plus the generic
+selected project pipeline. Evidence review returned Accept and confirmed that
+feature spelling comes from `flags.tsl` and typed profile alternatives, while
+the selected AVX512 source bodies, headers, register spellings, and compose
+policy come from real `tsldata` and accepted catalogs. Test review initially
+returned Needs Revision because only the `skylake` AVX512 subset rejected
+`avx3*` output; focused revision added canonical flag entries for the remaining
+observed AVX512 feature names and a cross-profile no-`avx3` test. Focused
+test re-review returned Accept. Validation audit returned Accept.
+
+Accepted validation:
+
+- `git diff --check`: exit 0 with no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with
+  no output.
+- Corrected required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m189_machine_feature_profiles.py tslgen/tests/test_m191_generated_project_smoke_boundary.py tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py tslgen/tests/test_m251_real_avx2_unmasked_binary_arithmetic_matrix_build_verification.py tslgen/tests/test_m252_real_sse_unmasked_binary_arithmetic_matrix_build_verification.py tslgen/tests/test_m253_avx512_feature_option_spelling_and_unmasked_binary_arithmetic_matrix_build_verification.py`
+  exited 0 with 42 tests passed in 40.31s after final closeout validation.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and printed
+  validation-created `__pycache__` directories. After cleanup, the final rerun
+  exited 0 with no output.
+- Broader cache check:
+  `find . -maxdepth 3 -type d \( -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -print`
+  exited 0 with no output.
+
+Validation note:
+
+The active M253 prompt initially referenced stale path
+`tslgen/tests/test_m191_generated_profile_project_skeleton.py`. The accepted
+M191 test is `tslgen/tests/test_m191_generated_project_smoke_boundary.py`.
+The prompt and roadmap validation command were corrected before final
+validation.
+
+Follow-up:
+
+M254 is selected to return to lowering work, per workflow direction. It should
+prove or implement real generic unmasked binary arithmetic body lowering over
+the accepted recursive TSIL token model, using the `generic` real `add`/`sub`
+bodies in `fundamental.tsl`. This is a distinct source-shape milestone, not
+another AVX profile or one-primitive build matrix.
+
+Next concrete prompt:
+`docs/agent/runs/m254-real-generic-unmasked-binary-arithmetic-body-lowering-execution-review-loop-prompt.md`.
+
+### Milestone 254: Real Generic Unmasked Binary Arithmetic Body Lowering
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m254-real-generic-unmasked-binary-arithmetic-body-lowering-execution-review-loop-prompt.md`.
+
+Goal:
+
+Prove or implement lowering for the real generic unmasked binary arithmetic
+body shape used by `add` and `sub` in
+`tsldata/primitives/arithmetic/fundamental.tsl`.
+
+Scope:
+
+- Load the real unmasked `add` and `sub` generic implementation bodies from
+  `fundamental.tsl`.
+- Use the accepted recursive TSIL lexical/token lowering boundary, not a
+  parent-child special case such as `loop + call` or `emit_return + call`.
+- Recognize/lower lowerable islands in the real generic body shape:
+  `var<init_register>(result)`,
+  `loop<unroll>(value<generation>(vector::length))`,
+  `loop<range>(i, 0, value<generation>(vector::length), 1) { ... }`,
+  nested `call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(...)`,
+  nested `type<backend>(vector::as_extension(scalar))`, and
+  `emit_return(result);`.
+- Preserve non-lowerable assignment/indexing punctuation such as
+  `result[i] = `, `left[i]`, and `right[i]` as source-owned raw tokens unless
+  an accepted existing lowerer already owns an exact typed fragment for them.
+- Produce typed lowering facts, typed unresolved requests, or explicit
+  diagnostics from existing lowering contracts. Do not render or build a
+  generated project in this milestone.
+
+Out of scope:
+
+Backend rendering/build verification; primitive-call dependency closure;
+semantic resolution of `@self`; broad assignment or array expression parsing;
+source repair; masks; SVE/NEON; generic loop code generation; target-language
+operator parsing; fixture-shaped pipelines; template-side semantic decisions;
+new runtime dependencies on `frozen` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m231_emit_return_lexical_region_lowering.py tslgen/tests/test_m232_return_payload_region_rescan_adapter.py tslgen/tests/test_m233_recursive_tsil_keyword_region_lowering.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py tslgen/tests/test_m236_recursive_payload_fragment_diagnostic_propagation.py tslgen/tests/test_m242_real_corpus_lowering_completion_gate.py tslgen/tests/test_m254_real_generic_unmasked_binary_arithmetic_body_lowering.py
 find tslgen -type d -name __pycache__ -print
 ```
 

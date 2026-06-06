@@ -700,6 +700,40 @@ pipelines, move backend decisions into templates, introduce Python-owned
 intrinsic/type/suffix tables, model host/compiler capability, or add runtime
 dependencies on `frozen` or `tslgenold`.
 
+### M253 AVX512 Feature Option Spelling And Unmasked Binary Arithmetic Matrix Build Verification
+
+Milestone 253 verifies the shared machine-profile feature-option spelling
+boundary needed by AVX512 generated projects, then uses the same generic
+selected primitive project pipeline to render and build-verify the real
+AVX512 unmasked binary arithmetic subset.
+
+Feature option rendering now preserves explicit `machine_profiles.json`
+alternatives as deliberate output spelling overrides. If no explicit
+alternative applies, the generated project render model prefers an exact
+self-normalized feature spelling from `tsldata/detail/flags.tsl` when one
+exists. This keeps input aliases such as `avx3f` as normalization evidence
+without emitting alias output such as `-mavx3f` or `+avx3f`.
+
+The accepted flag catalog includes self-normalized canonical AVX512 spellings
+for all currently observed AVX512 product profile features. All known x86
+AVX512 profiles render C++ options and Rust target features with no `avx3`
+output spelling, while explicit alternatives such as `vpclmulqdq`, `gfni`,
+and `vaes` remain honored.
+
+The accepted real generated-project matrix covers selector path
+`("avx512", "?i?")` for concrete integer type tags `si8`, `si16`, `si32`,
+`si64`, `ui8`, `ui16`, `ui32`, and `ui64`, plus selector path
+`("avx512", "f?")` for concrete floating type tags `f32` and `f64`.
+Generated C++ and Rust projects are written through the accepted artifact
+writer and verified through the accepted generated-project build verifier.
+C++ configure/build/test and Rust test run for requested profile `skylake`.
+
+M253 does not add new TSIL lowering semantics, broaden TSIL parsing, repair
+source, expand primitive calls, change dependency closure, add
+fixture-specific pipelines, move backend decisions into templates, introduce
+Python-owned intrinsic/type/suffix tables, model host/compiler capability, or
+add runtime dependencies on `frozen` or `tslgenold`.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

@@ -909,6 +909,7 @@ def _build_feature_spelling(
     selected = min(
         matches,
         key=lambda entry: (
+            str(entry.spelling) != str(feature),
             str(entry.source.path),
             entry.source.line,
             entry.source.column,

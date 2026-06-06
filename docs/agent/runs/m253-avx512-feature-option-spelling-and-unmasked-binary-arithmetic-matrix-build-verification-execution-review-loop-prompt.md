@@ -152,7 +152,7 @@ Run:
 ```bash
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m189_machine_feature_profiles.py tslgen/tests/test_m191_generated_profile_project_skeleton.py tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py tslgen/tests/test_m251_real_avx2_unmasked_binary_arithmetic_matrix_build_verification.py tslgen/tests/test_m252_real_sse_unmasked_binary_arithmetic_matrix_build_verification.py tslgen/tests/test_m253_avx512_feature_option_spelling_and_unmasked_binary_arithmetic_matrix_build_verification.py
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m189_machine_feature_profiles.py tslgen/tests/test_m191_generated_project_smoke_boundary.py tslgen/tests/test_m225_generated_profile_build_flags.py tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py tslgen/tests/test_m251_real_avx2_unmasked_binary_arithmetic_matrix_build_verification.py tslgen/tests/test_m252_real_sse_unmasked_binary_arithmetic_matrix_build_verification.py tslgen/tests/test_m253_avx512_feature_option_spelling_and_unmasked_binary_arithmetic_matrix_build_verification.py
 find tslgen -type d -name __pycache__ -print
 ```
 
