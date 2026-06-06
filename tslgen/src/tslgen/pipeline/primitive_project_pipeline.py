@@ -6,9 +6,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tslgen.analysis.selection import SelectedImplementation, Target
+from tslgen.backends import (
+    BackendIntrinsicModifierTranslationContext,
+    BackendTranslatedIntrinsicModifier,
+    translate_backend_intrinsic_compose_modifiers_with_context,
+)
 from tslgen.backends.type_spelling import translate_backend_type_spelling_request
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
-from tslgen.domain.backend_metadata import BackendMetadataCatalog
+from tslgen.domain.backend_metadata import BackendId, BackendMetadataCatalog
 from tslgen.domain.catalog import (
     ExtensionCatalog,
     ExtensionName,
@@ -35,6 +40,9 @@ from tslgen.domain.signatures import (
 from tslgen.io.artifacts import ArtifactSet
 from tslgen.io.sources import SourceDocument
 from tslgen.lowering import (
+    BackendIntrinsicComposeHandoffRequest,
+    BackendIntrinsicHandoff,
+    BackendIntrinsicHandoffRequestSegment,
     BackendTypeSpellingRequest,
     CurrentVector,
     LoweredScalarTypeIdentity,
@@ -564,6 +572,7 @@ def _render_function_definition(
         parameters,
         shape_selection.shape_key,
         supplementary_root=supplementary_root,
+        backend_metadata=backend_metadata,
         extension_catalog=extension_catalog,
     )
     if isinstance(intrinsic_definition, tuple):
@@ -617,6 +626,7 @@ def _render_intrinsic_payload_definition(
     shape_key: PrimitiveFunctionShapeKey,
     *,
     supplementary_root: Path,
+    backend_metadata: BackendMetadataCatalog | None,
     extension_catalog: ExtensionCatalog | None,
 ) -> RenderedPrimitiveDefinitionText | tuple[Diagnostic, ...] | None:
     discovery = discover_backend_intrinsic_requests_in_text(
@@ -636,6 +646,16 @@ def _render_intrinsic_payload_definition(
     if handoff.diagnostics or handoff.handoff is None:
         return handoff.diagnostics
 
+    translated_modifiers, modifier_diagnostics = _translated_intrinsic_modifiers(
+        handoff.handoff,
+        selection,
+        backend_id,
+        backend_metadata=backend_metadata,
+        extension_catalog=extension_catalog,
+    )
+    if modifier_diagnostics:
+        return modifier_diagnostics
+
     render = render_intrinsic_body_token_profile_artifact(
         supplementary_root,
         IntrinsicBodyTokenProfileRenderContext(
@@ -646,6 +666,7 @@ def _render_intrinsic_payload_definition(
             function_name=PrimitiveFunctionNameText(selection.function_name),
             result_type=PrimitiveFunctionResultTypeText(result_type),
             parameters=PrimitiveFunctionParameterListText(parameters),
+            translated_modifiers=translated_modifiers,
             shape_key=shape_key,
             rust_body_safety=_rust_intrinsic_body_safety(backend_id),
             selected_implementation=SelectedImplementationRenderContext(
@@ -659,6 +680,52 @@ def _render_intrinsic_payload_definition(
     if render.diagnostics or render.definition is None:
         return render.diagnostics
     return render.definition
+
+
+def _translated_intrinsic_modifiers(
+    handoff: BackendIntrinsicHandoff,
+    selection: SelectedPrimitiveBodyRenderSelection,
+    backend_id: str,
+    *,
+    backend_metadata: BackendMetadataCatalog | None,
+    extension_catalog: ExtensionCatalog | None,
+) -> tuple[tuple[BackendTranslatedIntrinsicModifier, ...], tuple[Diagnostic, ...]]:
+    requests = tuple(_intrinsic_compose_requests_with_modifiers(handoff))
+    if not requests:
+        return (), ()
+    if extension_catalog is None:
+        return (), (_missing_intrinsic_modifier_extension_catalog_diagnostic(requests[0]),)
+
+    context = BackendIntrinsicModifierTranslationContext(
+        backend=BackendId(backend_id),
+        selected_extension=selection.extension,
+        selected_type_tag=selection.type_tag,
+        extension_catalog=extension_catalog,
+        metadata_catalog=backend_metadata,
+    )
+    modifiers: list[BackendTranslatedIntrinsicModifier] = []
+    diagnostics: list[Diagnostic] = []
+    for request in requests:
+        result = translate_backend_intrinsic_compose_modifiers_with_context(
+            request,
+            context,
+        )
+        modifiers.extend(result.modifiers)
+        diagnostics.extend(result.diagnostics)
+
+    return tuple(modifiers), _sort_diagnostics(diagnostics)
+
+
+def _intrinsic_compose_requests_with_modifiers(
+    handoff: BackendIntrinsicHandoff,
+) -> tuple[BackendIntrinsicComposeHandoffRequest, ...]:
+    return tuple(
+        segment.request
+        for segment in handoff.segments
+        if isinstance(segment, BackendIntrinsicHandoffRequestSegment)
+        and isinstance(segment.request, BackendIntrinsicComposeHandoffRequest)
+        and segment.request.modifiers
+    )
 
 
 def _rust_intrinsic_body_safety(backend_id: str) -> RustIntrinsicBodySafety:
@@ -945,6 +1012,20 @@ def _unsupported_payload_diagnostic(
             "`emit_return(...)` payload"
         ),
         location=envelope.payload_source.start,
+    )
+
+
+def _missing_intrinsic_modifier_extension_catalog_diagnostic(
+    request: BackendIntrinsicComposeHandoffRequest,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code="TSL-SELECTED-PRIMITIVE-INTRINSIC-MODIFIER-MISSING-EXTENSION-CATALOG",
+        message=(
+            "selected primitive project bridge requires the extension catalog "
+            "before source-provided intrin_compose modifiers can be translated"
+        ),
+        location=request.source,
     )
 
 

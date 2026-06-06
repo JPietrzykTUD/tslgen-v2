@@ -3580,3 +3580,52 @@ Consequences:
 - Broader Rust safety policy, target-feature attributes, or function-level
   unsafe presentation remain future explicitly selected backend/render work if
   real generated shapes require them.
+
+## ADR-072: Source-Provided Intrin Compose Modifiers Translate Before Rendering
+
+Status: Accepted.
+
+Context:
+
+Real selected primitive bodies can provide explicit `intrin_compose` modifiers
+whose values are themselves typed backend/generation queries. The real AVX2
+integer `add` implementation provides a `suffix=value<backend>(...)` modifier
+whose suffix argument lowers through generation type queries, including
+`base::signed_of(base::in)`.
+
+By M249, selected primitive project rendering carried selected backend,
+extension, type tag, backend metadata, and extension catalog context to
+intrinsic body-token rendering for default compose policy. However,
+source-provided modifier facts also need to be translated before invocation
+assembly. The renderer must not rediscover them from raw source text, infer
+them from wildcard selectors, or embed suffix tables.
+
+Decision:
+
+The generic selected primitive project pipeline translates already-lowered
+`BackendIntrinsicComposeHandoffRequest` modifier fields before calling the
+intrinsic body-token bridge. Translation uses the accepted backend intrinsic
+modifier boundary with selected backend id, selected `ExtensionName`, selected
+concrete `TypeTag`, `BackendMetadataCatalog`, `ExtensionCatalog`, and the
+typed lowered modifier operands already present in the handoff.
+
+Only `intrin_compose` request segments with modifier fields are translated.
+Direct intrinsic requests and compose requests without explicit modifiers
+continue through the existing body-token/default-policy path.
+
+Selector wildcard text such as `?i?` is source selection evidence only. It is
+not rendered or translated as the selected current type. If a source-provided
+modifier asks for a transformed type such as `base::signed_of(base::in)`, the
+lowered typed operand determines the suffix translation. This is why an
+unsigned selected type such as `ui8` may render the signed intrinsic suffix
+`epi8` when the source modifier explicitly requested it.
+
+Consequences:
+
+- M250 proves the boundary with the real `add` `avx2/?i?` integer matrix for
+  C++ and Rust generated-project build verification.
+- Explicit source modifiers and extension-owned defaults now compose through
+  the same generic selected-project path.
+- Future selected primitive matrices can broaden coverage without adding
+  pairwise keyword handlers, fixture-specific pipelines, raw source-string
+  matchers, template-side semantic logic, or Python-owned suffix tables.

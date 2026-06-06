@@ -16755,7 +16755,7 @@ Next concrete prompt:
 
 Status:
 
-Selected. Execution-review loop prompt:
+Accepted. Execution-review loop prompt:
 `docs/agent/runs/m250-real-avx2-integer-modifier-lowering-build-verification-execution-review-loop-prompt.md`.
 
 Goal:
@@ -16803,6 +16803,123 @@ Validation:
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests
 PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m197_type_derived_intrinsic_suffix_translation.py tslgen/tests/test_m200_current_type_intrinsic_suffix_translation.py tslgen/tests/test_m213_backend_intrinsic_invocation_assembly.py tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py tslgen/tests/test_m245_extension_register_type_spelling_boundary.py tslgen/tests/test_m247_selected_implementation_render_context.py tslgen/tests/test_m248_generic_selected_primitive_project_intrinsic_rendering.py tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py tslgen/tests/test_m250_real_avx2_integer_modifier_lowering_build_verification.py
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M250 connected already-lowered source-provided `intrin_compose` modifier facts
+to the generic selected primitive project pipeline. The pipeline now translates
+modifier fields from the accepted `BackendIntrinsicComposeHandoffRequest`
+using selected backend id, selected extension, selected concrete `TypeTag`,
+backend metadata, extension catalog, and the existing typed lowered
+type/value facts before invoking the intrinsic body-token bridge.
+
+The real `add` `avx2/?i?` selected implementation matrix from
+`tsldata/primitives/arithmetic/fundamental.tsl` now renders and build-verifies
+for all concrete integer type tags `si8`, `si16`, `si32`, `si64`, `ui8`,
+`ui16`, `ui32`, and `ui64` for both C++ and Rust under profile `avx2`.
+Unsigned selected types preserve the source-requested
+`base::signed_of(base::in)` suffix behavior and render signed x86 suffixes
+such as `epi8`, not default unsigned suffixes such as `epu8`.
+
+Tests added:
+
+- `tslgen/tests/test_m250_real_avx2_integer_modifier_lowering_build_verification.py`
+  covers the real AVX2 integer matrix, deterministic artifacts, generated
+  C++/Rust integer intrinsic calls, unsigned-to-signed suffix behavior,
+  manifest-clean writing, generated-project build verification, and
+  guardrails against fixture pipelines, local intrinsic/suffix tables, exact
+  source-string matching, or runtime `frozen`/`tslgenold` dependencies.
+
+Review/audit verdict:
+
+Accepted after focused test revision. Architecture/boundary review returned
+Accept With Follow-Ups and found no generic-boundary blocker; its follow-up
+was final state/next-prompt closeout. Evidence review returned Accept. Test
+review initially returned Needs Revision because suffix assertions needed
+per-function type-to-suffix coverage; the focused revision added exact
+per-function C++/Rust assertions plus matrix digest determinism coverage, and
+focused re-review returned Accept. Validation audit returned Pass. This
+roadmap entry, the behavioral-spec update, ADR-072, state update, and M251
+prompt are the documentation closeout.
+
+Accepted validation:
+
+- `git diff --check`: exit 0 with no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with
+  no output.
+- Required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m197_type_derived_intrinsic_suffix_translation.py tslgen/tests/test_m200_current_type_intrinsic_suffix_translation.py tslgen/tests/test_m213_backend_intrinsic_invocation_assembly.py tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py tslgen/tests/test_m245_extension_register_type_spelling_boundary.py tslgen/tests/test_m247_selected_implementation_render_context.py tslgen/tests/test_m248_generic_selected_primitive_project_intrinsic_rendering.py tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py tslgen/tests/test_m250_real_avx2_integer_modifier_lowering_build_verification.py`
+  exited 0 with 101 tests passed in 53.37s.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and printed
+  validation-created `__pycache__` directories. After cleanup, the final rerun
+  exited 0 with no output.
+- Broader cache check:
+  `find . -maxdepth 2 \( -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -print`
+  exited 0 with no output.
+
+Follow-up:
+
+M251 is selected to broaden the same generic path over the real unmasked AVX2
+binary arithmetic subset rather than adding another tiny intrinsic-specific
+slice. It should render and build-verify real `add` and `sub` selected entries
+for AVX2 integer and floating types through the same selected primitive project
+pipeline. It must not add new lowering semantics, source repair, masks,
+primitive-call expansion, fixture-shaped pipelines, template-side semantic
+logic, or Python-owned intrinsic/type tables.
+
+Next concrete prompt:
+`docs/agent/runs/m251-real-avx2-unmasked-binary-arithmetic-matrix-build-verification-execution-review-loop-prompt.md`.
+
+### Milestone 251: Real AVX2 Unmasked Binary Arithmetic Matrix Build Verification
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m251-real-avx2-unmasked-binary-arithmetic-matrix-build-verification-execution-review-loop-prompt.md`.
+
+Goal:
+
+Use the generic selected primitive project pipeline to render and build-verify
+a broader real AVX2 unmasked binary arithmetic subset for both C++ and Rust,
+covering `add` and `sub` over the accepted exact `emit_return(...)` +
+`intrin_compose` body shapes.
+
+Scope:
+
+- Select real unmasked `add` and `sub` primitives from
+  `tsldata/primitives/arithmetic/fundamental.tsl`.
+- For each primitive, render selector path `("avx2", "?i?")` for concrete
+  integer type tags `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, and
+  `ui64`.
+- For each primitive, render selector path `("avx2", "f?")` for concrete
+  floating type tags `f32` and `f64`.
+- Use selected extension `avx2`, requested profile `avx2`, parameters
+  `("left", "right")`, and unique deterministic function names.
+- Reuse the accepted selected project pipeline, type spelling, default
+  `intrin_compose` policy, source-provided modifier translation, Rust unsafe
+  body policy, artifact writer, and generated-project verifier.
+- If the existing path already supports this matrix, add coverage and docs
+  only. If implementation is needed, limit it to generic selected-project
+  plumbing required by this matrix.
+
+Out of scope:
+
+New lowering semantics; broad TSIL parsing; masks; generic loop bodies;
+primitive-call expansion; dependency closure; SVE/NEON/AVX512; semantic vector
+runtime tests; generated test-source production; CLI workflow; fixture-shaped
+sibling pipelines; extending `generated_primitive_pipeline.py`; exact raw
+source-string matching; Python-owned intrinsic/type/suffix tables;
+template-side semantic decisions; runtime dependencies on `frozen` or
+`tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m197_type_derived_intrinsic_suffix_translation.py tslgen/tests/test_m200_current_type_intrinsic_suffix_translation.py tslgen/tests/test_m213_backend_intrinsic_invocation_assembly.py tslgen/tests/test_m243_real_scalar_emit_return_function_rendering.py tslgen/tests/test_m244_real_scalar_emit_return_matrix_rendering.py tslgen/tests/test_m245_extension_register_type_spelling_boundary.py tslgen/tests/test_m247_selected_implementation_render_context.py tslgen/tests/test_m248_generic_selected_primitive_project_intrinsic_rendering.py tslgen/tests/test_m249_real_avx2_selected_primitive_build_verification.py tslgen/tests/test_m250_real_avx2_integer_modifier_lowering_build_verification.py tslgen/tests/test_m251_real_avx2_unmasked_binary_arithmetic_matrix_build_verification.py
 find tslgen -type d -name __pycache__ -print
 ```
 

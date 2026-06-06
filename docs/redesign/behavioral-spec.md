@@ -604,6 +604,41 @@ move backend semantic decisions into templates, introduce Python-owned
 intrinsic spelling tables, model host/compiler capability, or add runtime
 dependencies on `frozen` or `tslgenold`.
 
+### M250 Real AVX2 Integer Modifier Lowering Build Verification
+
+Milestone 250 verifies that source-provided `intrin_compose` modifier fields
+that have already been lowered to typed handoff facts reach backend modifier
+translation inside the generic selected primitive project pipeline. The
+selected source is the real `add` `avx2/?i?` implementation from
+`tsldata/primitives/arithmetic/fundamental.tsl`, rendered for concrete integer
+type tags `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, and `ui64`
+under requested profile `avx2`.
+
+The selected source selector may contain wildcard text such as `?i?`, but the
+selected project context carries concrete `TypeTag` values. Wildcard selector
+text is not rendered as a type, suffix, or intrinsic-name component.
+
+Source-provided modifier translation consumes the accepted typed
+`BackendIntrinsicComposeHandoffRequest` modifier fields plus selected backend,
+extension, concrete type tag, backend metadata, and extension catalog. The
+pipeline does not match exact raw modifier strings. In particular, the real
+integer `add` source requests
+`base::signed_of(type<generation>(base::in))` for the suffix argument, so
+unsigned selected types such as `ui8` render the source-requested signed x86
+suffix family such as `epi8`, not the extension default unsigned suffix such
+as `epu8`.
+
+Generated C++ and Rust projects for the integer matrix are written through the
+accepted artifact writer and verified through the accepted generated-project
+build verifier. C++ configure/build/test and Rust test run for profile `avx2`.
+The Rust body still uses the typed unsafe body policy from M249.
+
+M250 does not add new lowering semantics, broad TSIL parsing, source repair,
+dependency closure, primitive-call expansion, fixture-specific pipelines,
+template-side semantic decisions, Python-owned intrinsic/type/suffix tables,
+host/compiler capability modeling, or runtime dependencies on `frozen` or
+`tslgenold`.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

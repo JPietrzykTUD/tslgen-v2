@@ -16,6 +16,7 @@ accepted. Milestone 241 is accepted. Milestone 242 is accepted.
 Milestone 243 is accepted. Milestone 244 is accepted. Milestone 244.5 is
 accepted. Milestone 245 is accepted. Milestone 246 is accepted. Milestone
 247 is accepted. Milestone 248 is accepted. Milestone 249 is accepted.
+Milestone 250 is accepted.
 
 M188 added the accepted `supplementary/` layout and a small typed
 static/template rendering boundary for deterministic C++ and Rust project
@@ -982,62 +983,80 @@ M249 did not add new lowering semantics, broad TSIL parsing, fixture-shaped
 pipelines, template-side semantic decisions, host/compiler modeling, or
 runtime dependencies on `frozen`/`tslgenold`.
 
+M250 connected already-lowered source-provided `intrin_compose` modifier facts
+to the generic selected primitive project pipeline. The pipeline translates
+modifier fields from accepted `BackendIntrinsicComposeHandoffRequest` values
+using selected backend id, selected extension, selected concrete `TypeTag`,
+backend metadata, extension catalog, and existing typed lowered modifier
+operands before invoking the intrinsic body-token bridge. The real `add`
+`avx2/?i?` integer matrix from
+`tsldata/primitives/arithmetic/fundamental.tsl` now renders and
+build-verifies for `si8`, `si16`, `si32`, `si64`, `ui8`, `ui16`, `ui32`, and
+`ui64` for both C++ and Rust under profile `avx2`. Unsigned selected types
+preserve the source-requested `base::signed_of(base::in)` behavior and render
+signed x86 suffixes such as `epi8`, not default unsigned suffixes such as
+`epu8`. M250 did not add new lowering semantics, raw exact source matching,
+fixture-shaped pipelines, template-side semantic decisions, Python-owned
+intrinsic/type/suffix tables, or runtime dependencies on `frozen`/`tslgenold`.
+
 ## Current Work State
 
 Current required action:
 
 ```text
-Run M250 real AVX2 integer modifier lowering build verification execution-review loop.
+Run M251 real AVX2 unmasked binary arithmetic matrix build verification execution-review loop.
 ```
 
 Active run prompt:
 
 ```text
-docs/agent/runs/m250-real-avx2-integer-modifier-lowering-build-verification-execution-review-loop-prompt.md
+docs/agent/runs/m251-real-avx2-unmasked-binary-arithmetic-matrix-build-verification-execution-review-loop-prompt.md
 ```
 
 Active execution milestone:
 
 ```text
-Milestone 250: Real AVX2 Integer Modifier Lowering Build Verification.
+Milestone 251: Real AVX2 Unmasked Binary Arithmetic Matrix Build Verification.
 ```
 
 Latest review verdict:
 
 ```text
-M249 execution-review returned Accept after closeout documentation revision.
-Architecture/boundary review returned Accept and confirmed that typed
-`RustIntrinsicBodySafety` is context-driven, with no fixture sibling pipeline,
-pairwise keyword handler, template-side semantic inference, or runtime
-`frozen`/`tslgenold` dependency. Evidence review returned Accept and confirmed
-that the selected fixture and type/header/intrinsic/profile/target-feature
-facts come from real `tsldata` and accepted catalogs/models. Test review
-returned Accept. Validation audit returned Accept and confirmed validation
-scope and cache hygiene. Documentation audit returned Needs Revision only for
-state/roadmap/behavioral-spec/design-decision/next-prompt closeout; the
-closeout updated those docs and created the M250 prompt. Final validation:
-`git diff --check` exit 0 with no output; `python -B -m compileall -q
-tslgen/src/tslgen tslgen/tests` exit 0 with no output; required pytest bundle
-exit 0 with 43 tests passed in 34.03s; initial cache check printed
-validation-created `__pycache__` directories; after cleanup, final
-`find tslgen -type d -name __pycache__ -print` exited 0 with no output.
-Broader cache check for `.pytest_cache`, `.mypy_cache`, and `.ruff_cache`
-exited 0 with no output. M250 real AVX2 integer modifier lowering build
-verification is selected next.
+M250 execution-review returned Accept after focused test revision and
+closeout documentation update. Architecture/boundary review returned Accept
+With Follow-Ups and confirmed that the production change stays on the generic
+selected primitive project path, translating already-lowered modifier facts
+with typed context and without raw source matching, fixture sibling pipelines,
+template-side semantics, or runtime `frozen`/`tslgenold` dependencies.
+Evidence review returned Accept and confirmed that the selected fixture,
+signed-suffix behavior, type spellings, headers, profile flags, and target
+features come from real `tsldata` and accepted catalogs/models. Test review
+initially returned Needs Revision for aggregate suffix assertions; the
+focused revision added per-function C++/Rust type-to-suffix assertions and
+integer-matrix digest determinism coverage, and focused re-review returned
+Accept. Validation audit returned Pass and confirmed validation scope and
+cache hygiene. Final validation: `git diff --check` exit 0 with no output;
+`python -B -m compileall -q tslgen/src/tslgen tslgen/tests` exit 0 with no
+output; required pytest bundle exit 0 with 101 tests passed in 53.37s; initial
+cache check printed validation-created `__pycache__` directories; after
+cleanup, final `find tslgen -type d -name __pycache__ -print` exited 0 with
+no output. Broader cache check for `.pytest_cache`, `.mypy_cache`, and
+`.ruff_cache` exited 0 with no output. M251 real AVX2 unmasked binary
+arithmetic matrix build verification is selected next.
 ```
 
 Next expected action:
 
 ```text
-Run the active M250 execution-review loop. Use the generic selected primitive
-project pipeline to render the real `add` `avx2/?i?` matrix for concrete
-integer type tags and requested profile `avx2`. The key work is to connect
-already-lowered source-provided intrinsic modifier facts, especially
-`suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(...))))`,
-to the accepted typed backend modifier translation boundary before rendering.
-Do not add new lowering semantics, match exact raw source strings, create
-fixture-shaped sibling pipelines, put semantic decisions in templates, or add
-runtime dependencies on `frozen`/`tslgenold`.
+Run the active M251 execution-review loop. Use the generic selected primitive
+project pipeline to render and build-verify the real unmasked `add` and `sub`
+AVX2 matrix for integer selector `("avx2", "?i?")` and floating selector
+`("avx2", "f?")`, requested profile `avx2`, and parameters
+`("left", "right")`. If the existing path already supports this matrix, add
+coverage and docs only. Do not add new lowering semantics, raw source
+matching, masks, primitive-call expansion, fixture-shaped sibling pipelines,
+template-side semantic decisions, Python-owned intrinsic/type/suffix tables,
+or runtime dependencies on `frozen`/`tslgenold`.
 ```
 
 Previous review verdict:
@@ -1160,13 +1179,15 @@ execution-review returned Accept With Follow-Ups after closeout revision and
 selected M249 real AVX2 selected primitive build verification
 execution-review. M249 execution-review returned Accept after documentation
 closeout and selected M250 real AVX2 integer modifier lowering build
-verification execution-review.
+verification execution-review. M250 execution-review returned Accept after
+focused test revision and documentation closeout and selected M251 real AVX2
+unmasked binary arithmetic matrix build verification execution-review.
 ```
 
 Completed prompt:
 
 ```text
-docs/agent/runs/m249-real-avx2-selected-primitive-build-verification-execution-review-loop-prompt.md
+docs/agent/runs/m250-real-avx2-integer-modifier-lowering-build-verification-execution-review-loop-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.
