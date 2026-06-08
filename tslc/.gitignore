@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+# scratch + generated output trees and their build byproducts.
+# Kept on the workspace (9p host mount) rather than /tmp so storage stays manageable.
+# The tslctmp/ dir itself is kept (pytest basetemp needs its parent to exist).
+/tslctmp/*
+!/tslctmp/.gitkeep
+/generated/
+**/build/
+**/target/
+.tslc-manifest.json

@@ -1,0 +1,45 @@
+"""The TSIL body model: a recursive sequence of raw text and keyword regions.
+
+A body is *not* an abstract syntax tree. The input is semi-valid target-language
+code enriched with TSIL keywords. A body is an ordered ``tuple[Segment, ...]``
+where each segment is either:
+
+- :class:`RawText` — target-language source, passed through verbatim; or
+- :class:`Region` — a recognized TSIL keyword island whose selector (``<...>``)
+  is kept as raw text and whose argument payload (``(...)``) is itself a
+  recursively-scanned ``tuple[Segment, ...]``.
+
+The lowerer translates regions and passes raw text through.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class RawText:
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class Region:
+    keyword: str  # e.g. "emit_return", "intrin_compose", "value", "type", "call"
+    selector_text: str  # raw text inside <...>, "" when the keyword has no selector
+    body: tuple["Segment", ...]  # recursively scanned (...) payload
+    full_text: str  # original source text of the whole region (provenance)
+
+
+Segment = RawText | Region
+
+
+def raw_concat(segments: tuple[Segment, ...]) -> str:
+    """Join a segment sequence of pure raw text. Raises if a region is present."""
+
+    parts: list[str] = []
+    for segment in segments:
+        if isinstance(segment, RawText):
+            parts.append(segment.text)
+        else:  # pragma: no cover - guarded by callers
+            raise ValueError(f"expected only raw text, found region {segment.keyword!r}")
+    return "".join(parts)
