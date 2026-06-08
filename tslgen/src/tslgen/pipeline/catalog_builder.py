@@ -24,7 +24,6 @@ from tslgen.domain.signatures import (
     signature_parameter_terms,
 )
 from tslgen.lowering.source_body_fragments import (
-    lower_source_body_fragments,
     payload_token_result_from_fragment_sequence,
 )
 from tslgen.pipeline.extension_catalog import build_extension_catalog, build_type_groups
@@ -49,6 +48,10 @@ from tslgen.syntax.ast import (
     ParsedTypeGroup,
 )
 from tslgen.syntax.source_body_regions import SourceBodyText
+from tslgen.syntax.source_body_fragments import (
+    SourceBodyFragmentSequence,
+    fragment_source_body_text,
+)
 
 M107_SIGNATURE = "v:=(v,v)"
 M107_PARAMETERS = ("left", "right")
@@ -296,11 +299,17 @@ class CatalogBuilder:
                 )
             )
 
+        source_body_fragments = _source_body_fragments_for_parsed_body(
+            parsed.body,
+            diagnostics,
+        )
+
         return Implementation(
             extension=parsed.extension,
             type_tag=parsed.type_tag,
             body=_build_body(parsed, shape, diagnostics),
             source=parsed.source,
+            source_body_fragments=source_body_fragments,
         )
 
 
@@ -613,6 +622,41 @@ def _build_body(
     return _build_implementation_body(parsed.body, diagnostics)
 
 
+def _source_body_fragments_for_parsed_body(
+    body: ParsedImplementationBody,
+    diagnostics: list[Diagnostic],
+) -> SourceBodyFragmentSequence | None:
+    if not _is_parsed_tsil_raw_body(body):
+        return None
+
+    result = fragment_source_body_text(_source_body_text_from_parsed_tsil_body(body))
+    if result.diagnostics:
+        return None
+    return result.sequence
+
+
+def _source_body_text_from_parsed_tsil_body(
+    body: ParsedImplementationBody,
+) -> SourceBodyText:
+    raw_lines = tuple(
+        line for line in body.lines if isinstance(line, ParsedRawStringLine)
+    )
+    if not raw_lines:
+        return SourceBodyText(
+            path=body.source.path,
+            line=body.source.line,
+            column=body.source.column,
+            text="",
+        )
+    source = raw_lines[0].source
+    return SourceBodyText(
+        path=source.path,
+        line=source.line,
+        column=source.column,
+        text="\n".join(line.text for line in raw_lines),
+    )
+
+
 def _single_operation_fragment(
     body: ParsedImplementationBody,
 ) -> ParsedLowerableOperationFragment | None:
@@ -686,7 +730,7 @@ def _classify_recursive_tsil_payload_token(
         token.source.line,
         token.source.column + len(_EMIT_RETURN_PREFIX),
     )
-    fragment_result = lower_source_body_fragments(
+    fragment_result = fragment_source_body_text(
         SourceBodyText(
             path=payload_source.path,
             line=payload_source.line,

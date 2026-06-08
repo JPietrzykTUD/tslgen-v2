@@ -259,6 +259,16 @@ not invitations to add extra supported syntax. Generated output must reflect
 accepted typed lowering/translation results only, never a best-effort repair of
 the original source text.
 
+`SourceBodyFragmentSequence` or its pure source-body successor is the canonical
+owner of TSIL implementation-body structure. Production body lowering must
+discover TSIL keyword regions through the shared recursive fragment boundary,
+not by independently scanning `ImplementationBody.tokens`, raw strings, or
+keyword-specific regex ladders. `ImplementationBody` is a retirement target:
+new milestones may add temporary compatibility adapters only when they reduce
+the remaining dependency on it and record the next removal step. Do not add new
+production source scanners, renderer bridges, or pipeline APIs that make
+`ImplementationBody` more central.
+
 ## Target-Language Operator Boundary
 
 Do not model arbitrary C, C++, or Rust operators merely because their spelling

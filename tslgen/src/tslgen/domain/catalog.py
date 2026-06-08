@@ -8,6 +8,7 @@ from typing import Literal, NewType
 
 from tslgen.core.diagnostics import SourceLocation
 from tslgen.domain.signatures import PrimitiveSignature, SignatureParameterTerm
+from tslgen.syntax.source_body_fragments import SourceBodyFragmentSequence
 
 ExtensionName = NewType("ExtensionName", str)
 TypeTag = NewType("TypeTag", str)
@@ -98,6 +99,7 @@ class Implementation:
     type_tag: str
     body: ImplementationBody
     source: SourceLocation
+    source_body_fragments: SourceBodyFragmentSequence | None = None
 
 
 @dataclass(frozen=True, slots=True)

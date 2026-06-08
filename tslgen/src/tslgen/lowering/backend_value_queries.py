@@ -8,7 +8,6 @@ from dataclasses import dataclass
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
-    ImplementationBody,
     RawStringToken,
 )
 from tslgen.lowering._source_islands import (
@@ -41,6 +40,7 @@ from tslgen.lowering.model import (
     SelectedTypeEnvironment,
 )
 from tslgen.lowering.type_queries import lower_type_expression
+from tslgen.syntax.source_body_fragments import SourceBodyFragmentSequence
 
 _QUERY_PREFIX = "value<backend>("
 _QUERY_HEAD = "value<backend>"
@@ -57,12 +57,16 @@ _BACKEND_SYMBOL_RE = re.compile(
 
 def discover_backend_value_queries(
     context: SelectedImplementationLoweringContext,
-    body: ImplementationBody,
 ) -> BackendValueQueryDiscoveryLoweringResult:
     """Discover exact backend value query islands in raw body-token text."""
 
-    del context
+    if context.implementation.source_body_fragments is not None:
+        return discover_backend_value_queries_in_fragments(
+            context,
+            context.implementation.source_body_fragments,
+        )
 
+    body = context.implementation.body
     segments: list[BackendValueQueryDiscoverySegment] = []
     pending_opaque_tokens = OpaqueTokenBuffer()
 
@@ -123,6 +127,22 @@ def discover_backend_value_queries_in_text(
 
     return _discover_backend_value_queries_in_source_text(
         source_text_from_text(text, source),
+    )
+
+
+def discover_backend_value_queries_in_fragments(
+    context: SelectedImplementationLoweringContext,
+    sequence: SourceBodyFragmentSequence,
+) -> BackendValueQueryDiscoveryLoweringResult:
+    """Discover backend value queries from recursive source-body fragments."""
+
+    del context
+
+    return _discover_backend_value_queries_in_source_text(
+        source_text_from_text(
+            sequence.source_text.text,
+            sequence.source_text.source_at(0),
+        )
     )
 
 

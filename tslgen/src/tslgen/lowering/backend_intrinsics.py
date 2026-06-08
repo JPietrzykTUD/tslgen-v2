@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
-    ImplementationBody,
     RawStringToken,
 )
 from tslgen.lowering._source_islands import (
@@ -27,18 +26,23 @@ from tslgen.lowering.model import (
     BackendIntrinsicRequestSegment,
     SelectedImplementationLoweringContext,
 )
+from tslgen.syntax.source_body_fragments import SourceBodyFragmentSequence
 
 _INTRINSIC_HEADS: tuple[BackendIntrinsicKind, ...] = ("intrin_compose", "intrin")
 
 
 def discover_backend_intrinsic_requests(
     context: SelectedImplementationLoweringContext,
-    body: ImplementationBody,
 ) -> BackendIntrinsicDiscoveryLoweringResult:
     """Discover exact backend intrinsic islands in raw body-token text."""
 
-    del context
+    if context.implementation.source_body_fragments is not None:
+        return discover_backend_intrinsic_requests_in_fragments(
+            context,
+            context.implementation.source_body_fragments,
+        )
 
+    body = context.implementation.body
     segments: list[BackendIntrinsicDiscoverySegment] = []
     pending_opaque_tokens = OpaqueTokenBuffer()
     raw_run = RawStringRunBuffer()
@@ -118,6 +122,22 @@ def discover_backend_intrinsic_requests_in_text(
 
     return _discover_backend_intrinsic_requests_in_source_text(
         source_text_from_text(text, source),
+    )
+
+
+def discover_backend_intrinsic_requests_in_fragments(
+    context: SelectedImplementationLoweringContext,
+    sequence: SourceBodyFragmentSequence,
+) -> BackendIntrinsicDiscoveryLoweringResult:
+    """Discover backend intrinsic requests from recursive source-body fragments."""
+
+    del context
+
+    return _discover_backend_intrinsic_requests_in_source_text(
+        source_text_from_text(
+            sequence.source_text.text,
+            sequence.source_text.source_at(0),
+        )
     )
 
 

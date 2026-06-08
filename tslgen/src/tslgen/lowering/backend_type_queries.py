@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
-from tslgen.domain.catalog import ImplementationBody, RawStringToken
+from tslgen.domain.catalog import RawStringToken
 from tslgen.lowering._source_islands import (
     JoinedRawStringRun,
     OpaqueTokenBuffer,
@@ -29,6 +29,7 @@ from tslgen.lowering.model import (
     SelectedTypeEnvironment,
 )
 from tslgen.lowering.type_queries import lower_backend_type_query
+from tslgen.syntax.source_body_fragments import SourceBodyFragmentSequence
 
 _QUERY_PREFIX = "type<backend>("
 _QUERY_HEAD = "type<backend>"
@@ -36,12 +37,16 @@ _QUERY_HEAD = "type<backend>"
 
 def discover_backend_type_queries(
     context: SelectedImplementationLoweringContext,
-    body: ImplementationBody,
 ) -> BackendTypeQueryDiscoveryLoweringResult:
     """Discover exact backend type query islands in raw body-token text."""
 
-    del context
+    if context.implementation.source_body_fragments is not None:
+        return discover_backend_type_queries_in_fragments(
+            context,
+            context.implementation.source_body_fragments,
+        )
 
+    body = context.implementation.body
     segments: list[BackendTypeQueryDiscoverySegment] = []
     pending_opaque_tokens = OpaqueTokenBuffer()
     raw_run = RawStringRunBuffer()
@@ -92,6 +97,22 @@ def discover_backend_type_queries_in_text(
 
     return _discover_backend_type_queries_in_source_text(
         source_text_from_text(text, source),
+    )
+
+
+def discover_backend_type_queries_in_fragments(
+    context: SelectedImplementationLoweringContext,
+    sequence: SourceBodyFragmentSequence,
+) -> BackendTypeQueryDiscoveryLoweringResult:
+    """Discover backend type queries from recursive source-body fragments."""
+
+    del context
+
+    return _discover_backend_type_queries_in_source_text(
+        source_text_from_text(
+            sequence.source_text.text,
+            sequence.source_text.source_at(0),
+        )
     )
 
 

@@ -49,11 +49,11 @@ from tslgen.lowering import (
     Lowerer,
     discover_backend_intrinsic_requests_in_text,
 )
-from tslgen.lowering.source_body_fragments import (
+from tslgen.syntax.source_body_fragments import (
     KeywordRegionFragment,
     RawSourceFragment,
     SourceBodyFragmentSequence,
-    lower_source_body_fragments,
+    fragment_source_body_text,
 )
 from tslgen.pipeline.generated_profiles import select_generated_profiles
 from tslgen.rendering import (
@@ -374,7 +374,7 @@ def _exact_single_emit_return_payload(
     envelope: ParsedImplementationBodyEnvelope,
 ) -> tuple[str | None, tuple[Diagnostic, ...]]:
     source_text = SourceBodyText.from_envelope(envelope)
-    lowering = lower_source_body_fragments(source_text)
+    lowering = fragment_source_body_text(source_text)
     if lowering.diagnostics:
         return None, lowering.diagnostics
 

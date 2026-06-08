@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
-from tslgen.domain.catalog import ImplementationBody, RawStringToken
+from tslgen.domain.catalog import RawStringToken
 from tslgen.lowering._source_islands import (
     JoinedRawStringRun,
     OpaqueTokenBuffer,
@@ -23,6 +23,7 @@ from tslgen.lowering.model import (
     MaskLaneConstantRequestSegment,
     SelectedImplementationLoweringContext,
 )
+from tslgen.syntax.source_body_fragments import SourceBodyFragmentSequence
 
 _VALUE_HEAD = "value<generation>"
 _VALUE_PREFIX = f"{_VALUE_HEAD}("
@@ -37,12 +38,16 @@ _FAILURE_CODES = frozenset(
 
 def discover_mask_lane_constant_requests(
     context: SelectedImplementationLoweringContext,
-    body: ImplementationBody,
 ) -> MaskLaneConstantDiscoveryLoweringResult:
     """Discover exact mask lane constant islands in raw body-token text."""
 
-    del context
+    if context.implementation.source_body_fragments is not None:
+        return discover_mask_lane_constant_requests_in_fragments(
+            context,
+            context.implementation.source_body_fragments,
+        )
 
+    body = context.implementation.body
     segments: list[MaskLaneConstantDiscoverySegment] = []
     pending_opaque_tokens = OpaqueTokenBuffer()
     raw_run = RawStringRunBuffer()
@@ -122,6 +127,22 @@ def discover_mask_lane_constant_requests_in_text(
 
     return _discover_mask_lane_constant_requests_in_source_text(
         source_text_from_text(text, source),
+    )
+
+
+def discover_mask_lane_constant_requests_in_fragments(
+    context: SelectedImplementationLoweringContext,
+    sequence: SourceBodyFragmentSequence,
+) -> MaskLaneConstantDiscoveryLoweringResult:
+    """Discover mask lane constants from recursive source-body fragments."""
+
+    del context
+
+    return _discover_mask_lane_constant_requests_in_source_text(
+        source_text_from_text(
+            sequence.source_text.text,
+            sequence.source_text.source_at(0),
+        )
     )
 
 

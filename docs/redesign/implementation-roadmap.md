@@ -16483,6 +16483,8 @@ which are recorded in the M247 completion docs and M248 prompt.
 Accepted validation:
 
 - `git diff --check`: exit 0 with no output.
+- After marking new files intent-to-add so untracked M254.x files were covered,
+  final `git diff --check`: exit 0 with no output.
 - `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with
   no output.
 - Required pytest bundle:
@@ -17361,22 +17363,1071 @@ Accepted validation:
 
 Follow-up:
 
-M255 is selected to keep moving on lowering without jumping into backend
-rendering prematurely. It should lower the real generic body's unresolved
-`@self[type<backend>(vector::as_extension(scalar))]` primitive-call selector
-specialization into accepted typed selector/type facts for concrete selected
-contexts. M255 must not resolve `@self`, compute dependency closure, render
-generic loops, parse assignments/indexing, or add pairwise keyword
-combinations.
+ADR-073 inserts an M254.x consolidation series before M255. M254 showed that
+the recursive source-body fragment boundary can see the real generic body, but
+also exposed that older `ImplementationBody.tokens` scanners still own too
+much production source discovery. M254.1 is selected to make fragment-first
+implementation-body ownership the next active step and to start removing
+`ImplementationBody` from production paths. M255 is deferred until the M254.x
+series has reduced or eliminated that bridge risk.
 
 Next concrete prompt:
-`docs/agent/runs/m255-real-generic-self-call-selector-specialization-lowering-execution-review-loop-prompt.md`.
+`docs/agent/runs/m254.1-fragment-first-implementation-body-ownership-execution-review-loop-prompt.md`.
+
+### Milestone 254.1: Fragment-First Implementation Body Ownership
+
+Status:
+
+Accepted. Execution-review loop prompt:
+`docs/agent/runs/m254.1-fragment-first-implementation-body-ownership-execution-review-loop-prompt.md`.
+
+Goal:
+
+Start the M254.x removal series that makes the recursive source-body fragment
+model the production implementation-body boundary and turns `ImplementationBody`
+into explicit removal debt instead of continuing feature work on top of two
+body models.
+
+Scope:
+
+- Inventory production `ImplementationBody` references and classify which are
+  source discovery, semantic evaluation, compatibility plumbing, tests, or
+  rendering/pipeline consumers.
+- If necessary, separate the pure recursive source-body fragment model from
+  lowering-only adapters so catalog/domain code can consume body structure
+  without importing semantic lowering helpers.
+- Make full `tsil` implementation bodies enter production lowering as
+  recursive `SourceBodyFragmentSequence` values or an equivalent pure
+  source-body successor. Do not limit recursion to `emit_return(...)` payloads.
+- Quarantine or remove direct `ImplementationBody.tokens` source scanners.
+  Any temporary adapter must be named as compatibility/deprecation machinery
+  and must be fed from the fragment tree.
+- Preserve accepted typed semantic behavior by retargeting existing evaluators
+  to fragment-derived facts where feasible in this first slice.
+- Add guardrail tests so future production body work cannot add new
+  `ImplementationBody` source scanners or pairwise keyword-combination paths.
+- Create the next M254.x prompt after review. The next prompt must continue
+  removing `ImplementationBody` until production code and tests no longer
+  depend on it; do not reactivate M255 while production body lowering still
+  depends on `ImplementationBody`.
+
+Out of scope:
+
+New TSIL keyword semantics; selector specialization lowering beyond what is
+needed to preserve existing accepted behavior; backend rendering/build
+verification; primitive-call dependency closure; semantic `@self` resolution;
+generic loop code generation; assignment/index expression parsing; source
+repair; pairwise keyword-combination handlers; fixture-shaped pipelines;
+template-side semantic decisions; runtime dependencies on `frozen` or
+`tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m231_emit_return_lexical_region_lowering.py tslgen/tests/test_m232_return_payload_region_rescan_adapter.py tslgen/tests/test_m233_recursive_tsil_keyword_region_lowering.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py tslgen/tests/test_m236_recursive_payload_fragment_diagnostic_propagation.py tslgen/tests/test_m242_real_corpus_lowering_completion_gate.py tslgen/tests/test_m254_real_generic_unmasked_binary_arithmetic_body_lowering.py tslgen/tests/test_m254_1_fragment_first_implementation_body_ownership.py
+rg -n "\bImplementationBody\b" tslgen/src tslgen/tests
+find tslgen -type d -name __pycache__ -print
+```
+
+The `rg` command is an accounting command, not necessarily a zero-output
+acceptance check for M254.1. M254.1 must report the exact remaining references
+and use them to select M254.2. Later M254.x prompts should tighten the command
+until no production/test references remain.
+
+Result:
+
+M254.1 split the pure recursive source-body fragment model into
+`tslgen.syntax.source_body_fragments`. The existing
+`tslgen.lowering.source_body_fragments` module now acts as a compatibility and
+semantic adapter over that pure syntax model, preserving accepted imports such
+as `lower_source_body_fragments` while removing fragment structure ownership
+from the lowering adapter.
+
+Domain `Implementation` now carries optional `source_body_fragments` as the
+transitional replacement path for `ImplementationBody`. Catalog promotion scans
+full `tsil` raw implementation bodies into that fragment sequence using the
+shared recursive source-body scanner. The old `ImplementationBody` token stream
+is still built for compatibility consumers, but the full source-body structure
+is no longer limited to rescanning `emit_return(...)` payloads.
+
+Backend type-query discovery is the first migrated production category. When a
+selected implementation carries `source_body_fragments`,
+`discover_backend_type_queries` uses the fragment sequence instead of
+`ImplementationBody.tokens`. `type<backend>(...)` keyword fragments become
+typed backend type-query request islands directly; raw fragments continue
+through the accepted text helper. Empty compatibility tokens no longer block
+backend type-query discovery when fragment facts are present.
+
+Tests added:
+
+- `tslgen/tests/test_m254_1_fragment_first_implementation_body_ownership.py`
+  covers catalog full-body fragment promotion, fragment-backed backend
+  type-query discovery with empty compatibility tokens, and static guardrails
+  against re-centralizing `ImplementationBody` or adding pairwise/fixture
+  paths.
+
+Accepted validation:
+
+- `git diff --check`: exit 0 with no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with
+  no output.
+- Required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m231_emit_return_lexical_region_lowering.py tslgen/tests/test_m232_return_payload_region_rescan_adapter.py tslgen/tests/test_m233_recursive_tsil_keyword_region_lowering.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py tslgen/tests/test_m236_recursive_payload_fragment_diagnostic_propagation.py tslgen/tests/test_m242_real_corpus_lowering_completion_gate.py tslgen/tests/test_m254_real_generic_unmasked_binary_arithmetic_body_lowering.py tslgen/tests/test_m254_1_fragment_first_implementation_body_ownership.py`
+  exited 0 with 66 tests passed in 17.13s.
+- Focused backend type-query regression:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m179_backend_type_queries.py`
+  exited 0 with 13 tests passed in 5.56s.
+- `rg -n "\bImplementationBody\b" tslgen/src tslgen/tests`: exit 0 and
+  printed the remaining production/test accounting output. Remaining
+  production categories include the model definition, catalog compatibility
+  builder, primitive-project compatibility stub, lowerer/token semantic
+  evaluators, directive/loop/control scanners, and raw-island scanner families
+  not yet migrated.
+
+Follow-up:
+
+M254.2 is selected to migrate the remaining raw-island source discovery family
+to fragment-first entry points. It should cover backend value queries, backend
+intrinsics, source operations, backend output source islands, mask keywords,
+and mask lane constants where feasible in one coherent slice. The milestone
+must preserve accepted typed semantic behavior, keep `ImplementationBody`
+fallbacks compatibility-only, and create M254.3 unless production/test
+`ImplementationBody` references are fully removed.
+
+Next concrete prompt:
+`docs/agent/runs/m254.2-fragment-first-raw-island-discovery-family-execution-review-loop-prompt.md`.
+
+### Milestone 254.2: Fragment-First Raw-Island Discovery Family
+
+Status:
+
+Accepted. Execution-review loop prompt:
+`docs/agent/runs/m254.2-fragment-first-raw-island-discovery-family-execution-review-loop-prompt.md`.
+
+Goal:
+
+Continue the M254.x `ImplementationBody` removal series by migrating the
+remaining raw source-island discovery family from `ImplementationBody.tokens`
+to fragment-derived facts when selected implementations carry
+`source_body_fragments`.
+
+Scope:
+
+- Add fragment-first discovery entry points for the remaining raw-island
+  families that currently scan raw token runs: backend value queries, backend
+  intrinsic requests, source operations, backend output source islands, mask
+  keyword requests, and mask lane constant requests.
+- Update `Lowerer` or the family-level production functions so
+  `implementation.source_body_fragments` is preferred whenever present, with
+  the old `ImplementationBody.tokens` path retained only as compatibility
+  fallback for tests and not-yet-migrated callers.
+- Preserve the accepted text helpers and typed semantic lowering results. Raw
+  fragments may still delegate to existing `*_in_text` helpers; recognized
+  keyword fragments should become typed request facts directly where the
+  keyword is already part of the accepted source-body scanner.
+- Add focused tests that use fragment-backed selected implementations with
+  empty compatibility tokens to prove each migrated family no longer depends on
+  direct token scanning when fragments are available.
+- Keep static guardrails against new pairwise keyword-combination handlers,
+  fixture-shaped pipelines, renderer-side semantic inference, and new
+  production `ImplementationBody.tokens` scanners in migrated families.
+- Record the remaining `ImplementationBody` accounting and select M254.3
+  unless no production/test references remain.
+
+Out of scope:
+
+New TSIL keyword semantics; broadening accepted source forms beyond already
+documented keyword families; selector specialization lowering; backend
+rendering/build verification; primitive-call dependency closure; semantic
+`@self` resolution; generic loop code generation; assignment/index expression
+parsing; source repair; target-language operator parsing; template-side
+semantic decisions; runtime dependencies on `frozen` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m177_mask_lane_constant_requests.py tslgen/tests/test_m185_mask_keyword_requests.py tslgen/tests/test_m187_backend_output_source_islands.py tslgen/tests/test_m254_1_fragment_first_implementation_body_ownership.py tslgen/tests/test_m254_2_fragment_first_raw_island_discovery_family.py
+rg -n "\bImplementationBody\b" tslgen/src tslgen/tests
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M254.2 migrated the remaining accepted raw-island discovery families to prefer
+`Implementation.source_body_fragments` when present: backend value queries,
+backend intrinsic requests, source operations, backend/output source islands,
+mask keyword requests, and mask lane constant requests. Existing
+`*_in_text` helpers still own accepted source-text scanning and malformed-form
+diagnostics. Fragment-backed discovery passes the contiguous source-body text
+carried by the fragment sequence to those helpers, preserving surrounding
+opaque text and accepted opaque nested payloads such as
+`value<generation>(...)` inside source-operation and backend/output islands.
+The old `ImplementationBody.tokens` scanners remain only as compatibility
+fallback for token-only callers.
+
+M254.2 did not add new TSIL keyword spellings,
+pairwise surrounding-keyword handlers, backend rendering, dependency closure,
+semantic `@self` resolution, source repair, assignment/index parsing,
+template-side semantic decisions, or runtime dependencies on `frozen` or
+`tslgenold`.
+
+Tests added:
+
+- `tslgen/tests/test_m254_2_fragment_first_raw_island_discovery_family.py`
+  covers all six migrated families with fragment-backed selected
+  implementations whose compatibility token streams are empty, preserves raw
+  malformed diagnostics, asserts opaque/request segment reconstruction,
+  preserves accepted nested opaque payloads, proves token-only compatibility
+  fallback, and checks guardrails against fixture/pairwise/runtime-dependency
+  leakage.
+
+Accepted validation:
+
+- `git diff --check`: exit 0 with no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with
+  no output.
+- Required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m177_mask_lane_constant_requests.py tslgen/tests/test_m185_mask_keyword_requests.py tslgen/tests/test_m187_backend_output_source_islands.py tslgen/tests/test_m254_1_fragment_first_implementation_body_ownership.py tslgen/tests/test_m254_2_fragment_first_raw_island_discovery_family.py`
+  exited 0 with 132 tests passed in 8.30s.
+- `rg -n "\bImplementationBody\b" tslgen/src tslgen/tests`: exit 0 and
+  printed the remaining production/test accounting output. Remaining
+  production categories include the model definition, catalog compatibility
+  builder, primitive-project compatibility stub, lowerer/token semantic
+  evaluators, generation variable/loop/control scanners, backend-control
+  scanners, primitive-call scanners, and compatibility fallback signatures in
+  already migrated discovery families.
+- Initial `find tslgen -type d -name __pycache__ -print` listed validation
+  caches. After removing `__pycache__`, `.pytest_cache`, `.mypy_cache`, and
+  `.ruff_cache`, the final `find` command exited 0 with no output.
+
+Follow-up:
+
+M254.3 is selected to migrate the next directive/control discovery families
+to fragment-first ownership while leaving generation loop/control evaluation,
+backend rendering, dependency closure, source repair, and M255 out of scope.
+
+Next concrete prompt:
+`docs/agent/runs/m254.3-fragment-first-directive-control-discovery-execution-review-loop-prompt.md`.
+
+### Milestone 254.3: Fragment-First Directive/Control Discovery
+
+Status:
+
+Accepted.
+
+Goal:
+
+Continue the M254.x `ImplementationBody` removal series by migrating the next
+structural directive/control discovery families to fragment-first ownership,
+with priority on generation variable declarations and backend control
+directives.
+
+Scope:
+
+- Add fragment-first discovery entry points for accepted directive/control
+  families that currently consume `ImplementationBody.tokens`.
+- Prefer `implementation.source_body_fragments` whenever present, keeping old
+  token paths only as compatibility fallback.
+- Convert already-scanned keyword fragments into existing typed request facts
+  only for accepted selectors and source forms.
+- Preserve accepted malformed-form and unsupported-selector diagnostics.
+- Add fragment-backed empty-token tests and compatibility fallback coverage.
+- Record exact remaining `ImplementationBody` accounting and select M254.4.
+
+Out of scope:
+
+Generation loop-region lowering, generation branch evaluation, backend
+rendering/build verification, primitive-call selector specialization lowering,
+primitive-call dependency closure, semantic `@self` resolution, generic loop
+code generation, assignment/index expression parsing, source repair,
+target-language operator parsing, template rendering, CLI workflow, and runtime
+dependencies on `frozen` or `tslgenold`.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m165_backend_control.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m254_1_fragment_first_implementation_body_ownership.py tslgen/tests/test_m254_2_fragment_first_raw_island_discovery_family.py tslgen/tests/test_m254_3_fragment_first_directive_control_discovery.py
+rg -n "\bImplementationBody\b" tslgen/src tslgen/tests
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M254.3 migrated generation variable declaration discovery and backend-control
+directive discovery to prefer `Implementation.source_body_fragments` when
+present. `var<...>(...)` lexical recognition now accepts any selector at the
+syntax boundary, while the generation-variable lowerer preserves the accepted
+M163 selector set and diagnostics. Fragment-backed variable discovery keeps
+the existing top-level/raw-brace behavior so variables inside opaque raw brace
+scopes do not silently become accepted.
+
+Backend-control lexical recognition now accepts `if<...>`, `else<...>`, and
+`switch<...>` selectors at the syntax boundary. The backend-control lowerer
+recursively walks the existing fragment tree and converts only accepted
+`compile` selectors into the existing typed request facts. `generation`
+selectors remain opaque for this discovery family, `runtime` and unknown
+selectors preserve unsupported-selector diagnostics, and body braces/payload
+text remain opaque source around the request segment rather than new backend
+semantics.
+
+The old `ImplementationBody.tokens` paths remain compatibility fallback only
+for token-only callers. M254.3 did not add new TSIL semantics, backend
+rendering/build verification, dependency closure, semantic `@self`
+resolution, generation branch evaluation, generic loop code generation,
+assignment/index parsing, source repair, target-language operator parsing,
+template-side semantic decisions, pairwise keyword-combination handlers, or
+runtime dependencies on `frozen` or `tslgenold`.
+
+Tests added:
+
+- `tslgen/tests/test_m254_3_fragment_first_directive_control_discovery.py`
+  covers fragment-backed selected implementations with empty compatibility
+  tokens, recursive backend-control discovery through nested fragments,
+  variable raw-brace preservation, unsupported-selector diagnostics,
+  malformed payload and invalid-name diagnostics on the fragment path,
+  token-only fallback, and static guardrails.
+
+Accepted validation:
+
+- `git diff --check`: exit 0 with no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with
+  no output.
+- Required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m165_backend_control.py tslgen/tests/test_m168_generic_generation_expressions.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m254_1_fragment_first_implementation_body_ownership.py tslgen/tests/test_m254_2_fragment_first_raw_island_discovery_family.py tslgen/tests/test_m254_3_fragment_first_directive_control_discovery.py`
+  exited 0 with 81 tests passed in 10.27s.
+- `rg -n "\bImplementationBody\b" tslgen/src tslgen/tests`: exit 0 and
+  printed the remaining production/test accounting output. Remaining
+  production categories include the domain compatibility model, catalog
+  compatibility builder, primitive-project compatibility stub, direct lowerer
+  operation diagnostics, generation control/loop region evaluators,
+  primitive-call diagnostics, and compatibility fallback signatures in
+  migrated discovery families.
+
+Follow-up:
+
+M254.4 is selected to migrate generation control/loop region ownership toward
+the fragment-first body model before M255 is reactivated.
+
+Next concrete prompt:
+`docs/agent/runs/m254.4-fragment-first-generation-region-ownership-execution-review-loop-prompt.md`.
+
+### Milestone 254.4: Fragment-First Generation Region Ownership
+
+Status:
+
+Accepted. Execution-review loop prompt:
+`docs/agent/runs/m254.4-fragment-first-generation-region-ownership-execution-review-loop-prompt.md`.
+
+Goal:
+
+Continue the M254.x `ImplementationBody` removal series by migrating the
+remaining generation-region ownership paths toward the canonical recursive
+source-body fragment boundary.
+
+Scope:
+
+- Add fragment-first entry points for accepted generation-control and
+  generation-loop region consumers that still parse `ImplementationBody.tokens`.
+- Prefer `implementation.source_body_fragments` whenever present, keeping old
+  token paths compatibility-only.
+- Reuse existing accepted semantics for `if<generation>`,
+  `else<generation>`, `loop<unroll>`, and `loop<range>`; do not add new
+  condition, loop, body, assignment, or expression semantics.
+- If a temporary fragment-to-token adapter is required to preserve accepted
+  result models, quarantine it behind one narrow compatibility boundary and
+  record the next removal step instead of spreading `ImplementationBody`
+  construction through production code.
+- Preserve accepted malformed-form, unsupported-selector, and generation-value
+  diagnostics.
+- Add fragment-backed empty-token tests plus token-only compatibility fallback
+  coverage for migrated generation-region paths.
+- Record exact remaining `ImplementationBody` accounting and select the next
+  M254.x prompt unless production/test references have been fully removed.
+
+Out of scope:
+
+Backend rendering/build verification, primitive-call selector specialization
+lowering, primitive-call dependency closure, semantic `@self` resolution,
+generic loop code generation beyond existing accepted loop-region facts,
+assignment/index expression parsing, source repair, target-language operator
+parsing, template rendering, CLI workflow, runtime dependencies on `frozen` or
+`tslgenold`, and M255.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m186_generation_condition_expressions.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m254_1_fragment_first_implementation_body_ownership.py tslgen/tests/test_m254_2_fragment_first_raw_island_discovery_family.py tslgen/tests/test_m254_3_fragment_first_directive_control_discovery.py tslgen/tests/test_m254_4_fragment_first_generation_region_ownership.py
+rg -n "\bImplementationBody\b" tslgen/src tslgen/tests
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M254.4 migrated generation-control region lowering and generation-loop
+region lowering/discovery to prefer `Implementation.source_body_fragments`
+when present. The accepted token semantics for `if<generation>`,
+`else if<generation>`, `else<generation>`, `loop<unroll>`, and
+`loop<range>` are preserved, including unsupported plain target-language
+`else` and unsupported loop-selector diagnostics on fragment-backed selected
+implementations. A single compatibility adapter,
+`compatibility_body_token_result_from_fragment_sequence`, bridges recursive
+source fragments into older `BodyToken` result models and is documented as
+explicit retirement debt. `Lowerer.lower()` now recognizes fragment-backed
+top-level generation-control regions and clears parent fragments before
+lowering the selected branch token body.
+
+Tests added:
+
+- `tslgen/tests/test_m254_4_fragment_first_generation_region_ownership.py`
+  covers fragment-backed generation-control with empty compatibility tokens,
+  fragment-backed generation-loop region lowering and discovery with empty
+  compatibility tokens, token-only fallback callers, preserved generation
+  condition/loop-bound diagnostics, and guardrails against re-centralizing
+  `ImplementationBody` in generation-loop ownership.
+
+Accepted validation:
+
+- `git diff --check`: exit 0 with no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with
+  no output.
+- Required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m186_generation_condition_expressions.py tslgen/tests/test_m230_source_body_lexical_region_boundary.py tslgen/tests/test_m254_1_fragment_first_implementation_body_ownership.py tslgen/tests/test_m254_2_fragment_first_raw_island_discovery_family.py tslgen/tests/test_m254_3_fragment_first_directive_control_discovery.py tslgen/tests/test_m254_4_fragment_first_generation_region_ownership.py`
+  exited 0 with 50 tests passed.
+- `rg -n "\bImplementationBody\b" tslgen/src tslgen/tests`: exit 0 and
+  printed remaining production/test accounting output. Remaining production
+  categories include the domain compatibility model, catalog/pipeline
+  compatibility construction, migrated fallback signatures, `lowerer.py`
+  direct body helpers and selected-branch temporary body construction,
+  primitive-call body diagnostics, and compatibility fallback signatures in
+  migrated discovery families.
+
+Follow-up:
+
+M254.5 is selected to make direct selected-body lowering in `lowerer.py`
+prefer fragment-derived compatibility tokens before the M255 primitive-call
+selector milestone is reactivated.
+
+Next concrete prompt:
+`docs/agent/runs/m254.5-fragment-first-direct-lowerer-body-consumption-execution-review-loop-prompt.md`.
+
+### Milestone 254.5: Fragment-First Direct Lowerer Body Consumption
+
+Status:
+
+Accepted. Execution-review loop prompt:
+`docs/agent/runs/m254.5-fragment-first-direct-lowerer-body-consumption-execution-review-loop-prompt.md`.
+
+Goal:
+
+Continue the M254.x `ImplementationBody` removal series by migrating direct
+selected-body lowering in `Lowerer._lower_direct_body` and its helper
+diagnostics toward fragment-derived body tokens when
+`Implementation.source_body_fragments` is present.
+
+Scope:
+
+- Add or reuse one narrow selected-body compatibility token view that returns
+  body tokens plus source from `source_body_fragments` when present and from
+  `ImplementationBody.tokens` only as token-only fallback.
+- Route direct operation-fragment detection, `emit_return(...)` detection,
+  primitive-call return-payload expression lowering, and unsupported body /
+  primitive-call diagnostics through that selected-body token view.
+- Preserve accepted binary/unary/comparison scalar lowerer behavior, exact
+  `emit_return(call<primitive=...>(...))` behavior, unsupported body
+  diagnostics, primitive-call diagnostics, and deterministic results.
+- Do not add new operation semantics, new primitive-call selector resolution,
+  dependency closure, backend rendering, assignment/index parsing, source
+  repair, target-language expression parsing, pairwise keyword handlers,
+  fixture-shaped pipelines, or template-side semantic decisions.
+- Keep any remaining `ImplementationBody` usage explicitly classified as
+  compatibility fallback or domain/catalog construction debt.
+- Add fragment-backed empty-token tests plus token-only fallback coverage for
+  the migrated direct lowerer paths.
+- Record exact remaining `ImplementationBody` accounting and select the next
+  M254.x prompt unless production/test references have been fully removed.
+
+Out of scope:
+
+Backend rendering/build verification, primitive-call selector specialization
+lowering, primitive-call dependency closure, semantic `@self` resolution,
+generic loop code generation beyond already accepted loop-region facts,
+assignment/index expression parsing, source repair, target-language operator
+parsing, template rendering, CLI workflow, runtime dependencies on `frozen`
+or `tslgenold`, and M255.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m186_generation_condition_expressions.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py tslgen/tests/test_m254_1_fragment_first_implementation_body_ownership.py tslgen/tests/test_m254_4_fragment_first_generation_region_ownership.py tslgen/tests/test_m254_5_fragment_first_direct_lowerer_body_consumption.py
+rg -n "\bImplementationBody\b" tslgen/src tslgen/tests
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M254.5 added a local selected-body token view for direct selected-body
+lowering. The view derives temporary compatibility tokens from
+`Implementation.source_body_fragments` when available and falls back to
+`ImplementationBody.tokens` only when the existing compatibility body tokens
+are the accepted diagnostic boundary. Direct operation-fragment detection,
+exact `emit_return(...)` detection, primitive-call return-payload expression
+lowering, unsupported return-expression diagnostics, and primitive-call
+diagnostics now flow through that token view.
+
+M254.5 also added
+`unsupported_primitive_call_diagnostics_from_body_tokens(...)`, so direct
+lowering can report recognized body-level primitive-call islands without
+passing an `ImplementationBody` object. The old
+`unsupported_primitive_call_diagnostics(...)` function remains as a
+compatibility wrapper. Catalog construction now attaches
+`source_body_fragments` only when a raw TSIL body can be lexically scanned
+without scanner diagnostics; balanced malformed payload adaptation diagnostics
+still surface through the accepted payload adapter path.
+
+Tests added:
+
+- `tslgen/tests/test_m254_5_fragment_first_direct_lowerer_body_consumption.py`
+  covers fragment-backed direct `emit_return(call<primitive=add>(left, right));`
+  lowering with empty compatibility body tokens, fragment-backed unsupported
+  return-expression and primitive-call diagnostics, fragment-backed unsupported
+  plain body diagnostics, token-only unary/comparison operation fallback,
+  token-only body-level primitive-call diagnostic fallback, and static
+  guardrails against pairwise/fixture-shaped/source-scanner drift.
+
+Accepted validation:
+
+- `git diff --check`: exit 0 with no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with
+  no output.
+- Required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m186_generation_condition_expressions.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py tslgen/tests/test_m254_1_fragment_first_implementation_body_ownership.py tslgen/tests/test_m254_4_fragment_first_generation_region_ownership.py tslgen/tests/test_m254_5_fragment_first_direct_lowerer_body_consumption.py`
+  exited 0 with 305 tests passed.
+- Extra adjacent check:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m236_recursive_payload_fragment_diagnostic_propagation.py`
+  exited 0 with 3 tests passed.
+- `rg -n "\bImplementationBody\b" tslgen/src tslgen/tests`: exit 0 and
+  printed remaining production/test accounting output. Remaining production
+  categories include the domain compatibility model, catalog/pipeline
+  compatibility construction, migrated fallback signatures, the
+  `Lowerer.lower()` selected-branch temporary body construction, the
+  direct-lowerer compatibility token view, primitive-call compatibility API
+  and inventory traversal, and compatibility fallback signatures in migrated
+  discovery families.
+
+Follow-up:
+
+M254.6 is selected to migrate primitive-call reference inventory/dependency
+discovery to the fragment-first source-body boundary before M255 is
+reactivated.
+
+Next concrete prompt:
+`docs/agent/runs/m254.6-fragment-first-primitive-call-inventory-execution-review-loop-prompt.md`.
+
+### Milestone 254.6: Fragment-First Primitive-Call Inventory
+
+Status:
+
+Accepted. Execution-review loop prompt:
+`docs/agent/runs/m254.6-fragment-first-primitive-call-inventory-execution-review-loop-prompt.md`.
+
+Goal:
+
+Continue the M254.x `ImplementationBody` removal series by migrating
+primitive-call reference inventory and dependency discovery in
+`PrimitiveCallDependencyCollector` away from direct
+`ImplementationBody.tokens` traversal.
+
+Scope:
+
+- Make primitive-call reference inventory prefer
+  `Implementation.source_body_fragments` when present, using the accepted
+  recursive fragment boundary and exact primitive-call directive adaptation.
+- Keep token-only traversal only as compatibility fallback for callers that do
+  not yet carry fragments.
+- Preserve accepted selector lowering, target matching, argument binding,
+  source order, unsupported selector diagnostics, unknown target diagnostics,
+  missing implementation diagnostics, arity mismatch diagnostics, and
+  continued collection after failed calls.
+- Do not add primitive-call selector specialization semantics beyond the
+  already accepted matcher, semantic `@self` resolution, dependency closure
+  expansion semantics, backend rendering, source repair, new TSIL keyword
+  spellings, new parsers, or pairwise surrounding-keyword handlers.
+- Record exact remaining `ImplementationBody` accounting and select the next
+  M254.x prompt unless production/test references have been fully removed.
+
+Out of scope:
+
+Backend rendering/build verification, new primitive-call selector semantics,
+semantic `@self` resolution, dependency closure behavior changes, source
+repair, assignment/index expression parsing, target-language expression
+parsing, template rendering, CLI workflow, runtime dependencies on `frozen`
+or `tslgenold`, and M255.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py tslgen/tests/test_m254_1_fragment_first_implementation_body_ownership.py tslgen/tests/test_m254_5_fragment_first_direct_lowerer_body_consumption.py tslgen/tests/test_m254_6_fragment_first_primitive_call_inventory.py
+rg -n "\bImplementationBody\b" tslgen/src tslgen/tests
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M254.6 migrated `PrimitiveCallDependencyCollector.reference_inventory(...)` to
+prefer `Implementation.source_body_fragments` when present. It now collects
+primitive-call facts through the accepted recursive fragment boundary and exact
+primitive-call directive adapter, with the old `ImplementationBody.tokens`
+traversal retained only for selected implementations without fragments.
+
+The accepted M147/M148 primitive-call behavior is preserved: standalone calls,
+`emit_return(...)` payload calls, source ordering, selector lowering, target
+matching, argument binding, unsupported-selector diagnostics, unknown-target
+diagnostics, missing-implementation diagnostics, arity diagnostics, continued
+collection after failed calls, and dependency closure traversal all remain
+compatible. Primitive-call argument payloads remain opaque for this inventory
+boundary, so nested call text inside a call argument is not recursively
+resolved as a dependency.
+
+Tests added:
+
+- `tslgen/tests/test_m254_6_fragment_first_primitive_call_inventory.py` covers
+  fragment-backed standalone and `emit_return(...)` primitive-call inventory
+  with empty `ImplementationBody.tokens`, source-order preservation with
+  continued collection after failure, opaque primitive-call argument payloads,
+  unsupported selector, unknown target, missing implementation, arity mismatch,
+  token-only fallback, and static guardrails against pairwise/fixture-shaped
+  drift.
+
+Accepted validation:
+
+- `git diff --check`: exit 0 with no output.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with
+  no output.
+- Required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py tslgen/tests/test_m254_1_fragment_first_implementation_body_ownership.py tslgen/tests/test_m254_5_fragment_first_direct_lowerer_body_consumption.py tslgen/tests/test_m254_6_fragment_first_primitive_call_inventory.py`
+  exited 0 with 317 tests passed in 34.84s.
+- `rg -n "\bImplementationBody\b" tslgen/src tslgen/tests`: exit 0 and
+  printed the exact accounting output recorded in
+  `docs/agent/m254.6-implementationbody-accounting.txt`. Remaining production
+  categories are now the domain compatibility model, catalog/pipeline
+  compatibility construction, migrated discovery fallback signatures, lowerer
+  temporary selected-body compatibility views, primitive-call compatibility
+  diagnostics, and tests that still construct compatibility bodies.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and printed
+  validation-created cache directories. After cleanup, the final rerun exited
+  0 with no output.
+
+Follow-up:
+
+M254.7 is selected to remove explicit `ImplementationBody` parameters from the
+already migrated discovery APIs. This is API consolidation only: selected
+implementations still use fragments first and may use
+`context.implementation.body.tokens` only as temporary token-only fallback.
+M254.6 test review also recorded non-blocking cleanup follow-ups: add stronger
+primitive-call inventory diagnostic provenance assertions and one stale-token
+preference regression proving fragment-backed inventory ignores conflicting
+compatibility body tokens.
+
+Next concrete prompt:
+`docs/agent/runs/m254.7-fragment-first-discovery-api-signature-cleanup-execution-review-loop-prompt.md`.
+
+### Milestone 254.7: Fragment-First Discovery API Signature Cleanup
+
+Status:
+
+Accepted.
+
+Goal:
+
+Continue the M254.x `ImplementationBody` removal series by removing explicit
+`body: ImplementationBody` parameters from already migrated fragment-first
+selected-implementation discovery APIs.
+
+Scope:
+
+- Update already migrated discovery entry points that currently accept
+  `(context, body: ImplementationBody)` so production selected-implementation
+  callers pass only the typed selected lowering context.
+- Target the migrated discovery families from M254.1-M254.6:
+  backend type queries, backend value queries, backend intrinsic requests,
+  backend/output source islands, source operations, backend control,
+  generation variables, generation control, generation loops, mask keywords,
+  and mask lane constants.
+- Keep `*_in_text(...)`, `*_in_fragments(...)`, and other narrow helper APIs
+  when they are already fragment/text-specific and useful for tests.
+- Preserve token-only fallback behavior internally by reading
+  `context.implementation.body.tokens` only when
+  `context.implementation.source_body_fragments` is absent.
+- Update callers and tests so the explicit `ImplementationBody` parameter is
+  no longer part of these selected-implementation discovery API shapes.
+- Add static guardrails proving the migrated discovery APIs no longer expose
+  `body: ImplementationBody` signatures, while remaining production
+  `ImplementationBody` references are accurately classified.
+
+Out of scope:
+
+Changing discovery semantics, removing the domain `ImplementationBody` class,
+removing catalog/pipeline compatibility body construction, rewriting lowerer
+direct-body compatibility views, deleting token-only tests, backend rendering,
+generated-project build verification, primitive-call selector semantics,
+dependency-closure semantics, source repair, target-language parsing,
+fixture-shaped pipelines, runtime dependencies on `frozen` or `tslgenold`, and
+M255.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m165_backend_control.py tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m177_mask_lane_constant_requests.py tslgen/tests/test_m179_backend_type_queries.py tslgen/tests/test_m185_mask_keyword_requests.py tslgen/tests/test_m187_backend_output_source_islands.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m254_1_fragment_first_implementation_body_ownership.py tslgen/tests/test_m254_2_fragment_first_raw_island_discovery_family.py tslgen/tests/test_m254_3_fragment_first_directive_control_discovery.py tslgen/tests/test_m254_4_fragment_first_generation_region_ownership.py tslgen/tests/test_m254_5_fragment_first_direct_lowerer_body_consumption.py tslgen/tests/test_m254_6_fragment_first_primitive_call_inventory.py tslgen/tests/test_m254_7_fragment_first_discovery_api_signature_cleanup.py
+rg -n "\bImplementationBody\b" tslgen/src tslgen/tests
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M254.7 removed explicit `body: ImplementationBody` parameters from the already
+migrated selected-implementation discovery APIs for backend type queries,
+backend value queries, backend intrinsic requests, backend/output source
+islands, source operations, backend control, generation variables, generation
+control, generation loops, mask keywords, and mask lane constants. Production
+callers now pass only the typed selected lowering context. Each migrated
+family still prefers `Implementation.source_body_fragments` and retains
+`context.implementation.body.tokens` only as fallback when fragments are
+absent.
+
+The lowerer facade no longer forwards `context.implementation.body` into those
+selected-discovery entry points. Focused text/fragment helper APIs remain
+available for tests and adapters.
+
+Tests added:
+
+- `tslgen/tests/test_m254_7_fragment_first_discovery_api_signature_cleanup.py`
+  verifies context-first selected-discovery signatures, absence of
+  `ImplementationBody` exposure in the targeted modules, lowerer facade
+  forwarding cleanup, and guardrails against new scanners, pairwise paths,
+  fixture-shaped pipelines, or runtime `frozen`/`tslgenold` dependencies.
+
+Accepted validation:
+
+- `git diff --check`: exit 0 with no output after marking new M254.7/M254.8
+  files intent-to-add.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with no
+  output.
+- Required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m163_generation_variables.py tslgen/tests/test_m164_backend_value_queries.py tslgen/tests/test_m165_backend_control.py tslgen/tests/test_m166_backend_intrinsics.py tslgen/tests/test_m167_source_operations.py tslgen/tests/test_m177_mask_lane_constant_requests.py tslgen/tests/test_m179_backend_type_queries.py tslgen/tests/test_m185_mask_keyword_requests.py tslgen/tests/test_m187_backend_output_source_islands.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m254_1_fragment_first_implementation_body_ownership.py tslgen/tests/test_m254_2_fragment_first_raw_island_discovery_family.py tslgen/tests/test_m254_3_fragment_first_directive_control_discovery.py tslgen/tests/test_m254_4_fragment_first_generation_region_ownership.py tslgen/tests/test_m254_5_fragment_first_direct_lowerer_body_consumption.py tslgen/tests/test_m254_6_fragment_first_primitive_call_inventory.py tslgen/tests/test_m254_7_fragment_first_discovery_api_signature_cleanup.py`
+  exited 0 with 494 tests passed in 37.96s.
+- `rg -n "\bImplementationBody\b" tslgen/src tslgen/tests`: exit 0 and
+  printed the exact accounting output recorded in
+  `docs/agent/m254.7-implementationbody-accounting.txt`. Remaining production
+  categories are the domain compatibility model, catalog/pipeline
+  compatibility construction, lowerer private direct-body compatibility
+  helpers, the primitive-call compatibility diagnostic wrapper, and one
+  compatibility-adapter doc note. Remaining test references are compatibility
+  fixture construction and guardrail strings.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and printed
+  validation-created cache directories. After cleanup, the final rerun exited
+  0 with no output.
+- `find . -type d -name .pytest_cache -print`,
+  `find . -type d -name .mypy_cache -print`, and
+  `find . -type d -name .ruff_cache -print`: exit 0 with no output.
+
+Review result:
+
+Architecture/boundary returned Accept With Follow-Ups. Evidence and test
+review returned Accept. Documentation and validation re-review accepted after
+handoff and validation-accounting completion.
+
+Follow-up:
+
+M254.8 is selected to retire the remaining lowerer/private compatibility-body
+API surface and the obsolete primitive-call diagnostic wrapper without changing
+semantics or removing the domain/catalog/pipeline compatibility body model.
+
+Next concrete prompt:
+`docs/agent/runs/m254.8-fragment-first-lowerer-compatibility-body-retirement-execution-review-loop-prompt.md`.
+
+### Milestone 254.8: Fragment-First Lowerer Compatibility Body Retirement
+
+Status:
+
+Accepted.
+
+Goal:
+
+Continue the M254.x `ImplementationBody` removal series by retiring the
+remaining lowerer/private compatibility-body API surface and the obsolete
+primitive-call diagnostic wrapper that still accept `ImplementationBody`
+directly.
+
+Scope:
+
+- Replace `Lowerer` private helpers that accept `body: ImplementationBody` with
+  helpers that accept the existing fragment-first selected body token view or
+  explicit token/source values.
+- Remove local `ImplementationBody` construction from lowerer direct-body or
+  branch helpers when an explicit token/source view can express the same
+  compatibility contract.
+- Remove or deprecate the old
+  `unsupported_primitive_call_diagnostics(body, ...)` wrapper if no production
+  caller needs it; route production and tests through
+  `unsupported_primitive_call_diagnostics_from_body_tokens(...)` or a
+  fragment-first selected-context path.
+- Preserve token-only fallback behavior for selected implementations without
+  `source_body_fragments`.
+- Add static guardrails proving `lowerer.py` and `primitive_calls.py` no longer
+  expose helper signatures with `body: ImplementationBody`.
+- Record exact remaining `ImplementationBody` references and use that
+  accounting to select the next M254.x prompt.
+
+Out of scope:
+
+Changing lowering semantics, removing the domain `ImplementationBody` class,
+removing catalog/pipeline compatibility body construction, deleting token-only
+tests, backend rendering, generated-project build verification, primitive-call
+selector semantics, dependency-closure behavior, source repair,
+target-language parsing, fixture-shaped pipelines, runtime dependencies on
+`frozen` or `tslgenold`, and M255.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py tslgen/tests/test_m254_5_fragment_first_direct_lowerer_body_consumption.py tslgen/tests/test_m254_6_fragment_first_primitive_call_inventory.py tslgen/tests/test_m254_7_fragment_first_discovery_api_signature_cleanup.py tslgen/tests/test_m254_8_fragment_first_lowerer_compatibility_body_retirement.py
+rg -n "\bImplementationBody\b" tslgen/src tslgen/tests
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M254.8 removed `ImplementationBody` imports, helper signatures, and local
+construction from `tslgen/src/tslgen/lowering/lowerer.py`. Direct selected-body
+lowering now routes through `_SelectedBodyTokenView` and
+`_lower_direct_body_view(...)`; generation-control branch lowering passes the
+selected branch tokens/source directly instead of constructing a temporary
+compatibility body.
+
+M254.8 also removed the obsolete
+`unsupported_primitive_call_diagnostics(body, ...)` wrapper and the
+`ImplementationBody` import from
+`tslgen/src/tslgen/lowering/primitive_calls.py`. Primitive-call unsupported
+diagnostics now use the already accepted explicit body-token and payload-token
+APIs.
+
+Tests added:
+
+- `tslgen/tests/test_m254_8_fragment_first_lowerer_compatibility_body_retirement.py`
+  verifies `lowerer.py` and `primitive_calls.py` no longer expose
+  `ImplementationBody` references or the old primitive-call wrapper, that
+  branch bodies use explicit selected body token views, that remaining
+  production `ImplementationBody` references are classified, and that no new
+  scanner/fixture/runtime-dependency drift was introduced.
+
+Accepted validation:
+
+- `git diff --check`: exit 0 with no output after marking the new M254.8 test,
+  M254.8 accounting artifact, and M254.9 prompt intent-to-add.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with no
+  output.
+- Required pytest bundle:
+  `PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m147_primitive_call_reference_inventory.py tslgen/tests/test_m148_primitive_call_dependency_closure.py tslgen/tests/test_m234_pairwise_lowering_path_cleanup.py tslgen/tests/test_m235_primitive_call_fragment_adapter_consolidation.py tslgen/tests/test_m254_5_fragment_first_direct_lowerer_body_consumption.py tslgen/tests/test_m254_6_fragment_first_primitive_call_inventory.py tslgen/tests/test_m254_7_fragment_first_discovery_api_signature_cleanup.py tslgen/tests/test_m254_8_fragment_first_lowerer_compatibility_body_retirement.py`
+  exited 0 with 322 tests passed in 49.27s.
+- `rg -n "\bImplementationBody\b" tslgen/src tslgen/tests`: exit 0 and
+  printed the exact accounting output recorded in
+  `docs/agent/m254.8-implementationbody-accounting.txt`. Remaining production
+  categories are the domain compatibility model, catalog-builder compatibility
+  construction, primitive-project compatibility construction, and one
+  compatibility-adapter doc note. `lowerer.py` and `primitive_calls.py` have no
+  remaining `ImplementationBody` hits.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and printed
+  validation-created cache directories. After cleanup, the final rerun exited
+  0 with no output.
+- `find . -type d -name .pytest_cache -print`,
+  `find . -type d -name .mypy_cache -print`, and
+  `find . -type d -name .ruff_cache -print`: exit 0 with no output.
+
+Review result:
+
+Architecture/boundary returned Accept With Follow-Ups. Evidence and test
+review returned Accept. Documentation and validation re-review accepted after
+handoff and validation-accounting completion.
+
+Follow-up:
+
+Architecture review recorded one remaining direct-lowerer concern:
+`_selected_body_token_view(...)` can still fall back from fragments to
+`selected.implementation.body.tokens` when fragment-derived tokens do not
+preserve direct-body shape. M254.9 is selected to retire that fragment-present
+stale-token override while keeping token-only fallback for fragment-absent
+selected implementations.
+
+Next concrete prompt:
+`docs/agent/runs/m254.9-fragment-present-token-fallback-retirement-execution-review-loop-prompt.md`.
+
+### Milestone 254.9: Fragment-Present Token Fallback Retirement
+
+Status:
+
+Accepted. Execution-review loop prompt:
+`docs/agent/runs/m254.9-fragment-present-token-fallback-retirement-execution-review-loop-prompt.md`.
+
+Goal:
+
+Continue the M254.x `ImplementationBody` removal series by retiring the
+fragment-present stale-token fallback in direct selected-body lowering. When
+`Implementation.source_body_fragments` is present, direct lowering should
+consume fragment-derived tokens or report their diagnostics; compatibility
+`implementation.body.tokens` may remain only as token-only fallback for
+selected implementations without fragments.
+
+Scope:
+
+- In `lowerer.py`, remove the shape-preservation fallback that returns
+  compatibility body tokens when fragments are present.
+- Delete now-unused helper functions such as
+  `_direct_body_fragment_tokens_preserve_shape(...)` and
+  `_has_direct_body_keyword(...)` if they become dead.
+- Preserve token-only fallback for selected implementations where
+  `source_body_fragments is None`.
+- Add a stale-token preference regression proving a fragment-present selected
+  implementation is lowered from fragments even if compatibility `body.tokens`
+  contain a conflicting lowerable operation or directive.
+- Keep M254.8 guardrails proving `lowerer.py` and `primitive_calls.py` do not
+  import, construct, or expose `ImplementationBody`.
+
+Out of scope:
+
+Changing lowering semantics beyond choosing fragments whenever fragments are
+present, removing the domain `ImplementationBody` class, removing
+catalog/pipeline compatibility body construction, deleting token-only tests,
+backend rendering, generated-project build verification, primitive-call
+selector semantics, dependency-closure behavior, source repair,
+target-language parsing, fixture-shaped pipelines, runtime dependencies on
+`frozen` or `tslgenold`, and M255.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py tslgen/tests/test_m254_5_fragment_first_direct_lowerer_body_consumption.py tslgen/tests/test_m254_8_fragment_first_lowerer_compatibility_body_retirement.py tslgen/tests/test_m254_9_fragment_present_token_fallback_retirement.py
+rg -n "\bImplementationBody\b" tslgen/src tslgen/tests
+find tslgen -type d -name __pycache__ -print
+```
+
+Result:
+
+M254.9 removed the fragment-present fallback from
+`Lowerer._selected_body_token_view(...)` back to compatibility
+`selected.implementation.body.tokens` and deleted the now-dead
+`_direct_body_fragment_tokens_preserve_shape(...)` and
+`_has_direct_body_keyword(...)` helpers. Fragment-present selected
+implementations now consume fragment-derived tokens and diagnostics; token-only
+fallback remains only for fragment-absent selections.
+
+M254.9 added
+`tslgen/tests/test_m254_9_fragment_present_token_fallback_retirement.py`,
+which proves stale compatibility operation tokens cannot override a
+fragment-backed `emit_return(...)` body. Existing `test_m107` diagnostic
+expectations were updated only where stale-token fallback removal exposed the
+already accepted fragment-first diagnostics: malformed primitive-call fragments
+now report `TSL-LOWER-PRIMITIVE-CALL-FRAGMENT-MALFORMED`, and an
+`emit_return(...)` region without a trailing semicolon still reports the
+unsupported opaque return payload.
+
+Validation result:
+
+- `git diff --check`: exit 0 with no output after marking the new M254.9
+  files intent-to-add.
+- `python -B -m compileall -q tslgen/src/tslgen tslgen/tests`: exit 0 with no
+  output.
+- Required pytest bundle: exit 0 with 282 tests passed in 63.81s.
+- `rg -n "\bImplementationBody\b" tslgen/src tslgen/tests`: exit 0 and printed
+  the exact accounting output recorded in
+  `docs/agent/m254.9-implementationbody-accounting.txt`.
+- Initial `find tslgen -type d -name __pycache__ -print`: exit 0 and printed
+  validation-created cache directories. After cleanup, the final rerun exited
+  0 with no output.
+- `find . -type d -name .pytest_cache -print`,
+  `find . -type d -name .mypy_cache -print`, and
+  `find . -type d -name .ruff_cache -print`: exit 0 with no output.
+
+Next concrete prompt:
+`docs/agent/runs/m254.91-implementation-body-full-deletion-execution-review-loop-prompt.md`.
+
+### Milestone 254.91: ImplementationBody Full Deletion
+
+Status:
+
+Selected. Execution-review loop prompt:
+`docs/agent/runs/m254.91-implementation-body-full-deletion-execution-review-loop-prompt.md`.
+
+Goal:
+
+Finish the M254.x `ImplementationBody` removal series by deleting the remaining
+`ImplementationBody` production and test references in one coherent mechanical
+cleanup. The target deletion gate is:
+
+```bash
+rg -n "\bImplementationBody\b" tslgen/src tslgen/tests
+```
+
+The expected result for M254.91 is no output with exit code 1. If full deletion
+cannot be completed safely in one coherent slice, M254.91 must stop before
+speculative implementation and create a narrower M254.92 prompt with exact
+remaining-reference accounting.
+
+Scope:
+
+- Remove the `ImplementationBody` dataclass from `tslgen.domain.catalog`.
+- Replace `Implementation.body: ImplementationBody` with explicit typed body
+  fields such as `body_tokens: tuple[BodyToken, ...]` and
+  `body_source: SourceLocation`.
+- Update production construction and consumers in catalog building, primitive
+  project construction, lowering, and compatibility adapters.
+- Update tests and test helpers mechanically so they follow the production
+  direct-field model; do not leave a test-only `ImplementationBody` shim.
+- Preserve M254.9 behavior: fragments are authoritative when present, and
+  token-only fallback remains only for fragment-absent selected
+  implementations.
+
+Out of scope:
+
+New TSIL semantics, new parser/source scanner paths, pairwise keyword handlers,
+backend rendering, generated-project build verification, template rendering,
+primitive-call selector semantics, dependency closure semantics, source repair,
+target-language parsing, runtime dependencies on `frozen` or `tslgenold`, and
+M255 unless deletion is complete and the next prompt explicitly reactivates it.
+
+Validation:
+
+```bash
+git diff --check
+python -B -m compileall -q tslgen/src/tslgen tslgen/tests
+PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests
+rg -n "\bImplementationBody\b" tslgen/src tslgen/tests
+find tslgen -type d -name __pycache__ -print
+```
 
 ### Milestone 255: Real Generic Self-Call Selector Specialization Lowering
 
 Status:
 
-Selected. Execution-review loop prompt:
+Deferred by ADR-073 and the M254.x `ImplementationBody` removal series.
+Existing execution-review loop prompt:
 `docs/agent/runs/m255-real-generic-self-call-selector-specialization-lowering-execution-review-loop-prompt.md`.
 
 Goal:

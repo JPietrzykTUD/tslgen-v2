@@ -769,6 +769,277 @@ assignment/index expression parsing, source repair, pairwise surrounding-keyword
 special cases, fixture-shaped pipelines, template-side semantic decisions, or
 runtime dependencies on `frozen` or `tslgenold`.
 
+### M254.1 Fragment-First Implementation Body Ownership
+
+Milestone 254.1 starts the ADR-073 `ImplementationBody` removal series.
+Recursive source-body fragments are split into the syntax/source-body boundary
+so production code can consume source structure without importing semantic
+lowering adapters. The lowering `source_body_fragments` module remains as a
+compatibility/semantic adapter layer over that pure syntax model.
+
+Catalog promotion now scans full `tsil` raw implementation bodies into a
+`SourceBodyFragmentSequence` attached to the selected `Implementation`. This
+full-body scan is not limited to `emit_return(...)` payloads; it sees root and
+nested regions such as `var`, `loop`, `call`, `type<backend>`, and
+`emit_return` through the shared recursive fragment boundary.
+
+The old `ImplementationBody` token stream remains temporarily as compatibility
+payload for accepted consumers, but backend type-query discovery now prefers
+the implementation's fragment sequence when present. `type<backend>(...)`
+keyword fragments are converted directly into backend type-query request
+islands, while raw fragments continue through the accepted text helper. Empty
+compatibility tokens no longer prevent backend type-query discovery when a
+selected implementation carries source-body fragments.
+
+M254.1 does not add new TSIL keyword semantics, backend rendering, generated
+project build verification, primitive-call dependency closure, semantic
+`@self` resolution, generic loop code generation, assignment/index expression
+parsing, source repair, pairwise keyword-combination handlers, fixture-shaped
+pipelines, template-side semantic decisions, or runtime dependencies on
+`frozen` or `tslgenold`.
+
+### M254.2 Fragment-First Raw-Island Discovery Family
+
+Milestone 254.2 extends the ADR-073 fragment-first body ownership path across
+the remaining accepted raw source-island discovery families. When a selected
+implementation carries `source_body_fragments`, discovery now prefers the
+recursive fragment sequence for:
+
+- backend value queries;
+- backend intrinsic requests;
+- source operations;
+- backend/output source islands;
+- mask keyword requests;
+- mask lane constant requests.
+
+Fragment-backed raw-island discovery runs the already accepted family text
+helper over the contiguous source-body text carried by the fragment sequence.
+This preserves existing request shapes, malformed-form diagnostics,
+surrounding opaque text, and opaque nested payload behavior. Accepted nested
+forms such as `value<generation>(...)` inside source-operation or
+backend/output payloads remain part of the outer raw island payload unless the
+selected family already owns that exact outer island.
+
+The old `ImplementationBody.tokens` paths remain as compatibility fallback
+only for token-only callers. No new selector, payload, backend translation, or
+rendering semantics are introduced.
+
+M254.2 does not add new TSIL keyword spellings, backend rendering, generated
+project build verification, primitive-call dependency closure, semantic
+`@self` resolution, generic loop code generation, assignment/index expression
+parsing, source repair, pairwise keyword-combination handlers, fixture-shaped
+pipelines, template-side semantic decisions, or runtime dependencies on
+`frozen` or `tslgenold`.
+
+### M254.3 Fragment-First Directive/Control Discovery
+
+Milestone 254.3 extends the fragment-first body ownership path to the accepted
+directive/control discovery families for generation variable declarations and
+backend-control directives.
+
+When a selected implementation carries `source_body_fragments`, generation
+variable discovery now consumes root `var<...>(...)` keyword fragments instead
+of requiring `ImplementationBody.tokens`. The source-body scanner recognizes
+any `var` selector lexically, but the lowerer still accepts only the M163
+selectors `init_register`, `infer`, `const_infer`, and `typed`. Unsupported
+selectors and malformed payloads keep the existing generation-variable
+diagnostics. The fragment-backed path preserves the old top-level/raw-brace
+boundary: a `var` region inside an opaque raw brace scope remains opaque for
+this discovery family.
+
+Backend-control discovery now consumes recursive `if<...>`, `else<...>`, and
+`switch<...>` keyword fragments instead of relying on flat token scanning when
+fragments are present. The source-body scanner recognizes selectors lexically,
+but the backend-control lowerer still records only accepted `compile`
+directives as typed request facts. `generation` selectors remain opaque to
+backend-control discovery, and `runtime` or unknown selectors keep the
+existing unsupported-selector diagnostics. Directive bodies are preserved as
+opaque source around the request; M254.3 does not evaluate compile branches or
+render backend control.
+
+The old `ImplementationBody.tokens` paths remain as compatibility fallback
+only for token-only callers. M254.3 does not add new TSIL semantics, backend
+rendering, generated project build verification, dependency closure, semantic
+`@self` resolution, generation branch evaluation, generic loop code
+generation, assignment/index parsing, source repair, pairwise keyword
+combination handlers, fixture-shaped pipelines, template-side semantic
+decisions, or runtime dependencies on `frozen` or `tslgenold`.
+
+### M254.4 Fragment-First Generation Region Ownership
+
+Milestone 254.4 extends the fragment-first body ownership path to accepted
+generation-control and generation-loop region consumers.
+
+When a selected implementation carries `source_body_fragments`,
+generation-control region lowering now consumes the recursive fragment
+sequence before falling back to the old `ImplementationBody.tokens` stream.
+The accepted semantics for `if<generation>(Condition) { ... }`,
+`else if<generation>(Condition) { ... }`, and
+`else<generation> { ... }` are preserved, including condition lowering,
+selected/unselected branch facts, malformed-form diagnostics, unsupported
+condition diagnostics, and deterministic branch output.
+
+Generation-loop region lowering and embedded loop discovery likewise prefer
+source-body fragments. The accepted `loop<unroll>(...)` and
+`loop<range>(Index, Start, End, Step) { ... }` semantics are preserved,
+including generation-value bound lowering, unsupported-bound diagnostics,
+selected loop-body facts, and opaque surrounding segments in discovery.
+Unsupported `loop<...>` selectors are lexically recognized only far enough to
+reach the existing generation-loop unsupported-selector diagnostic.
+Whitespace-only raw fragments between adjacent TSIL regions are treated as
+compatibility boundary whitespace so fragment streams preserve the token
+forms previously produced by catalog token classification.
+
+M254.4 introduces one narrow compatibility adapter,
+`compatibility_body_token_result_from_fragment_sequence`, for result models
+that still carry `BodyToken` tuples. The adapter is explicit retirement debt:
+it exists only to bridge recursive source fragments into older token-oriented
+generation-region result models while the M254.x series removes
+`ImplementationBody` dependencies.
+
+The old `ImplementationBody.tokens` paths remain as compatibility fallback
+only for token-only callers. M254.4 does not add new TSIL semantics, backend
+rendering, generated project build verification, dependency closure, semantic
+`@self` resolution, generic loop code generation, assignment/index parsing,
+source repair, target-language expression parsing, pairwise keyword
+combination handlers, fixture-shaped pipelines, template-side semantic
+decisions, or runtime dependencies on `frozen` or `tslgenold`.
+
+### M254.5 Fragment-First Direct Lowerer Body Consumption
+
+Milestone 254.5 extends the fragment-first body ownership path to
+`Lowerer._lower_direct_body`.
+
+Direct selected-body lowering now builds one local selected-body token view.
+When a selected implementation carries `source_body_fragments`, the view derives
+temporary compatibility tokens from the recursive fragment sequence and uses
+those tokens for direct operation-fragment detection, exact `emit_return(...)`
+detection, primitive-call return-payload expression lowering, unsupported
+return-expression diagnostics, and primitive-call diagnostics. If the selected
+implementation already carries old compatibility body tokens and fragment
+adaptation would change an accepted diagnostic boundary, the view falls back to
+`ImplementationBody.tokens` as compatibility-only debt.
+
+The fragment-backed path preserves accepted
+`emit_return(call<primitive=add>(left, right));` lowering with empty
+compatibility body tokens. It also preserves unsupported return-expression and
+primitive-call diagnostics from fragment-derived payload tokens. Token-only
+direct operation fallback remains available for accepted binary, unary, and
+comparison operation bodies until operation-body ownership is retired in a
+later M254.x step.
+
+Catalog construction attaches `source_body_fragments` only when the raw TSIL
+body can be lexically scanned without scanner diagnostics. Unbalanced lexical
+regions therefore remain raw unsupported body inputs at catalog/lowering
+boundaries, while balanced malformed payload adaptation diagnostics such as
+malformed primitive-call selectors still surface through the accepted payload
+adapter path.
+
+M254.5 adds a body-token primitive-call diagnostic entry point so direct
+lowering no longer needs to pass an `ImplementationBody` object to report
+recognized primitive-call islands. The old `ImplementationBody` diagnostic API
+delegates to this token API for compatibility.
+
+M254.5 does not add new TSIL semantics, new operation semantics, primitive-call
+selector specialization lowering, semantic `@self` resolution, dependency
+closure, backend rendering, generated project build verification, assignment
+or index parsing, source repair, target-language expression parsing, pairwise
+keyword-combination handlers, fixture-shaped pipelines, template-side semantic
+decisions, or runtime dependencies on `frozen` or `tslgenold`.
+
+### M254.6 Fragment-First Primitive-Call Inventory
+
+Milestone 254.6 extends fragment-first body ownership to primitive-call
+reference inventory and dependency discovery.
+
+When a selected implementation carries `source_body_fragments`,
+`PrimitiveCallDependencyCollector.reference_inventory(...)` now collects
+primitive-call facts from the accepted recursive fragment boundary and exact
+primitive-call directive adapter. `ImplementationBody.tokens` traversal remains
+available only for selected implementations without fragments.
+
+The fragment-backed path preserves the accepted M147/M148 primitive-call
+semantics: standalone calls and calls in `emit_return(...)` payloads are
+collected in source order; selector lowering, target matching, raw positional
+argument binding, unsupported-selector diagnostics, unknown-target diagnostics,
+missing-implementation diagnostics, arity diagnostics, and continued
+collection after failed calls are unchanged. Primitive-call argument payloads
+remain opaque for this inventory boundary, so a nested `call<primitive=...>(...)`
+inside another call's argument text is not recursively resolved as a dependency.
+
+M254.6 does not add new primitive-call selector semantics, semantic `@self`
+dependency resolution, dependency-closure expansion behavior, backend
+rendering, generated project build verification, assignment or index parsing,
+source repair, target-language expression parsing, pairwise keyword-combination
+handlers, fixture-shaped pipelines, template-side semantic decisions, or
+runtime dependencies on `frozen` or `tslgenold`.
+
+### M254.7 Fragment-First Discovery API Signature Cleanup
+
+Milestone 254.7 turns the already migrated selected-implementation discovery
+families into context-first APIs. Backend type queries, backend value queries,
+backend intrinsic requests, backend/output source islands, source operations,
+backend control, generation variables, generation control, generation loops,
+mask keywords, and mask lane constants now take the typed selected lowering
+context as their production input instead of accepting a separate
+`ImplementationBody` parameter.
+
+When a selected implementation carries `source_body_fragments`, those discovery
+families continue to consume the fragment-backed source-body structure first.
+`context.implementation.body.tokens` remains only a compatibility fallback for
+selected implementations without fragments. Focused text/fragment helper APIs
+remain available for tests and narrow adapters.
+
+M254.7 preserves accepted discovery semantics and diagnostics. It does not add
+new TSIL keyword semantics, new source scanners, pairwise keyword-combination
+handlers, backend rendering, generated project build verification,
+primitive-call selector semantics, dependency-closure semantics, source repair,
+target-language parsing, fixture-shaped pipelines, or runtime dependencies on
+`frozen` or `tslgenold`.
+
+### M254.8 Fragment-First Lowerer Compatibility Body Retirement
+
+Milestone 254.8 removes the remaining `ImplementationBody`-shaped API surface
+from direct selected-body lowering and primitive-call diagnostic helpers.
+`Lowerer` no longer imports, constructs, or accepts `ImplementationBody` in
+private helper signatures. Generation-control branch lowering now passes the
+selected branch tokens and source through an explicit selected body token view
+instead of constructing a temporary compatibility body.
+
+Primitive-call unsupported diagnostics no longer expose the old
+`unsupported_primitive_call_diagnostics(body, ...)` wrapper. The accepted
+diagnostic path consumes explicit body tokens or payload tokens.
+
+M254.8 preserves accepted fragment-first behavior, token-only fallback for
+selected implementations without fragments, direct selected-body diagnostics,
+primitive-call diagnostics, primitive-call inventory behavior, and dependency
+closure behavior. It does not remove the domain `ImplementationBody` class,
+catalog-builder compatibility construction, primitive-project compatibility
+construction, token-only tests, backend rendering, generated project build
+verification, new TSIL semantics, source repair, pairwise keyword handlers, or
+runtime dependencies on `frozen` or `tslgenold`.
+
+### M254.9 Fragment-Present Token Fallback Retirement
+
+Milestone 254.9 retires the remaining stale-token override in direct
+selected-body lowering. When a selected implementation carries
+`source_body_fragments`, direct lowering consumes the fragment-derived token
+view and diagnostics. It no longer falls back to compatibility
+`ImplementationBody.tokens` merely because those old tokens appear to preserve
+an accepted direct-body shape.
+
+Token-only fallback remains available only when `source_body_fragments is None`.
+This preserves accepted legacy-style unit fixtures while making fragment-backed
+selected implementations authoritative. Fragment-present malformed primitive
+call islands now surface the fragment-adaptation diagnostic instead of being
+masked by old compatibility tokens.
+
+M254.9 does not remove the domain `ImplementationBody` class, catalog-builder
+compatibility construction, primitive-project compatibility construction,
+token-only tests, backend rendering, generated project build verification, new
+TSIL semantics, source repair, pairwise keyword handlers, or runtime
+dependencies on `frozen` or `tslgenold`.
+
 ### M218 Typed Primitive Render Context
 
 Milestone 218 adds a typed primitive render model for already-decided

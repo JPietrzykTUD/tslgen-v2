@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
-from tslgen.domain.catalog import BodyToken, ImplementationBody, RawStringToken
+from tslgen.domain.catalog import BodyToken, RawStringToken
 from tslgen.lowering._source_islands import (
     JoinedRawStringRun,
     OpaqueTokenBuffer,
@@ -17,6 +17,7 @@ from tslgen.lowering._source_islands import (
     source_text_from_text,
 )
 from tslgen.lowering.model import SelectedImplementationLoweringContext
+from tslgen.syntax.source_body_fragments import SourceBodyFragmentSequence
 
 _MASK_HEAD = "mask"
 _MASK_PREFIX = f"{_MASK_HEAD}<"
@@ -84,12 +85,16 @@ class MaskKeywordDiscoveryLoweringResult:
 
 def discover_mask_keyword_requests(
     context: SelectedImplementationLoweringContext,
-    body: ImplementationBody,
 ) -> MaskKeywordDiscoveryLoweringResult:
     """Discover exact mask<...>(...) islands in raw body-token text."""
 
-    del context
+    if context.implementation.source_body_fragments is not None:
+        return discover_mask_keyword_requests_in_fragments(
+            context,
+            context.implementation.source_body_fragments,
+        )
 
+    body = context.implementation.body
     segments: list[MaskKeywordDiscoverySegment] = []
     pending_opaque_tokens = OpaqueTokenBuffer()
     raw_run = RawStringRunBuffer()
@@ -140,6 +145,22 @@ def discover_mask_keyword_requests_in_text(
 
     return _discover_mask_keyword_requests_in_source_text(
         source_text_from_text(text, source),
+    )
+
+
+def discover_mask_keyword_requests_in_fragments(
+    context: SelectedImplementationLoweringContext,
+    sequence: SourceBodyFragmentSequence,
+) -> MaskKeywordDiscoveryLoweringResult:
+    """Discover mask keyword requests from recursive source-body fragments."""
+
+    del context
+
+    return _discover_mask_keyword_requests_in_source_text(
+        source_text_from_text(
+            sequence.source_text.text,
+            sequence.source_text.source_at(0),
+        )
     )
 
 

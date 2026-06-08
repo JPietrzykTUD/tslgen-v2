@@ -12,7 +12,6 @@ from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
     BodyToken,
     Catalog,
-    ImplementationBody,
     LowerableDirective,
     NamedPrimitiveReference,
     PayloadToken,
@@ -49,8 +48,13 @@ from tslgen.lowering.model import (
     build_selected_implementation_lowering_context,
 )
 from tslgen.lowering.selector_payload import lower_primitive_call_selector_payload
+from tslgen.lowering.source_body_fragments import (
+    PrimitiveCallKeywordDirective,
+    extract_primitive_call_directives,
+)
 from tslgen.lowering.type_queries import build_selected_type_environment
 from tslgen.lowering.vector_member_types import resolve_vector_member_scalar_type
+from tslgen.syntax.source_body_regions import SourceBodyDelimitedSpan, SourceBodySpan
 
 _MISSING_PRIMITIVE_CALL_CAPABILITY = (
     "primitive-call dependency resolution is not implemented yet"
@@ -82,6 +86,12 @@ _ConcreteVectorResolution = CurrentVector | Diagnostic | None
 class _SelectorTargetParts:
     vector: CurrentVector
     return_binding_value: _ReturnBindingSelectorValue | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _PrimitiveCallInventorySource:
+    primitive_calls: tuple[PrimitiveCall, ...]
+    diagnostics: tuple[Diagnostic, ...]
 
 
 class PrimitiveCallResolver:
@@ -254,7 +264,10 @@ class PrimitiveCallDependencyCollector:
         references: list[PrimitiveCallReference] = []
         diagnostics: list[Diagnostic] = []
 
-        for primitive_call in _primitive_calls_in_source_order(selected):
+        source = _primitive_call_inventory_source(selected)
+        diagnostics.extend(source.diagnostics)
+
+        for primitive_call in source.primitive_calls:
             expression_result = self._resolver.lower_expression(
                 selected,
                 primitive_call,
@@ -305,14 +318,17 @@ class PrimitiveCallDependencyCollector:
         )
 
 
-def unsupported_primitive_call_diagnostics(
-    body: ImplementationBody,
+def unsupported_primitive_call_diagnostics_from_body_tokens(
+    tokens: tuple[BodyToken, ...],
     *,
     selected: SelectedImplementation,
     catalog: Catalog | None,
 ) -> tuple[Diagnostic, ...]:
+    primitive_call_tokens = _primitive_call_directives_from_body_tokens(tokens)
+    if not primitive_call_tokens:
+        return ()
     return _unsupported_primitive_call_diagnostics_from_directives(
-        _primitive_call_directives_from_body(body),
+        primitive_call_tokens,
         selected=selected,
         catalog=catalog,
     )
@@ -631,9 +647,148 @@ def _format_parameter_names(parameter_names: tuple[str, ...]) -> str:
 
 def _primitive_calls_in_source_order(
     selected: SelectedImplementation,
+) -> tuple[PrimitiveCall, ...]:
+    return _primitive_call_inventory_source(selected).primitive_calls
+
+
+def _primitive_call_inventory_source(
+    selected: SelectedImplementation,
+) -> _PrimitiveCallInventorySource:
+    fragments = selected.implementation.source_body_fragments
+    if fragments is not None:
+        extraction = extract_primitive_call_directives(fragments)
+        directives = _inventory_fragment_directives(extraction.directives)
+        return _PrimitiveCallInventorySource(
+            primitive_calls=tuple(
+                directive.directive.primitive_call
+                for directive in directives
+                if directive.directive.primitive_call is not None
+            ),
+            diagnostics=tuple(
+                diagnostic
+                for diagnostic in extraction.diagnostics
+                if not _diagnostic_inside_call_argument_payload(
+                    diagnostic,
+                    extraction.directives,
+                )
+            ),
+        )
+
+    return _PrimitiveCallInventorySource(
+        primitive_calls=tuple(
+            _primitive_calls_in_source_order_from_body_tokens(
+                selected.implementation.body.tokens
+            )
+        ),
+        diagnostics=(),
+    )
+
+
+def _primitive_calls_in_source_order_from_body_tokens(
+    tokens: tuple[BodyToken, ...],
 ) -> Iterator[PrimitiveCall]:
-    for token in selected.implementation.body.tokens:
+    for token in tokens:
         yield from _primitive_calls_from_token(token)
+
+
+def _inventory_fragment_directives(
+    directives: tuple[PrimitiveCallKeywordDirective, ...],
+) -> tuple[PrimitiveCallKeywordDirective, ...]:
+    return tuple(
+        directive
+        for directive in directives
+        if not _directive_inside_call_argument_payload(directive, directives)
+    )
+
+
+def _directive_inside_call_argument_payload(
+    candidate: PrimitiveCallKeywordDirective,
+    directives: tuple[PrimitiveCallKeywordDirective, ...],
+) -> bool:
+    candidate_span = candidate.fragment.source_region.full_span
+    return any(
+        other is not candidate
+        and _delimited_span_contains_span(
+            other.fragment.source_region.payload,
+            candidate_span,
+        )
+        for other in directives
+    )
+
+
+def _diagnostic_inside_call_argument_payload(
+    diagnostic: Diagnostic,
+    directives: tuple[PrimitiveCallKeywordDirective, ...],
+) -> bool:
+    if diagnostic.location is None:
+        return False
+    return any(
+        _delimited_span_contains_location(
+            directive.fragment.source_region.payload,
+            diagnostic.location,
+        )
+        for directive in directives
+    )
+
+
+def _delimited_span_contains_span(
+    container: SourceBodyDelimitedSpan | None,
+    child: SourceBodySpan,
+) -> bool:
+    if container is None:
+        return False
+    span = container.payload_span
+    return (
+        span.path == child.path
+        and _position_at_or_after(child.line, child.column, span.line, span.column)
+        and _position_at_or_before(
+            child.end_line,
+            child.end_column,
+            span.end_line,
+            span.end_column,
+        )
+    )
+
+
+def _delimited_span_contains_location(
+    container: SourceBodyDelimitedSpan | None,
+    location: SourceLocation,
+) -> bool:
+    if container is None:
+        return False
+    span = container.payload_span
+    return (
+        span.path == location.path
+        and _position_at_or_after(location.line, location.column, span.line, span.column)
+        and _position_before(location.line, location.column, span.end_line, span.end_column)
+    )
+
+
+def _position_at_or_after(
+    line: int,
+    column: int,
+    reference_line: int,
+    reference_column: int,
+) -> bool:
+    return (line, column) >= (reference_line, reference_column)
+
+
+def _position_at_or_before(
+    line: int,
+    column: int,
+    reference_line: int,
+    reference_column: int,
+) -> bool:
+    return (line, column) <= (reference_line, reference_column)
+
+
+def _position_before(
+    line: int,
+    column: int,
+    reference_line: int,
+    reference_column: int,
+) -> bool:
+    return (line, column) < (reference_line, reference_column)
 
 
 def _primitive_calls_from_token(token: BodyToken) -> Iterator[PrimitiveCall]:
@@ -667,12 +822,12 @@ def _unsupported_primitive_call_diagnostics_from_directives(
     )
 
 
-def _primitive_call_directives_from_body(
-    body: ImplementationBody,
+def _primitive_call_directives_from_body_tokens(
+    tokens: tuple[BodyToken, ...],
 ) -> tuple[LowerableDirective, ...]:
     return tuple(
         token
-        for token in body.tokens
+        for token in tokens
         if isinstance(token, LowerableDirective)
         and token.name == "call"
         and _has_primitive_call_shape(token)

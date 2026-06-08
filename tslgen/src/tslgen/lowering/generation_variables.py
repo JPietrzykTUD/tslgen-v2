@@ -7,7 +7,6 @@ import re
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
     BodyToken,
-    ImplementationBody,
     LowerableDirective,
     RawStringToken,
 )
@@ -25,6 +24,13 @@ from tslgen.syntax.tsil_lexical import (
     LexicalPart,
     raw_brace_depth_after,
 )
+from tslgen.syntax.source_body_fragments import (
+    KeywordRegionFragment,
+    RawSourceFragment,
+    SourceBodyFragment,
+    SourceBodyFragmentSequence,
+)
+from tslgen.syntax.source_body_regions import SourceBodyKeyword
 
 _SUPPORTED_SELECTORS = frozenset(("init_register", "infer", "const_infer", "typed"))
 _IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -32,12 +38,16 @@ _IDENTIFIER_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 def discover_generation_variable_declarations(
     context: SelectedImplementationLoweringContext,
-    body: ImplementationBody,
 ) -> GenerationVariableDeclarationDiscoveryLoweringResult:
     """Discover top-level unresolved generation variable declarations."""
 
-    del context
+    if context.implementation.source_body_fragments is not None:
+        return discover_generation_variable_declarations_in_fragments(
+            context,
+            context.implementation.source_body_fragments,
+        )
 
+    body = context.implementation.body
     tokens = body.tokens
     segments: list[
         GenerationVariableDeclarationOpaqueSegment
@@ -100,6 +110,108 @@ def discover_generation_variable_declarations(
             source=body.source,
         ),
         diagnostics=(),
+    )
+
+
+def discover_generation_variable_declarations_in_fragments(
+    context: SelectedImplementationLoweringContext,
+    sequence: SourceBodyFragmentSequence,
+) -> GenerationVariableDeclarationDiscoveryLoweringResult:
+    """Discover generation variable declarations from root body fragments."""
+
+    del context
+
+    segments: list[
+        GenerationVariableDeclarationOpaqueSegment
+        | GenerationVariableDeclarationRequestSegment
+    ] = []
+    pending_opaque: list[BodyToken] = []
+    raw_brace_depth = 0
+
+    for fragment in sequence.fragments:
+        opaque_token = _raw_token_from_fragment(fragment)
+
+        if raw_brace_depth != 0:
+            pending_opaque.append(opaque_token)
+            raw_brace_depth = _updated_raw_brace_depth(raw_brace_depth, opaque_token)
+            continue
+
+        if not _is_var_fragment(fragment):
+            pending_opaque.append(opaque_token)
+            raw_brace_depth = _updated_raw_brace_depth(raw_brace_depth, opaque_token)
+            continue
+
+        assert isinstance(fragment, KeywordRegionFragment)
+        declaration = _lower_var_fragment(fragment)
+        if isinstance(declaration, Diagnostic):
+            return GenerationVariableDeclarationDiscoveryLoweringResult(
+                discovery=None,
+                diagnostics=(declaration,),
+            )
+
+        if pending_opaque:
+            opaque_tokens = tuple(pending_opaque)
+            segments.append(
+                GenerationVariableDeclarationOpaqueSegment(
+                    tokens=opaque_tokens,
+                    source=opaque_tokens[0].source,
+                )
+            )
+            pending_opaque.clear()
+        segments.append(
+            GenerationVariableDeclarationRequestSegment(
+                declaration=declaration,
+                source=declaration.source,
+            )
+        )
+
+    if not segments:
+        return GenerationVariableDeclarationDiscoveryLoweringResult(
+            discovery=None,
+            diagnostics=(_no_declaration_diagnostic(sequence.source_text.source_at(0)),),
+        )
+
+    if pending_opaque:
+        opaque_tokens = tuple(pending_opaque)
+        segments.append(
+            GenerationVariableDeclarationOpaqueSegment(
+                tokens=opaque_tokens,
+                source=opaque_tokens[0].source,
+            )
+        )
+
+    return GenerationVariableDeclarationDiscoveryLoweringResult(
+        discovery=GenerationVariableDeclarationDiscovery(
+            segments=tuple(segments),
+            source=sequence.source_text.source_at(0),
+        ),
+        diagnostics=(),
+    )
+
+
+def _lower_var_fragment(
+    fragment: KeywordRegionFragment,
+) -> GenerationVariableDeclarationRequest | Diagnostic:
+    region = fragment.source_region
+    if region.selector is None or region.payload is None:
+        return _malformed_declaration_diagnostic(
+            LowerableDirective(
+                name="var",
+                arguments=(),
+                source=region.full_span.start,
+            ),
+            "expected var directive with selector and payload",
+        )
+
+    return _lower_var_directive(
+        LowerableDirective(
+            name="var",
+            arguments=(
+                region.selector.payload_span.text.strip(),
+                region.payload.payload_span.text,
+            ),
+            source=region.full_span.start,
+        )
     )
 
 
@@ -259,6 +371,22 @@ def _trimmed_part(payload: str, start: int, end: int) -> LexicalPart | None:
 
 def _is_var_directive(token: BodyToken) -> bool:
     return isinstance(token, LowerableDirective) and token.name == "var"
+
+
+def _is_var_fragment(fragment: SourceBodyFragment) -> bool:
+    return (
+        isinstance(fragment, KeywordRegionFragment)
+        and fragment.keyword is SourceBodyKeyword.VAR
+    )
+
+
+def _raw_token_from_fragment(fragment: SourceBodyFragment) -> RawStringToken:
+    if isinstance(fragment, RawSourceFragment):
+        return RawStringToken(text=fragment.span.text, source=fragment.span.start)
+    return RawStringToken(
+        text=fragment.source_region.full_span.text,
+        source=fragment.source_region.full_span.start,
+    )
 
 
 def _typed_selector(selector: str) -> GenerationVariableDeclarationSelector:

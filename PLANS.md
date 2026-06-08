@@ -198,6 +198,21 @@ deeper ancestor-specific variants. A future TSIL keyword should require one
 keyword-specific semantic consumer over the recursive token stream, not one
 consumer for every possible surrounding keyword.
 
+For implementation-body work after M254, `SourceBodyFragmentSequence` or its
+pure source-body successor is the intended canonical body structure. Planning
+must treat `ImplementationBody` as removal debt, not architecture. A milestone
+that touches body lowering must answer:
+
+- Does this reduce production dependence on `ImplementationBody`?
+- Is every TSIL keyword discovered through the shared recursive fragment
+  boundary?
+- Are old token scanners quarantined behind one temporary adapter, or removed?
+- Does the next prompt continue the removal series until production code no
+  longer references `ImplementationBody`?
+
+If the answer is no, retarget to a consolidation milestone before adding
+another lowering/rendering feature.
+
 ## Simplicity And End-To-End Slice Guardrails
 
 Future planning must optimize for the shortest maintainable path from source

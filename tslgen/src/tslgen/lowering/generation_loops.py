@@ -6,7 +6,6 @@ from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
     BodyToken,
     Catalog,
-    ImplementationBody,
     LowerableDirective,
     RawStringToken,
 )
@@ -22,6 +21,9 @@ from tslgen.lowering.model import (
     LoweredGenerationValue,
     SelectedImplementationLoweringContext,
     SelectedTypeEnvironment,
+)
+from tslgen.lowering.source_body_fragments import (
+    compatibility_body_token_result_from_fragment_sequence,
 )
 from tslgen.syntax.tsil_lexical import (
     ANGLE_DELIMITER,
@@ -74,15 +76,48 @@ class _LoopIntegerValueLowering:
 
 def lower_generation_loop_region(
     context: SelectedImplementationLoweringContext,
-    body: ImplementationBody,
     *,
     catalog: Catalog | None = None,
     environment: SelectedTypeEnvironment | None = None,
 ) -> GenerationLoopRegionLoweringResult:
-    tokens = body.tokens
+    if context.implementation.source_body_fragments is not None:
+        token_result = compatibility_body_token_result_from_fragment_sequence(
+            context.implementation.source_body_fragments,
+        )
+        if token_result.diagnostics:
+            return GenerationLoopRegionLoweringResult(
+                region=None,
+                diagnostics=token_result.diagnostics,
+            )
+        return _lower_generation_loop_region_from_tokens(
+            context,
+            _strip_boundary_whitespace_tokens(token_result.tokens),
+            context.implementation.source_body_fragments.source_text.source_at(0),
+            catalog=catalog,
+            environment=environment,
+        )
+
+    body = context.implementation.body
+    return _lower_generation_loop_region_from_tokens(
+        context,
+        body.tokens,
+        body.source,
+        catalog=catalog,
+        environment=environment,
+    )
+
+
+def _lower_generation_loop_region_from_tokens(
+    context: SelectedImplementationLoweringContext,
+    tokens: tuple[BodyToken, ...],
+    body_source: SourceLocation,
+    *,
+    catalog: Catalog | None,
+    environment: SelectedTypeEnvironment | None,
+) -> GenerationLoopRegionLoweringResult:
     if not tokens:
         return _malformed_region_result(
-            body.source,
+            body_source,
             "expected loop<range>(Index, Start, End, Step) region",
         )
 
@@ -104,7 +139,7 @@ def lower_generation_loop_region(
                 diagnostics=unroll_result.diagnostics,
             )
         unroll_count = unroll_result.value
-        loop_index = 1
+        loop_index = _skip_whitespace_tokens(tokens, 1)
         if loop_index >= len(tokens):
             return _malformed_region_result(
                 first.source,
@@ -214,12 +249,45 @@ def lower_generation_loop_region(
 
 def discover_generation_loop_regions(
     context: SelectedImplementationLoweringContext,
-    body: ImplementationBody,
     *,
     catalog: Catalog | None = None,
     environment: SelectedTypeEnvironment | None = None,
 ) -> GenerationLoopDiscoveryLoweringResult:
-    tokens = body.tokens
+    if context.implementation.source_body_fragments is not None:
+        token_result = compatibility_body_token_result_from_fragment_sequence(
+            context.implementation.source_body_fragments,
+        )
+        if token_result.diagnostics:
+            return GenerationLoopDiscoveryLoweringResult(
+                discovery=None,
+                diagnostics=token_result.diagnostics,
+            )
+        return _discover_generation_loop_regions_from_tokens(
+            context,
+            token_result.tokens,
+            context.implementation.source_body_fragments.source_text.source_at(0),
+            catalog=catalog,
+            environment=environment,
+        )
+
+    body = context.implementation.body
+    return _discover_generation_loop_regions_from_tokens(
+        context,
+        body.tokens,
+        body.source,
+        catalog=catalog,
+        environment=environment,
+    )
+
+
+def _discover_generation_loop_regions_from_tokens(
+    context: SelectedImplementationLoweringContext,
+    tokens: tuple[BodyToken, ...],
+    body_source: SourceLocation,
+    *,
+    catalog: Catalog | None,
+    environment: SelectedTypeEnvironment | None,
+) -> GenerationLoopDiscoveryLoweringResult:
     segments: list[LoweredGenerationLoopOpaqueSegment | LoweredGenerationLoopRegionSegment] = []
     pending_opaque_start = 0
     index = 0
@@ -251,13 +319,10 @@ def discover_generation_loop_regions(
             index += 1
             continue
 
-        loop_body = ImplementationBody(
-            tokens=tokens[loop_slice.start_index:loop_slice.end_index],
-            source=_token_source(tokens[loop_slice.start_index]),
-        )
-        loop_result = lower_generation_loop_region(
+        loop_result = _lower_generation_loop_region_from_tokens(
             context,
-            loop_body,
+            tokens[loop_slice.start_index:loop_slice.end_index],
+            _token_source(tokens[loop_slice.start_index]),
             catalog=catalog,
             environment=environment,
         )
@@ -287,7 +352,7 @@ def discover_generation_loop_regions(
     if not segments:
         return GenerationLoopDiscoveryLoweringResult(
             discovery=None,
-            diagnostics=(_no_loop_region_diagnostic(body.source),),
+            diagnostics=(_no_loop_region_diagnostic(body_source),),
         )
 
     trailing_tokens = tokens[pending_opaque_start:]
@@ -302,7 +367,7 @@ def discover_generation_loop_regions(
     return GenerationLoopDiscoveryLoweringResult(
         discovery=LoweredGenerationLoopDiscovery(
             segments=tuple(segments),
-            source=body.source,
+            source=body_source,
         ),
         diagnostics=(),
     )
@@ -389,6 +454,28 @@ def _is_loop_directive(token: BodyToken, selector: str) -> bool:
     )
 
 
+def _strip_boundary_whitespace_tokens(
+    tokens: tuple[RawStringToken | LowerableDirective, ...],
+) -> tuple[BodyToken, ...]:
+    start = 0
+    end = len(tokens)
+    while start < end and _is_whitespace_raw_token(tokens[start]):
+        start += 1
+    while end > start and _is_whitespace_raw_token(tokens[end - 1]):
+        end -= 1
+    return tuple(tokens[start:end])
+
+
+def _skip_whitespace_tokens(tokens: tuple[BodyToken, ...], index: int) -> int:
+    while index < len(tokens) and _is_whitespace_raw_token(tokens[index]):
+        index += 1
+    return index
+
+
+def _is_whitespace_raw_token(token: BodyToken) -> bool:
+    return isinstance(token, RawStringToken) and token.text.strip() == ""
+
+
 def _is_unsupported_loop_directive(token: BodyToken) -> bool:
     return (
         isinstance(token, LowerableDirective)
@@ -413,8 +500,7 @@ def _loop_slice_start(
         return index
     if (
         _is_loop_directive(token, "unroll")
-        and index + 1 < len(tokens)
-        and _is_loop_directive(tokens[index + 1], "range")
+        and _next_non_whitespace_token_is_loop_range(tokens, index + 1)
     ):
         return index
     return None
@@ -425,7 +511,11 @@ def _find_embedded_loop_slice(
     *,
     start: int,
 ) -> _LoopRegionSliceSearch:
-    loop_index = start + 1 if _is_loop_directive(tokens[start], "unroll") else start
+    loop_index = (
+        _skip_whitespace_tokens(tokens, start + 1)
+        if _is_loop_directive(tokens[start], "unroll")
+        else start
+    )
     if loop_index >= len(tokens):
         return _loop_slice_diagnostic(
             _malformed_region_diagnostic(
@@ -465,6 +555,14 @@ def _find_embedded_loop_slice(
         ),
         diagnostic=None,
     )
+
+
+def _next_non_whitespace_token_is_loop_range(
+    tokens: tuple[BodyToken, ...],
+    index: int,
+) -> bool:
+    next_index = _skip_whitespace_tokens(tokens, index)
+    return next_index < len(tokens) and _is_loop_directive(tokens[next_index], "range")
 
 
 def _loop_slice_diagnostic(diagnostic: Diagnostic) -> _LoopRegionSliceSearch:

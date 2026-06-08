@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
-    ImplementationBody,
     RawStringToken,
 )
 from tslgen.lowering._source_islands import (
@@ -27,18 +26,23 @@ from tslgen.lowering.model import (
     SourceOperationRequest,
     SourceOperationRequestSegment,
 )
+from tslgen.syntax.source_body_fragments import SourceBodyFragmentSequence
 
 _SOURCE_OPERATION_HEADS: tuple[SourceOperationKind, ...] = ("cast", "mem", "io")
 
 
 def discover_source_operation_requests(
     context: SelectedImplementationLoweringContext,
-    body: ImplementationBody,
 ) -> SourceOperationDiscoveryLoweringResult:
     """Discover exact cast/memory/I/O islands in raw body-token text."""
 
-    del context
+    if context.implementation.source_body_fragments is not None:
+        return discover_source_operation_requests_in_fragments(
+            context,
+            context.implementation.source_body_fragments,
+        )
 
+    body = context.implementation.body
     segments: list[SourceOperationDiscoverySegment] = []
     pending_opaque_tokens = OpaqueTokenBuffer()
     raw_run = RawStringRunBuffer()
@@ -89,6 +93,22 @@ def discover_source_operation_requests_in_text(
 
     return _discover_source_operation_requests_in_source_text(
         source_text_from_text(text, source),
+    )
+
+
+def discover_source_operation_requests_in_fragments(
+    context: SelectedImplementationLoweringContext,
+    sequence: SourceBodyFragmentSequence,
+) -> SourceOperationDiscoveryLoweringResult:
+    """Discover source-operation requests from recursive source-body fragments."""
+
+    del context
+
+    return _discover_source_operation_requests_in_source_text(
+        source_text_from_text(
+            sequence.source_text.text,
+            sequence.source_text.source_at(0),
+        )
     )
 
 

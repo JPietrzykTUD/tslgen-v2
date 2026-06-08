@@ -6,7 +6,6 @@ from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
     BodyToken,
     Catalog,
-    ImplementationBody,
     LowerableDirective,
     RawStringToken,
 )
@@ -18,6 +17,9 @@ from tslgen.lowering.model import (
     LoweredGenerationValue,
     SelectedImplementationLoweringContext,
     SelectedTypeEnvironment,
+)
+from tslgen.lowering.source_body_fragments import (
+    compatibility_body_token_result_from_fragment_sequence,
 )
 
 
@@ -57,14 +59,46 @@ class _BranchCloseSearch:
 
 def lower_generation_control_region(
     context: SelectedImplementationLoweringContext,
-    body: ImplementationBody,
     *,
     catalog: Catalog | None = None,
     environment: SelectedTypeEnvironment | None = None,
 ) -> GenerationControlRegionLoweringResult:
-    tokens = body.tokens
+    if context.implementation.source_body_fragments is not None:
+        token_result = compatibility_body_token_result_from_fragment_sequence(
+            context.implementation.source_body_fragments,
+        )
+        if token_result.diagnostics:
+            return GenerationControlRegionLoweringResult(
+                region=None,
+                diagnostics=token_result.diagnostics,
+            )
+        return _lower_generation_control_region_from_tokens(
+            context,
+            _strip_boundary_whitespace_tokens(token_result.tokens),
+            context.implementation.source_body_fragments.source_text.source_at(0),
+            catalog=catalog,
+            environment=environment,
+        )
 
-    shape_result = _parse_generation_control_shape(tokens, body.source)
+    body = context.implementation.body
+    return _lower_generation_control_region_from_tokens(
+        context,
+        body.tokens,
+        body.source,
+        catalog=catalog,
+        environment=environment,
+    )
+
+
+def _lower_generation_control_region_from_tokens(
+    context: SelectedImplementationLoweringContext,
+    tokens: tuple[BodyToken, ...],
+    body_source: SourceLocation,
+    *,
+    catalog: Catalog | None,
+    environment: SelectedTypeEnvironment | None,
+) -> GenerationControlRegionLoweringResult:
+    shape_result = _parse_generation_control_shape(tokens, body_source)
     if shape_result.shape is None:
         return GenerationControlRegionLoweringResult(
             region=None,
@@ -210,7 +244,7 @@ def _parse_generation_control_shape(
             directive_index = boundary.next_index
             continue
 
-        next_index = boundary.next_index
+        next_index = _skip_whitespace_tokens(tokens, boundary.next_index)
         if next_index >= len(tokens):
             if len(arms) == 1:
                 return _malformed_shape_parse(
@@ -228,6 +262,12 @@ def _parse_generation_control_shape(
         if _tokens_start_generation_else_if(tokens, next_index):
             directive_index = next_index + 1
             continue
+        unsupported_plain_else = _unsupported_plain_else_token_diagnostic(
+            tokens,
+            next_index,
+        )
+        if unsupported_plain_else is not None:
+            return _diagnostic_shape_parse(unsupported_plain_else)
 
         fallback_result = _parse_generation_fallback_arm(tokens, next_index)
         if fallback_result.shape is not None:
@@ -245,6 +285,7 @@ def _parse_generation_fallback_arm(
     tokens: tuple[BodyToken, ...],
     else_index: int,
 ) -> _GenerationControlShapeParse:
+    else_index = _skip_whitespace_tokens(tokens, else_index)
     else_directive = tokens[else_index]
     if (
         not isinstance(else_directive, LowerableDirective)
@@ -277,9 +318,10 @@ def _parse_generation_fallback_arm(
             else_directive.source,
             "could not find matching close brace for else<generation> branch",
         )
-    if fallback_boundary.next_index != len(tokens):
+    next_index = _skip_whitespace_tokens(tokens, fallback_boundary.next_index)
+    if next_index != len(tokens):
         return _malformed_shape_parse(
-            _token_source(tokens[fallback_boundary.next_index]),
+            _token_source(tokens[next_index]),
             "unexpected tokens after generation-control region",
         )
 
@@ -399,6 +441,18 @@ def _unsupported_close_suffix_diagnostic(
     return None
 
 
+def _unsupported_plain_else_token_diagnostic(
+    tokens: tuple[BodyToken, ...],
+    index: int,
+) -> Diagnostic | None:
+    if index >= len(tokens):
+        return None
+    token = tokens[index]
+    if not isinstance(token, RawStringToken):
+        return None
+    return _unsupported_close_suffix_diagnostic(token.text, tokens, index)
+
+
 def _next_token_is_generation_if(
     tokens: tuple[BodyToken, ...],
     close_index: int,
@@ -419,6 +473,7 @@ def _tokens_start_generation_else_if(
     tokens: tuple[BodyToken, ...],
     next_index: int,
 ) -> bool:
+    next_index = _skip_whitespace_tokens(tokens, next_index)
     if next_index + 1 >= len(tokens):
         return False
     prefix = tokens[next_index]
@@ -441,6 +496,28 @@ def _shape_parse(
     shape: _GenerationControlShape,
 ) -> _GenerationControlShapeParse:
     return _GenerationControlShapeParse(shape=shape, diagnostics=())
+
+
+def _strip_boundary_whitespace_tokens(
+    tokens: tuple[RawStringToken | LowerableDirective, ...],
+) -> tuple[BodyToken, ...]:
+    start = 0
+    end = len(tokens)
+    while start < end and _is_whitespace_raw_token(tokens[start]):
+        start += 1
+    while end > start and _is_whitespace_raw_token(tokens[end - 1]):
+        end -= 1
+    return tuple(tokens[start:end])
+
+
+def _skip_whitespace_tokens(tokens: tuple[BodyToken, ...], index: int) -> int:
+    while index < len(tokens) and _is_whitespace_raw_token(tokens[index]):
+        index += 1
+    return index
+
+
+def _is_whitespace_raw_token(token: BodyToken) -> bool:
+    return isinstance(token, RawStringToken) and token.text.strip() == ""
 
 
 def _diagnostic_shape_parse(

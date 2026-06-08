@@ -8359,8 +8359,14 @@ def test_m137_non_call_diagnostic_boundaries_remain_unchanged(
             "emit_return(prefix call<primitive=add>(left, right));",
             "TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION",
         ),
-        ("call<primitive=add]>(left, right)", "TSL-LOWER-UNSUPPORTED-BODY"),
-        ("call<primitive=add>(left,, right)", "TSL-LOWER-UNSUPPORTED-BODY"),
+        (
+            "call<primitive=add]>(left, right)",
+            "TSL-LOWER-PRIMITIVE-CALL-FRAGMENT-MALFORMED",
+        ),
+        (
+            "call<primitive=add>(left,, right)",
+            "TSL-LOWER-PRIMITIVE-CALL-FRAGMENT-MALFORMED",
+        ),
         ("left + right;", "TSL-LOWER-UNSUPPORTED-BODY"),
         ("var<init_register>(result)", "TSL-LOWER-UNSUPPORTED-BODY"),
     )
@@ -8805,15 +8811,42 @@ def test_m153_arithmetic_support_helpers_remain_opaque_return_payloads(
 def test_m129_malformed_or_unsupported_directive_lines_remain_unsupported(
     tmp_path: Path,
 ) -> None:
-    payload_lines = (
-        "emit_return(left + right)",
-        "emit_return((left + right);",
-        "emit_return(left + right); emit_return(result);",
-        "emit_value(left + right);",
-        "left + right;",
+    payload_expectations = (
+        (
+            "emit_return(left + right)",
+            "TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION",
+            11,
+            "opaque",
+        ),
+        (
+            "emit_return((left + right);",
+            "TSL-LOWER-UNSUPPORTED-BODY",
+            5,
+            "one lowerable operation token",
+        ),
+        (
+            "emit_return(left + right); emit_return(result);",
+            "TSL-LOWER-UNSUPPORTED-BODY",
+            5,
+            "one lowerable operation token",
+        ),
+        (
+            "emit_value(left + right);",
+            "TSL-LOWER-UNSUPPORTED-BODY",
+            5,
+            "one lowerable operation token",
+        ),
+        (
+            "left + right;",
+            "TSL-LOWER-UNSUPPORTED-BODY",
+            5,
+            "one lowerable operation token",
+        ),
     )
 
-    for index, payload_line in enumerate(payload_lines):
+    for index, (payload_line, code, column, message_fragment) in enumerate(
+        payload_expectations
+    ):
         source = tmp_path / f"tiny_add_bad_directive_{index}.tsl"
         source.write_text(
             "\n".join(
@@ -8841,10 +8874,10 @@ def test_m129_malformed_or_unsupported_directive_lines_remain_unsupported(
         assert result.artifacts.artifacts == ()
         assert len(result.diagnostics) == 1
         diagnostic = result.diagnostics[0]
-        assert diagnostic.code == "TSL-LOWER-UNSUPPORTED-BODY"
+        assert diagnostic.code == code
         assert diagnostic.severity == "error"
-        assert diagnostic.location == SourceLocation(source.resolve(), 3, 5)
-        assert "one lowerable operation token" in diagnostic.message
+        assert diagnostic.location == SourceLocation(source.resolve(), 3, column)
+        assert message_fragment in diagnostic.message
 
 
 def test_m130_malformed_or_unsupported_directive_envelopes_remain_unsupported(

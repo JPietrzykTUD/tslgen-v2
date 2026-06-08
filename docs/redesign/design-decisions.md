@@ -3629,3 +3629,71 @@ Consequences:
 - Future selected primitive matrices can broaden coverage without adding
   pairwise keyword handlers, fixture-specific pipelines, raw source-string
   matchers, template-side semantic logic, or Python-owned suffix tables.
+
+## ADR-073: Source Body Fragments Supersede ImplementationBody Token Scanning
+
+Status: Accepted.
+
+Context:
+
+M254 proved that the recursive source-body fragment boundary can recognize the
+real generic unmasked `add`/`sub` body shape, including nested TSIL keyword
+regions inside loop bodies and primitive-call selectors. The codebase still has
+an older `ImplementationBody.tokens` layer whose lowerers independently scan
+body tokens for variables, loops, type/value queries, masks, intrinsics, output
+requests, source operations, and backend control.
+
+Keeping both layers as production source-discovery mechanisms is high risk. It
+invites pairwise keyword-combination handling, duplicate keyword spelling
+ownership, and repeated drift back toward source-string scanners. However, the
+older layer also contains accepted typed semantic evaluator behavior that must
+not be lost casually.
+
+Decision:
+
+`SourceBodyFragmentSequence` or a pure source-body successor is the canonical
+owner of TSIL implementation-body structure. TSIL keyword regions are discovered
+once through the shared recursive fragment boundary. Semantic lowerers consume
+typed facts derived from those fragments; they must not independently rediscover
+source regions by scanning `ImplementationBody.tokens` or raw source strings.
+
+`ImplementationBody` is now explicit removal debt. The workflow inserts an
+M254.x consolidation series before M255. M254.1 starts by making the
+fragment-first boundary the production body-lowering entry point and by
+quarantining or deleting old token-scanning paths. Follow-up M254.x milestones
+must continue reducing references until production code and tests no longer
+depend on `ImplementationBody`.
+
+Temporary compatibility adapters are allowed only when they reduce the remaining
+dependency and record the next removal step. They must be named and documented
+as compatibility/deprecation paths, not as new architecture.
+
+Consequences:
+
+- M255 real generic self-call selector specialization lowering is deferred
+  until the source-body ownership correction has started.
+- Future TSIL keyword work must add one fragment-based semantic consumer, not
+  one handler per surrounding keyword combination.
+- Existing typed semantic behavior may be reused, but source discovery moves to
+  the fragment-first model.
+- Lexical region heads may recognize selector families broadly when needed to
+  route accepted diagnostics, but semantic lowerers still own supported
+  selector sets and must not treat lexical recognition as new semantics.
+- Primitive-call reference inventory consumes recursive fragments first, but
+  primitive-call argument payloads remain opaque until a future milestone
+  explicitly changes dependency semantics.
+- Selected-implementation discovery APIs should consume the typed selected
+  lowering context directly. Passing a separate `ImplementationBody` through
+  already migrated discovery families is compatibility debt, not production
+  architecture.
+- Direct lowerer and primitive-call diagnostic APIs should consume
+  fragment-derived token/source views or explicit token tuples. Constructing or
+  passing `ImplementationBody` inside lowering is compatibility debt and should
+  not reappear.
+- Once a selected implementation carries `source_body_fragments`, compatibility
+  `ImplementationBody.tokens` must not override fragment-derived direct-body
+  tokens. Token-only fallback is allowed only for selected implementations that
+  do not yet carry fragments.
+- Backend rendering, dependency closure, source repair, assignment/index
+  parsing, and target-language expression parsing remain outside the M254.x
+  cleanup series unless a later prompt explicitly selects them.

@@ -28,12 +28,14 @@ from tslgen.lowering.mask_lane_constants import (
 from tslgen.lowering.source_operation_handoff import lower_source_operation_discovery
 from tslgen.lowering.source_operations import discover_source_operation_requests_in_text
 from tslgen.lowering.source_body_fragments import (
+    extract_intrin_compose_requests,
+    extract_primitive_call_directives,
+)
+from tslgen.syntax.source_body_fragments import (
     KeywordRegionFragment,
     RawSourceFragment,
     SourceBodyFragmentSequence,
-    extract_intrin_compose_requests,
-    extract_primitive_call_directives,
-    lower_source_body_fragments,
+    fragment_source_body_text,
 )
 from tslgen.lowering.type_syntax import parse_type_syntax
 from tslgen.pipeline._tsil_directives import classify_tsil_directive_line
@@ -208,7 +210,7 @@ def characterize_primitive_corpus_lowering(
     for primitive in primitives:
         for envelope in primitive.body_envelopes:
             source_text = SourceBodyText.from_envelope(envelope)
-            fragment_result = lower_source_body_fragments(source_text)
+            fragment_result = fragment_source_body_text(source_text)
             diagnostics.extend(fragment_result.diagnostics)
             diagnostics.extend(
                 extract_intrin_compose_requests(fragment_result.sequence).diagnostics

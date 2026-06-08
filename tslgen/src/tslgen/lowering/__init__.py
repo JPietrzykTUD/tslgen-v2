@@ -173,10 +173,14 @@ from tslgen.lowering.model import (
     TypeExpressionLoweringResult,
     build_selected_implementation_lowering_context,
 )
-from tslgen.lowering.backend_control import discover_backend_control_directives
+from tslgen.lowering.backend_control import (
+    discover_backend_control_directives,
+    discover_backend_control_directives_in_fragments,
+)
 from tslgen.lowering.backend_intrinsic_handoff import lower_backend_intrinsic_discovery
 from tslgen.lowering.backend_intrinsics import (
     discover_backend_intrinsic_requests,
+    discover_backend_intrinsic_requests_in_fragments,
     discover_backend_intrinsic_requests_in_text,
 )
 from tslgen.lowering.backend_output_source_islands import (
@@ -189,20 +193,24 @@ from tslgen.lowering.backend_output_source_islands import (
     BackendOutputRequestKind,
     BackendOutputRequestSegment,
     discover_backend_output_requests,
+    discover_backend_output_requests_in_fragments,
     discover_backend_output_requests_in_text,
 )
 from tslgen.lowering.backend_type_queries import (
     discover_backend_type_queries,
+    discover_backend_type_queries_in_fragments,
     discover_backend_type_queries_in_text,
     lower_backend_type_query_discovery,
 )
 from tslgen.lowering.backend_value_queries import (
     discover_backend_value_queries,
+    discover_backend_value_queries_in_fragments,
     discover_backend_value_queries_in_text,
     lower_backend_value_query_discovery,
 )
 from tslgen.lowering.mask_lane_constants import (
     discover_mask_lane_constant_requests,
+    discover_mask_lane_constant_requests_in_fragments,
     discover_mask_lane_constant_requests_in_text,
 )
 from tslgen.lowering.mask_keywords import (
@@ -215,10 +223,12 @@ from tslgen.lowering.mask_keywords import (
     MaskKeywordRequestSegment,
     MaskKeywordSelector,
     discover_mask_keyword_requests,
+    discover_mask_keyword_requests_in_fragments,
     discover_mask_keyword_requests_in_text,
 )
 from tslgen.lowering.source_operations import (
     discover_source_operation_requests,
+    discover_source_operation_requests_in_fragments,
     discover_source_operation_requests_in_text,
 )
 from tslgen.lowering.source_operation_handoff import lower_source_operation_discovery
@@ -229,6 +239,7 @@ from tslgen.lowering.generation_loops import (
 )
 from tslgen.lowering.generation_variables import (
     discover_generation_variable_declarations,
+    discover_generation_variable_declarations_in_fragments,
 )
 from tslgen.lowering.type_queries import (
     build_selected_type_environment,
@@ -464,26 +475,35 @@ __all__ = [
     "build_selected_implementation_lowering_context",
     "build_selected_type_environment",
     "discover_backend_control_directives",
+    "discover_backend_control_directives_in_fragments",
     "discover_backend_intrinsic_requests",
+    "discover_backend_intrinsic_requests_in_fragments",
     "discover_backend_intrinsic_requests_in_text",
     "lower_backend_intrinsic_discovery",
     "discover_backend_output_requests",
+    "discover_backend_output_requests_in_fragments",
     "discover_backend_output_requests_in_text",
     "discover_backend_type_queries",
+    "discover_backend_type_queries_in_fragments",
     "discover_backend_type_queries_in_text",
     "lower_backend_type_query_discovery",
     "discover_backend_value_queries",
+    "discover_backend_value_queries_in_fragments",
     "discover_backend_value_queries_in_text",
     "lower_backend_value_query_discovery",
     "discover_mask_lane_constant_requests",
+    "discover_mask_lane_constant_requests_in_fragments",
     "discover_mask_lane_constant_requests_in_text",
     "discover_mask_keyword_requests",
+    "discover_mask_keyword_requests_in_fragments",
     "discover_mask_keyword_requests_in_text",
     "discover_source_operation_requests",
+    "discover_source_operation_requests_in_fragments",
     "discover_source_operation_requests_in_text",
     "lower_source_operation_discovery",
     "discover_generation_loop_regions",
     "discover_generation_variable_declarations",
+    "discover_generation_variable_declarations_in_fragments",
     "lower_backend_type_query",
     "lower_generation_type_query",
     "lower_generation_control_region",

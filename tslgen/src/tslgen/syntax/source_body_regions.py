@@ -234,20 +234,17 @@ DEFAULT_SOURCE_BODY_REGION_HEADS: tuple[SourceBodyRegionHead, ...] = (
     SourceBodyRegionHead(
         SourceBodyKeyword.VAR,
         "var",
-        selector_text="init_register",
         expects_selector=True,
     ),
     SourceBodyRegionHead(
         SourceBodyKeyword.IF,
         "if",
-        selector_text="generation",
         expects_selector=True,
         expects_body=True,
     ),
     SourceBodyRegionHead(
         SourceBodyKeyword.ELSE,
         "else",
-        selector_text="generation",
         expects_selector=True,
         expects_payload=False,
         expects_body=True,
@@ -266,9 +263,13 @@ DEFAULT_SOURCE_BODY_REGION_HEADS: tuple[SourceBodyRegionHead, ...] = (
         expects_body=True,
     ),
     SourceBodyRegionHead(
+        SourceBodyKeyword.LOOP,
+        "loop",
+        expects_selector=True,
+    ),
+    SourceBodyRegionHead(
         SourceBodyKeyword.SWITCH,
         "switch",
-        selector_text="compile",
         expects_selector=True,
         expects_body=True,
     ),

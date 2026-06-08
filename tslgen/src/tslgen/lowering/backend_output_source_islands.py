@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
-from tslgen.domain.catalog import BodyToken, ImplementationBody, RawStringToken
+from tslgen.domain.catalog import BodyToken, RawStringToken
 from tslgen.lowering._source_islands import (
     JoinedRawStringRun,
     OpaqueTokenBuffer,
@@ -17,6 +17,7 @@ from tslgen.lowering._source_islands import (
     source_text_from_text,
 )
 from tslgen.lowering.model import SelectedImplementationLoweringContext
+from tslgen.syntax.source_body_fragments import SourceBodyFragmentSequence
 
 _FAILURE_CODE = "TSL-LOWER-MALFORMED-BACKEND-OUTPUT-SOURCE-ISLAND"
 
@@ -90,12 +91,16 @@ _CALL_SHAPED_KINDS = frozenset(
 
 def discover_backend_output_requests(
     context: SelectedImplementationLoweringContext,
-    body: ImplementationBody,
 ) -> BackendOutputDiscoveryLoweringResult:
     """Discover exact backend/output islands in raw body-token text."""
 
-    del context
+    if context.implementation.source_body_fragments is not None:
+        return discover_backend_output_requests_in_fragments(
+            context,
+            context.implementation.source_body_fragments,
+        )
 
+    body = context.implementation.body
     segments: list[BackendOutputDiscoverySegment] = []
     pending_opaque_tokens = OpaqueTokenBuffer()
     raw_run = RawStringRunBuffer()
@@ -146,6 +151,22 @@ def discover_backend_output_requests_in_text(
 
     return _discover_backend_output_requests_in_source_text(
         source_text_from_text(text, source),
+    )
+
+
+def discover_backend_output_requests_in_fragments(
+    context: SelectedImplementationLoweringContext,
+    sequence: SourceBodyFragmentSequence,
+) -> BackendOutputDiscoveryLoweringResult:
+    """Discover backend/output source islands from recursive body fragments."""
+
+    del context
+
+    return _discover_backend_output_requests_in_source_text(
+        source_text_from_text(
+            sequence.source_text.text,
+            sequence.source_text.source_at(0),
+        )
     )
 
 

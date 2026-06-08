@@ -1,12 +1,12 @@
-"""Recursive TSIL keyword-region fragments over M230 lexical regions."""
+"""Semantic adapters over recursive TSIL source-body fragments."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias
 
 from tslgen.core.diagnostics import Diagnostic
 from tslgen.domain.catalog import (
+    BodyToken,
     LowerableDirective,
     RawStringToken,
 )
@@ -17,66 +17,21 @@ from tslgen.lowering.primitive_call_fragments import (
     PrimitiveCallFragmentText,
     adapt_exact_primitive_call_fragment,
 )
+from tslgen.syntax.source_body_fragments import (
+    KeywordRegionFragment,
+    RawSourceFragment,
+    SourceBodyFragmentScanResult,
+    SourceBodyFragmentSequence,
+    fragment_source_body_text,
+)
 from tslgen.syntax.source_body_regions import (
-    SourceBodyDelimitedSpan,
     SourceBodyKeyword,
-    SourceBodyLexicalRegionCandidate,
     SourceBodyLexicalScanResult,
-    SourceBodyRawSegment,
-    SourceBodySpan,
     SourceBodyText,
-    scan_source_body_text,
 )
 
 
-@dataclass(frozen=True, slots=True)
-class RawSourceFragment:
-    source_order: int
-    span: SourceBodySpan
-
-
-@dataclass(frozen=True, slots=True)
-class KeywordRegionFragment:
-    source_order: int
-    source_region: SourceBodyLexicalRegionCandidate
-    selector_fragments: SourceBodyFragmentSequence | None = None
-    payload_fragments: SourceBodyFragmentSequence | None = None
-    body_fragments: SourceBodyFragmentSequence | None = None
-
-    @property
-    def keyword(self) -> SourceBodyKeyword:
-        return self.source_region.head.keyword
-
-
-SourceBodyFragment: TypeAlias = RawSourceFragment | KeywordRegionFragment
-
-
-@dataclass(frozen=True, slots=True)
-class SourceBodyFragmentSequence:
-    source_text: SourceBodyText
-    fragments: tuple[SourceBodyFragment, ...]
-
-    @property
-    def raw_fragments(self) -> tuple[RawSourceFragment, ...]:
-        return tuple(
-            fragment
-            for fragment in self.fragments
-            if isinstance(fragment, RawSourceFragment)
-        )
-
-    @property
-    def keyword_fragments(self) -> tuple[KeywordRegionFragment, ...]:
-        return tuple(
-            fragment
-            for fragment in self.fragments
-            if isinstance(fragment, KeywordRegionFragment)
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class SourceBodyFragmentLoweringResult:
-    sequence: SourceBodyFragmentSequence
-    diagnostics: tuple[Diagnostic, ...]
+SourceBodyFragmentLoweringResult = SourceBodyFragmentScanResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,14 +67,7 @@ class PayloadTokenFragmentSequenceResult:
 def lower_source_body_fragments(
     source: SourceBodyText | SourceBodyLexicalScanResult,
 ) -> SourceBodyFragmentLoweringResult:
-    scan_result = (
-        source if isinstance(source, SourceBodyLexicalScanResult) else scan_source_body_text(source)
-    )
-    sequence, diagnostics = _fragment_sequence_from_scan(scan_result)
-    return SourceBodyFragmentLoweringResult(
-        sequence=sequence,
-        diagnostics=diagnostics,
-    )
+    return fragment_source_body_text(source)
 
 
 def payload_tokens_from_fragment_sequence(
@@ -159,6 +107,30 @@ def payload_token_result_from_fragment_sequence(
     )
 
 
+def compatibility_body_token_result_from_fragment_sequence(
+    sequence: SourceBodyFragmentSequence,
+) -> PayloadTokenFragmentSequenceResult:
+    """Build temporary body tokens for pre-fragment generation-region models.
+
+    This adapter is retirement debt for result models that still carry
+    ``BodyToken`` tuples. Production discovery should prefer recursive
+    fragments; this function only preserves already accepted token consumers
+    while M254.x removes ``ImplementationBody`` dependencies.
+    """
+
+    tokens: list[BodyToken] = []
+    diagnostics: list[Diagnostic] = []
+    _append_compatibility_body_tokens(sequence, tokens, diagnostics)
+    return PayloadTokenFragmentSequenceResult(
+        tokens=tuple(
+            token
+            for token in tokens
+            if isinstance(token, RawStringToken | LowerableDirective)
+        ),
+        diagnostics=tuple(diagnostics),
+    )
+
+
 def extract_primitive_call_directives(
     sequence: SourceBodyFragmentSequence,
 ) -> PrimitiveCallKeywordDirectiveExtractionResult:
@@ -171,6 +143,183 @@ def extract_primitive_call_directives(
     )
 
 
+def _append_compatibility_body_tokens(
+    sequence: SourceBodyFragmentSequence,
+    tokens: list[BodyToken],
+    diagnostics: list[Diagnostic],
+) -> None:
+    for fragment in sequence.fragments:
+        if isinstance(fragment, RawSourceFragment):
+            tokens.append(
+                RawStringToken(text=fragment.span.text, source=fragment.span.start)
+            )
+            continue
+
+        _append_keyword_compatibility_tokens(fragment, tokens, diagnostics)
+
+
+def _append_keyword_compatibility_tokens(
+    fragment: KeywordRegionFragment,
+    tokens: list[BodyToken],
+    diagnostics: list[Diagnostic],
+) -> None:
+    if fragment.keyword is SourceBodyKeyword.CALL:
+        result = _primitive_call_directive(fragment)
+        if result.directive is None:
+            diagnostics.extend(result.diagnostics)
+            _append_raw_keyword_fragment(fragment, tokens)
+        else:
+            tokens.append(result.directive)
+        return
+
+    if fragment.keyword is SourceBodyKeyword.EMIT_RETURN:
+        _append_emit_return_compatibility_tokens(fragment, tokens, diagnostics)
+        return
+
+    if fragment.keyword is SourceBodyKeyword.IF:
+        _append_if_compatibility_tokens(fragment, tokens, diagnostics)
+        return
+
+    if fragment.keyword is SourceBodyKeyword.ELSE:
+        _append_else_compatibility_tokens(fragment, tokens, diagnostics)
+        return
+
+    if fragment.keyword is SourceBodyKeyword.LOOP:
+        _append_loop_compatibility_tokens(fragment, tokens, diagnostics)
+        return
+
+    _append_raw_keyword_fragment(fragment, tokens)
+
+
+def _append_emit_return_compatibility_tokens(
+    fragment: KeywordRegionFragment,
+    tokens: list[BodyToken],
+    diagnostics: list[Diagnostic],
+) -> None:
+    region = fragment.source_region
+    if region.payload is None:
+        _append_raw_keyword_fragment(fragment, tokens)
+        return
+
+    payload_result = (
+        compatibility_body_token_result_from_fragment_sequence(fragment.payload_fragments)
+        if fragment.payload_fragments is not None
+        else PayloadTokenFragmentSequenceResult(tokens=(), diagnostics=())
+    )
+    diagnostics.extend(payload_result.diagnostics)
+    tokens.append(
+        LowerableDirective(
+            name="emit_return",
+            arguments=(region.payload.payload_span.text,),
+            source=region.full_span.start,
+            payload_tokens=payload_result.tokens,
+        )
+    )
+
+
+def _append_if_compatibility_tokens(
+    fragment: KeywordRegionFragment,
+    tokens: list[BodyToken],
+    diagnostics: list[Diagnostic],
+) -> None:
+    region = fragment.source_region
+    if region.selector is None or region.payload is None or region.body is None:
+        _append_raw_keyword_fragment(fragment, tokens)
+        return
+
+    tokens.append(
+        LowerableDirective(
+            name="if",
+            arguments=(
+                region.selector.payload_span.text.strip(),
+                region.payload.payload_span.text,
+            ),
+            source=region.full_span.start,
+        )
+    )
+    _append_braced_body_tokens(fragment, tokens, diagnostics)
+
+
+def _append_else_compatibility_tokens(
+    fragment: KeywordRegionFragment,
+    tokens: list[BodyToken],
+    diagnostics: list[Diagnostic],
+) -> None:
+    region = fragment.source_region
+    if region.selector is None or region.body is None:
+        _append_raw_keyword_fragment(fragment, tokens)
+        return
+
+    tokens.append(
+        LowerableDirective(
+            name="else",
+            arguments=(region.selector.payload_span.text.strip(),),
+            source=region.full_span.start,
+        )
+    )
+    _append_braced_body_tokens(fragment, tokens, diagnostics)
+
+
+def _append_loop_compatibility_tokens(
+    fragment: KeywordRegionFragment,
+    tokens: list[BodyToken],
+    diagnostics: list[Diagnostic],
+) -> None:
+    region = fragment.source_region
+    if region.selector is None or region.payload is None:
+        _append_raw_keyword_fragment(fragment, tokens)
+        return
+
+    selector = region.selector.payload_span.text.strip()
+    tokens.append(
+        LowerableDirective(
+            name="loop",
+            arguments=(selector, region.payload.payload_span.text),
+            source=region.full_span.start,
+        )
+    )
+    if region.body is not None:
+        _append_braced_body_tokens(fragment, tokens, diagnostics)
+
+
+def _append_braced_body_tokens(
+    fragment: KeywordRegionFragment,
+    tokens: list[BodyToken],
+    diagnostics: list[Diagnostic],
+) -> None:
+    body = fragment.source_region.body
+    if body is None:
+        _append_raw_keyword_fragment(fragment, tokens)
+        return
+
+    tokens.append(RawStringToken(text="{", source=body.full_span.start))
+    if fragment.body_fragments is not None:
+        _append_compatibility_body_tokens(fragment.body_fragments, tokens, diagnostics)
+    tokens.append(
+        RawStringToken(
+            text="}",
+            source=_span_location_at(body.full_span, len(body.full_span.text) - 1),
+        )
+    )
+
+
+def _append_raw_keyword_fragment(
+    fragment: KeywordRegionFragment,
+    tokens: list[BodyToken],
+) -> None:
+    region = fragment.source_region
+    tokens.append(
+        RawStringToken(
+            text=region.full_span.text,
+            source=region.full_span.start,
+        )
+    )
+
+
+def _span_location_at(span, offset: int):
+    return SourceBodyText.from_span(span).source_at(offset)
+
+
 def extract_intrin_compose_requests(
     sequence: SourceBodyFragmentSequence,
 ) -> BackendIntrinsicKeywordRequestExtractionResult:
@@ -181,57 +330,6 @@ def extract_intrin_compose_requests(
         requests=tuple(requests),
         diagnostics=tuple(diagnostics),
     )
-
-
-def _fragment_sequence_from_scan(
-    scan_result: SourceBodyLexicalScanResult,
-) -> tuple[SourceBodyFragmentSequence, tuple[Diagnostic, ...]]:
-    fragments: list[SourceBodyFragment] = []
-    diagnostics: list[Diagnostic] = list(scan_result.diagnostics)
-
-    for item in scan_result.items:
-        if isinstance(item, SourceBodyRawSegment):
-            fragments.append(
-                RawSourceFragment(
-                    source_order=item.source_order,
-                    span=item.span,
-                )
-            )
-            continue
-
-        selector_fragments, selector_diagnostics = _child_fragments(item.selector)
-        diagnostics.extend(selector_diagnostics)
-        payload_fragments, payload_diagnostics = _child_fragments(item.payload)
-        diagnostics.extend(payload_diagnostics)
-        body_fragments, body_diagnostics = _child_fragments(item.body)
-        diagnostics.extend(body_diagnostics)
-
-        fragments.append(
-            KeywordRegionFragment(
-                source_order=item.source_order,
-                source_region=item,
-                selector_fragments=selector_fragments,
-                payload_fragments=payload_fragments,
-                body_fragments=body_fragments,
-            )
-        )
-
-    return (
-        SourceBodyFragmentSequence(
-            source_text=scan_result.source_text,
-            fragments=tuple(fragments),
-        ),
-        tuple(diagnostics),
-    )
-
-
-def _child_fragments(
-    span: SourceBodyDelimitedSpan | None,
-) -> tuple[SourceBodyFragmentSequence | None, tuple[Diagnostic, ...]]:
-    if span is None:
-        return None, ()
-    child_scan = scan_source_body_text(SourceBodyText.from_span(span.payload_span))
-    return _fragment_sequence_from_scan(child_scan)
 
 
 def _collect_intrin_compose_requests(

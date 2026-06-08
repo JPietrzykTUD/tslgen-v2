@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
-from tslgen.domain.catalog import BodyToken, ImplementationBody, LowerableDirective
+from tslgen.domain.catalog import (
+    BodyToken,
+    LowerableDirective,
+    RawStringToken,
+)
 from tslgen.lowering.model import (
     BackendControlDirectiveDiscovery,
     BackendControlDirectiveDiscoveryLoweringResult,
@@ -15,6 +21,12 @@ from tslgen.lowering.model import (
     BackendControlDirectiveSelector,
     SelectedImplementationLoweringContext,
 )
+from tslgen.syntax.source_body_fragments import (
+    KeywordRegionFragment,
+    SourceBodyFragmentSequence,
+)
+from tslgen.syntax.source_body_regions import SourceBodyKeyword
+from tslgen.syntax.source_body_regions import SourceBodyText
 
 _BACKEND_CONTROL_NAMES = frozenset(("if", "else", "switch"))
 _SELECTED_BACKEND_CONTROL_SELECTOR = "compile"
@@ -22,14 +34,25 @@ _IGNORED_NON_BACKEND_CONTROL_SELECTORS = frozenset(("generation",))
 _UNSUPPORTED_BACKEND_CONTROL_SELECTORS = frozenset(("runtime",))
 
 
+@dataclass(frozen=True, slots=True)
+class _BackendControlFragmentRequest:
+    fragment: KeywordRegionFragment
+    request: BackendControlDirectiveRequest
+    request_end_offset: int
+
+
 def discover_backend_control_directives(
     context: SelectedImplementationLoweringContext,
-    body: ImplementationBody,
 ) -> BackendControlDirectiveDiscoveryLoweringResult:
     """Discover exact backend-control directive requests in body-token streams."""
 
-    del context
+    if context.implementation.source_body_fragments is not None:
+        return discover_backend_control_directives_in_fragments(
+            context,
+            context.implementation.source_body_fragments,
+        )
 
+    body = context.implementation.body
     segments: list[BackendControlDirectiveDiscoverySegment] = []
     pending_opaque_tokens: list[BodyToken] = []
 
@@ -80,6 +103,196 @@ def discover_backend_control_directives(
         ),
         diagnostics=(),
     )
+
+
+def discover_backend_control_directives_in_fragments(
+    context: SelectedImplementationLoweringContext,
+    sequence: SourceBodyFragmentSequence,
+) -> BackendControlDirectiveDiscoveryLoweringResult:
+    """Discover backend-control directive requests from recursive fragments."""
+
+    del context
+
+    requests: list[_BackendControlFragmentRequest] = []
+    diagnostics: list[Diagnostic] = []
+    _collect_backend_control_requests(sequence, requests, diagnostics)
+    if diagnostics:
+        return BackendControlDirectiveDiscoveryLoweringResult(
+            discovery=None,
+            diagnostics=tuple(diagnostics),
+        )
+    if not requests:
+        return BackendControlDirectiveDiscoveryLoweringResult(
+            discovery=None,
+            diagnostics=(_no_backend_control_diagnostic(sequence.source_text.source_at(0)),),
+        )
+
+    segments: list[BackendControlDirectiveDiscoverySegment] = []
+    cursor = 0
+    for item in sorted(
+        requests,
+        key=lambda request: (
+            _root_start_offset(sequence.source_text, request.fragment),
+            request.request.source_text,
+        ),
+    ):
+        region = item.fragment.source_region
+        request_start = _root_start_offset(sequence.source_text, item.fragment)
+        if request_start < cursor:
+            continue
+
+        if cursor < request_start:
+            segments.append(
+                _opaque_text_segment_from_source_range(
+                    sequence,
+                    cursor,
+                    request_start,
+                )
+            )
+        segments.append(
+            BackendControlDirectiveRequestSegment(
+                request=item.request,
+                source=item.request.source,
+            )
+        )
+        cursor = request_start + (
+            item.request_end_offset - region.full_span.start_offset
+        )
+
+    if cursor < len(sequence.source_text.text):
+        segments.append(
+            _opaque_text_segment_from_source_range(
+                sequence,
+                cursor,
+                len(sequence.source_text.text),
+            )
+        )
+
+    return BackendControlDirectiveDiscoveryLoweringResult(
+        discovery=BackendControlDirectiveDiscovery(
+            segments=tuple(segments),
+            source=sequence.source_text.source_at(0),
+        ),
+        diagnostics=(),
+    )
+
+
+def _collect_backend_control_requests(
+    sequence: SourceBodyFragmentSequence,
+    requests: list[_BackendControlFragmentRequest],
+    diagnostics: list[Diagnostic],
+) -> None:
+    for fragment in sequence.fragments:
+        if not isinstance(fragment, KeywordRegionFragment):
+            continue
+
+        if fragment.keyword in {
+            SourceBodyKeyword.IF,
+            SourceBodyKeyword.ELSE,
+            SourceBodyKeyword.SWITCH,
+        }:
+            lowered = _lower_backend_control_fragment(fragment)
+            if isinstance(lowered, Diagnostic):
+                diagnostics.append(lowered)
+            elif lowered is not None:
+                requests.append(lowered)
+
+        for child_sequence in (
+            fragment.selector_fragments,
+            fragment.payload_fragments,
+            fragment.body_fragments,
+        ):
+            if child_sequence is not None:
+                _collect_backend_control_requests(
+                    child_sequence,
+                    requests,
+                    diagnostics,
+                )
+
+
+def _lower_backend_control_fragment(
+    fragment: KeywordRegionFragment,
+) -> _BackendControlFragmentRequest | Diagnostic | None:
+    region = fragment.source_region
+    if region.selector is None:
+        return None
+
+    selector = region.selector.payload_span.text.strip()
+    if fragment.keyword is SourceBodyKeyword.ELSE:
+        directive = LowerableDirective(
+            name="else",
+            arguments=(selector,),
+            source=region.full_span.start,
+        )
+        request_end_offset = region.selector.full_span.end_offset
+    else:
+        if region.payload is None:
+            return _malformed_directive_diagnostic(
+                LowerableDirective(
+                    name=region.head.name,
+                    arguments=(selector,),
+                    source=region.full_span.start,
+                ),
+                f"{region.head.name}<compile> expected exactly one payload",
+            )
+        directive = LowerableDirective(
+            name=region.head.name,
+            arguments=(selector, region.payload.payload_span.text),
+            source=region.full_span.start,
+        )
+        request_end_offset = region.payload.full_span.end_offset
+
+    lowered = _lower_backend_control_directive(directive)
+    if lowered is None or isinstance(lowered, Diagnostic):
+        return lowered
+
+    return _BackendControlFragmentRequest(
+        fragment=fragment,
+        request=lowered,
+        request_end_offset=request_end_offset,
+    )
+
+
+def _opaque_text_segment_from_source_range(
+    sequence: SourceBodyFragmentSequence,
+    start_offset: int,
+    end_offset: int,
+) -> BackendControlDirectiveOpaqueSegment:
+    span = sequence.source_text.span(start_offset, end_offset)
+    return BackendControlDirectiveOpaqueSegment(
+        tokens=(RawStringToken(text=span.text, source=span.start),),
+        source=span.start,
+    )
+
+
+def _root_start_offset(
+    source_text: SourceBodyText,
+    fragment: KeywordRegionFragment,
+) -> int:
+    return _offset_for_location(source_text, fragment.source_region.full_span.start)
+
+
+def _offset_for_location(
+    source_text: SourceBodyText,
+    location: SourceLocation,
+) -> int:
+    if location.path != source_text.path:
+        raise ValueError("fragment location is outside the root source body")
+
+    line = source_text.line
+    column = source_text.column
+    for offset, char in enumerate(source_text.text):
+        if line == location.line and column == location.column:
+            return offset
+        if char == "\n":
+            line += 1
+            column = 1
+        else:
+            column += 1
+
+    if line == location.line and column == location.column:
+        return len(source_text.text)
+    raise ValueError("fragment location is outside the root source body")
 
 
 def _lower_backend_control_directive(

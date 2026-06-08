@@ -1,16 +1,17 @@
 """Selected-implementation lowering for the exact tiny clean operation bodies."""
 
 from collections.abc import Iterable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from tslgen.analysis.selection import SelectedImplementation
 from tslgen.core.diagnostics import Diagnostic, SourceLocation
 from tslgen.domain.catalog import (
+    BodyToken,
     Catalog,
-    ImplementationBody,
     LowerableDirective,
     LowerableOperationFragment,
     NamedPrimitiveReference,
+    RawStringToken,
 )
 from tslgen.lowering.binary_operations import (
     BinaryOperationDescriptor,
@@ -112,14 +113,23 @@ from tslgen.lowering.type_queries import (
 from tslgen.lowering.primitive_calls import (
     PrimitiveCallDependencyCollector,
     PrimitiveCallResolver,
-    unsupported_primitive_call_diagnostics,
+    unsupported_primitive_call_diagnostics_from_body_tokens,
     unsupported_primitive_call_diagnostics_from_payload_tokens,
+)
+from tslgen.lowering.source_body_fragments import (
+    compatibility_body_token_result_from_fragment_sequence,
 )
 from tslgen.lowering.unary_operations import (
     UnaryOperationDescriptor,
     lookup_unary_operation_descriptor,
     supported_unary_operation_ids,
 )
+from tslgen.syntax.source_body_fragments import (
+    KeywordRegionFragment,
+    RawSourceFragment,
+    SourceBodyFragmentSequence,
+)
+from tslgen.syntax.source_body_regions import SourceBodyKeyword
 
 _SUPPORTED_BINARY_TEMPLATE = "binary"
 _SUPPORTED_UNARY_TEMPLATE = "unary"
@@ -141,6 +151,13 @@ class LoweringResult:
 @dataclass(frozen=True, slots=True)
 class LoweringStageResult:
     lowered_functions: LoweredFunctionSet
+    diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _SelectedBodyTokenView:
+    tokens: tuple[BodyToken, ...]
+    source: SourceLocation
     diagnostics: tuple[Diagnostic, ...]
 
 
@@ -254,7 +271,6 @@ class Lowerer:
         context = self.context_for(selected)
         return lower_generation_control_region(
             context,
-            context.implementation.body,
             catalog=catalog,
             environment=environment,
         )
@@ -269,7 +285,6 @@ class Lowerer:
         context = self.context_for(selected)
         return lower_generation_loop_region(
             context,
-            context.implementation.body,
             catalog=catalog,
             environment=environment,
         )
@@ -284,7 +299,6 @@ class Lowerer:
         context = self.context_for(selected)
         return discover_generation_loop_regions(
             context,
-            context.implementation.body,
             catalog=catalog,
             environment=environment,
         )
@@ -294,20 +308,14 @@ class Lowerer:
         selected: SelectedImplementation,
     ) -> GenerationVariableDeclarationDiscoveryLoweringResult:
         context = self.context_for(selected)
-        return discover_generation_variable_declarations(
-            context,
-            context.implementation.body,
-        )
+        return discover_generation_variable_declarations(context)
 
     def discover_backend_value_queries(
         self,
         selected: SelectedImplementation,
     ) -> BackendValueQueryDiscoveryLoweringResult:
         context = self.context_for(selected)
-        return discover_backend_value_queries(
-            context,
-            context.implementation.body,
-        )
+        return discover_backend_value_queries(context)
 
     def lower_backend_value_query_discovery(
         self,
@@ -328,10 +336,7 @@ class Lowerer:
         selected: SelectedImplementation,
     ) -> BackendTypeQueryDiscoveryLoweringResult:
         context = self.context_for(selected)
-        return discover_backend_type_queries(
-            context,
-            context.implementation.body,
-        )
+        return discover_backend_type_queries(context)
 
     def lower_backend_type_query_discovery(
         self,
@@ -352,50 +357,35 @@ class Lowerer:
         selected: SelectedImplementation,
     ) -> MaskLaneConstantDiscoveryLoweringResult:
         context = self.context_for(selected)
-        return discover_mask_lane_constant_requests(
-            context,
-            context.implementation.body,
-        )
+        return discover_mask_lane_constant_requests(context)
 
     def discover_mask_keyword_requests(
         self,
         selected: SelectedImplementation,
     ) -> MaskKeywordDiscoveryLoweringResult:
         context = self.context_for(selected)
-        return discover_mask_keyword_requests(
-            context,
-            context.implementation.body,
-        )
+        return discover_mask_keyword_requests(context)
 
     def discover_backend_control_directives(
         self,
         selected: SelectedImplementation,
     ) -> BackendControlDirectiveDiscoveryLoweringResult:
         context = self.context_for(selected)
-        return discover_backend_control_directives(
-            context,
-            context.implementation.body,
-        )
+        return discover_backend_control_directives(context)
 
     def discover_backend_intrinsic_requests(
         self,
         selected: SelectedImplementation,
     ) -> BackendIntrinsicDiscoveryLoweringResult:
         context = self.context_for(selected)
-        return discover_backend_intrinsic_requests(
-            context,
-            context.implementation.body,
-        )
+        return discover_backend_intrinsic_requests(context)
 
     def discover_backend_output_requests(
         self,
         selected: SelectedImplementation,
     ) -> BackendOutputDiscoveryLoweringResult:
         context = self.context_for(selected)
-        return discover_backend_output_requests(
-            context,
-            context.implementation.body,
-        )
+        return discover_backend_output_requests(context)
 
     def lower_backend_intrinsic_discovery(
         self,
@@ -416,10 +406,7 @@ class Lowerer:
         selected: SelectedImplementation,
     ) -> SourceOperationDiscoveryLoweringResult:
         context = self.context_for(selected)
-        return discover_source_operation_requests(
-            context,
-            context.implementation.body,
-        )
+        return discover_source_operation_requests(context)
 
     def lower_source_operation_discovery(
         self,
@@ -472,12 +459,10 @@ class Lowerer:
         *,
         catalog: Catalog | None = None,
     ) -> LoweringResult:
-        body = selected.implementation.body
-        if _is_generation_control_region_candidate(body):
+        if _is_generation_control_region_candidate(selected):
             context = self.context_for(selected)
             branch_result = lower_generation_control_region(
                 context,
-                body,
                 catalog=catalog,
             )
             if branch_result.region is None:
@@ -485,12 +470,14 @@ class Lowerer:
                     function=None,
                     diagnostics=branch_result.diagnostics,
                 )
-            branch_body = ImplementationBody(
+            branch_body_view = _SelectedBodyTokenView(
                 tokens=branch_result.region.selected_branch.tokens,
                 source=branch_result.region.selected_branch.source,
+                diagnostics=(),
             )
-            return self._lower_direct_body(
-                _selected_with_body(selected, branch_body),
+            return self._lower_direct_body_view(
+                selected,
+                branch_body_view,
                 catalog=catalog,
             )
 
@@ -502,14 +489,30 @@ class Lowerer:
         *,
         catalog: Catalog | None = None,
     ) -> LoweringResult:
+        body_view = _selected_body_token_view(selected)
+        return self._lower_direct_body_view(
+            selected,
+            body_view,
+            catalog=catalog,
+        )
+
+    def _lower_direct_body_view(
+        self,
+        selected: SelectedImplementation,
+        body_view: _SelectedBodyTokenView,
+        *,
+        catalog: Catalog | None = None,
+    ) -> LoweringResult:
         context = self.context_for(selected)
         scalar_type = lookup_scalar_type_descriptor(context.type_tag)
-        body = context.implementation.body
-        fragment = _operation_fragment_from_selected_body(selected, body)
+        if body_view.diagnostics:
+            return LoweringResult(function=None, diagnostics=body_view.diagnostics)
+
+        fragment = _operation_fragment_from_selected_body(selected, body_view)
         call_expression_result = (
             _primitive_call_expression_result_from_return_payload(
                 selected,
-                body,
+                body_view,
                 catalog,
             )
         )
@@ -543,7 +546,7 @@ class Lowerer:
             diagnostics = tuple(
                 _unsupported_comparison_diagnostics(
                     selected,
-                    body,
+                    body_view,
                     fragment,
                     scalar_type,
                     operation,
@@ -597,7 +600,7 @@ class Lowerer:
             diagnostics = tuple(
                 _unsupported_unary_diagnostics(
                     selected,
-                    body,
+                    body_view,
                     fragment,
                     scalar_type,
                     operation,
@@ -651,7 +654,7 @@ class Lowerer:
             diagnostics = tuple(
                 _unsupported_binary_diagnostics(
                     selected,
-                    body,
+                    body_view,
                     fragment,
                     scalar_type,
                     operation,
@@ -693,7 +696,7 @@ class Lowerer:
 
 def _unsupported_binary_diagnostics(
     selected: SelectedImplementation,
-    body: ImplementationBody,
+    body: _SelectedBodyTokenView,
     fragment: LowerableOperationFragment | None,
     scalar_type: ScalarTypeDescriptor | None,
     operation: BinaryOperationDescriptor | None,
@@ -708,7 +711,7 @@ def _unsupported_binary_diagnostics(
     )
 
     if fragment is None:
-        directive = _emit_return_directive_from_body(body)
+        directive = _emit_return_directive_from_body_view(body)
         if directive is not None:
             diagnostics.extend(
                 _unsupported_emit_return_diagnostics(
@@ -717,10 +720,12 @@ def _unsupported_binary_diagnostics(
                     catalog=catalog,
                 )
             )
-        elif primitive_call_diagnostics := unsupported_primitive_call_diagnostics(
-            body,
-            selected=selected,
-            catalog=catalog,
+        elif primitive_call_diagnostics := (
+            unsupported_primitive_call_diagnostics_from_body_tokens(
+                body.tokens,
+                selected=selected,
+                catalog=catalog,
+            )
         ):
             diagnostics.extend(primitive_call_diagnostics)
         else:
@@ -865,7 +870,7 @@ def _unsupported_binary_capability_diagnostics(
 
 def _unsupported_comparison_diagnostics(
     selected: SelectedImplementation,
-    body: ImplementationBody,
+    body: _SelectedBodyTokenView,
     fragment: LowerableOperationFragment | None,
     scalar_type: ScalarTypeDescriptor | None,
     operation: ComparisonOperationDescriptor | None,
@@ -880,7 +885,7 @@ def _unsupported_comparison_diagnostics(
     )
 
     if fragment is None:
-        directive = _emit_return_directive_from_body(body)
+        directive = _emit_return_directive_from_body_view(body)
         if directive is not None:
             diagnostics.extend(
                 _unsupported_emit_return_diagnostics(
@@ -889,10 +894,12 @@ def _unsupported_comparison_diagnostics(
                     catalog=catalog,
                 )
             )
-        elif primitive_call_diagnostics := unsupported_primitive_call_diagnostics(
-            body,
-            selected=selected,
-            catalog=catalog,
+        elif primitive_call_diagnostics := (
+            unsupported_primitive_call_diagnostics_from_body_tokens(
+                body.tokens,
+                selected=selected,
+                catalog=catalog,
+            )
         ):
             diagnostics.extend(primitive_call_diagnostics)
         else:
@@ -1018,7 +1025,7 @@ def _unsupported_comparison_capability_diagnostics(
 
 def _unsupported_unary_diagnostics(
     selected: SelectedImplementation,
-    body: ImplementationBody,
+    body: _SelectedBodyTokenView,
     fragment: LowerableOperationFragment | None,
     scalar_type: ScalarTypeDescriptor | None,
     operation: UnaryOperationDescriptor | None,
@@ -1033,7 +1040,7 @@ def _unsupported_unary_diagnostics(
     )
 
     if fragment is None:
-        directive = _emit_return_directive_from_body(body)
+        directive = _emit_return_directive_from_body_view(body)
         if directive is not None:
             diagnostics.extend(
                 _unsupported_emit_return_diagnostics(
@@ -1042,10 +1049,12 @@ def _unsupported_unary_diagnostics(
                     catalog=catalog,
                 )
             )
-        elif primitive_call_diagnostics := unsupported_primitive_call_diagnostics(
-            body,
-            selected=selected,
-            catalog=catalog,
+        elif primitive_call_diagnostics := (
+            unsupported_primitive_call_diagnostics_from_body_tokens(
+                body.tokens,
+                selected=selected,
+                catalog=catalog,
+            )
         ):
             diagnostics.extend(primitive_call_diagnostics)
         else:
@@ -1188,10 +1197,22 @@ def _unsupported_unary_capability_diagnostics(
     return tuple(diagnostics)
 
 
-def _is_generation_control_region_candidate(body: ImplementationBody) -> bool:
-    if not body.tokens:
+def _is_generation_control_region_candidate(selected: SelectedImplementation) -> bool:
+    fragments = selected.implementation.source_body_fragments
+    if fragments is not None:
+        fragment = _first_non_whitespace_fragment(fragments)
+        return (
+            isinstance(fragment, KeywordRegionFragment)
+            and fragment.keyword is SourceBodyKeyword.IF
+            and fragment.source_region.selector is not None
+            and fragment.source_region.selector.payload_span.text.strip()
+            == "generation"
+        )
+
+    tokens = selected.implementation.body.tokens
+    if not tokens:
         return False
-    token = body.tokens[0]
+    token = tokens[0]
     return (
         isinstance(token, LowerableDirective)
         and token.name == "if"
@@ -1200,22 +1221,68 @@ def _is_generation_control_region_candidate(body: ImplementationBody) -> bool:
     )
 
 
-def _selected_with_body(
+def _first_non_whitespace_fragment(
+    fragments: SourceBodyFragmentSequence,
+):
+    for fragment in fragments.fragments:
+        if isinstance(fragment, RawSourceFragment) and fragment.span.text.strip() == "":
+            continue
+        return fragment
+    return None
+
+
+def _selected_body_token_view(
     selected: SelectedImplementation,
-    body: ImplementationBody,
-) -> SelectedImplementation:
-    implementation = replace(selected.implementation, body=body)
-    return replace(selected, implementation=implementation)
+) -> _SelectedBodyTokenView:
+    body = selected.implementation.body
+    fragments = selected.implementation.source_body_fragments
+    if fragments is not None:
+        result = compatibility_body_token_result_from_fragment_sequence(fragments)
+        tokens = _trim_direct_body_boundary_tokens(tuple(result.tokens))
+        return _SelectedBodyTokenView(
+            tokens=tokens,
+            source=body.source,
+            diagnostics=result.diagnostics,
+        )
+
+    return _body_token_view(body.tokens, body.source)
+
+
+def _body_token_view(
+    tokens: tuple[BodyToken, ...],
+    source: SourceLocation,
+) -> _SelectedBodyTokenView:
+    return _SelectedBodyTokenView(
+        tokens=tokens,
+        source=source,
+        diagnostics=(),
+    )
+
+
+def _trim_direct_body_boundary_tokens(
+    tokens: tuple[BodyToken, ...],
+) -> tuple[BodyToken, ...]:
+    start = 0
+    end = len(tokens)
+    while start < end and _is_direct_body_boundary_token(tokens[start]):
+        start += 1
+    while end > start and _is_direct_body_boundary_token(tokens[end - 1]):
+        end -= 1
+    return tokens[start:end]
+
+
+def _is_direct_body_boundary_token(token: BodyToken) -> bool:
+    return isinstance(token, RawStringToken) and token.text.strip() in {"", ";"}
 
 
 def _operation_fragment_from_selected_body(
     selected: SelectedImplementation,
-    body: ImplementationBody,
+    body: _SelectedBodyTokenView,
 ) -> LowerableOperationFragment | None:
     fragment = _operation_fragment_from_token_sequence(selected, body.tokens)
     if fragment is not None:
         return fragment
-    directive = _emit_return_directive_from_body(body)
+    directive = _emit_return_directive_from_body_view(body)
     if directive is None:
         return None
     return _operation_fragment_from_token_sequence(selected, directive.payload_tokens)
@@ -1282,13 +1349,13 @@ def _is_exact_add_primitive_call_directive(
 
 def _primitive_call_expression_result_from_return_payload(
     selected: SelectedImplementation,
-    body: ImplementationBody,
+    body: _SelectedBodyTokenView,
     catalog: Catalog | None,
 ) -> PrimitiveCallExpressionLoweringResult | None:
     if catalog is None:
         return None
 
-    directive = _emit_return_directive_from_body(body)
+    directive = _emit_return_directive_from_body_view(body)
     if directive is None or len(directive.payload_tokens) != 1:
         return None
 
@@ -1304,8 +1371,8 @@ def _primitive_call_expression_result_from_return_payload(
     )
 
 
-def _emit_return_directive_from_body(
-    body: ImplementationBody,
+def _emit_return_directive_from_body_view(
+    body: _SelectedBodyTokenView,
 ) -> LowerableDirective | None:
     if len(body.tokens) != 1:
         return None
@@ -1349,7 +1416,7 @@ def _unsupported_return_expression_diagnostic(
 
 
 def _unsupported_body_shape_diagnostic(
-    body: ImplementationBody,
+    body: _SelectedBodyTokenView,
     expected_arguments: tuple[str, ...],
     operation_id: str,
 ) -> Diagnostic:
