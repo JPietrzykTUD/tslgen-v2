@@ -59,7 +59,8 @@ class Extension:
     what backend translation consumes (the intrinsic family and compose fragments).
     """
 
-    name: str
+    name: str  # internal identity = TSL block name (e.g. "avx2_vl"); drives selection
+    isa_name: str  # emitted tag = `extension_name` (e.g. "avx2"); `_vl` is internal only
     family: str  # "x86" | "arm" | "scalar" | … — picks the Rust core::arch module
     compose_prefix: dict[str, str]  # backend_id -> intrinsic prefix
     compose_suffix_by_type: dict[str, str]  # type tag -> suffix fragment

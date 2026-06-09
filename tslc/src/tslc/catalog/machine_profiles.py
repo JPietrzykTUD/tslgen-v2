@@ -22,6 +22,9 @@ class MachineProfile:
     name: str
     family: str  # "generic" | "x86" | "aarch64"
     features: frozenset[str]
+    # feature -> its compiler/target-feature spelling when it differs from the token
+    # (e.g. avx512_vpclmulqdq -> vpclmulqdq, neon -> asimd).
+    alternatives: dict[str, str]
 
 
 def load_machine_profiles(path: Path) -> dict[str, MachineProfile]:
@@ -38,5 +41,10 @@ def load_machine_profiles(path: Path) -> dict[str, MachineProfile]:
                 if flags_text.strip() == _NO_SIMD
                 else frozenset(flags_text.split())
             )
-            profiles[name] = MachineProfile(name=name, family=family, features=features)
+            profiles[name] = MachineProfile(
+                name=name,
+                family=family,
+                features=features,
+                alternatives=dict(entry.get("alternatives", {})),
+            )
     return profiles

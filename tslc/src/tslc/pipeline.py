@@ -50,11 +50,24 @@ class CoverageEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class SkippedEntry:
+    """A selected slot whose body could not be lowered yet (recorded, not failed)."""
+
+    profile: str
+    backend: str
+    primitive: str
+    extension: str
+    type_tag: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class GenerationResult:
     artifacts: ArtifactSet
     rendered: RenderedProject | None
     diagnostics: tuple[Diagnostic, ...]
     coverage: tuple[CoverageEntry, ...]
+    skipped: tuple[SkippedEntry, ...] = ()
 
 
 def generate(request: GenerationRequest) -> GenerationResult:
@@ -83,6 +96,7 @@ def generate(request: GenerationRequest) -> GenerationResult:
     lowerer = Lowerer()
     type_tags = _sorted_type_tags(request.type_tags)
     coverage: list[CoverageEntry] = []
+    skipped: list[SkippedEntry] = []
     profile_renders: list[ProfileRender] = []
 
     for profile_name in sorted(request.profiles):
@@ -108,20 +122,34 @@ def generate(request: GenerationRequest) -> GenerationResult:
                 for backend in request.backends:
                     translation = BackendTranslation(catalog=catalog, backend_id=backend)
                     lowered = lowerer.lower(slot, catalog, translation)
-                    diagnostics.extend(lowered.diagnostics)
+                    # Real diagnostics (warnings/errors) bubble up; a not-yet-lowerable
+                    # body is an "info" skip -> recorded as a coverage gap, not noise.
+                    diagnostics.extend(d for d in lowered.diagnostics if d.severity != "info")
                     if lowered.specialization is None:
-                        continue
-                    grouped[backend].setdefault(primitive, []).append(lowered.specialization)
-                    if backend == request.backends[0]:
-                        coverage.append(
-                            CoverageEntry(
+                        reason = next(
+                            (d.message for d in lowered.diagnostics), "unsupported body"
+                        )
+                        skipped.append(
+                            SkippedEntry(
                                 profile=profile_name,
                                 backend=backend,
                                 primitive=primitive,
                                 extension=slot.extension.name,
                                 type_tag=slot.type_tag,
+                                reason=reason,
                             )
                         )
+                        continue
+                    grouped[backend].setdefault(primitive, []).append(lowered.specialization)
+                    coverage.append(
+                        CoverageEntry(
+                            profile=profile_name,
+                            backend=backend,
+                            primitive=primitive,
+                            extension=slot.extension.name,
+                            type_tag=slot.type_tag,
+                        )
+                    )
 
         profile_renders.append(
             ProfileRender(
@@ -131,13 +159,18 @@ def generate(request: GenerationRequest) -> GenerationResult:
             )
         )
 
-    rendered = render_project(tuple(profile_renders)) if profile_renders else None
+    rendered = (
+        render_project(tuple(profile_renders), request.backends)
+        if profile_renders
+        else None
+    )
     artifacts = rendered.artifacts if rendered is not None else ArtifactSet.create(())
     return GenerationResult(
         artifacts=artifacts,
         rendered=rendered,
         diagnostics=sort_diagnostics(diagnostics),
         coverage=tuple(sorted(coverage, key=_coverage_key)),
+        skipped=tuple(sorted(skipped, key=_skipped_key)),
     )
 
 
@@ -157,10 +190,22 @@ def _sorted_type_tags(type_tags: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(sorted(type_tags, key=lambda tag: (_TYPE_ORDER.get(tag, 99), tag)))
 
 
-def _coverage_key(entry: CoverageEntry) -> tuple[str, str, str, int, str]:
+def _coverage_key(entry: CoverageEntry) -> tuple[str, str, str, str, int, str]:
     return (
         entry.profile,
         entry.primitive,
+        entry.backend,
+        entry.extension,
+        _TYPE_ORDER.get(entry.type_tag, 99),
+        entry.type_tag,
+    )
+
+
+def _skipped_key(entry: SkippedEntry) -> tuple[str, str, str, str, int, str]:
+    return (
+        entry.profile,
+        entry.primitive,
+        entry.backend,
         entry.extension,
         _TYPE_ORDER.get(entry.type_tag, 99),
         entry.type_tag,

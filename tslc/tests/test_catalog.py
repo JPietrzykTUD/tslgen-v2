@@ -83,6 +83,7 @@ def test_nested_requires_promoted_per_type_group(catalog: Catalog) -> None:
 def test_extension_inheritance_and_lscpu(catalog: Catalog) -> None:
     avx2_vl = catalog.extensions["avx2_vl"]
     assert avx2_vl.inherits == "avx2"
+    assert avx2_vl.isa_name == "avx2"  # emitted as avx2; _vl is internal only
     assert {"avx512vl", "avx512f"} <= avx2_vl.lscpu_flags
     # compose metadata is inherited (flattened) from avx2.
     assert avx2_vl.compose_prefix["cpp"] == "_mm256_"

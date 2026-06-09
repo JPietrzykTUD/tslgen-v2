@@ -24,7 +24,7 @@ def test_artifact_layout(data_root: Path, machine_profiles_path: Path) -> None:
     # static cores, per-profile headers, top-level dispatch, per-profile smokes.
     assert {
         "cpp/include/tsl_core.hpp",
-        "cpp/include/tsl_core_x86.hpp",
+        "cpp/include/tsl_x86_traits.hpp",
         "cpp/include/tsl.hpp",
         "cpp/include/tsl_avx2.hpp",
         "cpp/include/tsl_scalar.hpp",
@@ -78,15 +78,15 @@ def test_skylake_uses_vl_and_avx512_not_base(
 ) -> None:
     by = {a.logical_path: a.content for a in _generate(data_root, machine_profiles_path).artifacts.artifacts}
     sky = by["cpp/include/tsl_skylake.hpp"]
-    # avx512vl present -> _vl variants + avx512, NOT the base avx2/sse.
+    # avx512vl present -> the avx512vl-aware bodies are selected, but they are
+    # emitted under the *ISA* names (avx2/sse), never the internal `_vl` tags.
+    assert "_vl" not in sky
     assert "add_impl<tsl::simd<int32_t, tsl::avx512>>" in sky
     assert "return _mm512_add_epi32(left, right);" in sky
-    assert "add_impl<tsl::simd<int32_t, tsl::avx2_vl>>" in sky
-    assert "add_impl<tsl::simd<int32_t, tsl::sse_vl>>" in sky
-    assert "tsl::avx2>" not in sky  # base avx2 superseded by avx2_vl
-    assert "tsl::sse>" not in sky
-    # avx2_vl inherits avx2's body.
+    # avx2 here is the avx2_vl-selected body (inherits avx2's), emitted as avx2.
+    assert "add_impl<tsl::simd<int32_t, tsl::avx2>>" in sky
     assert "return _mm256_add_epi32(left, right);" in sky
+    assert "add_impl<tsl::simd<int32_t, tsl::sse>>" in sky
 
 
 def test_coverage_counts_specializations(data_root: Path, machine_profiles_path: Path) -> None:

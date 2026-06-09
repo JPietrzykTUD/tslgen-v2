@@ -18,7 +18,9 @@ def test_generated_profiles_build(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["add", "hadd"],
-        profiles=["scalar", "sse2", "avx", "avx2", "skylake"],
+        # Include a hyphenated, exotic-flag profile so identifier-sanitization and
+        # feature-flag-spelling regressions are caught by the build, not just inspection.
+        profiles=["scalar", "sse2", "avx", "avx2", "skylake", "icelake-rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None

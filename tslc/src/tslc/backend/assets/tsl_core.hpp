@@ -1,22 +1,17 @@
-// tslc static core (scalar-safe). Hand-written library substrate, copied verbatim
-// into generated C++ projects. Defines the simd<base_type, extension> trait that
-// generated specializations key on.
+// tslc static substrate (profile-independent). The `simd<base_type, extension>`
+// primary template, the scalar registration, and `reg_param`. Per-profile headers
+// add the `simd<>` registrations for the extensions that profile actually uses.
 #pragma once
 #include <cstdint>
 
 namespace tsl {
 
-// Extension tag types (the second simd<> argument).
-struct scalar {};
-struct sse {};
-struct sse_vl {};
-struct avx2 {};
-struct avx2_vl {};
-struct avx512 {};
-
 // Primary trait: simd<BaseType, Extension> exposes base_type and register_type.
 template <class T, class Ext>
 struct simd;
+
+// scalar is always available and needs no SIMD substrate.
+struct scalar {};
 
 template <class T>
 struct simd<T, scalar> {

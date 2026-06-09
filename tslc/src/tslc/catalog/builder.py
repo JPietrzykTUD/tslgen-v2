@@ -213,8 +213,10 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
                 e.key.text: (_field_text(e) or "") for e in _children(by_type)
             }
 
+    name = declaration.name or ""
     return Extension(
-        name=declaration.name or "",
+        name=name,
+        isa_name=_field_text(fields.get("extension_name")) or name,
         family=_field_text(fields.get("family")) or "",
         compose_prefix=compose_prefix,
         compose_suffix_by_type=compose_suffix_by_type,

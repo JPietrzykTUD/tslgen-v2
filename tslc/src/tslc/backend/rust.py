@@ -4,14 +4,8 @@ from __future__ import annotations
 
 from tslc.lower.lowerer import LoweredSpecialization
 
-_EXT_TAG = {
-    "scalar": "Scalar",
-    "sse": "Sse",
-    "sse_vl": "SseVl",
-    "avx2": "Avx2",
-    "avx2_vl": "Avx2Vl",
-    "avx512": "Avx512",
-}
+# Keyed by ISA name (the emitted tag); `_vl` variants are internal and never emitted.
+_EXT_TAG = {"scalar": "Scalar", "sse": "Sse", "avx2": "Avx2", "avx512": "Avx512"}
 
 
 class RustBackend:

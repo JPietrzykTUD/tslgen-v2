@@ -9,6 +9,7 @@ profile's feature set (the one place that maps features to compiler options).
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from importlib import resources
 
@@ -20,9 +21,33 @@ from tslc.output.artifacts import Artifact, ArtifactSet
 from tslc.output.verify import VerifyBackend, VerifyProfile, VerifyProject
 
 _ASSETS = "tslc.backend.assets"
-# Feature spellings that differ from the bare token.
-_CPP_FLAG = {"sse4_1": "-msse4.1", "sse4_2": "-msse4.2"}
-_RUST_FEATURE = {"sse4_1": "sse4.1", "sse4_2": "sse4.2"}
+# x86 ISA extension -> register width and per-backend register-type wiring.
+_X86_WIDTH = {"sse": 128, "avx2": 256, "avx512": 512}
+_CPP_REG_HELPER = {128: "reg128", 256: "reg256", 512: "reg512"}
+_RUST_TAG = {"scalar": "Scalar", "sse": "Sse", "avx2": "Avx2", "avx512": "Avx512"}
+
+
+def _slug(profile_name: str) -> str:
+    """A safe C++/Rust/CMake identifier for a profile (e.g. icelake-rockerlake)."""
+
+    return re.sub(r"[^0-9A-Za-z_]", "_", profile_name)
+
+
+def _feature_spelling(feature: str, alternatives: dict[str, str]) -> str:
+    """A feature's compiler/target-feature spelling (gcc `-m` / rust `target-feature`).
+
+    Most x86 features spell as the bare token; the exceptions are: `sse4_1`/`sse4_2`
+    use a dot; `avx512_*` drop the underscore (`avx512_vnni` -> `avx512vnni`); and
+    `alternatives` from the profile data override entirely (`avx512_gfni` -> `gfni`).
+    """
+
+    if feature in alternatives:
+        return alternatives[feature]
+    if feature.startswith("sse4_"):
+        return "sse4." + feature[len("sse4_") :]
+    if feature.startswith("avx512_"):
+        return "avx512" + feature[len("avx512_") :]
+    return feature
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,55 +64,123 @@ class RenderedProject:
     verify: VerifyProject
 
 
-def render_project(profiles: tuple[ProfileRender, ...]) -> RenderedProject:
+def render_project(
+    profiles: tuple[ProfileRender, ...], backends: tuple[str, ...] = ("cpp", "rust")
+) -> RenderedProject:
     ordered = tuple(sorted(profiles, key=lambda p: p.profile.name))
     artifacts: list[Artifact] = []
-    artifacts.extend(_cpp_artifacts(ordered))
-    artifacts.extend(_rust_artifacts(ordered))
-    verify = VerifyProject(
-        backends=(
+    verify_backends: list[VerifyBackend] = []
+
+    if "cpp" in backends:
+        artifacts.extend(_cpp_artifacts(ordered))
+        verify_backends.append(
             VerifyBackend(
                 backend_id="cpp",
                 root_path="cpp",
                 profiles=tuple(
                     VerifyProfile(
-                        profile_name=p.profile.name,
-                        file_stem=p.profile.name,
+                        profile_name=_slug(p.profile.name),
+                        file_stem=_slug(p.profile.name),
                         cpp_flags=_cpp_flags(p.profile),
                     )
                     for p in ordered
                 ),
-            ),
+            )
+        )
+    if "rust" in backends:
+        artifacts.extend(_rust_artifacts(ordered))
+        verify_backends.append(
             VerifyBackend(
                 backend_id="rust",
                 root_path="rust",
                 profiles=tuple(
                     VerifyProfile(
-                        profile_name=p.profile.name,
-                        file_stem=p.profile.name,
+                        profile_name=_slug(p.profile.name),
+                        file_stem=_slug(p.profile.name),
                         rust_target_features=_rust_features(p.profile),
                     )
                     for p in ordered
                 ),
-            ),
+            )
         )
+    return RenderedProject(
+        artifacts=ArtifactSet.create(tuple(artifacts)),
+        verify=VerifyProject(backends=tuple(verify_backends)),
     )
-    return RenderedProject(artifacts=ArtifactSet.create(tuple(artifacts)), verify=verify)
 
 
 # --- build facts (the only place that maps features to compiler options) -----
 
 
-def _is_x86_simd(profile: MachineProfile) -> bool:
-    return profile.family == "x86" and bool(profile.features)
+def _used_exts(by_primitive: dict[str, tuple[LoweredSpecialization, ...]]) -> list[str]:
+    exts: set[str] = set()
+    for specs in by_primitive.values():
+        exts.update(spec.extension_name for spec in specs)
+    return sorted(exts)
+
+
+def _used_pairs(
+    by_primitive: dict[str, tuple[LoweredSpecialization, ...]],
+) -> list[tuple[str, str]]:
+    pairs: set[tuple[str, str]] = set()
+    for specs in by_primitive.values():
+        pairs.update((spec.extension_name, spec.base_type_spelling) for spec in specs)
+    return sorted(pairs)
+
+
+def _cpp_registration(ext: str) -> str:
+    """A C++ extension tag + `simd<T, ext>` register-type wiring for one ISA ext."""
+
+    helper = _CPP_REG_HELPER[_X86_WIDTH[ext]]
+    return (
+        f"struct {ext} {{}};\n"
+        f"template <class T>\n"
+        f"struct simd<T, {ext}> {{\n"
+        f"    using base_type = T;\n"
+        f"    using register_type = typename detail::{helper}<T>::type;\n"
+        f"}};\n\n"
+    )
+
+
+def _rust_registrations(
+    by_primitive: dict[str, tuple[LoweredSpecialization, ...]],
+) -> str:
+    """Rust extension tag structs + SimdVector impls for the used (ext, type) pairs."""
+
+    lines: list[str] = []
+    for ext in _used_exts(by_primitive):
+        if ext in _X86_WIDTH:
+            lines.append(f"pub struct {_RUST_TAG[ext]};")
+    for ext, base in _used_pairs(by_primitive):
+        if ext not in _X86_WIDTH:
+            continue
+        register = _rust_register(ext, base)
+        lines.append(
+            f"impl SimdVector for Simd<{base}, {_RUST_TAG[ext]}> {{ "
+            f"type BaseType = {base}; type RegisterType = {register}; }}"
+        )
+    return ("\n".join(lines) + "\n\n") if lines else ""
+
+
+def _rust_register(ext: str, base_spelling: str) -> str:
+    width = _X86_WIDTH[ext]
+    if base_spelling == "f32":
+        return f"core::arch::x86_64::__m{width}"
+    if base_spelling == "f64":
+        return f"core::arch::x86_64::__m{width}d"
+    return f"core::arch::x86_64::__m{width}i"
 
 
 def _cpp_flags(profile: MachineProfile) -> tuple[str, ...]:
-    return tuple(_CPP_FLAG.get(f, f"-m{f}") for f in sorted(profile.features))
+    return tuple(
+        f"-m{_feature_spelling(f, profile.alternatives)}" for f in sorted(profile.features)
+    )
 
 
 def _rust_features(profile: MachineProfile) -> tuple[str, ...]:
-    return tuple(f"+{_RUST_FEATURE.get(f, f)}" for f in sorted(profile.features))
+    return tuple(
+        f"+{_feature_spelling(f, profile.alternatives)}" for f in sorted(profile.features)
+    )
 
 
 def _asset(name: str) -> str:
@@ -101,12 +194,14 @@ def _cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
     backend = CppBackend()
     artifacts = [
         _text("cpp/include/tsl_core.hpp", _asset("tsl_core.hpp")),
-        _text("cpp/include/tsl_core_x86.hpp", _asset("tsl_core_x86.hpp")),
+        _text("cpp/include/tsl_x86_traits.hpp", _asset("tsl_x86_traits.hpp")),
     ]
     for p in profiles:
+        x86_exts = [e for e in _used_exts(p.cpp) if e in _X86_WIDTH]
         includes = '#include "tsl_core.hpp"\n'
-        if _is_x86_simd(p.profile):
-            includes += '#include "tsl_core_x86.hpp"\n'
+        if x86_exts:
+            includes += '#include "tsl_x86_traits.hpp"\n'
+        registrations = "".join(_cpp_registration(ext) for ext in x86_exts)
         bodies = "\n\n".join(
             backend.render_primitive(name, p.cpp[name]) for name in sorted(p.cpp)
         )
@@ -114,11 +209,13 @@ def _cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
             "#pragma once\n"
             f"{includes}\n"
             "namespace tsl {\n\n"
+            f"{registrations}"
             f"{bodies}\n\n"
             "}  // namespace tsl\n"
         )
-        artifacts.append(_text(f"cpp/include/tsl_{p.profile.name}.hpp", content))
-        artifacts.append(_text(f"cpp/tests/smoke_{p.profile.name}.cpp", _cpp_smoke(p)))
+        slug = _slug(p.profile.name)
+        artifacts.append(_text(f"cpp/include/tsl_{slug}.hpp", content))
+        artifacts.append(_text(f"cpp/tests/smoke_{slug}.cpp", _cpp_smoke(p)))
 
     artifacts.append(_text("cpp/include/tsl.hpp", _cpp_dispatch(profiles)))
     artifacts.append(_text("cpp/CMakeLists.txt", _cpp_cmakelists(profiles)))
@@ -128,9 +225,10 @@ def _cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
 def _cpp_dispatch(profiles: tuple[ProfileRender, ...]) -> str:
     lines = ["#pragma once", ""]
     for index, p in enumerate(profiles):
+        slug = _slug(p.profile.name)
         keyword = "#if" if index == 0 else "#elif"
-        lines.append(f"{keyword} defined(TSL_PROFILE_{p.profile.name.upper()})")
-        lines.append(f'#  include "tsl_{p.profile.name}.hpp"')
+        lines.append(f"{keyword} defined(TSL_PROFILE_{slug.upper()})")
+        lines.append(f'#  include "tsl_{slug}.hpp"')
     lines.append("#else")
     lines.append('#  error "No supported TSL profile selected"')
     lines.append("#endif")
@@ -173,7 +271,7 @@ def _cpp_cmakelists(profiles: tuple[ProfileRender, ...]) -> str:
         flags = _cpp_flags(p.profile)
         if not flags:
             continue
-        lines.append(f'if(TSL_PROFILE STREQUAL "{p.profile.name}")')
+        lines.append(f'if(TSL_PROFILE STREQUAL "{_slug(p.profile.name)}")')
         lines.append(f"  target_compile_options(tsl_smoke PRIVATE {' '.join(flags)})")
         lines.append("endif()")
     return "\n".join(lines) + "\n"
@@ -186,6 +284,7 @@ def _rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
     backend = RustBackend()
     artifacts = [_text("rust/src/tsl_core.rs", _asset("tsl_core.rs"))]
     for p in profiles:
+        registrations = _rust_registrations(p.rust)
         bodies = "\n\n".join(
             backend.render_primitive(name, p.rust[name]) for name in sorted(p.rust)
         )
@@ -193,9 +292,10 @@ def _rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
             "#![allow(non_camel_case_types)]\n"
             "#![allow(dead_code)]\n\n"
             "use crate::tsl_core::*;\n\n"
+            f"{registrations}"
             f"{bodies}\n"
         )
-        artifacts.append(_text(f"rust/src/tsl_{p.profile.name}.rs", content))
+        artifacts.append(_text(f"rust/src/tsl_{_slug(p.profile.name)}.rs", content))
 
     artifacts.append(_text("rust/src/lib.rs", _rust_lib(profiles)))
     artifacts.append(_text("rust/Cargo.toml", _rust_cargo(profiles)))
@@ -208,16 +308,17 @@ def _rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
 def _rust_lib(profiles: tuple[ProfileRender, ...]) -> str:
     lines = ["#![allow(dead_code)]", "", "pub mod tsl_core;", ""]
     for p in profiles:
-        lines.append(f'#[cfg(feature = "{p.profile.name}")]')
-        lines.append(f"pub mod tsl_{p.profile.name};")
+        slug = _slug(p.profile.name)
+        lines.append(f'#[cfg(feature = "{slug}")]')
+        lines.append(f"pub mod tsl_{slug};")
         lines.append("")
     return "\n".join(lines)
 
 
 def _rust_cargo(profiles: tuple[ProfileRender, ...]) -> str:
-    default = profiles[0].profile.name if profiles else "scalar"
+    default = _slug(profiles[0].profile.name) if profiles else "scalar"
     features = [f'default = ["{default}"]']
-    features.extend(f"{p.profile.name} = []" for p in profiles)
+    features.extend(f"{_slug(p.profile.name)} = []" for p in profiles)
     return (
         "[package]\n"
         'name = "tsl_generated"\n'

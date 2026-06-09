@@ -160,7 +160,9 @@ class Lowerer:
         specialization = LoweredSpecialization(
             backend_id=translation.backend_id,
             primitive_name=selected.primitive.name,
-            extension_name=context.extension.name,
+            # Emit the ISA name (avx2), not the internal block name (avx2_vl):
+            # the `_vl` distinction only steers selection, never the generated type.
+            extension_name=context.extension.isa_name,
             type_tag=context.type_tag,
             base_type_spelling=base_type_spelling,
             result_kind=shape.result_kind,

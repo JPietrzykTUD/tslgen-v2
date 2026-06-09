@@ -37,6 +37,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--backends", default="cpp,rust", help="comma-separated backends")
     parser.add_argument("--output-root", default=None, help="write artifacts under this root")
     parser.add_argument("--verify", action="store_true", help="build-verify after writing")
+    parser.add_argument(
+        "--coverage", action="store_true", help="print a behavior-coverage report"
+    )
     args = parser.parse_args(argv)
 
     result = generate_project(
@@ -56,6 +59,11 @@ def main(argv: list[str] | None = None) -> int:
         f"generated {len(result.coverage)} specializations across "
         f"{len(result.artifacts.artifacts)} artifacts"
     )
+
+    if args.coverage:
+        from tslc.coverage import format_coverage_report
+
+        print(format_coverage_report(result))
 
     if has_errors(result.diagnostics):
         return 1
