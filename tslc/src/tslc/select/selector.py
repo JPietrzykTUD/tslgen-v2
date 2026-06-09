@@ -1,90 +1,111 @@
-"""Choose an implementation for a concrete target.
+"""Resolve which implementation bodies a machine profile emits.
 
-Selection matches a target's ``(extension, type_tag)`` against the primitive's
-implementation selector paths, expanding type groups. Extension fallback chains
-(e.g. ``avx2_vl -> avx2``) are a documented future extension point; the first
-slice uses direct extension matches only.
+For a profile, a primitive, and a concrete type, every *extension* reachable in
+the profile yields its own specialization slot (the extension is part of the
+`simd<type, ext>` key, so there is no cross-extension ambiguity). Within one
+`(extension, type)` slot the body is chosen by the confirmed order:
+
+    1. most specific type-group (fewest members)
+    2. tie -> most hardware flags (most specialized)
+    3. tie -> first occurrence (source order)
+
+An implementation is usable only if its `required_flags` are known and are a
+subset of the profile's feature set.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, Extension, Implementation, Primitive
-from tslc.diagnostics import Diagnostic, sort_diagnostics
-from tslc.select.target import Target
+from tslc.diagnostics import Diagnostic
 
 
 @dataclass(frozen=True, slots=True)
 class SelectedImplementation:
-    target: Target
     primitive: Primitive
     implementation: Implementation
     extension: Extension
+    type_tag: str
 
 
 @dataclass(frozen=True, slots=True)
-class SelectionResult:
-    selected: SelectedImplementation | None
+class ProfileSelectionResult:
+    selected: tuple[SelectedImplementation, ...]
     diagnostics: tuple[Diagnostic, ...]
 
 
 class Selector:
-    def select(self, catalog: Catalog, target: Target) -> SelectionResult:
-        diagnostics: list[Diagnostic] = []
-
-        primitive = catalog.primitive(target.primitive_name, unmasked=True)
+    def select_profile(
+        self,
+        catalog: Catalog,
+        profile: MachineProfile,
+        primitive_name: str,
+        type_tags: tuple[str, ...],
+    ) -> ProfileSelectionResult:
+        primitive = catalog.primitive(primitive_name, unmasked=True)
         if primitive is None:
-            return _error(
-                "TSL-SELECT-UNKNOWN-PRIMITIVE",
-                f"no unmasked primitive named {target.primitive_name!r}",
-            )
-
-        extension = catalog.extensions.get(target.extension)
-        if extension is None:
-            return _error(
-                "TSL-SELECT-UNKNOWN-EXTENSION",
-                f"no extension named {target.extension!r}",
-            )
-
-        matches = [
-            implementation
-            for implementation in primitive.implementations
-            if implementation.extension == target.extension
-            and catalog.type_group_contains(implementation.type_group, target.type_tag)
-        ]
-        if not matches:
-            return _error(
-                "TSL-SELECT-NO-IMPLEMENTATION",
-                (
-                    f"primitive {target.primitive_name!r} has no implementation for "
-                    f"extension {target.extension!r} and type {target.type_tag!r}"
+            return ProfileSelectionResult(
+                selected=(),
+                diagnostics=(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-SELECT-UNKNOWN-PRIMITIVE",
+                        message=f"no unmasked primitive named {primitive_name!r}",
+                    ),
                 ),
             )
-        if len(matches) > 1:
-            diagnostics.append(
-                Diagnostic(
-                    severity="warning",
-                    code="TSL-SELECT-AMBIGUOUS-IMPLEMENTATION",
-                    message=(
-                        f"primitive {target.primitive_name!r} has {len(matches)} "
-                        f"implementations matching {target.extension!r}/{target.type_tag!r}; "
-                        "using the first in source order"
-                    ),
-                )
-            )
 
-        selected = SelectedImplementation(
-            target=target,
-            primitive=primitive,
-            implementation=matches[0],
-            extension=extension,
+        # Extensions that are real catalog extensions (skip bracketed multi-selectors).
+        extension_names = sorted(
+            {
+                implementation.extension
+                for implementation in primitive.implementations
+                if implementation.extension in catalog.extensions
+            }
         )
-        return SelectionResult(selected=selected, diagnostics=sort_diagnostics(diagnostics))
 
+        selected: list[SelectedImplementation] = []
+        for type_tag in type_tags:
+            for extension_name in extension_names:
+                best = self._best_body(
+                    catalog, profile, primitive, extension_name, type_tag
+                )
+                if best is not None:
+                    selected.append(
+                        SelectedImplementation(
+                            primitive=primitive,
+                            implementation=best,
+                            extension=catalog.extensions[extension_name],
+                            type_tag=type_tag,
+                        )
+                    )
+        return ProfileSelectionResult(selected=tuple(selected), diagnostics=())
 
-def _error(code: str, message: str) -> SelectionResult:
-    return SelectionResult(
-        selected=None,
-        diagnostics=(Diagnostic(severity="error", code=code, message=message),),
-    )
+    def _best_body(
+        self,
+        catalog: Catalog,
+        profile: MachineProfile,
+        primitive: Primitive,
+        extension_name: str,
+        type_tag: str,
+    ) -> Implementation | None:
+        candidates = [
+            implementation
+            for implementation in primitive.implementations
+            if implementation.extension == extension_name
+            and implementation.required_flags is not None
+            and implementation.required_flags <= profile.features
+            and catalog.type_group_contains(implementation.type_group, type_tag)
+        ]
+        if not candidates:
+            return None
+        return min(
+            candidates,
+            key=lambda impl: (
+                catalog.type_group_specificity(impl.type_group),
+                -len(impl.required_flags or frozenset()),
+                impl.source_order,
+            ),
+        )

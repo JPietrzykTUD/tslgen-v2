@@ -23,6 +23,8 @@ KEYWORDS: frozenset[str] = frozenset(
         "value",
         "type",
         "cast",
+        "var",
+        "let",
     }
 )
 

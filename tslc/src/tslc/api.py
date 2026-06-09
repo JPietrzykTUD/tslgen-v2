@@ -31,8 +31,9 @@ _ARITH_TYPE_TAGS = (
 def generate_project(
     source_paths: Iterable[Path | str],
     *,
+    machine_profiles_path: Path | str,
     primitives: Iterable[str],
-    extensions: Iterable[str],
+    profiles: Iterable[str],
     type_tags: Iterable[str] = _ARITH_TYPE_TAGS,
     backends: Iterable[str] = ("cpp", "rust"),
 ) -> GenerationResult:
@@ -41,12 +42,14 @@ def generate_project(
     ``source_paths`` entries may be ``.tsl`` files or directories; directories
     are expanded to every ``.tsl`` file beneath them (the catalog needs the
     extension/type/language definitions alongside the primitive files).
+    ``profiles`` names machine feature-profiles from ``machine_profiles_path``.
     """
 
     request = GenerationRequest(
         source_paths=_expand_sources(source_paths),
+        machine_profiles_path=Path(machine_profiles_path),
         primitives=tuple(primitives),
-        extensions=tuple(extensions),
+        profiles=tuple(profiles),
         type_tags=tuple(type_tags),
         backends=tuple(backends),
     )

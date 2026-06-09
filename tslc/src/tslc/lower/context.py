@@ -23,9 +23,16 @@ class LoweringContext:
     translation: BackendTranslation
     diagnostics: list[Diagnostic] = field(default_factory=list)
     requires_unsafe: bool = False
+    unsupported: bool = False  # a not-yet-supported construct -> skip this specialization
 
     def error(self, code: str, message: str) -> None:
         self.diagnostics.append(Diagnostic(severity="error", code=code, message=message))
+
+    def skip(self, code: str, message: str) -> None:
+        """Mark the body as not-yet-lowerable. It is skipped, not failed."""
+
+        self.unsupported = True
+        self.diagnostics.append(Diagnostic(severity="info", code=code, message=message))
 
     def mark_unsafe(self) -> None:
         self.requires_unsafe = True

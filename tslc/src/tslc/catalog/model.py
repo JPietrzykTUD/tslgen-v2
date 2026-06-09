@@ -23,6 +23,11 @@ class Implementation:
     extension: str
     type_group: str
     body_text: str
+    # Hardware features this body needs. None means the requirement could not be
+    # evaluated (e.g. avx512's nested per-type `requires:`), so the body is treated
+    # as unavailable until that form is supported.
+    required_flags: frozenset[str] | None = frozenset()
+    source_order: int = 0  # tiebreak: earlier source wins
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,15 +41,16 @@ class Primitive:
 
 @dataclass(frozen=True, slots=True)
 class Extension:
-    """Hardware target metadata needed for backend translation."""
+    """Hardware target metadata needed for backend translation.
 
-    name: str  # the extension's unique identity = its TSL block name (e.g. "avx2_vl")
-    isa_name: str  # the shared ISA/family spelling from `extension_name` (e.g. "avx2")
-    intrinsic_style: str  # "x86", "arm", "scalar", "generic"
-    vector_bits: str  # kept as text ("256", "0", "sized")
-    register_type_policy: str  # "explicit" | "base_type"
-    # type-group name -> {backend_id: register type spelling}
-    register_types: dict[str, dict[str, str]]
+    Identity is the TSL block name (`avx2` and `avx2_vl` are distinct extensions
+    even though they share an ISA spelling). Register types are *not* modeled here
+    — the generated library's static `simd<>` core supplies them; this carries only
+    what backend translation consumes (the intrinsic family and compose fragments).
+    """
+
+    name: str
+    family: str  # "x86" | "arm" | "scalar" | … — picks the Rust core::arch module
     compose_prefix: dict[str, str]  # backend_id -> intrinsic prefix
     compose_suffix_by_type: dict[str, str]  # type tag -> suffix fragment
 
@@ -68,11 +74,27 @@ class Catalog:
             return primitive
         return None
 
-    def expand_type_group(self, name: str) -> tuple[str, ...]:
-        return self.type_groups.get(name, ())
+    def type_group_members(self, type_group: str) -> tuple[str, ...]:
+        """Members of a selector's type-group.
+
+        Handles named groups (``?i?``), bracketed type lists (``[si32, ui32]``),
+        and bare concrete tags (``f64`` -> itself).
+        """
+
+        named = self.type_groups.get(type_group)
+        if named is not None:
+            return named
+        text = type_group.strip()
+        if text.startswith("[") and text.endswith("]"):
+            return tuple(
+                part.strip() for part in text[1:-1].split(",") if part.strip()
+            )
+        return (type_group,)
 
     def type_group_contains(self, type_group: str, type_tag: str) -> bool:
-        members = self.type_groups.get(type_group)
-        if members is None:
-            return type_group == type_tag
-        return type_tag in members
+        return type_tag in self.type_group_members(type_group)
+
+    def type_group_specificity(self, type_group: str) -> int:
+        """Fewer members = more specific (used as the primary selection key)."""
+
+        return len(self.type_group_members(type_group))

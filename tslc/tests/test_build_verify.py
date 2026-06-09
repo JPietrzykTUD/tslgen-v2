@@ -1,4 +1,4 @@
-"""The generated C++ and Rust projects actually compile.
+"""The generated per-profile projects actually compile (C++ and Rust).
 
 Skips a backend whose toolchain is unavailable; fails on any build error.
 """
@@ -11,9 +11,14 @@ from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.diagnostics import has_errors
 
 
-def test_generated_projects_build(data_root: Path, tmp_path: Path) -> None:
+def test_generated_profiles_build(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
     result = generate_project(
-        [data_root], primitives=["add", "sub"], extensions=["scalar", "avx2"]
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add", "hadd"],
+        profiles=["scalar", "sse2", "avx", "avx2"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -23,5 +28,5 @@ def test_generated_projects_build(data_root: Path, tmp_path: Path) -> None:
 
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
-    # At least one toolchain should have run on this dev container.
+    # configure+build for 4 C++ profiles (8) + cargo test for 4 Rust profiles (4).
     assert report.commands, f"nothing verified; skipped={report.skipped}"

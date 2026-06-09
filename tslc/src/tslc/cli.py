@@ -18,8 +18,15 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="explicit .tsl source paths or directories (dirs load all .tsl beneath them)",
     )
-    parser.add_argument("--primitives", default="add,sub", help="comma-separated primitive names")
-    parser.add_argument("--extensions", default="scalar,avx2", help="comma-separated extensions")
+    parser.add_argument(
+        "--machine-profiles",
+        required=True,
+        help="path to machine_profiles.json",
+    )
+    parser.add_argument("--primitives", default="add,hadd", help="comma-separated primitive names")
+    parser.add_argument(
+        "--profiles", default="scalar,sse2,avx,avx2", help="comma-separated machine profiles"
+    )
     parser.add_argument(
         "--types",
         default="si8,si16,si32,si64,ui8,ui16,ui32,ui64,f32,f64",
@@ -32,8 +39,9 @@ def main(argv: list[str] | None = None) -> int:
 
     result = generate_project(
         [Path(path) for path in args.sources],
+        machine_profiles_path=args.machine_profiles,
         primitives=_split(args.primitives),
-        extensions=_split(args.extensions),
+        profiles=_split(args.profiles),
         type_tags=_split(args.types),
         backends=_split(args.backends),
     )
@@ -42,9 +50,10 @@ def main(argv: list[str] | None = None) -> int:
         location = f" {diagnostic.location.path}:{diagnostic.location.line}" if diagnostic.location else ""
         print(f"[{diagnostic.severity}] {diagnostic.code}{location}: {diagnostic.message}", file=sys.stderr)
 
-    print(f"generated {len(result.coverage)} functions across {len(result.artifacts.artifacts)} artifacts")
-    for entry in result.coverage:
-        print(f"  {entry.backend} {entry.extension} {entry.function_name}")
+    print(
+        f"generated {len(result.coverage)} specializations across "
+        f"{len(result.artifacts.artifacts)} artifacts"
+    )
 
     if has_errors(result.diagnostics):
         return 1

@@ -13,7 +13,9 @@ from tslc.diagnostics import Diagnostic
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedBlockDeclaration,
+    ParsedImplementationSelectorEntry,
     ParsedPrimitiveDeclaration,
+    ParsedRequiresValue,
     ParsedTslField,
     ParsedTslListValue,
     ParsedTslMapValue,
@@ -65,15 +67,8 @@ class CatalogBuilder:
 
 
 def _build_primitive(declaration: ParsedPrimitiveDeclaration) -> Primitive:
-    implementations = tuple(
-        Implementation(
-            selector_path=envelope.selector_path,
-            extension=envelope.selector_path[0] if envelope.selector_path else "",
-            type_group=envelope.selector_path[-1] if envelope.selector_path else "",
-            body_text=envelope.payload_text,
-        )
-        for envelope in declaration.body_envelopes
-    )
+    # Walk the selector-entry tree so each body keeps its entry's `requires` flags.
+    implementations = tuple(_implementations_from_entries(declaration.impl_entries))
     return Primitive(
         name=declaration.name,
         signature=declaration.signature,
@@ -81,6 +76,49 @@ def _build_primitive(declaration: ParsedPrimitiveDeclaration) -> Primitive:
         attribute_keys=tuple(attribute.key.text for attribute in declaration.attributes),
         implementations=implementations,
     )
+
+
+def _implementations_from_entries(
+    entries: tuple[ParsedImplementationSelectorEntry, ...],
+) -> list[Implementation]:
+    implementations: list[Implementation] = []
+    for entry in entries:
+        flags = _required_flags(entry.requires)
+        for envelope in entry.body_envelopes:
+            implementations.append(
+                Implementation(
+                    selector_path=envelope.selector_path,
+                    extension=envelope.selector_path[0] if envelope.selector_path else "",
+                    type_group=envelope.selector_path[-1] if envelope.selector_path else "",
+                    body_text=envelope.payload_text,
+                    required_flags=flags,
+                    source_order=envelope.source_order,
+                )
+            )
+        implementations.extend(_implementations_from_entries(entry.children))
+    return implementations
+
+
+def _required_flags(requires: tuple[ParsedRequiresValue, ...]) -> frozenset[str] | None:
+    """Flags from the simple ``requires [a, b]`` list form.
+
+    Returns ``None`` if any requirement uses the nested per-type ``requires:`` map
+    (e.g. avx512's idqword/bword) — that form is not evaluated yet, so the body is
+    marked unavailable rather than appearing unconditionally usable.
+    """
+
+    flags: set[str] = set()
+    for value in requires:
+        list_value = value.field.value
+        if isinstance(list_value, ParsedTslListValue):
+            flags.update(
+                item.text
+                for item in list_value.items
+                if isinstance(item, ParsedTslScalarValue)
+            )
+        elif value.field.children:
+            return None
+    return frozenset(flags)
 
 
 def _build_type_groups(declaration: ParsedBlockDeclaration) -> dict[str, tuple[str, ...]]:
@@ -116,22 +154,9 @@ def _build_translations(declaration: ParsedBlockDeclaration) -> dict[str, str]:
 
 def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
     fields = {field.key.text: field for field in declaration.fields}
-    # Extension identity is the block name: `avx2` and `avx2_vl` are distinct
-    # extensions (avx/avx2-only hardware vs. avx512vl-present hardware) even
-    # though they share the `extension_name` ISA spelling "avx2".
-    name = declaration.name or ""
-    isa_name = _field_text(fields.get("extension_name")) or name
-
-    register_types: dict[str, dict[str, str]] = {}
-    register_type_policy = "base_type"
-    vrt = fields.get("vector_register_types")
-    if vrt is not None:
-        register_type_policy = "explicit"
-        for tg_field in _children(vrt):
-            register_types[tg_field.key.text] = {
-                bk.key.text: (_field_text(bk) or "") for bk in _children(tg_field)
-            }
-
+    # Identity is the block name: `avx2` and `avx2_vl` are distinct extensions
+    # (avx2-only hardware vs. avx512vl-present hardware) even though they share the
+    # `extension_name` ISA spelling "avx2".
     compose_prefix: dict[str, str] = {}
     compose_suffix_by_type: dict[str, str] = {}
     compose = fields.get("intrinsic_compose")
@@ -149,12 +174,8 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
             }
 
     return Extension(
-        name=name,
-        isa_name=isa_name,
-        intrinsic_style=_field_text(fields.get("intrinsic_style")) or "",
-        vector_bits=_field_text(fields.get("vector_bits")) or "",
-        register_type_policy=register_type_policy,
-        register_types=register_types,
+        name=declaration.name or "",
+        family=_field_text(fields.get("family")) or "",
         compose_prefix=compose_prefix,
         compose_suffix_by_type=compose_suffix_by_type,
     )

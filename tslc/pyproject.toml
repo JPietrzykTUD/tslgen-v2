@@ -16,7 +16,7 @@ where = ["src"]
 include = ["tslc*"]
 
 [tool.setuptools.package-data]
-tslc = ["syntax/grammar/*.lark"]
+tslc = ["syntax/grammar/*.lark", "backend/assets/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

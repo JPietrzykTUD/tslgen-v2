@@ -1,18 +1,16 @@
-"""Explicit selection targets."""
+"""Selection request: which primitives/types to emit for a machine profile."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tslc.catalog.machine_profiles import MachineProfile
+
 
 @dataclass(frozen=True, slots=True)
-class Target:
-    """A concrete request: emit ``primitive`` for one backend/extension/type."""
+class ProfileRequest:
+    """Emit ``primitives`` over ``type_tags`` for one machine ``profile``."""
 
-    backend: str  # "cpp" | "rust"
-    primitive_name: str
-    extension: str  # extension block name, e.g. "scalar", "avx2"
-    type_tag: str  # concrete type tag, e.g. "si32", "f64"
-
-    def sort_key(self) -> tuple[str, str, str, str]:
-        return (self.backend, self.extension, self.primitive_name, self.type_tag)
+    profile: MachineProfile
+    primitive_names: tuple[str, ...]
+    type_tags: tuple[str, ...]

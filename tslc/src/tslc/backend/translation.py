@@ -47,24 +47,10 @@ class BackendTranslation:
         spellings = self.catalog.type_spellings.get(self.backend_id, {})
         return spellings.get(normalize_scalar_tag(type_tag))
 
-    def register_type(self, extension: Extension, type_tag: str) -> str | None:
-        """The function-signature type for a value of ``type_tag`` under ``extension``."""
-
-        if extension.register_type_policy == "base_type":
-            return self.scalar_spelling(type_tag)
-        # explicit policy: find the register-type group that contains the tag
-        for group_name, by_backend in extension.register_types.items():
-            if self.catalog.type_group_contains(group_name, type_tag):
-                return by_backend.get(self.backend_id)
-        return None
-
     def compose_prefix(self, extension: Extension) -> str | None:
         return extension.compose_prefix.get(self.backend_id)
 
     def default_suffix(self, extension: Extension, type_tag: str) -> str | None:
-        return extension.compose_suffix_by_type.get(type_tag)
-
-    def suffix_for_type(self, extension: Extension, type_tag: str) -> str | None:
         return extension.compose_suffix_by_type.get(type_tag)
 
     def compose_intrinsic_name(
@@ -104,15 +90,33 @@ class BackendTranslation:
 
         return self.render_template("emit_return", "return {value}", value=value)
 
-    def wrap_value(self, value: str, *, requires_unsafe: bool) -> str:
-        """Wrap a value as the target language requires.
+    def qualify_intrinsic(self, extension: Extension, name: str) -> str:
+        """Qualify a direct intrinsic name for the backend.
 
-        Rust intrinsic-bearing expressions must sit in an ``unsafe`` block (the
-        corpus idiom is ``return unsafe { ... }``); C++ needs no wrapper. This is
-        the one genuinely backend-structural fact, so it lives here on the
-        backend boundary rather than in a neutral region handler.
+        C++ uses the bare name; Rust needs the ``core::arch::<module>::`` path.
+        The module is chosen from the extension's hardware family.
+        """
+
+        if self.backend_id != "rust":
+            return name
+        module = _RUST_ARCH_MODULE.get(extension.family)
+        return f"core::arch::{module}::{name}" if module is not None else name
+
+    def frame_body(self, body_text: str, *, requires_unsafe: bool) -> str:
+        """Frame a fully-rendered body for the target language.
+
+        Rust wraps an intrinsic-bearing body in a single ``unsafe { ... }`` block
+        (covering local-variable RHS calls as well as the return); C++ needs no
+        wrapper. This is the one genuinely backend-structural fact, so it lives
+        here on the backend boundary, not in a neutral region handler.
         """
 
         if requires_unsafe and self.backend_id == "rust":
-            return f"unsafe {{ {value} }}"
-        return value
+            return f"unsafe {{ {body_text} }}"
+        return body_text
+
+
+_RUST_ARCH_MODULE: dict[str, str] = {
+    "x86": "x86_64",
+    "arm": "aarch64",
+}
