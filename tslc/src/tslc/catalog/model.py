@@ -16,6 +16,19 @@ ExtensionName = NewType("ExtensionName", str)
 
 
 @dataclass(frozen=True, slots=True)
+class RequirementClause:
+    """One `requires` clause: a feature-flag set, optionally scoped to a type-group.
+
+    A simple ``requires [avx, avx2]`` is one clause with ``type_group=None`` (applies
+    to every type). A nested ``requires:`` map (avx512's ``idqword [avx512f]`` /
+    ``bword [avx512f, avx512bw]``) is one clause per type-subgroup.
+    """
+
+    flags: frozenset[str]
+    type_group: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Implementation:
     """One source-authored body for a (extension, type-group) selector path."""
 
@@ -23,10 +36,7 @@ class Implementation:
     extension: str
     type_group: str
     body_text: str
-    # Hardware features this body needs. None means the requirement could not be
-    # evaluated (e.g. avx512's nested per-type `requires:`), so the body is treated
-    # as unavailable until that form is supported.
-    required_flags: frozenset[str] | None = frozenset()
+    requirements: tuple[RequirementClause, ...] = ()
     source_order: int = 0  # tiebreak: earlier source wins
 
 
@@ -53,6 +63,8 @@ class Extension:
     family: str  # "x86" | "arm" | "scalar" | … — picks the Rust core::arch module
     compose_prefix: dict[str, str]  # backend_id -> intrinsic prefix
     compose_suffix_by_type: dict[str, str]  # type tag -> suffix fragment
+    inherits: str | None = None  # extension this one borrows impls/metadata from
+    lscpu_flags: frozenset[str] = frozenset()  # features that make this extension available
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +85,18 @@ class Catalog:
                 continue
             return primitive
         return None
+
+    def extension_chain(self, name: str) -> tuple[str, ...]:
+        """An extension followed by its `inherits` ancestors (e.g. avx2_vl, avx2)."""
+
+        chain: list[str] = []
+        current: str | None = name
+        seen: set[str] = set()
+        while current is not None and current not in seen and current in self.extensions:
+            seen.add(current)
+            chain.append(current)
+            current = self.extensions[current].inherits
+        return tuple(chain)
 
     def type_group_members(self, type_group: str) -> tuple[str, ...]:
         """Members of a selector's type-group.

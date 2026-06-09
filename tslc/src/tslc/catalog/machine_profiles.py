@@ -2,8 +2,9 @@
 
 A profile is a named feature-set (e.g. ``avx2`` = {sse, sse2, …, avx, avx2}).
 Loaded from ``supplementary/buildsystem/machine_profiles.json``. An implementation
-is usable in a profile iff its ``required_flags`` are a subset of the profile's
-features; the profile thus decides which extensions' specializations are emitted.
+body is usable in a profile iff the `requires` clause applying to the type has its
+flags ⊆ the profile's features; the profile thus decides which extensions'
+specializations are emitted.
 """
 
 from __future__ import annotations

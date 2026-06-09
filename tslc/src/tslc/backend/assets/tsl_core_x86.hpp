@@ -17,6 +17,10 @@ template <class T> struct register_trait_avx2 { using type = __m256i; };
 template <> struct register_trait_avx2<float> { using type = __m256; };
 template <> struct register_trait_avx2<double> { using type = __m256d; };
 
+template <class T> struct register_trait_avx512 { using type = __m512i; };
+template <> struct register_trait_avx512<float> { using type = __m512; };
+template <> struct register_trait_avx512<double> { using type = __m512d; };
+
 template <class T>
 struct simd<T, sse> {
     using base_type = T;
@@ -24,9 +28,27 @@ struct simd<T, sse> {
 };
 
 template <class T>
+struct simd<T, sse_vl> {
+    using base_type = T;
+    using register_type = typename register_trait_sse<T>::type;  // 128-bit, like sse
+};
+
+template <class T>
 struct simd<T, avx2> {
     using base_type = T;
     using register_type = typename register_trait_avx2<T>::type;
+};
+
+template <class T>
+struct simd<T, avx2_vl> {
+    using base_type = T;
+    using register_type = typename register_trait_avx2<T>::type;  // 256-bit, like avx2
+};
+
+template <class T>
+struct simd<T, avx512> {
+    using base_type = T;
+    using register_type = typename register_trait_avx512<T>::type;
 };
 
 }  // namespace tsl

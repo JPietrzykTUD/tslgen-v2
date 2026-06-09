@@ -54,23 +54,40 @@ def test_bracketed_type_group_membership(catalog: Catalog) -> None:
     assert catalog.type_group_specificity("arith") == 10
 
 
-def test_required_flags_promoted(catalog: Catalog) -> None:
+def _flat_flags(impl):
+    assert len(impl.requirements) == 1 and impl.requirements[0].type_group is None
+    return impl.requirements[0].flags
+
+
+def test_requirements_promoted_flat(catalog: Catalog) -> None:
     add = catalog.primitive("add")
     by_path = {(i.extension, i.type_group): i for i in add.implementations}
-    assert by_path[("avx2", "?i?")].required_flags == frozenset({"avx", "avx2"})
-    assert by_path[("avx2", "f?")].required_flags == frozenset({"avx"})
-    assert by_path[("sse", "?i?")].required_flags == frozenset({"sse2"})
-    assert by_path[("scalar", "arith")].required_flags == frozenset()
+    assert _flat_flags(by_path[("avx2", "?i?")]) == frozenset({"avx", "avx2"})
+    assert _flat_flags(by_path[("avx2", "f?")]) == frozenset({"avx"})
+    assert _flat_flags(by_path[("sse", "?i?")]) == frozenset({"sse2"})
+    assert _flat_flags(by_path[("scalar", "arith")]) == frozenset()
 
 
-def test_nested_requires_marked_unavailable(catalog: Catalog) -> None:
-    # avx512 add's ?i? body uses a nested per-type `requires:` map we don't
-    # evaluate yet; it must be marked unavailable (None), not unconditionally usable.
+def test_nested_requires_promoted_per_type_group(catalog: Catalog) -> None:
+    # avx512 add's ?i? body has a nested `requires:` map: idqword needs avx512f,
+    # bword needs avx512f + avx512bw.
     add = catalog.primitive("add")
-    nested = [
+    nested = next(
         i for i in add.implementations if i.extension == "avx512" and i.type_group == "?i?"
-    ]
-    assert nested and all(i.required_flags is None for i in nested)
+    )
+    clauses = {c.type_group: c.flags for c in nested.requirements}
+    assert clauses["idqword"] == frozenset({"avx512f"})
+    assert clauses["bword"] == frozenset({"avx512f", "avx512bw"})
+
+
+def test_extension_inheritance_and_lscpu(catalog: Catalog) -> None:
+    avx2_vl = catalog.extensions["avx2_vl"]
+    assert avx2_vl.inherits == "avx2"
+    assert {"avx512vl", "avx512f"} <= avx2_vl.lscpu_flags
+    # compose metadata is inherited (flattened) from avx2.
+    assert avx2_vl.compose_prefix["cpp"] == "_mm256_"
+    assert avx2_vl.family == "x86"
+    assert catalog.extension_chain("avx2_vl") == ("avx2_vl", "avx2")
 
 
 def test_machine_profiles_loaded(machine_profiles) -> None:

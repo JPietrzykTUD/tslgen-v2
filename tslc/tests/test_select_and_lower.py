@@ -37,16 +37,21 @@ def test_profile_reachability(catalog: Catalog, machine_profiles) -> None:
     assert scalar == {"scalar"}
 
     # avx profile: avx2 integer add needs the avx2 flag (absent) -> falls to sse;
-    # but avx2 float add only needs `avx`, so it IS reachable.
+    # but avx2 float add only needs `avx`, so it IS present.
     avx = _by_key(catalog, machine_profiles["avx"], "add")
-    assert avx[("si32", "avx2")] if ("si32", "avx2") in avx else True  # not present
     assert ("si32", "avx2") not in avx
     assert ("si32", "sse") in avx
-    assert ("f32", "avx2") in avx  # float add reachable via [avx]
+    assert ("f32", "avx2") in avx
 
-    # avx2 profile: sse + avx2 (and scalar) all reachable.
+    # avx2 profile: sse + avx2 (and scalar) all present; _vl is not active here.
     avx2 = {s.extension.name for s in _slots(catalog, machine_profiles["avx2"], "add")}
     assert {"scalar", "sse", "avx2"} <= avx2
+    assert "avx2_vl" not in avx2
+
+    # skylake: avx512vl present -> _vl supersedes base avx2/sse, plus avx512.
+    sky = {s.extension.name for s in _slots(catalog, machine_profiles["skylake"], "add")}
+    assert {"avx2_vl", "sse_vl", "avx512"} <= sky
+    assert "avx2" not in sky and "sse" not in sky
 
 
 def test_type_group_specificity_resolves_hadd(catalog: Catalog, machine_profiles) -> None:

@@ -9,7 +9,10 @@ namespace tsl {
 // Extension tag types (the second simd<> argument).
 struct scalar {};
 struct sse {};
+struct sse_vl {};
 struct avx2 {};
+struct avx2_vl {};
+struct avx512 {};
 
 // Primary trait: simd<BaseType, Extension> exposes base_type and register_type.
 template <class T, class Ext>

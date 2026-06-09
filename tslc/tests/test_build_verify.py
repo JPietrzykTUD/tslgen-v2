@@ -18,7 +18,7 @@ def test_generated_profiles_build(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["add", "hadd"],
-        profiles=["scalar", "sse2", "avx", "avx2"],
+        profiles=["scalar", "sse2", "avx", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None

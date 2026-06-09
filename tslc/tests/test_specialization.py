@@ -13,7 +13,7 @@ def _generate(data_root: Path, machine_profiles_path: Path):
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["add", "hadd"],
-        profiles=["scalar", "sse2", "avx", "avx2"],
+        profiles=["scalar", "sse2", "avx", "avx2", "skylake"],
     )
 
 
@@ -71,6 +71,22 @@ def test_avx_profile_falls_back_to_sse_for_integers(
     assert "add_impl<tsl::simd<int32_t, tsl::sse>>" in avx
     # ...but 256-bit float add only needs `avx`, so it IS present.
     assert "add_impl<tsl::simd<float, tsl::avx2>>" in avx
+
+
+def test_skylake_uses_vl_and_avx512_not_base(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    by = {a.logical_path: a.content for a in _generate(data_root, machine_profiles_path).artifacts.artifacts}
+    sky = by["cpp/include/tsl_skylake.hpp"]
+    # avx512vl present -> _vl variants + avx512, NOT the base avx2/sse.
+    assert "add_impl<tsl::simd<int32_t, tsl::avx512>>" in sky
+    assert "return _mm512_add_epi32(left, right);" in sky
+    assert "add_impl<tsl::simd<int32_t, tsl::avx2_vl>>" in sky
+    assert "add_impl<tsl::simd<int32_t, tsl::sse_vl>>" in sky
+    assert "tsl::avx2>" not in sky  # base avx2 superseded by avx2_vl
+    assert "tsl::sse>" not in sky
+    # avx2_vl inherits avx2's body.
+    assert "return _mm256_add_epi32(left, right);" in sky
 
 
 def test_coverage_counts_specializations(data_root: Path, machine_profiles_path: Path) -> None:

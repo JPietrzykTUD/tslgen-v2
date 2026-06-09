@@ -25,7 +25,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--primitives", default="add,hadd", help="comma-separated primitive names")
     parser.add_argument(
-        "--profiles", default="scalar,sse2,avx,avx2", help="comma-separated machine profiles"
+        "--profiles",
+        default="scalar,sse2,avx,avx2,skylake",
+        help="comma-separated machine profiles",
     )
     parser.add_argument(
         "--types",

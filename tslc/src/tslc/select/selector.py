@@ -9,8 +9,10 @@ the profile yields its own specialization slot (the extension is part of the
     2. tie -> most hardware flags (most specialized)
     3. tie -> first occurrence (source order)
 
-An implementation is usable only if its `required_flags` are known and are a
-subset of the profile's feature set.
+An implementation body is usable only if the `requires` clause that applies to the
+type has its flags ⊆ the profile's feature set. A *derived* extension (`avx2_vl`
+inherits `avx2`) is only active when its `lscpu_flags ⊆ features`, and then
+supersedes its base; a base extension's bodies self-gate via `requires`.
 """
 
 from __future__ import annotations
@@ -57,18 +59,9 @@ class Selector:
                 ),
             )
 
-        # Extensions that are real catalog extensions (skip bracketed multi-selectors).
-        extension_names = sorted(
-            {
-                implementation.extension
-                for implementation in primitive.implementations
-                if implementation.extension in catalog.extensions
-            }
-        )
-
         selected: list[SelectedImplementation] = []
-        for type_tag in type_tags:
-            for extension_name in extension_names:
+        for extension_name in self._emit_extensions(catalog, profile):
+            for type_tag in type_tags:
                 best = self._best_body(
                     catalog, profile, primitive, extension_name, type_tag
                 )
@@ -83,6 +76,34 @@ class Selector:
                     )
         return ProfileSelectionResult(selected=tuple(selected), diagnostics=())
 
+    def _emit_extensions(self, catalog: Catalog, profile: MachineProfile) -> list[str]:
+        """Extensions to emit for a profile.
+
+        A *base* extension (no `inherits`) is always a candidate; its individual
+        bodies self-gate via their `requires` (e.g. avx2's 256-bit *float* add needs
+        only `avx`, so it appears on an avx-only profile while its 256-bit *integer*
+        add does not). A *derived* extension (e.g. `avx2_vl`, which `inherits avx2`)
+        is a candidate only when genuinely active — its `lscpu_flags ⊆ features` —
+        and then it *supersedes* its base (avx512vl profiles use `_vl`, not the base).
+        Candidates with no usable body for any type drop out later in `_best_body`.
+        """
+
+        active_derived = [
+            name
+            for name, ext in catalog.extensions.items()
+            if ext.inherits is not None and ext.lscpu_flags <= profile.features
+        ]
+        superseded = {catalog.extensions[name].inherits for name in active_derived}
+
+        emit: list[str] = []
+        for name, ext in catalog.extensions.items():
+            if name in superseded:
+                continue
+            if ext.inherits is not None and not (ext.lscpu_flags <= profile.features):
+                continue  # inactive derived extension
+            emit.append(name)
+        return sorted(emit)
+
     def _best_body(
         self,
         catalog: Catalog,
@@ -91,21 +112,44 @@ class Selector:
         extension_name: str,
         type_tag: str,
     ) -> Implementation | None:
-        candidates = [
-            implementation
-            for implementation in primitive.implementations
-            if implementation.extension == extension_name
-            and implementation.required_flags is not None
-            and implementation.required_flags <= profile.features
-            and catalog.type_group_contains(implementation.type_group, type_tag)
-        ]
+        # Gather candidates from the extension and the ancestors it inherits from
+        # (e.g. avx2_vl borrows avx2's body where it has none of its own).
+        chain = catalog.extension_chain(extension_name)
+        distance = {name: index for index, name in enumerate(chain)}
+        candidates: list[tuple[Implementation, frozenset[str]]] = []
+        for implementation in primitive.implementations:
+            if implementation.extension not in distance:
+                continue
+            if not catalog.type_group_contains(implementation.type_group, type_tag):
+                continue
+            flags = _applicable_flags(catalog, implementation, type_tag)
+            if flags is None or not (flags <= profile.features):
+                continue
+            candidates.append((implementation, flags))
         if not candidates:
             return None
-        return min(
+        best, _ = min(
             candidates,
-            key=lambda impl: (
-                catalog.type_group_specificity(impl.type_group),
-                -len(impl.required_flags or frozenset()),
-                impl.source_order,
+            key=lambda item: (
+                catalog.type_group_specificity(item[0].type_group),  # most specific
+                distance[item[0].extension],  # own extension before inherited
+                -len(item[1]),  # most hardware flags
+                item[0].source_order,  # first occurrence
             ),
         )
+        return best
+
+
+def _applicable_flags(
+    catalog: Catalog, implementation: Implementation, type_tag: str
+) -> frozenset[str] | None:
+    """The requirement-clause flags that apply to ``type_tag`` (None if none apply)."""
+
+    if not implementation.requirements:
+        return frozenset()
+    for clause in implementation.requirements:
+        if clause.type_group is None or catalog.type_group_contains(
+            clause.type_group, type_tag
+        ):
+            return clause.flags
+    return None

@@ -6,9 +6,15 @@ and no dependency on lowering.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from tslc.catalog.model import Catalog, Extension, Implementation, Primitive
+from tslc.catalog.model import (
+    Catalog,
+    Extension,
+    Implementation,
+    Primitive,
+    RequirementClause,
+)
 from tslc.diagnostics import Diagnostic
 from tslc.syntax.ast import (
     OuterTslParseResult,
@@ -53,6 +59,7 @@ class CatalogBuilder:
                     elif declaration.kind == "translation" and declaration.name:
                         translations[declaration.name] = _build_translations(declaration)
 
+        extensions = _resolve_extension_inheritance(extensions)
         catalog = Catalog(
             primitives=tuple(primitives),
             type_groups=type_groups,
@@ -83,7 +90,7 @@ def _implementations_from_entries(
 ) -> list[Implementation]:
     implementations: list[Implementation] = []
     for entry in entries:
-        flags = _required_flags(entry.requires)
+        requirements = _requirements(entry.requires)
         for envelope in entry.body_envelopes:
             implementations.append(
                 Implementation(
@@ -91,7 +98,7 @@ def _implementations_from_entries(
                     extension=envelope.selector_path[0] if envelope.selector_path else "",
                     type_group=envelope.selector_path[-1] if envelope.selector_path else "",
                     body_text=envelope.payload_text,
-                    required_flags=flags,
+                    requirements=requirements,
                     source_order=envelope.source_order,
                 )
             )
@@ -99,26 +106,59 @@ def _implementations_from_entries(
     return implementations
 
 
-def _required_flags(requires: tuple[ParsedRequiresValue, ...]) -> frozenset[str] | None:
-    """Flags from the simple ``requires [a, b]`` list form.
+def _requirements(
+    requires: tuple[ParsedRequiresValue, ...],
+) -> tuple[RequirementClause, ...]:
+    """Promote `requires` into clauses.
 
-    Returns ``None`` if any requirement uses the nested per-type ``requires:`` map
-    (e.g. avx512's idqword/bword) — that form is not evaluated yet, so the body is
-    marked unavailable rather than appearing unconditionally usable.
+    Simple ``requires [a, b]`` -> one clause covering all types. Nested
+    ``requires:`` maps (avx512's ``idqword [avx512f]`` / ``bword [...]``) -> one
+    clause per type-subgroup key.
     """
 
-    flags: set[str] = set()
+    clauses: list[RequirementClause] = []
     for value in requires:
-        list_value = value.field.value
-        if isinstance(list_value, ParsedTslListValue):
-            flags.update(
-                item.text
-                for item in list_value.items
-                if isinstance(item, ParsedTslScalarValue)
-            )
-        elif value.field.children:
-            return None
-    return frozenset(flags)
+        field = value.field
+        if isinstance(field.value, ParsedTslListValue):
+            clauses.append(RequirementClause(flags=_flag_list(field.value)))
+        else:
+            for child in field.children:
+                if isinstance(child.value, ParsedTslListValue):
+                    clauses.append(
+                        RequirementClause(
+                            flags=_flag_list(child.value), type_group=child.key.text
+                        )
+                    )
+    return tuple(clauses)
+
+
+def _flag_list(value: ParsedTslListValue) -> frozenset[str]:
+    return frozenset(
+        item.text for item in value.items if isinstance(item, ParsedTslScalarValue)
+    )
+
+
+def _resolve_extension_inheritance(
+    extensions: dict[str, Extension],
+) -> dict[str, Extension]:
+    """Fill each extension's compose metadata/family from its `inherits` ancestors."""
+
+    def resolve(name: str, seen: frozenset[str]) -> Extension:
+        ext = extensions[name]
+        if ext.inherits is None or ext.inherits not in extensions or ext.inherits in seen:
+            return ext
+        parent = resolve(ext.inherits, seen | {name})
+        return replace(
+            ext,
+            family=ext.family or parent.family,
+            compose_prefix={**parent.compose_prefix, **ext.compose_prefix},
+            compose_suffix_by_type={
+                **parent.compose_suffix_by_type,
+                **ext.compose_suffix_by_type,
+            },
+        )
+
+    return {name: resolve(name, frozenset()) for name in extensions}
 
 
 def _build_type_groups(declaration: ParsedBlockDeclaration) -> dict[str, tuple[str, ...]]:
@@ -178,6 +218,8 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
         family=_field_text(fields.get("family")) or "",
         compose_prefix=compose_prefix,
         compose_suffix_by_type=compose_suffix_by_type,
+        inherits=_field_text(fields.get("inherits")),
+        lscpu_flags=_list_text_set(fields.get("lscpu_flags")),
     )
 
 
@@ -225,3 +267,7 @@ def _list_text(field: ParsedTslField | None) -> tuple[str, ...]:
     return tuple(
         item.text for item in field.value.items if isinstance(item, ParsedTslScalarValue)
     )
+
+
+def _list_text_set(field: ParsedTslField | None) -> frozenset[str]:
+    return frozenset(_list_text(field))
