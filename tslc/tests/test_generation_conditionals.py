@@ -153,3 +153,15 @@ def test_native_mask_registration_per_profile(
 
     assert "register_type" in _mask_line("avx2")  # lane-bitmask
     assert "native_mask<256" in _mask_line("skylake")  # avx2_vl native predicate
+
+
+# --- masked-variant selection: native blend (first mask-consuming primitive) --
+
+
+def test_masked_only_primitive_is_selectable(catalog: Catalog, machine_profiles) -> None:
+    # `blend` exists only as `[mask=pass_through]`; it must still resolve by name and
+    # lower its native body, consuming the mask as a parameter (kind `m`).
+    spec = _spec(catalog, machine_profiles, "skylake", "blend", "avx512", "si32")
+    assert spec is not None
+    assert spec.result_kind == "v" and spec.param_kinds == ("m", "v", "v")
+    assert "_mm512_mask_blend_epi32(mask, left, right)" in spec.body_text

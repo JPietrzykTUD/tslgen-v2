@@ -46,7 +46,13 @@ class Selector:
         primitive_name: str,
         type_tags: tuple[str, ...],
     ) -> ProfileSelectionResult:
-        primitive = catalog.primitive(primitive_name, unmasked=True)
+        # Prefer the unmasked variant; fall back to a masked-only primitive (like
+        # `blend`, which exists solely as `[mask=pass_through]`). Names that also have
+        # an unmasked variant still resolve unmasked — explicit masked requests for
+        # those are a separate concern.
+        primitive = catalog.primitive(primitive_name, unmasked=True) or catalog.primitive(
+            primitive_name, unmasked=False
+        )
         if primitive is None:
             return ProfileSelectionResult(
                 selected=(),
@@ -54,7 +60,7 @@ class Selector:
                     Diagnostic(
                         severity="error",
                         code="TSL-SELECT-UNKNOWN-PRIMITIVE",
-                        message=f"no unmasked primitive named {primitive_name!r}",
+                        message=f"no primitive named {primitive_name!r}",
                     ),
                 ),
             )
