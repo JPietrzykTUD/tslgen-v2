@@ -32,9 +32,11 @@ def test_unknown_primitive_is_error(catalog: Catalog, machine_profiles) -> None:
 
 
 def test_profile_reachability(catalog: Catalog, machine_profiles) -> None:
-    # scalar profile: only the scalar extension is reachable.
+    # scalar profile: the scalar extension plus the portable `generic` fallback
+    # (lscpu `[]`, so reachable in every profile; its loop-based bodies skip when
+    # not yet lowerable). `oneAPIfpga` needs a flag absent here, so it is not reached.
     scalar = {s.extension.name for s in _slots(catalog, machine_profiles["scalar"], "add")}
-    assert scalar == {"scalar"}
+    assert scalar == {"scalar", "generic"}
 
     # avx profile: avx2 integer add needs the avx2 flag (absent) -> falls to sse;
     # but avx2 float add only needs `avx`, so it IS present.

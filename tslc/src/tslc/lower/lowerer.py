@@ -182,9 +182,19 @@ _SUPPORTED_KINDS = frozenset({"v", "s", "m"})
 
 
 def _find_region(segments: tuple[Segment, ...], keyword: str) -> Region | None:
+    """Find a region by keyword, descending into ``if`` branch blocks so an
+    ``emit_return`` guarded by ``if<generation>`` still counts as present."""
+
     for segment in segments:
-        if isinstance(segment, Region) and segment.keyword == keyword:
-            return segment
+        if isinstance(segment, Region):
+            if segment.keyword == keyword:
+                return segment
+            if segment.keyword == "if":
+                nested = _find_region(segment.block, keyword)
+                if nested is None and segment.else_block is not None:
+                    nested = _find_region(segment.else_block, keyword)
+                if nested is not None:
+                    return nested
     return None
 
 

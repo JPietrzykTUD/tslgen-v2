@@ -15,8 +15,8 @@ from typing import Protocol
 
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower.context import LoweringContext
-from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
-from tslc.lower._text import split_top_level
+from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue, TypeValue
+from tslc.lower._text import skip_string, split_top_level
 
 RenderBody = Callable[[tuple[Segment, ...]], str]
 
@@ -219,6 +219,34 @@ def _segment_text(segments: tuple[Segment, ...]) -> str:
     ).strip()
 
 
+def _split_top_level_op(text: str, op: str) -> list[str]:
+    """Split ``text`` on the two-char operator ``op`` at paren/bracket/string depth
+    zero (so an operator inside a nested call is not a split point)."""
+
+    parts: list[str] = []
+    depth = 0
+    start = 0
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if ch == '"':
+            i = skip_string(text, i)
+            continue
+        if ch in "(<[":
+            depth += 1
+        elif ch in ")>]":
+            depth -= 1
+        elif depth == 0 and text[i : i + 2] == op:
+            parts.append(text[start:i])
+            i += 2
+            start = i
+            continue
+        i += 1
+    parts.append(text[start:])
+    return [part.strip() for part in parts if part.strip()]
+
+
 class CallLowerer:
     """``call<primitive=NAME[Vec]>(args)`` -> a call to NAME's generated wrapper.
 
@@ -246,6 +274,60 @@ class CallLowerer:
         return context.translation.render_call(name_part.strip(), render(region.body))
 
 
+class IfGenerationLowerer:
+    """``if<generation>(cond) { ... } else<generation> { ... }`` -> the taken branch.
+
+    A *generation-time* conditional: the condition is evaluated now (against the
+    type being generated) and **only the chosen branch's statements** are emitted —
+    the output contains no ``if<generation>`` and no dead branch. ``else if`` chains
+    nest naturally: the ``else_block`` holds a single nested ``if`` region that
+    re-dispatches through this same lowerer.
+    """
+
+    keyword = "if"
+
+    def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
+        self._evaluator = evaluator or QueryEvaluator()
+
+    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+        if region.selector_text.strip() != "generation":
+            context.skip(
+                "TSL-LOWER-UNSUPPORTED-IF",
+                f"only if<generation> is modeled (runtime if not yet): {region.full_text!r}",
+            )
+            return region.full_text
+
+        taken = self._evaluate_condition(_segment_text(region.body), context)
+        if taken is None:
+            context.skip(
+                "TSL-LOWER-UNRESOLVED-IF-CONDITION",
+                f"could not evaluate generation-time condition in {region.full_text!r}",
+            )
+            return region.full_text
+
+        if taken:
+            return render(region.block)
+        if region.else_block is None:
+            return ""
+        return render(region.else_block)
+
+    def _evaluate_condition(self, text: str, context: LoweringContext) -> bool | None:
+        """Evaluate a generation-time boolean condition. Supports ``||`` / ``&&`` of
+        query sub-conditions (``&&`` binds tighter), e.g.
+        ``is_same(..., si64) || is_same(..., ui64)``. Returns None if unresolvable."""
+
+        ors = _split_top_level_op(text, "||")
+        if len(ors) > 1:
+            results = [self._evaluate_condition(part, context) for part in ors]
+            return None if None in results else any(results)
+        ands = _split_top_level_op(text, "&&")
+        if len(ands) > 1:
+            results = [self._evaluate_condition(part, context) for part in ands]
+            return None if None in results else all(results)
+        value = self._evaluator.evaluate(text.strip(), context)
+        return value.value if isinstance(value, BoolValue) else None
+
+
 class EmitReturnLowerer:
     """``emit_return(expr)`` -> the backend's return framing around the value.
 
@@ -266,5 +348,6 @@ DEFAULT_REGION_LOWERERS: tuple[RegionLowerer, ...] = (
     VarLowerer(),
     CastLowerer(),
     CallLowerer(),
+    IfGenerationLowerer(),
     EmitReturnLowerer(),
 )

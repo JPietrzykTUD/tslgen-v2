@@ -28,6 +28,13 @@ class Region:
     selector_text: str  # raw text inside <...>, "" when the keyword has no selector
     body: tuple["Segment", ...]  # recursively scanned (...) payload
     full_text: str  # original source text of the whole region (provenance)
+    # Brace-delimited trailing block(s), for block-bearing keywords like
+    # ``if<generation>(cond) { ... } else<generation> { ... }``. Empty/None for
+    # ordinary ``keyword<sel>(args)`` regions. ``else_block`` holds either the
+    # plain ``else`` statements or, for an ``else if`` chain, a single nested
+    # ``if`` region.
+    block: tuple["Segment", ...] = ()
+    else_block: tuple["Segment", ...] | None = None
 
 
 Segment = RawText | Region

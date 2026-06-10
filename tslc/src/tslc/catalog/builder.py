@@ -44,10 +44,22 @@ class CatalogBuilder:
         translations: dict[str, dict[str, str]] = {}
         diagnostics: list[Diagnostic] = []
 
+        # A `requires:` map may be keyed by extension name (``avx2 [avx, avx2]``);
+        # know the extension names up front so those keys aren't mistaken for
+        # type-groups when promoting a primitive's requirement clauses.
+        extension_names = frozenset(
+            declaration.name
+            for document in parsed.documents
+            for declaration in document.declarations
+            if isinstance(declaration, ParsedBlockDeclaration)
+            and declaration.kind == "extension"
+            and declaration.name
+        )
+
         for document in parsed.documents:
             for declaration in document.declarations:
                 if isinstance(declaration, ParsedPrimitiveDeclaration):
-                    primitives.append(_build_primitive(declaration))
+                    primitives.append(_build_primitive(declaration, extension_names))
                 elif isinstance(declaration, ParsedBlockDeclaration):
                     if declaration.kind == "types":
                         type_groups.update(_build_type_groups(declaration))
@@ -73,9 +85,13 @@ class CatalogBuilder:
 # --- promotion helpers -------------------------------------------------------
 
 
-def _build_primitive(declaration: ParsedPrimitiveDeclaration) -> Primitive:
+def _build_primitive(
+    declaration: ParsedPrimitiveDeclaration, extension_names: frozenset[str]
+) -> Primitive:
     # Walk the selector-entry tree so each body keeps its entry's `requires` flags.
-    implementations = tuple(_implementations_from_entries(declaration.impl_entries))
+    implementations = tuple(
+        _implementations_from_entries(declaration.impl_entries, extension_names)
+    )
     return Primitive(
         name=declaration.name,
         signature=declaration.signature,
@@ -87,33 +103,55 @@ def _build_primitive(declaration: ParsedPrimitiveDeclaration) -> Primitive:
 
 def _implementations_from_entries(
     entries: tuple[ParsedImplementationSelectorEntry, ...],
+    extension_names: frozenset[str],
 ) -> list[Implementation]:
     implementations: list[Implementation] = []
     for entry in entries:
-        requirements = _requirements(entry.requires)
+        requirements = _requirements(entry.requires, extension_names)
         for envelope in entry.body_envelopes:
-            implementations.append(
-                Implementation(
-                    selector_path=envelope.selector_path,
-                    extension=envelope.selector_path[0] if envelope.selector_path else "",
-                    type_group=envelope.selector_path[-1] if envelope.selector_path else "",
-                    body_text=envelope.payload_text,
-                    requirements=requirements,
-                    source_order=envelope.source_order,
+            head = envelope.selector_path[0] if envelope.selector_path else ""
+            type_group = envelope.selector_path[-1] if envelope.selector_path else ""
+            # A bracketed multi-extension selector (``[avx2, sse]:``) is one body
+            # shared by several extensions: expand it to one Implementation per
+            # extension so each selects independently (its per-ext `requires` clause
+            # already carries that extension's flags).
+            for extension in _selector_extensions(head):
+                implementations.append(
+                    Implementation(
+                        selector_path=envelope.selector_path,
+                        extension=extension,
+                        type_group=type_group,
+                        body_text=envelope.payload_text,
+                        requirements=requirements,
+                        source_order=envelope.source_order,
+                    )
                 )
-            )
-        implementations.extend(_implementations_from_entries(entry.children))
+        implementations.extend(
+            _implementations_from_entries(entry.children, extension_names)
+        )
     return implementations
+
+
+def _selector_extensions(head: str) -> tuple[str, ...]:
+    """The extension(s) a selector head names: ``avx2`` -> one, ``[avx2, sse]`` ->
+    one per bracketed member."""
+
+    head = head.strip()
+    if head.startswith("[") and head.endswith("]"):
+        return tuple(name.strip() for name in head[1:-1].split(",") if name.strip())
+    return (head,)
 
 
 def _requirements(
     requires: tuple[ParsedRequiresValue, ...],
+    extension_names: frozenset[str],
 ) -> tuple[RequirementClause, ...]:
     """Promote `requires` into clauses.
 
-    Simple ``requires [a, b]`` -> one clause covering all types. Nested
-    ``requires:`` maps (avx512's ``idqword [avx512f]`` / ``bword [...]``) -> one
-    clause per type-subgroup key.
+    Simple ``requires [a, b]`` -> one unscoped clause. A nested ``requires:`` map
+    keys by extension name (``avx2 [avx, avx2]`` -> ``extension="avx2"``), by
+    type-group (avx512's ``idqword [avx512f]`` -> ``type_group="idqword"``), or both
+    (two-level ``avx512: idqword [...]`` -> extension + type-group).
     """
 
     clauses: list[RequirementClause] = []
@@ -123,13 +161,32 @@ def _requirements(
             clauses.append(RequirementClause(flags=_flag_list(field.value)))
         else:
             for child in field.children:
-                if isinstance(child.value, ParsedTslListValue):
-                    clauses.append(
-                        RequirementClause(
-                            flags=_flag_list(child.value), type_group=child.key.text
-                        )
-                    )
+                clauses.extend(_clauses_from_child(child, extension_names))
     return tuple(clauses)
+
+
+def _clauses_from_child(child, extension_names: frozenset[str]):  # noqa: ANN001
+    """One `requires:` child: an extension-name key (possibly nesting type-groups) or
+    a type-group key, each carrying a flag list."""
+
+    is_extension = child.key.text in extension_names
+    if isinstance(child.value, ParsedTslListValue):
+        scope = {"extension": child.key.text} if is_extension else {"type_group": child.key.text}
+        return [RequirementClause(flags=_flag_list(child.value), **scope)]
+    if not is_extension:
+        return []
+    # An extension key nesting per-type-group flag lists (``avx512: idqword [...]``).
+    clauses: list[RequirementClause] = []
+    for grandchild in child.children:
+        if isinstance(grandchild.value, ParsedTslListValue):
+            clauses.append(
+                RequirementClause(
+                    flags=_flag_list(grandchild.value),
+                    type_group=grandchild.key.text,
+                    extension=child.key.text,
+                )
+            )
+    return clauses
 
 
 def _flag_list(value: ParsedTslListValue) -> frozenset[str]:

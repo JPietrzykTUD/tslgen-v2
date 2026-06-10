@@ -204,9 +204,15 @@ def _cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
         if x86_exts:
             includes += '#include "tsl_x86_traits.hpp"\n'
         registrations = "".join(_cpp_registration(ext) for ext in x86_exts)
-        bodies = "\n\n".join(
-            backend.render_primitive(name, p.cpp[name]) for name in sorted(p.cpp)
+        # All declarations (impl primary templates + wrappers) precede all
+        # specialization bodies, so any body may call any primitive's wrapper.
+        declarations = "\n\n".join(
+            backend.render_declarations(name, p.cpp[name]) for name in sorted(p.cpp)
         )
+        definitions = "\n\n".join(
+            backend.render_definitions(name, p.cpp[name]) for name in sorted(p.cpp)
+        )
+        bodies = declarations + "\n\n" + definitions
         content = (
             "#pragma once\n"
             f"{includes}\n"

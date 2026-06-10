@@ -25,6 +25,7 @@ KEYWORDS: frozenset[str] = frozenset(
         "cast",
         "var",
         "let",
+        "if",  # block-bearing: if<generation>(cond) { ... } else<generation> { ... }
     }
 )
 
@@ -83,6 +84,9 @@ def _try_region(
     if close is None:
         return None, start
     body_text = text[pos + 1 : close]
+    if keyword == "if":
+        # A block-bearing region: capture the `{ ... }` body (and any `else`) too.
+        return _try_if_region(text, start, selector_text, tuple(_scan(body_text)), close + 1)
     region = Region(
         keyword=keyword,
         selector_text=selector_text,
@@ -90,6 +94,79 @@ def _try_region(
         full_text=text[start : close + 1],
     )
     return region, close + 1
+
+
+def _try_if_region(
+    text: str,
+    start: int,
+    selector_text: str,
+    condition: tuple[Segment, ...],
+    after_condition: int,
+) -> tuple[Region | None, int]:
+    """Capture ``if<sel>(cond) { then } [else<sel> ({else} | if...)]`` from
+    ``after_condition`` (just past the condition's ``)``). The taken-branch logic
+    lives in the lowerer; here we only delimit the then/else blocks."""
+
+    pos = _skip_ws(text, after_condition)
+    if pos >= len(text) or text[pos] != "{":
+        return None, start  # an `if` without a block is not a region we model
+    close = _match_bracket(text, pos, "{", "}")
+    if close is None:
+        return None, start
+    then_block = tuple(_scan(text[pos + 1 : close]))
+    end = close + 1
+
+    else_block: tuple[Segment, ...] | None = None
+    after_then = _skip_ws(text, end)
+    if _matches_keyword(text, after_then, "else"):
+        else_block, end = _scan_else(text, after_then + len("else"))
+        if else_block is None:
+            return None, start
+
+    region = Region(
+        keyword="if",
+        selector_text=selector_text,
+        body=condition,
+        full_text=text[start:end],
+        block=then_block,
+        else_block=else_block,
+    )
+    return region, end
+
+
+def _scan_else(text: str, after_else: int) -> tuple[tuple[Segment, ...] | None, int]:
+    """Parse the tail of ``else<sel> ( { ... } | if<sel>(...){...} )``.
+
+    Returns ``(segments, end)``; ``segments`` is the else body (a brace block, or a
+    one-element tuple holding the nested ``if`` region for an ``else if`` chain)."""
+
+    pos = _skip_ws(text, after_else)
+    if pos < len(text) and text[pos] == "<":  # consume the else<...> selector
+        close = _match_bracket(text, pos, "<", ">")
+        if close is None:
+            return None, pos
+        pos = _skip_ws(text, close + 1)
+    if pos >= len(text):
+        return None, pos
+    if text[pos] == "{":
+        close = _match_bracket(text, pos, "{", "}")
+        if close is None:
+            return None, pos
+        return tuple(_scan(text[pos + 1 : close])), close + 1
+    if _matches_keyword(text, pos, "if"):
+        keyword, after = _read_ident(text, pos)
+        region, end = _try_region(text, pos, keyword, after)
+        if region is None:
+            return None, pos
+        return (region,), end
+    return None, pos
+
+
+def _matches_keyword(text: str, index: int, keyword: str) -> bool:
+    if not _boundary_before(text, index):
+        return False
+    word, after = _read_ident(text, index)
+    return word == keyword and after > index
 
 
 def _match_bracket(text: str, open_index: int, open_ch: str, close_ch: str) -> int | None:

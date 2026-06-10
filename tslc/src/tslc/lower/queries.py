@@ -40,7 +40,12 @@ class TextValue:
     text: str
 
 
-QueryValue = TypeValue | TextValue
+@dataclass(frozen=True, slots=True)
+class BoolValue:
+    value: bool
+
+
+QueryValue = TypeValue | TextValue | BoolValue
 
 
 # --- parsed query terms ------------------------------------------------------
@@ -126,13 +131,39 @@ class ValueQuery:
 
 
 class IntrinSuffixQuery:
+    """``intrin::suffix(x)`` -> the composed intrinsic suffix fragment.
+
+    Two forms: a *type* argument (``si32`` -> ``epi32``) via the extension's
+    by-type compose map, or a *named policy* string literal (``"stream"`` ->
+    ``si256``) resolved per-extension from the ``intrinsic_suffix_<name>_<ext>``
+    translate template (e.g. whole-register integer ops: ``_mm256_xor_si256``).
+    """
+
     head = "intrin::suffix"
 
     def apply(self, args, context):  # noqa: ANN001
-        if len(args) != 1 or not isinstance(args[0], TypeValue):
+        if len(args) != 1:
             return None
-        fragment = context.extension.compose_suffix_by_type.get(args[0].type_tag)
-        return TextValue(fragment) if fragment is not None else None
+        arg = args[0]
+        if isinstance(arg, TypeValue):
+            fragment = context.extension.compose_suffix_by_type.get(arg.type_tag)
+            return TextValue(fragment) if fragment is not None else None
+        if isinstance(arg, TextValue):  # a named suffix policy, keyed by extension block name
+            key = f"intrinsic_suffix_{arg.text}_{context.extension.name}"
+            fragment = context.translation.template(key)
+            return TextValue(fragment) if fragment is not None else None
+        return None
+
+
+class IsSameQuery:
+    """``type::is_same(a, b)`` -> a generation-time boolean (the two type tags match)."""
+
+    head = "type::is_same"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 2 or not all(isinstance(arg, TypeValue) for arg in args):
+            return None
+        return BoolValue(args[0].type_tag == args[1].type_tag)
 
 
 DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
@@ -141,6 +172,7 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     TypeQuery(),
     ValueQuery(),
     IntrinSuffixQuery(),
+    IsSameQuery(),
 )
 
 
@@ -176,4 +208,7 @@ class QueryEvaluator:
         # A bare leaf that names a concrete type tag resolves to itself.
         if not term.args and is_type_tag(term.head):
             return TypeValue(term.head)
+        # A bare quoted string literal (e.g. a named suffix policy) is text.
+        if not term.args and len(term.head) >= 2 and term.head[0] == '"' == term.head[-1]:
+            return TextValue(term.head[1:-1])
         return None

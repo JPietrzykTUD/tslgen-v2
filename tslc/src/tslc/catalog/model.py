@@ -17,15 +17,21 @@ ExtensionName = NewType("ExtensionName", str)
 
 @dataclass(frozen=True, slots=True)
 class RequirementClause:
-    """One `requires` clause: a feature-flag set, optionally scoped to a type-group.
+    """One `requires` clause: a feature-flag set, optionally scoped to an extension
+    and/or a type-group.
 
-    A simple ``requires [avx, avx2]`` is one clause with ``type_group=None`` (applies
-    to every type). A nested ``requires:`` map (avx512's ``idqword [avx512f]`` /
-    ``bword [avx512f, avx512bw]``) is one clause per type-subgroup.
+    A simple ``requires [avx, avx2]`` is one clause with ``extension=None`` and
+    ``type_group=None`` (applies to every extension and type). A nested ``requires:``
+    map may key by extension name (``avx2 [avx, avx2]`` -> ``extension="avx2"``), by
+    type-group (avx512's ``idqword [avx512f]`` -> ``type_group="idqword"``), or both
+    (two-level ``avx512: idqword [...]`` -> ``extension="avx512", type_group="idqword"``).
+    A clause applies to a body only when its extension scope matches the body's own
+    extension (or is unscoped).
     """
 
     flags: frozenset[str]
     type_group: str | None = None
+    extension: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

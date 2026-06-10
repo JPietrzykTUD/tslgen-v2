@@ -148,6 +148,8 @@ def _applicable_flags(
     if not implementation.requirements:
         return frozenset()
     for clause in implementation.requirements:
+        if clause.extension is not None and clause.extension != implementation.extension:
+            continue  # this clause is scoped to a different extension
         if clause.type_group is None or catalog.type_group_contains(
             clause.type_group, type_tag
         ):
