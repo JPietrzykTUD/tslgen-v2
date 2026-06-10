@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass, field
 from importlib import resources
 
-from tslc.backend.cpp import CppBackend
+from tslc.backend.cpp import CppBackend, _varying_positions
 from tslc.backend.rust import RustBackend
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
@@ -279,20 +279,43 @@ def _cpp_dispatch(profiles: tuple[ProfileRender, ...]) -> str:
 
 def _cpp_smoke(p: ProfileRender) -> str:
     # Address-take every emitted wrapper instantiation so the profile's bodies are
-    # fully compiled (with the profile's ISA flags), not merely parsed.
-    specs = _ordered_specs(p.cpp)
+    # fully compiled (with the profile's ISA flags), not merely parsed. All template
+    # args are spelled explicitly (Vec, axis bool values, and the dispatch-arg type for
+    # each overloaded position) so address-of resolves without deduction.
     lines = ["#include <tsl.hpp>", "", "namespace {"]
-    for index, spec in enumerate(specs):
-        key = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
-        lines.append(f"auto* _tsl_use_{index} = &tsl::{spec.primitive_name}<{key}>;")
+    index = 0
+    for name in sorted(p.cpp):
+        specs = p.cpp[name]
+        varying = _varying_positions(specs)
+        for spec in specs:
+            vec = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
+            targs = (
+                [vec]
+                + [value for _, value in spec.axis]
+                + [_concrete_arg_type(vec, spec.param_kinds[i]) for i in varying]
+            )
+            lines.append(f"auto* _tsl_use_{index} = &tsl::{name}<{', '.join(targs)}>;")
+            index += 1
     lines.append("}  // namespace")
     lines.append("")
     lines.append("int main() {")
-    for index in range(len(specs)):
-        lines.append(f"  (void)_tsl_use_{index};")
+    for used in range(index):
+        lines.append(f"  (void)_tsl_use_{used};")
     lines.append("  return 0;")
     lines.append("}")
     return "\n".join(lines) + "\n"
+
+
+def _concrete_arg_type(vec: str, kind: str) -> str:
+    """The concrete dispatch-argument type for an overloaded wrapper instantiation."""
+
+    if kind == "v":
+        return f"{vec}::register_type"
+    if kind == "m":
+        return f"{vec}::mask_type"
+    if kind == "ptr":
+        return f"{vec}::base_type *"
+    return f"{vec}::base_type"
 
 
 def _cpp_cmakelists(profiles: tuple[ProfileRender, ...]) -> str:
@@ -380,15 +403,6 @@ def _rust_cargo(profiles: tuple[ProfileRender, ...]) -> str:
 
 
 # --- helpers -----------------------------------------------------------------
-
-
-def _ordered_specs(
-    by_primitive: dict[str, tuple[LoweredSpecialization, ...]],
-) -> list[LoweredSpecialization]:
-    specs: list[LoweredSpecialization] = []
-    for name in sorted(by_primitive):
-        specs.extend(by_primitive[name])
-    return specs
 
 
 def _text(logical_path: str, content: str) -> Artifact:

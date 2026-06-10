@@ -102,6 +102,22 @@ class BackendTranslation:
             return f"{name}::<Self>({args})"
         return self.render_template("call", "::tsl::{name}<Vec>({args})", name=name, args=args)
 
+    def register_type_spelling(self) -> str:
+        """The vector register type as named inside a body (`vector::register`)."""
+
+        return "Self::RegisterType" if self.backend_id == "rust" else "typename Vec::register_type"
+
+    def render_pointer_cast(self, inner: str, *, is_const: bool, expr: str) -> str:
+        """A reinterpret cast of a pointer (`cast<reinterpret>(T const *, ptr)`): C++
+        `reinterpret_cast<T [const] *>(expr)`, Rust `expr as *{const|mut} T`. The
+        existing value `bit_cast` would be wrong for a pointer, so this is backend-
+        structural and lives here, like ``render_call``."""
+
+        if self.backend_id == "rust":
+            return f"{expr} as *{'const' if is_const else 'mut'} {inner}"
+        qualifier = " const" if is_const else ""
+        return f"reinterpret_cast<{inner}{qualifier} *>({expr})"
+
     def qualify_intrinsic(self, extension: Extension, name: str) -> str:
         """Qualify a direct intrinsic name for the backend.
 

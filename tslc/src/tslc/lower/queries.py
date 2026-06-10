@@ -19,8 +19,11 @@ Design (so this grows by *vocabulary*, not by lengthening a function):
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Protocol
+
+_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 from tslc.backend.translation import is_type_tag, signed_of
 from tslc.lower._text import split_head_arg, split_top_level
@@ -166,6 +169,37 @@ class IsSameQuery:
         return BoolValue(args[0].type_tag == args[1].type_tag)
 
 
+class AttributeQuery:
+    """``primitive::attribute(name)`` -> the boolean value of the (concrete, after
+    wildcard expansion) attribute on the primitive being lowered, e.g. ``aligned``."""
+
+    head = "primitive::attribute"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 1 or not isinstance(args[0], TextValue):
+            return None
+        return BoolValue(context.attributes.get(args[0].text) == "true")
+
+
+class RegisterQuery:
+    """``vector::register`` -> the backend spelling of the vector register type
+    (C++ ``typename Vec::register_type`` / Rust ``Self::RegisterType``)."""
+
+    head = "vector::register"
+
+    def apply(self, args, context):  # noqa: ANN001
+        return TextValue(context.translation.register_type_spelling())
+
+
+class VectorAlignmentQuery:
+    """``vector::alignment`` -> the register's natural byte alignment (`vector_bits/8`)."""
+
+    head = "vector::alignment"
+
+    def apply(self, args, context):  # noqa: ANN001
+        return TextValue(str(context.extension.vector_bits // 8))
+
+
 DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     BaseInQuery(),
     SignedOfQuery(),
@@ -173,6 +207,9 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     ValueQuery(),
     IntrinSuffixQuery(),
     IsSameQuery(),
+    AttributeQuery(),
+    RegisterQuery(),
+    VectorAlignmentQuery(),
 )
 
 
@@ -211,4 +248,8 @@ class QueryEvaluator:
         # A bare quoted string literal (e.g. a named suffix policy) is text.
         if not term.args and len(term.head) >= 2 and term.head[0] == '"' == term.head[-1]:
             return TextValue(term.head[1:-1])
+        # A bare identifier (e.g. an attribute name `aligned`) is text. `?`-bearing
+        # tokens like `si?` don't match, so the avx512 set1 quirk is unaffected.
+        if not term.args and _IDENTIFIER.match(term.head):
+            return TextValue(term.head)
         return None

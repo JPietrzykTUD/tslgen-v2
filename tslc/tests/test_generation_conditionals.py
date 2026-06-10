@@ -188,3 +188,99 @@ def test_scalar_load_store_rust_is_unsafe(catalog: Catalog, machine_profiles) ->
     # Dereferencing a raw pointer is unsafe in Rust even without intrinsics.
     store = _spec(catalog, machine_profiles, "scalar", "store", "scalar", "si32", backend="rust")
     assert store is not None and store.body_text.startswith("unsafe {")
+
+
+# --- boolean-wildcard attribute axis: SIMD load/store (both aligned variants) --
+
+
+def test_aligned_wildcard_expands_to_both_variants(catalog: Catalog) -> None:
+    # `[aligned=*]` store expands into concrete aligned/unaligned primitives.
+    aligned = {
+        p.attributes.get("aligned")
+        for p in catalog.primitives_named("store")
+        if p.signature == "void:=(ptr,v)"
+    }
+    assert aligned == {"true", "false"}
+
+
+def test_simd_store_emits_both_aligned_variants(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    from tslc.api import write_artifacts  # noqa: PLC0415
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["store"],
+        profiles=["avx2"],
+        backends=["cpp"],
+    )
+    write_artifacts(result.artifacts, tmp_path)
+    hpp = (tmp_path / "cpp" / "include" / "tsl_avx2.hpp").read_text()
+    # both variants coexist, keyed by the bool axis param on the impl + wrapper
+    assert "template <class Vec, bool Aligned>" in hpp
+    assert "store_impl<tsl::simd<int32_t, tsl::avx2>, false>" in hpp
+    assert "store_impl<tsl::simd<int32_t, tsl::avx2>, true>" in hpp
+    # unaligned uses storeu + a pointer reinterpret; aligned uses store + assume_aligned
+    assert "_mm256_storeu_si256(reinterpret_cast<typename Vec::register_type *>(ptr)" in hpp
+    assert "_mm256_store_si256(reinterpret_cast<typename Vec::register_type *>(::tsl::assume_aligned<32>(ptr))" in hpp
+
+
+def test_simd_store_pointer_cast_rust(catalog: Catalog, machine_profiles) -> None:
+    # The pointer reinterpret diverges: Rust uses `ptr as *mut …`, not bit_cast.
+    spec = next(
+        s
+        for s in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "store", ("si32",))
+        .selected
+        if s.extension.name == "avx2" and s.primitive.attributes.get("aligned") == "false"
+    )
+    from tslc.lower.lowerer import Lowerer  # noqa: PLC0415
+
+    body = Lowerer().lower(spec, catalog, BackendTranslation(catalog, "rust")).specialization.body_text
+    assert "ptr as *mut Self::RegisterType" in body
+
+
+# --- overload dispatch: store's (ptr,v) / (ptr,s) signatures --------------------
+
+
+def test_store_overload_dispatch(data_root, machine_profiles_path, tmp_path) -> None:
+    from tslc.api import write_artifacts  # noqa: PLC0415
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["store"],
+        profiles=["avx2"],
+    )
+    write_artifacts(result.artifacts, tmp_path)
+    hpp = (tmp_path / "cpp" / "include" / "tsl_avx2.hpp").read_text()
+    # C++: one impl with two `apply` overloads (vector + scalar) resolved by arg type;
+    # a generic-arg wrapper.
+    assert hpp.count("struct store_impl<tsl::simd<int32_t, tsl::avx2>, false>") == 1
+    assert "apply(typename Vec::base_type * ptr, typename tsl::reg_param<Vec>::type" in hpp
+    assert "apply(typename Vec::base_type * ptr, typename Vec::base_type" in hpp
+    assert "class Arg1" in hpp
+    rs = (tmp_path / "rust" / "src" / "tsl_avx2.rs").read_text()
+    # Rust: an arg-dispatch trait implemented for each concrete argument type.
+    assert "pub trait StoreImplArg" in rs
+    assert "for core::arch::x86_64::__m256i {" in rs
+    assert "for i32 {" in rs
+
+
+def test_store_scalar_dedup(data_root, machine_profiles_path, tmp_path) -> None:
+    # On scalar, register_type == base_type, so the (ptr,v)/(ptr,s) overloads collapse to
+    # one — emitted once (no redefinition).
+    from tslc.api import write_artifacts  # noqa: PLC0415
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["store"],
+        profiles=["scalar"],
+        backends=["cpp"],
+    )
+    write_artifacts(result.artifacts, tmp_path)
+    hpp = (tmp_path / "cpp" / "include" / "tsl_scalar.hpp").read_text()
+    block = hpp.split("struct store_impl<tsl::simd<int32_t, tsl::scalar>, false>")[1].split("};")[0]
+    assert block.count("static inline") == 1  # the two signatures deduped to one apply

@@ -21,6 +21,9 @@ class LoweringContext:
     extension: Extension
     type_tag: str
     translation: BackendTranslation
+    # the selected primitive's attribute values (concrete after wildcard expansion),
+    # e.g. {"aligned": "false"} — read by the `primitive::attribute` query.
+    attributes: dict[str, str] = field(default_factory=dict)
     diagnostics: list[Diagnostic] = field(default_factory=list)
     requires_unsafe: bool = False
     unsupported: bool = False  # a not-yet-supported construct -> skip this specialization

@@ -165,27 +165,59 @@ class CastLowerer:
 
     def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
         args = _split_arg_groups(region.body)
-        key = f"cast_{region.selector_text.strip()}"
-        if len(args) != 2 or context.translation.template(key) is None:
+        if len(args) != 2:
             context.skip("TSL-LOWER-UNSUPPORTED-CAST", f"unsupported cast: {region.full_text!r}")
             return region.full_text
 
-        type_value = self._evaluator.evaluate(_segment_text(args[0]), context)
-        if not isinstance(type_value, TypeValue):
+        # A trailing `*` on the type argument means a pointer reinterpret. This infers
+        # intent from raw text; the cleaner-but-corpus-churny design would make it
+        # explicit (`cast<reinterpret type=ptr>(...)`, `type=value` default). Deferred to
+        # avoid rewriting every cast site for an internal-only gain.
+        type_text = _segment_text(args[0])
+        if type_text.rstrip().endswith("*"):
+            return self._pointer_cast(type_text, region, context, render(args[1]))
+
+        key = f"cast_{region.selector_text.strip()}"
+        if context.translation.template(key) is None:
+            context.skip("TSL-LOWER-UNSUPPORTED-CAST", f"unsupported cast: {region.full_text!r}")
+            return region.full_text
+
+        spelling = self._type_spelling(type_text, context)
+        if spelling is None:
             context.skip(
                 "TSL-LOWER-UNRESOLVED-CAST-TYPE",
                 f"could not resolve cast type in {region.full_text!r}",
             )
             return region.full_text
-        spelling = context.translation.scalar_spelling(type_value.type_tag)
-        if spelling is None:
+        return context.translation.render_template(key, type=spelling, expr=render(args[1]))
+
+    def _pointer_cast(
+        self, type_text: str, region: Region, context: LoweringContext, expr: str
+    ) -> str:
+        """``cast<reinterpret>(type<…>() [const] *, ptr)`` -> a backend pointer cast."""
+
+        stripped = type_text.rstrip()[:-1].rstrip()  # drop the trailing `*`
+        is_const = stripped.endswith("const")
+        inner_text = stripped[: -len("const")].rstrip() if is_const else stripped
+        inner = self._type_spelling(inner_text, context)
+        if inner is None:
             context.skip(
-                "TSL-LOWER-NO-CAST-TYPE-SPELLING",
-                f"no base-type spelling for {type_value.type_tag!r}",
+                "TSL-LOWER-UNRESOLVED-CAST-TYPE",
+                f"could not resolve pointer cast type in {region.full_text!r}",
             )
             return region.full_text
+        return context.translation.render_pointer_cast(inner, is_const=is_const, expr=expr)
 
-        return context.translation.render_template(key, type=spelling, expr=render(args[1]))
+    def _type_spelling(self, type_text: str, context: LoweringContext) -> str | None:
+        """Resolve a type expression to its backend spelling — a register spelling
+        (``vector::register`` -> ``TextValue``) or a base type tag (-> scalar spelling)."""
+
+        value = self._evaluator.evaluate(type_text, context)
+        if isinstance(value, TextValue):
+            return value.text
+        if isinstance(value, TypeValue):
+            return context.translation.scalar_spelling(value.type_tag)
+        return None
 
 
 def _split_arg_groups(segments: tuple[Segment, ...]) -> list[tuple[Segment, ...]]:
@@ -337,6 +369,31 @@ class IfGenerationLowerer:
         return value.value if isinstance(value, BoolValue) else None
 
 
+class AssumeAlignedLowerer:
+    """``assume_aligned<N>(ptr)`` -> an aligned-pointer hint. C++ forwards to the static
+    core's ``::tsl::assume_aligned<N>(ptr)`` (``std::assume_aligned``); Rust has no stable
+    equivalent and the aligned intrinsic already assumes alignment, so it drops to ``ptr``.
+    The ``<N>`` selector (e.g. ``value<generation>(vector::alignment)``) is query-resolved."""
+
+    keyword = "assume_aligned"
+
+    def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
+        self._evaluator = evaluator or QueryEvaluator()
+
+    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+        expr = render(region.body)
+        if context.translation.backend_id == "rust":
+            return expr
+        value = self._evaluator.evaluate(region.selector_text.strip(), context)
+        if not isinstance(value, TextValue):
+            context.skip(
+                "TSL-LOWER-UNRESOLVED-ASSUME-ALIGNED",
+                f"could not resolve alignment in {region.full_text!r}",
+            )
+            return region.full_text
+        return f"::tsl::assume_aligned<{value.text}>({expr})"
+
+
 class EmitReturnLowerer:
     """``emit_return(expr)`` -> the backend's return framing around the value.
 
@@ -358,5 +415,6 @@ DEFAULT_REGION_LOWERERS: tuple[RegionLowerer, ...] = (
     CastLowerer(),
     CallLowerer(),
     IfGenerationLowerer(),
+    AssumeAlignedLowerer(),
     EmitReturnLowerer(),
 )

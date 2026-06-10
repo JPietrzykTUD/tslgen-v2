@@ -14,6 +14,11 @@ TypeTag = NewType("TypeTag", str)
 BackendId = NewType("BackendId", str)
 ExtensionName = NewType("ExtensionName", str)
 
+# Boolean attributes whose `*` value is a generation axis: a `[aligned=*]` primitive
+# expands into concrete `true`/`false` variants, each an independent generation, and the
+# emitted API gains a bool axis parameter so both variants coexist as distinct callables.
+BOOLEAN_WILDCARD_ATTRIBUTES = frozenset({"aligned", "packed"})
+
 
 @dataclass(frozen=True, slots=True)
 class RequirementClause:
@@ -53,6 +58,10 @@ class Primitive:
     parameters: tuple[str, ...]
     attribute_keys: tuple[str, ...]  # e.g. () for unmasked, ("mask",) for masked
     implementations: tuple[Implementation, ...]
+    # attribute key -> value (e.g. {"aligned": "false"}). A `*`-valued boolean wildcard
+    # (aligned/packed) is expanded by the builder into concrete-value copies, so here the
+    # value is always concrete. `attribute_keys` is kept for the masked-variant filter.
+    attributes: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +122,16 @@ class Catalog:
                 continue
             return primitive
         return None
+
+    def primitives_named(self, name: str, *, unmasked: bool = True) -> tuple[Primitive, ...]:
+        """Every primitive of this name — there can be more than one when a boolean
+        wildcard attribute (`[aligned=*]`) expanded into concrete-value variants."""
+
+        return tuple(
+            p
+            for p in self.primitives
+            if p.name == name and not (unmasked and "mask" in p.attribute_keys)
+        )
 
     def extension_chain(self, name: str) -> tuple[str, ...]:
         """An extension followed by its `inherits` ancestors (e.g. avx2_vl, avx2)."""

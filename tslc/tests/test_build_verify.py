@@ -113,16 +113,16 @@ def test_blend_native_builds(data_root: Path, machine_profiles_path: Path, tmp_p
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
-def test_scalar_load_store_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
-    # The leaf of the array/reduction call chain: plain load/store introduce the ptr +
-    # void kinds. Scalar bodies (`*ptr = data;` / `return *ptr;`) build in C++ and Rust
-    # (Rust wraps the raw-pointer deref in unsafe). SIMD load/store (register-pointer
-    # reinterpret cast, prefix=, vector::register) is a separate slice.
+def test_load_store_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `load`/`store` (the ptr/void kinds) across scalar + SIMD. `[aligned=*]` expands to
+    # BOTH aligned/unaligned variants (a bool axis template/const-generic param); the
+    # integer SIMD bodies use a register-pointer reinterpret cast (C++ reinterpret_cast /
+    # Rust `as *mut`) and `assume_aligned` for the aligned branch. Builds in C++ and Rust.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["load", "store"],
-        profiles=["scalar"],
+        profiles=["scalar", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None

@@ -38,6 +38,9 @@ class ProfileSelectionResult:
     diagnostics: tuple[Diagnostic, ...]
 
 
+_SUPPORTED_FAMILIES = frozenset({"scalar", "x86"})  # families tslc registers `simd<>` for
+
+
 class Selector:
     def select_profile(
         self,
@@ -46,14 +49,22 @@ class Selector:
         primitive_name: str,
         type_tags: tuple[str, ...],
     ) -> ProfileSelectionResult:
-        # Prefer the unmasked variant; fall back to a masked-only primitive (like
-        # `blend`, which exists solely as `[mask=pass_through]`). Names that also have
-        # an unmasked variant still resolve unmasked — explicit masked requests for
-        # those are a separate concern.
-        primitive = catalog.primitive(primitive_name, unmasked=True) or catalog.primitive(
-            primitive_name, unmasked=False
+        # Enumerate every variant of this name: a `[aligned=*]` primitive expanded into
+        # concrete aligned/unaligned copies, so both must be emitted (each its own
+        # generation). Prefer the unmasked variants; fall back to masked-only primitives
+        # (like `blend`, which exists solely as `[mask=pass_through]`).
+        variants = catalog.primitives_named(primitive_name, unmasked=True) or (
+            catalog.primitives_named(primitive_name, unmasked=False)
         )
-        if primitive is None:
+        # Keep the variants sharing the first one's parameter *arity*: same-arity
+        # overloads (store's `(ptr,v)`/`(ptr,s)`, shift's `(v,s)`/`(v,sImm)`/`(v,v)`) are
+        # emitted together and resolved by argument type (overload dispatch). A
+        # different-arity overload (e.g. hadd `s:=v` vs masked-arg `s:=(m,v)`) is left for
+        # later — masked-arg reductions are a separate concern.
+        if variants:
+            arity = len(variants[0].parameters)
+            variants = tuple(p for p in variants if len(p.parameters) == arity)
+        if not variants:
             return ProfileSelectionResult(
                 selected=(),
                 diagnostics=(
@@ -66,20 +77,21 @@ class Selector:
             )
 
         selected: list[SelectedImplementation] = []
-        for extension_name in self._emit_extensions(catalog, profile):
-            for type_tag in type_tags:
-                best = self._best_body(
-                    catalog, profile, primitive, extension_name, type_tag
-                )
-                if best is not None:
-                    selected.append(
-                        SelectedImplementation(
-                            primitive=primitive,
-                            implementation=best,
-                            extension=catalog.extensions[extension_name],
-                            type_tag=type_tag,
-                        )
+        for primitive in variants:
+            for extension_name in self._emit_extensions(catalog, profile):
+                for type_tag in type_tags:
+                    best = self._best_body(
+                        catalog, profile, primitive, extension_name, type_tag
                     )
+                    if best is not None:
+                        selected.append(
+                            SelectedImplementation(
+                                primitive=primitive,
+                                implementation=best,
+                                extension=catalog.extensions[extension_name],
+                                type_tag=type_tag,
+                            )
+                        )
         return ProfileSelectionResult(selected=tuple(selected), diagnostics=())
 
     def _emit_extensions(self, catalog: Catalog, profile: MachineProfile) -> list[str]:
@@ -103,6 +115,11 @@ class Selector:
 
         emit: list[str] = []
         for name, ext in catalog.extensions.items():
+            if ext.family not in _SUPPORTED_FAMILIES:
+                # tslc only registers scalar + x86 `simd<>`; bodies for `arm`/`generic_like`/
+                # `cuda`/fpga have no backend tag. (x86 exts still self-gate via `requires`,
+                # so they drop on a profile lacking the flags.) Other families are future work.
+                continue
             if name in superseded:
                 continue
             if ext.inherits is not None and not (ext.lscpu_flags <= profile.features):

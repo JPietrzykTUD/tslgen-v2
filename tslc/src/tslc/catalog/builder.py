@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from tslc.catalog.model import (
+    BOOLEAN_WILDCARD_ATTRIBUTES,
     Catalog,
     Extension,
     Implementation,
@@ -60,7 +61,7 @@ class CatalogBuilder:
         for document in parsed.documents:
             for declaration in document.declarations:
                 if isinstance(declaration, ParsedPrimitiveDeclaration):
-                    primitives.append(_build_primitive(declaration, extension_names))
+                    primitives.extend(_build_primitives(declaration, extension_names))
                 elif isinstance(declaration, ParsedBlockDeclaration):
                     if declaration.kind == "types":
                         type_groups.update(_build_type_groups(declaration))
@@ -86,20 +87,53 @@ class CatalogBuilder:
 # --- promotion helpers -------------------------------------------------------
 
 
-def _build_primitive(
+_BOOLEAN_WILDCARD_VALUES = ("true", "false")
+
+
+def _build_primitives(
     declaration: ParsedPrimitiveDeclaration, extension_names: frozenset[str]
-) -> Primitive:
+) -> list[Primitive]:
+    """One declaration -> one Primitive, or several when a boolean wildcard attribute
+    (`[aligned=*]`) expands into concrete-value variants."""
+
     # Walk the selector-entry tree so each body keeps its entry's `requires` flags.
     implementations = tuple(
         _implementations_from_entries(declaration.impl_entries, extension_names)
     )
-    return Primitive(
-        name=declaration.name,
-        signature=declaration.signature,
-        parameters=declaration.parameters,
-        attribute_keys=tuple(attribute.key.text for attribute in declaration.attributes),
-        implementations=implementations,
-    )
+    attribute_keys = tuple(attribute.key.text for attribute in declaration.attributes)
+    base_attributes = {a.key.text: _attribute_value(a) for a in declaration.attributes}
+
+    def make(attributes: dict[str, str]) -> Primitive:
+        return Primitive(
+            name=declaration.name,
+            signature=declaration.signature,
+            parameters=declaration.parameters,
+            attribute_keys=attribute_keys,
+            implementations=implementations,
+            attributes=attributes,
+        )
+
+    return [make(attrs) for attrs in _expand_wildcards(base_attributes)]
+
+
+def _expand_wildcards(attributes: dict[str, str]) -> list[dict[str, str]]:
+    """Expand each `*`-valued boolean wildcard attribute into true/false copies (the
+    cartesian product over all such keys); other attributes pass through unchanged."""
+
+    variants = [dict(attributes)]
+    for key, value in attributes.items():
+        if key in BOOLEAN_WILDCARD_ATTRIBUTES and value == "*":
+            variants = [
+                {**variant, key: concrete}
+                for variant in variants
+                for concrete in _BOOLEAN_WILDCARD_VALUES
+            ]
+    return variants
+
+
+def _attribute_value(attribute) -> str:  # noqa: ANN001 - ParsedTslAttribute
+    value = attribute.value
+    return value.text if isinstance(value, ParsedTslScalarValue) else ""
 
 
 def _implementations_from_entries(

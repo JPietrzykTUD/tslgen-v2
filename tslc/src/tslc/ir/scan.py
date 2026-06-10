@@ -26,6 +26,7 @@ KEYWORDS: frozenset[str] = frozenset(
         "var",
         "let",
         "if",  # block-bearing: if<generation>(cond) { ... } else<generation> { ... }
+        "assume_aligned",  # assume_aligned<N>(ptr) -> aligned-pointer hint
     }
 )
 

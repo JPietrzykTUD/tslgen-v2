@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tslc.backend.translation import BackendTranslation
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import BOOLEAN_WILDCARD_ATTRIBUTES, Catalog
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, sort_diagnostics
 from tslc.ir.scan import scan
@@ -48,6 +48,14 @@ class LoweredSpecialization:
     param_names: tuple[str, ...]
     param_kinds: tuple[str, ...]
     body_text: str  # fully framed body, e.g. "return _mm256_add_epi32(left, right);"
+    # Boolean-wildcard attribute axis (name, concrete value), e.g. (("aligned","false"),).
+    # Each becomes a `bool` template parameter (C++) / const generic (Rust) so the
+    # `[aligned=*]`-expanded variants coexist as distinct callables.
+    axis: tuple[tuple[str, str], ...] = ()
+    # True when register_type == base_type for this extension (scalar/generic). Lets the
+    # backend dedup overload `apply`s that collapse to the same type (a `v` and an `s`
+    # parameter are distinct on SIMD but identical here).
+    register_is_base: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +108,7 @@ class Lowerer:
             extension=selected.extension,
             type_tag=selected.type_tag,
             translation=translation,
+            attributes=dict(selected.primitive.attributes),
         )
 
         shape = parse_signature(selected.primitive.signature)
@@ -178,6 +187,12 @@ class Lowerer:
             param_names=parameters,
             param_kinds=shape.param_kinds,
             body_text=body_text,
+            axis=tuple(
+                (key, selected.primitive.attributes[key])
+                for key in sorted(selected.primitive.attributes)
+                if key in BOOLEAN_WILDCARD_ATTRIBUTES
+            ),
+            register_is_base=context.extension.vector_bits == 0,
         )
         return LoweringResult(
             specialization=specialization,

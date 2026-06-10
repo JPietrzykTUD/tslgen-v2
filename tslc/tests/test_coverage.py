@@ -23,11 +23,10 @@ def test_coverage_separates_emitted_and_skipped(
     result = _result(data_root, machine_profiles_path)
     by = {row.primitive: row for row in coverage_by_primitive(result)}
 
-    # add lowers its scalar/sse/avx2 intrinsic bodies; the portable `generic`
-    # fallback (now a reachable extension) uses loops that aren't lowerable yet,
-    # so it has both emitted bodies and (generic) skips.
-    assert by["add"].emitted > 0
-    assert by["add"].skipped > 0
+    # add lowers everywhere it is selected (only scalar/x86-family extensions are
+    # emitted, and add covers them).
+    assert by["add"].skipped == 0
+    assert by["add"].emitted == by["add"].attempted > 0
 
     # hadd lowers its f32/f64 reductions but skips the integer ones (loops/calls/casts).
     assert by["hadd"].emitted > 0
