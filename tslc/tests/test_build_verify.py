@@ -111,3 +111,23 @@ def test_blend_native_builds(data_root: Path, machine_profiles_path: Path, tmp_p
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_scalar_load_store_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # The leaf of the array/reduction call chain: plain load/store introduce the ptr +
+    # void kinds. Scalar bodies (`*ptr = data;` / `return *ptr;`) build in C++ and Rust
+    # (Rust wraps the raw-pointer deref in unsafe). SIMD load/store (register-pointer
+    # reinterpret cast, prefix=, vector::register) is a separate slice.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["load", "store"],
+        profiles=["scalar"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"

@@ -165,3 +165,26 @@ def test_masked_only_primitive_is_selectable(catalog: Catalog, machine_profiles)
     assert spec is not None
     assert spec.result_kind == "v" and spec.param_kinds == ("m", "v", "v")
     assert "_mm512_mask_blend_epi32(mask, left, right)" in spec.body_text
+
+
+# --- ptr / void kinds: scalar load/store (leaf of the array/reduction chain) ---
+
+
+def test_scalar_load_store_kinds(catalog: Catalog, machine_profiles) -> None:
+    # `store<void:=(ptr,v)>` and `load<v:=ptr>` introduce the ptr param + void result
+    # kinds. Scalar bodies are raw pointer ops; void carries no emit_return.
+    store = _spec(catalog, machine_profiles, "scalar", "store", "scalar", "si32")
+    assert store is not None
+    assert store.result_kind == "void" and store.param_kinds == ("ptr", "v")
+    assert "*ptr = data;" in store.body_text
+
+    load = _spec(catalog, machine_profiles, "scalar", "load", "scalar", "si32")
+    assert load is not None
+    assert load.result_kind == "v" and load.param_kinds == ("ptr",)
+    assert "return *ptr;" in load.body_text
+
+
+def test_scalar_load_store_rust_is_unsafe(catalog: Catalog, machine_profiles) -> None:
+    # Dereferencing a raw pointer is unsafe in Rust even without intrinsics.
+    store = _spec(catalog, machine_profiles, "scalar", "store", "scalar", "si32", backend="rust")
+    assert store is not None and store.body_text.startswith("unsafe {")

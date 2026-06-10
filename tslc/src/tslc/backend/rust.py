@@ -59,6 +59,10 @@ def _ext_tag(extension_name: str) -> str:
 
 
 def _kind_type(kind: str, owner: str) -> str:
+    if kind == "ptr":
+        return f"*mut {owner}::BaseType"
+    if kind == "void":
+        return "()"
     suffix = {"v": "RegisterType", "s": "BaseType", "m": "MaskType"}[kind]
     return f"{owner}::{suffix}"
 

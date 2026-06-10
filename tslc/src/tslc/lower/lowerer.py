@@ -133,8 +133,15 @@ class Lowerer:
                 f"no {translation.backend_id} base-type spelling for {context.type_tag!r}",
             )
 
+        # Dereferencing a raw pointer is `unsafe` in Rust, so a `ptr`-taking body needs
+        # the unsafe frame even when it uses no intrinsics (e.g. scalar `*ptr = data;`).
+        if "ptr" in shape.param_kinds:
+            context.mark_unsafe()
+
         segments = scan(selected.implementation.body_text)
-        if _find_region(segments, _RETURN_KEYWORD) is None:
+        # A `void` primitive (e.g. `store`) has no return value, so it carries no
+        # top-level `emit_return`; only value-returning bodies require one.
+        if shape.result_kind != "void" and _find_region(segments, _RETURN_KEYWORD) is None:
             # No top-level return statement to model yet — skip, don't fail.
             return LoweringResult(
                 specialization=None,
@@ -178,7 +185,7 @@ class Lowerer:
         )
 
 
-_SUPPORTED_KINDS = frozenset({"v", "s", "m"})
+_SUPPORTED_KINDS = frozenset({"v", "s", "m", "ptr", "void"})
 
 
 def _find_region(segments: tuple[Segment, ...], keyword: str) -> Region | None:

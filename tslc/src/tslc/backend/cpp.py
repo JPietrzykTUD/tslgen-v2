@@ -74,6 +74,7 @@ def _result_type(kind: str) -> str:
         "v": "typename Vec::register_type",
         "s": "typename Vec::base_type",
         "m": "typename Vec::mask_type",
+        "void": "void",
     }[kind]
 
 
@@ -82,4 +83,6 @@ def _param_type(kind: str) -> str:
         return "typename tsl::reg_param<Vec>::type"
     if kind == "m":
         return "typename Vec::mask_type"
+    if kind == "ptr":
+        return "typename Vec::base_type *"
     return "typename Vec::base_type"
