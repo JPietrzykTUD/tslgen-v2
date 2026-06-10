@@ -47,8 +47,16 @@ class CppBackend:
 
 
 def _result_type(kind: str) -> str:
-    return "typename Vec::register_type" if kind == "v" else "typename Vec::base_type"
+    return {
+        "v": "typename Vec::register_type",
+        "s": "typename Vec::base_type",
+        "m": "typename Vec::mask_type",
+    }[kind]
 
 
 def _param_type(kind: str) -> str:
-    return "typename tsl::reg_param<Vec>::type" if kind == "v" else "typename Vec::base_type"
+    if kind == "v":
+        return "typename tsl::reg_param<Vec>::type"
+    if kind == "m":
+        return "typename Vec::mask_type"
+    return "typename Vec::base_type"

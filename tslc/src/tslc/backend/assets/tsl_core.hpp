@@ -17,6 +17,7 @@ template <class T>
 struct simd<T, scalar> {
     using base_type = T;
     using register_type = T;
+    using mask_type = bool;
 };
 
 // How a register value is passed to apply(): by value.

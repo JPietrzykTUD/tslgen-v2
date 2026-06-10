@@ -9,6 +9,7 @@ use core::marker::PhantomData;
 pub trait SimdVector {
     type BaseType;
     type RegisterType;
+    type MaskType;
 }
 
 // scalar is always available and needs no SIMD substrate.
@@ -19,4 +20,5 @@ pub struct Simd<T, Ext>(PhantomData<(T, Ext)>);
 impl<T> SimdVector for Simd<T, Scalar> {
     type BaseType = T;
     type RegisterType = T;
+    type MaskType = bool;
 }

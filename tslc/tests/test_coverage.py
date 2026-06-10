@@ -41,5 +41,5 @@ def test_report_text_is_actionable(data_root: Path, machine_profiles_path: Path)
     report = format_coverage_report(_result(data_root, machine_profiles_path))
     assert "add" in report and "emitted" in report
     assert "skipped because" in report
-    # the report names the construct blocking the integer reductions.
-    assert "call" in report or "cast" in report or "loop" in report
+    # the report names the construct/kind blocking the remaining reductions.
+    assert any(token in report for token in ("region", "kind", "signature"))

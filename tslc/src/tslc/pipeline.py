@@ -8,6 +8,7 @@ headers/modules with a top-level dispatch.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -111,14 +112,24 @@ def generate(request: GenerationRequest) -> GenerationResult:
             )
             continue
 
-        # backend -> primitive -> [specialization]
-        grouped: dict[str, dict[str, list[LoweredSpecialization]]] = {
-            backend: {} for backend in request.backends
-        }
-        for primitive in sorted(request.primitives):
+        # Profile-scoped dependency closure: start from the requested primitives and pull
+        # in only the callees referenced by bodies actually *selected* for this profile
+        # (so scalar's call-free comparison bodies don't drag in SIMD-only callees).
+        lowered_specs: list[_LoweredSlot] = []
+        worklist = list(request.primitives)
+        processed: set[str] = set()
+        while worklist:
+            primitive = worklist.pop(0)
+            if primitive in processed:
+                continue
+            processed.add(primitive)
             selection = selector.select_profile(catalog, profile, primitive, type_tags)
             diagnostics.extend(selection.diagnostics)
             for slot in selection.selected:
+                callees = frozenset(_CALL_TARGET.findall(slot.implementation.body_text))
+                for callee in callees:
+                    if callee not in processed and catalog.primitive(callee) is not None:
+                        worklist.append(callee)
                 for backend in request.backends:
                     translation = BackendTranslation(catalog=catalog, backend_id=backend)
                     lowered = lowerer.lower(slot, catalog, translation)
@@ -126,9 +137,6 @@ def generate(request: GenerationRequest) -> GenerationResult:
                     # body is an "info" skip -> recorded as a coverage gap, not noise.
                     diagnostics.extend(d for d in lowered.diagnostics if d.severity != "info")
                     if lowered.specialization is None:
-                        reason = next(
-                            (d.message for d in lowered.diagnostics), "unsupported body"
-                        )
                         skipped.append(
                             SkippedEntry(
                                 profile=profile_name,
@@ -136,20 +144,39 @@ def generate(request: GenerationRequest) -> GenerationResult:
                                 primitive=primitive,
                                 extension=slot.extension.name,
                                 type_tag=slot.type_tag,
-                                reason=reason,
+                                reason=next(
+                                    (d.message for d in lowered.diagnostics), "unsupported body"
+                                ),
                             )
                         )
                         continue
-                    grouped[backend].setdefault(primitive, []).append(lowered.specialization)
-                    coverage.append(
-                        CoverageEntry(
-                            profile=profile_name,
-                            backend=backend,
-                            primitive=primitive,
-                            extension=slot.extension.name,
-                            type_tag=slot.type_tag,
-                        )
+                    lowered_specs.append(
+                        _LoweredSlot(backend=backend, spec=lowered.specialization, callees=callees)
                     )
+
+        grouped, pruned = _prune_unresolved(lowered_specs)
+        for slot in pruned:
+            skipped.append(
+                SkippedEntry(
+                    profile=profile_name,
+                    backend=slot.backend,
+                    primitive=slot.spec.primitive_name,
+                    extension=slot.spec.extension_name,
+                    type_tag=slot.spec.type_tag,
+                    reason="pruned: a called primitive is not generated for this profile",
+                )
+            )
+        for slot in lowered_specs:
+            if slot not in pruned:
+                coverage.append(
+                    CoverageEntry(
+                        profile=profile_name,
+                        backend=slot.backend,
+                        primitive=slot.spec.primitive_name,
+                        extension=slot.spec.extension_name,
+                        type_tag=slot.spec.type_tag,
+                    )
+                )
 
         profile_renders.append(
             ProfileRender(
@@ -172,6 +199,52 @@ def generate(request: GenerationRequest) -> GenerationResult:
         coverage=tuple(sorted(coverage, key=_coverage_key)),
         skipped=tuple(sorted(skipped, key=_skipped_key)),
     )
+
+
+_CALL_TARGET = re.compile(r"call<primitive=([A-Za-z_][A-Za-z0-9_]*)")
+
+
+@dataclass(slots=True, eq=False)
+class _LoweredSlot:
+    backend: str
+    spec: LoweredSpecialization
+    callees: frozenset[str]
+
+
+def _prune_unresolved(
+    slots: list[_LoweredSlot],
+) -> tuple[dict[str, dict[str, list[LoweredSpecialization]]], list[_LoweredSlot]]:
+    """Drop emitted specializations whose called primitives are not themselves emitted
+    for the same ``simd<type, ext>`` (else the generated call would not link). Iterated
+    to a fixpoint, since pruning a callee can in turn dangle its callers."""
+
+    def key(slot: _LoweredSlot) -> tuple[str, str, str, str]:
+        return (slot.backend, slot.spec.primitive_name, slot.spec.extension_name, slot.spec.type_tag)
+
+    valid = {key(slot) for slot in slots}
+    changed = True
+    while changed:
+        changed = False
+        for slot in slots:
+            slot_key = key(slot)
+            if slot_key not in valid:
+                continue
+            for callee in slot.callees:
+                if (slot.backend, callee, slot.spec.extension_name, slot.spec.type_tag) not in valid:
+                    valid.discard(slot_key)
+                    changed = True
+                    break
+
+    grouped: dict[str, dict[str, list[LoweredSpecialization]]] = {}
+    pruned: list[_LoweredSlot] = []
+    for slot in slots:
+        if key(slot) in valid:
+            grouped.setdefault(slot.backend, {}).setdefault(
+                slot.spec.primitive_name, []
+            ).append(slot.spec)
+        else:
+            pruned.append(slot)
+    return grouped, pruned
 
 
 def _finalize(

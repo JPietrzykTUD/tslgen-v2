@@ -59,7 +59,8 @@ def _ext_tag(extension_name: str) -> str:
 
 
 def _kind_type(kind: str, owner: str) -> str:
-    return f"{owner}::RegisterType" if kind == "v" else f"{owner}::BaseType"
+    suffix = {"v": "RegisterType", "s": "BaseType", "m": "MaskType"}[kind]
+    return f"{owner}::{suffix}"
 
 
 def _params(shape: LoweredSpecialization, owner: str) -> str:

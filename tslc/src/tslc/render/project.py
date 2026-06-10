@@ -138,6 +138,7 @@ def _cpp_registration(ext: str) -> str:
         f"struct simd<T, {ext}> {{\n"
         f"    using base_type = T;\n"
         f"    using register_type = typename detail::{helper}<T>::type;\n"
+        f"    using mask_type = register_type;  // lane-bitmask placeholder (SIMD masks TBD)\n"
         f"}};\n\n"
     )
 
@@ -157,7 +158,8 @@ def _rust_registrations(
         register = _rust_register(ext, base)
         lines.append(
             f"impl SimdVector for Simd<{base}, {_RUST_TAG[ext]}> {{ "
-            f"type BaseType = {base}; type RegisterType = {register}; }}"
+            f"type BaseType = {base}; type RegisterType = {register}; "
+            f"type MaskType = {register}; }}"  # lane-bitmask placeholder (SIMD masks TBD)
         )
     return ("\n".join(lines) + "\n\n") if lines else ""
 

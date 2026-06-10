@@ -219,6 +219,33 @@ def _segment_text(segments: tuple[Segment, ...]) -> str:
     ).strip()
 
 
+class CallLowerer:
+    """``call<primitive=NAME[Vec]>(args)`` -> a call to NAME's generated wrapper.
+
+    Primitives are generated independently; this only renders the *call* (via
+    ``translation.render_call``), it does not inline NAME's body. Only the simple
+    ``[Vec]`` / no-type-arg form is handled; multi-type-arg forms (e.g.
+    ``[Vec, ToBase]``, ``[OutVec]``) are deferred.
+    """
+
+    keyword = "call"
+
+    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+        selector = region.selector_text.strip()
+        if not selector.startswith("primitive="):
+            context.skip("TSL-LOWER-UNSUPPORTED-CALL", f"unsupported call: {region.full_text!r}")
+            return region.full_text
+        name_part, _, bracket = selector[len("primitive=") :].partition("[")
+        type_args = bracket.rstrip("]").strip()
+        if type_args and type_args != "Vec":
+            context.skip(
+                "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS",
+                f"call type-args {type_args!r} not supported yet: {region.full_text!r}",
+            )
+            return region.full_text
+        return context.translation.render_call(name_part.strip(), render(region.body))
+
+
 class EmitReturnLowerer:
     """``emit_return(expr)`` -> the backend's return framing around the value.
 
@@ -238,5 +265,6 @@ DEFAULT_REGION_LOWERERS: tuple[RegionLowerer, ...] = (
     IntrinLowerer(),
     VarLowerer(),
     CastLowerer(),
+    CallLowerer(),
     EmitReturnLowerer(),
 )

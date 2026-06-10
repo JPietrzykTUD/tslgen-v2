@@ -82,7 +82,9 @@ class Catalog:
         for primitive in self.primitives:
             if primitive.name != name:
                 continue
-            if unmasked and primitive.attribute_keys:
+            # `unmasked` excludes only the masked *variants* (`[mask=…]`); other
+            # attributes (e.g. `[value=zero]` on set_zero) are ordinary primitives.
+            if unmasked and "mask" in primitive.attribute_keys:
                 continue
             return primitive
         return None

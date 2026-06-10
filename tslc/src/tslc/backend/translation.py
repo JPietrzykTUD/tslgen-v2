@@ -90,6 +90,18 @@ class BackendTranslation:
 
         return self.render_template("emit_return", "return {value}", value=value)
 
+    def render_call(self, name: str, args: str) -> str:
+        """A call to another primitive's generated wrapper, for the current vector.
+
+        C++ uses the ``call`` template (``::tsl::{name}<Vec>({args})``). Rust needs a
+        turbofish on our ``fn {name}<S: …Impl>`` wrappers (``{name}::<Self>({args})``),
+        which the frozen Rust ``call`` template does not express — so it is spelled here.
+        """
+
+        if self.backend_id == "rust":
+            return f"{name}::<Self>({args})"
+        return self.render_template("call", "::tsl::{name}<Vec>({args})", name=name, args=args)
+
     def qualify_intrinsic(self, extension: Extension, name: str) -> str:
         """Qualify a direct intrinsic name for the backend.
 

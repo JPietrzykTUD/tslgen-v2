@@ -111,10 +111,12 @@ class Lowerer:
         if shape.result_kind not in _SUPPORTED_KINDS or any(
             kind not in _SUPPORTED_KINDS for kind in shape.param_kinds
         ):
-            return _error(
+            # A not-yet-supported signature kind (e.g. s[], ptr) is a coverage gap,
+            # not a failure — skip the specialization (info), don't fail generation.
+            return _skip(
                 "TSL-LOWER-UNSUPPORTED-KIND",
-                f"signature {selected.primitive.signature!r} uses a kind beyond "
-                "the supported {v, s} set",
+                f"signature {selected.primitive.signature!r} uses an unsupported kind "
+                f"(supported: {', '.join(sorted(_SUPPORTED_KINDS))})",
             )
         parameters = selected.primitive.parameters
         if len(parameters) != len(shape.param_kinds):
@@ -176,7 +178,7 @@ class Lowerer:
         )
 
 
-_SUPPORTED_KINDS = frozenset({"v", "s"})
+_SUPPORTED_KINDS = frozenset({"v", "s", "m"})
 
 
 def _find_region(segments: tuple[Segment, ...], keyword: str) -> Region | None:
@@ -190,4 +192,13 @@ def _error(code: str, message: str) -> LoweringResult:
     return LoweringResult(
         specialization=None,
         diagnostics=(Diagnostic(severity="error", code=code, message=message),),
+    )
+
+
+def _skip(code: str, message: str) -> LoweringResult:
+    """A not-yet-lowerable specialization: recorded as a coverage gap, not a failure."""
+
+    return LoweringResult(
+        specialization=None,
+        diagnostics=(Diagnostic(severity="info", code=code, message=message),),
     )
