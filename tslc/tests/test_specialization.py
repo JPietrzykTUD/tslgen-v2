@@ -89,6 +89,16 @@ def test_skylake_uses_vl_and_avx512_not_base(
     assert "add_impl<tsl::simd<int32_t, tsl::sse>>" in sky
 
 
+def test_cast_lowers_integer_reductions(data_root: Path, machine_profiles_path: Path) -> None:
+    by = {a.logical_path: a.content for a in _generate(data_root, machine_profiles_path).artifacts.artifacts}
+    sky_cpp = by["cpp/include/tsl_skylake.hpp"]
+    sky_rust = by["rust/src/tsl_skylake.rs"]
+    # hadd's avx512 integer reduction casts the result to the base type:
+    # cast<static>(type<generation>(base::in), intrin_compose<reduce_add,...>(vec)).
+    assert "static_cast<int32_t>(_mm512_reduce_add_epi32(vec))" in sky_cpp
+    assert "(core::arch::x86_64::_mm512_reduce_add_epi32(vec) as i32)" in sky_rust
+
+
 def test_coverage_counts_specializations(data_root: Path, machine_profiles_path: Path) -> None:
     result = _generate(data_root, machine_profiles_path)
     keys = {(c.profile, c.extension, c.primitive, c.type_tag) for c in result.coverage}

@@ -13,9 +13,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from tslc.ir.segments import Region, Segment
+from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower.context import LoweringContext
-from tslc.lower.queries import QueryEvaluator, TextValue
+from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
 from tslc.lower._text import split_top_level
 
 RenderBody = Callable[[tuple[Segment, ...]], str]
@@ -140,6 +140,85 @@ class VarLowerer:
         return context.translation.render_template(key, name=name, value=value)
 
 
+class CastLowerer:
+    """``cast<variant>(type<...>(...), expr)`` -> the backend's cast template.
+
+    The type argument is resolved by delegating to the query evaluator (so query
+    semantics live in one place, not duplicated here); the value argument is
+    rendered normally. The cast syntax itself comes from the ``cast_<variant>``
+    translate template (C++ ``static_cast<T>(e)`` / Rust ``(e as T)``).
+    """
+
+    keyword = "cast"
+
+    def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
+        self._evaluator = evaluator or QueryEvaluator()
+
+    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+        args = _split_arg_groups(region.body)
+        key = f"cast_{region.selector_text.strip()}"
+        if len(args) != 2 or context.translation.template(key) is None:
+            context.skip("TSL-LOWER-UNSUPPORTED-CAST", f"unsupported cast: {region.full_text!r}")
+            return region.full_text
+
+        type_value = self._evaluator.evaluate(_segment_text(args[0]), context)
+        if not isinstance(type_value, TypeValue):
+            context.skip(
+                "TSL-LOWER-UNRESOLVED-CAST-TYPE",
+                f"could not resolve cast type in {region.full_text!r}",
+            )
+            return region.full_text
+        spelling = context.translation.scalar_spelling(type_value.type_tag)
+        if spelling is None:
+            context.skip(
+                "TSL-LOWER-NO-CAST-TYPE-SPELLING",
+                f"no base-type spelling for {type_value.type_tag!r}",
+            )
+            return region.full_text
+
+        return context.translation.render_template(key, type=spelling, expr=render(args[1]))
+
+
+def _split_arg_groups(segments: tuple[Segment, ...]) -> list[tuple[Segment, ...]]:
+    """Split a body segment sequence into top-level comma-separated argument groups.
+
+    Regions are atomic (their internal commas/brackets stay inside them); only
+    depth-0 commas in raw text separate arguments.
+    """
+
+    groups: list[list[Segment]] = [[]]
+    depth = 0
+    for segment in segments:
+        if isinstance(segment, Region):
+            groups[-1].append(segment)
+            continue
+        text = segment.text
+        start = 0
+        for index, char in enumerate(text):
+            if char in "(<[":
+                depth += 1
+            elif char in ")>]":
+                depth -= 1
+            elif char == "," and depth == 0:
+                piece = text[start:index]
+                if piece.strip():
+                    groups[-1].append(RawText(piece))
+                groups.append([])
+                start = index + 1
+        tail = text[start:]
+        if tail.strip():
+            groups[-1].append(RawText(tail))
+    return [tuple(group) for group in groups]
+
+
+def _segment_text(segments: tuple[Segment, ...]) -> str:
+    """Reconstruct the source text of a segment group (for query delegation)."""
+
+    return "".join(
+        seg.full_text if isinstance(seg, Region) else seg.text for seg in segments
+    ).strip()
+
+
 class EmitReturnLowerer:
     """``emit_return(expr)`` -> the backend's return framing around the value.
 
@@ -158,5 +237,6 @@ DEFAULT_REGION_LOWERERS: tuple[RegionLowerer, ...] = (
     IntrinComposeLowerer(),
     IntrinLowerer(),
     VarLowerer(),
+    CastLowerer(),
     EmitReturnLowerer(),
 )
