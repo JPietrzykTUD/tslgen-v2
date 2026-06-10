@@ -64,13 +64,12 @@ def test_scalar_mask_comparison_family_builds(
 def test_simd_comparison_family_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
-    # The signed+unsigned+float comparison family as real SIMD (lane-bitmask masks)
-    # on sse2 + avx2, in BOTH backends. Unsigned bodies resolve via if<generation>;
-    # the binary-op closure selects via extension-scoped/bracketed requires;
-    # declarations precede all bodies so cross-primitive wrapper calls resolve; the
-    # emitted set is prune-clean. Rust additionally needs the C++-flavored bodies
-    # adapted: `~`->`!` (scalar binary_andnot), x86 compare-predicate constants in
-    # scope, and set1's value cast to the signed lane type (corpus cast<static>).
+    # The signed+unsigned+float comparison family as real SIMD in BOTH backends, across
+    # both mask representations: lane-bitmask (sse2/avx2 — mask is the register) and
+    # native-predicate (skylake — avx512/_vl `__mmaskN`, selected via `post=mask`).
+    # Unsigned bodies resolve via if<generation> (avx2) or the `epu*` suffix (avx512);
+    # the binary-op closure selects via extension-scoped/bracketed requires; declarations
+    # precede all bodies; the emitted set is prune-clean.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
@@ -83,7 +82,7 @@ def test_simd_comparison_family_builds(
             "greater_than_or_equal",
             "unequal_zero",
         ],
-        profiles=["sse2", "avx2"],
+        profiles=["sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None

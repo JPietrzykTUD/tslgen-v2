@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tslc.api import generate_project
 from tslc.backend.translation import BackendTranslation
 from tslc.catalog.model import Catalog
 from tslc.lower.context import LoweringContext
@@ -106,3 +107,49 @@ def test_boolean_or_condition_lowers_set1(catalog: Catalog, machine_profiles) ->
     spec = _spec(catalog, machine_profiles, "avx2", "set1", "avx2", "si64")
     assert spec is not None
     assert "if<generation>" not in spec.body_text
+
+
+# --- native-predicate masks (avx512 / _vl) -----------------------------------
+
+
+def test_mask_policy_promoted_into_extension(catalog: Catalog) -> None:
+    assert catalog.extensions["avx2"].mask_policy.kind == "lane_bitmask"
+    avx512 = catalog.extensions["avx512"]
+    assert avx512.mask_policy.kind == "native_predicate_by_lanes"
+    assert avx512.vector_bits == 512
+    assert avx512.mask_policy.cpp_by_lanes[16] == "__mmask16"
+    # avx2_vl is native-predicate despite inheriting the lane-bitmask avx2 block.
+    assert catalog.extensions["avx2_vl"].mask_policy.kind == "native_predicate_by_lanes"
+
+
+def test_post_mask_appends_mask_only_for_native_predicate(catalog: Catalog, machine_profiles) -> None:
+    # avx512 (native predicate): post=mask selects the mask-returning intrinsic.
+    sky = _spec(catalog, machine_profiles, "skylake", "equal", "avx512", "si32")
+    assert sky is not None and "_mm512_cmpeq_epi32_mask" in sky.body_text
+    # avx2 (lane-bitmask): post=mask is a no-op, the compare yields the vector mask.
+    av = _spec(catalog, machine_profiles, "avx2", "equal", "avx2", "si32")
+    assert av is not None and "_mm256_cmpeq_epi32" in av.body_text
+    assert "_mask" not in av.body_text
+
+
+def test_native_mask_registration_per_profile(
+    data_root, machine_profiles_path, tmp_path
+) -> None:
+    # Same ISA tag `avx2`, two mask policies depending on the profile's selected block.
+    from tslc.api import write_artifacts  # noqa: PLC0415
+
+    def _mask_line(profile: str) -> str:
+        result = generate_project(
+            [data_root],
+            machine_profiles_path=machine_profiles_path,
+            primitives=["equal"],
+            profiles=[profile],
+        )
+        write_artifacts(result.artifacts, tmp_path / profile)
+        hpp = (tmp_path / profile / "cpp" / "include" / f"tsl_{profile}.hpp").read_text()
+        # the mask_type line of the `simd<T, avx2>` registration
+        block = hpp.split("struct simd<T, avx2>")[1]
+        return block.split("using mask_type =")[1].split(";")[0]
+
+    assert "register_type" in _mask_line("avx2")  # lane-bitmask
+    assert "native_mask<256" in _mask_line("skylake")  # avx2_vl native predicate

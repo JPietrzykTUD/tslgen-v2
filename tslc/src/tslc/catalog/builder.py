@@ -12,6 +12,7 @@ from tslc.catalog.model import (
     Catalog,
     Extension,
     Implementation,
+    MaskPolicy,
     Primitive,
     RequirementClause,
 )
@@ -213,6 +214,10 @@ def _resolve_extension_inheritance(
                 **parent.compose_suffix_by_type,
                 **ext.compose_suffix_by_type,
             },
+            # mask policy / width fall back to the parent only when this block didn't
+            # state its own (every `_vl` block does, so this is just gap-filling).
+            vector_bits=ext.vector_bits or parent.vector_bits,
+            mask_policy=ext.mask_policy if ext.mask_policy != MaskPolicy() else parent.mask_policy,
         )
 
     return {name: resolve(name, frozenset()) for name in extensions}
@@ -279,7 +284,38 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
         compose_suffix_by_type=compose_suffix_by_type,
         inherits=_field_text(fields.get("inherits")),
         lscpu_flags=_list_text_set(fields.get("lscpu_flags")),
+        vector_bits=_int_text(fields.get("vector_bits")),
+        mask_policy=_mask_policy(fields.get("mask_type_policy")),
     )
+
+
+def _mask_policy(field: ParsedTslField | None) -> MaskPolicy:
+    """Promote a ``mask_type_policy`` block: its ``kind`` plus the per-backend
+    ``cpp_by_lanes`` / ``rust_by_lanes`` (lane-count -> ``__mmaskN``) maps."""
+
+    if field is None:
+        return MaskPolicy()
+    return MaskPolicy(
+        kind=_field_text(_child(field, "kind")) or "lane_bitmask",
+        cpp_by_lanes=_int_keyed_map(_child(field, "cpp_by_lanes")),
+        rust_by_lanes=_int_keyed_map(_child(field, "rust_by_lanes")),
+    )
+
+
+def _int_keyed_map(field: ParsedTslField | None) -> dict[int, str]:
+    """An int-keyed string map (``8 "__mmask8"`` ...), skipping non-numeric keys."""
+
+    result: dict[int, str] = {}
+    for entry in _children(field):
+        key = entry.key.text
+        if key.isdigit():
+            result[int(key)] = _field_text(entry) or ""
+    return result
+
+
+def _int_text(field: ParsedTslField | None) -> int:
+    text = _field_text(field)
+    return int(text) if text is not None and text.lstrip("-").isdigit() else 0
 
 
 # --- parse-tree accessors ----------------------------------------------------

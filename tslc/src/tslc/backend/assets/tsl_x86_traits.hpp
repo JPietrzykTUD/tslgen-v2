@@ -19,4 +19,18 @@ template <class T> struct reg512 { using type = __m512i; };
 template <> struct reg512<float> { using type = __m512; };
 template <> struct reg512<double> { using type = __m512d; };
 
+// Native-predicate mask type (avx512 / the _vl variants): a `__mmaskN` whose width
+// covers the lane count `Bits / (sizeof(T) * 8)`, clamped to the smallest `__mmask8`.
+template <int Lanes> struct mmask_of;
+template <> struct mmask_of<8>  { using type = __mmask8;  };
+template <> struct mmask_of<16> { using type = __mmask16; };
+template <> struct mmask_of<32> { using type = __mmask32; };
+template <> struct mmask_of<64> { using type = __mmask64; };
+
+template <int Bits, class T>
+struct native_mask {
+    static constexpr int lanes = Bits / (static_cast<int>(sizeof(T)) * 8);
+    using type = typename mmask_of<(lanes < 8 ? 8 : lanes)>::type;
+};
+
 }  // namespace tsl::detail

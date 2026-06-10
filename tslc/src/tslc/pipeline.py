@@ -15,6 +15,7 @@ from pathlib import Path
 from tslc.backend.translation import BackendTranslation
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import load_machine_profiles
+from tslc.catalog.model import Extension
 from tslc.diagnostics import Diagnostic, has_errors, sort_diagnostics
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc.output.artifacts import ArtifactSet
@@ -116,6 +117,9 @@ def generate(request: GenerationRequest) -> GenerationResult:
         # in only the callees referenced by bodies actually *selected* for this profile
         # (so scalar's call-free comparison bodies don't drag in SIMD-only callees).
         lowered_specs: list[_LoweredSlot] = []
+        # Which extension block this profile selected for each emitted ISA tag, so the
+        # renderer can register the right mask_type (lane-bitmask vs native __mmaskN).
+        selected_extensions: dict[str, Extension] = {}
         worklist = list(request.primitives)
         processed: set[str] = set()
         while worklist:
@@ -126,6 +130,7 @@ def generate(request: GenerationRequest) -> GenerationResult:
             selection = selector.select_profile(catalog, profile, primitive, type_tags)
             diagnostics.extend(selection.diagnostics)
             for slot in selection.selected:
+                selected_extensions[slot.extension.isa_name] = slot.extension
                 callees = frozenset(_CALL_TARGET.findall(slot.implementation.body_text))
                 for callee in callees:
                     if callee not in processed and catalog.primitive(callee) is not None:
@@ -183,6 +188,7 @@ def generate(request: GenerationRequest) -> GenerationResult:
                 profile=profile,
                 cpp=_finalize(grouped.get("cpp", {})),
                 rust=_finalize(grouped.get("rust", {})),
+                extensions=selected_extensions,
             )
         )
 

@@ -83,6 +83,15 @@ class IntrinComposeLowerer:
                 f"intrinsic prefix for intrin_compose<{modifiers.base}>",
             )
             return region.full_text
+        # `post=mask` selects the mask-returning intrinsic on native-predicate
+        # extensions (`_mm512_cmpeq_epi32` -> `_mm512_cmpeq_epi32_mask`); on
+        # lane-bitmask/scalar extensions the compare already yields the mask, so it
+        # stays a no-op.
+        if (
+            modifiers.get("post") == "mask"
+            and context.extension.mask_policy.kind == "native_predicate_by_lanes"
+        ):
+            name = f"{name}_mask"
         return f"{name}({render(region.body)})"
 
     def _suffix(self, modifiers: ComposeModifiers, context: LoweringContext) -> str | None:

@@ -131,13 +131,18 @@ class Selector:
         best, _ = min(
             candidates,
             key=lambda item: (
-                catalog.type_group_specificity(item[0].type_group),  # most specific
-                distance[item[0].extension],  # own extension before inherited
+                distance[item[0].extension],  # own extension before inherited (a)
+                catalog.type_group_specificity(item[0].type_group),  # most specific (b)
                 -len(item[1]),  # most hardware flags
                 item[0].source_order,  # first occurrence
             ),
         )
         return best
+        # (a) before (b): when a derived extension is active and supersedes its base
+        # (e.g. avx2_vl over avx2 on an avx512vl profile), the derived ext's OWN body
+        # wins even if a base body is more type-specific — so avx512vl comparisons use
+        # the `_vl` native-mask body, not the base's lane-bitmask `si?` body. Within a
+        # single extension distance ties, so specificity still decides there.
 
 
 def _applicable_flags(

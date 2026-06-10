@@ -10,12 +10,13 @@ profile's feature set (the one place that maps features to compiler options).
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import resources
 
 from tslc.backend.cpp import CppBackend
 from tslc.backend.rust import RustBackend
 from tslc.catalog.machine_profiles import MachineProfile
+from tslc.catalog.model import Extension
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact, ArtifactSet
 from tslc.output.verify import VerifyBackend, VerifyProfile, VerifyProject
@@ -56,6 +57,10 @@ class ProfileRender:
     # primitive name -> its specializations (one backend each)
     cpp: dict[str, tuple[LoweredSpecialization, ...]]
     rust: dict[str, tuple[LoweredSpecialization, ...]]
+    # isa_name -> the extension block this profile actually selected for that ISA tag
+    # (so registrations know whether `avx2` here is lane-bitmask `avx2` or native
+    # `avx2_vl`). Per (profile, isa) exactly one block is selected, so this is 1:1.
+    extensions: dict[str, Extension] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,23 +133,32 @@ def _used_pairs(
     return sorted(pairs)
 
 
-def _cpp_registration(ext: str) -> str:
-    """A C++ extension tag + `simd<T, ext>` register-type wiring for one ISA ext."""
+def _cpp_registration(ext: str, extension: Extension | None) -> str:
+    """A C++ extension tag + `simd<T, ext>` register/mask-type wiring for one ISA ext.
+
+    Lane-bitmask extensions alias the mask to the register; native-predicate ones
+    (avx512 / the `_vl` variants selected on this profile) compute a `__mmaskN` from
+    the lane count via the `native_mask<bits, T>` substrate trait."""
 
     helper = _CPP_REG_HELPER[_X86_WIDTH[ext]]
+    if extension is not None and extension.mask_policy.kind == "native_predicate_by_lanes":
+        mask = f"typename detail::native_mask<{extension.vector_bits}, T>::type"
+    else:
+        mask = "register_type"
     return (
         f"struct {ext} {{}};\n"
         f"template <class T>\n"
         f"struct simd<T, {ext}> {{\n"
         f"    using base_type = T;\n"
         f"    using register_type = typename detail::{helper}<T>::type;\n"
-        f"    using mask_type = register_type;  // lane-bitmask placeholder (SIMD masks TBD)\n"
+        f"    using mask_type = {mask};\n"
         f"}};\n\n"
     )
 
 
 def _rust_registrations(
     by_primitive: dict[str, tuple[LoweredSpecialization, ...]],
+    extensions: dict[str, Extension],
 ) -> str:
     """Rust extension tag structs + SimdVector impls for the used (ext, type) pairs."""
 
@@ -156,10 +170,11 @@ def _rust_registrations(
         if ext not in _X86_WIDTH:
             continue
         register = _rust_register(ext, base)
+        mask = _rust_mask_type(extensions.get(ext), base, register)
         lines.append(
             f"impl SimdVector for Simd<{base}, {_RUST_TAG[ext]}> {{ "
             f"type BaseType = {base}; type RegisterType = {register}; "
-            f"type MaskType = {register}; }}"  # lane-bitmask placeholder (SIMD masks TBD)
+            f"type MaskType = {mask}; }}"
         )
     return ("\n".join(lines) + "\n\n") if lines else ""
 
@@ -171,6 +186,23 @@ def _rust_register(ext: str, base_spelling: str) -> str:
     if base_spelling == "f64":
         return f"core::arch::x86_64::__m{width}d"
     return f"core::arch::x86_64::__m{width}i"
+
+
+def _rust_mask_type(extension: Extension | None, base_spelling: str, register: str) -> str:
+    """The Rust mask type for one (ext, base) pair: the register for lane-bitmask, or
+    the native ``__mmaskN`` (looked up by lane count) for native-predicate extensions."""
+
+    if extension is None or extension.mask_policy.kind != "native_predicate_by_lanes":
+        return register
+    lanes = extension.vector_bits // _type_bits(base_spelling)
+    return extension.mask_policy.rust_by_lanes.get(max(8, lanes), register)
+
+
+def _type_bits(base_spelling: str) -> int:
+    """Bit width from a base-type spelling: ``i8``/``u32``/``f64`` -> 8/32/64."""
+
+    digits = "".join(c for c in base_spelling if c.isdigit())
+    return int(digits) if digits else 8
 
 
 def _cpp_flags(profile: MachineProfile) -> tuple[str, ...]:
@@ -203,7 +235,9 @@ def _cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
         includes = '#include "tsl_core.hpp"\n'
         if x86_exts:
             includes += '#include "tsl_x86_traits.hpp"\n'
-        registrations = "".join(_cpp_registration(ext) for ext in x86_exts)
+        registrations = "".join(
+            _cpp_registration(ext, p.extensions.get(ext)) for ext in x86_exts
+        )
         # All declarations (impl primary templates + wrappers) precede all
         # specialization bodies, so any body may call any primitive's wrapper.
         declarations = "\n\n".join(
@@ -292,7 +326,7 @@ def _rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
     backend = RustBackend()
     artifacts = [_text("rust/src/tsl_core.rs", _asset("tsl_core.rs"))]
     for p in profiles:
-        registrations = _rust_registrations(p.rust)
+        registrations = _rust_registrations(p.rust, p.extensions)
         bodies = "\n\n".join(
             backend.render_primitive(name, p.rust[name]) for name in sorted(p.rust)
         )

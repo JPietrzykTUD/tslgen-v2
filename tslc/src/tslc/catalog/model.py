@@ -7,7 +7,7 @@ What it is not is plumbing — there are no result/handoff wrappers here.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import NewType
 
 TypeTag = NewType("TypeTag", str)
@@ -56,6 +56,23 @@ class Primitive:
 
 
 @dataclass(frozen=True, slots=True)
+class MaskPolicy:
+    """How an extension represents a comparison/mask result.
+
+    - ``"bool"`` (scalar): the mask is a ``bool``.
+    - ``"lane_bitmask"`` (sse/avx2): the mask *is* the vector register (all-ones /
+      all-zeros per lane), so ``mask_type = register_type``.
+    - ``"native_predicate_by_lanes"`` (avx512 and the ``_vl`` variants): the mask is a
+      native ``__mmaskN`` predicate keyed by lane count; the per-backend spellings live
+      in ``cpp_by_lanes`` / ``rust_by_lanes`` (e.g. ``{8: "__mmask8", 16: "__mmask16"}``).
+    """
+
+    kind: str = "lane_bitmask"
+    cpp_by_lanes: dict[int, str] = field(default_factory=dict)
+    rust_by_lanes: dict[int, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
 class Extension:
     """Hardware target metadata needed for backend translation.
 
@@ -72,6 +89,8 @@ class Extension:
     compose_suffix_by_type: dict[str, str]  # type tag -> suffix fragment
     inherits: str | None = None  # extension this one borrows impls/metadata from
     lscpu_flags: frozenset[str] = frozenset()  # features that make this extension available
+    vector_bits: int = 0  # register width (sse=128, avx2=256, avx512=512); 0 for scalar
+    mask_policy: MaskPolicy = field(default_factory=MaskPolicy)  # how masks are represented
 
 
 @dataclass(frozen=True, slots=True)
