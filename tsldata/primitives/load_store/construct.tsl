@@ -50,12 +50,12 @@ prim<v:=s> set1(value):
             if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
               // in 8byte path
               emit_return(
-                intrin_compose<set1, suffix="epi64x">(value)
+                intrin_compose<set1, suffix="epi64x">(cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), value))
               );
             } else<generation> {
               emit_return(
                 intrin_compose<set1, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
-                  value
+                  cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), value)
                 )
               );
             }

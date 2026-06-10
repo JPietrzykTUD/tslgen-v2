@@ -119,11 +119,16 @@ class BackendTranslation:
 
         Rust wraps an intrinsic-bearing body in a single ``unsafe { ... }`` block
         (covering local-variable RHS calls as well as the return); C++ needs no
-        wrapper. This is the one genuinely backend-structural fact, so it lives
-        here on the backend boundary, not in a neutral region handler.
+        wrapper. Rust also spells bitwise-NOT ``!`` where the C++-flavored corpus
+        bodies use ``~`` (the one operator that diverges for integer types). These
+        are the genuinely backend-structural facts, so they live here on the
+        backend boundary, not in a neutral region handler.
         """
 
-        if requires_unsafe and self.backend_id == "rust":
+        if self.backend_id != "rust":
+            return body_text
+        body_text = body_text.replace("~", "!")  # C++ bitwise-NOT -> Rust `!`
+        if requires_unsafe:
             return f"unsafe {{ {body_text} }}"
         return body_text
 

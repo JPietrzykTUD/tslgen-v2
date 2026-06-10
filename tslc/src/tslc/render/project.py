@@ -296,10 +296,17 @@ def _rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
         bodies = "\n\n".join(
             backend.render_primitive(name, p.rust[name]) for name in sorted(p.rust)
         )
+        # x86 profiles bring the arch module into scope so intrinsic constant
+        # arguments left verbatim in bodies (e.g. `_CMP_EQ_OQ`) resolve; intrinsics
+        # themselves stay fully qualified, so the glob is only for those constants.
+        arch_use = ""
+        if any(e in _X86_WIDTH for e in _used_exts(p.rust)):
+            arch_use = "#[allow(unused_imports)]\nuse core::arch::x86_64::*;\n"
         content = (
             "#![allow(non_camel_case_types)]\n"
             "#![allow(dead_code)]\n\n"
-            "use crate::tsl_core::*;\n\n"
+            "use crate::tsl_core::*;\n"
+            f"{arch_use}\n"
             f"{registrations}"
             f"{bodies}\n"
         )

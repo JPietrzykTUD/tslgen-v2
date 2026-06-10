@@ -61,15 +61,16 @@ def test_scalar_mask_comparison_family_builds(
     assert report.diagnostics == (), report.diagnostics
 
 
-def test_simd_comparison_family_builds_cpp(
+def test_simd_comparison_family_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
     # The signed+unsigned+float comparison family as real SIMD (lane-bitmask masks)
-    # on sse2 + avx2: unsigned bodies resolve via if<generation>, the binary-op
-    # closure selects via extension-scoped/bracketed requires, declarations precede
-    # all bodies so cross-primitive wrapper calls resolve, and the emitted set is
-    # prune-clean -> it compiles in C++. (Rust for this family additionally needs
-    # raw-text translation of `~`->`!` and x86 compare-predicate constants; deferred.)
+    # on sse2 + avx2, in BOTH backends. Unsigned bodies resolve via if<generation>;
+    # the binary-op closure selects via extension-scoped/bracketed requires;
+    # declarations precede all bodies so cross-primitive wrapper calls resolve; the
+    # emitted set is prune-clean. Rust additionally needs the C++-flavored bodies
+    # adapted: `~`->`!` (scalar binary_andnot), x86 compare-predicate constants in
+    # scope, and set1's value cast to the signed lane type (corpus cast<static>).
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
@@ -83,7 +84,6 @@ def test_simd_comparison_family_builds_cpp(
             "unequal_zero",
         ],
         profiles=["sse2", "avx2"],
-        backends=["cpp"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -91,4 +91,5 @@ def test_simd_comparison_family_builds_cpp(
     assert not has_errors(write_report.diagnostics), write_report.diagnostics
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
     assert report.commands, f"nothing verified; skipped={report.skipped}"
