@@ -62,4 +62,7 @@ pub mod details {
     pub fn arith_add<T: core::ops::Add<Output = T>>(a: T, b: T) -> T {
         a + b
     }
+    pub fn arith_mul<T: core::ops::Mul<Output = T>>(a: T, b: T) -> T {
+        a * b
+    }
 }

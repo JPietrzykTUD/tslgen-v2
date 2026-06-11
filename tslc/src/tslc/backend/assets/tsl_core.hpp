@@ -77,6 +77,10 @@ template <class T>
 inline T arith_add(T a, T b) {
     return a + b;
 }
+template <class T>
+inline T arith_mul(T a, T b) {
+    return a * b;
+}
 }  // namespace details
 
 }  // namespace tsl

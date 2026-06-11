@@ -137,6 +137,39 @@ def test_to_from_array_roundtrip_builds(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_elementwise_bitwise_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # The core elementwise arithmetic + bitwise families. `add` was already build-verified;
+    # this is the first compile of `sub`/`mul`/`div`/`binary_{and,andnot,or,xor}` in either
+    # backend (they lowered but had never been built). Their integer/float intrinsic paths
+    # plus the byte/word scalar-loop fallback (details::arith_mul) compile on scalar + SIMD;
+    # cluster-gated variants (float bitwise via reinterpret, si64 mul via delegation) stay
+    # skipped and are simply absent from the emitted set.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=[
+            "add",
+            "sub",
+            "mul",
+            "div",
+            "binary_and",
+            "binary_andnot",
+            "binary_or",
+            "binary_xor",
+        ],
+        profiles=["scalar", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_reductions_build(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # Horizontal reductions: `hadd` (loop fallback via to_array + loop<range> +
     # details::arith_add) and `hmax`/`hmin` (intrinsic reduce_*/extracti128 bodies plus the
