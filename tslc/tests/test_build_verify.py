@@ -137,6 +137,27 @@ def test_to_from_array_roundtrip_builds(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_reductions_build(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # Horizontal reductions: `hadd` (loop fallback via to_array + loop<range> +
+    # details::arith_add) and `hmax`/`hmin` (intrinsic reduce_*/extracti128 bodies plus the
+    # generic var<infer> + runtime-`if` loop for byte/word). Exercises native loop and
+    # runtime-conditional translation end-to-end in C++ and Rust across scalar + SIMD; the
+    # closure pulls in `to_array`/`load`/`store`.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["hadd", "hmax", "hmin"],
+        profiles=["scalar", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_load_store_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # `load`/`store` (the ptr/void kinds) across scalar + SIMD. `[aligned=*]` expands to
     # BOTH aligned/unaligned variants (a bool axis template/const-generic param); the

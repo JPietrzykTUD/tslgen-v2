@@ -232,23 +232,6 @@ prim<s:=v> hmax(vec):
             temp = intrin<_mm_max_sd>(temp, intrin<_mm_unpackhi_pd>(temp, temp));
             emit_return(intrin<_mm_cvtsd_f64>(temp));
           """
-      arith:
-        requires [avx2]
-        implementation:
-          tsil """
-            var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
-            type<backend>(size_t) found = 0;
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
-              if (found == 0) {
-                result = values[i];
-                found = 1;
-              } else if (values[i] > result) {
-                result = values[i];
-              }
-            }
-            emit_return(result);
-          """
     sse:
       f32:
         requires [sse2]
@@ -265,23 +248,6 @@ prim<s:=v> hmax(vec):
           tsil """
             var<infer>(temp, intrin<_mm_max_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)))
             emit_return(intrin<_mm_cvtsd_f64>(temp));
-          """
-      arith:
-        requires [sse2]
-        implementation:
-          tsil """
-            var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
-            type<backend>(size_t) found = 0;
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
-              if (found == 0) {
-                result = values[i];
-                found = 1;
-              } else if (values[i] > result) {
-                result = values[i];
-              }
-            }
-            emit_return(result);
           """
     [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
       arith:
@@ -384,23 +350,6 @@ prim<s:=v> hmin(vec):
             temp = intrin<_mm_min_sd>(temp, intrin<_mm_unpackhi_pd>(temp, temp));
             emit_return(intrin<_mm_cvtsd_f64>(temp));
           """
-      arith:
-        requires [avx2]
-        implementation:
-          tsil """
-            var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
-            type<backend>(size_t) found = 0;
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
-              if (found == 0) {
-                result = values[i];
-                found = 1;
-              } else if (values[i] < result) {
-                result = values[i];
-              }
-            }
-            emit_return(result);
-          """
     sse:
       f32:
         requires [sse2]
@@ -417,23 +366,6 @@ prim<s:=v> hmin(vec):
           tsil """
             var<infer>(temp, intrin<_mm_min_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)))
             emit_return(intrin<_mm_cvtsd_f64>(temp));
-          """
-      arith:
-        requires [sse2]
-        implementation:
-          tsil """
-            var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
-            type<backend>(size_t) found = 0;
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
-              if (found == 0) {
-                result = values[i];
-                found = 1;
-              } else if (values[i] < result) {
-                result = values[i];
-              }
-            }
-            emit_return(result);
           """
     [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
       arith:

@@ -399,14 +399,18 @@ def _take_bracket(text: str) -> tuple[str, str]:
     return text[1:close].strip(), text[close + 1 :].lstrip()
 
 
-class IfGenerationLowerer:
-    """``if<generation>(cond) { ... } else<generation> { ... }`` -> the taken branch.
+class IfLowerer:
+    """``if(cond) { ... } [else ...]`` in two modes, by selector:
 
-    A *generation-time* conditional: the condition is evaluated now (against the
-    type being generated) and **only the chosen branch's statements** are emitted —
-    the output contains no ``if<generation>`` and no dead branch. ``else if`` chains
-    nest naturally: the ``else_block`` holds a single nested ``if`` region that
-    re-dispatches through this same lowerer.
+    - ``if<generation>(cond)``: a *generation-time* conditional — the condition is
+      evaluated now (against the type being generated) and **only the taken branch's
+      statements** are emitted; the output has no ``if<generation>`` and no dead branch.
+    - bare ``if(cond)`` (no selector): a **runtime** conditional, emitted natively as
+      ``if (cond) { then } [else { ... } | else if ...]`` — valid verbatim in C++ and
+      Rust. The condition/branches are rendered, not evaluated.
+
+    Either way ``else if`` chains nest naturally: ``else_block`` holds a single nested
+    ``if`` region that re-dispatches through this same lowerer.
     """
 
     keyword = "if"
@@ -416,11 +420,7 @@ class IfGenerationLowerer:
 
     def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
         if region.selector_text.strip() != "generation":
-            context.skip(
-                "TSL-LOWER-UNSUPPORTED-IF",
-                f"only if<generation> is modeled (runtime if not yet): {region.full_text!r}",
-            )
-            return region.full_text
+            return self._runtime(region, render)
 
         taken = self._evaluate_condition(_segment_text(region.body), context)
         if taken is None:
@@ -435,6 +435,24 @@ class IfGenerationLowerer:
         if region.else_block is None:
             return ""
         return render(region.else_block)
+
+    def _runtime(self, region: Region, render: RenderBody) -> str:
+        """A native runtime ``if``: emit the condition + branches verbatim for the target."""
+
+        then = render(region.block) if region.block is not None else ""
+        out = f"if ({render(region.body)}) {{\n        {then}\n      }}"
+        if region.else_block is not None:
+            # A bare nested `if` region in else position is an `else if` (no extra braces);
+            # any other else body is a plain block.
+            if (
+                len(region.else_block) == 1
+                and isinstance(region.else_block[0], Region)
+                and region.else_block[0].keyword == "if"
+            ):
+                out += f" else {render(region.else_block)}"
+            else:
+                out += f" else {{\n        {render(region.else_block)}\n      }}"
+        return out
 
     def _evaluate_condition(self, text: str, context: LoweringContext) -> bool | None:
         """Evaluate a generation-time boolean condition. Supports ``||`` / ``&&`` of
@@ -562,7 +580,7 @@ DEFAULT_REGION_LOWERERS: tuple[RegionLowerer, ...] = (
     VarLowerer(),
     CastLowerer(),
     CallLowerer(),
-    IfGenerationLowerer(),
+    IfLowerer(),
     AssumeAlignedLowerer(),
     LoopLowerer(),
     QueryRegionLowerer("type"),
