@@ -109,6 +109,8 @@ class Lowerer:
             type_tag=selected.type_tag,
             translation=translation,
             attributes=dict(selected.primitive.attributes),
+            primitive_axes=_primitive_axes(catalog),
+            primitive_arg_generics=_primitive_arg_generics(catalog),
         )
 
         shape = parse_signature(selected.primitive.signature)
@@ -200,7 +202,69 @@ class Lowerer:
         )
 
 
-_SUPPORTED_KINDS = frozenset({"v", "s", "m", "ptr", "void"})
+_SUPPORTED_KINDS = frozenset({"v", "s", "m", "ptr", "void", "s[]"})
+
+
+def _primitive_axes(catalog: Catalog) -> dict[str, tuple[str, ...]]:
+    """Each primitive's boolean-wildcard axis keys, keyed by name — so a call to it can
+    pass the axis value its wrapper requires. All variants of a name share these keys."""
+
+    axes: dict[str, tuple[str, ...]] = {}
+    for primitive in catalog.primitives:
+        axes[primitive.name] = tuple(
+            sorted(k for k in primitive.attributes if k in BOOLEAN_WILDCARD_ATTRIBUTES)
+        )
+    return axes
+
+
+def _primitive_arg_generics(catalog: Catalog) -> dict[str, int]:
+    """Each primitive's count of overload-dispatch generic params: the parameter
+    positions whose kind varies across its same-arity signatures (e.g. store's
+    `(ptr,v)`/`(ptr,s)` vary at position 1 -> 1). A Rust call site spells one inferred
+    `_` turbofish arg per such position; non-overloaded callees contribute none."""
+
+    by_name: dict[str, list[tuple[str, ...]]] = {}
+    for primitive in catalog.primitives:
+        shape = parse_signature(primitive.signature)
+        if shape is not None:
+            by_name.setdefault(primitive.name, []).append(shape.param_kinds)
+    counts: dict[str, int] = {}
+    for name, kinds in by_name.items():
+        arity = len(kinds[0])
+        same = [k for k in kinds if len(k) == arity]
+        counts[name] = sum(
+            1 for i in range(arity) if len({k[i] for k in same}) > 1
+        )
+    return counts
+
+
+def varying_positions(specs: tuple[LoweredSpecialization, ...]) -> tuple[int, ...]:
+    """Parameter positions whose kind differs across a primitive's signatures — the
+    dispatch points of an overload (e.g. store's `(ptr,v)`/`(ptr,s)` vary at position 1).
+    Shared by both backends."""
+
+    if not specs:
+        return ()
+    arity = len(specs[0].param_kinds)
+    return tuple(
+        i for i in range(arity) if len({spec.param_kinds[i] for spec in specs}) > 1
+    )
+
+
+def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
+    """A per-position type token for overload dedup. `v` and `s` map to the same token
+    where register_type == base_type (scalar/generic), so colliding overloads merge."""
+
+    def token(kind: str) -> str:
+        if kind == "v":
+            return "base" if spec.register_is_base else "register"
+        if kind == "m":
+            return "mask"
+        if kind == "ptr":
+            return "ptr"
+        return "base"  # s
+
+    return tuple(token(kind) for kind in spec.param_kinds)
 
 
 def _find_region(segments: tuple[Segment, ...], keyword: str) -> Region | None:

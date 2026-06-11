@@ -113,6 +113,30 @@ def test_blend_native_builds(data_root: Path, machine_profiles_path: Path, tmp_p
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_to_from_array_roundtrip_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # The vector<->array layer: `to_array` (result kind `s[]`, a `var<typed>` over the
+    # `array_type` substrate + a defaulted-axis `store` call) and `from_array` (`s[]`
+    # parameter, a `load attrs[aligned=false]` call / scalar `data[0]`). Exercises the new
+    # generic constructs (`type<generation>`/`value<generation>` regions, `var<typed>` +
+    # uninit array, calls into the axis'd/overloaded `store`/`load`) end-to-end in C++ and
+    # Rust across scalar + SIMD; the closure pulls in `load`/`store`.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["to_array", "from_array"],
+        profiles=["scalar", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_load_store_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # `load`/`store` (the ptr/void kinds) across scalar + SIMD. `[aligned=*]` expands to
     # BOTH aligned/unaligned variants (a bool axis template/const-generic param); the

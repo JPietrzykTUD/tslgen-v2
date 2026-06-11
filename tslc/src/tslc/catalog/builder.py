@@ -183,10 +183,13 @@ def _requirements(
 ) -> tuple[RequirementClause, ...]:
     """Promote `requires` into clauses.
 
-    Simple ``requires [a, b]`` -> one unscoped clause. A nested ``requires:`` map
-    keys by extension name (``avx2 [avx, avx2]`` -> ``extension="avx2"``), by
-    type-group (avx512's ``idqword [avx512f]`` -> ``type_group="idqword"``), or both
-    (two-level ``avx512: idqword [...]`` -> extension + type-group).
+    Simple ``requires [a, b]`` -> one unscoped clause. A map keys by extension name
+    (``avx2 [avx, avx2]`` -> ``extension="avx2"``), by type-group (avx512's
+    ``idqword [avx512f]`` -> ``type_group="idqword"``), or both (two-level
+    ``avx512: idqword [...]`` -> extension + type-group). The map may be written
+    indented (its entries are the field's ``children``) or inline as
+    ``requires {si8 [avx, avx2], ...}`` (a ``ParsedTslMapValue`` whose ``entries`` are
+    the same shape) — both feed the same per-child promotion.
     """
 
     clauses: list[RequirementClause] = []
@@ -195,7 +198,12 @@ def _requirements(
         if isinstance(field.value, ParsedTslListValue):
             clauses.append(RequirementClause(flags=_flag_list(field.value)))
         else:
-            for child in field.children:
+            children = (
+                field.value.entries
+                if isinstance(field.value, ParsedTslMapValue)
+                else field.children
+            )
+            for child in children:
                 clauses.extend(_clauses_from_child(child, extension_names))
     return tuple(clauses)
 

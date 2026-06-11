@@ -1,4 +1,4 @@
-prim<s[]:=v> to_array(data):
+prim<s[]:=v> to_array(a):
   brief_description "Stores SIMD register to array."
   operation ""
   tests:

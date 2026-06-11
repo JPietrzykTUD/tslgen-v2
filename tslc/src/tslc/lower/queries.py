@@ -200,6 +200,21 @@ class VectorAlignmentQuery:
         return TextValue(str(context.extension.vector_bits // 8))
 
 
+class VectorLengthQuery:
+    """``vector::length`` -> the lane count (`vector_bits / type_bits`); scalar (a
+    zero-width register) holds a single lane."""
+
+    head = "vector::length"
+
+    def apply(self, args, context):  # noqa: ANN001
+        bits = context.extension.vector_bits
+        if bits == 0:
+            return TextValue("1")
+        digits = "".join(c for c in context.type_tag if c.isdigit())
+        type_bits = int(digits) if digits else 8
+        return TextValue(str(bits // type_bits))
+
+
 DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     BaseInQuery(),
     SignedOfQuery(),
@@ -210,6 +225,7 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     AttributeQuery(),
     RegisterQuery(),
     VectorAlignmentQuery(),
+    VectorLengthQuery(),
 )
 
 

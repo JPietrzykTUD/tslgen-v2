@@ -9,6 +9,7 @@ keywords are added by writing a new class and listing it in
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
@@ -126,27 +127,62 @@ class IntrinLowerer:
 
 
 class VarLowerer:
-    """``var<variant>(name, value)`` -> the backend's local-declaration template.
+    """``var<variant>(...)`` -> the backend's local-declaration template.
 
-    Backend-neutral: the declaration syntax (``auto const {name} = {value};`` /
-    ``let {name} = {value};``) comes from the backend's ``var_<variant>`` template.
+    Two shapes: inferred (``var<infer>(name, value)`` / ``var<const_infer>``) fills
+    ``var_<variant> = {name}/{value}``; typed (``var<typed>(type, name, value)``)
+    additionally carries ``{type}``. An uninitialized array initializer
+    (``value<backend>(uninit::array)``) routes to the dedicated ``var_array_uninit``
+    template instead, which carries ``{type}`` so Rust's MaybeUninit gets it (a value
+    region alone cannot supply the array type). The declaration syntax itself is
+    backend-neutral, coming from the ``var_*`` translate templates.
     """
 
     keyword = "var"
 
     def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
-        terms = split_top_level(render(region.body))
         variant = region.selector_text.strip()
-        key = f"var_{variant}"
-        if len(terms) < 2 or context.translation.template(key) is None:
+        groups = _split_arg_groups(region.body)
+        if variant == "typed":
+            return self._typed(variant, groups, region, context, render)
+        if len(groups) < 2 or context.translation.template(f"var_{variant}") is None:
             context.skip(
                 "TSL-LOWER-UNSUPPORTED-VAR",
                 f"unsupported var<{variant}> declaration: {region.full_text!r}",
             )
             return region.full_text
-        name = terms[0]
-        value = ", ".join(terms[1:])
-        return context.translation.render_template(key, name=name, value=value)
+        name = render(groups[0]).strip()
+        value = ", ".join(render(group) for group in groups[1:])
+        return context.translation.render_template(f"var_{variant}", name=name, value=value)
+
+    def _typed(
+        self,
+        variant: str,
+        groups: list[tuple[Segment, ...]],
+        region: Region,
+        context: LoweringContext,
+        render: RenderBody,
+    ) -> str:
+        if len(groups) != 3:
+            context.skip(
+                "TSL-LOWER-UNSUPPORTED-VAR",
+                f"unsupported var<typed> declaration: {region.full_text!r}",
+            )
+            return region.full_text
+        type_text = render(groups[0]).strip()
+        name = render(groups[1]).strip()
+        # An uninitialized array uses the type-carrying template (see class docstring).
+        key = "var_array_uninit" if "uninit" in _segment_text(groups[2]) else f"var_{variant}"
+        if context.translation.template(key) is None:
+            context.skip(
+                "TSL-LOWER-UNSUPPORTED-VAR",
+                f"unsupported var<typed> declaration: {region.full_text!r}",
+            )
+            return region.full_text
+        if key == "var_array_uninit":
+            return context.translation.render_template(key, type=type_text, name=name)
+        value = render(groups[2])
+        return context.translation.render_template(key, type=type_text, name=name, value=value)
 
 
 class CastLowerer:
@@ -289,30 +325,78 @@ def _split_top_level_op(text: str, op: str) -> list[str]:
 
 
 class CallLowerer:
-    """``call<primitive=NAME[Vec]>(args)`` -> a call to NAME's generated wrapper.
+    """``call<primitive=NAME[Vec] attrs[aligned=…]>(args)`` -> a call to NAME's wrapper.
 
     Primitives are generated independently; this only renders the *call* (via
     ``translation.render_call``), it does not inline NAME's body. Only the simple
     ``[Vec]`` / no-type-arg form is handled; multi-type-arg forms (e.g.
     ``[Vec, ToBase]``, ``[OutVec]``) are deferred.
+
+    A callee carrying a boolean-wildcard axis (e.g. ``store``/``load`` with ``aligned``)
+    needs that axis passed at the call site: C++ could default it, but Rust const-generics
+    can't be inferred when ambiguous. The value comes from the call's ``attrs[...]``
+    (default ``false``); which axis keys a callee has comes from ``context.primitive_axes``.
     """
 
     keyword = "call"
+    _NAME = re.compile(r"([A-Za-z_]\w*)")
 
     def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
         selector = region.selector_text.strip()
         if not selector.startswith("primitive="):
             context.skip("TSL-LOWER-UNSUPPORTED-CALL", f"unsupported call: {region.full_text!r}")
             return region.full_text
-        name_part, _, bracket = selector[len("primitive=") :].partition("[")
-        type_args = bracket.rstrip("]").strip()
+        rest = selector[len("primitive=") :].strip()
+        match = self._NAME.match(rest)
+        if match is None:
+            context.skip("TSL-LOWER-UNSUPPORTED-CALL", f"unsupported call: {region.full_text!r}")
+            return region.full_text
+        name = match.group(1)
+        rest = rest[match.end() :].strip()
+
+        type_args, rest = _take_bracket(rest)
         if type_args and type_args != "Vec":
             context.skip(
                 "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS",
                 f"call type-args {type_args!r} not supported yet: {region.full_text!r}",
             )
             return region.full_text
-        return context.translation.render_call(name_part.strip(), render(region.body))
+
+        attrs: dict[str, str] = {}
+        if rest.startswith("attrs"):
+            attr_text, rest = _take_bracket(rest[len("attrs") :].lstrip())
+            for term in attr_text.split(","):
+                key, sep, value = term.partition("=")
+                if sep:
+                    attrs[key.strip()] = value.strip()
+        if rest:
+            context.skip(
+                "TSL-LOWER-UNSUPPORTED-CALL",
+                f"unsupported call selector tail {rest!r}: {region.full_text!r}",
+            )
+            return region.full_text
+
+        axis_values = tuple(
+            attrs.get(key, "false") for key in context.primitive_axes.get(name, ())
+        )
+        return context.translation.render_call(
+            name,
+            render(region.body),
+            axis_values,
+            context.primitive_arg_generics.get(name, 0),
+        )
+
+
+def _take_bracket(text: str) -> tuple[str, str]:
+    """If ``text`` starts with ``[...]``, return ``(inside, remainder)``; else ``("", text)``."""
+
+    text = text.lstrip()
+    if not text.startswith("["):
+        return "", text
+    close = text.find("]")
+    if close == -1:
+        return "", text
+    return text[1:close].strip(), text[close + 1 :].lstrip()
 
 
 class IfGenerationLowerer:
@@ -394,6 +478,32 @@ class AssumeAlignedLowerer:
         return f"::tsl::assume_aligned<{value.text}>({expr})"
 
 
+class QueryRegionLowerer:
+    """``type<generation>(x)`` / ``value<generation>(x)`` in raw expression position ->
+    the evaluated query's rendered text. A type resolves to its backend spelling; a
+    text/integer value to its literal. This is how generation-time constants are spliced
+    into a body, e.g. ``array_type<type<generation>(base::in), value<generation>(...)>``.
+    One instance is registered per keyword (``type``/``value``)."""
+
+    def __init__(self, keyword: str, evaluator: QueryEvaluator | None = None) -> None:
+        self.keyword = keyword
+        self._evaluator = evaluator or QueryEvaluator()
+
+    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+        value = self._evaluator.evaluate(region.full_text, context)
+        if isinstance(value, TextValue):
+            return value.text
+        if isinstance(value, TypeValue):
+            spelling = context.translation.scalar_spelling(value.type_tag)
+            if spelling is not None:
+                return spelling
+        context.skip(
+            "TSL-LOWER-UNRESOLVED-QUERY-REGION",
+            f"could not resolve {region.keyword}<...> region: {region.full_text!r}",
+        )
+        return region.full_text
+
+
 class EmitReturnLowerer:
     """``emit_return(expr)`` -> the backend's return framing around the value.
 
@@ -416,5 +526,7 @@ DEFAULT_REGION_LOWERERS: tuple[RegionLowerer, ...] = (
     CallLowerer(),
     IfGenerationLowerer(),
     AssumeAlignedLowerer(),
+    QueryRegionLowerer("type"),
+    QueryRegionLowerer("value"),
     EmitReturnLowerer(),
 )

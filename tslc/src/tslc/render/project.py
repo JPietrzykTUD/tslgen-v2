@@ -13,17 +13,16 @@ import re
 from dataclasses import dataclass, field
 from importlib import resources
 
-from tslc.backend.cpp import CppBackend, _varying_positions
-from tslc.backend.rust import RustBackend
+from tslc.backend.cpp import CppBackend
+from tslc.backend.rust import RustBackend, rust_register_type
+from tslc.backend.translation import X86_REGISTER_BITS
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
-from tslc.lower.lowerer import LoweredSpecialization
+from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 from tslc.output.artifacts import Artifact, ArtifactSet
 from tslc.output.verify import VerifyBackend, VerifyProfile, VerifyProject
 
 _ASSETS = "tslc.backend.assets"
-# x86 ISA extension -> register width and per-backend register-type wiring.
-_X86_WIDTH = {"sse": 128, "avx2": 256, "avx512": 512}
 _CPP_REG_HELPER = {128: "reg128", 256: "reg256", 512: "reg512"}
 _RUST_TAG = {"scalar": "Scalar", "sse": "Sse", "avx2": "Avx2", "avx512": "Avx512"}
 
@@ -140,7 +139,7 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
     (avx512 / the `_vl` variants selected on this profile) compute a `__mmaskN` from
     the lane count via the `native_mask<bits, T>` substrate trait."""
 
-    helper = _CPP_REG_HELPER[_X86_WIDTH[ext]]
+    helper = _CPP_REG_HELPER[X86_REGISTER_BITS[ext]]
     if extension is not None and extension.mask_policy.kind == "native_predicate_by_lanes":
         mask = f"typename detail::native_mask<{extension.vector_bits}, T>::type"
     else:
@@ -164,28 +163,21 @@ def _rust_registrations(
 
     lines: list[str] = []
     for ext in _used_exts(by_primitive):
-        if ext in _X86_WIDTH:
+        if ext in X86_REGISTER_BITS:
             lines.append(f"pub struct {_RUST_TAG[ext]};")
     for ext, base in _used_pairs(by_primitive):
-        if ext not in _X86_WIDTH:
+        if ext not in X86_REGISTER_BITS:
             continue
-        register = _rust_register(ext, base)
+        register = rust_register_type(ext, base)
         mask = _rust_mask_type(extensions.get(ext), base, register)
+        bits = X86_REGISTER_BITS[ext]
+        array = f"array_type<{base}, {bits // _type_bits(base)}, {bits // 8}>"
         lines.append(
             f"impl SimdVector for Simd<{base}, {_RUST_TAG[ext]}> {{ "
             f"type BaseType = {base}; type RegisterType = {register}; "
-            f"type MaskType = {mask}; }}"
+            f"type MaskType = {mask}; type Array = {array}; }}"
         )
     return ("\n".join(lines) + "\n\n") if lines else ""
-
-
-def _rust_register(ext: str, base_spelling: str) -> str:
-    width = _X86_WIDTH[ext]
-    if base_spelling == "f32":
-        return f"core::arch::x86_64::__m{width}"
-    if base_spelling == "f64":
-        return f"core::arch::x86_64::__m{width}d"
-    return f"core::arch::x86_64::__m{width}i"
 
 
 def _rust_mask_type(extension: Extension | None, base_spelling: str, register: str) -> str:
@@ -231,7 +223,7 @@ def _cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
         _text("cpp/include/tsl_x86_traits.hpp", _asset("tsl_x86_traits.hpp")),
     ]
     for p in profiles:
-        x86_exts = [e for e in _used_exts(p.cpp) if e in _X86_WIDTH]
+        x86_exts = [e for e in _used_exts(p.cpp) if e in X86_REGISTER_BITS]
         includes = '#include "tsl_core.hpp"\n'
         if x86_exts:
             includes += '#include "tsl_x86_traits.hpp"\n'
@@ -286,7 +278,7 @@ def _cpp_smoke(p: ProfileRender) -> str:
     index = 0
     for name in sorted(p.cpp):
         specs = p.cpp[name]
-        varying = _varying_positions(specs)
+        varying = varying_positions(specs)
         for spec in specs:
             vec = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
             targs = (
@@ -357,7 +349,7 @@ def _rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
         # arguments left verbatim in bodies (e.g. `_CMP_EQ_OQ`) resolve; intrinsics
         # themselves stay fully qualified, so the glob is only for those constants.
         arch_use = ""
-        if any(e in _X86_WIDTH for e in _used_exts(p.rust)):
+        if any(e in X86_REGISTER_BITS for e in _used_exts(p.rust)):
             arch_use = "#[allow(unused_imports)]\nuse core::arch::x86_64::*;\n"
         content = (
             "#![allow(non_camel_case_types)]\n"

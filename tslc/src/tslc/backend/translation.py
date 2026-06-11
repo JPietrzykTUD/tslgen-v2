@@ -15,6 +15,10 @@ _KNOWN_TYPE_TAGS = frozenset(
     {"si8", "si16", "si32", "si64", "ui8", "ui16", "ui32", "ui64", "f32", "f64"}
 )
 
+# x86 register width in bits, keyed by ISA name. The single source for both the C++
+# register-helper selection (render) and the Rust concrete register spelling (rust backend).
+X86_REGISTER_BITS = {"sse": 128, "avx2": 256, "avx512": 512}
+
 
 def is_type_tag(text: str) -> bool:
     return text in _KNOWN_TYPE_TAGS
@@ -90,17 +94,38 @@ class BackendTranslation:
 
         return self.render_template("emit_return", "return {value}", value=value)
 
-    def render_call(self, name: str, args: str) -> str:
+    def render_call(
+        self,
+        name: str,
+        args: str,
+        axis_values: tuple[str, ...] = (),
+        arg_generics: int = 0,
+    ) -> str:
         """A call to another primitive's generated wrapper, for the current vector.
 
         C++ uses the ``call`` template (``::tsl::{name}<Vec>({args})``). Rust needs a
         turbofish on our ``fn {name}<S: …Impl>`` wrappers (``{name}::<Self>({args})``),
         which the frozen Rust ``call`` template does not express — so it is spelled here.
+
+        ``axis_values`` are a callee's boolean-wildcard axis values (e.g. ``("false",)``
+        for an unaligned ``store``), spelled after the vector argument in both backends:
+        ``store<Vec, false>`` / ``store::<Self, false>``. C++ could default them, but Rust
+        const-generics can't be inferred when ambiguous, so they are always passed.
+
+        ``arg_generics`` is the number of overload-dispatch generic params the Rust wrapper
+        carries (one per varying argument position): each needs an explicit ``_`` in the
+        turbofish, since Rust won't infer trailing generics after an explicit prefix
+        (``store::<Self, false, _>``). C++ deduces these from the arguments, so it is unused
+        there.
         """
 
+        axis = "".join(f", {value}" for value in axis_values)
         if self.backend_id == "rust":
-            return f"{name}::<Self>({args})"
-        return self.render_template("call", "::tsl::{name}<Vec>({args})", name=name, args=args)
+            inferred = ", _" * arg_generics
+            return f"{name}::<Self{axis}{inferred}>({args})"
+        return self.render_template(
+            "call", "::tsl::{name}<Vec{axis}>({args})", name=name, axis=axis, args=args
+        )
 
     def register_type_spelling(self) -> str:
         """The vector register type as named inside a body (`vector::register`)."""

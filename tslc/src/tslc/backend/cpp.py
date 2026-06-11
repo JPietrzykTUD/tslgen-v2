@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from tslc.lower.lowerer import LoweredSpecialization
+from tslc.lower.lowerer import (
+    LoweredSpecialization,
+    effective_param_types,
+    varying_positions,
+)
 
 
 class CppBackend:
@@ -61,7 +65,7 @@ class CppBackend:
         for spec in group:
             # Dedup overloads that collapse to the same parameter types (a `v` and an
             # `s` parameter are identical where register_type == base_type, i.e. scalar).
-            signature = _effective_param_types(spec)
+            signature = effective_param_types(spec)
             if signature in seen:
                 continue
             seen.add(signature)
@@ -85,7 +89,7 @@ class CppBackend:
         shape = specializations[0]
         # Positions whose parameter kind differs across signatures are the overload's
         # dispatch points: they become generic template params so C++ resolves the call.
-        varying = _varying_positions(specializations)
+        varying = varying_positions(specializations)
         template_params = (
             ["class Vec"]
             + [f"bool {_axis_name(k)} = false" for k, _ in shape.axis]
@@ -105,33 +109,6 @@ class CppBackend:
         )
 
 
-def _varying_positions(specs: tuple[LoweredSpecialization, ...]) -> tuple[int, ...]:
-    """Parameter positions whose kind differs across the primitive's signatures."""
-
-    if not specs:
-        return ()
-    arity = len(specs[0].param_kinds)
-    return tuple(
-        i for i in range(arity) if len({spec.param_kinds[i] for spec in specs}) > 1
-    )
-
-
-def _effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
-    """A per-position type token for overload dedup. `v` and `s` map to the same token
-    where register_type == base_type (scalar/generic), so colliding overloads merge."""
-
-    def token(kind: str) -> str:
-        if kind == "v":
-            return "base" if spec.register_is_base else "register"
-        if kind == "m":
-            return "mask"
-        if kind == "ptr":
-            return "ptr"
-        return "base"  # s
-
-    return tuple(token(kind) for kind in spec.param_kinds)
-
-
 def _axis_name(key: str) -> str:
     """An axis attribute key as a C++ template-parameter name (`aligned` -> `Aligned`)."""
 
@@ -144,6 +121,7 @@ def _result_type(kind: str) -> str:
         "s": "typename Vec::base_type",
         "m": "typename Vec::mask_type",
         "void": "void",
+        "s[]": "typename ::tsl::array_for<Vec>::type",
     }[kind]
 
 
@@ -154,4 +132,6 @@ def _param_type(kind: str) -> str:
         return "typename Vec::mask_type"
     if kind == "ptr":
         return "typename Vec::base_type *"
+    if kind == "s[]":
+        return "typename ::tsl::array_for<Vec>::type"
     return "typename Vec::base_type"

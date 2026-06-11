@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from tslc.backend.cpp import _effective_param_types, _varying_positions
-from tslc.lower.lowerer import LoweredSpecialization
+from tslc.backend.translation import X86_REGISTER_BITS
+from tslc.lower.lowerer import (
+    LoweredSpecialization,
+    effective_param_types,
+    varying_positions,
+)
 
 # Keyed by ISA name (the emitted tag); `_vl` variants are internal and never emitted.
 _EXT_TAG = {"scalar": "Scalar", "sse": "Sse", "avx2": "Avx2", "avx512": "Avx512"}
-_X86_WIDTH = {"sse": 128, "avx2": 256, "avx512": 512}  # mirror of render._X86_WIDTH
 
 
 class RustBackend:
@@ -19,7 +22,7 @@ class RustBackend:
         # Rust has no fn overloading: a primitive with several signatures (e.g. store's
         # `(ptr,v)`/`(ptr,s)`) dispatches on the varying argument's type via a trait
         # implemented for that type. Single-signature primitives keep the simple trait.
-        if _varying_positions(specializations):
+        if varying_positions(specializations):
             return self._render_overloaded(primitive_name, specializations)
         shape = specializations[0]
         trait = self._trait(primitive_name, shape)
@@ -31,7 +34,7 @@ class RustBackend:
         self, primitive_name: str, specs: tuple[LoweredSpecialization, ...]
     ) -> str:
         shape = specs[0]
-        vi = _varying_positions(specs)[0]  # one varying position in scope
+        vi = varying_positions(specs)[0]  # one varying position in scope
         arg_trait = f"{_trait_name(primitive_name)}Arg"
         fixed = [
             (name, kind)
@@ -56,7 +59,7 @@ class RustBackend:
                 spec.base_type_spelling,
                 spec.extension_name,
                 spec.axis,
-                _effective_param_types(spec),
+                effective_param_types(spec),
             )
             if signature in seen:
                 continue
@@ -97,7 +100,7 @@ class RustBackend:
         return "\n\n".join([trait, *impls, wrapper])
 
     def _trait(self, primitive_name: str, shape: LoweredSpecialization) -> str:
-        params = _params(shape, "Self")
+        params = _params(shape, "Self", binding_mut=False)
         # A boolean-wildcard attribute axis becomes a const-generic on the trait, so the
         # `[aligned=*]` variants are distinct impls (`StoreImpl<false>` / `StoreImpl<true>`).
         generics = _axis_generics(shape.axis)
@@ -122,12 +125,14 @@ class RustBackend:
     def _wrapper(self, primitive_name: str, shape: LoweredSpecialization) -> str:
         params = _params(shape, "S")
         names = ", ".join(shape.param_names)
-        # Const-generic axis params come before the `S` type param; the trait bound
-        # carries them (`S: StoreImpl<ALIGNED>`). Call sites pass them by turbofish.
-        axis_decls = "".join(f"const {_axis_name(k)}: bool, " for k, _ in shape.axis)
+        # `S` comes first, then const-generic axis params — the same turbofish order as the
+        # overloaded wrapper (`S, ALIGNED, V`), so a call site can spell `name::<Self, …>`
+        # uniformly. The trait bound carries the axis (`S: StoreImpl<ALIGNED>`); Rust allows
+        # the const-generic to be referenced in the bound before it is declared.
         trait_args = "".join(f"<{_axis_name(k)}>" for k, _ in shape.axis)
+        axis_decls = "".join(f", const {_axis_name(k)}: bool" for k, _ in shape.axis)
         return (
-            f"pub fn {primitive_name}<{axis_decls}S: {_trait_name(primitive_name)}{trait_args}>"
+            f"pub fn {primitive_name}<S: {_trait_name(primitive_name)}{trait_args}{axis_decls}>"
             f"({params}) -> {_kind_type(shape.result_kind, 'S')} {{\n"
             f"    S::apply({names})\n"
             f"}}"
@@ -156,10 +161,10 @@ def _ext_tag(extension_name: str) -> str:
     return _EXT_TAG.get(extension_name, extension_name[:1].upper() + extension_name[1:])
 
 
-def _rust_register_type(extension_name: str, base: str) -> str:
+def rust_register_type(extension_name: str, base: str) -> str:
     """Concrete register type spelling (scalar's register == its base type)."""
 
-    width = _X86_WIDTH.get(extension_name)
+    width = X86_REGISTER_BITS.get(extension_name)
     if width is None:
         return base
     if base == "f32":
@@ -175,13 +180,13 @@ def _rust_concrete(spec: LoweredSpecialization, kind: str) -> str:
 
     base = spec.base_type_spelling
     if kind == "v":
-        return _rust_register_type(spec.extension_name, base)
+        return rust_register_type(spec.extension_name, base)
     if kind == "ptr":
         return f"*mut {base}"
     if kind == "void":
         return "()"
     if kind == "m":  # not reached by current overloads (store/shift vary in v/s)
-        return _rust_register_type(spec.extension_name, base)
+        return rust_register_type(spec.extension_name, base)
     return base  # s
 
 
@@ -193,7 +198,7 @@ def _concretize_simd_assoc(body: str, spec: LoweredSpecialization) -> str:
     """Replace Simd associated-type references with concrete spellings, for use inside an
     arg-trait impl where `Self` is the argument type rather than the Simd vector."""
 
-    register = _rust_register_type(spec.extension_name, spec.base_type_spelling)
+    register = rust_register_type(spec.extension_name, spec.base_type_spelling)
     return (
         body.replace("Self::RegisterType", register)
         .replace("Self::BaseType", spec.base_type_spelling)
@@ -205,12 +210,18 @@ def _kind_type(kind: str, owner: str) -> str:
         return f"*mut {owner}::BaseType"
     if kind == "void":
         return "()"
+    if kind == "s[]":
+        return f"{owner}::Array"
     suffix = {"v": "RegisterType", "s": "BaseType", "m": "MaskType"}[kind]
     return f"{owner}::{suffix}"
 
 
-def _params(shape: LoweredSpecialization, owner: str) -> str:
+def _params(shape: LoweredSpecialization, owner: str, *, binding_mut: bool = True) -> str:
+    # An array (`s[]`) parameter is bound `mut` so the body can take a pointer into it
+    # (`data.data()` borrows `&mut`); `mut` on an owned binding is otherwise harmless.
+    # A trait *declaration* has no body, where a binding pattern like `mut` is rejected,
+    # so it passes ``binding_mut=False``.
     return ", ".join(
-        f"{name}: {_kind_type(kind, owner)}"
+        f"{'mut ' if binding_mut and kind == 's[]' else ''}{name}: {_kind_type(kind, owner)}"
         for name, kind in zip(shape.param_names, shape.param_kinds)
     )

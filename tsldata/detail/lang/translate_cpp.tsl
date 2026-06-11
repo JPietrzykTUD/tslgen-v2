@@ -1,5 +1,5 @@
 translation cpp:
-  call "::tsl::{name}<Vec>({args})"
+  call "::tsl::{name}<Vec{axis}>({args})"
   intrinsic_suffix_x86_si8 "epi8"
   intrinsic_suffix_x86_si16 "epi16"
   intrinsic_suffix_x86_si32 "epi32"

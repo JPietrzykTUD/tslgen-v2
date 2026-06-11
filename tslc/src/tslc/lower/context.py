@@ -24,6 +24,12 @@ class LoweringContext:
     # the selected primitive's attribute values (concrete after wildcard expansion),
     # e.g. {"aligned": "false"} — read by the `primitive::attribute` query.
     attributes: dict[str, str] = field(default_factory=dict)
+    # callee name -> its boolean-wildcard axis keys (e.g. {"store": ("aligned",)}), so a
+    # `call<primitive=…>` can pass the axis value the callee's wrapper requires.
+    primitive_axes: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # callee name -> count of overload-dispatch generic params (one per varying argument
+    # position), so a Rust call site can spell the inferred `_` turbofish args.
+    primitive_arg_generics: dict[str, int] = field(default_factory=dict)
     diagnostics: list[Diagnostic] = field(default_factory=list)
     requires_unsafe: bool = False
     unsupported: bool = False  # a not-yet-supported construct -> skip this specialization

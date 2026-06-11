@@ -27,6 +27,10 @@ KEYWORDS: frozenset[str] = frozenset(
         "let",
         "if",  # block-bearing: if<generation>(cond) { ... } else<generation> { ... }
         "assume_aligned",  # assume_aligned<N>(ptr) -> aligned-pointer hint
+        # Recognized so a loop body is flagged unsupported and skips cleanly, rather than
+        # leaking through as raw text; the lowerer (native for-loop translation) is a later
+        # slice. Its trailing `{ ... }` block is not yet captured (only `if` is block-bearing).
+        "loop",
     }
 )
 
