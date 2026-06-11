@@ -54,3 +54,12 @@ impl<T, const N: usize, const ALIGN: usize> Index<usize> for array_type<T, N, AL
         &self.storage[i]
     }
 }
+
+// Scalar-core helpers used by emulated (loop) bodies, counterpart to C++ `tsl::details`.
+// In scope via `use crate::tsl_core::*`. Grows one function at a time with the primitives
+// that call `details::*`; `arith_add` is the reductions' accumulate step.
+pub mod details {
+    pub fn arith_add<T: core::ops::Add<Output = T>>(a: T, b: T) -> T {
+        a + b
+    }
+}

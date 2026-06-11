@@ -478,6 +478,44 @@ class AssumeAlignedLowerer:
         return f"::tsl::assume_aligned<{value.text}>({expr})"
 
 
+class LoopLowerer:
+    """``loop<range>(var, start, end, step) { body }`` / ``loop<unroll>(count)`` -> the
+    backend's **native** loop construct (NOT a generation-time unroll): the `loop_range` /
+    `loop_unroll` translate template framing the (recursively-rendered) block. C++
+    ``for (std::size_t i = 0; i < N; i += 1) { ... }`` / Rust ``for i in (0..N).step_by(1)
+    { ... }``; the bound ``value<generation>(vector::length)`` resolves via the query region.
+    """
+
+    keyword = "loop"
+
+    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+        variant = region.selector_text.strip()
+        key = f"loop_{variant}"
+        if context.translation.template(key) is None:
+            context.skip(
+                "TSL-LOWER-UNSUPPORTED-LOOP",
+                f"unsupported loop<{variant}>: {region.full_text!r}",
+            )
+            return region.full_text
+        block = render(region.block) if region.block else ""
+        if variant == "range":
+            groups = _split_arg_groups(region.body)
+            if len(groups) != 4:
+                context.skip(
+                    "TSL-LOWER-UNSUPPORTED-LOOP",
+                    f"loop<range> needs (var, start, end, step): {region.full_text!r}",
+                )
+                return region.full_text
+            var, start, end, step = (render(group).strip() for group in groups)
+            header = context.translation.render_template(
+                key, var=var, start=start, end=end, step=step
+            )
+            return f"{header} {{\n        {block}\n      }}"
+        # unroll: a bare hint (no block of its own; it precedes a loop).
+        header = context.translation.render_template(key, count=render(region.body).strip())
+        return f"{header} {{\n        {block}\n      }}" if region.block else header
+
+
 class QueryRegionLowerer:
     """``type<generation>(x)`` / ``value<generation>(x)`` in raw expression position ->
     the evaluated query's rendered text. A type resolves to its backend spelling; a
@@ -526,6 +564,7 @@ DEFAULT_REGION_LOWERERS: tuple[RegionLowerer, ...] = (
     CallLowerer(),
     IfGenerationLowerer(),
     AssumeAlignedLowerer(),
+    LoopLowerer(),
     QueryRegionLowerer("type"),
     QueryRegionLowerer("value"),
     EmitReturnLowerer(),

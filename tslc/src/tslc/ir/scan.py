@@ -92,6 +92,10 @@ def _try_region(
     if keyword == "if":
         # A block-bearing region: capture the `{ ... }` body (and any `else`) too.
         return _try_if_region(text, start, selector_text, tuple(_scan(body_text)), close + 1)
+    if keyword == "loop":
+        # `loop<range>(…) { body }` captures its `{ ... }` block; `loop<unroll>(n)` is a bare
+        # hint with no block. Either way the lowerer translates it to a native loop construct.
+        return _try_loop_region(text, start, selector_text, tuple(_scan(body_text)), close + 1)
     region = Region(
         keyword=keyword,
         selector_text=selector_text,
@@ -135,6 +139,36 @@ def _try_if_region(
         full_text=text[start:end],
         block=then_block,
         else_block=else_block,
+    )
+    return region, end
+
+
+def _try_loop_region(
+    text: str,
+    start: int,
+    selector_text: str,
+    body: tuple[Segment, ...],
+    after_body: int,
+) -> tuple[Region | None, int]:
+    """Capture ``loop<sel>(args) [{ block }]`` from ``after_body`` (just past the args'
+    ``)``). A trailing ``{ ... }`` (``loop<range>``'s body) goes in ``Region.block``; a bare
+    hint (``loop<unroll>(n)``) has none. The native-loop translation lives in the lowerer."""
+
+    pos = _skip_ws(text, after_body)
+    block: tuple[Segment, ...] | None = None
+    end = after_body
+    if pos < len(text) and text[pos] == "{":
+        close = _match_bracket(text, pos, "{", "}")
+        if close is None:
+            return None, start
+        block = tuple(_scan(text[pos + 1 : close]))
+        end = close + 1
+    region = Region(
+        keyword="loop",
+        selector_text=selector_text,
+        body=body,
+        full_text=text[start:end],
+        block=block,
     )
     return region, end
 

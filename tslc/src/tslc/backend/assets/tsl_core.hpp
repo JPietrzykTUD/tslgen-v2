@@ -6,6 +6,12 @@
 #include <cstddef>
 #include <cstdint>
 
+// Loop-unroll hint for `loop<unroll>`. A no-op by default (a real unroll pragma is
+// compiler-specific and only a hint); kept as a macro so generated bodies always compile.
+#ifndef TSL_UNROLL
+#define TSL_UNROLL(n)
+#endif
+
 namespace tsl {
 
 // Aligned-pointer hint for aligned load/store. `__builtin_assume_aligned` (gcc/clang)
@@ -63,5 +69,14 @@ struct array_for {
                             sizeof(typename Vec::register_type) / sizeof(typename Vec::base_type),
                             alignof(typename Vec::register_type)>;
 };
+
+// Scalar-core helpers used by emulated (loop) bodies. Grows one function at a time as the
+// primitives that call `details::*` land; `arith_add` is the reductions' accumulate step.
+namespace details {
+template <class T>
+inline T arith_add(T a, T b) {
+    return a + b;
+}
+}  // namespace details
 
 }  // namespace tsl

@@ -83,7 +83,7 @@ prim<s:=v> hadd(vec):
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
+            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0))
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               result = details::arith_add(result, values[i]);
             }
@@ -127,7 +127,7 @@ prim<s:=v> hadd(vec):
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
+            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0))
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               result = details::arith_add(result, values[i]);
             }
@@ -147,7 +147,7 @@ prim<s:=v> hadd(vec):
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
+            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0))
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               result = details::arith_add(result, values[i]);
             }
