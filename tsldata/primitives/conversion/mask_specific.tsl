@@ -212,7 +212,7 @@ prim<v:=m> to_vector(mask):
       arith:
         requires []
         implementation:
-          tsil "emit_return(mask);"
+          tsil "emit_return(cast<static>(type<generation>(base::in), cast<static>(si32, mask)));"
     generic:
       arith:
         requires []

@@ -34,16 +34,16 @@ prim<s[]:=v> to_array(a):
           ui64 [avx512f]
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, tmp, value<backend>(uninit::array)) 
-              call<primitive=store>(assume_aligned<value<generation>(vector::alignment)>(tmp.data()), a);
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+              call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
       f?:
         requires [avx512f]
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, tmp, value<backend>(uninit::array)) 
-              call<primitive=store>(assume_aligned<value<generation>(vector::alignment)>(tmp.data()), a);
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+              call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
     avx2:
@@ -51,16 +51,16 @@ prim<s[]:=v> to_array(a):
         requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx], ui32 [avx], si64 [avx], ui64 [avx]}
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, tmp, value<backend>(uninit::array)) 
-              call<primitive=store>(assume_aligned<value<generation>(vector::alignment)>(tmp.data()), a);
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+              call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
       f?:
         requires [avx]
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, tmp, value<backend>(uninit::array)) 
-              call<primitive=store>(assume_aligned<value<generation>(vector::alignment)>(tmp.data()), a);
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+              call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
     sse:
@@ -68,16 +68,16 @@ prim<s[]:=v> to_array(a):
         requires [sse, sse2]
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, tmp, value<backend>(uninit::array)) 
-              call<primitive=store>(assume_aligned<value<generation>(vector::alignment)>(tmp.data()), a);
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+              call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
       f?:
         requires {f32 [sse], f64 [sse, sse2]}
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, tmp, value<backend>(uninit::array)) 
-              call<primitive=store>(assume_aligned<value<generation>(vector::alignment)>(tmp.data()), a);
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+              call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
     neon:
@@ -85,16 +85,16 @@ prim<s[]:=v> to_array(a):
         requires [neon]
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, tmp, value<backend>(uninit::array)) 
-              call<primitive=store>(assume_aligned<value<generation>(vector::alignment)>(tmp.data()), a);
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+              call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
       f?:
         requires [neon]
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, tmp, value<backend>(uninit::array)) 
-              call<primitive=store>(assume_aligned<value<generation>(vector::alignment)>(tmp.data()), a);
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+              call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
     sve:

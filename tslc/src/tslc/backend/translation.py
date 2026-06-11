@@ -144,6 +144,15 @@ class BackendTranslation:
             return f"Simd<{base_spelling}, {tag}>"
         return f"tsl::simd<{base_spelling}, tsl::{extension_name}>"
 
+    def generic_vector_spelling(self, base_spelling: str, lanes: int) -> str:
+        """The sized generic vector `simd<base, generic<N>>` for a concrete lane count — C++
+        `tsl::simd<{base}, tsl::generic<{N}>>`, Rust `Simd<{base}, Generic<{N}>>`. The lane
+        count is generation-time known (the caller's `vector_bits / type_bits`)."""
+
+        if self.backend_id == "rust":
+            return f"Simd<{base_spelling}, Generic<{lanes}>>"
+        return f"tsl::simd<{base_spelling}, tsl::generic<{lanes}>>"
+
     def register_type_spelling(self) -> str:
         """The vector register type as named inside a body (`vector::register`)."""
 

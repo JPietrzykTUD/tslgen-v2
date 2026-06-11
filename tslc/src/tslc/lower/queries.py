@@ -207,10 +207,9 @@ class VectorAlignmentQuery:
     head = "vector::alignment"
 
     def apply(self, args, context):  # noqa: ANN001
-        # The generic vector's array register carries no hardware alignment — its natural
-        # alignment is the element's (`alignof(T)`, i.e. the type's byte size for primitives),
-        # which is what `array_type<T, LANES>` defaults to. Fixed-width registers use the
-        # register's byte width.
+        # The register's natural byte alignment — used by the *aligned* load/store variants
+        # (e.g. avx2 -> 32). The generic vector has no hardware register, so it reports its
+        # element alignment instead.
         if context.extension.isa_name == "generic":
             digits = "".join(c for c in context.type_tag if c.isdigit())
             return TextValue(str((int(digits) if digits else 8) // 8))
@@ -245,15 +244,24 @@ class AsExtensionQuery:
     head = "vector::as_extension"
 
     def apply(self, args, context):  # noqa: ANN001
-        # Only the no-arg `scalar` form is supported (generic's per-lane delegation). The
-        # `generic` form needs the caller's lane count (`generic<N>`) and the multi-arg forms
-        # are the cross-extension delegation slice — leave them unresolved so those bodies skip.
-        if len(args) != 1 or not isinstance(args[0], TextValue) or args[0].text != "scalar":
+        # Single-extension forms only (the multi-arg `as_extension(sse, ToBase)` forms are a
+        # later slice). `scalar` → the scalar vector; `generic` → the sized generic vector at
+        # the caller's (generation-time) lane count, for cross-extension delegation.
+        if len(args) != 1 or not isinstance(args[0], TextValue):
             return None
         base = context.translation.scalar_spelling(context.type_tag)
         if base is None:
             return None
-        return TextValue(context.translation.vector_type_spelling(base, args[0].text))
+        if args[0].text == "scalar":
+            return TextValue(context.translation.vector_type_spelling(base, "scalar"))
+        if args[0].text == "generic":
+            bits = context.extension.vector_bits
+            digits = "".join(c for c in context.type_tag if c.isdigit())
+            type_bits = int(digits) if digits else 8
+            if bits == 0:  # scalar/generic callers have no fixed lane count to delegate at
+                return None
+            return TextValue(context.translation.generic_vector_spelling(base, bits // type_bits))
+        return None
 
 
 DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (

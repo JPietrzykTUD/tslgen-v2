@@ -75,9 +75,12 @@ struct alignas(Align) array_type {
 // so it matches the body's explicit `array_type<base, length, alignment>`.
 template <class Vec>
 struct array_for {
+    // Element-aligned (not register-aligned) so the array type is identical across extensions
+    // of the same (base, lane-count) — `to_array<A>`'s result is what `from_array<B>` accepts,
+    // for the cross-extension delegation round-trip. The buffer is fed unaligned load/store.
     using type = array_type<typename Vec::base_type,
                             sizeof(typename Vec::register_type) / sizeof(typename Vec::base_type),
-                            alignof(typename Vec::register_type)>;
+                            alignof(typename Vec::base_type)>;
 };
 
 // The `generic` portable vector: a sized, array-backed register parameterized by its lane

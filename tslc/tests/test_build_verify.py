@@ -137,6 +137,31 @@ def test_to_from_array_roundtrip_builds(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_blend_select_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # Mask consumers + cross-extension delegation. `blend`/`mov` select on a mask (native
+    # blendv/mask_blend, or the generic mask<test> loop); `min`/`max` are blend(less_than(...)),
+    # so this is the first build of x86 min/max. `mul`'s si64 fallback delegates through the
+    # generic vector via vector::as_extension(generic) -> simd<i64, generic<4>> (the lane count
+    # is generation-time known), round-tripping to_array -> @self -> from_array.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["mul", "blend", "mov", "min", "max"],
+        profiles=["scalar", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    blob = "\n".join(a.content for a in result.artifacts.artifacts)
+    assert "tsl::generic<4>" in blob, "mul si64 cross-extension delegation not emitted"
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_generic_masks_build(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
