@@ -111,6 +111,7 @@ class Lowerer:
             attributes=dict(selected.primitive.attributes),
             primitive_axes=_primitive_axes(catalog),
             primitive_arg_generics=_primitive_arg_generics(catalog),
+            current_primitive=selected.primitive.name,
         )
 
         shape = parse_signature(selected.primitive.signature)
@@ -194,7 +195,10 @@ class Lowerer:
                 for key in sorted(selected.primitive.attributes)
                 if key in BOOLEAN_WILDCARD_ATTRIBUTES
             ),
-            register_is_base=context.extension.vector_bits == 0,
+            # True only when the register type *is* the base type (scalar). The generic
+            # vector also has vector_bits 0 but its register is the lane array, not the base,
+            # so its `v`/`s` overloads must stay distinct.
+            register_is_base=context.extension.isa_name == "scalar",
         )
         return LoweringResult(
             specialization=specialization,

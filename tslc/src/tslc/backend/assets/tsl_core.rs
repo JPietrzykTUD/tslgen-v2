@@ -5,7 +5,7 @@
 #![allow(non_camel_case_types)]
 
 use core::marker::PhantomData;
-use core::ops::Index;
+use core::ops::{Index, IndexMut};
 
 pub trait SimdVector {
     type BaseType;
@@ -28,36 +28,76 @@ impl<T> SimdVector for Simd<T, Scalar> {
     type Array = array_type<T, 1>;
 }
 
+// The `generic` portable vector: a sized, array-backed register parameterized by its lane
+// count (a const generic on the tag), counterpart to the C++ `simd<T, generic<LANES>>`. Its
+// register is the indexable `[T; LANES]`, so emulated bodies `result[i] = ...` and delegate
+// per lane to scalar. Always available, so defined in the static core.
+pub struct Generic<const LANES: usize>;
+
+impl<T, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
+    type BaseType = T;
+    type RegisterType = array_type<T, LANES>;
+    type MaskType = array_type<T, LANES>;
+    type Array = array_type<T, LANES>;
+}
+
 // A fixed-size array buffer (the `s[]` kind), counterpart to the C++ `tsl::array_type`.
-// Named lowercase to match the corpus body token. The load/store calls it feeds are
-// unaligned (Rust has no stable `assume_aligned`), so it needs no special alignment;
-// `ALIGN` is carried for spelling parity with C++ but unused.
-pub struct array_type<T, const N: usize, const ALIGN: usize = 1> {
+// `array_type<T, N, ALIGN>` is a type *alias* over `ArrayStorage<T, N>`: the load/store calls
+// it feeds are unaligned (Rust has no stable `assume_aligned`), so `ALIGN` is cosmetic — and
+// making it alias-only means `array_type<T, N, a>` is the *same* type for every `a` (C++ uses
+// `a` for `alignas`, where the value matters). Named lowercase to match the corpus token.
+#[allow(type_alias_bounds)]
+pub type array_type<T, const N: usize, const ALIGN: usize = 1> = ArrayStorage<T, N>;
+
+pub struct ArrayStorage<T, const N: usize> {
     storage: [T; N],
 }
 
-impl<T, const N: usize, const ALIGN: usize> array_type<T, N, ALIGN> {
+impl<T, const N: usize> ArrayStorage<T, N> {
     pub fn data(&mut self) -> *mut T {
         self.storage.as_mut_ptr()
     }
 }
 
-impl<T: Copy, const N: usize, const ALIGN: usize> array_type<T, N, ALIGN> {
+impl<T: Copy, const N: usize> ArrayStorage<T, N> {
     pub fn fill(&mut self, value: T) {
         self.storage = [value; N];
     }
 }
 
-impl<T, const N: usize, const ALIGN: usize> Index<usize> for array_type<T, N, ALIGN> {
+impl<T, const N: usize> Index<usize> for ArrayStorage<T, N> {
     type Output = T;
     fn index(&self, i: usize) -> &T {
         &self.storage[i]
     }
 }
 
+impl<T, const N: usize> IndexMut<usize> for ArrayStorage<T, N> {
+    fn index_mut(&mut self, i: usize) -> &mut T {
+        &mut self.storage[i]
+    }
+}
+
+// Zero/default register for `var<init_register>`. A manual impl (not derived) so it works
+// for any `N` (std's `[T; N]: Default` is limited to small N).
+impl<T: Copy + Default, const N: usize> Default for ArrayStorage<T, N> {
+    fn default() -> Self {
+        Self { storage: [T::default(); N] }
+    }
+}
+
 // Scalar-core helpers used by emulated (loop) bodies, counterpart to C++ `tsl::details`.
 // In scope via `use crate::tsl_core::*`. Grows one function at a time with the primitives
 // that call `details::*`; `arith_add` is the reductions' accumulate step.
+// Pointer-offset helpers used by the generic vector's element-wise load/store loops. Our
+// pointer kind is `*mut`, so both take it; callers deref inside an `unsafe`-framed body.
+pub fn ptr_add<T>(p: *mut T, i: usize) -> *mut T {
+    p.wrapping_add(i)
+}
+pub fn ptr_add_mut<T>(p: *mut T, i: usize) -> *mut T {
+    p.wrapping_add(i)
+}
+
 pub mod details {
     pub fn arith_add<T: core::ops::Add<Output = T>>(a: T, b: T) -> T {
         a + b

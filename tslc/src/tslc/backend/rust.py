@@ -64,7 +64,13 @@ class RustBackend:
             if signature in seen:
                 continue
             seen.add(signature)
-            vec = f"Simd<{spec.base_type_spelling}, {_ext_tag(spec.extension_name)}>"
+            # The generic vector is sized: its overloaded impls are parameterized by `LANES`.
+            if spec.extension_name == "generic":
+                vec = f"Simd<{spec.base_type_spelling}, Generic<LANES>>"
+                impl_prefix = "impl<const LANES: usize>"
+            else:
+                vec = f"Simd<{spec.base_type_spelling}, {_ext_tag(spec.extension_name)}>"
+                impl_prefix = "impl"
             self_ty = _rust_concrete(spec, spec.param_kinds[vi])
             trait_args = "<" + vec + "".join(f", {value}" for _, value in spec.axis) + ">"
             fixed_impl = "".join(
@@ -75,9 +81,9 @@ class RustBackend:
             # the body's `Self::RegisterType`/`Self::BaseType` (Simd associated types) are
             # concretized; the varying parameter is bound from `self`.
             bind = f"let {spec.param_names[vi]} = self;\n        "
-            body = _concretize_simd_assoc(spec.body_text, spec)
+            body = _concretize_simd_assoc(spec.body_text, spec, vec)
             impls.append(
-                f"impl {arg_trait}{trait_args} for {self_ty} {{\n"
+                f"{impl_prefix} {arg_trait}{trait_args} for {self_ty} {{\n"
                 f"    fn apply(self{fixed_impl}) -> {ret_impl} {{\n"
                 f"        {bind}{body}\n"
                 f"    }}\n"
@@ -111,11 +117,18 @@ class RustBackend:
         )
 
     def _impl(self, spec: LoweredSpecialization) -> str:
-        key = f"Simd<{spec.base_type_spelling}, {_ext_tag(spec.extension_name)}>"
+        # The `generic` vector is sized: the impl is parameterized by `LANES` (a const generic
+        # on the `Generic<LANES>` tag), and the body's `LANES` refers to it.
+        if spec.extension_name == "generic":
+            impl_generics = "<const LANES: usize>"
+            key = f"Simd<{spec.base_type_spelling}, Generic<LANES>>"
+        else:
+            impl_generics = ""
+            key = f"Simd<{spec.base_type_spelling}, {_ext_tag(spec.extension_name)}>"
         params = _params(spec, "Self")
         trait_args = "".join(f"<{value}>" for _, value in spec.axis)
         return (
-            f"impl {_trait_name(spec.primitive_name)}{trait_args} for {key} {{\n"
+            f"impl{impl_generics} {_trait_name(spec.primitive_name)}{trait_args} for {key} {{\n"
             f"    fn apply({params}) -> {_kind_type(spec.result_kind, 'Self')} {{\n"
             f"        {spec.body_text}\n"
             f"    }}\n"
@@ -164,6 +177,10 @@ def _ext_tag(extension_name: str) -> str:
 def rust_register_type(extension_name: str, base: str) -> str:
     """Concrete register type spelling (scalar's register == its base type)."""
 
+    # The generic vector's register is the lane array (the `array_type` wrapper, matching its
+    # `Array`); `LANES` is in scope wherever this is used (a generic impl's const generic).
+    if extension_name == "generic":
+        return f"array_type<{base}, LANES>"
     width = X86_REGISTER_BITS.get(extension_name)
     if width is None:
         return base
@@ -194,13 +211,16 @@ def _rust_concrete_result(spec: LoweredSpecialization) -> str:
     return _rust_concrete(spec, spec.result_kind)
 
 
-def _concretize_simd_assoc(body: str, spec: LoweredSpecialization) -> str:
-    """Replace Simd associated-type references with concrete spellings, for use inside an
-    arg-trait impl where `Self` is the argument type rather than the Simd vector."""
+def _concretize_simd_assoc(body: str, spec: LoweredSpecialization, simd_vec: str) -> str:
+    """Concretize references to the Simd vector inside an arg-trait impl, where `Self` is the
+    *argument* type, not the vector: a `::<Self>` call turbofish (e.g. delegating
+    `to_array::<Self>`) becomes `::<{simd_vec}>`, and the Simd associated types become their
+    concrete spellings."""
 
     register = rust_register_type(spec.extension_name, spec.base_type_spelling)
     return (
-        body.replace("Self::RegisterType", register)
+        body.replace("::<Self>", f"::<{simd_vec}>")
+        .replace("Self::RegisterType", register)
         .replace("Self::BaseType", spec.base_type_spelling)
     )
 

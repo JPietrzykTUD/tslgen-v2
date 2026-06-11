@@ -145,6 +145,21 @@ class VarLowerer:
         groups = _split_arg_groups(region.body)
         if variant == "typed":
             return self._typed(variant, groups, region, context, render)
+        if variant == "init_register":
+            # A zero-initialized register declaration: `var<init_register>(name)`. The type is
+            # the vector's register type (C++ template uses it; the Rust template builds
+            # `[BaseType::default(); LANES]` and ignores it).
+            if len(groups) != 1 or context.translation.template("var_init_register") is None:
+                context.skip(
+                    "TSL-LOWER-UNSUPPORTED-VAR",
+                    f"unsupported var<init_register>: {region.full_text!r}",
+                )
+                return region.full_text
+            return context.translation.render_template(
+                "var_init_register",
+                type=context.translation.register_type_spelling(),
+                name=render(groups[0]).strip(),
+            )
         if len(groups) < 2 or context.translation.template(f"var_{variant}") is None:
             context.skip(
                 "TSL-LOWER-UNSUPPORTED-VAR",
@@ -339,7 +354,10 @@ class CallLowerer:
     """
 
     keyword = "call"
-    _NAME = re.compile(r"([A-Za-z_]\w*)")
+    _NAME = re.compile(r"(@?[A-Za-z_]\w*)")
+
+    def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
+        self._evaluator = evaluator or QueryEvaluator()
 
     def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
         selector = region.selector_text.strip()
@@ -353,14 +371,24 @@ class CallLowerer:
             return region.full_text
         name = match.group(1)
         rest = rest[match.end() :].strip()
+        # `@self` is a recursive call into the primitive currently being lowered.
+        if name == "@self":
+            name = context.current_primitive
 
         type_args, rest = _take_bracket(rest)
+        # The plain `[Vec]` / no-type-arg form targets the current vector; any other single
+        # type-arg is a type-expression naming the vector to call (e.g.
+        # `vector::as_extension(scalar)` for the generic vector's per-lane delegation).
+        vec_override: str | None = None
         if type_args and type_args != "Vec":
-            context.skip(
-                "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS",
-                f"call type-args {type_args!r} not supported yet: {region.full_text!r}",
-            )
-            return region.full_text
+            value = self._evaluator.evaluate(type_args, context)
+            if not isinstance(value, TextValue):
+                context.skip(
+                    "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS",
+                    f"call type-args {type_args!r} not supported yet: {region.full_text!r}",
+                )
+                return region.full_text
+            vec_override = value.text
 
         attrs: dict[str, str] = {}
         if rest.startswith("attrs"):
@@ -384,6 +412,7 @@ class CallLowerer:
             render(region.body),
             axis_values,
             context.primitive_arg_generics.get(name, 0),
+            vec_override,
         )
 
 

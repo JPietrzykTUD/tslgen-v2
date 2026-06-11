@@ -280,7 +280,12 @@ def _cpp_smoke(p: ProfileRender) -> str:
         specs = p.cpp[name]
         varying = varying_positions(specs)
         for spec in specs:
-            vec = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
+            # The `generic` vector is a LANES template; instantiate it at a representative
+            # width so address-of forces the body to compile.
+            if spec.extension_name == "generic":
+                vec = f"tsl::simd<{spec.base_type_spelling}, tsl::generic<8>>"
+            else:
+                vec = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
             targs = (
                 [vec]
                 + [value for _, value in spec.axis]

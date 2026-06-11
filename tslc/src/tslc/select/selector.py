@@ -38,7 +38,9 @@ class ProfileSelectionResult:
     diagnostics: tuple[Diagnostic, ...]
 
 
-_SUPPORTED_FAMILIES = frozenset({"scalar", "x86"})  # families tslc registers `simd<>` for
+_SUPPORTED_FAMILIES = frozenset(
+    {"scalar", "x86", "generic_like"}
+)  # families tslc registers `simd<>` for (generic_like = the portable `generic` vector)
 
 
 class Selector:

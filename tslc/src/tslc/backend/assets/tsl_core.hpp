@@ -46,6 +46,16 @@ struct reg_param {
     using type = typename Vec::register_type;
 };
 
+// Pointer-offset helpers used by the generic vector's element-wise load/store loops.
+template <class T>
+inline T *ptr_add_mut(T *p, std::size_t i) {
+    return p + i;
+}
+template <class T>
+inline const T *ptr_add(const T *p, std::size_t i) {
+    return p + i;
+}
+
 // A fixed-size, over-aligned array buffer (the `s[]` kind). Wraps std::array so
 // `.data()`/`operator[]`/`.fill()` are uniform with the Rust counterpart; `Align`
 // over-aligns the storage so an aligned store into it (via `assume_aligned`) is valid.
@@ -68,6 +78,21 @@ struct array_for {
     using type = array_type<typename Vec::base_type,
                             sizeof(typename Vec::register_type) / sizeof(typename Vec::base_type),
                             alignof(typename Vec::register_type)>;
+};
+
+// The `generic` portable vector: a sized, array-backed register parameterized by its lane
+// count. The tag carries `LANES` (a non-type template parameter), so `simd<T, generic<N>>`
+// stays an ordinary two-argument specialization. Its register is an indexable `array_type`,
+// so emulated bodies can `result[i] = ...` and delegate per lane to scalar. Always available
+// (no hardware feature), hence defined here in the static core rather than per profile.
+template <std::size_t LANES>
+struct generic {};
+
+template <class T, std::size_t LANES>
+struct simd<T, generic<LANES>> {
+    using base_type = T;
+    using register_type = array_type<T, LANES>;
+    using mask_type = register_type;
 };
 
 // Scalar-core helpers used by emulated (loop) bodies. Grows one function at a time as the

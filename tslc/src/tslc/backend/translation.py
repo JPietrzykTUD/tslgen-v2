@@ -100,6 +100,7 @@ class BackendTranslation:
         args: str,
         axis_values: tuple[str, ...] = (),
         arg_generics: int = 0,
+        vec_override: str | None = None,
     ) -> str:
         """A call to another primitive's generated wrapper, for the current vector.
 
@@ -117,15 +118,31 @@ class BackendTranslation:
         turbofish, since Rust won't infer trailing generics after an explicit prefix
         (``store::<Self, false, _>``). C++ deduces these from the arguments, so it is unused
         there.
+
+        ``vec_override`` re-targets the call at an explicit vector type instead of the current
+        `Vec`/`Self` — e.g. `@self[vector::as_extension(scalar)]` delegating per lane to the
+        scalar instantiation.
         """
 
         axis = "".join(f", {value}" for value in axis_values)
         if self.backend_id == "rust":
             inferred = ", _" * arg_generics
-            return f"{name}::<Self{axis}{inferred}>({args})"
+            return f"{name}::<{vec_override or 'Self'}{axis}{inferred}>({args})"
+        if vec_override is not None:
+            return f"::tsl::{name}<{vec_override}{axis}>({args})"
         return self.render_template(
             "call", "::tsl::{name}<Vec{axis}>({args})", name=name, axis=axis, args=args
         )
+
+    def vector_type_spelling(self, base_spelling: str, extension_name: str) -> str:
+        """The `simd<base, ext>` type spelling for a backend — e.g. C++
+        `tsl::simd<int32_t, tsl::scalar>`, Rust `Simd<i32, Scalar>`. Used to re-express the
+        current vector under another extension (`vector::as_extension`)."""
+
+        if self.backend_id == "rust":
+            tag = _RUST_EXT_TAG.get(extension_name, extension_name.capitalize())
+            return f"Simd<{base_spelling}, {tag}>"
+        return f"tsl::simd<{base_spelling}, tsl::{extension_name}>"
 
     def register_type_spelling(self) -> str:
         """The vector register type as named inside a body (`vector::register`)."""
@@ -177,4 +194,12 @@ class BackendTranslation:
 _RUST_ARCH_MODULE: dict[str, str] = {
     "x86": "x86_64",
     "arm": "aarch64",
+}
+
+# Rust extension tag spelling (the `Ext` in `Simd<T, Ext>`), keyed by ISA name.
+_RUST_EXT_TAG: dict[str, str] = {
+    "scalar": "Scalar",
+    "sse": "Sse",
+    "avx2": "Avx2",
+    "avx512": "Avx512",
 }

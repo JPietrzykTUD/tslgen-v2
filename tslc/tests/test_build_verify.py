@@ -137,6 +137,33 @@ def test_to_from_array_roundtrip_builds(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_generic_extension_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # The `generic` portable vector emitted standalone: `simd<T, generic<LANES>>` with the lane
+    # count a template param (C++) / const generic (Rust), its register an array, and its bodies
+    # delegating per-lane to scalar (`result[i] = @self[vector::as_extension(scalar)](...)`).
+    # `add`/`sub` build in both backends; the C++ smoke instantiates `generic<8>`, the Rust
+    # impl is type-checked generically over `LANES`. The closure pulls scalar `add`/`sub`.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add", "sub"],
+        profiles=["scalar", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    # The generic vector is actually emitted (not merely skipped-clean).
+    blob = "\n".join(a.content for a in result.artifacts.artifacts)
+    assert "tsl::generic<LANES>" in blob and "Generic<LANES>" in blob, "generic not emitted"
+
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_elementwise_bitwise_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:

@@ -131,10 +131,10 @@ def generate(request: GenerationRequest) -> GenerationResult:
             diagnostics.extend(selection.diagnostics)
             for slot in selection.selected:
                 selected_extensions[slot.extension.isa_name] = slot.extension
-                callees = frozenset(_CALL_TARGET.findall(slot.implementation.body_text))
-                for callee in callees:
-                    if callee not in processed and catalog.primitive(callee) is not None:
-                        worklist.append(callee)
+                callees = _extract_calls(
+                    slot.implementation.body_text, primitive, slot.extension.isa_name
+                )
+                slot_lowered = False
                 for backend in request.backends:
                     translation = BackendTranslation(catalog=catalog, backend_id=backend)
                     lowered = lowerer.lower(slot, catalog, translation)
@@ -158,6 +158,15 @@ def generate(request: GenerationRequest) -> GenerationResult:
                     lowered_specs.append(
                         _LoweredSlot(backend=backend, spec=lowered.specialization, callees=callees)
                     )
+                    slot_lowered = True
+                # Only pull callees referenced by a body that actually lowered — a skipped
+                # body (e.g. a deferred `let<type>`/`mask<test>` delegation) must not drag its
+                # callees (to_array/store/…) into the emitted set, where they would otherwise
+                # surface as unbuildable generic instantiations.
+                if slot_lowered:
+                    for callee, _target_ext in callees:
+                        if callee not in processed and catalog.primitive(callee) is not None:
+                            worklist.append(callee)
 
         grouped, pruned = _prune_unresolved(lowered_specs)
         for slot in pruned:
@@ -207,14 +216,32 @@ def generate(request: GenerationRequest) -> GenerationResult:
     )
 
 
-_CALL_TARGET = re.compile(r"call<primitive=([A-Za-z_][A-Za-z0-9_]*)")
+_CALL_TARGET = re.compile(r"call<primitive=(@?[A-Za-z_][A-Za-z0-9_]*)\s*(\[[^\]]*\])?")
+_AS_EXTENSION = re.compile(r"as_extension\(\s*([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def _extract_calls(
+    body_text: str, current_primitive: str, current_extension: str
+) -> frozenset[tuple[str, str]]:
+    """The ``(callee, target-extension)`` pairs a body calls. ``@self`` resolves to the
+    primitive being lowered; a ``[… vector::as_extension(ext) …]`` type-arg retargets the
+    call at ``ext`` (e.g. the generic vector delegating per lane to ``scalar``), otherwise the
+    callee is on the caller's own extension. The target extension lets the prune check the
+    *right* ``simd<type, ext>`` exists, not merely a same-named primitive."""
+
+    calls: set[tuple[str, str]] = set()
+    for name, bracket in _CALL_TARGET.findall(body_text):
+        callee = current_primitive if name == "@self" else name.lstrip("@")
+        match = _AS_EXTENSION.search(bracket)
+        calls.add((callee, match.group(1) if match else current_extension))
+    return frozenset(calls)
 
 
 @dataclass(slots=True, eq=False)
 class _LoweredSlot:
     backend: str
     spec: LoweredSpecialization
-    callees: frozenset[str]
+    callees: frozenset[tuple[str, str]]  # (callee primitive, target extension isa name)
 
 
 def _prune_unresolved(
@@ -235,8 +262,8 @@ def _prune_unresolved(
             slot_key = key(slot)
             if slot_key not in valid:
                 continue
-            for callee in slot.callees:
-                if (slot.backend, callee, slot.spec.extension_name, slot.spec.type_tag) not in valid:
+            for callee, target_ext in slot.callees:
+                if (slot.backend, callee, target_ext, slot.spec.type_tag) not in valid:
                     valid.discard(slot_key)
                     changed = True
                     break

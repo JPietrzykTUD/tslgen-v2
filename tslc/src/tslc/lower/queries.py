@@ -197,6 +197,13 @@ class VectorAlignmentQuery:
     head = "vector::alignment"
 
     def apply(self, args, context):  # noqa: ANN001
+        # The generic vector's array register carries no hardware alignment — its natural
+        # alignment is the element's (`alignof(T)`, i.e. the type's byte size for primitives),
+        # which is what `array_type<T, LANES>` defaults to. Fixed-width registers use the
+        # register's byte width.
+        if context.extension.isa_name == "generic":
+            digits = "".join(c for c in context.type_tag if c.isdigit())
+            return TextValue(str((int(digits) if digits else 8) // 8))
         return TextValue(str(context.extension.vector_bits // 8))
 
 
@@ -207,12 +214,33 @@ class VectorLengthQuery:
     head = "vector::length"
 
     def apply(self, args, context):  # noqa: ANN001
+        # The `generic` vector is sized: its lane count is the `LANES` template parameter,
+        # not a concrete integer — emit the symbol so the body keys off the template param.
+        if context.extension.isa_name == "generic":
+            return TextValue("LANES")
         bits = context.extension.vector_bits
         if bits == 0:
             return TextValue("1")
         digits = "".join(c for c in context.type_tag if c.isdigit())
         type_bits = int(digits) if digits else 8
         return TextValue(str(bits // type_bits))
+
+
+class AsExtensionQuery:
+    """``vector::as_extension(ext)`` -> the current base type re-expressed as a vector under
+    a different extension, e.g. ``as_extension(scalar)`` -> ``tsl::simd<int32_t, tsl::scalar>``
+    / ``Simd<i32, Scalar>``. Used by the generic vector's per-lane delegation to scalar. (The
+    lanes-matching ``as_extension(generic)`` and multi-arg forms are a later slice.)"""
+
+    head = "vector::as_extension"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 1 or not isinstance(args[0], TextValue):
+            return None
+        base = context.translation.scalar_spelling(context.type_tag)
+        if base is None:
+            return None
+        return TextValue(context.translation.vector_type_spelling(base, args[0].text))
 
 
 DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
@@ -226,6 +254,7 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     RegisterQuery(),
     VectorAlignmentQuery(),
     VectorLengthQuery(),
+    AsExtensionQuery(),
 )
 
 

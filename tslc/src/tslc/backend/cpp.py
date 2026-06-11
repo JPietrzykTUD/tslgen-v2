@@ -57,7 +57,15 @@ class CppBackend:
 
     def _specialization(self, group: list[LoweredSpecialization]) -> str:
         first = group[0]
-        vec = f"tsl::simd<{first.base_type_spelling}, tsl::{first.extension_name}>"
+        # The `generic` vector is sized: its specialization is parameterized by `LANES` (the
+        # tag carries it), so it emits as `template <std::size_t LANES> struct …_impl<simd<T,
+        # generic<LANES>>>` rather than a full specialization.
+        if first.extension_name == "generic":
+            vec = f"tsl::simd<{first.base_type_spelling}, tsl::generic<LANES>>"
+            head = "template <std::size_t LANES>"
+        else:
+            vec = f"tsl::simd<{first.base_type_spelling}, tsl::{first.extension_name}>"
+            head = "template <>"
         # A boolean-wildcard attribute keys the specialization so both variants coexist.
         key = vec + "".join(f", {value}" for _, value in first.axis)
         applies: list[str] = []
@@ -79,7 +87,7 @@ class CppBackend:
                 f"    }}"
             )
         return (
-            f"template <>\nstruct {first.primitive_name}_impl<{key}> {{\n"
+            f"{head}\nstruct {first.primitive_name}_impl<{key}> {{\n"
             f"    using Vec = {vec};\n" + "\n".join(applies) + "\n};"
         )
 

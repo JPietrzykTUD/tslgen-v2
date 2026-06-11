@@ -32,10 +32,11 @@ def test_unknown_primitive_is_error(catalog: Catalog, machine_profiles) -> None:
 
 
 def test_profile_reachability(catalog: Catalog, machine_profiles) -> None:
-    # scalar profile: only the scalar extension. tslc registers `simd<>` only for the
-    # scalar and x86 families, so `generic`/`arm`/`cuda`/fpga extensions are not emitted.
+    # scalar profile: the scalar extension plus the always-available `generic` portable vector
+    # (a base extension with no feature flags). tslc registers `simd<>` for the scalar, x86,
+    # and generic_like families; `arm`/`cuda`/fpga extensions are still not emitted.
     scalar = {s.extension.name for s in _slots(catalog, machine_profiles["scalar"], "add")}
-    assert scalar == {"scalar"}
+    assert scalar == {"scalar", "generic"}
 
     # avx profile: avx2 integer add needs the avx2 flag (absent) -> falls to sse;
     # but avx2 float add only needs `avx`, so it IS present.

@@ -733,7 +733,7 @@ translation rust:
   var_const_typed "let {name}: {type} = {value};"
   var_array_uninit "#[allow(invalid_value, unused_mut)] let mut {name}: {type} = unsafe { core::mem::MaybeUninit::<{type}>::uninit().assume_init() };"
   var_uninit "#[allow(invalid_value, unused_mut)] let mut {name}: {type} = unsafe { core::mem::MaybeUninit::<{type}>::uninit().assume_init() };"
-  var_init_register "let mut {name} = [Self::BaseType::default(); Self::LANES];"
+  var_init_register "let mut {name}: {type} = Default::default();"
   flow_if_static "if {cond}"
   flow_else_if_static "else if {cond}"
   flow_if_runtime "if {cond}"

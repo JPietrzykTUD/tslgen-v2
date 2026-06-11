@@ -21,6 +21,9 @@ class LoweringContext:
     extension: Extension
     type_tag: str
     translation: BackendTranslation
+    # the name of the primitive currently being lowered, so a `@self[...]` call can recurse
+    # into it for a different vector (e.g. generic delegating per-lane to scalar).
+    current_primitive: str = ""
     # the selected primitive's attribute values (concrete after wildcard expansion),
     # e.g. {"aligned": "false"} — read by the `primitive::attribute` query.
     attributes: dict[str, str] = field(default_factory=dict)
