@@ -191,6 +191,16 @@ class RegisterQuery:
         return TextValue(context.translation.register_type_spelling())
 
 
+class MaskQuery:
+    """``vector::mask`` -> the backend spelling of the vector mask type
+    (C++ ``typename Vec::mask_type`` / Rust ``Self::MaskType``)."""
+
+    head = "vector::mask"
+
+    def apply(self, args, context):  # noqa: ANN001
+        return TextValue(context.translation.mask_type_spelling())
+
+
 class VectorAlignmentQuery:
     """``vector::alignment`` -> the register's natural byte alignment (`vector_bits/8`)."""
 
@@ -235,7 +245,10 @@ class AsExtensionQuery:
     head = "vector::as_extension"
 
     def apply(self, args, context):  # noqa: ANN001
-        if len(args) != 1 or not isinstance(args[0], TextValue):
+        # Only the no-arg `scalar` form is supported (generic's per-lane delegation). The
+        # `generic` form needs the caller's lane count (`generic<N>`) and the multi-arg forms
+        # are the cross-extension delegation slice — leave them unresolved so those bodies skip.
+        if len(args) != 1 or not isinstance(args[0], TextValue) or args[0].text != "scalar":
             return None
         base = context.translation.scalar_spelling(context.type_tag)
         if base is None:
@@ -252,6 +265,7 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     IsSameQuery(),
     AttributeQuery(),
     RegisterQuery(),
+    MaskQuery(),
     VectorAlignmentQuery(),
     VectorLengthQuery(),
     AsExtensionQuery(),

@@ -137,6 +137,39 @@ def test_to_from_array_roundtrip_builds(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_generic_masks_build(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # The generic vector's emulated mask: comparisons build a bitset mask via `let<type>(MaskT,
+    # vector::mask)` + `var<typed>` + `mask<zero>`/`mask<set:1>` (the `mask<*>` ops lowered per
+    # the lane-bitmask representation), and the mask/bitwise primitives (pulled by le/ge)
+    # combine them with `mask<test>`/`mask<set>`. Builds in both backends; the native
+    # comparison bodies are unaffected.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=[
+            "equal",
+            "nequal",
+            "less_than",
+            "greater_than",
+            "less_than_or_equal",
+            "greater_than_or_equal",
+            "unequal_zero",
+        ],
+        profiles=["scalar", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    blob = "\n".join(a.content for a in result.artifacts.artifacts)
+    assert "equal_impl<tsl::simd<int32_t, tsl::generic<LANES>>>" in blob, "generic mask not emitted"
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_generic_extension_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:

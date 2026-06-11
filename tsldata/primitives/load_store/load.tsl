@@ -36,9 +36,8 @@ prim<v:=ptr>[aligned=*] load(ptr):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              let<type>(T, type<generation>(vector::register)) 
-              T reg;
-              loop<unroll>(value<generation>(vector::length)) 
+              var<init_register>(reg)
+              loop<unroll>(value<generation>(vector::length))
               loop<range>(idx, 0, value<generation>(vector::length), 1)  {
                 reg[idx] = *ptr_add(ptr, idx);
               }

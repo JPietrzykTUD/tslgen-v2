@@ -16,6 +16,7 @@ this file.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from tslc.backend.translation import BackendTranslation
@@ -176,6 +177,9 @@ class Lowerer:
         if context.unsupported or context.has_errors:
             # A not-yet-lowerable construct was hit: skip this specialization.
             return LoweringResult(specialization=None, diagnostics=tuple(context.diagnostics))
+        # Inline `let<type>` aliases at their use sites (whole-word) — see LetLowerer.
+        for alias, spelling in context.type_aliases.items():
+            rendered = re.sub(rf"\b{re.escape(alias)}\b", lambda _m, s=spelling: s, rendered)
         body_text = translation.frame_body(rendered, requires_unsafe=context.requires_unsafe)
 
         specialization = LoweredSpecialization(

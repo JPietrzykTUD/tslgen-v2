@@ -92,7 +92,8 @@ template <class T, std::size_t LANES>
 struct simd<T, generic<LANES>> {
     using base_type = T;
     using register_type = array_type<T, LANES>;
-    using mask_type = register_type;
+    // Emulated mask: a bitset, one bit per lane (≤64 lanes covers all real widths).
+    using mask_type = std::uint64_t;
 };
 
 // Scalar-core helpers used by emulated (loop) bodies. Grows one function at a time as the

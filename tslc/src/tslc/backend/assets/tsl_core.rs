@@ -37,7 +37,8 @@ pub struct Generic<const LANES: usize>;
 impl<T, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
     type BaseType = T;
     type RegisterType = array_type<T, LANES>;
-    type MaskType = array_type<T, LANES>;
+    // Emulated mask: a bitset, one bit per lane (≤64 lanes covers all real widths).
+    type MaskType = u64;
     type Array = array_type<T, LANES>;
 }
 
@@ -49,6 +50,7 @@ impl<T, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
 #[allow(type_alias_bounds)]
 pub type array_type<T, const N: usize, const ALIGN: usize = 1> = ArrayStorage<T, N>;
 
+#[derive(Clone, Copy)]
 pub struct ArrayStorage<T, const N: usize> {
     storage: [T; N],
 }

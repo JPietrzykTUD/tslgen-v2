@@ -91,7 +91,7 @@ prim<m:=()>[value=all] mask_true():
         implementation:
           tsil """
               let<type>(MaskT, type<generation>(vector::mask))
-              MaskT result = mask<zero>();
+              var<typed>(MaskT, result, mask<zero>())
               loop<unroll>(value<generation>(vector::length))
               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 mask<set:1>(result, i);

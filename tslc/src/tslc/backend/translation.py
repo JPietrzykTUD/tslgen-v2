@@ -149,6 +149,11 @@ class BackendTranslation:
 
         return "Self::RegisterType" if self.backend_id == "rust" else "typename Vec::register_type"
 
+    def mask_type_spelling(self) -> str:
+        """The vector mask type as named inside a body (`vector::mask`)."""
+
+        return "Self::MaskType" if self.backend_id == "rust" else "typename Vec::mask_type"
+
     def render_pointer_cast(self, inner: str, *, is_const: bool, expr: str) -> str:
         """A reinterpret cast of a pointer (`cast<reinterpret>(T const *, ptr)`): C++
         `reinterpret_cast<T [const] *>(expr)`, Rust `expr as *{const|mut} T`. The

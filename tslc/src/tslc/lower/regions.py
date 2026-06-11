@@ -200,6 +200,67 @@ class VarLowerer:
         return context.translation.render_template(key, type=type_text, name=name, value=value)
 
 
+class LetLowerer:
+    """``let<type>(Name, type-expr)`` -> a type alias, applied by **substitution**: the
+    resolved type spelling is recorded and inlined at every later use of ``Name`` in the body
+    (the lowerer substitutes after rendering). A real local alias would be ``using Name = T;``
+    in C++, but Rust rejects a fn-local ``type Name = Self::T;`` (E0401), so inlining is the
+    backend-neutral form. The type-expression is resolved via the normal region path (e.g.
+    ``type<generation>(vector::mask)`` -> the mask-type spelling)."""
+
+    keyword = "let"
+
+    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+        variant = region.selector_text.strip()
+        groups = _split_arg_groups(region.body)
+        if variant != "type" or len(groups) != 2:
+            context.skip(
+                "TSL-LOWER-UNSUPPORTED-LET",
+                f"unsupported let<{variant}>: {region.full_text!r}",
+            )
+            return region.full_text
+        context.type_aliases[render(groups[0]).strip()] = render(groups[1]).strip()
+        return ""
+
+
+class MaskLowerer:
+    """``mask<zero>() / mask<set:1|0>(m,i) / mask<set>(m,i,v) / mask<test>(m,i)`` -> mask-bit
+    ops, lowered per the extension's mask **representation** via a backend translate template
+    keyed by `mask_<op>_<repr>` (so literal/`&mut` differences stay in the translate layer).
+    Currently the integer-bitset repr (`lane_bitmask`, used by the generic vector's emulated
+    masks) is templated; native `__mmask`/register reprs register their own keys later. (Only
+    the emulated/generic bodies use `mask<…>` — native bodies use intrinsics — so the bitset
+    templates are reached only for the generic vector.)"""
+
+    keyword = "mask"
+
+    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+        op, _, bit = region.selector_text.strip().partition(":")
+        repr_kind = context.extension.mask_policy.kind
+        args = [render(group).strip() for group in _split_arg_groups(region.body) if render(group).strip()]
+        if op == "zero":
+            key, fields = f"mask_zero_{repr_kind}", {}
+        elif op == "test" and len(args) == 2:
+            key, fields = f"mask_test_{repr_kind}", {"mask": args[0], "index": args[1]}
+        elif op == "set" and bit == "1" and len(args) == 2:
+            key, fields = f"mask_set_{repr_kind}", {"name": args[0], "index": args[1]}
+        elif op == "set" and bit == "0" and len(args) == 2:
+            key, fields = f"mask_clear_{repr_kind}", {"name": args[0], "index": args[1]}
+        elif op == "set" and not bit and len(args) == 3:
+            key = f"mask_set_to_{repr_kind}"
+            fields = {"name": args[0], "index": args[1], "value": args[2]}
+        else:
+            key, fields = "", {}
+        if not key or context.translation.template(key) is None:
+            context.skip(
+                "TSL-LOWER-UNSUPPORTED-MASK",
+                f"unsupported mask<{region.selector_text.strip()}> for {repr_kind!r}: "
+                f"{region.full_text!r}",
+            )
+            return region.full_text
+        return context.translation.render_template(key, **fields)
+
+
 class CastLowerer:
     """``cast<variant>(type<...>(...), expr)`` -> the backend's cast template.
 
@@ -607,6 +668,8 @@ DEFAULT_REGION_LOWERERS: tuple[RegionLowerer, ...] = (
     IntrinComposeLowerer(),
     IntrinLowerer(),
     VarLowerer(),
+    LetLowerer(),
+    MaskLowerer(),
     CastLowerer(),
     CallLowerer(),
     IfLowerer(),
