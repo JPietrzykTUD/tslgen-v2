@@ -218,6 +218,9 @@ def generate(request: GenerationRequest) -> GenerationResult:
 
 _CALL_TARGET = re.compile(r"call<primitive=(@?[A-Za-z_][A-Za-z0-9_]*)\s*(\[[^\]]*\])?")
 _AS_EXTENSION = re.compile(r"as_extension\(\s*([A-Za-z_][A-Za-z0-9_]*)")
+_LET_TYPE_EXT = re.compile(
+    r"let<type>\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,[^)]*?as_extension\(\s*([A-Za-z_][A-Za-z0-9_]*)"
+)
 
 
 def _extract_calls(
@@ -227,13 +230,25 @@ def _extract_calls(
     primitive being lowered; a ``[… vector::as_extension(ext) …]`` type-arg retargets the
     call at ``ext`` (e.g. the generic vector delegating per lane to ``scalar``), otherwise the
     callee is on the caller's own extension. The target extension lets the prune check the
-    *right* ``simd<type, ext>`` exists, not merely a same-named primitive."""
+    *right* ``simd<type, ext>`` exists, not merely a same-named primitive.
 
+    A retarget is often via a ``let<type>(GenericVec, … as_extension(generic))`` alias used
+    as the call's type-arg (``@self[GenericVec]``); those aliases are resolved here so the
+    delegation's true target extension is tracked (else a skipping leaf wouldn't prune)."""
+
+    aliases = {m.group(1): m.group(2) for m in _LET_TYPE_EXT.finditer(body_text)}
     calls: set[tuple[str, str]] = set()
     for name, bracket in _CALL_TARGET.findall(body_text):
         callee = current_primitive if name == "@self" else name.lstrip("@")
         match = _AS_EXTENSION.search(bracket)
-        calls.add((callee, match.group(1) if match else current_extension))
+        if match is not None:
+            target = match.group(1)
+        else:
+            target = next(
+                (ext for alias, ext in aliases.items() if re.search(rf"\b{alias}\b", bracket)),
+                current_extension,
+            )
+        calls.add((callee, target))
     return frozenset(calls)
 
 

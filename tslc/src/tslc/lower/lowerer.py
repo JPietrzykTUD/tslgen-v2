@@ -117,6 +117,7 @@ class Lowerer:
             primitive_axes=_primitive_axes(catalog),
             primitive_arg_generics=_primitive_arg_generics(catalog),
             current_primitive=selected.primitive.name,
+            immediate_dispatch=selected.primitive.immediate_dispatch,
         )
 
         shape = parse_signature(selected.primitive.signature)
@@ -166,6 +167,7 @@ class Lowerer:
                     f"{selected.primitive.name!r}",
                 )
             immediate = (parameters[idx], imm_spelling)
+            context.immediate_name = parameters[idx]
 
         # Dereferencing a raw pointer is `unsafe` in Rust, so a `ptr`-taking body needs
         # the unsafe frame even when it uses no intrinsics (e.g. scalar `*ptr = data;`).

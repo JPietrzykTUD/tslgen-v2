@@ -93,7 +93,41 @@ class IntrinComposeLowerer:
             and context.extension.mask_policy.kind == "native_predicate_by_lanes"
         ):
             name = f"{name}_mask"
+        # Const-generic intrinsic forward: a Rust immediate intrinsic takes the count as a
+        # const generic (`_mm256_slli_epi32::<SHIFT>(a)`), not a runtime arg. When the
+        # primitive's immediate uses `rust_const_match`, lift the arg that names the
+        # immediate out of the call and into the turbofish. (C++ takes it as a normal arg —
+        # a compile-time-constant template param converts implicitly.)
+        forwarded = self._forward_immediate(region, context, render)
+        if forwarded is not None:
+            turbofish, rest = forwarded
+            return f"{name}::<{turbofish}>({rest})"
         return f"{name}({render(region.body)})"
+
+    def _forward_immediate(
+        self, region: Region, context: LoweringContext, render: RenderBody
+    ) -> tuple[str, str] | None:
+        """If this is a Rust `rust_const_match` immediate intrinsic, split the rendered
+        args into (immediate-for-turbofish, remaining-args). Returns None otherwise."""
+
+        if (
+            context.translation.backend_id != "rust"
+            or context.immediate_dispatch != "rust_const_match"
+            or context.immediate_name is None
+        ):
+            return None
+        groups = _split_arg_groups(region.body)
+        imm: str | None = None
+        rest: list[str] = []
+        for group in groups:
+            rendered = render(group).strip()
+            if rendered == context.immediate_name:
+                imm = rendered
+            else:
+                rest.append(rendered)
+        if imm is None:
+            return None
+        return (imm, ", ".join(rest))
 
     def _suffix(self, modifiers: ComposeModifiers, context: LoweringContext) -> str | None:
         explicit = modifiers.get("suffix")

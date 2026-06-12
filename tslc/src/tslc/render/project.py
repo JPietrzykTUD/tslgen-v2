@@ -10,7 +10,7 @@ profile's feature set (the one place that maps features to compiler options).
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from importlib import resources
 
 from tslc.backend.cpp import CppBackend
@@ -71,7 +71,10 @@ class RenderedProject:
 def render_project(
     profiles: tuple[ProfileRender, ...], backends: tuple[str, ...] = ("cpp", "rust")
 ) -> RenderedProject:
-    ordered = tuple(sorted(profiles, key=lambda p: p.profile.name))
+    ordered = tuple(
+        replace(p, cpp=_split_immediates(p.cpp), rust=_split_immediates(p.rust))
+        for p in sorted(profiles, key=lambda p: p.profile.name)
+    )
     artifacts: list[Artifact] = []
     verify_backends: list[VerifyBackend] = []
 
@@ -114,6 +117,29 @@ def render_project(
 
 
 # --- build facts (the only place that maps features to compiler options) -----
+
+
+def _split_immediates(
+    by_name: dict[str, tuple[LoweredSpecialization, ...]],
+) -> dict[str, tuple[LoweredSpecialization, ...]]:
+    """Split a primitive whose overload set MIXES an `sImm` form with runtime forms into two
+    emitted primitives: the runtime forms keep `<name>` (a normal scalar/vector overload),
+    the `sImm` form moves to `<name>_imm` (a non-overloaded const-generic wrapper). Rust has
+    no fn overloading and neither backend's single-wrapper machinery can carry a position
+    that is compile-time in one form and runtime in another, so the immediate form is lifted
+    out; `<name>_imm` follows TSL's own `mul_imm`/`mod_imm` convention. Pure-`sImm` primitives
+    (`mul_imm`) and immediate-free primitives are unchanged."""
+
+    out: dict[str, tuple[LoweredSpecialization, ...]] = {}
+    for name, specs in by_name.items():
+        imm = tuple(s for s in specs if "sImm" in s.param_kinds)
+        runtime = tuple(s for s in specs if "sImm" not in s.param_kinds)
+        if imm and runtime:
+            out[name] = runtime
+            out[f"{name}_imm"] = tuple(replace(s, primitive_name=f"{name}_imm") for s in imm)
+        else:
+            out[name] = specs
+    return out
 
 
 def _used_exts(by_primitive: dict[str, tuple[LoweredSpecialization, ...]]) -> list[str]:

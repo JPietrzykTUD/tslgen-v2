@@ -41,7 +41,9 @@ class RustBackend:
             for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
             if i != vi
         ]
-        ret = _kind_type(shape.result_kind, "Self")
+        # In the arg-trait `Self` is the *argument* type, not the vector — a vector-typed
+        # result (e.g. shift's `v` -> register) must project through the vector param `S`.
+        ret = _kind_type(shape.result_kind, "S")
         axis_decl = "".join(f", const {_axis_name(k)}: bool" for k, _ in shape.axis)
         fixed_trait = "".join(f", {n}: {_kind_type(k, 'S')}" for n, k in fixed)
         trait = (

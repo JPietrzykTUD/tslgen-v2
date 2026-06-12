@@ -104,13 +104,12 @@ def _build_primitives(
     attribute_keys = tuple(attribute.key.text for attribute in declaration.attributes)
     base_attributes = {a.key.text: _attribute_value(a) for a in declaration.attributes}
 
-    # The `sImm` immediate's type: the `sImm_type` block's `default`, if present. (Per-ext
-    # `override`s ride with the shifts slice; primitives with no block default to ui32 in
-    # the lowerer.)
-    simm_fields = declaration.fields_by_name("sImm_type")
-    immediate_type = (
-        _field_text(_child(simm_fields[0].field, "default")) if simm_fields else None
-    )
+    # The `sImm` immediate's type + dispatch from the `sImm_type` block. The x86 `override`
+    # (e.g. `si32`) wins over `default` when present — the const-generic/template param type
+    # is uniform per primitive, and the override is the type the x86 intrinsics want. (A
+    # genuinely per-ISA immediate type — avx512's `ui32` vs sse/avx2's `si32` — is deferred
+    # with the avx512 shift bodies; for now the override type is used uniformly.)
+    immediate_type, immediate_dispatch = _immediate_spec(declaration)
 
     def make(attributes: dict[str, str]) -> Primitive:
         return Primitive(
@@ -121,6 +120,7 @@ def _build_primitives(
             implementations=implementations,
             attributes=attributes,
             immediate_type=immediate_type,
+            immediate_dispatch=immediate_dispatch,
         )
 
     return [make(attrs) for attrs in _expand_wildcards(base_attributes)]
@@ -356,6 +356,27 @@ def _mask_policy(field: ParsedTslField | None) -> MaskPolicy:
         cpp_by_lanes=_int_keyed_map(_child(field, "cpp_by_lanes")),
         rust_by_lanes=_int_keyed_map(_child(field, "rust_by_lanes")),
     )
+
+
+def _immediate_spec(
+    declaration: ParsedPrimitiveDeclaration,
+) -> tuple[str | None, str | None]:
+    """The `sImm` immediate's (type, dispatch) from the `sImm_type` block: the x86
+    `override` type if present (the type the const-generic intrinsics want), else the
+    `default`; plus the `dispatch` strategy (e.g. ``rust_const_match``)."""
+
+    fields = declaration.fields_by_name("sImm_type")
+    if not fields:
+        return (None, None)
+    block = fields[0].field
+    dispatch = _field_text(_child(block, "dispatch"))
+    # `override: tsil: [exts] <type>` — the bracketed-extension entry's value is the type.
+    override = _child(block, "override")
+    tsil = _child(override, "tsil") if override is not None else None
+    override_entries = _children(tsil) if tsil is not None else ()
+    override_type = _field_text(override_entries[0]) if override_entries else None
+    immediate_type = override_type or _field_text(_child(block, "default"))
+    return (immediate_type, dispatch)
 
 
 def _imask_policy(field: ParsedTslField | None) -> ImaskPolicy:

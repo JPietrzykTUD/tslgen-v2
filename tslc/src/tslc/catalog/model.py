@@ -63,9 +63,14 @@ class Primitive:
     # value is always concrete. `attribute_keys` is kept for the masked-variant filter.
     attributes: dict[str, str] = field(default_factory=dict)
     # The type tag of an `sImm` compile-time immediate operand (from the `sImm_type` block's
-    # `default`), or None. Primitives with an `sImm` param but no block default to ``ui32``
-    # in the lowerer. The immediate's *name*/position come from the signature.
+    # `default`, or its x86 `override` when present — see the builder), or None. Primitives
+    # with an `sImm` param but no block default to ``ui32`` in the lowerer. The immediate's
+    # *name*/position come from the signature.
     immediate_type: str | None = None
+    # The `sImm_type` `dispatch` strategy (e.g. ``rust_const_match``), or None. When set, the
+    # Rust backend forwards the immediate into a const-generic intrinsic turbofish
+    # (`slli::<SHIFT>(data)`) rather than passing it as a runtime value.
+    immediate_dispatch: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,7 +176,10 @@ class Catalog:
         """Members of a selector's type-group.
 
         Handles named groups (``?i?``), bracketed type lists (``[si32, ui32]``),
-        and bare concrete tags (``f64`` -> itself).
+        and bare concrete tags (``f64`` -> itself). Bracket elements are expanded
+        *recursively*, so a wildcard list like ``[?i16, ?i32, ?i64]`` unfolds to its
+        concrete members (``si16, ui16, …``) rather than the literal ``?iN`` tokens —
+        otherwise it would match no concrete type and lose selection to ``arith``.
         """
 
         named = self.type_groups.get(type_group)
@@ -179,9 +187,12 @@ class Catalog:
             return named
         text = type_group.strip()
         if text.startswith("[") and text.endswith("]"):
-            return tuple(
-                part.strip() for part in text[1:-1].split(",") if part.strip()
-            )
+            members: list[str] = []
+            for part in text[1:-1].split(","):
+                part = part.strip()
+                if part:
+                    members.extend(self.type_group_members(part))
+            return tuple(members)
         return (type_group,)
 
     def type_group_contains(self, type_group: str, type_tag: str) -> bool:

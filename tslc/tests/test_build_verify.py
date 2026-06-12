@@ -380,3 +380,26 @@ def test_mul_imm_builds(data_root: Path, machine_profiles_path: Path, tmp_path: 
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_shift_left_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `shift_left` is the first MIXED overload set with an `sImm` member: in Rust the
+    # immediate form splits out to `shift_left_imm` (const generic) while `(v,s)`/`(v,v)`
+    # stay the `shift_left` arg-trait; C++ keeps `shift_left_imm`. The x86 immediate body
+    # forwards the const generic into the intrinsic — Rust `_mm256_slli_epi32::<shift>(data)`
+    # (rust_const_match), C++ `_mm256_slli_epi32(data, shift)`. Both backends, scalar + sse +
+    # avx2 (avx512's `u32`-immediate per-ISA type, generic/x86 fallback multi-arg call,
+    # shift_right's `if<compile>`, float, and masked are deferred and skip cleanly).
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["shift_left"],
+        profiles=["scalar", "sse2", "avx", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"

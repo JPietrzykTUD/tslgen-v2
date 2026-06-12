@@ -37,6 +37,11 @@ class LoweringContext:
     # callee name -> count of overload-dispatch generic params (one per varying argument
     # position), so a Rust call site can spell the inferred `_` turbofish args.
     primitive_arg_generics: dict[str, int] = field(default_factory=dict)
+    # the `sImm` immediate operand's name (e.g. "shift") and dispatch strategy of the
+    # primitive being lowered, so `intrin_compose` can forward it into a Rust const-generic
+    # intrinsic turbofish (`slli::<shift>(data)`) when dispatch is `rust_const_match`.
+    immediate_name: str | None = None
+    immediate_dispatch: str | None = None
     diagnostics: list[Diagnostic] = field(default_factory=list)
     requires_unsafe: bool = False
     unsupported: bool = False  # a not-yet-supported construct -> skip this specialization
