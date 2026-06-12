@@ -107,6 +107,46 @@ pub fn bit_cast<From, To>(value: From) -> To {
     unsafe { core::mem::transmute_copy(&value) }
 }
 
+// Mask lane values (`mask::lane::all_true` / `all_false`): the all-bits-set / all-bits-clear
+// value of a lane, broadcast by `set1` to build an all-true / all-false lane-bitmask mask.
+// Counterpart to C++ `tsl::mask_lane_all_true`; int is `!0`, float the all-ones-bit NaN.
+pub trait TslMaskLaneValue: Copy + Default + 'static {
+    fn all_true() -> Self;
+    fn all_false() -> Self {
+        Self::default()
+    }
+}
+macro_rules! impl_tsl_mask_lane_value_int {
+    ($ty:ty) => {
+        impl TslMaskLaneValue for $ty {
+            #[inline]
+            fn all_true() -> Self {
+                !0
+            }
+        }
+    };
+}
+macro_rules! impl_tsl_mask_lane_value_float {
+    ($ty:ty, $bits:ty) => {
+        impl TslMaskLaneValue for $ty {
+            #[inline]
+            fn all_true() -> Self {
+                <$ty>::from_bits(<$bits>::MAX)
+            }
+        }
+    };
+}
+impl_tsl_mask_lane_value_int!(i8);
+impl_tsl_mask_lane_value_int!(i16);
+impl_tsl_mask_lane_value_int!(i32);
+impl_tsl_mask_lane_value_int!(i64);
+impl_tsl_mask_lane_value_int!(u8);
+impl_tsl_mask_lane_value_int!(u16);
+impl_tsl_mask_lane_value_int!(u32);
+impl_tsl_mask_lane_value_int!(u64);
+impl_tsl_mask_lane_value_float!(f32, u32);
+impl_tsl_mask_lane_value_float!(f64, u64);
+
 pub fn ptr_add<T>(p: *mut T, i: usize) -> *mut T {
     p.wrapping_add(i)
 }

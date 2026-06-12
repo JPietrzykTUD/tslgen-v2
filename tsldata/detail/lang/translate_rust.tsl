@@ -773,6 +773,8 @@ translation rust:
   value_size_of "core::mem::size_of::<{type}>()"
   value_size_of_expr "core::mem::size_of_val(&{expr})"
   value_pack_size "tsl_pack_size!({expr})"
+  mask_lane_all_true "<{base} as crate::tsl_core::TslMaskLaneValue>::all_true()"
+  mask_lane_all_false "<{base} as crate::tsl_core::TslMaskLaneValue>::all_false()"
   value_generic_length "<{type} as SimdVector>::LANES"
   value_generic_runtime_length "<{type} as SimdVector>::LANES"
   value_cmp_eq_oq "core::arch::x86_64::_CMP_EQ_OQ"

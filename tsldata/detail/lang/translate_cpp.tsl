@@ -104,6 +104,8 @@ translation cpp:
   value_size_of "sizeof({type})"
   value_size_of_expr "sizeof({expr})"
   value_pack_size "sizeof...({expr})"
+  mask_lane_all_true "::tsl::mask_lane_all_true<{base}>()"
+  mask_lane_all_false "::tsl::mask_lane_all_false<{base}>()"
   value_generic_length "{type}::vector_element_count()"
   value_generic_runtime_length "{type}::vector_element_count_runtime()"
   value_cmp_eq_oq "_CMP_EQ_OQ"

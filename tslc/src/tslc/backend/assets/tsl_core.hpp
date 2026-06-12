@@ -26,6 +26,22 @@ inline To bit_cast(const From &src) {
     return dst;
 }
 
+// Mask lane values (`mask::lane::all_true` / `all_false`): the all-bits-set / all-bits-clear
+// value of a lane, broadcast by `set1` to build an all-true / all-false lane-bitmask mask.
+// Uniform for integer and float via the object representation — all-ones bytes are an int's
+// all-ones and a float's all-ones-bit NaN. (Runtime, not constexpr: `set1`'s arg is a
+// runtime broadcast.)
+template <class T>
+inline T mask_lane_all_true() {
+    T value;
+    std::memset(&value, 0xFF, sizeof(T));
+    return value;
+}
+template <class T>
+inline T mask_lane_all_false() {
+    return T{};
+}
+
 // Aligned-pointer hint for aligned load/store. `__builtin_assume_aligned` (gcc/clang)
 // keeps this C++17-compatible; it is only an optimizer hint, so a plain return is also
 // correct if the builtin is unavailable.

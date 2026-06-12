@@ -470,3 +470,24 @@ def test_mask_boolean_algebra_builds(
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_mask_true_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `mask_true` (`m:=()`) builds on all targets now that `mask::lane::all_true` resolves: native
+    # `__mmaskN` all-ones (avx512), `set1(mask_lane_all_true<T>())` on the lane-bitmask ISAs
+    # (sse/avx2 — the previously-pruned path), `true` (scalar), generic bit-loop. The lane value
+    # comes from the `::tsl::mask_lane_all_true<T>()` / `<T as TslMaskLaneValue>::all_true()`
+    # substrate (all-ones bytes → int all-ones / float all-ones-bit NaN). Both backends.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["mask_true"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"

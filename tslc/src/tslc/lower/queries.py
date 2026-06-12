@@ -224,6 +224,25 @@ class ImaskQuery:
         return TextValue(context.translation.imask_type_spelling())
 
 
+class MaskLaneQuery:
+    """``mask::lane::all_true`` / ``mask::lane::all_false`` -> the all-bits-set / all-bits-clear
+    lane value of the current base type, as a substrate call (C++ ``::tsl::mask_lane_all_true<T>()``
+    / Rust ``<T as TslMaskLaneValue>::all_true()``). Broadcast by ``set1`` to build an all-true /
+    all-false lane-bitmask mask. The per-`head` template key is supplied at registration."""
+
+    def __init__(self, head: str, template_key: str) -> None:
+        self.head = head
+        self._template_key = template_key
+
+    def apply(self, args, context):  # noqa: ANN001
+        if args:
+            return None
+        base = context.translation.scalar_spelling(context.type_tag)
+        if base is None or context.translation.template(self._template_key) is None:
+            return None
+        return TextValue(context.translation.render_template(self._template_key, base=base))
+
+
 class VectorAlignmentQuery:
     """``vector::alignment`` -> the register's natural byte alignment (`vector_bits/8`)."""
 
@@ -299,6 +318,8 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     RegisterQuery(),
     MaskQuery(),
     ImaskQuery(),
+    MaskLaneQuery("mask::lane::all_true", "mask_lane_all_true"),
+    MaskLaneQuery("mask::lane::all_false", "mask_lane_all_false"),
     VectorAlignmentQuery(),
     VectorLengthQuery(),
     AsExtensionQuery(),
