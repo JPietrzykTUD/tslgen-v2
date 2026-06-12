@@ -32,6 +32,17 @@ def signed_of(type_tag: str) -> str:
     return type_tag
 
 
+def unsigned_of(type_tag: str) -> str:
+    """The unsigned integer tag of the same width: ``si16 -> ui16``, ``f32 -> ui32``,
+    ``f64 -> ui64``; unsigned tags are unchanged. Used for bit-level reinterpretation."""
+
+    if type_tag.startswith("si"):
+        return "ui" + type_tag[2:]
+    if type_tag.startswith("f"):
+        return "ui" + type_tag[1:]
+    return type_tag
+
+
 def normalize_scalar_tag(type_tag: str) -> str:
     """``si32 -> s32``, ``ui32 -> u32``, ``f32 -> f32`` for language type-map lookup."""
 
@@ -50,6 +61,11 @@ class BackendTranslation:
     def scalar_spelling(self, type_tag: str) -> str | None:
         spellings = self.catalog.type_spellings.get(self.backend_id, {})
         return spellings.get(normalize_scalar_tag(type_tag))
+
+    def size_t_spelling(self) -> str:
+        """The backend's size type (`type<backend>(size_t)`): C++ `std::size_t` / Rust `usize`."""
+
+        return "usize" if self.backend_id == "rust" else "std::size_t"
 
     def compose_prefix(self, extension: Extension) -> str | None:
         return extension.compose_prefix.get(self.backend_id)
@@ -170,12 +186,13 @@ class BackendTranslation:
 
     def render_pointer_cast(self, inner: str, *, is_const: bool, expr: str) -> str:
         """A reinterpret cast of a pointer (`cast<reinterpret>(T const *, ptr)`): C++
-        `reinterpret_cast<T [const] *>(expr)`, Rust `expr as *{const|mut} T`. The
+        `reinterpret_cast<T [const] *>(expr)`, Rust `(expr as *{const|mut} T)`. The
         existing value `bit_cast` would be wrong for a pointer, so this is backend-
-        structural and lives here, like ``render_call``."""
+        structural and lives here, like ``render_call``. The Rust form is parenthesized so
+        an outer deref binds correctly — `*(&x as *const T)`, not `(*&x) as *const T`."""
 
         if self.backend_id == "rust":
-            return f"{expr} as *{'const' if is_const else 'mut'} {inner}"
+            return f"({expr} as *{'const' if is_const else 'mut'} {inner})"
         qualifier = " const" if is_const else ""
         return f"reinterpret_cast<{inner}{qualifier} *>({expr})"
 

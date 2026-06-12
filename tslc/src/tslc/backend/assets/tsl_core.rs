@@ -99,6 +99,14 @@ impl<T: Copy + Default, const N: usize> Default for ArrayStorage<T, N> {
 // that call `details::*`; `arith_add` is the reductions' accumulate step.
 // Pointer-offset helpers used by the generic vector's element-wise load/store loops. Our
 // pointer kind is `*mut`, so both take it; callers deref inside an `unsafe`-framed body.
+// Type-punning bit reinterpret (`cast<bitcast>` / value `cast<reinterpret>`): reinterpret
+// the object representation as a same-sized type. Counterpart to C++ `tsl::bit_cast`; the
+// `assert_eq!` makes the size precondition a hard error rather than UB.
+pub fn bit_cast<From, To>(value: From) -> To {
+    assert_eq!(core::mem::size_of::<From>(), core::mem::size_of::<To>());
+    unsafe { core::mem::transmute_copy(&value) }
+}
+
 pub fn ptr_add<T>(p: *mut T, i: usize) -> *mut T {
     p.wrapping_add(i)
 }

@@ -218,21 +218,18 @@ prim<v:=m> to_vector(mask):
         requires []
         implementation:
           tsil """
-               let<type>(T, type<generation>(vector::register)) 
-              T result{};
-              type<generation>(base::in) true_val = cast<static>(type<generation>(base::in),
-                cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF))
-              );
+              var<init_register>(result)
+              var<typed>(type<generation>(base::in), true_val, cast<static>(type<generation>(base::in), cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF))))
               if<compile>( value<generation>(type::is_same(type<generation>(base::in), f32)) ) {
-                 var<const_infer>(bits32, cast<static>(type<backend>(scalar::ui32), 0xFFFFFFFF)) 
-                true_val = *cast<reinterpret>(type<generation>(base::in) const *, &bits32);
+                 var<const_infer>(bits32, cast<static>(type<backend>(scalar::ui32), 0xFFFFFFFF))
+                true_val = cast<bitcast>(type<generation>(base::in), bits32);
               }
               if<compile>( value<generation>(type::is_same(type<generation>(base::in), f64)) ) {
-                 var<const_infer>(bits64, cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)) 
-                true_val = *cast<reinterpret>(type<generation>(base::in) const *, &bits64);
+                 var<const_infer>(bits64, cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF))
+                true_val = cast<bitcast>(type<generation>(base::in), bits64);
               }
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
-                if (details::mask_test<Vec>(mask, i)) {
+                if (mask<test>(mask, i)) {
                   result[i] = true_val;
                 } else {
                   result[i] = cast<static>(type<generation>(base::in), 0);

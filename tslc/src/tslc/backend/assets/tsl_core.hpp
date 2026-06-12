@@ -5,6 +5,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 // Loop-unroll hint for `loop<unroll>`. A no-op by default (a real unroll pragma is
 // compiler-specific and only a hint); kept as a macro so generated bodies always compile.
@@ -13,6 +14,17 @@
 #endif
 
 namespace tsl {
+
+// Type-punning bit reinterpret (`cast<bitcast>`): copy the object representation into a
+// same-sized destination type. `std::bit_cast` needs C++20; this `memcpy` form is C++17 and
+// the optimizer lowers it to a register move (used e.g. to read a SIMD register as another).
+template <class To, class From>
+inline To bit_cast(const From &src) {
+    static_assert(sizeof(To) == sizeof(From), "bit_cast requires equal sizes");
+    To dst;
+    std::memcpy(&dst, &src, sizeof(To));
+    return dst;
+}
 
 // Aligned-pointer hint for aligned load/store. `__builtin_assume_aligned` (gcc/clang)
 // keeps this C++17-compatible; it is only an optimizer hint, so a plain return is also

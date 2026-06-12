@@ -337,3 +337,25 @@ def test_to_mask_builds(data_root: Path, machine_profiles_path: Path, tmp_path: 
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_to_vector_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `to_vector` (mask -> vector) closes the mask triad. Exercises the reinterpret /
+    # type-conversion cluster: the generic emulated body (`var<init_register>` + `if<compile>`
+    # splicing the f32/f64 NaN branch + `mask<test>` loop + `base::unsigned_of` /
+    # `type<backend>(scalar::*)` / `cast<bitcast>` via `tsl_core::bit_cast`), the avx512
+    # `maskz_set1`+`bit_cast` float paths, and the avx2/sse `emit_return(mask)` identity.
+    # Both backends; avx2_vl/sse_vl native conversion (mov+mask::lane) skips cleanly.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["to_vector"],
+        profiles=["scalar", "avx2", "skylake", "icelake-rockerlake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"

@@ -492,9 +492,12 @@ def _take_bracket(text: str) -> tuple[str, str]:
 class IfLowerer:
     """``if(cond) { ... } [else ...]`` in two modes, by selector:
 
-    - ``if<generation>(cond)``: a *generation-time* conditional — the condition is
-      evaluated now (against the type being generated) and **only the taken branch's
-      statements** are emitted; the output has no ``if<generation>`` and no dead branch.
+    - ``if<generation>(cond)`` / ``if<compile>(cond)``: a *generation-time* conditional —
+      the condition is evaluated now (against the type being generated) and **only the taken
+      branch's statements** are emitted; the output has no ``if<…>`` and no dead branch. The
+      two selectors are equivalent (``compile`` reads as a C++ ``if constexpr``); each spec is
+      monomorphized per base type, so the predicate is known and splicing is valid in both
+      backends — no runtime/constexpr branch is emitted.
     - bare ``if(cond)`` (no selector): a **runtime** conditional, emitted natively as
       ``if (cond) { then } [else { ... } | else if ...]`` — valid verbatim in C++ and
       Rust. The condition/branches are rendered, not evaluated.
@@ -504,12 +507,13 @@ class IfLowerer:
     """
 
     keyword = "if"
+    _SPLICE_SELECTORS = ("generation", "compile")
 
     def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
         self._evaluator = evaluator or QueryEvaluator()
 
     def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
-        if region.selector_text.strip() != "generation":
+        if region.selector_text.strip() not in self._SPLICE_SELECTORS:
             return self._runtime(region, render)
 
         taken = self._evaluate_condition(_segment_text(region.body), context)

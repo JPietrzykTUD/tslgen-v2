@@ -25,7 +25,7 @@ from typing import Protocol
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
-from tslc.backend.translation import is_type_tag, signed_of
+from tslc.backend.translation import is_type_tag, signed_of, unsigned_of
 from tslc.lower._text import split_head_arg, split_top_level
 from tslc.lower.context import LoweringContext
 
@@ -113,6 +113,18 @@ class SignedOfQuery:
         if len(args) != 1 or not isinstance(args[0], TypeValue):
             return None
         return TypeValue(signed_of(args[0].type_tag))
+
+
+class UnsignedOfQuery:
+    """``base::unsigned_of(x)`` -> the same-width unsigned integer tag (``f32`` -> ``ui32``),
+    for bit-level reinterpretation."""
+
+    head = "base::unsigned_of"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 1 or not isinstance(args[0], TypeValue):
+            return None
+        return TypeValue(unsigned_of(args[0].type_tag))
 
 
 class TypeQuery:
@@ -278,6 +290,7 @@ class AsExtensionQuery:
 DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     BaseInQuery(),
     SignedOfQuery(),
+    UnsignedOfQuery(),
     TypeQuery(),
     ValueQuery(),
     IntrinSuffixQuery(),
@@ -324,6 +337,14 @@ class QueryEvaluator:
         # A bare leaf that names a concrete type tag resolves to itself.
         if not term.args and is_type_tag(term.head):
             return TypeValue(term.head)
+        # Named backend scalar types (`type<backend>(size_t)` / `type<backend>(scalar::ui64)`):
+        # resolve to the backend's spelling. `size_t` -> `std::size_t`/`usize`; `scalar::<tag>`
+        # -> the language type-map spelling (`ui64` -> `uint64_t`/`u64`).
+        if not term.args and term.head == "size_t":
+            return TextValue(context.translation.size_t_spelling())
+        if not term.args and term.head.startswith("scalar::"):
+            spelling = context.translation.scalar_spelling(term.head[len("scalar::") :])
+            return TextValue(spelling) if spelling is not None else None
         # A bare quoted string literal (e.g. a named suffix policy) is text.
         if not term.args and len(term.head) >= 2 and term.head[0] == '"' == term.head[-1]:
             return TextValue(term.head[1:-1])
