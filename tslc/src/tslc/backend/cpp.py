@@ -32,6 +32,8 @@ class CppBackend:
 
         shape = specializations[0]  # all share the same signature shape + axis keys
         decl_params = "class Vec" + "".join(f", bool {_axis_name(k)}" for k, _ in shape.axis)
+        if shape.immediate is not None:  # an `sImm` non-type template parameter
+            decl_params += f", {shape.immediate[1]} {shape.immediate[0]}"
         return (
             f"template <{decl_params}>\nstruct {primitive_name}_impl;"
             + "\n\n"
@@ -60,14 +62,22 @@ class CppBackend:
         # The `generic` vector is sized: its specialization is parameterized by `LANES` (the
         # tag carries it), so it emits as `template <std::size_t LANES> struct …_impl<simd<T,
         # generic<LANES>>>` rather than a full specialization.
+        # Free template params of the (partial) specialization: the generic vector's `LANES`
+        # and an `sImm` immediate (both unbound, so they appear in the head AND the key);
+        # concrete axis values are bound literals (key only).
+        free: list[str] = []
         if first.extension_name == "generic":
             vec = f"tsl::simd<{first.base_type_spelling}, tsl::generic<LANES>>"
-            head = "template <std::size_t LANES>"
+            free.append("std::size_t LANES")
         else:
             vec = f"tsl::simd<{first.base_type_spelling}, tsl::{first.extension_name}>"
-            head = "template <>"
+        if first.immediate is not None:
+            free.append(f"{first.immediate[1]} {first.immediate[0]}")
+        head = f"template <{', '.join(free)}>" if free else "template <>"
         # A boolean-wildcard attribute keys the specialization so both variants coexist.
         key = vec + "".join(f", {value}" for _, value in first.axis)
+        if first.immediate is not None:
+            key += f", {first.immediate[0]}"
         applies: list[str] = []
         seen: set[tuple[str, ...]] = set()
         for spec in group:
@@ -80,6 +90,7 @@ class CppBackend:
             params = ", ".join(
                 f"{_param_type(kind)} {name}"
                 for name, kind in zip(spec.param_names, spec.param_kinds)
+                if kind != "sImm"  # the immediate is a template param, not a runtime arg
             )
             applies.append(
                 f"    static inline {_result_type(spec.result_kind)} apply({params}) {{\n"
@@ -98,17 +109,30 @@ class CppBackend:
         # Positions whose parameter kind differs across signatures are the overload's
         # dispatch points: they become generic template params so C++ resolves the call.
         varying = varying_positions(specializations)
+        immediate_params = (
+            [f"{shape.immediate[1]} {shape.immediate[0]}"] if shape.immediate is not None else []
+        )
         template_params = (
             ["class Vec"]
             + [f"bool {_axis_name(k)} = false" for k, _ in shape.axis]
+            + immediate_params
             + [f"class Arg{i}" for i in varying]
         )
         params = ", ".join(
             (f"Arg{i} {name}" if i in varying else f"{_param_type(kind)} {name}")
             for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
+            if kind != "sImm"  # the immediate is a template param, not a runtime arg
         )
-        names = ", ".join(shape.param_names)
-        impl_args = "Vec" + "".join(f", {_axis_name(k)}" for k, _ in shape.axis)
+        names = ", ".join(
+            name
+            for name, kind in zip(shape.param_names, shape.param_kinds)
+            if kind != "sImm"
+        )
+        impl_args = (
+            "Vec"
+            + "".join(f", {_axis_name(k)}" for k, _ in shape.axis)
+            + (f", {shape.immediate[0]}" if shape.immediate is not None else "")
+        )
         return (
             f"template <{', '.join(template_params)}>\n"
             f"inline {_result_type(shape.result_kind)} {primitive_name}({params}) {{\n"

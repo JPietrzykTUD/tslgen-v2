@@ -53,6 +53,10 @@ class LoweredSpecialization:
     # Each becomes a `bool` template parameter (C++) / const generic (Rust) so the
     # `[aligned=*]`-expanded variants coexist as distinct callables.
     axis: tuple[tuple[str, str], ...] = ()
+    # An `sImm` compile-time immediate operand as (name, backend type spelling), e.g.
+    # ("factor", "std::uint32_t"). Emitted as a C++ non-type template param / Rust const
+    # generic (NOT a runtime arg); None when the signature has no `sImm`.
+    immediate: tuple[str, str] | None = None
     # True when register_type == base_type for this extension (scalar/generic). Lets the
     # backend dedup overload `apply`s that collapse to the same type (a `v` and an `s`
     # parameter are distinct on SIMD but identical here).
@@ -146,6 +150,23 @@ class Lowerer:
                 f"no {translation.backend_id} base-type spelling for {context.type_tag!r}",
             )
 
+        # An `sImm` operand is a compile-time immediate: resolve its (name, backend type
+        # spelling) so the backend can emit it as a template/const-generic param. Its type is
+        # the primitive's `sImm_type` default, falling back to `ui32`.
+        immediate: tuple[str, str] | None = None
+        if "sImm" in shape.param_kinds:
+            idx = shape.param_kinds.index("sImm")
+            imm_spelling = translation.scalar_spelling(
+                selected.primitive.immediate_type or "ui32"
+            )
+            if imm_spelling is None:
+                return _error(
+                    "TSL-LOWER-NO-IMMEDIATE-TYPE",
+                    f"no {translation.backend_id} spelling for the immediate type of "
+                    f"{selected.primitive.name!r}",
+                )
+            immediate = (parameters[idx], imm_spelling)
+
         # Dereferencing a raw pointer is `unsafe` in Rust, so a `ptr`-taking body needs
         # the unsafe frame even when it uses no intrinsics (e.g. scalar `*ptr = data;`).
         if "ptr" in shape.param_kinds:
@@ -199,6 +220,7 @@ class Lowerer:
                 for key in sorted(selected.primitive.attributes)
                 if key in BOOLEAN_WILDCARD_ATTRIBUTES
             ),
+            immediate=immediate,
             # True only when the register type *is* the base type (scalar). The generic
             # vector also has vector_bits 0 but its register is the lane array, not the base,
             # so its `v`/`s` overloads must stay distinct.
@@ -210,7 +232,7 @@ class Lowerer:
         )
 
 
-_SUPPORTED_KINDS = frozenset({"v", "s", "m", "im", "ptr", "void", "s[]"})
+_SUPPORTED_KINDS = frozenset({"v", "s", "m", "im", "sImm", "ptr", "void", "s[]"})
 
 
 def _primitive_axes(catalog: Catalog) -> dict[str, tuple[str, ...]]:

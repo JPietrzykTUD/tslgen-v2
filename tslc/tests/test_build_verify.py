@@ -359,3 +359,24 @@ def test_to_vector_builds(data_root: Path, machine_profiles_path: Path, tmp_path
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_mul_imm_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `mul_imm` exercises the `sImm` compile-time immediate kind: the immediate `factor`
+    # becomes a C++ non-type template parameter (`template <class Vec, uint32_t factor>`) and
+    # a Rust const generic (`Mul_immImpl<const factor: u32>`), omitted from the runtime args
+    # and used as a value in the body. Builds in both backends on scalar + generic + x86
+    # (the C++ smoke instantiates the wrapper at `factor = 3`).
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["mul_imm"],
+        profiles=["scalar", "avx2", "skylake", "icelake-rockerlake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"

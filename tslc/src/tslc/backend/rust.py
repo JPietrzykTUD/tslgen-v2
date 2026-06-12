@@ -107,9 +107,11 @@ class RustBackend:
 
     def _trait(self, primitive_name: str, shape: LoweredSpecialization) -> str:
         params = _params(shape, "Self", binding_mut=False)
-        # A boolean-wildcard attribute axis becomes a const-generic on the trait, so the
-        # `[aligned=*]` variants are distinct impls (`StoreImpl<false>` / `StoreImpl<true>`).
-        generics = _axis_generics(shape.axis)
+        # Boolean-wildcard axes and an `sImm` immediate become const-generics on the trait,
+        # so the `[aligned=*]` variants are distinct impls (`StoreImpl<false>`/`StoreImpl<true>`)
+        # and the immediate is a free param (`MulImmImpl<const factor: u32>`).
+        decls = _generic_decls(shape)
+        generics = f"<{', '.join(decls)}>" if decls else ""
         return (
             f"pub trait {_trait_name(primitive_name)}{generics}: SimdVector {{\n"
             f"    fn apply({params}) -> {_kind_type(shape.result_kind, 'Self')};\n"
@@ -118,15 +120,19 @@ class RustBackend:
 
     def _impl(self, spec: LoweredSpecialization) -> str:
         # The `generic` vector is sized: the impl is parameterized by `LANES` (a const generic
-        # on the `Generic<LANES>` tag), and the body's `LANES` refers to it.
+        # on the `Generic<LANES>` tag); an `sImm` immediate is a further free const generic.
+        impl_parts: list[str] = []
         if spec.extension_name == "generic":
-            impl_generics = "<const LANES: usize>"
+            impl_parts.append("const LANES: usize")
             key = f"Simd<{spec.base_type_spelling}, Generic<LANES>>"
         else:
-            impl_generics = ""
             key = f"Simd<{spec.base_type_spelling}, {_ext_tag(spec.extension_name)}>"
+        if spec.immediate is not None:
+            impl_parts.append(f"const {spec.immediate[0]}: {spec.immediate[1]}")
+        impl_generics = f"<{', '.join(impl_parts)}>" if impl_parts else ""
         params = _params(spec, "Self")
-        trait_args = "".join(f"<{value}>" for _, value in spec.axis)
+        targs = _trait_args_by_value(spec)
+        trait_args = f"<{', '.join(targs)}>" if targs else ""
         return (
             f"impl{impl_generics} {_trait_name(spec.primitive_name)}{trait_args} for {key} {{\n"
             f"    fn apply({params}) -> {_kind_type(spec.result_kind, 'Self')} {{\n"
@@ -137,15 +143,16 @@ class RustBackend:
 
     def _wrapper(self, primitive_name: str, shape: LoweredSpecialization) -> str:
         params = _params(shape, "S")
-        names = ", ".join(shape.param_names)
-        # `S` comes first, then const-generic axis params — the same turbofish order as the
-        # overloaded wrapper (`S, ALIGNED, V`), so a call site can spell `name::<Self, …>`
-        # uniformly. The trait bound carries the axis (`S: StoreImpl<ALIGNED>`); Rust allows
-        # the const-generic to be referenced in the bound before it is declared.
-        trait_args = "".join(f"<{_axis_name(k)}>" for k, _ in shape.axis)
-        axis_decls = "".join(f", const {_axis_name(k)}: bool" for k, _ in shape.axis)
+        names = _runtime_names(shape)
+        # `S` comes first, then the const-generic axis/immediate params — the same turbofish
+        # order as the overloaded wrapper (`S, ALIGNED, V`), so a call site can spell
+        # `name::<Self, …>` uniformly. The trait bound carries them (`S: MulImmImpl<factor>`);
+        # Rust allows referencing a const-generic in the bound before it is declared.
+        targs = _trait_args_by_name(shape)
+        trait_args = f"<{', '.join(targs)}>" if targs else ""
+        decls = "".join(f", {d}" for d in _generic_decls(shape))
         return (
-            f"pub fn {primitive_name}<S: {_trait_name(primitive_name)}{trait_args}{axis_decls}>"
+            f"pub fn {primitive_name}<S: {_trait_name(primitive_name)}{trait_args}{decls}>"
             f"({params}) -> {_kind_type(shape.result_kind, 'S')} {{\n"
             f"    S::apply({names})\n"
             f"}}"
@@ -160,14 +167,6 @@ def _axis_name(key: str) -> str:
     """An axis attribute key as a Rust const-generic name (`aligned` -> `ALIGNED`)."""
 
     return key.upper()
-
-
-def _axis_generics(axis: tuple[tuple[str, str], ...]) -> str:
-    """The trait's const-generic parameter list, e.g. ``<const ALIGNED: bool>``."""
-
-    if not axis:
-        return ""
-    return "<" + ", ".join(f"const {_axis_name(k)}: bool" for k, _ in axis) + ">"
 
 
 def _ext_tag(extension_name: str) -> str:
@@ -251,4 +250,44 @@ def _params(shape: LoweredSpecialization, owner: str, *, binding_mut: bool = Tru
     return ", ".join(
         f"{'mut ' if binding_mut and kind == 's[]' else ''}{name}: {_kind_type(kind, owner)}"
         for name, kind in zip(shape.param_names, shape.param_kinds)
+        if kind != "sImm"  # the immediate is a const generic, not a runtime arg
     )
+
+
+def _runtime_names(shape: LoweredSpecialization) -> str:
+    """The call-through argument names, excluding the `sImm` immediate (a const generic)."""
+
+    return ", ".join(
+        name
+        for name, kind in zip(shape.param_names, shape.param_kinds)
+        if kind != "sImm"
+    )
+
+
+def _generic_decls(shape: LoweredSpecialization) -> list[str]:
+    """Const-generic parameter declarations for a trait/wrapper: the boolean axes plus an
+    `sImm` immediate, e.g. ``["const ALIGNED: bool", "const factor: u32"]``."""
+
+    decls = [f"const {_axis_name(k)}: bool" for k, _ in shape.axis]
+    if shape.immediate is not None:
+        decls.append(f"const {shape.immediate[0]}: {shape.immediate[1]}")
+    return decls
+
+
+def _trait_args_by_name(shape: LoweredSpecialization) -> list[str]:
+    """Trait generic ARGS spelled by name (wrapper side): axis names + immediate name."""
+
+    args = [_axis_name(k) for k, _ in shape.axis]
+    if shape.immediate is not None:
+        args.append(shape.immediate[0])
+    return args
+
+
+def _trait_args_by_value(spec: LoweredSpecialization) -> list[str]:
+    """Trait generic ARGS for a concrete impl: axis literal values + immediate name (the
+    immediate stays a free const generic on the impl)."""
+
+    args = [value for _, value in spec.axis]
+    if spec.immediate is not None:
+        args.append(spec.immediate[0])
+    return args

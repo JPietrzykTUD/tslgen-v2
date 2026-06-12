@@ -104,6 +104,14 @@ def _build_primitives(
     attribute_keys = tuple(attribute.key.text for attribute in declaration.attributes)
     base_attributes = {a.key.text: _attribute_value(a) for a in declaration.attributes}
 
+    # The `sImm` immediate's type: the `sImm_type` block's `default`, if present. (Per-ext
+    # `override`s ride with the shifts slice; primitives with no block default to ui32 in
+    # the lowerer.)
+    simm_fields = declaration.fields_by_name("sImm_type")
+    immediate_type = (
+        _field_text(_child(simm_fields[0].field, "default")) if simm_fields else None
+    )
+
     def make(attributes: dict[str, str]) -> Primitive:
         return Primitive(
             name=declaration.name,
@@ -112,6 +120,7 @@ def _build_primitives(
             attribute_keys=attribute_keys,
             implementations=implementations,
             attributes=attributes,
+            immediate_type=immediate_type,
         )
 
     return [make(attrs) for attrs in _expand_wildcards(base_attributes)]

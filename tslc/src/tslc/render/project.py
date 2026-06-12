@@ -321,6 +321,9 @@ def _cpp_smoke(p: ProfileRender) -> str:
             targs = (
                 [vec]
                 + [value for _, value in spec.axis]
+                # An `sImm` immediate is a non-type template param: pick a representative
+                # positive literal so address-of forces the body to compile.
+                + (["3"] if spec.immediate is not None else [])
                 + [_concrete_arg_type(vec, spec.param_kinds[i]) for i in varying]
             )
             lines.append(f"auto* _tsl_use_{index} = &tsl::{name}<{', '.join(targs)}>;")
@@ -407,7 +410,15 @@ def _rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
 
 
 def _rust_lib(profiles: tuple[ProfileRender, ...]) -> str:
-    lines = ["#![allow(dead_code)]", "", "pub mod tsl_core;", ""]
+    # `non_upper_case_globals` is allowed so an `sImm` immediate can keep its corpus name
+    # (e.g. `factor`) as a lowercase const-generic, matching the body that uses it.
+    lines = [
+        "#![allow(dead_code)]",
+        "#![allow(non_upper_case_globals)]",
+        "",
+        "pub mod tsl_core;",
+        "",
+    ]
     for p in profiles:
         slug = _slug(p.profile.name)
         lines.append(f'#[cfg(feature = "{slug}")]')

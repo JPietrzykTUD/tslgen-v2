@@ -62,6 +62,10 @@ class Primitive:
     # (aligned/packed) is expanded by the builder into concrete-value copies, so here the
     # value is always concrete. `attribute_keys` is kept for the masked-variant filter.
     attributes: dict[str, str] = field(default_factory=dict)
+    # The type tag of an `sImm` compile-time immediate operand (from the `sImm_type` block's
+    # `default`), or None. Primitives with an `sImm` param but no block default to ``ui32``
+    # in the lowerer. The immediate's *name*/position come from the signature.
+    immediate_type: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
