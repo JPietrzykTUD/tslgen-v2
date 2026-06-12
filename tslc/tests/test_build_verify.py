@@ -447,3 +447,26 @@ def test_range_comparisons_build(data_root: Path, machine_profiles_path: Path, t
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_mask_boolean_algebra_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # The mask boolean ops, completing `mask_binary_and`: `or`/`xor` are `binary_or`/`binary_xor`
+    # on the lane-bitmask register (sse/avx2), raw `|`/`^` on the native `__mmaskN` (avx512) /
+    # `bool` (scalar), generic bit-loops. `not` is native `~`/`!` (avx512/scalar) + generic loop;
+    # its avx2/sse path (`binary_xor(mask, mask_true())`) prunes cleanly — `mask_true` needs the
+    # not-yet-built `mask::lane::all_true` lane value (deferred). Both backends.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["mask_binary_or", "mask_binary_xor", "mask_binary_not"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
