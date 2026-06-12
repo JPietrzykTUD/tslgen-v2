@@ -6,7 +6,7 @@ import pytest
 
 from tslc.backend.translation import BackendTranslation
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import Catalog, Extension, Implementation, Primitive
 from tslc.lower.lowerer import Lowerer
 from tslc.select.selector import Selector
 
@@ -103,3 +103,64 @@ def test_hadd_reduction_lowers_for_f64(catalog: Catalog, machine_profiles) -> No
     # multi-statement body: var declarations + assignment + scalar return
     assert "auto const lo = _mm256_extractf128_pd(vec, 0);" in cpp.body_text
     assert "return _mm_cvtsd_f64(temp);" in cpp.body_text
+
+
+def test_ambiguous_specificity_warns(machine_profiles) -> None:
+    # Two bodies on the same extension keyed to type-groups that are equally specific
+    # (both 4 members) but incomparable — `si?` = {si8,si16,si32,si64} and
+    # `idqword` = {si32,ui32,si64,ui64} both match `si32`, neither a subset of the other.
+    # Cardinality ties them, so the pick falls to source order; the selector still chooses
+    # a body (no failure) but emits a warning so the corpus author can disambiguate.
+    ext = Extension(
+        name="scalar", isa_name="scalar", family="scalar",
+        compose_prefix={}, compose_suffix_by_type={},
+    )
+    prim = Primitive(
+        name="amb", signature="v:=v", parameters=("a",), attribute_keys=(),
+        implementations=(
+            Implementation(("scalar", "si?"), "scalar", "si?", "emit_return(a);", source_order=0),
+            Implementation(("scalar", "idqword"), "scalar", "idqword", "emit_return(a);", source_order=1),
+        ),
+    )
+    catalog = Catalog(
+        primitives=(prim,),
+        type_groups={
+            "si?": ("si8", "si16", "si32", "si64"),
+            "idqword": ("si32", "ui32", "si64", "ui64"),
+        },
+        extensions={"scalar": ext},
+        type_spellings={},
+        translations={},
+    )
+    result = Selector().select_profile(catalog, machine_profiles["scalar"], "amb", ("si32",))
+    assert [d.code for d in result.diagnostics] == ["TSL-SELECT-AMBIGUOUS-SPECIFICITY"]
+    assert result.diagnostics[0].severity == "warning"
+    # still resolves to one body (source-order tiebreak) — a warning, not a hard failure.
+    assert len(result.selected) == 1
+    assert result.selected[0].implementation.type_group == "si?"  # source_order 0 wins
+
+
+def test_nested_specificity_does_not_warn(machine_profiles) -> None:
+    # `?i32` ⊂ `si?` (nested, comparable): `?i32` is strictly more specific, so the pick is
+    # unambiguous and no warning is emitted.
+    ext = Extension(
+        name="scalar", isa_name="scalar", family="scalar",
+        compose_prefix={}, compose_suffix_by_type={},
+    )
+    prim = Primitive(
+        name="amb2", signature="v:=v", parameters=("a",), attribute_keys=(),
+        implementations=(
+            Implementation(("scalar", "si?"), "scalar", "si?", "emit_return(a);", source_order=0),
+            Implementation(("scalar", "?i32"), "scalar", "?i32", "emit_return(a);", source_order=1),
+        ),
+    )
+    catalog = Catalog(
+        primitives=(prim,),
+        type_groups={"si?": ("si8", "si16", "si32", "si64"), "?i32": ("si32", "ui32")},
+        extensions={"scalar": ext},
+        type_spellings={},
+        translations={},
+    )
+    result = Selector().select_profile(catalog, machine_profiles["scalar"], "amb2", ("si32",))
+    assert result.diagnostics == ()
+    assert result.selected[0].implementation.type_group == "?i32"  # more specific (2 < 4)

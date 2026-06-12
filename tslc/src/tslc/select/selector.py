@@ -79,11 +79,12 @@ class Selector:
             )
 
         selected: list[SelectedImplementation] = []
+        warnings: dict[str, Diagnostic] = {}  # keyed by message, so each ambiguity warns once
         for primitive in variants:
             for extension_name in self._emit_extensions(catalog, profile):
                 for type_tag in type_tags:
                     best = self._best_body(
-                        catalog, profile, primitive, extension_name, type_tag
+                        catalog, profile, primitive, extension_name, type_tag, warnings
                     )
                     if best is not None:
                         selected.append(
@@ -94,7 +95,9 @@ class Selector:
                                 type_tag=type_tag,
                             )
                         )
-        return ProfileSelectionResult(selected=tuple(selected), diagnostics=())
+        return ProfileSelectionResult(
+            selected=tuple(selected), diagnostics=tuple(warnings.values())
+        )
 
     def _emit_extensions(self, catalog: Catalog, profile: MachineProfile) -> list[str]:
         """Extensions to emit for a profile.
@@ -136,6 +139,7 @@ class Selector:
         primitive: Primitive,
         extension_name: str,
         type_tag: str,
+        warnings: dict[str, Diagnostic],
     ) -> Implementation | None:
         # Gather candidates from the extension and the ancestors it inherits from
         # (e.g. avx2_vl borrows avx2's body where it has none of its own).
@@ -153,15 +157,47 @@ class Selector:
             candidates.append((implementation, flags))
         if not candidates:
             return None
-        best, _ = min(
+        best, best_flags = min(
             candidates,
             key=lambda item: (
                 distance[item[0].extension],  # own extension before inherited (a)
                 catalog.type_group_specificity(item[0].type_group),  # most specific (b)
-                -len(item[1]),  # most hardware flags
-                item[0].source_order,  # first occurrence
+                -len(item[1]),  # most hardware flags (c)
+                item[0].source_order,  # first occurrence (d)
             ),
         )
+        # Ambiguity guard: warn only when the pick is genuinely *arbitrary* — two candidate
+        # bodies on the same extension that tie on every principled key (a) distance,
+        # (b) type-group specificity, and (c) hardware-flag count, yet are keyed to *different*
+        # type-groups. Equal-size different groups are necessarily incomparable (a proper
+        # subset has strictly fewer members), so neither is more type-specific; equal flag
+        # counts mean hardware-specialization doesn't separate them either — so only
+        # `source_order` (d) decides, which is arbitrary. A flag-count difference IS a
+        # principled tiebreak (more required features = more specialized), so it does not warn.
+        best_spec = catalog.type_group_specificity(best.type_group)
+        rival_groups = {
+            impl.type_group
+            for impl, flags in candidates
+            if distance[impl.extension] == distance[best.extension]
+            and catalog.type_group_specificity(impl.type_group) == best_spec
+            and len(flags) == len(best_flags)
+            and impl.type_group != best.type_group
+        }
+        if rival_groups:
+            groups = ", ".join(sorted({best.type_group, *rival_groups}))
+            message = (
+                f"{primitive.name!r} on {extension_name}: type-groups {{{groups}}} are equally "
+                f"specific and incomparable (both match overlapping types); the body is chosen "
+                f"by source order — disambiguate the corpus selectors"
+            )
+            warnings.setdefault(
+                message,
+                Diagnostic(
+                    severity="warning",
+                    code="TSL-SELECT-AMBIGUOUS-SPECIFICITY",
+                    message=message,
+                ),
+            )
         return best
         # (a) before (b): when a derived extension is active and supersedes its base
         # (e.g. avx2_vl over avx2 on an avx512vl profile), the derived ext's OWN body
