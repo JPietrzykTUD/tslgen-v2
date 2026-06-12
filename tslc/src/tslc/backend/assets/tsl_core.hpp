@@ -38,6 +38,8 @@ struct simd<T, scalar> {
     using base_type = T;
     using register_type = T;
     using mask_type = bool;
+    // Integral mask: a fixed unsigned scalar (to_integral packs the 0/1 mask into it).
+    using imask_type = std::uint64_t;
 };
 
 // How a register value is passed to apply(): by value.
@@ -97,6 +99,9 @@ struct simd<T, generic<LANES>> {
     using register_type = array_type<T, LANES>;
     // Emulated mask: a bitset, one bit per lane (≤64 lanes covers all real widths).
     using mask_type = std::uint64_t;
+    // Integral mask: the same 64-bit bitset (LANES is a template param, so the lane count
+    // can't size a smaller integer at this point).
+    using imask_type = std::uint64_t;
 };
 
 // Scalar-core helpers used by emulated (loop) bodies. Grows one function at a time as the

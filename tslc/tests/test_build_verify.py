@@ -294,3 +294,46 @@ def test_load_store_builds(data_root: Path, machine_profiles_path: Path, tmp_pat
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_to_integral_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `to_integral` (result kind `im` = the integral-mask type) packs a mask into an
+    # integer: the scalar `if`-return (imask = u64), the avx2/sse `movemask` bodies incl.
+    # the avx2 `?i16` two-half pack (imask = a lane-sized uint via `lane_bitmask_int`),
+    # and the avx512/_vl `emit_return(mask)` identity (imask = the native `__mmaskN`).
+    # The `cast<static>(vector::imask, …)` resolves via the new `vector::imask` query.
+    # Generic/neon/sve to_integral still skip (their bit-loop uses `type::size_bytes` /
+    # `details::mask_test`, unimplemented), so they don't appear in the build.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["to_integral"],
+        profiles=["scalar", "sse2", "avx", "avx2", "skylake", "icelake-rockerlake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_to_mask_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `to_mask` is the inverse of `to_integral`: its parameter is the integral-mask scalar
+    # (signature `m:=im`, the same `im` kind), spelled `Vec::imask_type` / `Self::ImaskType`.
+    # The scalar `(mask & 1) != 0` body and the avx2 bodies that build a lane mask from the
+    # integer build-verify in both backends; the heavier portable bodies skip cleanly.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["to_mask"],
+        profiles=["scalar", "avx2"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"

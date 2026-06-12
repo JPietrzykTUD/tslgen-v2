@@ -140,10 +140,12 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
     the lane count via the `native_mask<bits, T>` substrate trait."""
 
     helper = _CPP_REG_HELPER[X86_REGISTER_BITS[ext]]
+    bits = X86_REGISTER_BITS[ext]
     if extension is not None and extension.mask_policy.kind == "native_predicate_by_lanes":
         mask = f"typename detail::native_mask<{extension.vector_bits}, T>::type"
     else:
         mask = "register_type"
+    imask = _cpp_imask_type(extension, bits, mask)
     return (
         f"struct {ext} {{}};\n"
         f"template <class T>\n"
@@ -151,8 +153,21 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
         f"    using base_type = T;\n"
         f"    using register_type = typename detail::{helper}<T>::type;\n"
         f"    using mask_type = {mask};\n"
+        f"    using imask_type = {imask};\n"
         f"}};\n\n"
     )
+
+
+def _cpp_imask_type(extension: Extension | None, vector_bits: int, mask: str) -> str:
+    """The C++ integral-mask type for an x86 `simd<T, ext>` registration: the native mask
+    spelling for `same_as_mask_type` (avx512 / _vl), else a lane-sized unsigned integer
+    (the `lane_bitmask` sse / avx2 case). Scalar/generic are not registered here — they
+    carry `imask_type` in the static substrate (`tsl_core.hpp`), like their `mask_type`."""
+
+    kind = extension.imask_policy.kind if extension is not None else "lane_bitmask"
+    if kind == "same_as_mask_type":
+        return mask
+    return f"typename detail::lane_bitmask_int<{vector_bits}, T>::type"
 
 
 def _rust_registrations(
@@ -171,11 +186,12 @@ def _rust_registrations(
         register = rust_register_type(ext, base)
         mask = _rust_mask_type(extensions.get(ext), base, register)
         bits = X86_REGISTER_BITS[ext]
+        imask = _rust_imask_type(extensions.get(ext), base, mask, bits)
         array = f"array_type<{base}, {bits // _type_bits(base)}, {bits // 8}>"
         lines.append(
             f"impl SimdVector for Simd<{base}, {_RUST_TAG[ext]}> {{ "
             f"type BaseType = {base}; type RegisterType = {register}; "
-            f"type MaskType = {mask}; type Array = {array}; }}"
+            f"type MaskType = {mask}; type ImaskType = {imask}; type Array = {array}; }}"
         )
     return ("\n".join(lines) + "\n\n") if lines else ""
 
@@ -188,6 +204,22 @@ def _rust_mask_type(extension: Extension | None, base_spelling: str, register: s
         return register
     lanes = extension.vector_bits // _type_bits(base_spelling)
     return extension.mask_policy.rust_by_lanes.get(max(8, lanes), register)
+
+
+def _rust_imask_type(
+    extension: Extension | None, base_spelling: str, mask: str, vector_bits: int
+) -> str:
+    """The Rust integral-mask type for one (ext, base) pair: the native mask spelling for
+    `same_as_mask_type` (avx512 / _vl), else the smallest `u{8,16,32,64}` with one bit per
+    lane (the `lane_bitmask` sse / avx2 case). Scalar/generic are not registered here —
+    they carry `ImaskType` in the static substrate (`tsl_core.rs`), like their `MaskType`."""
+
+    kind = extension.imask_policy.kind if extension is not None else "lane_bitmask"
+    if kind == "same_as_mask_type":
+        return mask
+    lanes = vector_bits // _type_bits(base_spelling)
+    width = 8 if lanes <= 8 else 16 if lanes <= 16 else 32 if lanes <= 32 else 64
+    return f"u{width}"
 
 
 def _type_bits(base_spelling: str) -> int:

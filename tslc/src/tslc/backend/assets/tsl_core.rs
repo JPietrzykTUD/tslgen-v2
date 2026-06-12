@@ -11,6 +11,9 @@ pub trait SimdVector {
     type BaseType;
     type RegisterType;
     type MaskType;
+    // The integral mask (to_integral's result): the mask packed into an unsigned integer,
+    // one bit per lane (the native __mmaskN, or a lane-sized uint on lane-bitmask ISAs).
+    type ImaskType;
     // The array type this vector lowers to (the `s[]` kind: to_array's result /
     // from_array's argument), one element per lane.
     type Array;
@@ -25,6 +28,7 @@ impl<T> SimdVector for Simd<T, Scalar> {
     type BaseType = T;
     type RegisterType = T;
     type MaskType = bool;
+    type ImaskType = u64;
     type Array = array_type<T, 1>;
 }
 
@@ -39,6 +43,8 @@ impl<T, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
     type RegisterType = array_type<T, LANES>;
     // Emulated mask: a bitset, one bit per lane (≤64 lanes covers all real widths).
     type MaskType = u64;
+    // Integral mask: the same 64-bit bitset (LANES can't size a smaller integer here).
+    type ImaskType = u64;
     type Array = array_type<T, LANES>;
 }
 

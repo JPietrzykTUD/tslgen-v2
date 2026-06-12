@@ -201,6 +201,17 @@ class MaskQuery:
         return TextValue(context.translation.mask_type_spelling())
 
 
+class ImaskQuery:
+    """``vector::imask`` -> the backend spelling of the integral-mask type
+    (C++ ``typename Vec::imask_type`` / Rust ``Self::ImaskType``). This is the
+    integer ``to_integral`` packs a mask into (``movemask`` result / ``__mmaskN``)."""
+
+    head = "vector::imask"
+
+    def apply(self, args, context):  # noqa: ANN001
+        return TextValue(context.translation.imask_type_spelling())
+
+
 class VectorAlignmentQuery:
     """``vector::alignment`` -> the register's natural byte alignment (`vector_bits/8`)."""
 
@@ -274,6 +285,7 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     AttributeQuery(),
     RegisterQuery(),
     MaskQuery(),
+    ImaskQuery(),
     VectorAlignmentQuery(),
     VectorLengthQuery(),
     AsExtensionQuery(),

@@ -1,4 +1,4 @@
-prim<s:=m> to_integral(mask):
+prim<im:=m> to_integral(mask):
   brief_description "[Example: sse + si8]: Create mask from the most significant bit of each 8-bit element in \"a\", and store the result in \"dst\"."
   operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[j] := a[i+7]\nENDFOR\ndst[MAX:16] := 0"
   tests:
@@ -240,7 +240,7 @@ prim<v:=m> to_vector(mask):
               }
                emit_return(result) ;
             """
-prim<m:=s> to_mask(mask):
+prim<m:=im> to_mask(mask):
   brief_description "Forms a mask type from an integral mask scalar."
   operation ""
   tests:

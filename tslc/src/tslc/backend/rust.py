@@ -204,6 +204,8 @@ def _rust_concrete(spec: LoweredSpecialization, kind: str) -> str:
         return "()"
     if kind == "m":  # not reached by current overloads (store/shift vary in v/s)
         return rust_register_type(spec.extension_name, base)
+    if kind == "im":  # not reached by current overloads (to_integral is single-param)
+        return rust_register_type(spec.extension_name, base)
     return base  # s
 
 
@@ -232,7 +234,12 @@ def _kind_type(kind: str, owner: str) -> str:
         return "()"
     if kind == "s[]":
         return f"{owner}::Array"
-    suffix = {"v": "RegisterType", "s": "BaseType", "m": "MaskType"}[kind]
+    suffix = {
+        "v": "RegisterType",
+        "s": "BaseType",
+        "m": "MaskType",
+        "im": "ImaskType",
+    }[kind]
     return f"{owner}::{suffix}"
 
 

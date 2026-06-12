@@ -33,8 +33,10 @@ def test_coverage_separates_emitted_and_skipped(
     assert by["hadd"].emitted == by["hadd"].attempted > 0
     assert by["hadd"].skipped == 0
 
-    # to_integral is partly deferred: its bodies that cast to the integral-mask type
-    # (cast<static>(type<generation>(vector::imask), ...)) skip, so it shows both columns.
+    # to_integral now lowers on scalar + the x86 ISAs (the integral-mask type `im` /
+    # `vector::imask` + the `movemask` bodies), but the generic bit-loop body still skips
+    # (it uses the unimplemented `type::size_bytes` / `details::mask_test`), so it shows
+    # both columns.
     assert by["to_integral"].emitted > 0
     assert by["to_integral"].skipped > 0
 

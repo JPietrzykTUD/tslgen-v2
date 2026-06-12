@@ -12,6 +12,7 @@ from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     Catalog,
     Extension,
+    ImaskPolicy,
     Implementation,
     MaskPolicy,
     Primitive,
@@ -260,6 +261,9 @@ def _resolve_extension_inheritance(
             # state its own (every `_vl` block does, so this is just gap-filling).
             vector_bits=ext.vector_bits or parent.vector_bits,
             mask_policy=ext.mask_policy if ext.mask_policy != MaskPolicy() else parent.mask_policy,
+            imask_policy=(
+                ext.imask_policy if ext.imask_policy != ImaskPolicy() else parent.imask_policy
+            ),
         )
 
     return {name: resolve(name, frozenset()) for name in extensions}
@@ -328,6 +332,7 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
         lscpu_flags=_list_text_set(fields.get("lscpu_flags")),
         vector_bits=_int_text(fields.get("vector_bits")),
         mask_policy=_mask_policy(fields.get("mask_type_policy")),
+        imask_policy=_imask_policy(fields.get("integral_mask_type_policy")),
     )
 
 
@@ -342,6 +347,15 @@ def _mask_policy(field: ParsedTslField | None) -> MaskPolicy:
         cpp_by_lanes=_int_keyed_map(_child(field, "cpp_by_lanes")),
         rust_by_lanes=_int_keyed_map(_child(field, "rust_by_lanes")),
     )
+
+
+def _imask_policy(field: ParsedTslField | None) -> ImaskPolicy:
+    """Promote an ``integral_mask_type_policy`` block: only its ``kind`` is consumed (it
+    selects the registered ``imask_type`` spelling; see :class:`ImaskPolicy`)."""
+
+    if field is None:
+        return ImaskPolicy()
+    return ImaskPolicy(kind=_field_text(_child(field, "kind")) or "lane_bitmask")
 
 
 def _int_keyed_map(field: ParsedTslField | None) -> dict[int, str]:

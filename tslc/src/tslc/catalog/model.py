@@ -82,6 +82,23 @@ class MaskPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class ImaskPolicy:
+    """How a *generated* (x86-registered) extension represents the integral mask of
+    ``to_integral`` — the mask packed into an integer bitmask (one bit per lane).
+
+    - ``"same_as_mask_type"`` (avx512 / ``_vl``): the integral mask *is* the native
+      ``__mmaskN`` predicate, so ``imask_type`` mirrors ``mask_type``.
+    - ``"lane_bitmask"`` (sse / avx2): the smallest unsigned integer with at least one bit
+      per lane (``movemask`` returns an ``int``, not the register).
+
+    Scalar/generic carry their ``imask_type`` in the static substrate (like ``mask_type``),
+    so their declared policy (``unsigned_scalar`` / ``lane_bitmask``) is not consumed here.
+    """
+
+    kind: str = "lane_bitmask"
+
+
+@dataclass(frozen=True, slots=True)
 class Extension:
     """Hardware target metadata needed for backend translation.
 
@@ -100,6 +117,7 @@ class Extension:
     lscpu_flags: frozenset[str] = frozenset()  # features that make this extension available
     vector_bits: int = 0  # register width (sse=128, avx2=256, avx512=512); 0 for scalar
     mask_policy: MaskPolicy = field(default_factory=MaskPolicy)  # how masks are represented
+    imask_policy: ImaskPolicy = field(default_factory=ImaskPolicy)  # how integral masks are represented
 
 
 @dataclass(frozen=True, slots=True)
