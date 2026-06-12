@@ -403,3 +403,47 @@ def test_shift_left_builds(data_root: Path, machine_profiles_path: Path, tmp_pat
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_mask_binary_and_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `mask_binary_and` (the mask-algebra enabler for range comparisons): `binary_and` on the
+    # lane-bitmask register (sse/avx2), raw `&` on the native `__mmaskN` (avx512), `bool & bool`
+    # (scalar), and a `mask<test>`/`mask<set>` bit-loop (generic). Both backends.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["mask_binary_and"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_range_comparisons_build(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # The four range predicates compose delivered primitives: scalar `(left <= x) && (x <= right)`,
+    # and elsewhere `mask_binary_and(less_than[_or_equal](left, x), less_than[_or_equal](x, right))`.
+    # The comparison family + `mask_binary_and` are pulled in as the call closure. Both backends,
+    # scalar + sse + avx2 + avx512. (Masked `[mask=zero]` range variants are deferred.)
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=[
+            "between_inclusive",
+            "between_left_inclusive",
+            "between_right_inclusive",
+            "between_exclusive",
+        ],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
