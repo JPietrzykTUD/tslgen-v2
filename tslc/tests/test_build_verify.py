@@ -491,3 +491,25 @@ def test_mask_true_builds(data_root: Path, machine_profiles_path: Path, tmp_path
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_imask_ops_build(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # The imask bit-manipulation ops, typed with the `im` (integral-mask) kind so they operate on
+    # the integer mask, not the element type: `test_imask` `(mask >> position) & 1`, `insert_imask`
+    # `a | (b << position)`, `extract_imask` `mask >> position` — all on `imask_type` (`__mmaskN` on
+    # avx512, the lane-bitmask integer elsewhere), so float vectors shift by an integer (base-type
+    # typing would shift by a float — illegal). Named `_imask` (not `_mask`) because they manipulate
+    # the integral value, matching `shift_right_imask`/`lzc_imask`. Both backends.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["test_imask", "insert_imask", "extract_imask"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
