@@ -149,7 +149,7 @@ def _used_exts(by_primitive: dict[str, tuple[LoweredSpecialization, ...]]) -> li
         # A representation-change primitive's target vector lives under another extension
         # (`extract` avx2->sse): register it too so its `simd<>` tag is defined.
         exts.update(
-            spec.target_extension_isa for spec in specs if spec.target_extension_isa
+            spec.target.extension_isa for spec in specs if spec.target
         )
     return sorted(exts)
 
@@ -163,9 +163,9 @@ def _used_pairs(
         # The target vector's `simd<base, ext>` must be registered too (e.g. `extract`
         # avx2->sse needs `simd<int8_t, sse>`).
         pairs.update(
-            (spec.target_extension_isa, spec.target_base_spelling)
+            (spec.target.extension_isa, spec.target.base_spelling)
             for spec in specs
-            if spec.target_extension_isa and spec.target_base_spelling
+            if spec.target
         )
     return sorted(pairs)
 
@@ -360,7 +360,7 @@ def _cpp_smoke(p: ProfileRender) -> str:
                 [vec]
                 # A representation-change primitive's second type param is the target vector
                 # (right after `Vec`, matching the wrapper's `<Vec, ToVec, …>` order).
-                + ([spec.target_vector_spelling] if spec.target_vector_spelling else [])
+                + ([spec.target.vector_spelling] if spec.target else [])
                 + [value for _, value in spec.axis]
                 # An `sImm` immediate is a non-type template param: pick `0`, valid for every
                 # immediate's range (shift-by-0, `extract` lane-block 0, factor 0) — some

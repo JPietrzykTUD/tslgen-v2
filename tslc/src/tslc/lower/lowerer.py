@@ -20,7 +20,11 @@ import re
 from dataclasses import dataclass
 
 from tslc.backend.translation import BackendTranslation
-from tslc.catalog.model import BOOLEAN_WILDCARD_ATTRIBUTES, Catalog
+from tslc.catalog.model import (
+    BOOLEAN_WILDCARD_ATTRIBUTES,
+    RESULT_DIM_BASE,
+    Catalog,
+)
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, sort_diagnostics
 from tslc.ir.scan import scan
@@ -31,6 +35,19 @@ from tslc.select.selector import SelectedImplementation
 
 # The single supported statement keyword for the current slice (v:=(v,v) bodies).
 _RETURN_KEYWORD = "emit_return"
+
+
+@dataclass(frozen=True, slots=True)
+class TargetVector:
+    """The target of a representation-change primitive (`return_type: base|extension: …`) — the
+    source vector with one dimension replaced. Bundling every spelling of the one concept keeps
+    the pipeline branching on `spec.target is None` instead of juggling correlated nullable
+    fields, and disambiguates the three "spelling" levels by field name."""
+
+    vector_spelling: str  # the full `simd<…>` type — the backend's second type parameter
+    register_spelling: str  # its register type — the `apply` result (C++ `…::register_type`)
+    extension_isa: str  # the target's extension ISA — for `simd<base, ext>` core registration
+    base_spelling: str  # the target's base type spelling — for core registration
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,18 +82,11 @@ class LoweredSpecialization:
     # backend dedup overload `apply`s that collapse to the same type (a `v` and an `s`
     # parameter are distinct on SIMD but identical here).
     register_is_base: bool = False
-    # For a representation-change primitive (`return_type: base|extension: …`), the full
-    # `simd<…>` spelling of the TARGET vector (source vector with one dimension replaced):
-    # the backend emits it as a SECOND type parameter on the impl/wrapper, keyed per
-    # (source, target). None for ordinary primitives.
-    target_vector_spelling: str | None = None
-    # The concrete register-type spelling of that target vector (the `apply` result type) —
-    # C++ `typename tsl::simd<…>::register_type`, Rust `core::arch::x86_64::__m256i`.
-    target_register_spelling: str | None = None
-    # The target vector's (extension ISA, base spelling) — so the generated `simd<>` core
-    # registers the target's `simd<base, ext>` (e.g. `extract` avx2->sse needs `tsl::sse`).
-    target_extension_isa: str | None = None
-    target_base_spelling: str | None = None
+    # The TARGET vector of a representation-change primitive, or None for ordinary primitives.
+    # When set, the backend emits it as a SECOND type parameter (keyed per source+target) and the
+    # result type is its register — so `target is None` (not `result_kind`) is the signal that a
+    # primitive returns a different vector. See :class:`TargetVector`.
+    target: "TargetVector | None" = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,13 +179,10 @@ class Lowerer:
             )
 
         # A representation-change primitive (`return_type: base|extension: …`) produces a
-        # TARGET vector — the source vector with one dimension replaced. Resolve its full
-        # `simd<…>` spelling (the result type + the backend's second type param) and bind the
-        # target-type aliases the body names (`ToBase`/`ToType` -> the target base tag).
-        target_vector_spelling: str | None = None
-        target_register_spelling: str | None = None
-        target_extension_isa: str | None = None
-        target_base_spelling: str | None = None
+        # TARGET vector — the source vector with one dimension replaced. Resolve every spelling
+        # of it as one `TargetVector` and bind the target-type aliases the body names
+        # (`ToBase`/`ToType` -> the target base tag).
+        target: TargetVector | None = None
         if selected.primitive.result_target is not None and selected.to_target is not None:
             # The generic vector is sized by `LANES`; a target vector under it needs that
             # threaded into the second type param — deferred (the x86/scalar reinterpret slice).
@@ -186,7 +193,8 @@ class Lowerer:
                     f"not supported yet: {selected.primitive.name!r}",
                 )
             dim = selected.primitive.result_target[0]
-            if dim == "base":
+            if dim == RESULT_DIM_BASE:
+                # base dim: same extension, replace the element type with the target tag.
                 to_base_spelling = translation.scalar_spelling(selected.to_target)
                 if to_base_spelling is None:
                     return _error(
@@ -194,29 +202,33 @@ class Lowerer:
                         f"no {translation.backend_id} base-type spelling for the target "
                         f"{selected.to_target!r}",
                     )
-                target_vector_spelling = translation.vector_type_spelling(
-                    to_base_spelling, context.extension.isa_name
+                target = TargetVector(
+                    vector_spelling=translation.vector_type_spelling(
+                        to_base_spelling, context.extension.isa_name
+                    ),
+                    register_spelling=translation.target_register_spelling(
+                        selected.to_target, context.extension.isa_name
+                    ),
+                    extension_isa=context.extension.isa_name,
+                    base_spelling=to_base_spelling,
                 )
-                target_register_spelling = translation.target_register_spelling(
-                    selected.to_target, context.extension.isa_name
-                )
-                target_extension_isa = context.extension.isa_name
-                target_base_spelling = to_base_spelling
                 context.target_type_aliases = {
                     "ToBase": selected.to_target,
                     "ToType": selected.to_target,
                 }
-            else:  # "extension": the target is another extension, same base type
+            else:  # RESULT_DIM_EXTENSION: another extension, same base type
                 target_ext = catalog.extensions.get(selected.to_target)
                 target_isa = target_ext.isa_name if target_ext else selected.to_target
-                target_vector_spelling = translation.vector_type_spelling(
-                    base_type_spelling, target_isa
+                target = TargetVector(
+                    vector_spelling=translation.vector_type_spelling(
+                        base_type_spelling, target_isa
+                    ),
+                    register_spelling=translation.target_register_spelling(
+                        context.type_tag, target_isa
+                    ),
+                    extension_isa=target_isa,
+                    base_spelling=base_type_spelling,
                 )
-                target_register_spelling = translation.target_register_spelling(
-                    context.type_tag, target_isa
-                )
-                target_extension_isa = target_isa
-                target_base_spelling = base_type_spelling
 
         # An `sImm` operand is a compile-time immediate: resolve its (name, backend type
         # spelling) so the backend can emit it as a template/const-generic param. Its type is
@@ -297,10 +309,7 @@ class Lowerer:
             # vector also has vector_bits 0 but its register is the lane array, not the base,
             # so its `v`/`s` overloads must stay distinct.
             register_is_base=context.extension.isa_name == "scalar",
-            target_vector_spelling=target_vector_spelling,
-            target_register_spelling=target_register_spelling,
-            target_extension_isa=target_extension_isa,
-            target_base_spelling=target_base_spelling,
+            target=target,
         )
         return LoweringResult(
             specialization=specialization,

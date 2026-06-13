@@ -129,7 +129,7 @@ class RustBackend:
         ret = _kind_type(shape.result_kind, "Self")
         # A representation-change primitive takes the target vector as a first generic `ToVec`
         # and returns its register type.
-        if shape.target_vector_spelling is not None:
+        if shape.target is not None:
             decls = ["ToVec: SimdVector", *decls]
             ret = "ToVec::RegisterType"
         generics = f"<{', '.join(decls)}>" if decls else ""
@@ -156,9 +156,9 @@ class RustBackend:
         targs = _trait_args_by_value(spec)
         ret = _kind_type(spec.result_kind, "Self")
         # The target vector is concrete in the impl's trait args; the result is its register.
-        if spec.target_vector_spelling is not None:
-            targs = [spec.target_vector_spelling, *targs]
-            ret = spec.target_register_spelling or ret
+        if spec.target is not None:
+            targs = [spec.target.vector_spelling, *targs]
+            ret = spec.target.register_spelling
         trait_args = f"<{', '.join(targs)}>" if targs else ""
         return (
             f"impl{impl_generics} {_trait_name(spec.primitive_name)}{trait_args} for {key} {{\n"
@@ -181,7 +181,7 @@ class RustBackend:
         call = f"S::apply({names})"
         # A representation-change primitive takes the target vector `T` as a generic, bounds `S`
         # on `…Impl<T, …>`, and returns `T`'s register; the call is qualified to pin the target.
-        if shape.target_vector_spelling is not None:
+        if shape.target is not None:
             targs = ["T", *targs]
             decl_list = ["T: SimdVector", *decl_list]
             ret = "T::RegisterType"
@@ -255,7 +255,12 @@ def _concretize_simd_assoc(body: str, spec: LoweredSpecialization, simd_vec: str
     """Concretize references to the Simd vector inside an arg-trait impl, where `Self` is the
     *argument* type, not the vector: a `::<Self>` call turbofish (e.g. delegating
     `to_array::<Self>`) becomes `::<{simd_vec}>`, and the Simd associated types become their
-    concrete spellings."""
+    concrete spellings.
+
+    Only the *overloaded* (arg-trait) path needs this: there `Self` is the argument type, so a
+    body's `Self::RegisterType` / `…::<Self, …>` would otherwise mean the wrong type. In the
+    non-overloaded `_impl` path `Self` already *is* the vector, so its body is left untouched —
+    that asymmetry is intentional, not an omission."""
 
     register = rust_register_type(spec.extension_name, spec.base_type_spelling)
     return (

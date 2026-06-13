@@ -34,7 +34,7 @@ class CppBackend:
         # A representation-change primitive carries a SECOND vector type (the target): the
         # result is `ToVec::register_type` and `ToVec` is a free template param the caller binds.
         decl_params = "class Vec" + (
-            ", class ToVec" if shape.target_vector_spelling is not None else ""
+            ", class ToVec" if shape.target is not None else ""
         )
         decl_params += "".join(f", bool {_axis_name(k)}" for k, _ in shape.axis)
         if shape.immediate is not None:  # an `sImm` non-type template parameter
@@ -64,7 +64,7 @@ class CppBackend:
                 spec.base_type_spelling,
                 spec.extension_name,
                 spec.axis,
-                spec.target_vector_spelling,
+                spec.target.vector_spelling if spec.target else None,
             )
             if key not in groups:
                 groups[key] = []
@@ -94,8 +94,8 @@ class CppBackend:
         # A representation-change primitive keys on (source, target) so each target is its
         # own specialization (`reinterpret_impl<simd<i32,avx2>, simd<u32,avx2>>`).
         key = vec
-        if first.target_vector_spelling is not None:
-            key += f", {first.target_vector_spelling}"
+        if first.target is not None:
+            key += f", {first.target.vector_spelling}"
         key += "".join(f", {value}" for _, value in first.axis)
         if first.immediate is not None:
             key += f", {first.immediate[0]}"
@@ -134,7 +134,7 @@ class CppBackend:
         immediate_params = (
             [f"{shape.immediate[1]} {shape.immediate[0]}"] if shape.immediate is not None else []
         )
-        has_target = shape.target_vector_spelling is not None
+        has_target = shape.target is not None
         template_params = (
             ["class Vec"]
             + (["class ToVec"] if has_target else [])
@@ -180,8 +180,8 @@ def _apply_result_type(spec: LoweredSpecialization) -> str:
     """The `apply` result type. A representation-change spec returns the (concrete) target
     register; otherwise the kind projects through `Vec`."""
 
-    if spec.target_register_spelling is not None:
-        return spec.target_register_spelling
+    if spec.target is not None:
+        return spec.target.register_spelling
     return _result_type(spec.result_kind)
 
 

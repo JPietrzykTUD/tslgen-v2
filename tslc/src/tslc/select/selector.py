@@ -20,7 +20,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import Catalog, Extension, Implementation, Primitive
+from tslc.catalog.model import (
+    RESULT_DIM_BASE,
+    RESULT_DIM_EXTENSION,
+    Catalog,
+    Extension,
+    Implementation,
+    Primitive,
+)
 from tslc.diagnostics import Diagnostic
 
 
@@ -157,12 +164,15 @@ class Selector:
         An ordinary primitive yields a single ``None`` (no second axis). A
         representation-change primitive yields its in-scope targets, gathered from the
         ``to_target_group`` of the impls matching this (extension, source type):
-        - **base** dim -> same-width integer target tags (signedness flips `si32↔ui32`);
-          different-width / float are deferred (their `bit_cast` is a size mismatch on
-          scalar, and float/cross-domain needs cast intrinsics).
         - **extension** dim -> target *extension* names that are registered extensions
           (the concrete `sse`/`avx2` branches; the generic `where:`-clause level is not an
           extension, so it drops — deferred).
+        - **base** dim, *bit-reinterpret* (`[cast=reinterpret]`) -> same-width integer targets
+          only (signedness flips `si32↔ui32`): a `bit_cast` is meaningful only between equal-
+          width types (a size mismatch on scalar). Different-width/float reinterpret is deferred.
+        - **base** dim, *value conversion* (`cast`/`convert_up`, `[cast=convert]`) -> all targets
+          (these genuinely change width/domain); their conversion-intrinsic bodies are not lowered
+          yet, so they skip at the body level — discoverably, rather than vanishing here.
         """
 
         if primitive.result_target is None:
@@ -176,10 +186,10 @@ class Selector:
             if not catalog.type_group_contains(impl.type_group, type_tag):
                 continue
             targets.update(catalog.type_group_members(impl.to_target_group))
-        if dim == "base":
-            return tuple(sorted(t for t in targets if _same_width_int(t, type_tag)))
-        if dim == "extension":
+        if dim == RESULT_DIM_EXTENSION:
             return tuple(sorted(t for t in targets if t in catalog.extensions))
+        if dim == RESULT_DIM_BASE and primitive.attributes.get("cast") == "reinterpret":
+            return tuple(sorted(t for t in targets if _same_width_int(t, type_tag)))
         return tuple(sorted(targets))
 
     def _best_body(

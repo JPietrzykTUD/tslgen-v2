@@ -19,6 +19,11 @@ ExtensionName = NewType("ExtensionName", str)
 # emitted API gains a bool axis parameter so both variants coexist as distinct callables.
 BOOLEAN_WILDCARD_ATTRIBUTES = frozenset({"aligned", "packed"})
 
+# The two dimensions a `return_type` can replace on a representation-change primitive (the
+# `Primitive.result_target` dim): the element type, or the extension/register width.
+RESULT_DIM_BASE = "base"
+RESULT_DIM_EXTENSION = "extension"
+
 
 @dataclass(frozen=True, slots=True)
 class RequirementClause:
