@@ -358,11 +358,9 @@ class QueryEvaluator:
         # A bare leaf that names a concrete type tag resolves to itself.
         if not term.args and is_type_tag(term.head):
             return TypeValue(term.head)
-        # Named backend scalar types (`type<backend>(size_t)` / `type<backend>(scalar::ui64)`):
-        # resolve to the backend's spelling. `size_t` -> `std::size_t`/`usize`; `scalar::<tag>`
-        # -> the language type-map spelling (`ui64` -> `uint64_t`/`u64`).
-        if not term.args and term.head == "size_t":
-            return TextValue(context.translation.size_t_spelling())
+        # Named backend scalar types (`type<backend>(scalar::ui64)` / `scalar::size`): resolve
+        # to the language type-map spelling (`ui64` -> `uint64_t`/`u64`; `size` ->
+        # `std::size_t`/`usize`).
         if not term.args and term.head.startswith("scalar::"):
             spelling = context.translation.scalar_spelling(term.head[len("scalar::") :])
             return TextValue(spelling) if spelling is not None else None

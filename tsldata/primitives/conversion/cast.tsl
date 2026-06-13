@@ -845,7 +845,7 @@ prim<v:=v>[cast=convert] cast(data):
                   svbool_t even = intrin<svcmpeq_n_u32>(pg32, intrin<svand_n_u32_x>(pg32, idx, 1), 0);
                   auto packed = intrin_compose<svcompact suffix=value<backend>(intrin::suffix(ToBase))>(even, tmp);
                   auto out_lanes = value<generation>(generic::runtime_length(ToType));
-                  svbool_t out_pg = intrin<svwhilelt_b32>(cast<static>( type<backend>(size_t) , 0), out_lanes);
+                  svbool_t out_pg = intrin<svwhilelt_b32>(cast<static>( type<backend>(scalar::size) , 0), out_lanes);
                    emit_return(intrin<svsel>(out_pg, packed, intrin_compose<svdup suffix=value<backend>(intrin::suffix(ToBase))>(0))) ;
                 """
           ?i64:
@@ -891,7 +891,7 @@ prim<v:=v>[cast=convert] cast(data):
                   svbool_t even = intrin<svcmpeq_n_u32>(pg32, intrin<svand_n_u32_x>(pg32, idx, 1), 0);
                   auto packed = intrin_compose<svcompact suffix=value<backend>(intrin::suffix(ToBase))>(even, tmp);
                   auto out_lanes = value<generation>(generic::runtime_length(ToType));
-                  svbool_t out_pg = intrin<svwhilelt_b32>(cast<static>( type<backend>(size_t) , 0), out_lanes);
+                  svbool_t out_pg = intrin<svwhilelt_b32>(cast<static>( type<backend>(scalar::size) , 0), out_lanes);
                   emit_return(intrin<svsel>(out_pg, packed, intrin_compose<svdup suffix=value<backend>(intrin::suffix(ToBase))>(0))) ;
                 """
           f64:

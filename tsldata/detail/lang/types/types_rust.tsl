@@ -10,4 +10,5 @@ language rust:
   u64 {type "u64"}
   f32 {type "f32"}
   f64 {type "f64"}
+  size {type "usize"}
   ptr {type "*mut core::ffi::c_void"}

@@ -234,7 +234,7 @@ class Lowerer:
         )
 
 
-_SUPPORTED_KINDS = frozenset({"v", "s", "m", "im", "sImm", "ptr", "void", "s[]"})
+_SUPPORTED_KINDS = frozenset({"v", "s", "m", "im", "usize", "sImm", "ptr", "void", "s[]"})
 
 
 def _primitive_axes(catalog: Catalog) -> dict[str, tuple[str, ...]]:

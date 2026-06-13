@@ -197,7 +197,7 @@ prim<s:=v[idx]> extract_value(a):
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a)) 
-               emit_return(arr[cast<static>(type<backend>(size_t), Index)]) ;
+               emit_return(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
             """
     avx2:
       arith:
@@ -205,7 +205,7 @@ prim<s:=v[idx]> extract_value(a):
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a)) 
-               emit_return(arr[cast<static>(type<backend>(size_t), Index)]) ;
+               emit_return(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
             """
     sse:
       arith:
@@ -213,7 +213,7 @@ prim<s:=v[idx]> extract_value(a):
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a)) 
-               emit_return(arr[cast<static>(type<backend>(size_t), Index)]) ;
+               emit_return(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
             """
     neon:
       arith:
@@ -226,7 +226,7 @@ prim<s:=v[idx]> extract_value(a):
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a))
-               emit_return(arr[cast<static>(type<backend>(size_t), Index)]) ;
+               emit_return(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
             """
     [generic, oneAPIfpga]:
       arith:
@@ -234,7 +234,7 @@ prim<s:=v[idx]> extract_value(a):
           generic []
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
-          tsil "emit_return(a[cast<static>(type<backend>(size_t), Index)]);"
+          tsil "emit_return(a[cast<static>(type<backend>(scalar::size), Index)]);"
     scalar:
       arith:
         requires []

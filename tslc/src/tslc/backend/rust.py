@@ -207,6 +207,8 @@ def _rust_concrete(spec: LoweredSpecialization, kind: str) -> str:
         return rust_register_type(spec.extension_name, base)
     if kind == "im":  # not reached by current overloads (to_integral is single-param)
         return rust_register_type(spec.extension_name, base)
+    if kind == "usize":  # a count type; not reached by current overloads
+        return "usize"
     return base  # s
 
 
@@ -235,6 +237,8 @@ def _kind_type(kind: str, owner: str) -> str:
         return "()"
     if kind == "s[]":
         return f"{owner}::Array"
+    if kind == "usize":  # a fixed count type, not a vector projection
+        return "usize"
     suffix = {
         "v": "RegisterType",
         "s": "BaseType",

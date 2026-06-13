@@ -513,3 +513,26 @@ def test_imask_ops_build(data_root: Path, machine_profiles_path: Path, tmp_path:
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_mask_population_count_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # `mask_population_count` (`usize:=m`) counts a mask's set lanes: `to_integral` then
+    # `details::popcount` (C++ `__builtin_popcountll` / Rust `count_ones`, returning a u32
+    # count), cast to the `usize` result (`std::size_t`/`usize` — a count, not a mask). The
+    # generic path is a `size_t` count loop over `mask<test>`. Exercises the new `usize`
+    # signature kind + the popcount substrate. Both backends.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["mask_population_count"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"

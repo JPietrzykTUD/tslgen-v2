@@ -70,7 +70,7 @@ prim<v:=v> conflict(data):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              let<type>(ConflictT, type<backend>(size_t))
+              let<type>(ConflictT, type<backend>(scalar::size))
               var<const_infer>(values, call<primitive=to_array[Vec]>(data))
               var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
               loop<range>(idx, 1, value<generation>(vector::length), 1) {

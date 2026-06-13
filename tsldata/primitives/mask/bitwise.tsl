@@ -254,7 +254,7 @@ prim<m:=m> mask_binary_not(mask):
               }
               emit_return(result);
             """
-prim<s:=m> mask_population_count(mask):
+prim<usize:=m> mask_population_count(mask):
   brief_description "Counts bits set in a mask scalar."
   operation ""
   tests:
@@ -286,8 +286,8 @@ prim<s:=m> mask_population_count(mask):
             var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
             emit_return(
               cast<static>(
-                type<generation>(vector::imask),
-                details::popcount<type<generation>(vector::imask), type<generation>(vector::imask)>(imask)
+                type<backend>(scalar::size),
+                details::popcount(imask)
               )
             );
           """
@@ -323,8 +323,8 @@ prim<s:=m> mask_population_count(mask):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              let<type>(CountT, type<generation>(vector::imask))
-              CountT count = cast<static>(CountT, 0);
+              let<type>(CountT, type<backend>(scalar::size))
+              var<typed>(CountT, count, cast<static>(CountT, 0))
               loop<unroll>(value<generation>(vector::length))
               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if (mask<test>(mask, i)) {

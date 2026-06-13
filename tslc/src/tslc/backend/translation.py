@@ -44,11 +44,15 @@ def unsigned_of(type_tag: str) -> str:
 
 
 def normalize_scalar_tag(type_tag: str) -> str:
-    """``si32 -> s32``, ``ui32 -> u32``, ``f32 -> f32`` for language type-map lookup."""
+    """``si32 -> s32``, ``ui32 -> u32``, ``f32 -> f32`` for language type-map lookup.
 
-    if type_tag.startswith("si"):
+    The ``si``/``ui`` prefix is only the signed/unsigned marker of a *width* tag, so it is
+    stripped only when a width follows (``si32``); names like ``size`` pass through unchanged.
+    """
+
+    if type_tag.startswith("si") and type_tag[2:].isdigit():
         return "s" + type_tag[2:]
-    if type_tag.startswith("ui"):
+    if type_tag.startswith("ui") and type_tag[2:].isdigit():
         return "u" + type_tag[2:]
     return type_tag
 
@@ -61,11 +65,6 @@ class BackendTranslation:
     def scalar_spelling(self, type_tag: str) -> str | None:
         spellings = self.catalog.type_spellings.get(self.backend_id, {})
         return spellings.get(normalize_scalar_tag(type_tag))
-
-    def size_t_spelling(self) -> str:
-        """The backend's size type (`type<backend>(size_t)`): C++ `std::size_t` / Rust `usize`."""
-
-        return "usize" if self.backend_id == "rust" else "std::size_t"
 
     def compose_prefix(self, extension: Extension) -> str | None:
         return extension.compose_prefix.get(self.backend_id)

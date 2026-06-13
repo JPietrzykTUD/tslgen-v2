@@ -143,6 +143,13 @@ template <class T>
 inline T arith_mul(T a, T b) {
     return a * b;
 }
+// Population count of an integer mask: the number of set bits, an unsigned count (not the
+// input type). Used by `mask_population_count` after `to_integral`. `__builtin_popcountll`
+// keeps this C++17 (no `<bit>`/`std::popcount`).
+template <class T>
+inline std::uint32_t popcount(T v) {
+    return static_cast<std::uint32_t>(__builtin_popcountll(static_cast<unsigned long long>(v)));
+}
 }  // namespace details
 
 }  // namespace tsl

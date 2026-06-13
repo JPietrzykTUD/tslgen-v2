@@ -121,7 +121,7 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
                   let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
                   var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                  var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                   loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                     result[i] = values[start + i];
                   }
@@ -139,7 +139,7 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
                   let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
                   var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                  var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                   loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                     result[i] = values[start + i];
                   }
@@ -156,7 +156,7 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
                   let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
                   var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                  var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                   loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                     result[i] = values[start + i];
                   }
@@ -179,7 +179,7 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
                   let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
                   var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                  var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                   loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                     result[i] = values[start + i];
                   }
@@ -282,7 +282,7 @@ prim<v:=(v,v,sImm)>[cast=reinterpret] insert(orig, data, index):
                   let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
                   var<infer>(result, call<primitive=to_array[OutVec]>(orig));
                   var<const_infer>(chunk, call<primitive=to_array[Vec]>(data));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(vector::length));
                   loop<range>(i, 0, value<generation>(vector::length), 1) {
                     result[start + i] = chunk[i];
                   }
@@ -300,7 +300,7 @@ prim<v:=(v,v,sImm)>[cast=reinterpret] insert(orig, data, index):
                   let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
                   var<infer>(result, call<primitive=to_array[OutVec]>(orig));
                   var<const_infer>(chunk, call<primitive=to_array[Vec]>(data));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(vector::length));
                   loop<range>(i, 0, value<generation>(vector::length), 1) {
                     result[start + i] = chunk[i];
                   }
@@ -345,7 +345,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -374,7 +374,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -415,7 +415,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -441,7 +441,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -470,7 +470,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -496,7 +496,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -522,7 +522,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -580,7 +580,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -653,7 +653,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -710,7 +710,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -825,7 +825,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -893,7 +893,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -922,7 +922,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -963,7 +963,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -989,7 +989,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -1018,7 +1018,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -1044,7 +1044,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -1070,7 +1070,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -1104,7 +1104,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -1122,7 +1122,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                     let<type>(To, type<generation>(base::generic(OutVec)));
                     var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                     var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                    var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                    var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                     loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                       result[i] = cast<static>(To, values[start + i]);
                     }
@@ -1139,7 +1139,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                     let<type>(To, type<generation>(base::generic(OutVec)));
                     var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                     var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                    var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                    var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                     loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                       result[i] = cast<static>(To, values[start + i]);
                     }
@@ -1171,7 +1171,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -1189,7 +1189,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                     let<type>(To, type<generation>(base::generic(OutVec)));
                     var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                     var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                    var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                    var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                     loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                       result[i] = cast<static>(To, values[start + i]);
                     }
@@ -1221,7 +1221,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       let<type>(To, type<generation>(base::generic(OutVec)));
                       var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                       var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                       loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                         result[i] = cast<static>(To, values[start + i]);
                       }
@@ -1242,7 +1242,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                     let<type>(To, type<generation>(base::generic(OutVec)));
                     var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                     var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                    var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                    var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                     loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                       result[i] = cast<static>(To, values[start + i]);
                     }
@@ -1262,7 +1262,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                     let<type>(To, type<generation>(base::generic(OutVec)));
                     var<const_infer>(values, call<primitive=to_array[Vec]>(data));
                     var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                    var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+                    var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
                     loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                       result[i] = cast<static>(To, values[start + i]);
                     }
@@ -1285,7 +1285,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               let<type>(To, type<generation>(base::generic(OutVec)));
               var<const_infer>(values, call<primitive=to_array[Vec]>(data));
               var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-              var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(generic::length(OutVec)));
+              var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
               loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                 result[i] = cast<static>(To, values[start + i]);
               }
@@ -1525,7 +1525,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   var<const_infer>(narrowed, intrin<_mm512_cvtsepi32_epi8>(data));
                   var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(cast<reinterpret>(type<generation>(register::generic(HalfVec)), narrowed)));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(vector::length));
                   loop<range>(i, 0, value<generation>(vector::length), 1) {
                     result[start + i] = narrowed_values[i];
                   }
@@ -1562,7 +1562,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   var<const_infer>(narrowed, intrin<_mm512_cvtusepi32_epi8>(data));
                   var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(cast<reinterpret>(type<generation>(register::generic(HalfVec)), narrowed)));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(vector::length));
                   loop<range>(i, 0, value<generation>(vector::length), 1) {
                     result[start + i] = narrowed_values[i];
                   }
@@ -1587,7 +1587,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   var<const_infer>(narrowed, intrin<_mm512_cvtsepi64_epi8>(data));
                   var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(cast<reinterpret>(type<generation>(register::generic(HalfVec)), narrowed)));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(vector::length));
                   loop<range>(i, 0, value<generation>(vector::length), 1) {
                     result[start + i] = narrowed_values[i];
                   }
@@ -1601,7 +1601,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   var<const_infer>(narrowed, intrin<_mm512_cvtsepi64_epi16>(data));
                   var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(cast<reinterpret>(type<generation>(register::generic(HalfVec)), narrowed)));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(vector::length));
                   loop<range>(i, 0, value<generation>(vector::length), 1) {
                     result[start + i] = narrowed_values[i];
                   }
@@ -1626,7 +1626,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   var<const_infer>(narrowed, intrin<_mm512_cvtusepi64_epi8>(data));
                   var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(cast<reinterpret>(type<generation>(register::generic(HalfVec)), narrowed)));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(vector::length));
                   loop<range>(i, 0, value<generation>(vector::length), 1) {
                     result[start + i] = narrowed_values[i];
                   }
@@ -1640,7 +1640,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   var<const_infer>(narrowed, intrin<_mm512_cvtusepi64_epi16>(data));
                   var<const_infer>(narrowed_values, call<primitive=to_array[HalfVec]>(cast<reinterpret>(type<generation>(register::generic(HalfVec)), narrowed)));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+                  var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(vector::length));
                   loop<range>(i, 0, value<generation>(vector::length), 1) {
                     result[start + i] = narrowed_values[i];
                   }
@@ -1682,7 +1682,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               let<type>(OutBase, type<generation>(base::generic(OutVec)));
               var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
               var<const_infer>(chunk, call<primitive=to_array[Vec]>(data));
-              var<const_infer>(start, cast<static>(type<backend>(size_t), index) * value<generation>(vector::length));
+              var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(vector::length));
               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 result[start + i] = cast<saturating>(OutBase, chunk[i]);
               }

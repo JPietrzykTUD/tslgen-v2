@@ -147,6 +147,30 @@ impl_tsl_mask_lane_value_int!(u64);
 impl_tsl_mask_lane_value_float!(f32, u32);
 impl_tsl_mask_lane_value_float!(f64, u64);
 
+// Population count of an integer mask: the number of set bits, as an unsigned count (not the
+// input type). Counterpart to C++ `tsl::details::popcount`; `count_ones` is already `u32`.
+pub trait TslPopCount: Copy {
+    fn popcount(self) -> u32;
+}
+macro_rules! impl_tsl_popcount {
+    ($ty:ty) => {
+        impl TslPopCount for $ty {
+            #[inline]
+            fn popcount(self) -> u32 {
+                self.count_ones()
+            }
+        }
+    };
+}
+impl_tsl_popcount!(i8);
+impl_tsl_popcount!(i16);
+impl_tsl_popcount!(i32);
+impl_tsl_popcount!(i64);
+impl_tsl_popcount!(u8);
+impl_tsl_popcount!(u16);
+impl_tsl_popcount!(u32);
+impl_tsl_popcount!(u64);
+
 pub fn ptr_add<T>(p: *mut T, i: usize) -> *mut T {
     p.wrapping_add(i)
 }
@@ -160,5 +184,8 @@ pub mod details {
     }
     pub fn arith_mul<T: core::ops::Mul<Output = T>>(a: T, b: T) -> T {
         a * b
+    }
+    pub fn popcount<T: super::TslPopCount>(v: T) -> u32 {
+        v.popcount()
     }
 }

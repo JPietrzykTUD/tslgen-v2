@@ -465,7 +465,7 @@ prim<s:=(m,v)> hand(mask, vec):
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
             type<generation>(base::in) result = cast<static>(type<generation>(base::in), 0);
-            type<backend>(size_t) found = 0;
+            type<backend>(scalar::size) found = 0;
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 if (found == 0) {
@@ -496,7 +496,7 @@ prim<s:=(m,v)> hand(mask, vec):
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
             var<infer>(result, cast<static>(UnsignedT, 0))
-            type<backend>(size_t) found = 0;
+            type<backend>(scalar::size) found = 0;
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 var<infer>(bits, cast<static>(UnsignedT, 0))

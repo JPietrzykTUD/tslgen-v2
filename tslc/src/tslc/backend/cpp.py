@@ -153,6 +153,7 @@ def _result_type(kind: str) -> str:
         "s": "typename Vec::base_type",
         "m": "typename Vec::mask_type",
         "im": "typename Vec::imask_type",
+        "usize": "std::size_t",
         "void": "void",
         "s[]": "typename ::tsl::array_for<Vec>::type",
     }[kind]
@@ -165,6 +166,8 @@ def _param_type(kind: str) -> str:
         return "typename Vec::mask_type"
     if kind == "im":
         return "typename Vec::imask_type"
+    if kind == "usize":
+        return "std::size_t"
     if kind == "ptr":
         return "typename Vec::base_type *"
     if kind == "s[]":

@@ -97,7 +97,7 @@ prim<im:=m> to_integral(mask):
           tsil """
                let<type>(ImaskT, type<generation>(vector::imask)) 
               ImaskT result = 0;
-              const  type<backend>(size_t)  mask_bits = value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8;
+              const  type<backend>(scalar::size)  mask_bits = value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8;
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 if (i < mask_bits && details::mask_test<Vec>(mask, i)) {
                   result |= cast<static>(ImaskT, 1) << i;
@@ -123,7 +123,7 @@ prim<im:=m> to_integral(mask):
           tsil """
                let<type>(ImaskT, type<generation>(vector::imask)) 
               ImaskT result = 0;
-              const  type<backend>(size_t)  mask_bits = value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8;
+              const  type<backend>(scalar::size)  mask_bits = value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8;
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 if (i < mask_bits && details::mask_test<Vec>(mask, i)) {
                   result |= cast<static>(ImaskT, 1) << i;
@@ -270,9 +270,9 @@ prim<m:=im> to_mask(mask):
               let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
               let<type>(UVec, type<generation>(vector::transform_extension(UnsignedT)))
               var<infer>(tmp, call<primitive=to_array[UVec]>(call<primitive=set_zero[UVec]>()));
-              const type<backend>(size_t) mask_period = cast<static>(type<backend>(size_t), 16 / value<generation>(type::size_bytes(type<generation>(base::in))));
+              const type<backend>(scalar::size) mask_period = cast<static>(type<backend>(scalar::size), 16 / value<generation>(type::size_bytes(type<generation>(base::in))));
               loop<range>(i, 0, value<generation>(vector::length), 1) {
-                const type<backend>(size_t) bit_idx = i % mask_period;
+                const type<backend>(scalar::size) bit_idx = i % mask_period;
                 tmp[i] = cast<static>(UnsignedT, (mask >> bit_idx) & 1);
               }
               var<const_infer>(pg, call<primitive=mask_true[Vec]>())
@@ -481,7 +481,7 @@ prim<m:=im> to_mask(mask):
           tsil """
               let<type>(MaskT, type<generation>(vector::mask))
               var<typed>(MaskT, result, mask<zero>())
-              const type<backend>(size_t) mask_bits = value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8;
+              const type<backend>(scalar::size) mask_bits = value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8;
               loop<unroll>(value<generation>(vector::length))
               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if (i < mask_bits && (((mask >> i) & cast<static>(type<generation>(vector::imask), 1)) != 0)) {
