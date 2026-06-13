@@ -45,9 +45,12 @@ class RustBackend:
         # result (e.g. shift's `v` -> register) must project through the vector param `S`.
         ret = _kind_type(shape.result_kind, "S")
         axis_decl = "".join(f", const {_axis_name(k)}: bool" for k, _ in shape.axis)
+        # `generic_params` (e.g. `PreserveSign`) are free const generics on the arg-trait too.
+        gp_decl = "".join(f", const {name}: {typ}" for name, typ, _ in shape.generic_params)
+        gp_names = [name for name, _, _ in shape.generic_params]
         fixed_trait = "".join(f", {n}: {_kind_type(k, 'S')}" for n, k in fixed)
         trait = (
-            f"pub trait {arg_trait}<S: SimdVector{axis_decl}> {{\n"
+            f"pub trait {arg_trait}<S: SimdVector{axis_decl}{gp_decl}> {{\n"
             f"    fn apply(self{fixed_trait}) -> {ret};\n"
             f"}}"
         )
@@ -67,14 +70,22 @@ class RustBackend:
                 continue
             seen.add(signature)
             # The generic vector is sized: its overloaded impls are parameterized by `LANES`.
+            impl_generics = (["const LANES: usize"] if spec.extension_name == "generic" else []) + [
+                f"const {name}: {typ}" for name, typ, _ in spec.generic_params
+            ]
             if spec.extension_name == "generic":
                 vec = f"Simd<{spec.base_type_spelling}, Generic<LANES>>"
-                impl_prefix = "impl<const LANES: usize>"
             else:
                 vec = f"Simd<{spec.base_type_spelling}, {_ext_tag(spec.extension_name)}>"
-                impl_prefix = "impl"
+            impl_prefix = f"impl<{', '.join(impl_generics)}>" if impl_generics else "impl"
             self_ty = _rust_concrete(spec, spec.param_kinds[vi])
-            trait_args = "<" + vec + "".join(f", {value}" for _, value in spec.axis) + ">"
+            trait_args = (
+                "<"
+                + vec
+                + "".join(f", {value}" for _, value in spec.axis)
+                + "".join(f", {name}" for name in gp_names)
+                + ">"
+            )
             fixed_impl = "".join(
                 f", {n}: {_rust_concrete(spec, k)}" for n, k in fixed
             )
@@ -94,14 +105,16 @@ class RustBackend:
 
         axis_wrap = "".join(f"const {_axis_name(k)}: bool, " for k, _ in shape.axis)
         axis_args = "".join(f", {_axis_name(k)}" for k, _ in shape.axis)
+        gp_wrap = "".join(f"const {name}: {typ}, " for name, typ, _ in shape.generic_params)
+        gp_args = "".join(f", {name}" for name in gp_names)
         wrap_params = ", ".join(
             (f"{name}: V" if i == vi else f"{name}: {_kind_type(kind, 'S')}")
             for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
         )
         fixed_names = ", ".join(n for n, _ in fixed)
         wrapper = (
-            f"pub fn {primitive_name}<S: SimdVector, {axis_wrap}"
-            f"V: {arg_trait}<S{axis_args}>>({wrap_params}) -> {_kind_type(shape.result_kind, 'S')} {{\n"
+            f"pub fn {primitive_name}<S: SimdVector, {axis_wrap}{gp_wrap}"
+            f"V: {arg_trait}<S{axis_args}{gp_args}>>({wrap_params}) -> {_kind_type(shape.result_kind, 'S')} {{\n"
             f"    {shape.param_names[vi]}.apply({fixed_names})\n"
             f"}}"
         )
@@ -131,6 +144,7 @@ class RustBackend:
             key = f"Simd<{spec.base_type_spelling}, {_ext_tag(spec.extension_name)}>"
         if spec.immediate is not None:
             impl_parts.append(f"const {spec.immediate[0]}: {spec.immediate[1]}")
+        impl_parts += [f"const {name}: {typ}" for name, typ, _ in spec.generic_params]
         impl_generics = f"<{', '.join(impl_parts)}>" if impl_parts else ""
         params = _params(spec, "Self")
         targs = _trait_args_by_value(spec)
@@ -277,23 +291,28 @@ def _generic_decls(shape: LoweredSpecialization) -> list[str]:
     decls = [f"const {_axis_name(k)}: bool" for k, _ in shape.axis]
     if shape.immediate is not None:
         decls.append(f"const {shape.immediate[0]}: {shape.immediate[1]}")
+    # `generic_params` (e.g. `PreserveSign`) — const generics with no default (Rust const-generic
+    # defaults are unstable, so callers pass them).
+    decls += [f"const {name}: {typ}" for name, typ, _ in shape.generic_params]
     return decls
 
 
 def _trait_args_by_name(shape: LoweredSpecialization) -> list[str]:
-    """Trait generic ARGS spelled by name (wrapper side): axis names + immediate name."""
+    """Trait generic ARGS spelled by name (wrapper side): axis names + immediate + generic_params."""
 
     args = [_axis_name(k) for k, _ in shape.axis]
     if shape.immediate is not None:
         args.append(shape.immediate[0])
+    args += [name for name, _, _ in shape.generic_params]
     return args
 
 
 def _trait_args_by_value(spec: LoweredSpecialization) -> list[str]:
-    """Trait generic ARGS for a concrete impl: axis literal values + immediate name (the
-    immediate stays a free const generic on the impl)."""
+    """Trait generic ARGS for a concrete impl: axis literal values + immediate + generic_params
+    (the immediate and generic_params stay free const generics on the impl)."""
 
     args = [value for _, value in spec.axis]
     if spec.immediate is not None:
         args.append(spec.immediate[0])
+    args += [name for name, _, _ in spec.generic_params]
     return args

@@ -34,6 +34,9 @@ class CppBackend:
         decl_params = "class Vec" + "".join(f", bool {_axis_name(k)}" for k, _ in shape.axis)
         if shape.immediate is not None:  # an `sImm` non-type template parameter
             decl_params += f", {shape.immediate[1]} {shape.immediate[0]}"
+        # `generic_params` (e.g. `PreserveSign`) are free template params too (defaults go on
+        # the wrapper, not the primary template).
+        decl_params += "".join(f", {typ} {name}" for name, typ, _ in shape.generic_params)
         return (
             f"template <{decl_params}>\nstruct {primitive_name}_impl;"
             + "\n\n"
@@ -73,11 +76,13 @@ class CppBackend:
             vec = f"tsl::simd<{first.base_type_spelling}, tsl::{first.extension_name}>"
         if first.immediate is not None:
             free.append(f"{first.immediate[1]} {first.immediate[0]}")
+        free += [f"{typ} {name}" for name, typ, _ in first.generic_params]
         head = f"template <{', '.join(free)}>" if free else "template <>"
         # A boolean-wildcard attribute keys the specialization so both variants coexist.
         key = vec + "".join(f", {value}" for _, value in first.axis)
         if first.immediate is not None:
             key += f", {first.immediate[0]}"
+        key += "".join(f", {name}" for name, _, _ in first.generic_params)
         applies: list[str] = []
         seen: set[tuple[str, ...]] = set()
         for spec in group:
@@ -116,6 +121,7 @@ class CppBackend:
             ["class Vec"]
             + [f"bool {_axis_name(k)} = false" for k, _ in shape.axis]
             + immediate_params
+            + [f"{typ} {name} = {default}" for name, typ, default in shape.generic_params]
             + [f"class Arg{i}" for i in varying]
         )
         params = ", ".join(
@@ -132,6 +138,7 @@ class CppBackend:
             "Vec"
             + "".join(f", {_axis_name(k)}" for k, _ in shape.axis)
             + (f", {shape.immediate[0]}" if shape.immediate is not None else "")
+            + "".join(f", {name}" for name, _, _ in shape.generic_params)
         )
         return (
             f"template <{', '.join(template_params)}>\n"

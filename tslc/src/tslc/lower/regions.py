@@ -434,6 +434,29 @@ def _split_top_level_op(text: str, op: str) -> list[str]:
     return [part.strip() for part in parts if part.strip()]
 
 
+def _strip_outer_parens(text: str) -> str:
+    """Remove balanced parentheses that wrap the *whole* expression, e.g.
+    ``( A && B )`` -> ``A && B``. A leading ``(`` that closes before the end
+    (``( A ) && B``) is left intact — it isn't wrapping the whole text."""
+
+    text = text.strip()
+    while text.startswith("(") and text.endswith(")"):
+        depth = 0
+        wraps = True
+        for i, ch in enumerate(text):
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0 and i != len(text) - 1:
+                    wraps = False
+                    break
+        if not wraps:
+            break
+        text = text[1:-1].strip()
+    return text
+
+
 class CallLowerer:
     """``call<primitive=NAME[Vec] attrs[aligned=…]>(args)`` -> a call to NAME's wrapper.
 
@@ -547,22 +570,40 @@ class IfLowerer:
         self._evaluator = evaluator or QueryEvaluator()
 
     def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
-        if region.selector_text.strip() not in self._SPLICE_SELECTORS:
+        selector = region.selector_text.strip()
+        if selector not in self._SPLICE_SELECTORS:
             return self._runtime(region, render)
 
-        taken = self._evaluate_condition(_segment_text(region.body), context)
-        if taken is None:
-            context.skip(
-                "TSL-LOWER-UNRESOLVED-IF-CONDITION",
-                f"could not evaluate generation-time condition in {region.full_text!r}",
-            )
-            return region.full_text
+        condition = _segment_text(region.body)
+        taken = self._evaluate_condition(condition, context)
+        if taken is not None:
+            # Fully generation-resolvable: splice only the taken branch (no surviving `if`).
+            if taken:
+                return render(region.block)
+            return render(region.else_block) if region.else_block is not None else ""
 
-        if taken:
-            return render(region.block)
-        if region.else_block is None:
-            return ""
-        return render(region.else_block)
+        # `if<compile>` second half: the predicate has a *symbolic* term (a `generic_params`
+        # template param like `!PreserveSign`) that isn't generation-known. Emit a real
+        # compile-time branch keeping BOTH arms — C++ `if constexpr` / Rust `if` — with the
+        # gen-evaluable leaves folded to literals. (`if<generation>` has no such fallback: an
+        # unresolvable generation condition there is still a skip.)
+        if selector == "compile":
+            rendered = self._render_condition(condition, context)
+            if rendered is not None:
+                header = context.translation.render_template(
+                    "flow_if_static", "if constexpr ({cond})", cond=rendered
+                )
+                then = render(region.block) if region.block is not None else ""
+                out = f"{header} {{\n        {then}\n      }}"
+                if region.else_block is not None:
+                    out += f" else {{\n        {render(region.else_block)}\n      }}"
+                return out
+
+        context.skip(
+            "TSL-LOWER-UNRESOLVED-IF-CONDITION",
+            f"could not evaluate generation-time condition in {region.full_text!r}",
+        )
+        return region.full_text
 
     def _runtime(self, region: Region, render: RenderBody) -> str:
         """A native runtime ``if``: emit the condition + branches verbatim for the target."""
@@ -587,16 +628,47 @@ class IfLowerer:
         query sub-conditions (``&&`` binds tighter), e.g.
         ``is_same(..., si64) || is_same(..., ui64)``. Returns None if unresolvable."""
 
+        text = _strip_outer_parens(text)
         ors = _split_top_level_op(text, "||")
         if len(ors) > 1:
             results = [self._evaluate_condition(part, context) for part in ors]
-            return None if None in results else any(results)
+            if any(r is True for r in results):  # short-circuit: True dominates ||
+                return True
+            return None if None in results else False
         ands = _split_top_level_op(text, "&&")
         if len(ands) > 1:
             results = [self._evaluate_condition(part, context) for part in ands]
-            return None if None in results else all(results)
+            if any(r is False for r in results):  # short-circuit: False dominates &&
+                return False
+            return None if None in results else True
         value = self._evaluator.evaluate(text.strip(), context)
         return value.value if isinstance(value, BoolValue) else None
+
+    def _render_condition(self, text: str, context: LoweringContext) -> str | None:
+        """Render a partially-symbolic `if<compile>` predicate as a target expression: each
+        leaf is either a generation-time query (folded to ``true``/``false``) or a symbolic
+        ``generic_params`` reference (`!PreserveSign`) passed through verbatim. Returns None
+        if a leaf is neither (so the caller skips rather than emitting an undefined name)."""
+
+        text = _strip_outer_parens(text)
+        ors = _split_top_level_op(text, "||")
+        if len(ors) > 1:
+            parts = [self._render_condition(part, context) for part in ors]
+            return None if None in parts else " || ".join(parts)
+        ands = _split_top_level_op(text, "&&")
+        if len(ands) > 1:
+            parts = [self._render_condition(part, context) for part in ands]
+            return None if None in parts else " && ".join(parts)
+        leaf = text.strip()
+        value = self._evaluator.evaluate(leaf, context)
+        if isinstance(value, BoolValue):
+            return "true" if value.value else "false"
+        if any(
+            re.search(rf"\b{re.escape(name)}\b", leaf)
+            for name in context.generic_param_names
+        ):
+            return leaf  # a symbolic generic_params predicate; the param is in scope
+        return None
 
 
 class AssumeAlignedLowerer:

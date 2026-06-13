@@ -405,6 +405,56 @@ def test_shift_left_builds(data_root: Path, machine_profiles_path: Path, tmp_pat
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_shift_right_scalar_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # Scalar `shift_right` is the `if<compile>` *second half* + `generic_params(PreserveSign)`.
+    # Its `?i?` body splices on `if<generation>(is_signed)` (gen-known) and, on the signed arm,
+    # emits a real compile-time branch over the *symbolic* `PreserveSign` template param —
+    # C++ `if constexpr (!PreserveSign) { <unsigned-cast logical> } else { <arithmetic> }`,
+    # Rust `if !PreserveSign { … } else { … }`. `PreserveSign` is a free `bool` template /
+    # `const` generic (default `true` in C++; spelled at call sites otherwise). Unsigned scalars
+    # splice the plain `else` (no `if constexpr`). The x86/generic/float forms are deferred and
+    # skip cleanly. Both backends.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["shift_right"],
+        profiles=["scalar"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_shift_right_imask_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # `shift_right_imask` (`im:=(im,s)`) closes the mask subsystem: a logical right shift of
+    # the integral mask. Its `if<compile>(is_signed(vector::imask) && !PreserveSign)` predicate
+    # short-circuits — the imask is unsigned by construction, so `is_signed` folds `false`, the
+    # `&&` collapses to `false`, and the generation splice takes the plain logical-shift `else`
+    # arm (no `if constexpr` survives). Exercises the `&&` short-circuit fold + the
+    # `type::is_signed` query + parenthesised-predicate handling. All profiles, both backends.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["shift_right_imask"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_mask_binary_and_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # `mask_binary_and` (the mask-algebra enabler for range comparisons): `binary_and` on the
     # lane-bitmask register (sse/avx2), raw `&` on the native `__mmaskN` (avx512), `bool & bool`

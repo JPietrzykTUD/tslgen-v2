@@ -43,6 +43,18 @@ def unsigned_of(type_tag: str) -> str:
     return type_tag
 
 
+def is_signed(type_tag: str) -> bool:
+    """Whether a width tag denotes a signed arithmetic type. ``si*`` and floats (``f*``)
+    are signed; ``ui*`` is unsigned. (The integral-mask type is unsigned by construction,
+    handled separately at the query layer where it arrives as a spelling, not a tag.)"""
+
+    if type_tag.startswith("ui") and type_tag[2:].isdigit():
+        return False
+    if type_tag.startswith("si") and type_tag[2:].isdigit():
+        return True
+    return type_tag.startswith("f")
+
+
 def normalize_scalar_tag(type_tag: str) -> str:
     """``si32 -> s32``, ``ui32 -> u32``, ``f32 -> f32`` for language type-map lookup.
 

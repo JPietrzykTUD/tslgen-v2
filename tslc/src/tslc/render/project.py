@@ -350,6 +350,10 @@ def _cpp_smoke(p: ProfileRender) -> str:
                 # An `sImm` immediate is a non-type template param: pick a representative
                 # positive literal so address-of forces the body to compile.
                 + (["3"] if spec.immediate is not None else [])
+                # `generic_params` (e.g. `PreserveSign`) precede the deduced `Arg` params in
+                # the wrapper's template list, so they must be spelled (at their default) to
+                # keep the explicit args aligned with the varying-arg positions.
+                + [default for _, _, default in spec.generic_params]
                 + [_concrete_arg_type(vec, spec.param_kinds[i]) for i in varying]
             )
             lines.append(f"auto* _tsl_use_{index} = &tsl::{name}<{', '.join(targs)}>;")

@@ -57,6 +57,10 @@ class LoweredSpecialization:
     # ("factor", "std::uint32_t"). Emitted as a C++ non-type template param / Rust const
     # generic (NOT a runtime arg); None when the signature has no `sImm`.
     immediate: tuple[str, str] | None = None
+    # Free template params from a `generic_params` block, as (name, type, default), e.g.
+    # (("PreserveSign", "bool", "true"),). Emitted as C++ non-type template params (with the
+    # default) / Rust const generics (no default); bodies reference them symbolically.
+    generic_params: tuple[tuple[str, str, str], ...] = ()
     # True when register_type == base_type for this extension (scalar/generic). Lets the
     # backend dedup overload `apply`s that collapse to the same type (a `v` and an `s`
     # parameter are distinct on SIMD but identical here).
@@ -118,6 +122,7 @@ class Lowerer:
             primitive_arg_generics=_primitive_arg_generics(catalog),
             current_primitive=selected.primitive.name,
             immediate_dispatch=selected.primitive.immediate_dispatch,
+            generic_param_names=tuple(gp.name for gp in selected.primitive.generic_params),
         )
 
         shape = parse_signature(selected.primitive.signature)
@@ -223,6 +228,9 @@ class Lowerer:
                 if key in BOOLEAN_WILDCARD_ATTRIBUTES
             ),
             immediate=immediate,
+            generic_params=tuple(
+                (gp.name, "bool", gp.default) for gp in selected.primitive.generic_params
+            ),
             # True only when the register type *is* the base type (scalar). The generic
             # vector also has vector_bits 0 but its register is the lane array, not the base,
             # so its `v`/`s` overloads must stay distinct.

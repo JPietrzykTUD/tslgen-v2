@@ -12,6 +12,7 @@ from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     Catalog,
     Extension,
+    GenericParam,
     ImaskPolicy,
     Implementation,
     MaskPolicy,
@@ -110,6 +111,7 @@ def _build_primitives(
     # genuinely per-ISA immediate type — avx512's `ui32` vs sse/avx2's `si32` — is deferred
     # with the avx512 shift bodies; for now the override type is used uniformly.)
     immediate_type, immediate_dispatch = _immediate_spec(declaration)
+    generic_params = _generic_params(declaration)
 
     def make(attributes: dict[str, str]) -> Primitive:
         return Primitive(
@@ -121,6 +123,7 @@ def _build_primitives(
             attributes=attributes,
             immediate_type=immediate_type,
             immediate_dispatch=immediate_dispatch,
+            generic_params=generic_params,
         )
 
     return [make(attrs) for attrs in _expand_wildcards(base_attributes)]
@@ -355,6 +358,23 @@ def _mask_policy(field: ParsedTslField | None) -> MaskPolicy:
         kind=_field_text(_child(field, "kind")) or "lane_bitmask",
         cpp_by_lanes=_int_keyed_map(_child(field, "cpp_by_lanes")),
         rust_by_lanes=_int_keyed_map(_child(field, "rust_by_lanes")),
+    )
+
+
+def _generic_params(declaration: ParsedPrimitiveDeclaration) -> tuple[GenericParam, ...]:
+    """The free template parameters from a `generic_params` block: each entry's `kind` +
+    `default` (e.g. `PreserveSign {kind bool, default true}`)."""
+
+    fields = declaration.fields_by_name("generic_params")
+    if not fields:
+        return ()
+    return tuple(
+        GenericParam(
+            name=entry.key.text,
+            kind=_field_text(_child(entry, "kind")) or "bool",
+            default=_field_text(_child(entry, "default")) or "false",
+        )
+        for entry in _children(fields[0].field)
     )
 
 

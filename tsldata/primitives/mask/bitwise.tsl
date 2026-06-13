@@ -333,7 +333,7 @@ prim<usize:=m> mask_population_count(mask):
               }
               emit_return(count);
             """
-prim<m:=(m,s)> shift_right_imask(data, shift):
+prim<im:=(im,s)> shift_right_imask(data, shift):
   brief_description "Arithmetic shift of an imask to the right by n bits."
   operation ""
   generic_params:

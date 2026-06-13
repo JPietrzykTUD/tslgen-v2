@@ -71,6 +71,20 @@ class Primitive:
     # Rust backend forwards the immediate into a const-generic intrinsic turbofish
     # (`slli::<SHIFT>(data)`) rather than passing it as a runtime value.
     immediate_dispatch: str | None = None
+    # Free template parameters from a `generic_params` block, e.g. `PreserveSign {kind bool,
+    # default true}` on `shift_right`. Emitted as C++ non-type template params / Rust const
+    # generics — unlike a wildcard axis they are NOT baked into variants (the caller picks),
+    # so the body may reference them symbolically (`if<compile>(!PreserveSign)`).
+    generic_params: tuple["GenericParam", ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class GenericParam:
+    """A `generic_params` entry: a free template parameter (name, kind, default)."""
+
+    name: str
+    kind: str  # currently always "bool"
+    default: str  # e.g. "true"
 
 
 @dataclass(frozen=True, slots=True)

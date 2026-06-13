@@ -42,6 +42,10 @@ class LoweringContext:
     # intrinsic turbofish (`slli::<shift>(data)`) when dispatch is `rust_const_match`.
     immediate_name: str | None = None
     immediate_dispatch: str | None = None
+    # names of the primitive's `generic_params` (e.g. ("PreserveSign",)), so the `if<compile>`
+    # render knows which condition leaves are symbolic template params (rendered raw) vs
+    # generation-time queries (folded to a literal).
+    generic_param_names: tuple[str, ...] = ()
     diagnostics: list[Diagnostic] = field(default_factory=list)
     requires_unsafe: bool = False
     unsupported: bool = False  # a not-yet-supported construct -> skip this specialization

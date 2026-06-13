@@ -25,7 +25,7 @@ from typing import Protocol
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
-from tslc.backend.translation import is_type_tag, signed_of, unsigned_of
+from tslc.backend.translation import is_signed, is_type_tag, signed_of, unsigned_of
 from tslc.lower._text import split_head_arg, split_top_level
 from tslc.lower.context import LoweringContext
 
@@ -181,6 +181,26 @@ class IsSameQuery:
         return BoolValue(args[0].type_tag == args[1].type_tag)
 
 
+class IsSignedQuery:
+    """``type::is_signed(x)`` -> a generation-time boolean. A type *tag* (``base::in``,
+    ``base::signed_of(...)``) resolves by prefix (``si*``/``f*`` signed, ``ui*`` not). The
+    integral-mask type arrives as a *spelling* (``vector::imask`` -> ``TextValue``) and is
+    unsigned by construction, so it folds to ``false`` — which short-circuits a
+    ``is_signed(imask) && ...`` predicate to the logical-shift arm."""
+
+    head = "type::is_signed"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 1:
+            return None
+        arg = args[0]
+        if isinstance(arg, TypeValue):
+            return BoolValue(is_signed(arg.type_tag))
+        if isinstance(arg, TextValue):  # the imask spelling — unsigned by construction
+            return BoolValue(False)
+        return None
+
+
 class AttributeQuery:
     """``primitive::attribute(name)`` -> the boolean value of the (concrete, after
     wildcard expansion) attribute on the primitive being lowered, e.g. ``aligned``."""
@@ -314,6 +334,7 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     ValueQuery(),
     IntrinSuffixQuery(),
     IsSameQuery(),
+    IsSignedQuery(),
     AttributeQuery(),
     RegisterQuery(),
     MaskQuery(),
