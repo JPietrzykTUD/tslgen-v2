@@ -128,6 +128,7 @@ class BackendTranslation:
         axis_values: tuple[str, ...] = (),
         arg_generics: int = 0,
         vec_override: str | None = None,
+        extra_args: tuple[str, ...] = (),
     ) -> str:
         """A call to another primitive's generated wrapper, for the current vector.
 
@@ -149,14 +150,21 @@ class BackendTranslation:
         ``vec_override`` re-targets the call at an explicit vector type instead of the current
         `Vec`/`Self` — e.g. `@self[vector::as_extension(scalar)]` delegating per lane to the
         scalar instantiation.
+
+        ``extra_args`` are forwarded template/const-generic args from a multi-entry call bracket
+        (`@self[GenericVec, shift, PreserveSign]`): spelled after the vector + its axes and before
+        the Rust trailing `_`s, matching the wrapper template order (`Vec, axes, immediate,
+        generic_params, Arg…`). For the shift fallback these are the in-scope `shift` immediate +
+        `PreserveSign` generic_param.
         """
 
         axis = "".join(f", {value}" for value in axis_values)
+        extra = "".join(f", {value}" for value in extra_args)
         if self.backend_id == "rust":
             inferred = ", _" * arg_generics
-            return f"{name}::<{vec_override or 'Self'}{axis}{inferred}>({args})"
-        if vec_override is not None:
-            return f"::tsl::{name}<{vec_override}{axis}>({args})"
+            return f"{name}::<{vec_override or 'Self'}{axis}{extra}{inferred}>({args})"
+        if vec_override is not None or extra:
+            return f"::tsl::{name}<{vec_override or 'Vec'}{axis}{extra}>({args})"
         return self.render_template(
             "call", "::tsl::{name}<Vec{axis}>({args})", name=name, axis=axis, args=args
         )

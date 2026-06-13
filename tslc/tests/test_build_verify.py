@@ -455,6 +455,32 @@ def test_shift_right_imask_builds(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_shift_right_delegation_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # The comma-separated `call` bracket: the `(v,s)`/`(v,v)` runtime `shift_right` forms with no
+    # native intrinsic (e.g. avx2/sse `si64`, runtime vector shifts) delegate
+    # `@self[GenericVec, PreserveSign]` -> generic -> `@self[as_extension(scalar), PreserveSign]`
+    # -> scalar, forwarding the `PreserveSign` generic_param through the multi-entry `[...]` list
+    # (entry 0 = target vector, entries 1.. = forwarded template args). Scalar + sse2 + avx2: the
+    # avx512 native immediate body (per-ISA `u32` shift immediate) and the `(v,sImm)` immediate-
+    # forwarding delegation (needs the `_imm` split + per-ISA immediate type) are deferred and skip
+    # cleanly, as are the signed reinterpret arm and the float chain. Both backends.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["shift_right"],
+        profiles=["scalar", "sse2", "avx2"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_mask_binary_and_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # `mask_binary_and` (the mask-algebra enabler for range comparisons): `binary_and` on the
     # lane-bitmask register (sse/avx2), raw `&` on the native `__mmaskN` (avx512), `bool & bool`

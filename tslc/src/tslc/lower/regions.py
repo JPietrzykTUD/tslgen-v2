@@ -494,12 +494,15 @@ class CallLowerer:
             name = context.current_primitive
 
         type_args, rest = _take_bracket(rest)
-        # The plain `[Vec]` / no-type-arg form targets the current vector; any other single
-        # type-arg is a type-expression naming the vector to call (e.g.
-        # `vector::as_extension(scalar)` for the generic vector's per-lane delegation).
+        # The bracket is a comma-separated list: entry 0 is the target vector (the plain `[Vec]` /
+        # no-arg form targets the current vector; any other type-expression — e.g.
+        # `vector::as_extension(scalar)` — names the vector to call), and entries 1.. are extra
+        # template/const-generic args forwarded into the callee's wrapper (e.g.
+        # `@self[GenericVec, shift, PreserveSign]` delegating with the in-scope immediate + param).
+        entries = split_top_level(type_args, ",") if type_args else []
         vec_override: str | None = None
-        if type_args and type_args != "Vec":
-            value = self._evaluator.evaluate(type_args, context)
+        if entries and entries[0] != "Vec":
+            value = self._evaluator.evaluate(entries[0], context)
             if not isinstance(value, TextValue):
                 context.skip(
                     "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS",
@@ -507,6 +510,16 @@ class CallLowerer:
                 )
                 return region.full_text
             vec_override = value.text
+        extra_args: list[str] = []
+        for entry in entries[1:]:
+            rendered = self._render_call_arg(entry, context)
+            if rendered is None:
+                context.skip(
+                    "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS",
+                    f"call type-args {type_args!r} not supported yet: {region.full_text!r}",
+                )
+                return region.full_text
+            extra_args.append(rendered)
 
         attrs: dict[str, str] = {}
         if rest.startswith("attrs"):
@@ -531,7 +544,32 @@ class CallLowerer:
             axis_values,
             context.primitive_arg_generics.get(name, 0),
             vec_override,
+            tuple(extra_args),
         )
+
+    def _render_call_arg(self, entry: str, context: LoweringContext) -> str | None:
+        """A forwarded call-bracket arg (entries 1..) as a target template/const-generic arg:
+        a query that resolves to a `TextValue` spelling, or a bare `generic_params` name (e.g.
+        `PreserveSign`) passed through verbatim. Returns None when it is neither (so the caller
+        skips).
+
+        Forwarding the *immediate* itself (`@self[…, shift, …]`) is deferred: it would target the
+        callee's `_imm` split (not the current `@self` name) and cross the per-ISA immediate type
+        (e.g. avx2 `i32` into a generic/scalar `u32` slot). Such an entry returns None → skip.
+
+        In-scope param names are matched *before* query evaluation (the evaluator passes a bare
+        token through as a `TextValue`, which would otherwise mask the immediate-skip)."""
+
+        if entry == context.immediate_name:
+            return None
+        if any(
+            re.search(rf"\b{re.escape(name)}\b", entry) for name in context.generic_param_names
+        ):
+            return entry
+        value = self._evaluator.evaluate(entry, context)
+        if isinstance(value, TextValue):
+            return value.text
+        return None
 
 
 def _take_bracket(text: str) -> tuple[str, str]:
