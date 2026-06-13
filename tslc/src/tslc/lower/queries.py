@@ -223,6 +223,24 @@ class RegisterQuery:
         return TextValue(context.translation.register_type_spelling())
 
 
+class RegisterGenericQuery:
+    """``register::generic(x)`` -> the concrete register-type spelling of the vector whose
+    base is ``x`` in the current extension (C++ ``typename tsl::simd<uint32_t,
+    tsl::avx2>::register_type`` / Rust ``core::arch::x86_64::__m256i``). Used by a
+    representation-change body to name the target register it bit-casts to —
+    ``cast<bitcast>(type<generation>(register::generic(ToType)), data)``."""
+
+    head = "register::generic"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 1 or not isinstance(args[0], TypeValue):
+            return None
+        spelling = context.translation.target_register_spelling(
+            args[0].type_tag, context.extension.isa_name
+        )
+        return TextValue(spelling) if spelling is not None else None
+
+
 class MaskQuery:
     """``vector::mask`` -> the backend spelling of the vector mask type
     (C++ ``typename Vec::mask_type`` / Rust ``Self::MaskType``)."""
@@ -337,6 +355,7 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     IsSignedQuery(),
     AttributeQuery(),
     RegisterQuery(),
+    RegisterGenericQuery(),
     MaskQuery(),
     ImaskQuery(),
     MaskLaneQuery("mask::lane::all_true", "mask_lane_all_true"),
@@ -376,6 +395,10 @@ class QueryEvaluator:
         function = self._functions.get(term.head)
         if function is not None:
             return function.apply(tuple(evaluated_args), context)
+        # A representation-change target alias (`ToBase`/`ToType`) -> the target base type tag,
+        # so `register::generic(ToType)` / `base::unsigned_of(ToBase)` resolve against the target.
+        if not term.args and term.head in context.target_type_aliases:
+            return TypeValue(context.target_type_aliases[term.head])
         # A bare leaf that names a concrete type tag resolves to itself.
         if not term.args and is_type_tag(term.head):
             return TypeValue(term.head)

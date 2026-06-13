@@ -126,10 +126,16 @@ class RustBackend:
         # so the `[aligned=*]` variants are distinct impls (`StoreImpl<false>`/`StoreImpl<true>`)
         # and the immediate is a free param (`MulImmImpl<const factor: u32>`).
         decls = _generic_decls(shape)
+        ret = _kind_type(shape.result_kind, "Self")
+        # A representation-change primitive takes the target vector as a first generic `ToVec`
+        # and returns its register type.
+        if shape.target_vector_spelling is not None:
+            decls = ["ToVec: SimdVector", *decls]
+            ret = "ToVec::RegisterType"
         generics = f"<{', '.join(decls)}>" if decls else ""
         return (
             f"pub trait {_trait_name(primitive_name)}{generics}: SimdVector {{\n"
-            f"    fn apply({params}) -> {_kind_type(shape.result_kind, 'Self')};\n"
+            f"    fn apply({params}) -> {ret};\n"
             f"}}"
         )
 
@@ -148,10 +154,15 @@ class RustBackend:
         impl_generics = f"<{', '.join(impl_parts)}>" if impl_parts else ""
         params = _params(spec, "Self")
         targs = _trait_args_by_value(spec)
+        ret = _kind_type(spec.result_kind, "Self")
+        # The target vector is concrete in the impl's trait args; the result is its register.
+        if spec.target_vector_spelling is not None:
+            targs = [spec.target_vector_spelling, *targs]
+            ret = spec.target_register_spelling or ret
         trait_args = f"<{', '.join(targs)}>" if targs else ""
         return (
             f"impl{impl_generics} {_trait_name(spec.primitive_name)}{trait_args} for {key} {{\n"
-            f"    fn apply({params}) -> {_kind_type(spec.result_kind, 'Self')} {{\n"
+            f"    fn apply({params}) -> {ret} {{\n"
             f"        {spec.body_text}\n"
             f"    }}\n"
             f"}}"
@@ -165,12 +176,22 @@ class RustBackend:
         # `name::<Self, …>` uniformly. The trait bound carries them (`S: MulImmImpl<factor>`);
         # Rust allows referencing a const-generic in the bound before it is declared.
         targs = _trait_args_by_name(shape)
+        decl_list = _generic_decls(shape)
+        ret = _kind_type(shape.result_kind, "S")
+        call = f"S::apply({names})"
+        # A representation-change primitive takes the target vector `T` as a generic, bounds `S`
+        # on `…Impl<T, …>`, and returns `T`'s register; the call is qualified to pin the target.
+        if shape.target_vector_spelling is not None:
+            targs = ["T", *targs]
+            decl_list = ["T: SimdVector", *decl_list]
+            ret = "T::RegisterType"
+            call = f"<S as {_trait_name(primitive_name)}<{', '.join(targs)}>>::apply({names})"
         trait_args = f"<{', '.join(targs)}>" if targs else ""
-        decls = "".join(f", {d}" for d in _generic_decls(shape))
+        decls = "".join(f", {d}" for d in decl_list)
         return (
             f"pub fn {primitive_name}<S: {_trait_name(primitive_name)}{trait_args}{decls}>"
-            f"({params}) -> {_kind_type(shape.result_kind, 'S')} {{\n"
-            f"    S::apply({names})\n"
+            f"({params}) -> {ret} {{\n"
+            f"    {call}\n"
             f"}}"
         )
 
@@ -239,6 +260,9 @@ def _concretize_simd_assoc(body: str, spec: LoweredSpecialization, simd_vec: str
     register = rust_register_type(spec.extension_name, spec.base_type_spelling)
     return (
         body.replace("::<Self>", f"::<{simd_vec}>")
+        # A turbofish whose FIRST arg is the vector (`reinterpret::<Self, ToVec>`) — the call
+        # targets the Simd vector, not the arg-trait `Self` (the argument type).
+        .replace("::<Self,", f"::<{simd_vec},")
         .replace("Self::RegisterType", register)
         .replace("Self::BaseType", spec.base_type_spelling)
     )

@@ -49,6 +49,11 @@ class Implementation:
     body_text: str
     requirements: tuple[RequirementClause, ...] = ()
     source_order: int = 0  # tiebreak: earlier source wins
+    # For a representation-change primitive (`return_type: base|extension: Target`), the
+    # selector nests a `ToBase:`/`ToExtension:` level branching on the *target*: this is the
+    # branch below it (the target type-group `?i?` / a target extension name `sse`). The
+    # source type-group stays in `type_group`. None for ordinary single-axis primitives.
+    to_target_group: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +81,12 @@ class Primitive:
     # generics — unlike a wildcard axis they are NOT baked into variants (the caller picks),
     # so the body may reference them symbolically (`if<compile>(!PreserveSign)`).
     generic_params: tuple["GenericParam", ...] = ()
+    # A representation-change primitive declares `return_type: <dim>: <Target>` (`dim` is
+    # "base" or "extension"): its result is the source vector with that one dimension replaced
+    # by a caller-supplied target. `(dim, target_name)`, e.g. `("base", "ToBase")` (reinterpret)
+    # or `("extension", "ToExtension")` (extract). The target is a *second type axis* — its
+    # values come from each impl's `to_target_group`. None for ordinary primitives.
+    result_target: tuple[str, str] | None = None
 
 
 @dataclass(frozen=True, slots=True)

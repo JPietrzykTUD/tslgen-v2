@@ -46,6 +46,10 @@ class LoweringContext:
     # render knows which condition leaves are symbolic template params (rendered raw) vs
     # generation-time queries (folded to a literal).
     generic_param_names: tuple[str, ...] = ()
+    # For a representation-change primitive (`return_type: base|extension: …`), the target-type
+    # aliases the body may name (`ToBase`/`ToType` -> the target base type tag), so a query like
+    # `register::generic(ToType)` resolves against the target. Empty for ordinary primitives.
+    target_type_aliases: dict[str, str] = field(default_factory=dict)
     diagnostics: list[Diagnostic] = field(default_factory=list)
     requires_unsafe: bool = False
     unsupported: bool = False  # a not-yet-supported construct -> skip this specialization

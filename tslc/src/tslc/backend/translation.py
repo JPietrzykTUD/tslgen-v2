@@ -188,6 +188,27 @@ class BackendTranslation:
             return f"Simd<{base_spelling}, Generic<{lanes}>>"
         return f"tsl::simd<{base_spelling}, tsl::generic<{lanes}>>"
 
+    def target_register_spelling(self, base_tag: str, extension_isa: str) -> str | None:
+        """The *concrete* register type of `simd<base_tag, extension_isa>` — for a
+        representation-change body's `register::generic(ToType)` cast target and the backend's
+        target result type. C++ projects through the simd member
+        (`typename tsl::simd<uint32_t, tsl::avx2>::register_type`); Rust spells the arch type
+        directly (`core::arch::x86_64::__m256i`, scalar = the base spelling)."""
+
+        base = self.scalar_spelling(base_tag)
+        if base is None:
+            return None
+        if self.backend_id != "rust":
+            return f"typename {self.vector_type_spelling(base, extension_isa)}::register_type"
+        width = X86_REGISTER_BITS.get(extension_isa)
+        if width is None:  # scalar: the register is the base type
+            return base
+        if base == "f32":
+            return f"core::arch::x86_64::__m{width}"
+        if base == "f64":
+            return f"core::arch::x86_64::__m{width}d"
+        return f"core::arch::x86_64::__m{width}i"
+
     def register_type_spelling(self) -> str:
         """The vector register type as named inside a body (`vector::register`)."""
 

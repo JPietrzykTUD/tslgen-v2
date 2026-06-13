@@ -30,6 +30,10 @@ class SelectedImplementation:
     implementation: Implementation
     extension: Extension
     type_tag: str
+    # For a representation-change primitive (`result_target`), the concrete target this slot
+    # is monomorphized for: a target *type tag* (base dim, e.g. ``ui32``) or a target
+    # *extension name* (extension dim, e.g. ``sse``). None for ordinary primitives.
+    to_target: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,18 +87,27 @@ class Selector:
         for primitive in variants:
             for extension_name in self._emit_extensions(catalog, profile):
                 for type_tag in type_tags:
-                    best = self._best_body(
-                        catalog, profile, primitive, extension_name, type_tag, warnings
+                    # A representation-change primitive has a SECOND axis (the target type /
+                    # extension); it emits one slot per (type_tag, to_target). An ordinary
+                    # primitive has a single target-less slot.
+                    to_targets = self._target_candidates(
+                        catalog, primitive, extension_name, type_tag
                     )
-                    if best is not None:
-                        selected.append(
-                            SelectedImplementation(
-                                primitive=primitive,
-                                implementation=best,
-                                extension=catalog.extensions[extension_name],
-                                type_tag=type_tag,
-                            )
+                    for to_target in to_targets:
+                        best = self._best_body(
+                            catalog, profile, primitive, extension_name,
+                            type_tag, to_target, warnings,
                         )
+                        if best is not None:
+                            selected.append(
+                                SelectedImplementation(
+                                    primitive=primitive,
+                                    implementation=best,
+                                    extension=catalog.extensions[extension_name],
+                                    type_tag=type_tag,
+                                    to_target=to_target,
+                                )
+                            )
         return ProfileSelectionResult(
             selected=tuple(selected), diagnostics=tuple(warnings.values())
         )
@@ -132,6 +145,43 @@ class Selector:
             emit.append(name)
         return sorted(emit)
 
+    def _target_candidates(
+        self,
+        catalog: Catalog,
+        primitive: Primitive,
+        extension_name: str,
+        type_tag: str,
+    ) -> tuple[str | None, ...]:
+        """The concrete second-axis targets to emit for this (extension, source type).
+
+        An ordinary primitive yields a single ``None`` (no second axis). A
+        representation-change primitive yields its in-scope targets, gathered from the
+        ``to_target_group`` of the impls matching this (extension, source type):
+        - **base** dim -> same-width integer target tags (signedness flips `si32↔ui32`);
+          different-width / float are deferred (their `bit_cast` is a size mismatch on
+          scalar, and float/cross-domain needs cast intrinsics).
+        - **extension** dim -> target *extension* names that are registered extensions
+          (the concrete `sse`/`avx2` branches; the generic `where:`-clause level is not an
+          extension, so it drops — deferred).
+        """
+
+        if primitive.result_target is None:
+            return (None,)
+        dim = primitive.result_target[0]
+        chain = catalog.extension_chain(extension_name)
+        targets: set[str] = set()
+        for impl in primitive.implementations:
+            if impl.extension not in chain or impl.to_target_group is None:
+                continue
+            if not catalog.type_group_contains(impl.type_group, type_tag):
+                continue
+            targets.update(catalog.type_group_members(impl.to_target_group))
+        if dim == "base":
+            return tuple(sorted(t for t in targets if _same_width_int(t, type_tag)))
+        if dim == "extension":
+            return tuple(sorted(t for t in targets if t in catalog.extensions))
+        return tuple(sorted(targets))
+
     def _best_body(
         self,
         catalog: Catalog,
@@ -139,6 +189,7 @@ class Selector:
         primitive: Primitive,
         extension_name: str,
         type_tag: str,
+        to_target: str | None,
         warnings: dict[str, Diagnostic],
     ) -> Implementation | None:
         # Gather candidates from the extension and the ancestors it inherits from
@@ -150,6 +201,12 @@ class Selector:
             if implementation.extension not in distance:
                 continue
             if not catalog.type_group_contains(implementation.type_group, type_tag):
+                continue
+            # Second-axis match: the body's `to_target_group` must contain the target slot.
+            if to_target is not None and not (
+                implementation.to_target_group is not None
+                and catalog.type_group_contains(implementation.to_target_group, to_target)
+            ):
                 continue
             flags = _applicable_flags(catalog, implementation, type_tag)
             if flags is None or not (flags <= profile.features):
@@ -206,18 +263,41 @@ class Selector:
         # single extension distance ties, so specificity still decides there.
 
 
+def _same_width_int(target_tag: str, source_tag: str) -> bool:
+    """Both tags are same-width integers (`si32`/`ui32`) — the scope of the delivered
+    `base`-dim `reinterpret` (a register no-op on x86, a valid same-size `bit_cast` on
+    scalar). Different-width and float targets are deferred."""
+
+    def int_width(tag: str) -> int | None:
+        if (tag.startswith("si") or tag.startswith("ui")) and tag[2:].isdigit():
+            return int(tag[2:])
+        return None
+
+    tw, sw = int_width(target_tag), int_width(source_tag)
+    return tw is not None and tw == sw
+
+
 def _applicable_flags(
     catalog: Catalog, implementation: Implementation, type_tag: str
 ) -> frozenset[str] | None:
-    """The requirement-clause flags that apply to ``type_tag`` (None if none apply)."""
+    """The requirement-clause flags that apply to ``type_tag`` (None if none apply).
+
+    The *union* of every applicable clause's flags: a body's requirements may be the
+    selector ancestors' clauses plus its own (e.g. `?i?`'s ``[avx512f]`` + a `ToExtension:
+    avx2`'s ``[avx512dq]``), all of which must hold. Mutually-exclusive type-group clauses in
+    a `requires` map still contribute only the one that matches the type, so this is
+    equivalent to the former first-match for single/disjoint clauses."""
 
     if not implementation.requirements:
         return frozenset()
+    flags: set[str] = set()
+    matched = False
     for clause in implementation.requirements:
         if clause.extension is not None and clause.extension != implementation.extension:
             continue  # this clause is scoped to a different extension
         if clause.type_group is None or catalog.type_group_contains(
             clause.type_group, type_tag
         ):
-            return clause.flags
-    return None
+            flags |= clause.flags
+            matched = True
+    return frozenset(flags) if matched else None

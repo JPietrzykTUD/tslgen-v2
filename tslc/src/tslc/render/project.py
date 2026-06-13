@@ -146,6 +146,11 @@ def _used_exts(by_primitive: dict[str, tuple[LoweredSpecialization, ...]]) -> li
     exts: set[str] = set()
     for specs in by_primitive.values():
         exts.update(spec.extension_name for spec in specs)
+        # A representation-change primitive's target vector lives under another extension
+        # (`extract` avx2->sse): register it too so its `simd<>` tag is defined.
+        exts.update(
+            spec.target_extension_isa for spec in specs if spec.target_extension_isa
+        )
     return sorted(exts)
 
 
@@ -155,6 +160,13 @@ def _used_pairs(
     pairs: set[tuple[str, str]] = set()
     for specs in by_primitive.values():
         pairs.update((spec.extension_name, spec.base_type_spelling) for spec in specs)
+        # The target vector's `simd<base, ext>` must be registered too (e.g. `extract`
+        # avx2->sse needs `simd<int8_t, sse>`).
+        pairs.update(
+            (spec.target_extension_isa, spec.target_base_spelling)
+            for spec in specs
+            if spec.target_extension_isa and spec.target_base_spelling
+        )
     return sorted(pairs)
 
 
@@ -346,10 +358,14 @@ def _cpp_smoke(p: ProfileRender) -> str:
                 vec = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
             targs = (
                 [vec]
+                # A representation-change primitive's second type param is the target vector
+                # (right after `Vec`, matching the wrapper's `<Vec, ToVec, …>` order).
+                + ([spec.target_vector_spelling] if spec.target_vector_spelling else [])
                 + [value for _, value in spec.axis]
-                # An `sImm` immediate is a non-type template param: pick a representative
-                # positive literal so address-of forces the body to compile.
-                + (["3"] if spec.immediate is not None else [])
+                # An `sImm` immediate is a non-type template param: pick `0`, valid for every
+                # immediate's range (shift-by-0, `extract` lane-block 0, factor 0) — some
+                # intrinsics range-check the immediate at compile time (`extract` needs [0,1]).
+                + (["0"] if spec.immediate is not None else [])
                 # `generic_params` (e.g. `PreserveSign`) precede the deduced `Arg` params in
                 # the wrapper's template list, so they must be spelled (at their default) to
                 # keep the explicit args aligned with the varying-arg positions.

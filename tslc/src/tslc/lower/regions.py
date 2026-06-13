@@ -502,14 +502,13 @@ class CallLowerer:
         entries = split_top_level(type_args, ",") if type_args else []
         vec_override: str | None = None
         if entries and entries[0] != "Vec":
-            value = self._evaluator.evaluate(entries[0], context)
-            if not isinstance(value, TextValue):
+            vec_override = self._resolve_vec_expr(entries[0], context)
+            if vec_override is None:
                 context.skip(
                     "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS",
                     f"call type-args {type_args!r} not supported yet: {region.full_text!r}",
                 )
                 return region.full_text
-            vec_override = value.text
         extra_args: list[str] = []
         for entry in entries[1:]:
             rendered = self._render_call_arg(entry, context)
@@ -557,9 +556,22 @@ class CallLowerer:
         callee's `_imm` split (not the current `@self` name) and cross the per-ISA immediate type
         (e.g. avx2 `i32` into a generic/scalar `u32` slot). Such an entry returns None → skip.
 
-        In-scope param names are matched *before* query evaluation (the evaluator passes a bare
-        token through as a `TextValue`, which would otherwise mask the immediate-skip)."""
+        A `Vec<X>` entry (a representation-change target, e.g. `reinterpret[Vec, Vec<UnsignedT>]`)
+        resolves to the target vector spelling. In-scope param names are matched *before* query
+        evaluation (the evaluator passes a bare token through as a `TextValue`, which would
+        otherwise mask the immediate-skip)."""
 
+        if entry.startswith("Vec<") and entry.endswith(">"):
+            return self._resolve_vec_expr(entry, context)
+        # A bare `Vec` target (`reinterpret[Vec<UnsignedT>, Vec]`) is the current vector — spell
+        # it concretely (Rust has no `Vec` alias, and an arg-trait `Self` is the argument type).
+        if entry == "Vec":
+            base = context.translation.scalar_spelling(context.type_tag)
+            return (
+                context.translation.vector_type_spelling(base, context.extension.isa_name)
+                if base is not None
+                else None
+            )
         if entry == context.immediate_name:
             return None
         if any(
@@ -570,6 +582,34 @@ class CallLowerer:
         if isinstance(value, TextValue):
             return value.text
         return None
+
+    def _resolve_vec_expr(self, entry: str, context: LoweringContext) -> str | None:
+        """A call-bracket vector expression -> its backend `simd<…>` spelling. `Vec<X>` is the
+        current vector with base replaced by the type `X` (`Vec<UnsignedT>` -> the same-extension
+        unsigned sibling); any other expression is a query resolving to a vector `TextValue`
+        (e.g. `vector::as_extension(scalar)`). None if unresolvable."""
+
+        entry = entry.strip()
+        if entry.startswith("Vec<") and entry.endswith(">"):
+            inner = entry[len("Vec<") : -1].strip()
+            # `inner` is either a `let<type>` alias (its recorded spelling is the base) or a
+            # type expression that evaluates to a tag (-> its scalar spelling).
+            if inner in context.type_aliases:
+                base: str | None = context.type_aliases[inner]
+            else:
+                value = self._evaluator.evaluate(inner, context)
+                base = (
+                    context.translation.scalar_spelling(value.type_tag)
+                    if isinstance(value, TypeValue)
+                    else None
+                )
+            if base is None:
+                return None
+            return context.translation.vector_type_spelling(
+                base, context.extension.isa_name
+            )
+        value = self._evaluator.evaluate(entry, context)
+        return value.text if isinstance(value, TextValue) else None
 
 
 def _take_bracket(text: str) -> tuple[str, str]:

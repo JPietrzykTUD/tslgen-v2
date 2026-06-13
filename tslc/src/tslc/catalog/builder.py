@@ -98,9 +98,15 @@ def _build_primitives(
     """One declaration -> one Primitive, or several when a boolean wildcard attribute
     (`[aligned=*]`) expands into concrete-value variants."""
 
+    # A representation-change primitive (`return_type: base|extension: Target`) carries a
+    # second type axis; its selector nests a `<Target>:` level the impl-walk must split out.
+    result_target = _result_target(declaration)
+    target_name = result_target[1] if result_target is not None else None
     # Walk the selector-entry tree so each body keeps its entry's `requires` flags.
     implementations = tuple(
-        _implementations_from_entries(declaration.impl_entries, extension_names)
+        _implementations_from_entries(
+            declaration.impl_entries, extension_names, target_name
+        )
     )
     attribute_keys = tuple(attribute.key.text for attribute in declaration.attributes)
     base_attributes = {a.key.text: _attribute_value(a) for a in declaration.attributes}
@@ -124,6 +130,7 @@ def _build_primitives(
             immediate_type=immediate_type,
             immediate_dispatch=immediate_dispatch,
             generic_params=generic_params,
+            result_target=result_target,
         )
 
     return [make(attrs) for attrs in _expand_wildcards(base_attributes)]
@@ -152,13 +159,20 @@ def _attribute_value(attribute) -> str:  # noqa: ANN001 - ParsedTslAttribute
 def _implementations_from_entries(
     entries: tuple[ParsedImplementationSelectorEntry, ...],
     extension_names: frozenset[str],
+    target_name: str | None = None,
+    inherited: tuple[RequirementClause, ...] = (),
 ) -> list[Implementation]:
     implementations: list[Implementation] = []
     for entry in entries:
-        requirements = _requirements(entry.requires, extension_names)
+        # An entry's bodies carry its own `requires` PLUS those of its selector ancestors —
+        # a nested level (`avx512: ?i?: ToExtension: sse:`) inherits the `[avx512f]` declared at
+        # `?i?`, so a deeper body is still gated by the outer feature requirement.
+        requirements = inherited + _requirements(entry.requires, extension_names)
         for envelope in entry.body_envelopes:
             head = envelope.selector_path[0] if envelope.selector_path else ""
-            type_group = envelope.selector_path[-1] if envelope.selector_path else ""
+            type_group, to_target_group = _split_target_selector(
+                envelope.selector_path, target_name
+            )
             # A bracketed multi-extension selector (``[avx2, sse]:``) is one body
             # shared by several extensions: expand it to one Implementation per
             # extension so each selects independently (its per-ext `requires` clause
@@ -172,12 +186,35 @@ def _implementations_from_entries(
                         body_text=envelope.payload_text,
                         requirements=requirements,
                         source_order=envelope.source_order,
+                        to_target_group=to_target_group,
                     )
                 )
         implementations.extend(
-            _implementations_from_entries(entry.children, extension_names)
+            _implementations_from_entries(
+                entry.children, extension_names, target_name, requirements
+            )
         )
     return implementations
+
+
+def _split_target_selector(
+    selector_path: tuple[str, ...], target_name: str | None
+) -> tuple[str, str | None]:
+    """Split a selector path into (source type-group, target type-group).
+
+    For an ordinary primitive the source type-group is the last level. A
+    representation-change primitive nests a `<target_name>:` marker level (``ToBase`` /
+    ``ToExtension``): the source is the level just before it and the target the level just
+    after (`(ext, ?i?, ToBase, ui32)` -> source ``?i?``, target ``ui32``)."""
+
+    if not selector_path:
+        return "", None
+    if target_name is not None and target_name in selector_path:
+        marker = selector_path.index(target_name)
+        source = selector_path[marker - 1] if marker >= 1 else ""
+        target = selector_path[marker + 1] if marker + 1 < len(selector_path) else None
+        return source, target
+    return selector_path[-1], None
 
 
 def _selector_extensions(head: str) -> tuple[str, ...]:
@@ -376,6 +413,24 @@ def _generic_params(declaration: ParsedPrimitiveDeclaration) -> tuple[GenericPar
         )
         for entry in _children(fields[0].field)
     )
+
+
+def _result_target(
+    declaration: ParsedPrimitiveDeclaration,
+) -> tuple[str, str] | None:
+    """A `return_type: <dim>: <Target>` block -> `(dim, target_name)` where `dim` is
+    "base" (reinterpret/cast/convert_up) or "extension" (extract/insert). The result is the
+    source vector with `dim` replaced by the caller-supplied target. None when absent."""
+
+    fields = declaration.fields_by_name("return_type")
+    if not fields:
+        return None
+    for child in _children(fields[0].field):
+        if child.key.text in ("base", "extension"):
+            name = _field_text(child)
+            if name:
+                return (child.key.text, name)
+    return None
 
 
 def _immediate_spec(

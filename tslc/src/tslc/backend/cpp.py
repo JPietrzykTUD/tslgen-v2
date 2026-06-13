@@ -31,7 +31,12 @@ class CppBackend:
         other primitive's wrapper (``::tsl::set1<Vec>(...)``) regardless of order."""
 
         shape = specializations[0]  # all share the same signature shape + axis keys
-        decl_params = "class Vec" + "".join(f", bool {_axis_name(k)}" for k, _ in shape.axis)
+        # A representation-change primitive carries a SECOND vector type (the target): the
+        # result is `ToVec::register_type` and `ToVec` is a free template param the caller binds.
+        decl_params = "class Vec" + (
+            ", class ToVec" if shape.target_vector_spelling is not None else ""
+        )
+        decl_params += "".join(f", bool {_axis_name(k)}" for k, _ in shape.axis)
         if shape.immediate is not None:  # an `sImm` non-type template parameter
             decl_params += f", {shape.immediate[1]} {shape.immediate[0]}"
         # `generic_params` (e.g. `PreserveSign`) are free template params too (defaults go on
@@ -50,10 +55,17 @@ class CppBackend:
         overloaded primitive (several signatures, e.g. store's `(ptr,v)`/`(ptr,s)`)
         emits one `apply` per signature in that group, resolved by C++ overloading."""
 
-        groups: dict[tuple[str, str, tuple], list[LoweredSpecialization]] = {}
-        order: list[tuple[str, str, tuple]] = []
+        groups: dict[tuple, list[LoweredSpecialization]] = {}
+        order: list[tuple] = []
         for spec in specializations:
-            key = (spec.base_type_spelling, spec.extension_name, spec.axis)
+            # A representation-change primitive keys on the target too: same-source different-
+            # target specs are distinct specializations (`si8->ui8` vs `si8->si8`), not one group.
+            key = (
+                spec.base_type_spelling,
+                spec.extension_name,
+                spec.axis,
+                spec.target_vector_spelling,
+            )
             if key not in groups:
                 groups[key] = []
                 order.append(key)
@@ -79,7 +91,12 @@ class CppBackend:
         free += [f"{typ} {name}" for name, typ, _ in first.generic_params]
         head = f"template <{', '.join(free)}>" if free else "template <>"
         # A boolean-wildcard attribute keys the specialization so both variants coexist.
-        key = vec + "".join(f", {value}" for _, value in first.axis)
+        # A representation-change primitive keys on (source, target) so each target is its
+        # own specialization (`reinterpret_impl<simd<i32,avx2>, simd<u32,avx2>>`).
+        key = vec
+        if first.target_vector_spelling is not None:
+            key += f", {first.target_vector_spelling}"
+        key += "".join(f", {value}" for _, value in first.axis)
         if first.immediate is not None:
             key += f", {first.immediate[0]}"
         key += "".join(f", {name}" for name, _, _ in first.generic_params)
@@ -98,7 +115,7 @@ class CppBackend:
                 if kind != "sImm"  # the immediate is a template param, not a runtime arg
             )
             applies.append(
-                f"    static inline {_result_type(spec.result_kind)} apply({params}) {{\n"
+                f"    static inline {_apply_result_type(spec)} apply({params}) {{\n"
                 f"        {spec.body_text}\n"
                 f"    }}"
             )
@@ -117,8 +134,10 @@ class CppBackend:
         immediate_params = (
             [f"{shape.immediate[1]} {shape.immediate[0]}"] if shape.immediate is not None else []
         )
+        has_target = shape.target_vector_spelling is not None
         template_params = (
             ["class Vec"]
+            + (["class ToVec"] if has_target else [])
             + [f"bool {_axis_name(k)} = false" for k, _ in shape.axis]
             + immediate_params
             + [f"{typ} {name} = {default}" for name, typ, default in shape.generic_params]
@@ -136,13 +155,16 @@ class CppBackend:
         )
         impl_args = (
             "Vec"
+            + (", ToVec" if has_target else "")
             + "".join(f", {_axis_name(k)}" for k, _ in shape.axis)
             + (f", {shape.immediate[0]}" if shape.immediate is not None else "")
             + "".join(f", {name}" for name, _, _ in shape.generic_params)
         )
+        # The wrapper's result projects through the caller-bound `ToVec` param.
+        result_type = "typename ToVec::register_type" if has_target else _result_type(shape.result_kind)
         return (
             f"template <{', '.join(template_params)}>\n"
-            f"inline {_result_type(shape.result_kind)} {primitive_name}({params}) {{\n"
+            f"inline {result_type} {primitive_name}({params}) {{\n"
             f"    return {primitive_name}_impl<{impl_args}>::apply({names});\n"
             f"}}"
         )
@@ -152,6 +174,15 @@ def _axis_name(key: str) -> str:
     """An axis attribute key as a C++ template-parameter name (`aligned` -> `Aligned`)."""
 
     return key[:1].upper() + key[1:]
+
+
+def _apply_result_type(spec: LoweredSpecialization) -> str:
+    """The `apply` result type. A representation-change spec returns the (concrete) target
+    register; otherwise the kind projects through `Vec`."""
+
+    if spec.target_register_spelling is not None:
+        return spec.target_register_spelling
+    return _result_type(spec.result_kind)
 
 
 def _result_type(kind: str) -> str:

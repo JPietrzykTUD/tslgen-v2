@@ -462,15 +462,66 @@ def test_shift_right_delegation_builds(
     # native intrinsic (e.g. avx2/sse `si64`, runtime vector shifts) delegate
     # `@self[GenericVec, PreserveSign]` -> generic -> `@self[as_extension(scalar), PreserveSign]`
     # -> scalar, forwarding the `PreserveSign` generic_param through the multi-entry `[...]` list
-    # (entry 0 = target vector, entries 1.. = forwarded template args). Scalar + sse2 + avx2: the
-    # avx512 native immediate body (per-ISA `u32` shift immediate) and the `(v,sImm)` immediate-
-    # forwarding delegation (needs the `_imm` split + per-ISA immediate type) are deferred and skip
-    # cleanly, as are the signed reinterpret arm and the float chain. Both backends.
+    # (entry 0 = target vector, entries 1.. = forwarded template args). Also the SIGNED x86 bodies
+    # now build via the `reinterpret` second type-axis: `srai` (PreserveSign) + the `!PreserveSign`
+    # `reinterpret`->`srli`->`reinterpret` arm. Scalar + sse2 + avx2: the avx512 native immediate
+    # body (per-ISA `u32` shift immediate) and the `(v,sImm)` immediate-forwarding delegation are
+    # deferred and skip cleanly, as is the float chain. Both backends.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["shift_right"],
         profiles=["scalar", "sse2", "avx2"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_reinterpret_integer_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # `reinterpret` is the `base`-dimension of the target-vector second axis: `return_type: base:
+    # ToBase` makes the result the source vector with its base type replaced. Delivered for
+    # same-width integer targets (signedness flips `si32<->ui32`) — the corpus `?i?: ToBase: ?i?`
+    # `bit_cast` branch. The backend emits a SECOND type param (C++ `reinterpret_impl<simd<i32,
+    # avx2>, simd<u32,avx2>>` / Rust `ReinterpretImpl<ToVec>`); `register::generic(ToType)` resolves
+    # the target register. Scalar + sse2 + avx2. Different-width / float / cross-domain reinterpret
+    # and the generic (LANES-sized) vector are deferred. Both backends.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["reinterpret"],
+        profiles=["scalar", "sse2", "avx2"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_extract_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # `extract` is the `extension`-dimension of the same axis: `return_type: extension:
+    # ToExtension` makes the result the source vector under a smaller extension (avx2->sse,
+    # avx512->sse/avx2), via the single-intrinsic branches (`_mm256_extracti128_si256`,
+    # `_mm512_extracti32x4_epi32`, the `f32`/`f64` variants) + an `sImm` lane-block index. Proves
+    # the second axis on the *extension* dimension. The generic `where:`-clause body (`family
+    # same_as`/`width smaller_than`) is deferred and skips cleanly. sse2 + avx2 + skylake, both
+    # backends.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["extract"],
+        profiles=["sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
