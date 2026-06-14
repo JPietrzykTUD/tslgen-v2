@@ -500,6 +500,13 @@ class CallLowerer:
         # template/const-generic args forwarded into the callee's wrapper (e.g.
         # `@self[GenericVec, shift, PreserveSign]` delegating with the in-scope immediate + param).
         entries = split_top_level(type_args, ",") if type_args else []
+        # Forwarding the immediate as a (template/const-generic) arg is, by construction, a call
+        # to the immediate-split `<name>_imm` form (the runtime form takes it as a runtime arg).
+        # So "the immediate is among the forwarded entries" ⟺ "target the `_imm` split" — match
+        # `_split_immediates`' `<name>_imm` naming. (Holds for every `@self` shift delegation; no
+        # corpus call forwards an immediate to a non-splitting callee.)
+        if context.immediate_name is not None and context.immediate_name in entries[1:]:
+            name = f"{name}_imm"
         vec_override: str | None = None
         if entries and entries[0] != "Vec":
             vec_override = self._resolve_vec_expr(entries[0], context)
@@ -552,14 +559,13 @@ class CallLowerer:
         `PreserveSign`) passed through verbatim. Returns None when it is neither (so the caller
         skips).
 
-        Forwarding the *immediate* itself (`@self[…, shift, …]`) is deferred: it would target the
-        callee's `_imm` split (not the current `@self` name) and cross the per-ISA immediate type
-        (e.g. avx2 `i32` into a generic/scalar `u32` slot). Such an entry returns None → skip.
+        Forwarding the *immediate* (`@self[…, shift, …]`) passes it through verbatim — it is in
+        scope as the `_imm` form's template / const-generic param (the caller appends `_imm` to
+        the callee; see `lower()`), so it threads straight into the callee's turbofish.
 
         A `Vec<X>` entry (a representation-change target, e.g. `reinterpret[Vec, Vec<UnsignedT>]`)
         resolves to the target vector spelling. In-scope param names are matched *before* query
-        evaluation (the evaluator passes a bare token through as a `TextValue`, which would
-        otherwise mask the immediate-skip)."""
+        evaluation (the evaluator passes a bare token through as a `TextValue`)."""
 
         if entry.startswith("Vec<") and entry.endswith(">"):
             return self._resolve_vec_expr(entry, context)
@@ -573,7 +579,7 @@ class CallLowerer:
                 else None
             )
         if entry == context.immediate_name:
-            return None
+            return entry
         if any(
             re.search(rf"\b{re.escape(name)}\b", entry) for name in context.generic_param_names
         ):

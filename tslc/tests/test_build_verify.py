@@ -462,11 +462,13 @@ def test_shift_right_delegation_builds(
     # native intrinsic (e.g. avx2/sse `si64`, runtime vector shifts) delegate
     # `@self[GenericVec, PreserveSign]` -> generic -> `@self[as_extension(scalar), PreserveSign]`
     # -> scalar, forwarding the `PreserveSign` generic_param through the multi-entry `[...]` list
-    # (entry 0 = target vector, entries 1.. = forwarded template args). Also the SIGNED x86 bodies
-    # now build via the `reinterpret` second type-axis: `srai` (PreserveSign) + the `!PreserveSign`
-    # `reinterpret`->`srli`->`reinterpret` arm. Scalar + sse2 + avx2: the avx512 native immediate
-    # body (per-ISA `u32` shift immediate) and the `(v,sImm)` immediate-forwarding delegation are
-    # deferred and skip cleanly, as is the float chain. Both backends.
+    # (entry 0 = target vector, entries 1.. = forwarded template args). The SIGNED x86 bodies build
+    # via the `reinterpret` second type-axis (`srai` + the `!PreserveSign`
+    # `reinterpret`->`srli`->`reinterpret` arm). The `(v,sImm)` IMMEDIATE-forwarding delegation also
+    # builds: `@self[…, shift, PreserveSign]` targets the `_imm` split (`shift_right_imm`) with the
+    # immediate forwarded as a const arg, chaining avx2/sse `si64` -> generic -> scalar. Scalar +
+    # sse2 + avx2: the avx512 native immediate body (per-ISA `u32`) and the float chain are deferred
+    # and skip cleanly. Both backends.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
