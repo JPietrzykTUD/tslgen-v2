@@ -93,33 +93,36 @@ class IntrinComposeLowerer:
             and context.extension.mask_policy.kind == "native_predicate_by_lanes"
         ):
             name = f"{name}_mask"
-        # Const-generic intrinsic forward: a Rust immediate intrinsic takes the count as a
-        # const generic (`_mm256_slli_epi32::<SHIFT>(a)`), not a runtime arg. When the
-        # primitive's immediate uses `rust_const_match`, lift the arg that names the
-        # immediate out of the call and into the turbofish. (C++ takes it as a normal arg —
-        # a compile-time-constant template param converts implicitly.)
-        forwarded = self._forward_immediate(region, context, render)
-        if forwarded is not None:
-            turbofish, rest = forwarded
-            return f"{name}::<{turbofish}>({rest})"
+        # Const-generic immediate bridge: a Rust immediate intrinsic takes the count as a
+        # const generic whose type differs across ISAs (avx2 `i32` vs avx512 `u32`), and a
+        # single shared const can't satisfy both. When the immediate declares the `const_match`
+        # strategy, forward it through a literal match — each arm calls the intrinsic with a
+        # *literal* const, which re-types to whatever that intrinsic wants (folds to one arm at
+        # compile time). Otherwise the immediate stays a positional const arg (C++ always;
+        # Rust when no strategy is declared — a compile-time-constant arg works directly).
+        match_call = self._const_match(name, region, context, render)
+        if match_call is not None:
+            return match_call
         return f"{name}({render(region.body)})"
 
-    def _forward_immediate(
-        self, region: Region, context: LoweringContext, render: RenderBody
-    ) -> tuple[str, str] | None:
-        """If this is a Rust `rust_const_match` immediate intrinsic, split the rendered
-        args into (immediate-for-turbofish, remaining-args). Returns None otherwise."""
+    def _const_match(
+        self, name: str, region: Region, context: LoweringContext, render: RenderBody
+    ) -> str | None:
+        """A Rust `const_match` immediate intrinsic -> a literal match over the immediate's
+        legal range: `match shift { 0 => name::<0>(rest), … hi-1 => …, _ => name::<lo>(rest) }`.
+        Returns None when not applicable (wrong backend, no strategy, no range, or the
+        immediate isn't among the args)."""
 
         if (
             context.translation.backend_id != "rust"
-            or context.immediate_dispatch != "rust_const_match"
+            or context.immediate_dispatch != "const_match"
             or context.immediate_name is None
+            or context.immediate_range is None
         ):
             return None
-        groups = _split_arg_groups(region.body)
         imm: str | None = None
         rest: list[str] = []
-        for group in groups:
+        for group in _split_arg_groups(region.body):
             rendered = render(group).strip()
             if rendered == context.immediate_name:
                 imm = rendered
@@ -127,7 +130,13 @@ class IntrinComposeLowerer:
                 rest.append(rendered)
         if imm is None:
             return None
-        return (imm, ", ".join(rest))
+        rest_text = ", ".join(rest)
+        lo, hi, inclusive = context.immediate_range
+        values = range(lo, hi + 1 if inclusive else hi)
+        arms = "".join(f"{k} => {name}::<{k}>({rest_text}), " for k in values)
+        # `_` covers an out-of-range *constant* (`value_range` deems it invalid); a `lo` shift
+        # keeps it type-valid. Exact out-of-range semantics is a value-test concern (deferred).
+        return f"match {imm} {{ {arms}_ => {name}::<{lo}>({rest_text}) }}"
 
     def _suffix(self, modifiers: ComposeModifiers, context: LoweringContext) -> str | None:
         explicit = modifiers.get("suffix")

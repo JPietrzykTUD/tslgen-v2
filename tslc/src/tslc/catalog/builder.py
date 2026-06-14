@@ -14,11 +14,13 @@ from tslc.catalog.model import (
     Extension,
     GenericParam,
     ImaskPolicy,
+    ImmediateParam,
     Implementation,
     MaskPolicy,
     Primitive,
     RequirementClause,
 )
+from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic
 from tslc.syntax.ast import (
     OuterTslParseResult,
@@ -63,7 +65,9 @@ class CatalogBuilder:
         for document in parsed.documents:
             for declaration in document.declarations:
                 if isinstance(declaration, ParsedPrimitiveDeclaration):
-                    primitives.extend(_build_primitives(declaration, extension_names))
+                    primitives.extend(
+                        _build_primitives(declaration, extension_names, diagnostics)
+                    )
                 elif isinstance(declaration, ParsedBlockDeclaration):
                     if declaration.kind == "types":
                         type_groups.update(_build_type_groups(declaration))
@@ -93,7 +97,9 @@ _BOOLEAN_WILDCARD_VALUES = ("true", "false")
 
 
 def _build_primitives(
-    declaration: ParsedPrimitiveDeclaration, extension_names: frozenset[str]
+    declaration: ParsedPrimitiveDeclaration,
+    extension_names: frozenset[str],
+    diagnostics: list[Diagnostic],
 ) -> list[Primitive]:
     """One declaration -> one Primitive, or several when a boolean wildcard attribute
     (`[aligned=*]`) expands into concrete-value variants."""
@@ -111,12 +117,9 @@ def _build_primitives(
     attribute_keys = tuple(attribute.key.text for attribute in declaration.attributes)
     base_attributes = {a.key.text: _attribute_value(a) for a in declaration.attributes}
 
-    # The `sImm` immediate's type + dispatch from the `sImm_type` block. The x86 `override`
-    # (e.g. `si32`) wins over `default` when present — the const-generic/template param type
-    # is uniform per primitive, and the override is the type the x86 intrinsics want. (A
-    # genuinely per-ISA immediate type — avx512's `ui32` vs sse/avx2's `si32` — is deferred
-    # with the avx512 shift bodies; for now the override type is used uniformly.)
-    immediate_type, immediate_dispatch = _immediate_spec(declaration)
+    # Per-parameter `sImm` immediate metadata from the `params:` block (type, value_range,
+    # per-backend dispatch strategy), keyed by the signature parameter name.
+    immediate_params = _immediate_params(declaration, diagnostics)
     generic_params = _generic_params(declaration)
 
     def make(attributes: dict[str, str]) -> Primitive:
@@ -127,8 +130,7 @@ def _build_primitives(
             attribute_keys=attribute_keys,
             implementations=implementations,
             attributes=attributes,
-            immediate_type=immediate_type,
-            immediate_dispatch=immediate_dispatch,
+            immediate_params=immediate_params,
             generic_params=generic_params,
             result_target=result_target,
         )
@@ -433,25 +435,108 @@ def _result_target(
     return None
 
 
-def _immediate_spec(
+def _immediate_params(
     declaration: ParsedPrimitiveDeclaration,
-) -> tuple[str | None, str | None]:
-    """The `sImm` immediate's (type, dispatch) from the `sImm_type` block: the x86
-    `override` type if present (the type the const-generic intrinsics want), else the
-    `default`; plus the `dispatch` strategy (e.g. ``rust_const_match``)."""
+    diagnostics: list[Diagnostic],
+) -> tuple[ImmediateParam, ...]:
+    """The `params:` block -> per-name `ImmediateParam` metadata for `sImm` operands.
 
-    fields = declaration.fields_by_name("sImm_type")
+    Each entry refines a named `sImm` parameter from the signature with its public `type`,
+    a `value_range`, and a per-language `dispatch` strategy. Entries that name a non-`sImm`
+    parameter, an unknown parameter, or duplicate a name are diagnosed and dropped.
+    """
+
+    fields = declaration.fields_by_name("params")
     if not fields:
-        return (None, None)
-    block = fields[0].field
-    dispatch = _field_text(_child(block, "dispatch"))
-    # `override: tsil: [exts] <type>` — the bracketed-extension entry's value is the type.
-    override = _child(block, "override")
-    tsil = _child(override, "tsil") if override is not None else None
-    override_entries = _children(tsil) if tsil is not None else ()
-    override_type = _field_text(override_entries[0]) if override_entries else None
-    immediate_type = override_type or _field_text(_child(block, "default"))
-    return (immediate_type, dispatch)
+        return ()
+    shape = parse_signature(declaration.signature)
+    kinds = (
+        dict(zip(declaration.parameters, shape.param_kinds)) if shape is not None else {}
+    )
+    name = declaration.name
+    result: list[ImmediateParam] = []
+    seen: set[str] = set()
+    for entry in _children(fields[0].field):
+        param_name = entry.key.text
+        if param_name in seen:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-PARAMS-DUPLICATE",
+                    message=f"duplicate `params` entry {param_name!r} on {name!r}",
+                )
+            )
+            continue
+        seen.add(param_name)
+        if param_name not in kinds:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-PARAMS-UNKNOWN-PARAM",
+                    message=f"`params` entry {param_name!r} is not a parameter of {name!r}",
+                )
+            )
+            continue
+        if kinds[param_name] != "sImm":
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-PARAMS-NOT-IMMEDIATE",
+                    message=(
+                        f"`params` entry {param_name!r} on {name!r} is not an `sImm` "
+                        "immediate (its signature kind is "
+                        f"{kinds[param_name]!r})"
+                    ),
+                )
+            )
+            continue
+        range_text = _field_text(_child(entry, "value_range"))
+        value_range = _parse_value_range(range_text)
+        if range_text is not None and value_range is None:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    code="TSL-PARAMS-BAD-RANGE",
+                    message=(
+                        f"malformed `value_range` {range_text!r} for {param_name!r} on "
+                        f"{name!r} (expected `lo..hi` or `lo..=hi`)"
+                    ),
+                )
+            )
+        dispatch = tuple(
+            (child.key.text, _field_text(child) or "")
+            for child in _children(_child(entry, "dispatch"))
+        )
+        result.append(
+            ImmediateParam(
+                name=param_name,
+                type_tag=_field_text(_child(entry, "type")) or "ui32",
+                value_range=value_range,
+                dispatch=dispatch,
+            )
+        )
+    return tuple(result)
+
+
+def _parse_value_range(text: str | None) -> tuple[int, str, bool] | None:
+    """`"0..base_bit_width(data)"` / `"1..=32"` -> `(lo, hi_expr, inclusive)`. `hi_expr` is
+    kept symbolic (an int-literal string or a token like `base_bit_width(data)`) and resolved
+    at lowering against the selected type. None when malformed."""
+
+    if text is None:
+        return None
+    if "..=" in text:
+        lo_text, hi_text = text.split("..=", 1)
+        inclusive = True
+    elif ".." in text:
+        lo_text, hi_text = text.split("..", 1)
+        inclusive = False
+    else:
+        return None
+    lo_text, hi_text = lo_text.strip(), hi_text.strip()
+    if not lo_text.lstrip("-").isdigit() or not hi_text:
+        return None
+    return (int(lo_text), hi_text, inclusive)
 
 
 def _imask_policy(field: ParsedTslField | None) -> ImaskPolicy:

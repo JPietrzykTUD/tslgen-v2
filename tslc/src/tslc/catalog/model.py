@@ -72,15 +72,11 @@ class Primitive:
     # (aligned/packed) is expanded by the builder into concrete-value copies, so here the
     # value is always concrete. `attribute_keys` is kept for the masked-variant filter.
     attributes: dict[str, str] = field(default_factory=dict)
-    # The type tag of an `sImm` compile-time immediate operand (from the `sImm_type` block's
-    # `default`, or its x86 `override` when present — see the builder), or None. Primitives
-    # with an `sImm` param but no block default to ``ui32`` in the lowerer. The immediate's
-    # *name*/position come from the signature.
-    immediate_type: str | None = None
-    # The `sImm_type` `dispatch` strategy (e.g. ``rust_const_match``), or None. When set, the
-    # Rust backend forwards the immediate into a const-generic intrinsic turbofish
-    # (`slli::<SHIFT>(data)`) rather than passing it as a runtime value.
-    immediate_dispatch: str | None = None
+    # Per-parameter metadata for `sImm` compile-time immediates, from the `params:` block
+    # (keyed by the signature parameter name). Empty when absent — the lowerer then defaults
+    # the immediate to ``ui32`` with no forwarding strategy (a positional const arg). See
+    # `ImmediateParam`.
+    immediate_params: tuple["ImmediateParam", ...] = ()
     # Free template parameters from a `generic_params` block, e.g. `PreserveSign {kind bool,
     # default true}` on `shift_right`. Emitted as C++ non-type template params / Rust const
     # generics — unlike a wildcard axis they are NOT baked into variants (the caller picks),
@@ -92,6 +88,40 @@ class Primitive:
     # or `("extension", "ToExtension")` (extract). The target is a *second type axis* — its
     # values come from each impl's `to_target_group`. None for ordinary primitives.
     result_target: tuple[str, str] | None = None
+
+    def immediate_param(self, name: str) -> "ImmediateParam | None":
+        """The `params:` metadata for the `sImm` parameter `name`, or None."""
+
+        for param in self.immediate_params:
+            if param.name == name:
+                return param
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class ImmediateParam:
+    """Per-parameter metadata for an `sImm` compile-time immediate (a `params:` entry).
+
+    - ``type_tag``: the immediate's public type (C++ non-type template param / Rust const
+      generic), e.g. ``ui32``/``si32``.
+    - ``value_range``: the legal value range as ``(lo, hi_expr, inclusive)`` — ``lo`` is an
+      int, ``hi_expr`` is an int-literal string or the symbolic token ``base_bit_width(data)``
+      resolved at lowering against the selected type; ``inclusive`` distinguishes ``a..b``
+      (half-open) from ``a..=b``. None when undeclared.
+    - ``dispatch``: backend-id -> forwarding strategy pairs (e.g. ``(("rust", "const_match"),)``).
+      A backend with no entry passes the immediate as a positional const arg.
+    """
+
+    name: str
+    type_tag: str = "ui32"
+    value_range: tuple[int, str, bool] | None = None
+    dispatch: tuple[tuple[str, str], ...] = ()
+
+    def dispatch_for(self, backend_id: str) -> str | None:
+        for backend, strategy in self.dispatch:
+            if backend == backend_id:
+                return strategy
+        return None
 
 
 @dataclass(frozen=True, slots=True)

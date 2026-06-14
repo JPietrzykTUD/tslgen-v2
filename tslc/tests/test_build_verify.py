@@ -385,11 +385,12 @@ def test_mul_imm_builds(data_root: Path, machine_profiles_path: Path, tmp_path: 
 def test_shift_left_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # `shift_left` is the first MIXED overload set with an `sImm` member: in Rust the
     # immediate form splits out to `shift_left_imm` (const generic) while `(v,s)`/`(v,v)`
-    # stay the `shift_left` arg-trait; C++ keeps `shift_left_imm`. The x86 immediate body
-    # forwards the const generic into the intrinsic — Rust `_mm256_slli_epi32::<shift>(data)`
-    # (rust_const_match), C++ `_mm256_slli_epi32(data, shift)`. Both backends, scalar + sse +
-    # avx2 (avx512's `u32`-immediate per-ISA type, generic/x86 fallback multi-arg call,
-    # shift_right's `if<compile>`, float, and masked are deferred and skip cleanly).
+    # stay the `shift_left` arg-trait; C++ keeps `shift_left_imm`. The immediate's `params:`
+    # block (`type ui32`, `value_range 0..base_bit_width(data)`, `dispatch rust: const_match`)
+    # drives the Rust forwarding: a literal match `match shift { 0 => _mm256_slli_epi32::<0>(data),
+    # … }` whose arms re-type per intrinsic; C++ stays positional `_mm256_slli_epi32(data, shift)`.
+    # Both backends, scalar + sse + avx2 (the generic/x86 fallback multi-arg call, shift_right's
+    # `if<compile>`, float, and masked are deferred and skip cleanly).
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
@@ -467,13 +468,39 @@ def test_shift_right_delegation_builds(
     # `reinterpret`->`srli`->`reinterpret` arm). The `(v,sImm)` IMMEDIATE-forwarding delegation also
     # builds: `@self[…, shift, PreserveSign]` targets the `_imm` split (`shift_right_imm`) with the
     # immediate forwarded as a const arg, chaining avx2/sse `si64` -> generic -> scalar. Scalar +
-    # sse2 + avx2: the avx512 native immediate body (per-ISA `u32`) and the float chain are deferred
-    # and skip cleanly. Both backends.
+    # sse2 + avx2 (avx512 is covered by `test_shift_right_avx512_immediate_builds`; the float chain
+    # is deferred and skips cleanly). Both backends.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["shift_right"],
         profiles=["scalar", "sse2", "avx2"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_shift_right_avx512_immediate_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # avx512's `_mm512_srli_epi32` etc. take their shift count as a `const u32`, while avx2's
+    # take `i32` — a single shared trait const can't satisfy both, and stable Rust can't cast a
+    # generic const in a turbofish. The `params:` `dispatch rust: const_match` bridges it: the
+    # immediate forwards through a literal match (`match shift { 0 => _mm512_srli_epi32::<0>(data),
+    # … }`) whose literal arms re-type to whichever const each intrinsic wants (folds to one arm).
+    # `value_range 0..base_bit_width(data)` sets the per-type arm count (16/32/64). This is the
+    # case the wall blocked; skylake + icelake-rockerlake, both backends. (The si8/u8 avx512
+    # `intrin::suffix(si?)` gap and the generic-vector reinterpret fallback skip cleanly.)
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["shift_right"],
+        profiles=["skylake", "icelake-rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None

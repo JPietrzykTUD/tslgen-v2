@@ -24,6 +24,7 @@ from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     RESULT_DIM_BASE,
     Catalog,
+    ImmediateParam,
 )
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, sort_diagnostics
@@ -143,7 +144,6 @@ class Lowerer:
             primitive_axes=_primitive_axes(catalog),
             primitive_arg_generics=_primitive_arg_generics(catalog),
             current_primitive=selected.primitive.name,
-            immediate_dispatch=selected.primitive.immediate_dispatch,
             generic_param_names=tuple(gp.name for gp in selected.primitive.generic_params),
         )
 
@@ -231,22 +231,29 @@ class Lowerer:
                 )
 
         # An `sImm` operand is a compile-time immediate: resolve its (name, backend type
-        # spelling) so the backend can emit it as a template/const-generic param. Its type is
-        # the primitive's `sImm_type` default, falling back to `ui32`.
+        # spelling) so the backend can emit it as a template/const-generic param. Its type,
+        # per-backend forwarding strategy, and legal range come from the `params:` block
+        # (`immediate_param`); absent metadata defaults to `ui32` with positional forwarding.
         immediate: tuple[str, str] | None = None
         if "sImm" in shape.param_kinds:
             idx = shape.param_kinds.index("sImm")
-            imm_spelling = translation.scalar_spelling(
-                selected.primitive.immediate_type or "ui32"
-            )
+            imm_name = parameters[idx]
+            imm_param = selected.primitive.immediate_param(imm_name)
+            imm_type = imm_param.type_tag if imm_param is not None else "ui32"
+            imm_spelling = translation.scalar_spelling(imm_type)
             if imm_spelling is None:
                 return _error(
                     "TSL-LOWER-NO-IMMEDIATE-TYPE",
                     f"no {translation.backend_id} spelling for the immediate type of "
                     f"{selected.primitive.name!r}",
                 )
-            immediate = (parameters[idx], imm_spelling)
-            context.immediate_name = parameters[idx]
+            immediate = (imm_name, imm_spelling)
+            context.immediate_name = imm_name
+            if imm_param is not None:
+                context.immediate_dispatch = imm_param.dispatch_for(translation.backend_id)
+                context.immediate_range = _resolve_immediate_range(
+                    imm_param, context.type_tag
+                )
 
         # Dereferencing a raw pointer is `unsafe` in Rust, so a `ptr`-taking body needs
         # the unsafe frame even when it uses no intrinsics (e.g. scalar `*ptr = data;`).
@@ -315,6 +322,27 @@ class Lowerer:
             specialization=specialization,
             diagnostics=sort_diagnostics(context.diagnostics),
         )
+
+
+def _resolve_immediate_range(
+    imm_param: ImmediateParam, type_tag: str
+) -> tuple[int, int, bool] | None:
+    """Resolve an `ImmediateParam.value_range` to concrete `(lo, hi, inclusive)` for the
+    selected type. `hi_expr` is an int literal or the symbolic `base_bit_width(data)` (the
+    selected type's bit width, from its tag's digits, e.g. `si32` -> 32). None when undeclared
+    or unresolvable — the literal-match bridge then has no range and falls back to positional."""
+
+    if imm_param.value_range is None:
+        return None
+    lo, hi_expr, inclusive = imm_param.value_range
+    if hi_expr == "base_bit_width(data)":
+        digits = "".join(c for c in type_tag if c.isdigit())
+        hi = int(digits) if digits else 8
+    elif hi_expr.lstrip("-").isdigit():
+        hi = int(hi_expr)
+    else:
+        return None
+    return (lo, hi, inclusive)
 
 
 _SUPPORTED_KINDS = frozenset(

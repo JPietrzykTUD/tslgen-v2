@@ -37,11 +37,15 @@ class LoweringContext:
     # callee name -> count of overload-dispatch generic params (one per varying argument
     # position), so a Rust call site can spell the inferred `_` turbofish args.
     primitive_arg_generics: dict[str, int] = field(default_factory=dict)
-    # the `sImm` immediate operand's name (e.g. "shift") and dispatch strategy of the
-    # primitive being lowered, so `intrin_compose` can forward it into a Rust const-generic
-    # intrinsic turbofish (`slli::<shift>(data)`) when dispatch is `rust_const_match`.
+    # the `sImm` immediate operand's name (e.g. "shift"), its per-backend forwarding strategy,
+    # and its resolved legal value range `(lo, hi, inclusive)`. When the strategy is
+    # `const_match` (Rust), `intrin_compose` forwards the immediate through a literal match over
+    # that range (`match shift { 0 => …::<0>(data), … }`), which re-types each literal to the
+    # intrinsic's const param (bridging avx2 `i32` vs avx512 `u32`); otherwise the immediate is
+    # a positional const arg.
     immediate_name: str | None = None
     immediate_dispatch: str | None = None
+    immediate_range: tuple[int, int, bool] | None = None
     # names of the primitive's `generic_params` (e.g. ("PreserveSign",)), so the `if<compile>`
     # render knows which condition leaves are symbolic template params (rendered raw) vs
     # generation-time queries (folded to a literal).

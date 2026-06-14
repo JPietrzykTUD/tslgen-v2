@@ -2,12 +2,12 @@ description "Shift operations"
 prim<v:=(v,sImm)> shift_left(data, shift):
   brief_description "[Example: avx512 + si16]: Shift packed 16-bit integers in \"a\" left by \"imm8\" while shifting in zeros, and store the results in \"dst\"."
   operation "[Example: avx512 + si16]: FOR j := 0 to 31\n\ti := j*16\n\tIF imm8[7:0] > 15\n\t\tdst[i+15:i] := 0\n\tELSE\n\t\tdst[i+15:i] := ZeroExtend16(a[i+15:i] << imm8[7:0])\n\tFI\nENDFOR\ndst[MAX:512] := 0"
-  sImm_type:
-    default ui32
-    dispatch rust_const_match
-    override:
-      tsil:
-        [sse,sse_vl,avx2,avx2_vl] si32
+  params:
+    shift:
+      type ui32
+      value_range "0..base_bit_width(data)"
+      dispatch:
+        rust const_match
   tests:
     - {test_name "shift_left_imm_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
     - {test_name "shift_left_imm_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 5], expected [0, 32, 64, 96, 128, 160, 192, 224]}}
@@ -167,12 +167,12 @@ prim<v:=(v,sImm)> shift_left(data, shift):
 prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
   brief_description "[Example: avx512 + si16]: Shift packed 16-bit integers in \"a\" left by \"imm8\" while shifting in zeros, and store the results in \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
   operation "[Example: avx512 + si16]: FOR j := 0 to 31\n\ti := j*16\n\tIF k[j]\n\t\tIF imm8[7:0] > 15\n\t\t\tdst[i+15:i] := 0\n\t\tELSE\n\t\t\tdst[i+15:i] := ZeroExtend16(a[i+15:i] << imm8[7:0])\n\t\tFI\n\tELSE\n\t\tdst[i+15:i] := src[i+15:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
-  sImm_type:
-    default ui32
-    dispatch rust_const_match
-    override:
-      tsil:
-        [sse,sse_vl,avx2,avx2_vl] si32
+  params:
+    shift:
+      type ui32
+      value_range "0..base_bit_width(data)"
+      dispatch:
+        rust const_match
   tests:
     - {test_name "shift_left_mask_passthrough_imm_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 4, 3, 8, 5, 12, 7, 16]}}
     - {test_name "shift_left_mask_passthrough_imm_u32_zero", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
@@ -593,12 +593,12 @@ prim<v:=(v,sImm)> shift_right(data, shift):
     PreserveSign:
       kind bool
       default true
-  sImm_type:
-    default ui32
-    dispatch rust_const_match
-    override:
-      tsil:
-        [sse,sse_vl,avx2,avx2_vl] si32
+  params:
+    shift:
+      type ui32
+      value_range "0..base_bit_width(data)"
+      dispatch:
+        rust const_match
   tests:
     - {test_name "shift_right_imm_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4, 8, 16, 32], 1], expected [0, 0, 1, 1, 2, 4, 8, 16]}}
     - {test_name "shift_right_imm_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 32, 64, 96, 128, 256, 512, 1024], 5], expected [0, 1, 2, 3, 4, 8, 16, 32]}}

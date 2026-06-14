@@ -2,12 +2,9 @@ description "Operations that change the extension / representation"
 prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
   brief_description "Extracts a smaller SIMD register with the same underlying base type from a larger SIMD register."
   operation ""
-  sImm_type:
-    default ui32
-    dispatch rust_const_match
-    override:
-      tsil:
-        [sse, sse_vl, avx2, avx2_vl, avx512] si32
+  params:
+    index:
+      type si32
   return_type:
     extension: ToExtension
   tests:
@@ -188,8 +185,9 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
 prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
   brief_description "Inserts a smaller SIMD register with the same underlying base type into a larger SIMD register."
   operation ""
-  sImm_type:
-    default si32
+  params:
+    index:
+      type si32
   return_type:
     extension: ToExtension
   tests:
