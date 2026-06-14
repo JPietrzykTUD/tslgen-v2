@@ -19,14 +19,14 @@ def _build(text: str):
 
 
 def test_shift_right_immediate_params(catalog: Catalog) -> None:
-    # shifts declare type, a symbolic value_range, and the const_match Rust bridge.
+    # shifts declare type, a symbolic value_range, and the literal_match Rust bridge.
     shift_right = catalog.primitive("shift_right")
     assert shift_right is not None
     param = shift_right.immediate_param("shift")
     assert param is not None
     assert param.type_tag == "ui32"
     assert param.value_range == (0, "base_bit_width(data)", False)
-    assert param.dispatch_for("rust") == "const_match"
+    assert param.dispatch_for("rust") == "literal_match"
     assert param.dispatch_for("cpp") is None  # C++ stays positional
 
 

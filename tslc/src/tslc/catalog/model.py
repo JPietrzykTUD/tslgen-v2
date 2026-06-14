@@ -108,7 +108,7 @@ class ImmediateParam:
       int, ``hi_expr`` is an int-literal string or the symbolic token ``base_bit_width(data)``
       resolved at lowering against the selected type; ``inclusive`` distinguishes ``a..b``
       (half-open) from ``a..=b``. None when undeclared.
-    - ``dispatch``: backend-id -> forwarding strategy pairs (e.g. ``(("rust", "const_match"),)``).
+    - ``dispatch``: backend-id -> forwarding strategy pairs (e.g. ``(("rust", "literal_match"),)``).
       A backend with no entry passes the immediate as a positional const arg.
     """
 

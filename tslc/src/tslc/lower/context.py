@@ -39,7 +39,7 @@ class LoweringContext:
     primitive_arg_generics: dict[str, int] = field(default_factory=dict)
     # the `sImm` immediate operand's name (e.g. "shift"), its per-backend forwarding strategy,
     # and its resolved legal value range `(lo, hi, inclusive)`. When the strategy is
-    # `const_match` (Rust), `intrin_compose` forwards the immediate through a literal match over
+    # `literal_match` (Rust), `intrin_compose` forwards the immediate through a literal match over
     # that range (`match shift { 0 => …::<0>(data), … }`), which re-types each literal to the
     # intrinsic's const param (bridging avx2 `i32` vs avx512 `u32`); otherwise the immediate is
     # a positional const arg.

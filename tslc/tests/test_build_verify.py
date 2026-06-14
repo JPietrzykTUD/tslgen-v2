@@ -386,7 +386,7 @@ def test_shift_left_builds(data_root: Path, machine_profiles_path: Path, tmp_pat
     # `shift_left` is the first MIXED overload set with an `sImm` member: in Rust the
     # immediate form splits out to `shift_left_imm` (const generic) while `(v,s)`/`(v,v)`
     # stay the `shift_left` arg-trait; C++ keeps `shift_left_imm`. The immediate's `params:`
-    # block (`type ui32`, `value_range 0..base_bit_width(data)`, `dispatch rust: const_match`)
+    # block (`type ui32`, `value_range 0..base_bit_width(data)`, `dispatch rust: literal_match`)
     # drives the Rust forwarding: a literal match `match shift { 0 => _mm256_slli_epi32::<0>(data),
     # … }` whose arms re-type per intrinsic; C++ stays positional `_mm256_slli_epi32(data, shift)`.
     # Both backends, scalar + sse + avx2 (the generic/x86 fallback multi-arg call, shift_right's
@@ -490,7 +490,7 @@ def test_shift_right_avx512_immediate_builds(
 ) -> None:
     # avx512's `_mm512_srli_epi32` etc. take their shift count as a `const u32`, while avx2's
     # take `i32` — a single shared trait const can't satisfy both, and stable Rust can't cast a
-    # generic const in a turbofish. The `params:` `dispatch rust: const_match` bridges it: the
+    # generic const in a turbofish. The `params:` `dispatch rust: literal_match` bridges it: the
     # immediate forwards through a literal match (`match shift { 0 => _mm512_srli_epi32::<0>(data),
     # … }`) whose literal arms re-type to whichever const each intrinsic wants (folds to one arm).
     # `value_range 0..base_bit_width(data)` sets the per-type arm count (16/32/64). This is the
