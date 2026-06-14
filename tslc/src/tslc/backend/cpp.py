@@ -119,9 +119,16 @@ class CppBackend:
                 f"        {spec.body_text}\n"
                 f"    }}"
             )
+        # A representation-change spec exposes `ToVec` (the target vector) in the impl so a
+        # `tv` param / the result can project through it (`typename ToVec::register_type`).
+        to_vec = (
+            f"    using ToVec = {first.target.vector_spelling};\n"
+            if first.target is not None
+            else ""
+        )
         return (
             f"{head}\nstruct {first.primitive_name}_impl<{key}> {{\n"
-            f"    using Vec = {vec};\n" + "\n".join(applies) + "\n};"
+            f"    using Vec = {vec};\n" + to_vec + "\n".join(applies) + "\n};"
         )
 
     def _wrapper(
@@ -200,6 +207,8 @@ def _result_type(kind: str) -> str:
 def _param_type(kind: str) -> str:
     if kind == "v":
         return "typename tsl::reg_param<Vec>::type"
+    if kind == "vt":  # a target-axis vector param (`insert`'s `orig`) — the ToVec register
+        return "typename tsl::reg_param<ToVec>::type"
     if kind == "m":
         return "typename Vec::mask_type"
     if kind == "im":

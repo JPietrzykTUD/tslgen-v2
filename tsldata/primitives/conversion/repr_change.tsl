@@ -185,15 +185,11 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
                   }
                   emit_return(call<primitive=from_array[OutVec]>(result));
                 """
-prim<v:=(v,v,sImm)>[cast=reinterpret] insert(orig, data, index):
+prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
   brief_description "Inserts a smaller SIMD register with the same underlying base type into a larger SIMD register."
   operation ""
   sImm_type:
-    default ui32
-    dispatch rust_const_match
-    override:
-      tsil:
-        [sse, sse_vl, avx2, avx2_vl, avx512] si32
+    default si32
   return_type:
     extension: ToExtension
   tests:

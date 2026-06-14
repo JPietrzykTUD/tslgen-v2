@@ -534,6 +534,31 @@ def test_extract_builds(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_insert_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # `insert` is `extract`'s inverse on the `extension` axis: it writes the source vector into
+    # a *larger* target (`return_type: extension: ToExtension`), so its `orig` operand is the
+    # target (`ToVec`), not the source. That makes `orig` a `vt` (target-axis vector) param —
+    # typed `ToVec::register_type` (C++) / `T::RegisterType` (Rust) while `data` stays the source
+    # `Vec` — over `_mm256_inserti128_si256` / `_mm512_inserti32x4` / `_inserti64x4` + an `sImm`
+    # lane-block index. Proves a parameter (not just the result) on the target type axis. sse2 +
+    # avx2 + skylake, both backends.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["insert"],
+        profiles=["sse2", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_mask_binary_and_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # `mask_binary_and` (the mask-algebra enabler for range comparisons): `binary_and` on the
     # lane-bitmask register (sse/avx2), raw `&` on the native `__mmaskN` (avx512), `bool & bool`

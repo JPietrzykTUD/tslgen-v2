@@ -121,17 +121,19 @@ class RustBackend:
         return "\n\n".join([trait, *impls, wrapper])
 
     def _trait(self, primitive_name: str, shape: LoweredSpecialization) -> str:
-        params = _params(shape, "Self", binding_mut=False)
         # Boolean-wildcard axes and an `sImm` immediate become const-generics on the trait,
         # so the `[aligned=*]` variants are distinct impls (`StoreImpl<false>`/`StoreImpl<true>`)
         # and the immediate is a free param (`MulImmImpl<const factor: u32>`).
         decls = _generic_decls(shape)
         ret = _kind_type(shape.result_kind, "Self")
+        vt_type: str | None = None
         # A representation-change primitive takes the target vector as a first generic `ToVec`
-        # and returns its register type.
+        # and returns (and may take, via a `vt` param) its register type.
         if shape.target is not None:
             decls = ["ToVec: SimdVector", *decls]
             ret = "ToVec::RegisterType"
+            vt_type = "ToVec::RegisterType"
+        params = _params(shape, "Self", binding_mut=False, vt_type=vt_type)
         generics = f"<{', '.join(decls)}>" if decls else ""
         return (
             f"pub trait {_trait_name(primitive_name)}{generics}: SimdVector {{\n"
@@ -152,13 +154,16 @@ class RustBackend:
             impl_parts.append(f"const {spec.immediate[0]}: {spec.immediate[1]}")
         impl_parts += [f"const {name}: {typ}" for name, typ, _ in spec.generic_params]
         impl_generics = f"<{', '.join(impl_parts)}>" if impl_parts else ""
-        params = _params(spec, "Self")
         targs = _trait_args_by_value(spec)
         ret = _kind_type(spec.result_kind, "Self")
-        # The target vector is concrete in the impl's trait args; the result is its register.
+        vt_type: str | None = None
+        # The target vector is concrete in the impl's trait args; the result (and any `vt`
+        # param) is its concrete register.
         if spec.target is not None:
             targs = [spec.target.vector_spelling, *targs]
             ret = spec.target.register_spelling
+            vt_type = spec.target.register_spelling
+        params = _params(spec, "Self", vt_type=vt_type)
         trait_args = f"<{', '.join(targs)}>" if targs else ""
         return (
             f"impl{impl_generics} {_trait_name(spec.primitive_name)}{trait_args} for {key} {{\n"
@@ -169,7 +174,6 @@ class RustBackend:
         )
 
     def _wrapper(self, primitive_name: str, shape: LoweredSpecialization) -> str:
-        params = _params(shape, "S")
         names = _runtime_names(shape)
         # `S` comes first, then the const-generic axis/immediate params — the same turbofish
         # order as the overloaded wrapper (`S, ALIGNED, V`), so a call site can spell
@@ -179,13 +183,17 @@ class RustBackend:
         decl_list = _generic_decls(shape)
         ret = _kind_type(shape.result_kind, "S")
         call = f"S::apply({names})"
+        vt_type: str | None = None
         # A representation-change primitive takes the target vector `T` as a generic, bounds `S`
-        # on `…Impl<T, …>`, and returns `T`'s register; the call is qualified to pin the target.
+        # on `…Impl<T, …>`, and returns (and may take, via a `vt` param) `T`'s register; the
+        # call is qualified to pin the target.
         if shape.target is not None:
             targs = ["T", *targs]
             decl_list = ["T: SimdVector", *decl_list]
             ret = "T::RegisterType"
+            vt_type = "T::RegisterType"
             call = f"<S as {_trait_name(primitive_name)}<{', '.join(targs)}>>::apply({names})"
+        params = _params(shape, "S", vt_type=vt_type)
         trait_args = f"<{', '.join(targs)}>" if targs else ""
         decls = "".join(f", {d}" for d in decl_list)
         return (
@@ -291,16 +299,26 @@ def _kind_type(kind: str, owner: str) -> str:
     return f"{owner}::{suffix}"
 
 
-def _params(shape: LoweredSpecialization, owner: str, *, binding_mut: bool = True) -> str:
+def _params(
+    shape: LoweredSpecialization,
+    owner: str,
+    *,
+    binding_mut: bool = True,
+    vt_type: str | None = None,
+) -> str:
     # An array (`s[]`) parameter is bound `mut` so the body can take a pointer into it
     # (`data.data()` borrows `&mut`); `mut` on an owned binding is otherwise harmless.
     # A trait *declaration* has no body, where a binding pattern like `mut` is rejected,
-    # so it passes ``binding_mut=False``.
-    return ", ".join(
-        f"{'mut ' if binding_mut and kind == 's[]' else ''}{name}: {_kind_type(kind, owner)}"
-        for name, kind in zip(shape.param_names, shape.param_kinds)
-        if kind != "sImm"  # the immediate is a const generic, not a runtime arg
-    )
+    # so it passes ``binding_mut=False``. A `vt` (target-axis vector) param uses `vt_type` —
+    # the per-context target register spelling (trait `ToVec::RegisterType` / impl concrete /
+    # wrapper `T::RegisterType`), the same spelling the target result uses in that context.
+    parts: list[str] = []
+    for name, kind in zip(shape.param_names, shape.param_kinds):
+        if kind == "sImm":  # the immediate is a const generic, not a runtime arg
+            continue
+        typ = vt_type if kind == "vt" else _kind_type(kind, owner)
+        parts.append(f"{'mut ' if binding_mut and kind == 's[]' else ''}{name}: {typ}")
+    return ", ".join(parts)
 
 
 def _runtime_names(shape: LoweredSpecialization) -> str:

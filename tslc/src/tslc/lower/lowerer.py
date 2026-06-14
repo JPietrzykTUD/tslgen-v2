@@ -317,7 +317,9 @@ class Lowerer:
         )
 
 
-_SUPPORTED_KINDS = frozenset({"v", "s", "m", "im", "usize", "sImm", "ptr", "void", "s[]"})
+_SUPPORTED_KINDS = frozenset(
+    {"v", "s", "m", "im", "usize", "sImm", "ptr", "void", "s[]", "vt"}
+)
 
 
 def _primitive_axes(catalog: Catalog) -> dict[str, tuple[str, ...]]:
@@ -373,6 +375,8 @@ def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
     def token(kind: str) -> str:
         if kind == "v":
             return "base" if spec.register_is_base else "register"
+        if kind == "vt":  # a target-axis vector param (`insert`'s `orig`) — the ToVec register
+            return "target_register"
         if kind == "m":
             return "mask"
         if kind == "ptr":
