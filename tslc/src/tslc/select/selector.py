@@ -68,16 +68,16 @@ class Selector:
         #    shift's `(v,s)`/`(v,sImm)`/`(v,v)`) resolved by argument type. The arity filter
         #    keeps only this group's shared arity (a different-arity unmasked overload — e.g.
         #    hadd `s:=v` vs masked-arg `s:=(m,v)` — is left for later).
-        #  - the MASKED variants in the **value-masking** category (vector result, no memory
-        #    operand): each is a distinct callable, split to `<name>_mask`/`_maskz` at render
-        #    (so a different arity / two policies like `mov`'s zero+pass_through both emit).
-        #    Mask-producing comparisons (result `m`) and `load`/`store`/`gather`/`scatter`
-        #    (`ptr`/`vidx`) are a deferred follow-up.
+        #  - the MASKED variants (`_is_maskable`): value-masking ops (result `v`), mask-producing
+        #    comparisons (result `m`), and masked `load`/`store` (`ptr`). Each is a distinct
+        #    callable, split to `<name>_mask`/`_maskz` at render (so a different arity / two
+        #    policies like `mov`'s zero+pass_through both emit). `gather`/`scatter` (`vidx`) and
+        #    masked reductions (result `s`) are deferred.
         unmasked = catalog.primitives_named(primitive_name, unmasked=True)
         masked = tuple(
             p
             for p in catalog.primitives_named(primitive_name, unmasked=False)
-            if "mask" in p.attributes and _is_value_masking(p)
+            if "mask" in p.attributes and _is_maskable(p)
         )
         if unmasked:
             arity = len(unmasked[0].parameters)
@@ -305,18 +305,17 @@ def _same_width(target_tag: str, source_tag: str) -> bool:
     return tw is not None and tw == sw
 
 
-def _is_value_masking(primitive: Primitive) -> bool:
-    """A masked variant in the **value-masking** category (the masked-variant slice's scope):
-    its result is a vector and it has no memory operand. This admits `add`/`mul`/`binary_and`/
-    `shift_left`/`mul_imm`/… (mask selects which lanes get the op) and excludes mask-*producing*
-    comparisons (result `m`) and `load`/`store`/`gather`/`scatter` (`ptr`/`vidx`), which are
-    deferred follow-ups."""
+def _is_maskable(primitive: Primitive) -> bool:
+    """A masked variant the compiler can currently emit. Admits value-masking ops (`add`/`mul`/
+    `binary_and`/`shift_left`/`mul_imm`/`inv`, result `v`), mask-producing comparisons (`equal`/
+    `less_than`/`between_*`, result `m`/`im`), and masked `load`/`store` (result `v`/`void`, with
+    a `ptr`). Excludes `gather`/`scatter` (the `vidx` kind is unsupported — orthogonal prerequisite)
+    and masked reductions (`hadd` `s:=(m,v)`, result `s` — different arity, left for later)."""
 
     shape = parse_signature(primitive.signature)
     return (
         shape is not None
-        and shape.result_kind == "v"
-        and "ptr" not in shape.param_kinds
+        and shape.result_kind in ("v", "m", "im", "void")
         and "vidx" not in shape.param_kinds
     )
 
@@ -336,7 +335,7 @@ def policy_split_names(catalog: Catalog) -> frozenset[str]:
         forms.update(
             p.attributes["mask"]
             for p in variants
-            if "mask" in p.attributes and _is_value_masking(p)
+            if "mask" in p.attributes and _is_maskable(p)
         )
         if len(forms) > 1:
             names.add(name)

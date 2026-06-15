@@ -388,6 +388,54 @@ def test_masked_value_ops_build(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_masked_comparisons_build(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # Masked category B: mask-producing comparisons emit a `[mask=zero]` variant `m:=(m,v,v)`
+    # (takes a mask, returns a mask), split to `<name>_maskz`. avx512(_vl) uses the native
+    # masked compare (`intrin_compose<…, post=mask>` -> `_mm512_cmpeq_*_mask`); avx2/sse/scalar
+    # fall back to `mask_binary_and(mask, <unmasked compare>)`; the generic `<LANES>` masked loop
+    # is gated off. Both backends, scalar + sse2 + avx2 + skylake + icelake-rockerlake.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["equal", "less_than", "greater_than_or_equal", "between_inclusive"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_masked_load_store_build(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # Masked category C (memory): `load` emits `load_maskz` (zero) + `load_mask` (pass_through);
+    # `store` emits `store_mask` — each carrying the `aligned` const-generic (mask × aligned
+    # compose orthogonally). avx512(_vl) uses native masked load/store (`maskz_loadu`/`mask_loadu`/
+    # `mask_storeu`); avx2/sse fall back to `load`+`mov`/`blend`(+`store`) — the fallback forwards
+    # the caller's `aligned` via `attrs[aligned=value<generation>(primitive::attribute(aligned))]`,
+    # which the call lowerer now resolves. `void` store result types in both backends. scalar +
+    # sse2 + avx2 + skylake. (gather/scatter masked are deferred on the `vidx` kind.)
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["load", "store"],
+        profiles=["scalar", "sse2", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_mul_imm_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # `mul_imm` exercises the `sImm` compile-time immediate kind: the immediate `factor`
     # becomes a C++ non-type template parameter (`template <class Vec, uint32_t factor>`) and

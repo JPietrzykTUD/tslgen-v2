@@ -542,7 +542,7 @@ class CallLowerer:
             for term in attr_text.split(","):
                 key, sep, value = term.partition("=")
                 if sep:
-                    attrs[key.strip()] = value.strip()
+                    attrs[key.strip()] = self._resolve_attr_value(value.strip(), context)
         if rest:
             context.skip(
                 "TSL-LOWER-UNSUPPORTED-CALL",
@@ -566,6 +566,21 @@ class CallLowerer:
             vec_override,
             tuple(extra_args),
         )
+
+    def _resolve_attr_value(self, value: str, context: LoweringContext) -> str:
+        """An `attrs[key=value]` value. A literal (`false`) passes through; a generation query
+        — `value<generation>(primitive::attribute(aligned))`, used by masked `load`/`store` to
+        forward the caller's `aligned` to the delegated unmasked op — is evaluated to its literal
+        so it doesn't leak unlowered into the emitted call."""
+
+        if "<" not in value and "::" not in value:
+            return value
+        resolved = self._evaluator.evaluate(value, context)
+        if isinstance(resolved, TextValue):
+            return resolved.text
+        if isinstance(resolved, BoolValue):
+            return "true" if resolved.value else "false"
+        return value
 
     def _render_call_arg(self, entry: str, context: LoweringContext) -> str | None:
         """A forwarded call-bracket arg (entries 1..) as a target template/const-generic arg:
