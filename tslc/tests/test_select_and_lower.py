@@ -18,8 +18,13 @@ def _slots(catalog, profile, primitive):
 
 
 def _by_key(catalog, profile, primitive):
+    # The UNMASKED specs keyed by (type, ext). A dual name now also selects masked variants
+    # (same key until the render `_mask`/`_maskz` rename), so filter them out — these tests
+    # exercise the unmasked overload set.
     return {
-        (s.type_tag, s.extension.name): s for s in _slots(catalog, profile, primitive)
+        (s.type_tag, s.extension.name): s
+        for s in _slots(catalog, profile, primitive)
+        if s.primitive.attributes.get("mask") is None
     }
 
 

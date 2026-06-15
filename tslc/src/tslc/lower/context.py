@@ -37,6 +37,10 @@ class LoweringContext:
     # callee name -> count of overload-dispatch generic params (one per varying argument
     # position), so a Rust call site can spell the inferred `_` turbofish args.
     primitive_arg_generics: dict[str, int] = field(default_factory=dict)
+    # names with >1 emitted form (unmasked + value-masking mask policies), so a
+    # `call<…attrs[mask=…]>` to them is mangled to `<name>_mask`/`<name>_maskz` (matching the
+    # render rename). Single-form callees (`blend`) are absent → keep their bare names.
+    policy_split_names: frozenset[str] = frozenset()
     # the `sImm` immediate operand's name (e.g. "shift"), its per-backend forwarding strategy,
     # and its resolved legal value range `(lo, hi, inclusive)`. When the strategy is
     # `literal_match` (Rust), `intrin_compose` forwards the immediate through a literal match over

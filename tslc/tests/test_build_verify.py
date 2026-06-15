@@ -361,6 +361,33 @@ def test_to_vector_builds(data_root: Path, machine_profiles_path: Path, tmp_path
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_masked_value_ops_build(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # Masked-variant generation (value-masking category): a dual name now emits its masked
+    # variants alongside the unmasked one, split to `<name>_mask` (pass_through/merge) /
+    # `<name>_maskz` (zero) — distinct names (Rust can't overload; the two policies share a
+    # signature so C++ can't either). SIMD bodies delegate to the unmasked op + `blend`/`mov`
+    # (which stay bare, masked-only; `mov` itself emits both `mov_mask`/`mov_maskz`); scalar uses
+    # if/set_zero. Pruning is policy-aware, so float masked specs whose `mov_maskz` float delegate
+    # is absent prune cleanly. Representative spread (`binary_and`, `add`, `inv`, `shift_left`,
+    # `mul_imm`), both policies, both backends, scalar + sse2 + avx2 + skylake. (The generic
+    # `<LANES>` masked loop and mask-producing comparisons / memory masked variants are deferred.)
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["binary_and", "add", "inv", "shift_left", "mul_imm"],
+        profiles=["scalar", "sse2", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_mul_imm_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # `mul_imm` exercises the `sImm` compile-time immediate kind: the immediate `factor`
     # becomes a C++ non-type template parameter (`template <class Vec, uint32_t factor>`) and

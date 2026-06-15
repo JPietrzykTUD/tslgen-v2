@@ -164,8 +164,13 @@ def generate(request: GenerationRequest) -> GenerationResult:
                 # callees (to_array/store/…) into the emitted set, where they would otherwise
                 # surface as unbuildable generic instantiations.
                 if slot_lowered:
-                    for callee, _target_ext in callees:
-                        if callee not in processed and catalog.primitive(callee) is not None:
+                    for callee, _policy, _target_ext in callees:
+                        # `primitives_named(unmasked=False)` so a masked-ONLY callee
+                        # (`blend`/`mov`) is pulled too — a masked body delegates to them, and
+                        # `catalog.primitive` (unmasked-only) would miss them and prune the caller.
+                        if callee not in processed and catalog.primitives_named(
+                            callee, unmasked=False
+                        ):
                             worklist.append(callee)
 
         grouped, pruned = _prune_unresolved(lowered_specs)
@@ -216,8 +221,11 @@ def generate(request: GenerationRequest) -> GenerationResult:
     )
 
 
-_CALL_TARGET = re.compile(r"call<primitive=(@?[A-Za-z_][A-Za-z0-9_]*)\s*(\[[^\]]*\])?")
+_CALL_TARGET = re.compile(
+    r"call<primitive=(@?[A-Za-z_][A-Za-z0-9_]*)\s*(\[[^\]]*\])?(?:\s*attrs\s*(\[[^\]]*\]))?"
+)
 _AS_EXTENSION = re.compile(r"as_extension\(\s*([A-Za-z_][A-Za-z0-9_]*)")
+_MASK_ATTR = re.compile(r"mask\s*=\s*([A-Za-z_]+)")
 _LET_TYPE_EXT = re.compile(
     r"let<type>\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,[^)]*?as_extension\(\s*([A-Za-z_][A-Za-z0-9_]*)"
 )
@@ -225,11 +233,13 @@ _LET_TYPE_EXT = re.compile(
 
 def _extract_calls(
     body_text: str, current_primitive: str, current_extension: str
-) -> frozenset[tuple[str, str]]:
-    """The ``(callee, target-extension)`` pairs a body calls. ``@self`` resolves to the
-    primitive being lowered; a ``[… vector::as_extension(ext) …]`` type-arg retargets the
+) -> frozenset[tuple[str, str | None, str]]:
+    """The ``(callee, mask-policy, target-extension)`` triples a body calls. ``@self`` resolves
+    to the primitive being lowered; a ``[… vector::as_extension(ext) …]`` type-arg retargets the
     call at ``ext`` (e.g. the generic vector delegating per lane to ``scalar``), otherwise the
-    callee is on the caller's own extension. The target extension lets the prune check the
+    callee is on the caller's own extension. An ``attrs[mask=zero|pass_through]`` selects the
+    callee's masked form (so the prune resolves `mov_maskz` vs `mov_mask` precisely, not merely
+    "some `mov`"); None for an unmasked call. The target extension lets the prune check the
     *right* ``simd<type, ext>`` exists, not merely a same-named primitive.
 
     A retarget is often via a ``let<type>(GenericVec, … as_extension(generic))`` alias used
@@ -237,8 +247,8 @@ def _extract_calls(
     delegation's true target extension is tracked (else a skipping leaf wouldn't prune)."""
 
     aliases = {m.group(1): m.group(2) for m in _LET_TYPE_EXT.finditer(body_text)}
-    calls: set[tuple[str, str]] = set()
-    for name, bracket in _CALL_TARGET.findall(body_text):
+    calls: set[tuple[str, str | None, str]] = set()
+    for name, bracket, attrs in _CALL_TARGET.findall(body_text):
         callee = current_primitive if name == "@self" else name.lstrip("@")
         match = _AS_EXTENSION.search(bracket)
         if match is not None:
@@ -248,7 +258,8 @@ def _extract_calls(
                 (ext for alias, ext in aliases.items() if re.search(rf"\b{alias}\b", bracket)),
                 current_extension,
             )
-        calls.add((callee, target))
+        mask = _MASK_ATTR.search(attrs)
+        calls.add((callee, mask.group(1) if mask else None, target))
     return frozenset(calls)
 
 
@@ -256,7 +267,8 @@ def _extract_calls(
 class _LoweredSlot:
     backend: str
     spec: LoweredSpecialization
-    callees: frozenset[tuple[str, str]]  # (callee primitive, target extension isa name)
+    # (callee primitive, mask policy or None, target extension isa name)
+    callees: frozenset[tuple[str, str | None, str]]
 
 
 def _prune_unresolved(
@@ -264,10 +276,16 @@ def _prune_unresolved(
 ) -> tuple[dict[str, dict[str, list[LoweredSpecialization]]], list[_LoweredSlot]]:
     """Drop emitted specializations whose called primitives are not themselves emitted
     for the same ``simd<type, ext>`` (else the generated call would not link). Iterated
-    to a fixpoint, since pruning a callee can in turn dangle its callers."""
+    to a fixpoint, since pruning a callee can in turn dangle its callers.
 
-    def key(slot: _LoweredSlot) -> tuple[str, str, str, str]:
-        return (slot.backend, slot.spec.primitive_name, slot.spec.extension_name, slot.spec.type_tag)
+    Identity is **policy-aware**: a slot's key includes its `mask_policy`, and a call resolves
+    against the callee's policy — so a dual name's masked and unmasked forms (and `mov`'s two
+    policies) prune independently and a `mov_maskz` caller isn't satisfied by a live `mov_mask`.
+    Unmasked slots/calls carry `None`, so non-masked behavior is unchanged (name-level)."""
+
+    def key(slot: _LoweredSlot) -> tuple[str, str, str | None, str, str]:
+        s = slot.spec
+        return (slot.backend, s.primitive_name, s.mask_policy, s.extension_name, s.type_tag)
 
     valid = {key(slot) for slot in slots}
     changed = True
@@ -277,8 +295,8 @@ def _prune_unresolved(
             slot_key = key(slot)
             if slot_key not in valid:
                 continue
-            for callee, target_ext in slot.callees:
-                if (slot.backend, callee, target_ext, slot.spec.type_tag) not in valid:
+            for callee, policy, target_ext in slot.callees:
+                if (slot.backend, callee, policy, target_ext, slot.spec.type_tag) not in valid:
                     valid.discard(slot_key)
                     changed = True
                     break

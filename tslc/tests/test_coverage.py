@@ -23,10 +23,12 @@ def test_coverage_separates_emitted_and_skipped(
     result = _result(data_root, machine_profiles_path)
     by = {row.primitive: row for row in coverage_by_primitive(result)}
 
-    # add lowers everywhere it is selected (only scalar/x86-family extensions are
-    # emitted, and add covers them).
-    assert by["add"].skipped == 0
-    assert by["add"].emitted == by["add"].attempted > 0
+    # add lowers everywhere it is selected; it now also emits masked variants (`add_mask`/
+    # `add_maskz`). Integer masked specs lower; the *float* masked specs on sse/avx2 prune
+    # cleanly (their `mov[mask=zero]` float delegate isn't generated there), and the generic
+    # `<LANES>` masked loop is deferred — so `add` shows some skips.
+    assert by["add"].emitted > 0
+    assert by["add"].emitted > by["add"].skipped
 
     # hadd now lowers fully: SIMD bodies plus the loop fallback (to_array + loop<range> +
     # details::arith_add); hmax/hmin likewise lower fully now that runtime `if` translates.

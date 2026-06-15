@@ -72,7 +72,11 @@ def render_project(
     profiles: tuple[ProfileRender, ...], backends: tuple[str, ...] = ("cpp", "rust")
 ) -> RenderedProject:
     ordered = tuple(
-        replace(p, cpp=_split_immediates(p.cpp), rust=_split_immediates(p.rust))
+        replace(
+            p,
+            cpp=_split_immediates(_split_masked(p.cpp)),
+            rust=_split_immediates(_split_masked(p.rust)),
+        )
         for p in sorted(profiles, key=lambda p: p.profile.name)
     )
     artifacts: list[Artifact] = []
@@ -117,6 +121,37 @@ def render_project(
 
 
 # --- build facts (the only place that maps features to compiler options) -----
+
+
+_MASK_SUFFIX = {"pass_through": "_mask", "zero": "_maskz"}
+
+
+def _split_masked(
+    by_name: dict[str, tuple[LoweredSpecialization, ...]],
+) -> dict[str, tuple[LoweredSpecialization, ...]]:
+    """Split a name with MORE THAN ONE *form* so each masked form moves to `<name>_mask`
+    (pass_through/merge) / `<name>_maskz` (zero). A form is the unmasked spec (if any) plus each
+    mask policy. Rust has no fn overloading, and two mask policies share a signature so *neither*
+    backend can overload them — distinct names are the only option. A single-form name (unmasked
+    only, or a masked-*only* primitive with one policy like `blend`) is unchanged (bare name); a
+    multi-policy masked-only name (`mov`: zero + merge) splits both with no bare name. Runs before
+    `_split_immediates`, which then composes per group (`shift_left`'s masked immediate lands at
+    `shift_left_mask`)."""
+
+    out: dict[str, tuple[LoweredSpecialization, ...]] = {}
+    for name, specs in by_name.items():
+        forms = {s.mask_policy for s in specs}  # None == the unmasked form
+        if len(forms) <= 1:
+            out[name] = specs
+            continue
+        for policy in forms:
+            group = tuple(s for s in specs if s.mask_policy == policy)
+            if policy is None:
+                out[name] = group  # the unmasked form keeps the bare name
+            else:
+                renamed = f"{name}{_MASK_SUFFIX.get(policy, '_mask_' + policy)}"
+                out[renamed] = tuple(replace(s, primitive_name=renamed) for s in group)
+    return out
 
 
 def _split_immediates(

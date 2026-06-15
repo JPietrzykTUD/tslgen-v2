@@ -32,7 +32,7 @@ from tslc.ir.scan import scan
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower.context import LoweringContext
 from tslc.lower.regions import DEFAULT_REGION_LOWERERS, RegionLowerer
-from tslc.select.selector import SelectedImplementation
+from tslc.select.selector import SelectedImplementation, policy_split_names
 
 # The single supported statement keyword for the current slice (v:=(v,v) bodies).
 _RETURN_KEYWORD = "emit_return"
@@ -88,6 +88,10 @@ class LoweredSpecialization:
     # result type is its register — so `target is None` (not `result_kind`) is the signal that a
     # primitive returns a different vector. See :class:`TargetVector`.
     target: "TargetVector | None" = None
+    # The `[mask=…]` policy of a masked variant (`"zero"`/`"pass_through"`), or None for an
+    # unmasked spec. Survives lowering (the boolean `axis` does not carry it) so pruning can match
+    # callees per-policy and the render rename can split a dual name to `<name>_mask`/`_maskz`.
+    mask_policy: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,6 +147,7 @@ class Lowerer:
             attributes=dict(selected.primitive.attributes),
             primitive_axes=_primitive_axes(catalog),
             primitive_arg_generics=_primitive_arg_generics(catalog),
+            policy_split_names=policy_split_names(catalog),
             current_primitive=selected.primitive.name,
             generic_param_names=tuple(gp.name for gp in selected.primitive.generic_params),
         )
@@ -317,6 +322,7 @@ class Lowerer:
             # so its `v`/`s` overloads must stay distinct.
             register_is_base=context.extension.isa_name == "scalar",
             target=target,
+            mask_policy=selected.primitive.attributes.get("mask"),
         )
         return LoweringResult(
             specialization=specialization,

@@ -28,6 +28,7 @@ from tslc.catalog.model import (
     Implementation,
     Primitive,
 )
+from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic
 
 
@@ -62,21 +63,29 @@ class Selector:
         primitive_name: str,
         type_tags: tuple[str, ...],
     ) -> ProfileSelectionResult:
-        # Enumerate every variant of this name: a `[aligned=*]` primitive expanded into
-        # concrete aligned/unaligned copies, so both must be emitted (each its own
-        # generation). Prefer the unmasked variants; fall back to masked-only primitives
-        # (like `blend`, which exists solely as `[mask=pass_through]`).
-        variants = catalog.primitives_named(primitive_name, unmasked=True) or (
-            catalog.primitives_named(primitive_name, unmasked=False)
+        # Variants of this name fall into two groups, emitted side by side:
+        #  - the UNMASKED overload set: same-arity overloads (store's `(ptr,v)`/`(ptr,s)`,
+        #    shift's `(v,s)`/`(v,sImm)`/`(v,v)`) resolved by argument type. The arity filter
+        #    keeps only this group's shared arity (a different-arity unmasked overload — e.g.
+        #    hadd `s:=v` vs masked-arg `s:=(m,v)` — is left for later).
+        #  - the MASKED variants in the **value-masking** category (vector result, no memory
+        #    operand): each is a distinct callable, split to `<name>_mask`/`_maskz` at render
+        #    (so a different arity / two policies like `mov`'s zero+pass_through both emit).
+        #    Mask-producing comparisons (result `m`) and `load`/`store`/`gather`/`scatter`
+        #    (`ptr`/`vidx`) are a deferred follow-up.
+        unmasked = catalog.primitives_named(primitive_name, unmasked=True)
+        masked = tuple(
+            p
+            for p in catalog.primitives_named(primitive_name, unmasked=False)
+            if "mask" in p.attributes and _is_value_masking(p)
         )
-        # Keep the variants sharing the first one's parameter *arity*: same-arity
-        # overloads (store's `(ptr,v)`/`(ptr,s)`, shift's `(v,s)`/`(v,sImm)`/`(v,v)`) are
-        # emitted together and resolved by argument type (overload dispatch). A
-        # different-arity overload (e.g. hadd `s:=v` vs masked-arg `s:=(m,v)`) is left for
-        # later — masked-arg reductions are a separate concern.
-        if variants:
-            arity = len(variants[0].parameters)
-            variants = tuple(p for p in variants if len(p.parameters) == arity)
+        if unmasked:
+            arity = len(unmasked[0].parameters)
+            variants = tuple(p for p in unmasked if len(p.parameters) == arity) + masked
+        elif masked:
+            variants = masked  # masked-only (blend/mov/…): every policy is its own callable
+        else:
+            variants = catalog.primitives_named(primitive_name, unmasked=False)
         if not variants:
             return ProfileSelectionResult(
                 selected=(),
@@ -92,7 +101,14 @@ class Selector:
         selected: list[SelectedImplementation] = []
         warnings: dict[str, Diagnostic] = {}  # keyed by message, so each ambiguity warns once
         for primitive in variants:
+            masked = "mask" in primitive.attributes
             for extension_name in self._emit_extensions(catalog, profile):
+                # The generic (`<LANES>`) vector's masked body is a per-lane `mask<test>` loop
+                # that isn't substrate-ready (`details::mask_test` is unimplemented; the C-style
+                # `if` doesn't translate to Rust). Defer masked variants on the generic vector;
+                # the SIMD (blend/mov/maskz) and scalar (if/set_zero) masked bodies are emitted.
+                if masked and catalog.extensions[extension_name].family == "generic_like":
+                    continue
                 for type_tag in type_tags:
                     # A representation-change primitive has a SECOND axis (the target type /
                     # extension); it emits one slot per (type_tag, to_target). An ordinary
@@ -287,6 +303,44 @@ def _same_width(target_tag: str, source_tag: str) -> bool:
 
     tw, sw = width(target_tag), width(source_tag)
     return tw is not None and tw == sw
+
+
+def _is_value_masking(primitive: Primitive) -> bool:
+    """A masked variant in the **value-masking** category (the masked-variant slice's scope):
+    its result is a vector and it has no memory operand. This admits `add`/`mul`/`binary_and`/
+    `shift_left`/`mul_imm`/… (mask selects which lanes get the op) and excludes mask-*producing*
+    comparisons (result `m`) and `load`/`store`/`gather`/`scatter` (`ptr`/`vidx`), which are
+    deferred follow-ups."""
+
+    shape = parse_signature(primitive.signature)
+    return (
+        shape is not None
+        and shape.result_kind == "v"
+        and "ptr" not in shape.param_kinds
+        and "vidx" not in shape.param_kinds
+    )
+
+
+def policy_split_names(catalog: Catalog) -> frozenset[str]:
+    """Names with MORE THAN ONE emitted *form* — so a `call<…attrs[mask=…]>` to them must take
+    the `_mask`/`_maskz` suffix (matching the render rename). A form is the unmasked variant (if
+    any) plus each value-masking mask policy. Examples: `add` (unmasked + zero + merge → 3 forms)
+    and `mov` (zero + merge → 2 forms) split; `blend` (merge only → 1 form) keeps its bare name."""
+
+    names: set[str] = set()
+    for name in {primitive.name for primitive in catalog.primitives}:
+        variants = catalog.primitives_named(name, unmasked=False)
+        forms: set[str | None] = set()
+        if any("mask" not in p.attributes for p in variants):
+            forms.add(None)
+        forms.update(
+            p.attributes["mask"]
+            for p in variants
+            if "mask" in p.attributes and _is_value_masking(p)
+        )
+        if len(forms) > 1:
+            names.add(name)
+    return frozenset(names)
 
 
 def _applicable_flags(

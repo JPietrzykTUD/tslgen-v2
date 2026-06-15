@@ -550,14 +550,19 @@ class CallLowerer:
             )
             return region.full_text
 
+        # A `attrs[mask=…]` call to a policy-split name targets its `_mask`/`_maskz` split (the
+        # render rename); single-form callees (`blend`) aren't in the set and stay bare.
+        call_name = name
+        if attrs.get("mask") and name in context.policy_split_names:
+            call_name = f"{name}_maskz" if attrs["mask"] == "zero" else f"{name}_mask"
         axis_values = tuple(
             attrs.get(key, "false") for key in context.primitive_axes.get(name, ())
         )
         return context.translation.render_call(
-            name,
+            call_name,
             render(region.body),
             axis_values,
-            context.primitive_arg_generics.get(name, 0),
+            context.primitive_arg_generics.get(call_name, 0),
             vec_override,
             tuple(extra_args),
         )
