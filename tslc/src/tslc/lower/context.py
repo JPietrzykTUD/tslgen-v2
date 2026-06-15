@@ -16,6 +16,21 @@ from tslc.catalog.model import Extension
 from tslc.diagnostics import Diagnostic
 
 
+@dataclass(frozen=True, slots=True)
+class VectorValue:
+    """A SIMD vector type as a query value: an element base tag + the extension ISA it lives in
+    + its concrete lane count (None for the LANES-sized generic vector). Returned by
+    ``vector::transform_extension``/``as_extension`` and consumed by ``base::generic`` /
+    ``generic::length`` / ``register::generic``. Stored in :attr:`LoweringContext.vector_aliases`
+    so a query argument that names a ``let<type>`` alias (``generic::length(OutVec)``) resolves to
+    the structured vector, not its rendered spelling string. (Defined here, not in ``queries``, so
+    ``context`` stays import-cycle-free — ``queries`` imports ``context``.)"""
+
+    base_tag: str
+    extension_isa: str
+    lanes: int | None
+
+
 @dataclass(slots=True)
 class LoweringContext:
     extension: Extension
@@ -58,6 +73,12 @@ class LoweringContext:
     # aliases the body may name (`ToBase`/`ToType` -> the target base type tag), so a query like
     # `register::generic(ToType)` resolves against the target. Empty for ordinary primitives.
     target_type_aliases: dict[str, str] = field(default_factory=dict)
+    # `let<type>(Name, …)` aliases whose value is a SIMD vector (e.g. `OutVec` from
+    # `vector::transform_extension(ToBase)`): Name -> its :class:`VectorValue`. A query arg that
+    # names one of these resolves to the structured vector, so `generic::length(OutVec)` /
+    # `base::generic(OutVec)` work. (`type_aliases` still holds the rendered spelling for
+    # type-position uses like `to_array[OutVec]`.)
+    vector_aliases: dict[str, VectorValue] = field(default_factory=dict)
     diagnostics: list[Diagnostic] = field(default_factory=list)
     requires_unsafe: bool = False
     unsupported: bool = False  # a not-yet-supported construct -> skip this specialization

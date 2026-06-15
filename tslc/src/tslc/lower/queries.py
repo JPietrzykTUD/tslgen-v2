@@ -27,7 +27,7 @@ _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 from tslc.backend.translation import is_signed, is_type_tag, signed_of, unsigned_of
 from tslc.lower._text import split_head_arg, split_top_level
-from tslc.lower.context import LoweringContext
+from tslc.lower.context import LoweringContext, VectorValue
 
 
 # --- query value types (extend as new queries need new result kinds) ---------
@@ -48,7 +48,23 @@ class BoolValue:
     value: bool
 
 
-QueryValue = TypeValue | TextValue | BoolValue
+QueryValue = TypeValue | TextValue | BoolValue | VectorValue
+
+
+def _vector_value(base_tag: str, context: LoweringContext) -> VectorValue:
+    """A :class:`VectorValue` for ``base_tag`` in the *current* extension. Lane count: the
+    LANES-symbol (None) for the generic vector, 1 for scalar (zero-width register), else
+    ``vector_bits / base-bit-width``."""
+
+    isa = context.extension.isa_name
+    if isa == "generic":
+        lanes: int | None = None
+    elif context.extension.vector_bits == 0:
+        lanes = 1
+    else:
+        digits = "".join(c for c in base_tag if c.isdigit())
+        lanes = context.extension.vector_bits // (int(digits) if digits else 8)
+    return VectorValue(base_tag=base_tag, extension_isa=isa, lanes=lanes)
 
 
 # --- parsed query terms ------------------------------------------------------
@@ -233,11 +249,20 @@ class RegisterGenericQuery:
     head = "register::generic"
 
     def apply(self, args, context):  # noqa: ANN001
-        if len(args) != 1 or not isinstance(args[0], TypeValue):
+        if len(args) != 1:
             return None
-        spelling = context.translation.target_register_spelling(
-            args[0].type_tag, context.extension.isa_name
-        )
+        arg = args[0]
+        # A bare base tag (`register::generic(ToType)`) -> that base's register in the current
+        # extension. A `VectorValue` (`register::generic(transform_extension(ToBase))`) carries its
+        # own extension, so the target register is read from it (needed when it differs, e.g. a
+        # widening load's input vector).
+        if isinstance(arg, TypeValue):
+            base_tag, isa = arg.type_tag, context.extension.isa_name
+        elif isinstance(arg, VectorValue):
+            base_tag, isa = arg.base_tag, arg.extension_isa
+        else:
+            return None
+        spelling = context.translation.target_register_spelling(base_tag, isa)
         return TextValue(spelling) if spelling is not None else None
 
 
@@ -344,6 +369,45 @@ class AsExtensionQuery:
         return None
 
 
+class TransformExtensionQuery:
+    """``vector::transform_extension(ToBase)`` -> the vector with the given base in the *current*
+    extension (a :class:`VectorValue`), e.g. for a `si8`@avx2 source, `transform_extension(si16)`
+    is `simd<si16, avx2>` (same 256-bit register, 16 lanes). The conversion bodies bind it to a
+    `let<type>(OutVec, …)` and then read `generic::length(OutVec)` / `base::generic(OutVec)`."""
+
+    head = "vector::transform_extension"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 1 or not isinstance(args[0], TypeValue):
+            return None
+        return _vector_value(args[0].type_tag, context)
+
+
+class BaseGenericQuery:
+    """``base::generic(V)`` -> the base type tag of a vector value (a `VectorValue`, typically a
+    `let<type>` alias like `OutVec`)."""
+
+    head = "base::generic"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 1 or not isinstance(args[0], VectorValue):
+            return None
+        return TypeValue(args[0].base_tag)
+
+
+class GenericLengthQuery:
+    """``generic::length(V)`` -> the lane count of a vector value (`str(lanes)`, or the `LANES`
+    symbol for the sized generic vector). Counterpart to `vector::length` (the current vector),
+    but for a named vector alias."""
+
+    head = "generic::length"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 1 or not isinstance(args[0], VectorValue):
+            return None
+        return TextValue("LANES" if args[0].lanes is None else str(args[0].lanes))
+
+
 DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     BaseInQuery(),
     SignedOfQuery(),
@@ -363,6 +427,9 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     VectorAlignmentQuery(),
     VectorLengthQuery(),
     AsExtensionQuery(),
+    TransformExtensionQuery(),
+    BaseGenericQuery(),
+    GenericLengthQuery(),
 )
 
 
@@ -399,6 +466,10 @@ class QueryEvaluator:
         # so `register::generic(ToType)` / `base::unsigned_of(ToBase)` resolve against the target.
         if not term.args and term.head in context.target_type_aliases:
             return TypeValue(context.target_type_aliases[term.head])
+        # A `let<type>` vector alias (`OutVec`) -> its structured VectorValue, so a query arg that
+        # names it (`generic::length(OutVec)` / `base::generic(OutVec)`) resolves to the vector.
+        if not term.args and term.head in context.vector_aliases:
+            return context.vector_aliases[term.head]
         # A bare leaf that names a concrete type tag resolves to itself.
         if not term.args and is_type_tag(term.head):
             return TypeValue(term.head)

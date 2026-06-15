@@ -473,9 +473,10 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), data));"
           ?i64:
+            requires [sse4_1]
             implementation:
               tsil """
-                   var<const_infer>(temp, intrin<_mm_cvtps_epi32>(intrin<_mm_round_ps>(intrin<_mm_cvtpd_ps>(intrin<_mm_round_pd>(data, value<backend>(x86::mm_fround_to_zero))), value<backend>(x86::mm_fround_to_zero)))) 
+                   var<const_infer>(temp, intrin<_mm_cvtps_epi32>(intrin<_mm_round_ps>(intrin<_mm_cvtpd_ps>(intrin<_mm_round_pd>(data, value<backend>(x86::mm_fround_to_zero))), value<backend>(x86::mm_fround_to_zero))))
                    emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm_cvtepi32_epi64>(temp))) ;
                 """
           si32:
@@ -491,6 +492,7 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), data));"
           ?i64:
+            requires [sse4_1]
             implementation:
               tsil """
                   if<compile>( value<generation>(type::is_same(type<generation>(base::in), si32)) ) {
@@ -534,10 +536,11 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), data));"
           f64:
+            requires [sse4_1]
             implementation:
               tsil """
                   if<compile>( value<generation>(type::is_same(type<generation>(base::in), si64)) ) {
-                     var<infer>(x_h, intrin<_mm_srai_epi32>(data, 16)) 
+                     var<infer>(x_h, intrin<_mm_srai_epi32>(data, 16))
                     x_h = intrin<_mm_blend_epi16>(x_h, intrin<_mm_setzero_si128>(), 0x33);
                     x_h = intrin<_mm_add_epi64>(x_h, intrin<_mm_castpd_si128>(intrin<_mm_set1_pd>(442721857769029238784.)));
                      var<const_infer>(x_l, intrin<_mm_blend_epi16>(data, intrin<_mm_castpd_si128>(intrin<_mm_set1_pd>(cast<static>( f64 , cast<static>( ui64 , 0x0010000000000000)))), 0x88)) 

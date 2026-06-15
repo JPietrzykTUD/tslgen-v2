@@ -202,7 +202,16 @@ class Selector:
                 continue
             if not catalog.type_group_contains(impl.type_group, type_tag):
                 continue
-            targets.update(catalog.type_group_members(impl.to_target_group))
+            for member in catalog.type_group_members(impl.to_target_group):
+                # `"=="` (identity, target == source) and `"*"` (unenumerable catch-all "any other
+                # base") are target-only markers, not concrete tags (they carry literal quotes in
+                # the corpus). Drop both: their bodies are no-ops/fallbacks covered by the concrete
+                # `?i?`/`f?`/… sibling targets, and they don't name a base the lowerer can spell —
+                # leaking them is the `target '"*"'`/`'"=="'` errors. A concrete sibling may still
+                # enumerate the source tag itself (an int `?i?` block includes its own type), so the
+                # genuine identity target survives where the corpus actually provides a body for it.
+                if member.strip('"') not in ("==", "*"):
+                    targets.add(member)
         if dim == RESULT_DIM_EXTENSION:
             return tuple(sorted(t for t in targets if t in catalog.extensions))
         if dim == RESULT_DIM_BASE and primitive.attributes.get("cast") == "reinterpret":
@@ -229,7 +238,9 @@ class Selector:
                 continue
             if not catalog.type_group_contains(implementation.type_group, type_tag):
                 continue
-            # Second-axis match: the body's `to_target_group` must contain the target slot.
+            # Second-axis match: the body's `to_target_group` must contain the target slot. The
+            # `==`/`*` markers never contain a concrete tag (their members are the literal marker),
+            # so those bodies stay unselected — the concrete sibling blocks cover every emitted slot.
             if to_target is not None and not (
                 implementation.to_target_group is not None
                 and catalog.type_group_contains(implementation.to_target_group, to_target)

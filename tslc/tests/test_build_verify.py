@@ -296,6 +296,31 @@ def test_load_store_builds(data_root: Path, machine_profiles_path: Path, tmp_pat
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_cast_reinterpret_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # The representation-change `base`-dim primitives: `reinterpret` (same-width bit-reinterpret)
+    # and `cast` (value conversion, possibly different lane count within the same register). Both
+    # carry a `ToBase` second type axis; the selector resolves the `"=="` identity marker to the
+    # source and drops the unenumerable `"*"` catch-all (else they'd leak as bogus target bases).
+    # The same-width / bitcast / sse4.1-gated native bodies build; the space-separated-modifier
+    # conversion bodies (`intrin_compose<cvt infix=… suffix=…>`) skip cleanly until Stage 2.
+    # Builds in C++ and Rust.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["cast", "reinterpret"],
+        profiles=["scalar", "sse2", "avx", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_sequence_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # `sequence` is nullary (`v:=()`, an iota generator) — its native bodies are
     # `intrin_compose<set>(N-1, …, 0)` literal lists per width. Builds in C++ and Rust.

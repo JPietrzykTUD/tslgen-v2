@@ -15,8 +15,17 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from tslc.ir.segments import RawText, Region, Segment
-from tslc.lower.context import LoweringContext
+from tslc.lower.context import LoweringContext, VectorValue
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue, TypeValue
+
+
+def _vector_spelling(value: VectorValue, context: LoweringContext) -> str | None:
+    """The backend type spelling of a :class:`VectorValue` (`simd<base, ext>`)."""
+
+    base = context.translation.scalar_spelling(value.base_tag)
+    if base is None:
+        return None
+    return context.translation.vector_type_spelling(base, value.extension_isa)
 from tslc.lower._text import skip_string, split_top_level
 
 RenderBody = Callable[[tuple[Segment, ...]], str]
@@ -80,6 +89,17 @@ class IntrinComposeLowerer:
         modifiers = ComposeModifiers.parse(region.selector_text)
         if modifiers.base is None:
             context.skip("TSL-LOWER-EMPTY-INTRIN-COMPOSE", "intrin_compose has no base name")
+            return region.full_text
+        # Space-separated modifiers (`<cast infix=… suffix=…>`, `<srli suffix=… immediate(1)=…>`)
+        # aren't parsed yet (the parser splits on commas) — the whole spaced string would become a
+        # garbage intrinsic base. Skip cleanly until the composition vocabulary (infix/infix_sep +
+        # whitespace parsing) lands, so conversion/cast native bodies skip rather than emit garbage.
+        if any(ch.isspace() for ch in modifiers.base.strip()):
+            context.skip(
+                "TSL-LOWER-UNSUPPORTED-COMPOSE-MODIFIERS",
+                f"intrin_compose with space-separated modifiers is not supported yet: "
+                f"{region.selector_text!r}",
+            )
             return region.full_text
 
         suffix = self._suffix(modifiers, context)
@@ -291,6 +311,9 @@ class LetLowerer:
 
     keyword = "let"
 
+    def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
+        self._evaluator = evaluator or QueryEvaluator()
+
     def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
         variant = region.selector_text.strip()
         groups = _split_arg_groups(region.body)
@@ -300,7 +323,14 @@ class LetLowerer:
                 f"unsupported let<{variant}>: {region.full_text!r}",
             )
             return region.full_text
-        context.type_aliases[render(groups[0]).strip()] = render(groups[1]).strip()
+        name = render(groups[0]).strip()
+        # A vector-valued alias (`let<type>(OutVec, transform_extension(ToBase))`) is captured
+        # structurally too, so a later `generic::length(OutVec)` query arg resolves to the vector
+        # (the rendered spelling below still drives type-position substitution like `to_array[OutVec]`).
+        value = self._evaluator.evaluate(_segment_text(groups[1]), context)
+        if isinstance(value, VectorValue):
+            context.vector_aliases[name] = value
+        context.type_aliases[name] = render(groups[1]).strip()
         return ""
 
 
@@ -654,6 +684,17 @@ class CallLowerer:
         value = self._evaluator.evaluate(entry, context)
         if isinstance(value, TextValue):
             return value.text
+        # A base tag (`cast[Vec, ToBase]`'s `ToBase`) -> the target vector (`ToVec`) the cast/convert
+        # wrapper takes as its second type param: `simd<ToBase, current_ext>`.
+        if isinstance(value, TypeValue):
+            base = context.translation.scalar_spelling(value.type_tag)
+            return (
+                context.translation.vector_type_spelling(base, context.extension.isa_name)
+                if base is not None
+                else None
+            )
+        if isinstance(value, VectorValue):  # an already-vector target -> its spelling
+            return _vector_spelling(value, context)
         return None
 
     def _resolve_vec_expr(self, entry: str, context: LoweringContext) -> str | None:
@@ -902,6 +943,10 @@ class QueryRegionLowerer:
             return value.text
         if isinstance(value, TypeValue):
             spelling = context.translation.scalar_spelling(value.type_tag)
+            if spelling is not None:
+                return spelling
+        if isinstance(value, VectorValue):  # e.g. `type<generation>(transform_extension(ToBase))`
+            spelling = _vector_spelling(value, context)
             if spelling is not None:
                 return spelling
         context.skip(
