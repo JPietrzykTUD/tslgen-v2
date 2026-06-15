@@ -296,6 +296,32 @@ def test_load_store_builds(data_root: Path, machine_profiles_path: Path, tmp_pat
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_gather_scatter_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # `gather`/`scatter` (the `vidx` index-vector kind + the free `IndicesType` SIMD type param +
+    # an `N`/`scale` immediate). Two body shapes coexist: the portable fallback (a `to_array`
+    # over `IndicesType` -> index loop with `idx_offset`/`ptr_add`, on scalar + types with no
+    # native gather) and the native `switch<compile>(scale) { 1 => intrin… _ => fallback }` —
+    # lowered to a C++ cascading `if constexpr` / Rust compile-time `match`, with the scale
+    # forwarded via `immediate(N)=` (a C++ positional const arg / Rust turbofish const). The Rust
+    # index register is pinned per-ISA so the native intrinsic's concrete `__m256i` type-checks.
+    # Builds in C++ and Rust.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["gather", "scatter"],
+        profiles=["scalar", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_to_integral_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # `to_integral` (result kind `im` = the integral-mask type) packs a mask into an
     # integer: the scalar `if`-return (imask = u64), the avx2/sse `movemask` bodies incl.

@@ -79,6 +79,12 @@ class LoweredSpecialization:
     # (("PreserveSign", "bool", "true"),). Emitted as C++ non-type template params (with the
     # default) / Rust const generics (no default); bodies reference them symbolically.
     generic_params: tuple[tuple[str, str, str], ...] = ()
+    # Free SIMD *type* params from a `generic_params {kind simd_type}` block (gather's
+    # `IndicesType`), as (name, bound-primitive-names). Emitted as a C++ `class` template param /
+    # Rust `NAME: SimdVector + <Bound>Impl…` generic, threaded through trait/impl/wrapper like the
+    # representation-change `ToVec`. The bound names are the primitives the body calls on the param
+    # (`to_array[IndicesType]` -> `to_array`); the Rust backend maps each to its `…Impl` trait.
+    type_params: tuple[tuple[str, tuple[str, ...]], ...] = ()
     # True when register_type == base_type for this extension (scalar/generic). Lets the
     # backend dedup overload `apply`s that collapse to the same type (a `v` and an `s`
     # parameter are distinct on SIMD but identical here).
@@ -314,8 +320,17 @@ class Lowerer:
                 if key in BOOLEAN_WILDCARD_ATTRIBUTES
             ),
             immediate=immediate,
+            # `generic_params` split by kind: `bool`/`int` are non-type (const) params; a
+            # `simd_type` is a free type param (see `type_params`).
             generic_params=tuple(
-                (gp.name, "bool", gp.default) for gp in selected.primitive.generic_params
+                (gp.name, _const_param_type(gp.kind, translation.backend_id), gp.default)
+                for gp in selected.primitive.generic_params
+                if gp.kind != "simd_type"
+            ),
+            type_params=tuple(
+                (gp.name, _type_param_bounds(selected.implementation.body_text, gp.name))
+                for gp in selected.primitive.generic_params
+                if gp.kind == "simd_type"
             ),
             # True only when the register type *is* the base type (scalar). The generic
             # vector also has vector_bits 0 but its register is the lane array, not the base,
@@ -352,8 +367,32 @@ def _resolve_immediate_range(
 
 
 _SUPPORTED_KINDS = frozenset(
-    {"v", "s", "m", "im", "usize", "sImm", "ptr", "void", "s[]", "vt"}
+    {"v", "s", "m", "im", "usize", "sImm", "ptr", "void", "s[]", "vt", "vidx"}
 )
+
+
+def _const_param_type(kind: str, backend_id: str) -> str:
+    """The backend spelling of a non-type `generic_params` declaration: an `int` is a
+    machine-width count (`std::size_t`/`usize`); everything else (currently `bool`,
+    e.g. `PreserveSign`) is a boolean flag."""
+
+    if kind == "int":
+        return "std::size_t" if backend_id == "cpp" else "usize"
+    return "bool"
+
+
+def _type_param_bounds(body: str, type_param_name: str) -> tuple[str, ...]:
+    """The primitive names a body calls *on* a free SIMD type param (`primitive=NAME[<param>]`).
+    Each is a trait the type param must satisfy in Rust (`to_array[IndicesType]` ->
+    `IndicesType: To_arrayImpl`); C++ templates are duck-typed and ignore them. Derived here in
+    the lowerer (it already parses calls) so neither backend needs to know which primitives a
+    body invokes — the Rust backend only maps a recorded name to its trait spelling."""
+
+    import re as _re
+
+    return tuple(
+        sorted(set(_re.findall(rf"primitive=(\w+)\s*\[\s*{_re.escape(type_param_name)}\s*\]", body)))
+    )
 
 
 def _primitive_axes(catalog: Catalog) -> dict[str, tuple[str, ...]]:
@@ -411,6 +450,8 @@ def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
             return "base" if spec.register_is_base else "register"
         if kind == "vt":  # a target-axis vector param (`insert`'s `orig`) — the ToVec register
             return "target_register"
+        if kind == "vidx":  # a gather/scatter index vector — the IndicesType register
+            return "index_register"
         if kind == "m":
             return "mask"
         if kind == "ptr":

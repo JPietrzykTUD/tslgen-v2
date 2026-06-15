@@ -35,6 +35,10 @@ class Region:
     # ``if`` region.
     block: tuple["Segment", ...] = ()
     else_block: tuple["Segment", ...] | None = None
+    # Arms of a ``switch<compile>(sel) { label => { body } … _ => { body } }`` region: each is
+    # (label, body-segments); ``_`` is the default. The lowerer emits a compile-time multi-way
+    # selection over the const selector (``body`` holds the selector). None for other regions.
+    arms: tuple[tuple[str, tuple["Segment", ...]], ...] | None = None
 
 
 Segment = RawText | Region

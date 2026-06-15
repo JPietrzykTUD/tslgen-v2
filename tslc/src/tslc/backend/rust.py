@@ -133,10 +133,13 @@ class RustBackend:
             decls = ["ToVec: SimdVector", *decls]
             ret = "ToVec::RegisterType"
             vt_type = "ToVec::RegisterType"
-        params = _params(shape, "Self", binding_mut=False, vt_type=vt_type)
+        # Free SIMD type params (gather's `IndicesType`) — a `vidx` param projects through one.
+        decls = _type_param_decls(shape) + decls
+        vidx_type = f"{shape.type_params[0][0]}::RegisterType" if shape.type_params else None
+        params = _params(shape, "Self", binding_mut=False, vt_type=vt_type, vidx_type=vidx_type)
         generics = f"<{', '.join(decls)}>" if decls else ""
         return (
-            f"pub trait {_trait_name(primitive_name)}{generics}: SimdVector {{\n"
+            f"pub trait {_trait_name(primitive_name)}{generics}: SimdVector{_index_where(shape)} {{\n"
             f"    fn apply({params}) -> {ret};\n"
             f"}}"
         )
@@ -153,6 +156,9 @@ class RustBackend:
         if spec.immediate is not None:
             impl_parts.append(f"const {spec.immediate[0]}: {spec.immediate[1]}")
         impl_parts += [f"const {name}: {typ}" for name, typ, _ in spec.generic_params]
+        # Free SIMD type params stay generic in the impl (a caller binds them); they precede the
+        # const generics (Rust requires types before consts).
+        impl_parts = _type_param_decls(spec) + impl_parts
         impl_generics = f"<{', '.join(impl_parts)}>" if impl_parts else ""
         targs = _trait_args_by_value(spec)
         ret = _kind_type(spec.result_kind, "Self")
@@ -163,10 +169,20 @@ class RustBackend:
             targs = [spec.target.vector_spelling, *targs]
             ret = spec.target.register_spelling
             vt_type = spec.target.register_spelling
-        params = _params(spec, "Self", vt_type=vt_type)
+        targs = [*_type_param_names(spec), *targs]
+        vidx_type = f"{spec.type_params[0][0]}::RegisterType" if spec.type_params else None
+        params = _params(spec, "Self", vt_type=vt_type, vidx_type=vidx_type)
         trait_args = f"<{', '.join(targs)}>" if targs else ""
+        # On a real x86 ISA, pin the index register to that ISA's integer register so a native
+        # intrinsic (which takes a concrete `__m256i`) type-checks; scalar/generic stay opaque.
+        impl_register = (
+            rust_register_type(spec.extension_name, "i32")
+            if spec.extension_name in X86_REGISTER_BITS
+            else None
+        )
         return (
-            f"impl{impl_generics} {_trait_name(spec.primitive_name)}{trait_args} for {key} {{\n"
+            f"impl{impl_generics} {_trait_name(spec.primitive_name)}{trait_args} for {key}"
+            f"{_index_where(spec, impl_register=impl_register)} {{\n"
             f"    fn apply({params}) -> {ret} {{\n"
             f"        {spec.body_text}\n"
             f"    }}\n"
@@ -193,12 +209,22 @@ class RustBackend:
             ret = "T::RegisterType"
             vt_type = "T::RegisterType"
             call = f"<S as {_trait_name(primitive_name)}<{', '.join(targs)}>>::apply({names})"
-        params = _params(shape, "S", vt_type=vt_type)
+        # Free SIMD type params: declare them (bounded) and pass them as trait args. The call is
+        # qualified — `IndicesType::RegisterType` is non-injective, so it can't be inferred from
+        # the `vidx` argument; pinning `IndicesType` in the trait path resolves `apply`.
+        if shape.type_params:
+            targs = [*_type_param_names(shape), *targs]
+            decl_list = _type_param_decls(shape) + decl_list
+            vidx_type = f"{shape.type_params[0][0]}::RegisterType"
+            call = f"<S as {_trait_name(primitive_name)}<{', '.join(targs)}>>::apply({names})"
+        else:
+            vidx_type = None
+        params = _params(shape, "S", vt_type=vt_type, vidx_type=vidx_type)
         trait_args = f"<{', '.join(targs)}>" if targs else ""
         decls = "".join(f", {d}" for d in decl_list)
         return (
             f"pub fn {primitive_name}<S: {_trait_name(primitive_name)}{trait_args}{decls}>"
-            f"({params}) -> {ret} {{\n"
+            f"({params}) -> {ret}{_index_where(shape)} {{\n"
             f"    {call}\n"
             f"}}"
         )
@@ -206,6 +232,47 @@ class RustBackend:
 
 def _trait_name(primitive_name: str) -> str:
     return f"{primitive_name[:1].upper()}{primitive_name[1:]}Impl"
+
+
+def _type_param_decls(shape: LoweredSpecialization) -> list[str]:
+    """`NAME: SimdVector + <Bound>Impl…` for each free SIMD type param (gather's `IndicesType`).
+    The bound primitives are the ones the body calls on the param (recorded by the lowerer), so
+    the param satisfies them — `to_array[IndicesType]` adds `To_arrayImpl`. C++ needs no such
+    bound (templates are duck-typed); only Rust does. Type params precede const generics (Rust
+    requires types before consts) and so are prepended to the generic list.
+
+    The integer-index requirement of a `vidx`-backing param is carried by a where-clause
+    (`_index_where`), not a bound here — a trait's where-clause is not an implied bound at use
+    sites, so the constraint must be restated where the body needs it."""
+
+    decls: list[str] = []
+    for name, bounds in shape.type_params:
+        traits = ["SimdVector", *(_trait_name(b) for b in bounds)]
+        decls.append(f"{name}: {' + '.join(traits)}")
+    return decls
+
+
+def _index_where(shape: LoweredSpecialization, *, impl_register: str | None = None) -> str:
+    """The where-clause(s) for a primitive with a `vidx` param. Always `IndicesType::BaseType:
+    IndexBase` — the index lanes must convert to byte offsets (`idx_offset`). On a *real-ISA impl*
+    (``impl_register`` set) it ALSO pins `IndicesType: SimdVector<RegisterType = …>` to that ISA's
+    integer register: a native gather/scatter intrinsic takes a concrete register (`__m256i`), but
+    `IndicesType::RegisterType` is otherwise an opaque associated type. A gather index is by kind
+    that ISA's integer register whatever the data type — a kind-level fact, not primitive
+    knowledge. Emitted on the trait/impl/wrapper so each constraint holds where the body needs it;
+    empty for non-`vidx` primitives."""
+
+    if "vidx" not in shape.param_kinds or not shape.type_params:
+        return ""
+    index = shape.type_params[0][0]
+    clauses = [f"{index}::BaseType: IndexBase"]
+    if impl_register is not None:
+        clauses.insert(0, f"{index}: SimdVector<RegisterType = {impl_register}>")
+    return " where " + ", ".join(clauses)
+
+
+def _type_param_names(shape: LoweredSpecialization) -> list[str]:
+    return [name for name, _ in shape.type_params]
 
 
 def _axis_name(key: str) -> str:
@@ -305,18 +372,25 @@ def _params(
     *,
     binding_mut: bool = True,
     vt_type: str | None = None,
+    vidx_type: str | None = None,
 ) -> str:
     # An array (`s[]`) parameter is bound `mut` so the body can take a pointer into it
     # (`data.data()` borrows `&mut`); `mut` on an owned binding is otherwise harmless.
     # A trait *declaration* has no body, where a binding pattern like `mut` is rejected,
     # so it passes ``binding_mut=False``. A `vt` (target-axis vector) param uses `vt_type` —
     # the per-context target register spelling (trait `ToVec::RegisterType` / impl concrete /
-    # wrapper `T::RegisterType`), the same spelling the target result uses in that context.
+    # wrapper `T::RegisterType`); a `vidx` (index vector) param uses `vidx_type`
+    # (`IndicesType::RegisterType` — the generic name is the same in every context).
     parts: list[str] = []
     for name, kind in zip(shape.param_names, shape.param_kinds):
         if kind == "sImm":  # the immediate is a const generic, not a runtime arg
             continue
-        typ = vt_type if kind == "vt" else _kind_type(kind, owner)
+        if kind == "vt":
+            typ = vt_type
+        elif kind == "vidx":
+            typ = vidx_type
+        else:
+            typ = _kind_type(kind, owner)
         parts.append(f"{'mut ' if binding_mut and kind == 's[]' else ''}{name}: {typ}")
     return ", ".join(parts)
 

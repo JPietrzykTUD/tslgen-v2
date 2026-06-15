@@ -15,8 +15,10 @@ pub trait SimdVector {
     // one bit per lane (the native __mmaskN, or a lane-sized uint on lane-bitmask ISAs).
     type ImaskType;
     // The array type this vector lowers to (the `s[]` kind: to_array's result /
-    // from_array's argument), one element per lane.
-    type Array;
+    // from_array's argument), one element per lane. Indexable (yielding a lane's base value) so
+    // an element-wise loop body in a *generic* context — e.g. gather's `idx_array[i]` over a free
+    // `IndicesType` — can read/write lanes; concrete `array_type` already satisfies this.
+    type Array: Index<usize, Output = Self::BaseType> + IndexMut<usize>;
 }
 
 // scalar is always available and needs no SIMD substrate.
@@ -176,6 +178,24 @@ pub fn ptr_add<T>(p: *mut T, i: usize) -> *mut T {
 }
 pub fn ptr_add_mut<T>(p: *mut T, i: usize) -> *mut T {
     p.wrapping_add(i)
+}
+
+/// A value usable as a gather/scatter index or scale — an integer lane that converts to a byte
+/// offset. Implemented for the integer bases only (floats can't index memory), so a free
+/// `IndicesType: IndexVector` guarantees its lanes are valid indices.
+pub trait IndexBase: Copy {
+    fn as_offset(self) -> usize;
+}
+
+macro_rules! impl_index_base {
+    ($($t:ty),*) => { $(impl IndexBase for $t { fn as_offset(self) -> usize { self as usize } })* };
+}
+impl_index_base!(i8, i16, i32, i64, u8, u16, u32, u64, isize, usize);
+
+/// The byte offset of a gather/scatter index: `index * scale` (scale in {1,2,4,8}). Used by the
+/// fallback loops over a byte-reinterpreted base pointer.
+pub fn idx_offset<I: IndexBase, S: IndexBase>(index: I, scale: S) -> usize {
+    index.as_offset() * scale.as_offset()
 }
 
 pub mod details {

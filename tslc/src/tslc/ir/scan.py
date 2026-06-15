@@ -32,6 +32,11 @@ KEYWORDS: frozenset[str] = frozenset(
         # leaking through as raw text; the lowerer (native for-loop translation) is a later
         # slice. Its trailing `{ ... }` block is not yet captured (only `if` is block-bearing).
         "loop",
+        # Recognized so a `switch<compile>(scale) { … }` (gather/scatter's native scale dispatch)
+        # is flagged unsupported and the whole specialization skips cleanly, rather than leaking as
+        # raw text. Its lowerer (a multi-arm constexpr sibling of `if<compile>`) is a later slice;
+        # the trailing `{ … }` block is not captured yet, but a skipped spec is dropped whole.
+        "switch",
     }
 )
 
@@ -97,6 +102,10 @@ def _try_region(
         # `loop<range>(…) { body }` captures its `{ ... }` block; `loop<unroll>(n)` is a bare
         # hint with no block. Either way the lowerer translates it to a native loop construct.
         return _try_loop_region(text, start, selector_text, tuple(_scan(body_text)), close + 1)
+    if keyword == "switch":
+        # `switch<compile>(sel) { label => { body } … }`: capture the arm blocks so the lowerer
+        # can emit a compile-time multi-way selection over the selector.
+        return _try_switch_region(text, start, selector_text, tuple(_scan(body_text)), close + 1)
     region = Region(
         keyword=keyword,
         selector_text=selector_text,
@@ -172,6 +181,63 @@ def _try_loop_region(
         block=block,
     )
     return region, end
+
+
+def _try_switch_region(
+    text: str,
+    start: int,
+    selector_text: str,
+    selector: tuple[Segment, ...],
+    after_selector: int,
+) -> tuple[Region | None, int]:
+    """Capture ``switch<sel>(selector) { label => { body } … }`` from ``after_selector`` (just
+    past the selector's ``)``). Each arm is ``label => { block }``; ``label`` is a literal or
+    ``_`` (default). The compile-time selection lives in the lowerer; here we only delimit arms."""
+
+    pos = _skip_ws(text, after_selector)
+    if pos >= len(text) or text[pos] != "{":
+        return None, start  # a switch without a brace block is not a region we model
+    outer_close = _match_bracket(text, pos, "{", "}")
+    if outer_close is None:
+        return None, start
+    arms = _scan_switch_arms(text[pos + 1 : outer_close])
+    if arms is None:
+        return None, start
+    region = Region(
+        keyword="switch",
+        selector_text=selector_text,
+        body=selector,
+        full_text=text[start : outer_close + 1],
+        arms=arms,
+    )
+    return region, outer_close + 1
+
+
+def _scan_switch_arms(
+    inner: str,
+) -> tuple[tuple[str, tuple[Segment, ...]], ...] | None:
+    """Parse ``label => { body } …`` arms from a switch block's inner text. Returns None if the
+    shape doesn't hold (so the caller leaves the text as a non-region)."""
+
+    arms: list[tuple[str, tuple[Segment, ...]]] = []
+    i = 0
+    while True:
+        i = _skip_ws(inner, i)
+        if i >= len(inner):
+            break
+        arrow = inner.find("=>", i)
+        if arrow == -1:
+            return None
+        label = inner[i:arrow].strip()
+        brace = _skip_ws(inner, arrow + 2)
+        if brace >= len(inner) or inner[brace] != "{":
+            return None
+        close = _match_bracket(inner, brace, "{", "}")
+        if close is None:
+            return None
+        arms.append((label, tuple(_scan(inner[brace + 1 : close]))))
+        i = close + 1
+    return tuple(arms) if arms else None
 
 
 def _scan_else(text: str, after_else: int) -> tuple[tuple[Segment, ...] | None, int]:

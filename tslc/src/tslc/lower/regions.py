@@ -54,6 +54,18 @@ class ComposeModifiers:
                 return value
         return None
 
+    def immediate_forward(self) -> tuple[int, str] | None:
+        """An ``immediate(N)=V`` modifier as ``(position, value)``: intrinsic-arg position ``N``
+        carries the compile-time immediate ``V``. C++ keeps ``V`` as the positional arg the body
+        already supplies; Rust forwards it as a turbofish const and drops that positional arg
+        (the gather scale: a C++ runtime const arg vs a Rust const generic). None when absent."""
+
+        for name, value in self.modifiers:
+            match = re.fullmatch(r"immediate\((\d+)\)", name)
+            if match:
+                return int(match.group(1)), value
+        return None
+
 
 class IntrinComposeLowerer:
     """``intrin_compose<base, suffix=...>(args)`` -> a composed intrinsic call."""
@@ -103,6 +115,32 @@ class IntrinComposeLowerer:
         match_call = self._literal_match(name, region, context, render)
         if match_call is not None:
             return match_call
+        forward = modifiers.immediate_forward()
+        if forward is not None:
+            return self._immediate_forward(name, forward, region, context, render)
+        return f"{name}({render(region.body)})"
+
+    def _immediate_forward(
+        self,
+        name: str,
+        forward: tuple[int, str],
+        region: Region,
+        context: LoweringContext,
+        render: RenderBody,
+    ) -> str:
+        """Emit an intrinsic whose arg at position ``N`` is a compile-time immediate ``V``
+        (``immediate(N)=V``). Rust forwards ``V`` as a turbofish const and drops that positional
+        arg (`name::<V>(rest)`); C++ leaves ``V`` as the positional arg the body already supplies
+        (`name(all args)`) — the same intrinsic shape differs between backends (gather's scale)."""
+
+        position, value = forward
+        if context.translation.backend_id == "rust":
+            rest = [
+                render(group).strip()
+                for index, group in enumerate(_split_arg_groups(region.body))
+                if index != position
+            ]
+            return f"{name}::<{value}>({', '.join(rest)})"
         return f"{name}({render(region.body)})"
 
     def _literal_match(
@@ -873,6 +911,45 @@ class QueryRegionLowerer:
         return region.full_text
 
 
+class SwitchLowerer:
+    """``switch<compile>(sel) { label => { body } … _ => { body } }`` -> a compile-time multi-way
+    selection over the const selector ``sel`` (gather/scatter's ``scale``). The selected arm folds
+    at compile time, so each arm can call an intrinsic that needs a *literal* (the scale const):
+
+    - C++: a cascading ``if constexpr (sel == label) { … } else if constexpr (…) … else { … }``.
+    - Rust: a ``match sel { label => { … }, _ => { … } }`` (LLVM folds the const match).
+
+    Each arm body renders like any block — ``emit_return`` inside it becomes the backend's return,
+    and every arm returns, so the construct is the function's diverging tail (as with ``if<compile>``).
+    The ``_`` arm is the default (the portable fallback loop)."""
+
+    keyword = "switch"
+
+    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+        if region.arms is None:
+            context.skip(
+                "TSL-LOWER-SWITCH-NO-ARMS",
+                f"switch without arms is not supported: {region.full_text!r}",
+            )
+            return region.full_text
+        selector = render(region.body).strip()
+        if context.translation.backend_id == "rust":
+            arms = "".join(
+                f"{label} => {{\n        {render(body)}\n      }}\n      "
+                for label, body in region.arms
+            )
+            return f"match {selector} {{\n      {arms}}}"
+        parts: list[str] = []
+        for label, body in region.arms:
+            inner = render(body)
+            if label == "_":
+                parts.append(f"else {{\n        {inner}\n      }}")
+            else:
+                keyword = "if" if not parts else "else if"
+                parts.append(f"{keyword} constexpr ({selector} == {label}) {{\n        {inner}\n      }}")
+        return " ".join(parts)
+
+
 class EmitReturnLowerer:
     """``emit_return(expr)`` -> the backend's return framing around the value.
 
@@ -898,6 +975,7 @@ DEFAULT_REGION_LOWERERS: tuple[RegionLowerer, ...] = (
     IfLowerer(),
     AssumeAlignedLowerer(),
     LoopLowerer(),
+    SwitchLowerer(),
     QueryRegionLowerer("type"),
     QueryRegionLowerer("value"),
     EmitReturnLowerer(),

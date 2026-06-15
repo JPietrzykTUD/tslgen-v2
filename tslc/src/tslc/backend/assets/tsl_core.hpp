@@ -86,6 +86,13 @@ inline const T *ptr_add(const T *p, std::size_t i) {
     return p + i;
 }
 
+// The byte offset of a gather/scatter index: `index * scale` (scale in {1,2,4,8}). Used by the
+// fallback loops over a byte-reinterpreted base pointer.
+template <class Idx>
+inline std::size_t idx_offset(Idx index, std::size_t scale) {
+    return static_cast<std::size_t>(index) * scale;
+}
+
 // A fixed-size, over-aligned array buffer (the `s[]` kind). Wraps std::array so
 // `.data()`/`operator[]`/`.fill()` are uniform with the Rust counterpart; `Align`
 // over-aligns the storage so an aligned store into it (via `assume_aligned`) is valid.

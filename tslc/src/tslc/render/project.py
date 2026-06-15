@@ -396,6 +396,10 @@ def _cpp_smoke(p: ProfileRender) -> str:
                 # A representation-change primitive's second type param is the target vector
                 # (right after `Vec`, matching the wrapper's `<Vec, ToVec, …>` order).
                 + ([spec.target.vector_spelling] if spec.target else [])
+                # Free SIMD type params (gather's `IndicesType`) follow, matching the wrapper's
+                # `<Vec, ToVec, IndicesType, …>` order. The fallback only needs a vector with
+                # `to_array` and the same lane count, so `vec` itself is a valid instantiation.
+                + [vec for _ in spec.type_params]
                 + [value for _, value in spec.axis]
                 # An `sImm` immediate is a non-type template param: pick `0`, valid for every
                 # immediate's range (shift-by-0, `extract` lane-block 0, factor 0) — some
