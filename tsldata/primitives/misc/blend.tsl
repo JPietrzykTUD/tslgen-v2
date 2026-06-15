@@ -29,9 +29,10 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
         implementation:
           tsil """
               if (mask) {
-                return right;
+                emit_return(right);
+              } else {
+                emit_return(left);
               }
-              return left;
             """
     [generic, oneAPIfpga]:
       arith:
@@ -191,9 +192,9 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
         implementation:
           tsil """
               if (mask) {
-                return src;
+                emit_return(src);
               } else {
-                return cast<static>(type<generation>(base::in), 0);
+                emit_return(cast<static>(type<generation>(base::in), 0));
               }
             """
     [avx512, avx2_vl, sse_vl]:
@@ -285,9 +286,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
         implementation:
           tsil """
               if (mask) {
-                return data;
+                emit_return(data);
+              } else {
+                emit_return(src);
               }
-              return src;
             """
     [avx512, avx2_vl, sse_vl]:
       f?:

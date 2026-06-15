@@ -20,7 +20,7 @@ from tslc.diagnostics import Diagnostic, has_errors, sort_diagnostics
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc.output.artifacts import ArtifactSet
 from tslc.render.project import ProfileRender, RenderedProject, render_project
-from tslc.select.selector import Selector
+from tslc.select.selector import Selector, policy_split_names
 from tslc.sources import SourceLoader
 
 _DEFAULT_BACKENDS = ("cpp", "rust")
@@ -92,6 +92,10 @@ def generate(request: GenerationRequest) -> GenerationResult:
     if catalog_result.catalog is None or has_errors(diagnostics):
         return _empty(diagnostics)
     catalog = catalog_result.catalog
+    # Names emitted in >1 form (split to `_mask`/`_maskz`). Only these are policy-distinguished by
+    # `CallLowerer`; a single-form masked name (`blend`, `[mask=pass_through]`) stays bare, so the
+    # prune must treat it bare too (else a bare `blend` caller can't resolve the pass_through spec).
+    split_names = policy_split_names(catalog)
     machine_profiles = load_machine_profiles(request.machine_profiles_path)
 
     selector = Selector()
@@ -173,7 +177,7 @@ def generate(request: GenerationRequest) -> GenerationResult:
                         ):
                             worklist.append(callee)
 
-        grouped, pruned = _prune_unresolved(lowered_specs)
+        grouped, pruned = _prune_unresolved(lowered_specs, split_names)
         for slot in pruned:
             skipped.append(
                 SkippedEntry(
@@ -273,19 +277,26 @@ class _LoweredSlot:
 
 def _prune_unresolved(
     slots: list[_LoweredSlot],
+    split_names: frozenset[str] = frozenset(),
 ) -> tuple[dict[str, dict[str, list[LoweredSpecialization]]], list[_LoweredSlot]]:
     """Drop emitted specializations whose called primitives are not themselves emitted
     for the same ``simd<type, ext>`` (else the generated call would not link). Iterated
     to a fixpoint, since pruning a callee can in turn dangle its callers.
 
-    Identity is **policy-aware**: a slot's key includes its `mask_policy`, and a call resolves
-    against the callee's policy — so a dual name's masked and unmasked forms (and `mov`'s two
-    policies) prune independently and a `mov_maskz` caller isn't satisfied by a live `mov_mask`.
-    Unmasked slots/calls carry `None`, so non-masked behavior is unchanged (name-level)."""
+    Identity is **policy-aware, but only for names that are actually split** (`split_names`,
+    emitted in >1 form → `_mask`/`_maskz`). For those, the slot key and the call both carry the
+    `mask_policy`, so `mov_maskz` isn't satisfied by a live `mov_mask`. A name with a single form
+    — unmasked, OR a lone `[mask=…]` like `blend` that `CallLowerer` leaves bare — normalizes its
+    policy to `None`, so a bare caller (`max`'s `blend`) and a policy-tagged caller (`mov`'s
+    `blend attrs[mask=pass_through]`) both resolve the one bare spec."""
+
+    def policy_of(name: str, policy: str | None) -> str | None:
+        return policy if name in split_names else None
 
     def key(slot: _LoweredSlot) -> tuple[str, str, str | None, str, str]:
         s = slot.spec
-        return (slot.backend, s.primitive_name, s.mask_policy, s.extension_name, s.type_tag)
+        return (slot.backend, s.primitive_name, policy_of(s.primitive_name, s.mask_policy),
+                s.extension_name, s.type_tag)
 
     valid = {key(slot) for slot in slots}
     changed = True
@@ -296,7 +307,9 @@ def _prune_unresolved(
             if slot_key not in valid:
                 continue
             for callee, policy, target_ext in slot.callees:
-                if (slot.backend, callee, policy, target_ext, slot.spec.type_tag) not in valid:
+                resolved = (slot.backend, callee, policy_of(callee, policy),
+                            target_ext, slot.spec.type_tag)
+                if resolved not in valid:
                     valid.discard(slot_key)
                     changed = True
                     break

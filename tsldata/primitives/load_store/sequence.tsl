@@ -1,4 +1,4 @@
-prim<v:=sequence> sequence():
+prim<v:=()> sequence():
   brief_description "Creates a sequence [0..SIMD-Reg-Element-Count]."
   operation ""
   tests:

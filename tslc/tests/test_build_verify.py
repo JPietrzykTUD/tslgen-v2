@@ -296,6 +296,67 @@ def test_load_store_builds(data_root: Path, machine_profiles_path: Path, tmp_pat
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_sequence_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `sequence` is nullary (`v:=()`, an iota generator) — its native bodies are
+    # `intrin_compose<set>(N-1, …, 0)` literal lists per width. Builds in C++ and Rust.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["sequence"],
+        profiles=["scalar", "sse2", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_extract_value_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # `extract_value` (`s:=v[idx]`) extracts a lane. The `[idx]` is a decorative index annotation
+    # the signature parser drops (it is NOT the array kind `s[]`); the real index is the `Index
+    # {kind int}` generic_param, emitted as a compile-time const generic. The body reads
+    # `to_array(a)[Index]`. Builds in C++ and Rust.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["extract_value"],
+        profiles=["scalar", "sse2", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_max_min_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `max`/`min` (`v:=(v,v)`) delegate to `blend(less_than(a,b), …)`. `blend` is a single-form
+    # masked primitive (`[mask=pass_through]`) emitted *bare*, so the prune must match a bare
+    # `blend` caller against the lone `pass_through` spec (single-form names normalize their policy
+    # to None; only split `_mask`/`_maskz` names stay policy-aware). The scalar `blend` body uses
+    # the `emit_return` form (not a raw `return`). Builds in C++ and Rust.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["max", "min"],
+        profiles=["scalar", "sse2", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_gather_scatter_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
