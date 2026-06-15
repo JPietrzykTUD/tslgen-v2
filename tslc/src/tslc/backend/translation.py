@@ -25,10 +25,15 @@ def is_type_tag(text: str) -> bool:
 
 
 def signed_of(type_tag: str) -> str:
-    """The signed sibling of an integer tag; floats and signed tags are unchanged."""
+    """The same-width signed integer tag: ``ui16 -> si16``, ``f32 -> si32``, ``f64 -> si64``;
+    signed integer tags are unchanged. Symmetric with :func:`unsigned_of` — both name the
+    same-width integer of a given signedness, for bit-level reinterpretation (e.g. an
+    arithmetic float shift reinterprets to the signed int of the same width)."""
 
     if type_tag.startswith("ui"):
         return "si" + type_tag[2:]
+    if type_tag.startswith("f"):
+        return "si" + type_tag[1:]
     return type_tag
 
 

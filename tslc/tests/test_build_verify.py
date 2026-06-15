@@ -511,6 +511,53 @@ def test_shift_right_avx512_immediate_builds(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_set1_avx512_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # `set1`'s avx512 `?i?` body previously hardcoded `intrin::suffix(si?)` — a type-group
+    # wildcard, not a concrete type — so suffix resolution failed (16 skips on avx512) and any
+    # primitive broadcasting a scalar via `call set1` pruned. Now it resolves the suffix from
+    # the selected type like avx2/sse (`signed_of(base::in)` + a `cast<static>` to the signed
+    # type; avx512 uses `_mm512_set1_epi64` directly). skylake, both backends.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["set1"],
+        profiles=["skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_shift_float_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # Float shifts shift the *bit pattern*: reinterpret the float to a same-width int, shift,
+    # reinterpret back. This needs same-width cross-domain `reinterpret` (`f32↔ui32`/`f64↔ui64`),
+    # which the selector now enumerates (`_same_width`, was integer-only), plus `signed_of`
+    # being float-aware (`f32→si32`) so the sign-preserving (`PreserveSign`) branch reinterprets
+    # to the signed int rather than back to the float. `reinterpret`/`set1`/`from_array`/
+    # `to_array` are pulled in as callees. scalar + sse2 + avx2 + skylake, both backends.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["shift_left", "shift_right"],
+        profiles=["scalar", "sse2", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_reinterpret_integer_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:

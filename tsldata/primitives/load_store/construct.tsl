@@ -27,8 +27,8 @@ prim<v:=s> set1(value):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set1, suffix=value<backend>(intrin::suffix(si?))>(
-                value
+              intrin_compose<set1, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), value)
               )
             );
           """

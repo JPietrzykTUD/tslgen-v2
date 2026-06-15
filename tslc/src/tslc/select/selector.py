@@ -167,9 +167,10 @@ class Selector:
         - **extension** dim -> target *extension* names that are registered extensions
           (the concrete `sse`/`avx2` branches; the generic `where:`-clause level is not an
           extension, so it drops — deferred).
-        - **base** dim, *bit-reinterpret* (`[cast=reinterpret]`) -> same-width integer targets
-          only (signedness flips `si32↔ui32`): a `bit_cast` is meaningful only between equal-
-          width types (a size mismatch on scalar). Different-width/float reinterpret is deferred.
+        - **base** dim, *bit-reinterpret* (`[cast=reinterpret]`) -> same-width targets, any domain
+          (signedness flips `si32↔ui32`, cross-domain `f32↔ui32`): a `bit_cast` is meaningful
+          between equal-width types (a size mismatch on scalar). Different-width reinterpret is
+          deferred.
         - **base** dim, *value conversion* (`cast`/`convert_up`, `[cast=convert]`) -> all targets
           (these genuinely change width/domain); their conversion-intrinsic bodies are not lowered
           yet, so they skip at the body level — discoverably, rather than vanishing here.
@@ -189,7 +190,7 @@ class Selector:
         if dim == RESULT_DIM_EXTENSION:
             return tuple(sorted(t for t in targets if t in catalog.extensions))
         if dim == RESULT_DIM_BASE and primitive.attributes.get("cast") == "reinterpret":
-            return tuple(sorted(t for t in targets if _same_width_int(t, type_tag)))
+            return tuple(sorted(t for t in targets if _same_width(t, type_tag)))
         return tuple(sorted(targets))
 
     def _best_body(
@@ -273,17 +274,18 @@ class Selector:
         # single extension distance ties, so specificity still decides there.
 
 
-def _same_width_int(target_tag: str, source_tag: str) -> bool:
-    """Both tags are same-width integers (`si32`/`ui32`) — the scope of the delivered
-    `base`-dim `reinterpret` (a register no-op on x86, a valid same-size `bit_cast` on
-    scalar). Different-width and float targets are deferred."""
+def _same_width(target_tag: str, source_tag: str) -> bool:
+    """Both tags have the same bit width, regardless of domain — `si32`/`ui32`/`f32` are all
+    32-bit, `si64`/`ui64`/`f64` all 64-bit. This is the scope of the delivered `base`-dim
+    `reinterpret`: a register no-op on x86, a valid same-size `bit_cast` on scalar. It admits
+    same-width *cross-domain* targets (`f32`↔`ui32` — the bit pattern of a float read as an int
+    and back, used by float shifts); different-width targets stay deferred."""
 
-    def int_width(tag: str) -> int | None:
-        if (tag.startswith("si") or tag.startswith("ui")) and tag[2:].isdigit():
-            return int(tag[2:])
-        return None
+    def width(tag: str) -> int | None:
+        digits = "".join(c for c in tag if c.isdigit())
+        return int(digits) if digits else None
 
-    tw, sw = int_width(target_tag), int_width(source_tag)
+    tw, sw = width(target_tag), width(source_tag)
     return tw is not None and tw == sw
 
 
