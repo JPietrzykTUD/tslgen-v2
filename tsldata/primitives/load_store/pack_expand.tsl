@@ -273,7 +273,7 @@ prim<v:=ptr+> load_convert_up(ptr):
     avx512:
       si8:
         requires [avx512f]
-        to_base:
+        ToBase:
           si16:
             requires [avx512bw]
             implementation:
@@ -293,7 +293,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                 """
       ui8:
         requires [avx512f]
-        to_base:
+        ToBase:
           ui16:
             requires [avx512bw]
             implementation:
@@ -313,7 +313,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                 """
       si16:
         requires [avx512f]
-        to_base:
+        ToBase:
           si32:
             implementation:
               tsil """
@@ -332,7 +332,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                 """
       ui16:
         requires [avx512f]
-        to_base:
+        ToBase:
           ui32:
             implementation:
               tsil """
@@ -351,7 +351,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                 """
       si32:
         requires [avx512f]
-        to_base:
+        ToBase:
           si64:
             implementation:
               tsil """
@@ -362,7 +362,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                 """
       ui32:
         requires [avx512f]
-        to_base:
+        ToBase:
           ui64:
             implementation:
               tsil """
@@ -373,7 +373,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                 """
       f32:
         requires [avx512f]
-        to_base:
+        ToBase:
           f64:
             implementation:
               tsil """
@@ -399,7 +399,7 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires:
           avx2 [avx2]
           avx2_vl [avx2]
-        to_base:
+        ToBase:
           si16:
             implementation:
               tsil """
@@ -412,7 +412,7 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires:
           avx2 [avx2]
           avx2_vl [avx2]
-        to_base:
+        ToBase:
           ui16:
             implementation:
               tsil """
@@ -425,7 +425,7 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires:
           avx2 [avx2]
           avx2_vl [avx2]
-        to_base:
+        ToBase:
           si32:
             implementation:
               tsil """
@@ -438,7 +438,7 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires:
           avx2 [avx2]
           avx2_vl [avx2]
-        to_base:
+        ToBase:
           ui32:
             implementation:
               tsil """
@@ -451,7 +451,7 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires:
           avx2 [avx2]
           avx2_vl [avx2]
-        to_base:
+        ToBase:
           si64:
             implementation:
               tsil """
@@ -464,7 +464,7 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires:
           avx2 [avx2]
           avx2_vl [avx2]
-        to_base:
+        ToBase:
           ui64:
             implementation:
               tsil """
@@ -477,7 +477,7 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires:
           avx2 [avx]
           avx2_vl [avx]
-        to_base:
+        ToBase:
           f64:
             implementation:
               tsil """
@@ -503,7 +503,7 @@ prim<v:=ptr+> load_convert_up(ptr):
     sve:
       si8:
         requires [sve]
-        to_base:
+        ToBase:
           si16:
             implementation:
               tsil """
@@ -524,7 +524,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                 """
       ui8:
         requires [sve]
-        to_base:
+        ToBase:
           ui16:
             implementation:
               tsil """
@@ -545,7 +545,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                 """
       si16:
         requires [sve]
-        to_base:
+        ToBase:
           si32:
             implementation:
               tsil """
@@ -560,7 +560,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                 """
       ui16:
         requires [sve]
-        to_base:
+        ToBase:
           ui32:
             implementation:
               tsil """
@@ -575,7 +575,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                 """
       si32:
         requires [sve]
-        to_base:
+        ToBase:
           si64:
             implementation:
               tsil """
@@ -584,7 +584,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                 """
       ui32:
         requires [sve]
-        to_base:
+        ToBase:
           ui64:
             implementation:
               tsil """

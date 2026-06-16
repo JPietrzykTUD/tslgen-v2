@@ -226,7 +226,7 @@ def _param_type(kind: str, index_type: str | None = None) -> str:
         return "typename Vec::imask_type"
     if kind == "usize":
         return "std::size_t"
-    if kind == "ptr":
+    if kind in ("ptr", "ptr+"):  # `ptr+`: a widening-load source pointer (load_convert_up)
         return "typename Vec::base_type *"
     if kind == "s[]":
         return "typename ::tsl::array_for<Vec>::type"

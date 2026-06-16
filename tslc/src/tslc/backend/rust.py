@@ -349,7 +349,7 @@ def _concretize_simd_assoc(body: str, spec: LoweredSpecialization, simd_vec: str
 
 
 def _kind_type(kind: str, owner: str) -> str:
-    if kind == "ptr":
+    if kind in ("ptr", "ptr+"):  # `ptr+`: a widening-load source pointer (load_convert_up)
         return f"*mut {owner}::BaseType"
     if kind == "void":
         return "()"

@@ -25,7 +25,13 @@ from typing import Protocol
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
-from tslc.backend.translation import is_signed, is_type_tag, signed_of, unsigned_of
+from tslc.backend.translation import (
+    X86_REGISTER_BITS,
+    is_signed,
+    is_type_tag,
+    signed_of,
+    unsigned_of,
+)
 from tslc.lower._text import split_head_arg, split_top_level
 from tslc.lower.context import LoweringContext, VectorValue
 
@@ -173,6 +179,9 @@ class IntrinSuffixQuery:
     head = "intrin::suffix"
 
     def apply(self, args, context):  # noqa: ANN001
+        if not args:  # `intrin::suffix` (no arg) -> the CURRENT type's suffix fragment
+            fragment = context.extension.compose_suffix_by_type.get(context.type_tag)
+            return TextValue(fragment) if fragment is not None else None
         if len(args) != 1:
             return None
         arg = args[0]
@@ -341,17 +350,27 @@ class VectorLengthQuery:
 
 
 class AsExtensionQuery:
-    """``vector::as_extension(ext)`` -> the current base type re-expressed as a vector under
-    a different extension, e.g. ``as_extension(scalar)`` -> ``tsl::simd<int32_t, tsl::scalar>``
-    / ``Simd<i32, Scalar>``. Used by the generic vector's per-lane delegation to scalar. (The
-    lanes-matching ``as_extension(generic)`` and multi-arg forms are a later slice.)"""
+    """``vector::as_extension(ext [, base])`` -> a vector under a named extension.
+
+    One arg (``as_extension(scalar)`` / ``as_extension(generic)``): the CURRENT base re-expressed
+    under that extension, as a spelling :class:`TextValue` — used by the generic vector's per-lane
+    delegation to scalar. Two args (``as_extension(avx2, ToBase)``): the given base in the named
+    *concrete* x86 extension, as a :class:`VectorValue` — used by the conversion bodies for an
+    intermediate input/output vector at a different register width."""
 
     head = "vector::as_extension"
 
     def apply(self, args, context):  # noqa: ANN001
-        # Single-extension forms only (the multi-arg `as_extension(sse, ToBase)` forms are a
-        # later slice). `scalar` → the scalar vector; `generic` → the sized generic vector at
-        # the caller's (generation-time) lane count, for cross-extension delegation.
+        if len(args) == 2:  # as_extension(ext_name, base) -> a VectorValue in the named extension
+            ext_arg, base_arg = args
+            if not isinstance(ext_arg, TextValue) or not isinstance(base_arg, TypeValue):
+                return None
+            bits = X86_REGISTER_BITS.get(ext_arg.text)
+            if bits is None:
+                return None
+            digits = "".join(c for c in base_arg.type_tag if c.isdigit())
+            lanes = bits // (int(digits) if digits else 8)
+            return VectorValue(base_tag=base_arg.type_tag, extension_isa=ext_arg.text, lanes=lanes)
         if len(args) != 1 or not isinstance(args[0], TextValue):
             return None
         base = context.translation.scalar_spelling(context.type_tag)

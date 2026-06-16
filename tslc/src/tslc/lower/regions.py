@@ -38,6 +38,37 @@ class RegionLowerer(Protocol):
         """Render one region to target text (recursing into its body via ``render``)."""
 
 
+def _split_compose_terms(text: str) -> list[str]:
+    """Split an ``intrin_compose`` selector into ``base`` + ``key=value`` modifiers on top-level
+    commas OR runs of whitespace, respecting ``()``/``<>`` nesting and quoted strings. Handles
+    both the comma form (``i32gather, suffix=…, immediate(2)=1``) and the space form
+    (``cvt infix=… infix_sep="" suffix=…``); modifier values are parens-wrapped or quoted, so they
+    never contain a top-level separator."""
+
+    terms: list[str] = []
+    depth = 0
+    start = 0
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if ch == '"':
+            i = skip_string(text, i)
+            continue
+        if ch in "(<":
+            depth += 1
+        elif ch in ")>":
+            depth -= 1
+        elif depth == 0 and (ch == "," or ch.isspace()):
+            if start < i:
+                terms.append(text[start:i])
+            start = i + 1
+        i += 1
+    if start < n:
+        terms.append(text[start:])
+    return [term.strip() for term in terms if term.strip()]
+
+
 @dataclass(frozen=True, slots=True)
 class ComposeModifiers:
     """The parsed selector of ``intrin_compose<base, key=value, ...>``."""
@@ -47,7 +78,7 @@ class ComposeModifiers:
 
     @classmethod
     def parse(cls, selector_text: str) -> "ComposeModifiers":
-        terms = split_top_level(selector_text)
+        terms = _split_compose_terms(selector_text)
         if not terms:
             return cls(base=None, modifiers=())
         modifiers: list[tuple[str, str]] = []
@@ -90,15 +121,15 @@ class IntrinComposeLowerer:
         if modifiers.base is None:
             context.skip("TSL-LOWER-EMPTY-INTRIN-COMPOSE", "intrin_compose has no base name")
             return region.full_text
-        # Space-separated modifiers (`<cast infix=… suffix=…>`, `<srli suffix=… immediate(1)=…>`)
-        # aren't parsed yet (the parser splits on commas) — the whole spaced string would become a
-        # garbage intrinsic base. Skip cleanly until the composition vocabulary (infix/infix_sep +
-        # whitespace parsing) lands, so conversion/cast native bodies skip rather than emit garbage.
-        if any(ch.isspace() for ch in modifiers.base.strip()):
+
+        # An `infix`/`infix_sep` modifier folds into the base: `base + infix_sep + infix`
+        # (`cast`+``+`ps` -> `castps`, completed to `_mm256_castps_si256` by the suffix; `cvt`+`epi8`
+        # -> `cvtepi8` -> `_mm256_cvtepi8_epi16`). Unresolvable -> skip.
+        base = self._compose_base(modifiers, modifiers.base, context)
+        if base is None:
             context.skip(
-                "TSL-LOWER-UNSUPPORTED-COMPOSE-MODIFIERS",
-                f"intrin_compose with space-separated modifiers is not supported yet: "
-                f"{region.selector_text!r}",
+                "TSL-LOWER-UNRESOLVED-INFIX",
+                f"could not resolve intrin_compose infix in {region.selector_text!r}",
             )
             return region.full_text
 
@@ -106,9 +137,7 @@ class IntrinComposeLowerer:
         if context.has_errors:
             return region.full_text
 
-        name = context.translation.compose_intrinsic_name(
-            context.extension, modifiers.base, suffix
-        )
+        name = context.translation.compose_intrinsic_name(context.extension, base, suffix)
         if name is None:
             context.skip(
                 "TSL-LOWER-NO-INTRINSIC-PREFIX",
@@ -195,6 +224,28 @@ class IntrinComposeLowerer:
         # `_` covers an out-of-range *constant* (`value_range` deems it invalid); a `lo` shift
         # keeps it type-valid. Exact out-of-range semantics is a value-test concern (deferred).
         return f"match {imm} {{ {arms}_ => {name}::<{lo}>({rest_text}) }}"
+
+    def _compose_base(
+        self, modifiers: ComposeModifiers, base: str, context: LoweringContext
+    ) -> str | None:
+        """Fold an ``infix``/``infix_sep`` modifier into the intrinsic base: ``base + infix_sep +
+        infix`` (both resolved as query values — ``infix`` is typically a type's intrinsic suffix,
+        ``infix_sep`` a literal like ``""``). Returns ``base`` unchanged when there is no ``infix``,
+        or None when a part doesn't resolve to text."""
+
+        infix_expr = modifiers.get("infix")
+        if infix_expr is None:
+            return base
+        infix = self._evaluator.evaluate(infix_expr, context)
+        sep_expr = modifiers.get("infix_sep")
+        separator = (
+            self._evaluator.evaluate(sep_expr, context)
+            if sep_expr is not None
+            else TextValue("")
+        )
+        if not isinstance(infix, TextValue) or not isinstance(separator, TextValue):
+            return None
+        return f"{base}{separator.text}{infix.text}"
 
     def _suffix(self, modifiers: ComposeModifiers, context: LoweringContext) -> str | None:
         explicit = modifiers.get("suffix")
@@ -723,7 +774,11 @@ class CallLowerer:
                 base, context.extension.isa_name
             )
         value = self._evaluator.evaluate(entry, context)
-        return value.text if isinstance(value, TextValue) else None
+        if isinstance(value, TextValue):  # a query resolving to a vector spelling
+            return value.text
+        if isinstance(value, VectorValue):  # a `let<type>` vector alias (`InVec`) -> its spelling
+            return _vector_spelling(value, context)
+        return None
 
 
 def _take_bracket(text: str) -> tuple[str, str]:

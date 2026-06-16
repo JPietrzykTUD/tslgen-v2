@@ -305,6 +305,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
   operation ""
   return_type:
     base: ToBase
+  params:
+    index:
+      type si32
   tests:
     - {test_name "convert_up_i8_to_i16_idx1", type "si8", lane_set "lanes_i8", lanes 32, to_type "si16", index 1, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31]], expected [16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31]}}
     - {test_name "convert_up_i8_to_i32_idx0", type "si8", lane_set "lanes_i8", lanes 32, to_type "si32", index 0, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
@@ -1290,6 +1293,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
   operation ""
   return_type:
     base: ToBase
+  params:
+    index:
+      type si32
   tests:
     - {test_name "convert_down_i64_to_i32_idx0", type "si64", lane_set "lanes_i64", lanes 4, to_type "si32", index 0, case {inputs [[10, 11, 12, 13]], expected [10, 11, 12, 13, 0, 0, 0, 0]}}
     - {test_name "convert_down_i64_to_i32_idx1", type "si64", lane_set "lanes_i64", lanes 4, to_type "si32", index 1, case {inputs [[100, 101, 102, 103]], expected [0, 0, 0, 0, 100, 101, 102, 103]}}

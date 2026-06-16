@@ -296,6 +296,30 @@ def test_load_store_builds(data_root: Path, machine_profiles_path: Path, tmp_pat
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_convert_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # The width-changing conversion family (`return_type: base: ToBase`): `convert_up`/
+    # `convert_down` (`v:=(v,sImm)`) select+widen/narrow a chunk; `load_convert_up` (`v:=ptr+`)
+    # widens straight from memory. Their native bodies compose intrinsics from SPACE-separated
+    # `intrin_compose` modifiers + `infix`/`infix_sep` (`<cvt infix=epi8 infix_sep="" suffix=epi16>`
+    # -> `_mm256_cvtepi8_epi16`), dispatch the chunk via `switch<compile>(index)` (the `index`
+    # const typed `si32` to match the i32 intrinsic const), and build the out/intermediate vectors
+    # from `vector::transform_extension(ToBase)` / `as_extension(ext, ToBase)`. Builds in C++ and
+    # Rust; cluster-gated / not-yet-composable variants skip.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["convert_up", "convert_down", "load_convert_up"],
+        profiles=["scalar", "sse2", "avx", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_cast_reinterpret_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:

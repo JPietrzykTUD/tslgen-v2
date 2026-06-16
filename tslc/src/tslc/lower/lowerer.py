@@ -266,9 +266,9 @@ class Lowerer:
                     imm_param, context.type_tag
                 )
 
-        # Dereferencing a raw pointer is `unsafe` in Rust, so a `ptr`-taking body needs
+        # Dereferencing a raw pointer is `unsafe` in Rust, so a `ptr`/`ptr+`-taking body needs
         # the unsafe frame even when it uses no intrinsics (e.g. scalar `*ptr = data;`).
-        if "ptr" in shape.param_kinds:
+        if "ptr" in shape.param_kinds or "ptr+" in shape.param_kinds:
             context.mark_unsafe()
 
         segments = scan(selected.implementation.body_text)
@@ -367,7 +367,7 @@ def _resolve_immediate_range(
 
 
 _SUPPORTED_KINDS = frozenset(
-    {"v", "s", "m", "im", "usize", "sImm", "ptr", "void", "s[]", "vt", "vidx"}
+    {"v", "s", "m", "im", "usize", "sImm", "ptr", "ptr+", "void", "s[]", "vt", "vidx"}
 )
 
 
@@ -454,7 +454,7 @@ def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
             return "index_register"
         if kind == "m":
             return "mask"
-        if kind == "ptr":
+        if kind in ("ptr", "ptr+"):  # a base-type pointer (`ptr+` = a widening-load source pointer)
             return "ptr"
         return "base"  # s
 
@@ -462,8 +462,9 @@ def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
 
 
 def _find_region(segments: tuple[Segment, ...], keyword: str) -> Region | None:
-    """Find a region by keyword, descending into ``if`` branch blocks so an
-    ``emit_return`` guarded by ``if<generation>`` still counts as present."""
+    """Find a region by keyword, descending into ``if`` branch blocks and ``switch`` arms so an
+    ``emit_return`` guarded by ``if<generation>`` / inside a ``switch<compile>`` arm still counts
+    as present (every arm returns, so finding it in any arm is sufficient)."""
 
     for segment in segments:
         if isinstance(segment, Region):
@@ -475,6 +476,11 @@ def _find_region(segments: tuple[Segment, ...], keyword: str) -> Region | None:
                     nested = _find_region(segment.else_block, keyword)
                 if nested is not None:
                     return nested
+            if segment.keyword == "switch" and segment.arms is not None:
+                for _label, body in segment.arms:
+                    nested = _find_region(body, keyword)
+                    if nested is not None:
+                        return nested
     return None
 
 
