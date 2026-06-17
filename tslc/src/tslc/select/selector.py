@@ -353,6 +353,32 @@ def policy_split_names(catalog: Catalog) -> frozenset[str]:
     return frozenset(names)
 
 
+def immediate_split_names(catalog: Catalog) -> frozenset[str]:
+    """Names whose callable family mixes compile-time and runtime operands.
+
+    Pure `sImm` primitives keep their authored name (`insert`, `extract`, `mul_imm`). A split is
+    needed only when the same callable name has both an `sImm` form and a non-`sImm` form, because
+    the backends cannot expose one wrapper position as both a const generic/template parameter and
+    a runtime argument.
+    """
+
+    names: set[str] = set()
+    for name in {primitive.name for primitive in catalog.primitives}:
+        has_immediate = False
+        has_runtime = False
+        for primitive in catalog.primitives_named(name, unmasked=False):
+            shape = parse_signature(primitive.signature)
+            if shape is None:
+                continue
+            if "sImm" in shape.param_kinds:
+                has_immediate = True
+            else:
+                has_runtime = True
+        if has_immediate and has_runtime:
+            names.add(name)
+    return frozenset(names)
+
+
 def _applicable_flags(
     catalog: Catalog, implementation: Implementation, type_tag: str
 ) -> frozenset[str] | None:

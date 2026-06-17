@@ -3697,3 +3697,52 @@ Consequences:
 - Backend rendering, dependency closure, source repair, assignment/index
   parsing, and target-language expression parsing remain outside the M254.x
   cleanup series unless a later prompt explicitly selects them.
+
+## ADR-074: Vector Type Query Names Expose Changed Axes Explicitly
+
+Status: Accepted and implemented in `tslc`/`tsldata`.
+
+Context:
+
+The TSL source vocabulary previously had vector type queries whose names did
+not make the transformed axes obvious. In the observed corpus, one-argument
+`vector::as_extension(ext)` meant "same base, named extension". The old
+two-argument `vector::as_extension(ext, base)` meant "named extension, named
+base". The old `vector::transform_extension(base)` meant "same current
+extension, named base" despite the name mentioning extension transformation.
+
+This ambiguity matters because primitive bodies use these queries to express
+selected vector aliases such as output vectors, chunk vectors, and scalar or
+generic fallback call targets. The source language should make the changed
+axis explicit before lowering, dependency planning, or backend rendering
+consume the query.
+
+Decision:
+
+`vector::as_extension(ext)` remains the spelling for "same base, named
+extension".
+
+The same-extension base-change operation is named `vector::as_base(base)`.
+This is the semantic replacement for the current
+`vector::transform_extension(base)` spelling.
+
+The two-axis operation is named `vector::as(ext, base)`. This is the semantic
+replacement for the current two-argument `vector::as_extension(ext, base)`
+spelling.
+
+The two-argument `vector::as_extension(ext, base)` form must not be collapsed
+to `vector::as_base(base)`, because that would discard the explicit extension
+argument. Any compatibility support for the old spellings is migration debt and
+must remain in the source/query boundary. It must not leak into backend
+rendering or intrinsic-specific lowering.
+
+Consequences:
+
+- The vector query vocabulary exposes the changed axes directly:
+  extension-only, base-only, and extension-plus-base.
+- The lowerer can map all supported spellings to the same typed vector-query
+  value without embedding intrinsic names or backend details.
+- The `tsldata` source spellings are migrated to the new vocabulary, and
+  focused query tests cover accepted forms plus rejected old arities.
+- Backend translation and rendering remain consumers of typed vector values;
+  they do not decide which vector axis changed.

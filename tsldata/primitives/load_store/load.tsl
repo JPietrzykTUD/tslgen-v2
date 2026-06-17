@@ -447,7 +447,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask(ptr):
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
               let<type>(MaskT, type<generation>(vector::mask))
-              let<type>(UVec, type<generation>(vector::transform_extension(type<generation>(base::unsigned_of(type<generation>(base::in))))))
+              let<type>(UVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))))
               var<typed>(MaskT, out, intrin<svpfalse_b>())
               var<const_infer>(all, call<primitive=mask_true[Vec]>())
               var<const_infer>(idx, call<primitive=sequence[UVec]>())
@@ -466,7 +466,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask(ptr):
               emit_return(out);
             } else<generation> {
               let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
-              let<type>(UVec, type<generation>(vector::transform_extension(type<generation>(base::unsigned_of(type<generation>(base::in))))))
+              let<type>(UVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))))
               var<const_infer>(pg, call<primitive=mask_true[Vec]>())
               var<infer>(vec, call<primitive=set_zero[UVec]>())
               if<generation>(value<generation>(primitive::attribute(aligned))) {

@@ -303,7 +303,7 @@ def test_convert_builds(data_root: Path, machine_profiles_path: Path, tmp_path: 
     # `intrin_compose` modifiers + `infix`/`infix_sep` (`<cvt infix=epi8 infix_sep="" suffix=epi16>`
     # -> `_mm256_cvtepi8_epi16`), dispatch the chunk via `switch<compile>(index)` (the `index`
     # const typed `si32` to match the i32 intrinsic const), and build the out/intermediate vectors
-    # from `vector::transform_extension(ToBase)` / `as_extension(ext, ToBase)`. Builds in C++ and
+    # from `vector::as_base(ToBase)` / `as(ext, ToBase)`. Builds in C++ and
     # Rust; cluster-gated / not-yet-composable variants skip.
     result = generate_project(
         [data_root],

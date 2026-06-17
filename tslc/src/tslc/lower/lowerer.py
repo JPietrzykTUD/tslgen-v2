@@ -30,9 +30,14 @@ from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, sort_diagnostics
 from tslc.ir.scan import scan
 from tslc.ir.segments import RawText, Region, Segment
+from tslc.lower.calls import parse_call_selector
 from tslc.lower.context import LoweringContext
 from tslc.lower.regions import DEFAULT_REGION_LOWERERS, RegionLowerer
-from tslc.select.selector import SelectedImplementation, policy_split_names
+from tslc.select.selector import (
+    SelectedImplementation,
+    immediate_split_names,
+    policy_split_names,
+)
 
 # The single supported statement keyword for the current slice (v:=(v,v) bodies).
 _RETURN_KEYWORD = "emit_return"
@@ -48,6 +53,7 @@ class TargetVector:
     vector_spelling: str  # the full `simd<…>` type — the backend's second type parameter
     register_spelling: str  # its register type — the `apply` result (C++ `…::register_type`)
     extension_isa: str  # the target's extension ISA — for `simd<base, ext>` core registration
+    base_tag: str  # the target's source-data base tag — for semantic dependency matching
     base_spelling: str  # the target's base type spelling — for core registration
 
 
@@ -154,6 +160,7 @@ class Lowerer:
             primitive_axes=_primitive_axes(catalog),
             primitive_arg_generics=_primitive_arg_generics(catalog),
             policy_split_names=policy_split_names(catalog),
+            immediate_split_names=immediate_split_names(catalog),
             current_primitive=selected.primitive.name,
             generic_param_names=tuple(gp.name for gp in selected.primitive.generic_params),
         )
@@ -191,8 +198,9 @@ class Lowerer:
 
         # A representation-change primitive (`return_type: base|extension: …`) produces a
         # TARGET vector — the source vector with one dimension replaced. Resolve every spelling
-        # of it as one `TargetVector` and bind the target-type aliases the body names
-        # (`ToBase`/`ToType` -> the target base tag).
+        # of it as one `TargetVector` and bind the target alias declared by the primitive.
+        # Current source bodies also use `ToType` as a target-base synonym, so keep it bound
+        # to the same value without treating `ToBase` itself as a keyword.
         target: TargetVector | None = None
         if selected.primitive.result_target is not None and selected.to_target is not None:
             # The generic vector is sized by `LANES`; a target vector under it needs that
@@ -221,15 +229,19 @@ class Lowerer:
                         selected.to_target, context.extension.isa_name
                     ),
                     extension_isa=context.extension.isa_name,
+                    base_tag=selected.to_target,
                     base_spelling=to_base_spelling,
                 )
                 context.target_type_aliases = {
-                    "ToBase": selected.to_target,
+                    selected.primitive.result_target[1]: selected.to_target,
                     "ToType": selected.to_target,
                 }
             else:  # RESULT_DIM_EXTENSION: another extension, same base type
                 target_ext = catalog.extensions.get(selected.to_target)
                 target_isa = target_ext.isa_name if target_ext else selected.to_target
+                context.target_extension_aliases = {
+                    selected.primitive.result_target[1]: target_isa,
+                }
                 target = TargetVector(
                     vector_spelling=translation.vector_type_spelling(
                         base_type_spelling, target_isa
@@ -238,6 +250,7 @@ class Lowerer:
                         context.type_tag, target_isa
                     ),
                     extension_isa=target_isa,
+                    base_tag=context.type_tag,
                     base_spelling=base_type_spelling,
                 )
 
@@ -384,15 +397,38 @@ def _const_param_type(kind: str, backend_id: str) -> str:
 def _type_param_bounds(body: str, type_param_name: str) -> tuple[str, ...]:
     """The primitive names a body calls *on* a free SIMD type param (`primitive=NAME[<param>]`).
     Each is a trait the type param must satisfy in Rust (`to_array[IndicesType]` ->
-    `IndicesType: To_arrayImpl`); C++ templates are duck-typed and ignore them. Derived here in
-    the lowerer (it already parses calls) so neither backend needs to know which primitives a
-    body invokes — the Rust backend only maps a recorded name to its trait spelling."""
+    `IndicesType: To_arrayImpl`); C++ templates are duck-typed and ignore them. Derived from the
+    TSIL segment stream and the shared call selector parser so neither backend needs to know which
+    primitives a body invokes — the Rust backend only maps a recorded name to its trait spelling."""
 
-    import re as _re
+    return tuple(sorted(_type_param_bound_names(scan(body), type_param_name)))
 
-    return tuple(
-        sorted(set(_re.findall(rf"primitive=(\w+)\s*\[\s*{_re.escape(type_param_name)}\s*\]", body)))
-    )
+
+def _type_param_bound_names(
+    segments: tuple[Segment, ...],
+    type_param_name: str,
+) -> frozenset[str]:
+    names: set[str] = set()
+    for segment in segments:
+        if not isinstance(segment, Region):
+            continue
+        if segment.keyword == "call":
+            parsed = parse_call_selector(segment.selector_text)
+            if (
+                parsed is not None
+                and not parsed.primitive_ref.startswith("@")
+                and parsed.type_args
+                and parsed.type_args[0].strip() == type_param_name
+            ):
+                names.add(parsed.primitive_ref)
+        names.update(_type_param_bound_names(segment.body, type_param_name))
+        names.update(_type_param_bound_names(segment.block, type_param_name))
+        if segment.else_block is not None:
+            names.update(_type_param_bound_names(segment.else_block, type_param_name))
+        if segment.arms is not None:
+            for _label, body in segment.arms:
+                names.update(_type_param_bound_names(body, type_param_name))
+    return frozenset(names)
 
 
 def _primitive_axes(catalog: Catalog) -> dict[str, tuple[str, ...]]:

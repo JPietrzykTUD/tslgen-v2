@@ -26,12 +26,12 @@ from typing import Protocol
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 from tslc.backend.translation import (
-    X86_REGISTER_BITS,
     is_signed,
     is_type_tag,
     signed_of,
     unsigned_of,
 )
+from tslc.catalog.model import Extension
 from tslc.lower._text import split_head_arg, split_top_level
 from tslc.lower.context import LoweringContext, VectorValue
 
@@ -57,20 +57,65 @@ class BoolValue:
 QueryValue = TypeValue | TextValue | BoolValue | VectorValue
 
 
-def _vector_value(base_tag: str, context: LoweringContext) -> VectorValue:
-    """A :class:`VectorValue` for ``base_tag`` in the *current* extension. Lane count: the
-    LANES-symbol (None) for the generic vector, 1 for scalar (zero-width register), else
-    ``vector_bits / base-bit-width``."""
+def _type_bits(base_tag: str) -> int:
+    digits = "".join(c for c in base_tag if c.isdigit())
+    return int(digits) if digits else 8
 
-    isa = context.extension.isa_name
-    if isa == "generic":
+
+def _vector_value(base_tag: str, context: LoweringContext) -> VectorValue:
+    """A :class:`VectorValue` for ``base_tag`` in the *current* extension."""
+
+    return _vector_value_from_extension(base_tag, context.extension)
+
+
+def _vector_value_for_extension(
+    base_tag: str, extension_name: str, context: LoweringContext
+) -> VectorValue | None:
+    """A source-level vector identity for ``base_tag`` under ``extension_name``.
+
+    The name may be an internal extension block name (``avx2_vl``) or an emitted ISA tag
+    (``avx2``). Lane count follows the same convention as :func:`_vector_value`: ``None`` for
+    a sized generic vector, 1 for scalar, otherwise ``vector_bits / base-bit-width``.
+    """
+
+    extension = _catalog_extension(extension_name, context)
+    if extension is None:
+        return None
+    return _vector_value_from_extension(base_tag, extension)
+
+
+def _vector_value_from_extension(base_tag: str, extension: Extension) -> VectorValue:
+    extension_isa = extension.isa_name
+    bits = extension.vector_bits
+    if extension_isa == "generic":
         lanes: int | None = None
-    elif context.extension.vector_bits == 0:
+    elif bits == 0:
         lanes = 1
     else:
-        digits = "".join(c for c in base_tag if c.isdigit())
-        lanes = context.extension.vector_bits // (int(digits) if digits else 8)
-    return VectorValue(base_tag=base_tag, extension_isa=isa, lanes=lanes)
+        lanes = bits // _type_bits(base_tag)
+    return VectorValue(base_tag=base_tag, extension_isa=extension_isa, lanes=lanes)
+
+
+def _catalog_extension(extension_name: str, context: LoweringContext) -> Extension | None:
+    catalog = context.translation.catalog
+    extension = catalog.extensions.get(extension_name)
+    if extension is not None:
+        return extension
+    for candidate in catalog.extensions.values():
+        if candidate.isa_name == extension_name:
+            return candidate
+    return None
+
+
+def _generic_vector_value(base_tag: str, context: LoweringContext) -> VectorValue | None:
+    bits = context.extension.vector_bits
+    if bits == 0:
+        return None
+    return VectorValue(
+        base_tag=base_tag,
+        extension_isa="generic",
+        lanes=bits // _type_bits(base_tag),
+    )
 
 
 # --- parsed query terms ------------------------------------------------------
@@ -262,7 +307,7 @@ class RegisterGenericQuery:
             return None
         arg = args[0]
         # A bare base tag (`register::generic(ToType)`) -> that base's register in the current
-        # extension. A `VectorValue` (`register::generic(transform_extension(ToBase))`) carries its
+        # extension. A `VectorValue` (`register::generic(vector::as_base(ToBase))`) carries its
         # own extension, so the target register is read from it (needed when it differs, e.g. a
         # widening load's input vector).
         if isinstance(arg, TypeValue):
@@ -350,56 +395,50 @@ class VectorLengthQuery:
 
 
 class AsExtensionQuery:
-    """``vector::as_extension(ext [, base])`` -> a vector under a named extension.
+    """``vector::as_extension(ext)`` -> the current base under a named extension.
 
-    One arg (``as_extension(scalar)`` / ``as_extension(generic)``): the CURRENT base re-expressed
-    under that extension, as a spelling :class:`TextValue` — used by the generic vector's per-lane
-    delegation to scalar. Two args (``as_extension(avx2, ToBase)``): the given base in the named
-    *concrete* x86 extension, as a :class:`VectorValue` — used by the conversion bodies for an
-    intermediate input/output vector at a different register width."""
+    ``as_extension(scalar)`` / ``as_extension(generic)`` re-express the current base under that
+    extension. Rendering code turns the returned :class:`VectorValue` into backend spelling."""
 
     head = "vector::as_extension"
 
     def apply(self, args, context):  # noqa: ANN001
-        if len(args) == 2:  # as_extension(ext_name, base) -> a VectorValue in the named extension
-            ext_arg, base_arg = args
-            if not isinstance(ext_arg, TextValue) or not isinstance(base_arg, TypeValue):
-                return None
-            bits = X86_REGISTER_BITS.get(ext_arg.text)
-            if bits is None:
-                return None
-            digits = "".join(c for c in base_arg.type_tag if c.isdigit())
-            lanes = bits // (int(digits) if digits else 8)
-            return VectorValue(base_tag=base_arg.type_tag, extension_isa=ext_arg.text, lanes=lanes)
         if len(args) != 1 or not isinstance(args[0], TextValue):
             return None
-        base = context.translation.scalar_spelling(context.type_tag)
-        if base is None:
-            return None
         if args[0].text == "scalar":
-            return TextValue(context.translation.vector_type_spelling(base, "scalar"))
+            return _vector_value_for_extension(context.type_tag, "scalar", context)
         if args[0].text == "generic":
-            bits = context.extension.vector_bits
-            digits = "".join(c for c in context.type_tag if c.isdigit())
-            type_bits = int(digits) if digits else 8
-            if bits == 0:  # scalar/generic callers have no fixed lane count to delegate at
-                return None
-            return TextValue(context.translation.generic_vector_spelling(base, bits // type_bits))
-        return None
+            return _generic_vector_value(context.type_tag, context)
+        return _vector_value_for_extension(context.type_tag, args[0].text, context)
 
 
-class TransformExtensionQuery:
-    """``vector::transform_extension(ToBase)`` -> the vector with the given base in the *current*
-    extension (a :class:`VectorValue`), e.g. for a `si8`@avx2 source, `transform_extension(si16)`
-    is `simd<si16, avx2>` (same 256-bit register, 16 lanes). The conversion bodies bind it to a
-    `let<type>(OutVec, …)` and then read `generic::length(OutVec)` / `base::generic(OutVec)`."""
+class AsBaseQuery:
+    """``vector::as_base(base)`` -> the given base under the current extension.
 
-    head = "vector::transform_extension"
+    For a `si8`@avx2 source, ``as_base(si16)`` is ``simd<si16, avx2>`` (same
+    256-bit register, 16 lanes). Conversion bodies bind it to a ``let<type>`` alias and then read
+    ``generic::length(alias)`` / ``base::generic(alias)``."""
+
+    head = "vector::as_base"
 
     def apply(self, args, context):  # noqa: ANN001
         if len(args) != 1 or not isinstance(args[0], TypeValue):
             return None
         return _vector_value(args[0].type_tag, context)
+
+
+class VectorAsQuery:
+    """``vector::as(ext, base)`` -> the given base under the named extension."""
+
+    head = "vector::as"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 2:
+            return None
+        ext_arg, base_arg = args
+        if not isinstance(ext_arg, TextValue) or not isinstance(base_arg, TypeValue):
+            return None
+        return _vector_value_for_extension(base_arg.type_tag, ext_arg.text, context)
 
 
 class BaseGenericQuery:
@@ -446,7 +485,8 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     VectorAlignmentQuery(),
     VectorLengthQuery(),
     AsExtensionQuery(),
-    TransformExtensionQuery(),
+    AsBaseQuery(),
+    VectorAsQuery(),
     BaseGenericQuery(),
     GenericLengthQuery(),
 )
@@ -481,10 +521,18 @@ class QueryEvaluator:
         function = self._functions.get(term.head)
         if function is not None:
             return function.apply(tuple(evaluated_args), context)
-        # A representation-change target alias (`ToBase`/`ToType`) -> the target base type tag,
-        # so `register::generic(ToType)` / `base::unsigned_of(ToBase)` resolve against the target.
+        # A representation-change target alias (the declaration's alias, plus the current
+        # `ToType` synonym) -> the target base type tag, so `register::generic(ToType)` and
+        # sibling queries resolve against the target.
         if not term.args and term.head in context.target_type_aliases:
             return TypeValue(context.target_type_aliases[term.head])
+        # A representation-change extension target alias (`ToExtension`) names another vector
+        # extension/ISA. It stays textual until consumed by `vector::as_extension`.
+        if not term.args and term.head in context.target_extension_aliases:
+            return TextValue(context.target_extension_aliases[term.head])
+        # A `let<type>` alias whose value is a source type tag (`AliasBase`) -> that type.
+        if not term.args and term.head in context.type_value_aliases:
+            return TypeValue(context.type_value_aliases[term.head])
         # A `let<type>` vector alias (`OutVec`) -> its structured VectorValue, so a query arg that
         # names it (`generic::length(OutVec)` / `base::generic(OutVec)`) resolves to the vector.
         if not term.args and term.head in context.vector_aliases:
@@ -492,11 +540,14 @@ class QueryEvaluator:
         # A bare leaf that names a concrete type tag resolves to itself.
         if not term.args and is_type_tag(term.head):
             return TypeValue(term.head)
-        # Named backend scalar types (`type<backend>(scalar::ui64)` / `scalar::size`): resolve
-        # to the language type-map spelling (`ui64` -> `uint64_t`/`u64`; `size` ->
-        # `std::size_t`/`usize`).
+        # Named scalar width tags stay semantic (`scalar::ui64` -> `TypeValue("ui64")`) so type
+        # queries compose uniformly. Non-width scalar names such as `scalar::size` resolve to the
+        # backend spelling because they are target-language type aliases, not source type tags.
         if not term.args and term.head.startswith("scalar::"):
-            spelling = context.translation.scalar_spelling(term.head[len("scalar::") :])
+            scalar_tag = term.head[len("scalar::") :]
+            if is_type_tag(scalar_tag):
+                return TypeValue(scalar_tag)
+            spelling = context.translation.scalar_spelling(scalar_tag)
             return TextValue(spelling) if spelling is not None else None
         # A bare quoted string literal (e.g. a named suffix policy) is text.
         if not term.args and len(term.head) >= 2 and term.head[0] == '"' == term.head[-1]:

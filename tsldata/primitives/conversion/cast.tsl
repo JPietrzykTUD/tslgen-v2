@@ -615,7 +615,7 @@ prim<v:=v>[cast=convert] cast(data):
           ?i16:
             implementation:
               tsil """
-                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                  let<type>(OutVec, type<generation>(vector::as_base(ToBase)))
                   var<infer>(in_arr, call<primitive=to_array[Vec]>(data))
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()))
                   loop<unroll>(value<generation>(generic::length(OutVec)))
@@ -628,10 +628,10 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                    let<type>(StepVec, type<generation>(vector::transform_extension(type<backend>(scalar::si16))))
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::si16))))
                     emit_return(call<primitive=cast[StepVec, ToBase]>(call<primitive=cast[Vec, StepVec]>(data)));
                   } else {
-                    let<type>(StepVec, type<generation>(vector::transform_extension(type<backend>(scalar::ui16))))
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::ui16))))
                     emit_return(call<primitive=cast[StepVec, ToBase]>(call<primitive=cast[Vec, StepVec]>(data)));
                   }
                 """
@@ -639,10 +639,10 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                    let<type>(StepVec, type<generation>(vector::transform_extension(type<backend>(scalar::si16))))
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::si16))))
                     emit_return(call<primitive=cast[StepVec, ToBase]>(call<primitive=cast[Vec, StepVec]>(data)));
                   } else {
-                    let<type>(StepVec, type<generation>(vector::transform_extension(type<backend>(scalar::ui16))))
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::ui16))))
                     emit_return(call<primitive=cast[StepVec, ToBase]>(call<primitive=cast[Vec, StepVec]>(data)));
                   }
                 """
@@ -652,7 +652,7 @@ prim<v:=v>[cast=convert] cast(data):
           ?i32:
             implementation:
               tsil """
-                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                  let<type>(OutVec, type<generation>(vector::as_base(ToBase)))
                   var<infer>(in_arr, call<primitive=to_array[Vec]>(data))
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()))
                   loop<unroll>(value<generation>(generic::length(OutVec)))
@@ -665,10 +665,10 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                    let<type>(StepVec, type<generation>(vector::transform_extension(type<backend>(scalar::si32))))
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::si32))))
                     emit_return(call<primitive=cast[StepVec, ToBase]>(call<primitive=cast[Vec, StepVec]>(data)));
                   } else {
-                    let<type>(StepVec, type<generation>(vector::transform_extension(type<backend>(scalar::ui32))))
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::ui32))))
                     emit_return(call<primitive=cast[StepVec, ToBase]>(call<primitive=cast[Vec, StepVec]>(data)));
                   }
                 """
@@ -684,7 +684,7 @@ prim<v:=v>[cast=convert] cast(data):
           f64:
             implementation:
               tsil """
-                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                  let<type>(OutVec, type<generation>(vector::as_base(ToBase)))
                   var<infer>(in_arr, call<primitive=to_array[Vec]>(data))
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()))
                   loop<unroll>(value<generation>(generic::length(OutVec)))
@@ -720,7 +720,7 @@ prim<v:=v>[cast=convert] cast(data):
           ?i64:
             implementation:
               tsil """
-                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                  let<type>(OutVec, type<generation>(vector::as_base(ToBase)))
                   var<infer>(in_arr, call<primitive=to_array[Vec]>(data))
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()))
                   loop<unroll>(value<generation>(generic::length(OutVec)))
@@ -755,7 +755,7 @@ prim<v:=v>[cast=convert] cast(data):
                     emit_return(intrin<svunpklo_s16>(data));
                   } else {
                     let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))))
-                    let<type>(UVec, type<generation>(vector::transform_extension(UBase)))
+                    let<type>(UVec, type<generation>(vector::as_base(UBase)))
                     var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
                     emit_return(intrin<svunpklo_u16>(udata));
                   }
@@ -764,12 +764,12 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                    let<type>(StepVec, type<generation>(vector::transform_extension(type<backend>(scalar::si16))))
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::si16))))
                     emit_return(call<primitive=cast[StepVec, ToBase]>(intrin<svunpklo_s16>(data)));
                   } else {
                     let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))))
-                    let<type>(UVec, type<generation>(vector::transform_extension(UBase)))
-                    let<type>(StepVec, type<generation>(vector::transform_extension(type<backend>(scalar::ui16))))
+                    let<type>(UVec, type<generation>(vector::as_base(UBase)))
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::ui16))))
                     var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
                     emit_return(call<primitive=cast[StepVec, ToBase]>(intrin<svunpklo_u16>(udata)));
                   }
@@ -778,12 +778,12 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                    let<type>(StepVec, type<generation>(vector::transform_extension(type<backend>(scalar::si16))))
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::si16))))
                     emit_return(call<primitive=cast[StepVec, ToBase]>(intrin<svunpklo_s16>(data)));
                   } else {
                     let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))))
-                    let<type>(UVec, type<generation>(vector::transform_extension(UBase)))
-                    let<type>(StepVec, type<generation>(vector::transform_extension(type<backend>(scalar::ui16))))
+                    let<type>(UVec, type<generation>(vector::as_base(UBase)))
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::ui16))))
                     var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
                     emit_return(call<primitive=cast[StepVec, ToBase]>(intrin<svunpklo_u16>(udata)));
                   }
@@ -798,7 +798,7 @@ prim<v:=v>[cast=convert] cast(data):
                     emit_return(intrin<svunpklo_s32>(data));
                   } else {
                     let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))))
-                    let<type>(UVec, type<generation>(vector::transform_extension(UBase)))
+                    let<type>(UVec, type<generation>(vector::as_base(UBase)))
                     var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
                     emit_return(intrin<svunpklo_u32>(udata));
                   }
@@ -807,12 +807,12 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                    let<type>(StepVec, type<generation>(vector::transform_extension(type<backend>(scalar::si32))))
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::si32))))
                     emit_return(call<primitive=cast[StepVec, ToBase]>(intrin<svunpklo_s32>(data)));
                   } else {
                     let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))))
-                    let<type>(UVec, type<generation>(vector::transform_extension(UBase)))
-                    let<type>(StepVec, type<generation>(vector::transform_extension(type<backend>(scalar::ui32))))
+                    let<type>(UVec, type<generation>(vector::as_base(UBase)))
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::ui32))))
                     var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
                     emit_return(call<primitive=cast[StepVec, ToBase]>(intrin<svunpklo_u32>(udata)));
                   }
@@ -867,7 +867,7 @@ prim<v:=v>[cast=convert] cast(data):
                     emit_return(intrin<svunpklo_s64>(data));
                   } else {
                     let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))))
-                    let<type>(UVec, type<generation>(vector::transform_extension(UBase)))
+                    let<type>(UVec, type<generation>(vector::as_base(UBase)))
                     var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
                     emit_return(intrin<svunpklo_u64>(udata));
                   }
@@ -907,7 +907,7 @@ prim<v:=v>[cast=convert] cast(data):
           arith:
             implementation:
               tsil """
-                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                  let<type>(OutVec, type<generation>(vector::as_base(ToBase)))
                   var<infer>(in_arr, call<primitive=to_array[Vec]>(data))
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()))
                   result[0] = cast<static>(type<generation>(base::generic(OutVec)), in_arr[0]);
@@ -920,7 +920,7 @@ prim<v:=v>[cast=convert] cast(data):
           arith:
             implementation:
               tsil """
-                  let<type>(OutVec, type<generation>(vector::transform_extension(ToBase)))
+                  let<type>(OutVec, type<generation>(vector::as_base(ToBase)))
                   var<infer>(in_arr, call<primitive=to_array[Vec]>(data))
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()))
                   loop<unroll>(value<generation>(generic::length(OutVec))) 

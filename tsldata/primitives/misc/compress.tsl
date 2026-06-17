@@ -156,7 +156,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
         implementation:
           tsil """
               let<type>(IndexBase, type<generation>(base::unsigned_of(type<generation>(base::in))))
-              let<type>(IndexVec, type<generation>(vector::transform_extension(IndexBase)))
+              let<type>(IndexVec, type<generation>(vector::as_base(IndexBase)))
               var<const_infer>(packed, intrin_compose<svcompact>(mask, data))
               var<const_infer>(active_count, call<primitive=mask_population_count[Vec]>(mask))
               var<const_infer>(indices, call<primitive=sequence[IndexVec]>())

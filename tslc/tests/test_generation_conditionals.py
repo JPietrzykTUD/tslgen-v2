@@ -14,9 +14,9 @@ from pathlib import Path
 from tslc.api import generate_project
 from tslc.backend.translation import BackendTranslation
 from tslc.catalog.model import Catalog
-from tslc.lower.context import LoweringContext
+from tslc.lower.context import LoweringContext, VectorValue
 from tslc.lower.lowerer import Lowerer
-from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue
+from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue, TypeValue
 from tslc.select.selector import Selector
 
 
@@ -54,6 +54,36 @@ def test_named_stream_suffix_resolves_per_extension(catalog: Catalog) -> None:
     # whole-register integer suffix: si128 on sse, si256 on avx2.
     assert ev.evaluate('intrin::suffix("stream")', _ctx(catalog, "avx2", "si32")) == TextValue("si256")
     assert ev.evaluate('intrin::suffix("stream")', _ctx(catalog, "sse", "si32")) == TextValue("si128")
+
+
+def test_query_evaluator_returns_source_identities_for_type_and_vector_terms(catalog: Catalog) -> None:
+    ev = QueryEvaluator()
+    ctx = LoweringContext(
+        extension=catalog.extensions["avx2"],
+        type_tag="si32",
+        translation=BackendTranslation(catalog, "cpp"),
+        target_type_aliases={"ToBase": "ui16", "ToType": "ui16"},
+        target_extension_aliases={"ToExtension": "sse"},
+        type_value_aliases={"AliasBase": "ui32"},
+    )
+
+    assert ev.evaluate("type<backend>(scalar::si16)", ctx) == TypeValue("si16")
+    assert ev.evaluate("base::signed_of(AliasBase)", ctx) == TypeValue("si32")
+    assert ev.evaluate(
+        "type<generation>(vector::as_base(ToBase))", ctx
+    ) == VectorValue(base_tag="ui16", extension_isa="avx2", lanes=16)
+    assert ev.evaluate(
+        "type<generation>(vector::as_extension(ToExtension))", ctx
+    ) == VectorValue(base_tag="si32", extension_isa="sse", lanes=4)
+    assert ev.evaluate(
+        "type<generation>(vector::as(sse, ToBase))", ctx
+    ) == VectorValue(base_tag="ui16", extension_isa="sse", lanes=8)
+    assert ev.evaluate(
+        "type<generation>(vector::transform_extension(ToBase))", ctx
+    ) is None
+    assert ev.evaluate(
+        "type<generation>(vector::as_extension(sse, ToBase))", ctx
+    ) is None
 
 
 # --- if<generation> lowering (taken branch only) -----------------------------

@@ -8,19 +8,23 @@ headers/modules with a top-level dispatch.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from tslc.backend.translation import BackendTranslation
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import load_machine_profiles
-from tslc.catalog.model import Extension
+from tslc.catalog.model import Extension, RESULT_DIM_BASE, RESULT_DIM_EXTENSION
 from tslc.diagnostics import Diagnostic, has_errors, sort_diagnostics
+from tslc.lower.dependencies import (
+    CallDependency,
+    VectorIdentity,
+    extract_call_dependencies,
+)
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc.output.artifacts import ArtifactSet
 from tslc.render.project import ProfileRender, RenderedProject, render_project
-from tslc.select.selector import Selector, policy_split_names
+from tslc.select.selector import Selector, immediate_split_names, policy_split_names
 from tslc.sources import SourceLoader
 
 _DEFAULT_BACKENDS = ("cpp", "rust")
@@ -96,6 +100,7 @@ def generate(request: GenerationRequest) -> GenerationResult:
     # `CallLowerer`; a single-form masked name (`blend`, `[mask=pass_through]`) stays bare, so the
     # prune must treat it bare too (else a bare `blend` caller can't resolve the pass_through spec).
     split_names = policy_split_names(catalog)
+    imm_split_names = immediate_split_names(catalog)
     machine_profiles = load_machine_profiles(request.machine_profiles_path)
 
     selector = Selector()
@@ -135,8 +140,32 @@ def generate(request: GenerationRequest) -> GenerationResult:
             diagnostics.extend(selection.diagnostics)
             for slot in selection.selected:
                 selected_extensions[slot.extension.isa_name] = slot.extension
-                callees = _extract_calls(
-                    slot.implementation.body_text, primitive, slot.extension.isa_name
+                target_alias = (
+                    slot.primitive.result_target[1]
+                    if slot.primitive.result_target is not None
+                    else None
+                )
+                target_base = (
+                    slot.to_target
+                    if slot.primitive.result_target is not None
+                    and slot.primitive.result_target[0] == RESULT_DIM_BASE
+                    else None
+                )
+                target_extension = (
+                    slot.to_target
+                    if slot.primitive.result_target is not None
+                    and slot.primitive.result_target[0] == RESULT_DIM_EXTENSION
+                    else None
+                )
+                callees = extract_call_dependencies(
+                    slot.implementation.body_text,
+                    primitive,
+                    slot.extension.isa_name,
+                    slot.type_tag,
+                    target_alias,
+                    target_base,
+                    target_extension,
+                    catalog,
                 )
                 slot_lowered = False
                 for backend in request.backends:
@@ -168,14 +197,14 @@ def generate(request: GenerationRequest) -> GenerationResult:
                 # callees (to_array/store/…) into the emitted set, where they would otherwise
                 # surface as unbuildable generic instantiations.
                 if slot_lowered:
-                    for callee, _policy, _target_ext in callees:
+                    for dependency in callees:
                         # `primitives_named(unmasked=False)` so a masked-ONLY callee
                         # (`blend`/`mov`) is pulled too — a masked body delegates to them, and
                         # `catalog.primitive` (unmasked-only) would miss them and prune the caller.
-                        if callee not in processed and catalog.primitives_named(
-                            callee, unmasked=False
+                        if dependency.primitive not in processed and catalog.primitives_named(
+                            dependency.primitive, unmasked=False
                         ):
-                            worklist.append(callee)
+                            worklist.append(dependency.primitive)
 
         grouped, pruned = _prune_unresolved(lowered_specs, split_names)
         for slot in pruned:
@@ -211,7 +240,7 @@ def generate(request: GenerationRequest) -> GenerationResult:
         )
 
     rendered = (
-        render_project(tuple(profile_renders), request.backends)
+        render_project(tuple(profile_renders), request.backends, imm_split_names)
         if profile_renders
         else None
     )
@@ -225,54 +254,11 @@ def generate(request: GenerationRequest) -> GenerationResult:
     )
 
 
-_CALL_TARGET = re.compile(
-    r"call<primitive=(@?[A-Za-z_][A-Za-z0-9_]*)\s*(\[[^\]]*\])?(?:\s*attrs\s*(\[[^\]]*\]))?"
-)
-_AS_EXTENSION = re.compile(r"as_extension\(\s*([A-Za-z_][A-Za-z0-9_]*)")
-_MASK_ATTR = re.compile(r"mask\s*=\s*([A-Za-z_]+)")
-_LET_TYPE_EXT = re.compile(
-    r"let<type>\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,[^)]*?as_extension\(\s*([A-Za-z_][A-Za-z0-9_]*)"
-)
-
-
-def _extract_calls(
-    body_text: str, current_primitive: str, current_extension: str
-) -> frozenset[tuple[str, str | None, str]]:
-    """The ``(callee, mask-policy, target-extension)`` triples a body calls. ``@self`` resolves
-    to the primitive being lowered; a ``[… vector::as_extension(ext) …]`` type-arg retargets the
-    call at ``ext`` (e.g. the generic vector delegating per lane to ``scalar``), otherwise the
-    callee is on the caller's own extension. An ``attrs[mask=zero|pass_through]`` selects the
-    callee's masked form (so the prune resolves `mov_maskz` vs `mov_mask` precisely, not merely
-    "some `mov`"); None for an unmasked call. The target extension lets the prune check the
-    *right* ``simd<type, ext>`` exists, not merely a same-named primitive.
-
-    A retarget is often via a ``let<type>(GenericVec, … as_extension(generic))`` alias used
-    as the call's type-arg (``@self[GenericVec]``); those aliases are resolved here so the
-    delegation's true target extension is tracked (else a skipping leaf wouldn't prune)."""
-
-    aliases = {m.group(1): m.group(2) for m in _LET_TYPE_EXT.finditer(body_text)}
-    calls: set[tuple[str, str | None, str]] = set()
-    for name, bracket, attrs in _CALL_TARGET.findall(body_text):
-        callee = current_primitive if name == "@self" else name.lstrip("@")
-        match = _AS_EXTENSION.search(bracket)
-        if match is not None:
-            target = match.group(1)
-        else:
-            target = next(
-                (ext for alias, ext in aliases.items() if re.search(rf"\b{alias}\b", bracket)),
-                current_extension,
-            )
-        mask = _MASK_ATTR.search(attrs)
-        calls.add((callee, mask.group(1) if mask else None, target))
-    return frozenset(calls)
-
-
 @dataclass(slots=True, eq=False)
 class _LoweredSlot:
     backend: str
     spec: LoweredSpecialization
-    # (callee primitive, mask policy or None, target extension isa name)
-    callees: frozenset[tuple[str, str | None, str]]
+    callees: frozenset[CallDependency]
 
 
 def _prune_unresolved(
@@ -293,10 +279,21 @@ def _prune_unresolved(
     def policy_of(name: str, policy: str | None) -> str | None:
         return policy if name in split_names else None
 
-    def key(slot: _LoweredSlot) -> tuple[str, str, str | None, str, str]:
+    def key(
+        slot: _LoweredSlot,
+    ) -> tuple[str, str, str | None, VectorIdentity, VectorIdentity | None]:
         s = slot.spec
-        return (slot.backend, s.primitive_name, policy_of(s.primitive_name, s.mask_policy),
-                s.extension_name, s.type_tag)
+        return (
+            slot.backend,
+            s.primitive_name,
+            policy_of(s.primitive_name, s.mask_policy),
+            VectorIdentity(s.type_tag, s.extension_name),
+            (
+                VectorIdentity(s.target.base_tag, s.target.extension_isa)
+                if s.target is not None
+                else None
+            ),
+        )
 
     valid = {key(slot) for slot in slots}
     changed = True
@@ -306,9 +303,14 @@ def _prune_unresolved(
             slot_key = key(slot)
             if slot_key not in valid:
                 continue
-            for callee, policy, target_ext in slot.callees:
-                resolved = (slot.backend, callee, policy_of(callee, policy),
-                            target_ext, slot.spec.type_tag)
+            for dependency in slot.callees:
+                resolved = (
+                    slot.backend,
+                    dependency.primitive,
+                    policy_of(dependency.primitive, dependency.mask_policy),
+                    dependency.source,
+                    dependency.target,
+                )
                 if resolved not in valid:
                     valid.discard(slot_key)
                     changed = True

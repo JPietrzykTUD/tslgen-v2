@@ -1,0 +1,197 @@
+"""Primitive-call TSIL region lowerers."""
+
+from __future__ import annotations
+
+import re
+
+from tslc.ir.segments import Region
+from tslc.lower.calls import parse_call_selector
+from tslc.lower.context import LoweringContext, VectorValue
+from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue, TypeValue
+from tslc.lower.region_handlers.common import _vector_spelling
+from tslc.lower.region_handlers.protocol import RenderBody
+
+class CallLowerer:
+    """``call<primitive=NAME[Vec] attrs[aligned=…]>(args)`` -> a call to NAME's wrapper.
+
+    Primitives are generated independently; this only renders the *call* (via
+    ``translation.render_call``), it does not inline NAME's body. The selector shape is parsed by
+    :func:`tslc.lower.calls.parse_call_selector`; this lowerer owns only rendering decisions.
+
+    A callee carrying a boolean-wildcard axis (e.g. ``store``/``load`` with ``aligned``)
+    needs that axis passed at the call site: C++ could default it, but Rust const-generics
+    can't be inferred when ambiguous. The value comes from the call's ``attrs[...]``
+    (default ``false``); which axis keys a callee has comes from ``context.primitive_axes``.
+    """
+
+    keyword = "call"
+
+    def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
+        self._evaluator = evaluator or QueryEvaluator()
+
+    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+        parsed = parse_call_selector(region.selector_text)
+        if parsed is None:
+            context.skip("TSL-LOWER-UNSUPPORTED-CALL", f"unsupported call: {region.full_text!r}")
+            return region.full_text
+        name = parsed.primitive_ref
+        # `@self` is a recursive call into the primitive currently being lowered.
+        if name == "@self":
+            name = context.current_primitive
+
+        # The bracket is a comma-separated list: entry 0 is the target vector (the plain `[Vec]` /
+        # no-arg form targets the current vector; any other type-expression — e.g.
+        # `vector::as_extension(scalar)` — names the vector to call), and entries 1.. are extra
+        # template/const-generic args forwarded into the callee's wrapper (e.g.
+        # `@self[GenericVec, shift, PreserveSign]` delegating with the in-scope immediate + param).
+        entries = list(parsed.type_args)
+        immediate_forwarded = (
+            context.immediate_name is not None and context.immediate_name in entries[1:]
+        )
+        vec_override: str | None = None
+        if entries and entries[0] != "Vec":
+            vec_override = self._resolve_vec_expr(entries[0], context)
+            if vec_override is None:
+                context.skip(
+                    "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS",
+                    f"call type-args {parsed.type_args!r} not supported yet: {region.full_text!r}",
+                )
+                return region.full_text
+        extra_args: list[str] = []
+        for entry in entries[1:]:
+            rendered = self._render_call_arg(entry, context)
+            if rendered is None:
+                context.skip(
+                    "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS",
+                    f"call type-args {parsed.type_args!r} not supported yet: {region.full_text!r}",
+                )
+                return region.full_text
+            extra_args.append(rendered)
+
+        attrs = {
+            key: self._resolve_attr_value(value, context) for key, value in parsed.attrs
+        }
+
+        # A `attrs[mask=…]` call to a policy-split name targets its `_mask`/`_maskz` split (the
+        # render rename); single-form callees (`blend`) aren't in the set and stay bare.
+        call_name = name
+        if attrs.get("mask") and name in context.policy_split_names:
+            call_name = f"{name}_maskz" if attrs["mask"] == "zero" else f"{name}_mask"
+        # Forwarding the caller's compile-time immediate targets an `_imm` wrapper only for
+        # callees whose emitted callable family actually splits runtime and `sImm` forms. Pure
+        # `sImm` callees such as `insert` and `extract` keep their authored name.
+        if immediate_forwarded and name in context.immediate_split_names:
+            call_name = f"{call_name}_imm"
+        axis_values = tuple(
+            attrs.get(key, "false") for key in context.primitive_axes.get(name, ())
+        )
+        return context.translation.render_call(
+            call_name,
+            render(region.body),
+            axis_values,
+            context.primitive_arg_generics.get(call_name, 0),
+            vec_override,
+            tuple(extra_args),
+        )
+
+    def _resolve_attr_value(self, value: str, context: LoweringContext) -> str:
+        """An `attrs[key=value]` value. A literal (`false`) passes through; a generation query
+        — `value<generation>(primitive::attribute(aligned))`, used by masked `load`/`store` to
+        forward the caller's `aligned` to the delegated unmasked op — is evaluated to its literal
+        so it doesn't leak unlowered into the emitted call."""
+
+        if "<" not in value and "::" not in value:
+            return value
+        resolved = self._evaluator.evaluate(value, context)
+        if isinstance(resolved, TextValue):
+            return resolved.text
+        if isinstance(resolved, BoolValue):
+            return "true" if resolved.value else "false"
+        return value
+
+    def _render_call_arg(self, entry: str, context: LoweringContext) -> str | None:
+        """A forwarded call-bracket arg (entries 1..) as a target template/const-generic arg:
+        a query that resolves to a `TextValue` spelling, or a bare `generic_params` name (e.g.
+        `PreserveSign`) passed through verbatim. Returns None when it is neither (so the caller
+        skips).
+
+        Forwarding the *immediate* (`@self[…, shift, …]`) passes it through verbatim — it is in
+        scope as the `_imm` form's template / const-generic param (the caller appends `_imm` to
+        the callee; see `lower()`), so it threads straight into the callee's turbofish.
+
+        A `Vec<X>` entry (a representation-change target, e.g. `reinterpret[Vec, Vec<UnsignedT>]`)
+        resolves to the target vector spelling. In-scope param names are matched *before* query
+        evaluation (the evaluator passes a bare token through as a `TextValue`)."""
+
+        if entry.startswith("Vec<") and entry.endswith(">"):
+            return self._resolve_vec_expr(entry, context)
+        # A bare `Vec` target (`reinterpret[Vec<UnsignedT>, Vec]`) is the current vector — spell
+        # it concretely (Rust has no `Vec` alias, and an arg-trait `Self` is the argument type).
+        if entry == "Vec":
+            base = context.translation.scalar_spelling(context.type_tag)
+            return (
+                context.translation.vector_type_spelling(base, context.extension.isa_name)
+                if base is not None
+                else None
+            )
+        if entry == context.immediate_name:
+            return entry
+        if any(
+            re.search(rf"\b{re.escape(name)}\b", entry) for name in context.generic_param_names
+        ):
+            return entry
+        extension = context.translation.catalog.extensions.get(entry)
+        if extension is not None:
+            base = context.translation.scalar_spelling(context.type_tag)
+            return (
+                context.translation.vector_type_spelling(base, extension.isa_name)
+                if base is not None
+                else None
+            )
+        value = self._evaluator.evaluate(entry, context)
+        if isinstance(value, TextValue):
+            return value.text
+        # A base tag (`cast[Vec, ToBase]`'s `ToBase`) -> the target vector (`ToVec`) the cast/convert
+        # wrapper takes as its second type param: `simd<ToBase, current_ext>`.
+        if isinstance(value, TypeValue):
+            base = context.translation.scalar_spelling(value.type_tag)
+            return (
+                context.translation.vector_type_spelling(base, context.extension.isa_name)
+                if base is not None
+                else None
+            )
+        if isinstance(value, VectorValue):  # an already-vector target -> its spelling
+            return _vector_spelling(value, context)
+        return None
+
+    def _resolve_vec_expr(self, entry: str, context: LoweringContext) -> str | None:
+        """A call-bracket vector expression -> its backend `simd<…>` spelling. `Vec<X>` is the
+        current vector with base replaced by the type `X` (`Vec<UnsignedT>` -> the same-extension
+        unsigned sibling); any other expression is a query resolving to a vector `TextValue`
+        (e.g. `vector::as_extension(scalar)`). None if unresolvable."""
+
+        entry = entry.strip()
+        if entry.startswith("Vec<") and entry.endswith(">"):
+            inner = entry[len("Vec<") : -1].strip()
+            # `inner` is either a `let<type>` alias (its recorded spelling is the base) or a
+            # type expression that evaluates to a tag (-> its scalar spelling).
+            if inner in context.type_aliases:
+                base: str | None = context.type_aliases[inner]
+            else:
+                value = self._evaluator.evaluate(inner, context)
+                base = (
+                    context.translation.scalar_spelling(value.type_tag)
+                    if isinstance(value, TypeValue)
+                    else None
+                )
+            if base is None:
+                return None
+            return context.translation.vector_type_spelling(
+                base, context.extension.isa_name
+            )
+        value = self._evaluator.evaluate(entry, context)
+        if isinstance(value, TextValue):  # a query resolving to a vector spelling
+            return value.text
+        if isinstance(value, VectorValue):  # a `let<type>` vector alias (`InVec`) -> its spelling
+            return _vector_spelling(value, context)
+        return None

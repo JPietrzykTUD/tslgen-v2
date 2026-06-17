@@ -20,7 +20,7 @@ from tslc.diagnostics import Diagnostic
 class VectorValue:
     """A SIMD vector type as a query value: an element base tag + the extension ISA it lives in
     + its concrete lane count (None for the LANES-sized generic vector). Returned by
-    ``vector::transform_extension``/``as_extension`` and consumed by ``base::generic`` /
+    ``vector::as_base``/``vector::as_extension``/``vector::as`` and consumed by ``base::generic`` /
     ``generic::length`` / ``register::generic``. Stored in :attr:`LoweringContext.vector_aliases`
     so a query argument that names a ``let<type>`` alias (``generic::length(OutVec)``) resolves to
     the structured vector, not its rendered spelling string. (Defined here, not in ``queries``, so
@@ -43,6 +43,10 @@ class LoweringContext:
     # into the rendered body (a Rust local `type Alias = Self::…;` item is illegal — E0401 —
     # so the alias is inlined at use sites instead).
     type_aliases: dict[str, str] = field(default_factory=dict)
+    # `let<type>` aliases that resolve to source type tags, not backend spellings. Query
+    # evaluation consumes this channel so aliases can participate in semantic expressions such as
+    # `base::signed_of(AliasBase)` without reading rendered text from `type_aliases`.
+    type_value_aliases: dict[str, str] = field(default_factory=dict)
     # the selected primitive's attribute values (concrete after wildcard expansion),
     # e.g. {"aligned": "false"} — read by the `primitive::attribute` query.
     attributes: dict[str, str] = field(default_factory=dict)
@@ -56,6 +60,9 @@ class LoweringContext:
     # `call<…attrs[mask=…]>` to them is mangled to `<name>_mask`/`<name>_maskz` (matching the
     # render rename). Single-form callees (`blend`) are absent → keep their bare names.
     policy_split_names: frozenset[str] = frozenset()
+    # names whose callable family mixes runtime and compile-time immediate forms. Only these
+    # names gain an `_imm` suffix when a caller forwards its own `sImm` as a const/template arg.
+    immediate_split_names: frozenset[str] = frozenset()
     # the `sImm` immediate operand's name (e.g. "shift"), its per-backend forwarding strategy,
     # and its resolved legal value range `(lo, hi, inclusive)`. When the strategy is
     # `literal_match` (Rust), `intrin_compose` forwards the immediate through a literal match over
@@ -69,12 +76,16 @@ class LoweringContext:
     # render knows which condition leaves are symbolic template params (rendered raw) vs
     # generation-time queries (folded to a literal).
     generic_param_names: tuple[str, ...] = ()
-    # For a representation-change primitive (`return_type: base|extension: …`), the target-type
-    # aliases the body may name (`ToBase`/`ToType` -> the target base type tag), so a query like
-    # `register::generic(ToType)` resolves against the target. Empty for ordinary primitives.
+    # For a representation-change primitive (`return_type: base: Alias`), the declared target
+    # alias plus the established `ToType` synonym resolve to the target base type tag, so a query
+    # like `register::generic(ToType)` resolves against the target. Empty for ordinary primitives.
     target_type_aliases: dict[str, str] = field(default_factory=dict)
+    # For `return_type: extension: Alias`, the declared target alias resolves to the target
+    # extension/ISA. Rendering still uses the explicit target vector carried by the lowered
+    # specialization.
+    target_extension_aliases: dict[str, str] = field(default_factory=dict)
     # `let<type>(Name, …)` aliases whose value is a SIMD vector (e.g. `OutVec` from
-    # `vector::transform_extension(ToBase)`): Name -> its :class:`VectorValue`. A query arg that
+    # `vector::as_base(ToBase)`): Name -> its :class:`VectorValue`. A query arg that
     # names one of these resolves to the structured vector, so `generic::length(OutVec)` /
     # `base::generic(OutVec)` work. (`type_aliases` still holds the rendered spelling for
     # type-position uses like `to_array[OutVec]`.)

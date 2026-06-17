@@ -268,7 +268,7 @@ prim<m:=im> to_mask(mask):
         implementation:
           tsil """
               let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
-              let<type>(UVec, type<generation>(vector::transform_extension(UnsignedT)))
+              let<type>(UVec, type<generation>(vector::as_base(UnsignedT)))
               var<infer>(tmp, call<primitive=to_array[UVec]>(call<primitive=set_zero[UVec]>()));
               const type<backend>(scalar::size) mask_period = cast<static>(type<backend>(scalar::size), 16 / value<generation>(type::size_bytes(type<generation>(base::in))));
               loop<range>(i, 0, value<generation>(vector::length), 1) {
@@ -441,7 +441,7 @@ prim<m:=im> to_mask(mask):
         requires [neon]
         implementation:
           tsil """
-              let<type>(MaskVec, type<generation>(vector::transform_extension(type<backend>(scalar::si32))))
+              let<type>(MaskVec, type<generation>(vector::as_base(type<backend>(scalar::si32))))
               var<typed>(array_type<type<backend>(scalar::si32), value<generation>(vector::length)>, and_values, value<backend>(uninit::array))
               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i)
@@ -457,7 +457,7 @@ prim<m:=im> to_mask(mask):
         requires [neon]
         implementation:
           tsil """
-              let<type>(MaskVec, type<generation>(vector::transform_extension(type<backend>(scalar::si64))))
+              let<type>(MaskVec, type<generation>(vector::as_base(type<backend>(scalar::si64))))
               var<typed>(array_type<type<backend>(scalar::si64), value<generation>(vector::length)>, and_values, value<backend>(uninit::array))
               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i)
