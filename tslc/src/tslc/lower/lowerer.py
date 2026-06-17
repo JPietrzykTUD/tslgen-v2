@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from tslc.backend.translation import BackendTranslation
+from tslc.backend.translation import BackendTranslator
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     RESULT_DIM_BASE,
@@ -150,7 +150,7 @@ class Lowerer:
         self,
         selected: SelectedImplementation,
         catalog: Catalog,
-        translation: BackendTranslation,
+        translation: BackendTranslator,
     ) -> LoweringResult:
         context = LoweringContext(
             extension=selected.extension,
@@ -336,7 +336,7 @@ class Lowerer:
             # `generic_params` split by kind: `bool`/`int` are non-type (const) params; a
             # `simd_type` is a free type param (see `type_params`).
             generic_params=tuple(
-                (gp.name, _const_param_type(gp.kind, translation.backend_id), gp.default)
+                (gp.name, translation.const_param_type(gp.kind), gp.default)
                 for gp in selected.primitive.generic_params
                 if gp.kind != "simd_type"
             ),
@@ -382,16 +382,6 @@ def _resolve_immediate_range(
 _SUPPORTED_KINDS = frozenset(
     {"v", "s", "m", "im", "usize", "sImm", "ptr", "ptr+", "void", "s[]", "vt", "vidx"}
 )
-
-
-def _const_param_type(kind: str, backend_id: str) -> str:
-    """The backend spelling of a non-type `generic_params` declaration: an `int` is a
-    machine-width count (`std::size_t`/`usize`); everything else (currently `bool`,
-    e.g. `PreserveSign`) is a boolean flag."""
-
-    if kind == "int":
-        return "std::size_t" if backend_id == "cpp" else "usize"
-    return "bool"
 
 
 def _type_param_bounds(body: str, type_param_name: str) -> tuple[str, ...]:

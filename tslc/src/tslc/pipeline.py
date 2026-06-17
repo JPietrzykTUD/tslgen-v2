@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from tslc.backend.translation import BackendTranslation
+from tslc.backend.translation import create_backend_translation
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import load_machine_profiles
 from tslc.catalog.model import Extension, RESULT_DIM_BASE, RESULT_DIM_EXTENSION
@@ -169,7 +169,7 @@ def generate(request: GenerationRequest) -> GenerationResult:
                 )
                 slot_lowered = False
                 for backend in request.backends:
-                    translation = BackendTranslation(catalog=catalog, backend_id=backend)
+                    translation = create_backend_translation(catalog, backend)
                     lowered = lowerer.lower(slot, catalog, translation)
                     # Real diagnostics (warnings/errors) bubble up; a not-yet-lowerable
                     # body is an "info" skip -> recorded as a coverage gap, not noise.

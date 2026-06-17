@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from tslc.api import generate_project
-from tslc.backend.translation import BackendTranslation
+from tslc.backend.translation import create_backend_translation
 from tslc.catalog.model import Catalog
 from tslc.diagnostics import has_errors
 from tslc.lower.calls import ParsedCallSelector, parse_call_selector
@@ -23,7 +23,7 @@ def _scalar_spec(catalog, machine_profiles, primitive, backend, type_tag="si32")
         .selected
         if s.extension.name == "scalar"
     )
-    return Lowerer().lower(slot, catalog, BackendTranslation(catalog, backend)).specialization
+    return Lowerer().lower(slot, catalog, create_backend_translation(catalog, backend)).specialization
 
 
 def test_m_kind_lowers_to_mask_type(catalog: Catalog, machine_profiles) -> None:

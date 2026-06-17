@@ -157,14 +157,10 @@ class IntrinComposeLowerer:
         (`name(all args)`) — the same intrinsic shape differs between backends (gather's scale)."""
 
         position, value = forward
-        if context.translation.backend_id == "rust":
-            rest = [
-                render(group).strip()
-                for index, group in enumerate(_split_arg_groups(region.body))
-                if index != position
-            ]
-            return f"{name}::<{value}>({', '.join(rest)})"
-        return f"{name}({render(region.body)})"
+        args = tuple(render(group).strip() for group in _split_arg_groups(region.body))
+        return context.translation.render_immediate_intrinsic_call(
+            name, value, position, args
+        )
 
     def _literal_match(
         self, name: str, region: Region, context: LoweringContext, render: RenderBody
@@ -175,29 +171,15 @@ class IntrinComposeLowerer:
         immediate isn't among the args)."""
 
         if (
-            context.translation.backend_id != "rust"
-            or context.immediate_dispatch != "literal_match"
+            context.immediate_dispatch != "literal_match"
             or context.immediate_name is None
             or context.immediate_range is None
         ):
             return None
-        imm: str | None = None
-        rest: list[str] = []
-        for group in _split_arg_groups(region.body):
-            rendered = render(group).strip()
-            if rendered == context.immediate_name:
-                imm = rendered
-            else:
-                rest.append(rendered)
-        if imm is None:
-            return None
-        rest_text = ", ".join(rest)
-        lo, hi, inclusive = context.immediate_range
-        values = range(lo, hi + 1 if inclusive else hi)
-        arms = "".join(f"{k} => {name}::<{k}>({rest_text}), " for k in values)
-        # `_` covers an out-of-range *constant* (`value_range` deems it invalid); a `lo` shift
-        # keeps it type-valid. Exact out-of-range semantics is a value-test concern (deferred).
-        return f"match {imm} {{ {arms}_ => {name}::<{lo}>({rest_text}) }}"
+        args = tuple(render(group).strip() for group in _split_arg_groups(region.body))
+        return context.translation.render_literal_match_intrinsic_call(
+            name, context.immediate_name, context.immediate_range, args
+        )
 
     def _compose_base(
         self, modifiers: ComposeModifiers, base: str, context: LoweringContext

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from tslc.backend.translation import BackendTranslation
+from tslc.backend.translation import BackendTranslator
 from tslc.catalog.model import Extension
 from tslc.diagnostics import Diagnostic
 
@@ -35,7 +35,7 @@ class VectorValue:
 class LoweringContext:
     extension: Extension
     type_tag: str
-    translation: BackendTranslation
+    translation: BackendTranslator
     # the name of the primitive currently being lowered, so a `@self[...]` call can recurse
     # into it for a different vector (e.g. generic delegating per-lane to scalar).
     current_primitive: str = ""

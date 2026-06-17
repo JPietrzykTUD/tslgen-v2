@@ -199,8 +199,6 @@ class AssumeAlignedLowerer:
 
     def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
         expr = render(region.body)
-        if context.translation.backend_id == "rust":
-            return expr
         value = self._evaluator.evaluate(region.selector_text.strip(), context)
         if not isinstance(value, TextValue):
             context.skip(
@@ -208,7 +206,7 @@ class AssumeAlignedLowerer:
                 f"could not resolve alignment in {region.full_text!r}",
             )
             return region.full_text
-        return f"::tsl::assume_aligned<{value.text}>({expr})"
+        return context.translation.render_assume_aligned(expr, value.text)
 
 
 class LoopLowerer:
@@ -270,18 +268,5 @@ class SwitchLowerer:
             )
             return region.full_text
         selector = render(region.body).strip()
-        if context.translation.backend_id == "rust":
-            arms = "".join(
-                f"{label} => {{\n        {render(body)}\n      }}\n      "
-                for label, body in region.arms
-            )
-            return f"match {selector} {{\n      {arms}}}"
-        parts: list[str] = []
-        for label, body in region.arms:
-            inner = render(body)
-            if label == "_":
-                parts.append(f"else {{\n        {inner}\n      }}")
-            else:
-                keyword = "if" if not parts else "else if"
-                parts.append(f"{keyword} constexpr ({selector} == {label}) {{\n        {inner}\n      }}")
-        return " ".join(parts)
+        arms = tuple((label, render(body)) for label, body in region.arms)
+        return context.translation.render_compile_switch(selector, arms)

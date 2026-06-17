@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tslc.backend.translation import BackendTranslation
+from tslc.backend.translation import create_backend_translation
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, Extension, Implementation, Primitive
 from tslc.lower.lowerer import Lowerer
@@ -76,13 +76,17 @@ def test_lower_add_avx2(catalog: Catalog, machine_profiles, type_tag, suffix) ->
     slots = _by_key(catalog, machine_profiles["avx2"], "add")
     slot = slots[(type_tag, "avx2")]
 
-    cpp = Lowerer().lower(slot, catalog, BackendTranslation(catalog, "cpp")).specialization
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_translation(catalog, "cpp")
+    ).specialization
     assert cpp is not None
     assert cpp.extension_name == "avx2"
     assert cpp.body_text == f"return _mm256_add_{suffix}(left, right);"
     assert cpp.result_kind == "v"
 
-    rust = Lowerer().lower(slot, catalog, BackendTranslation(catalog, "rust")).specialization
+    rust = Lowerer().lower(
+        slot, catalog, create_backend_translation(catalog, "rust")
+    ).specialization
     assert rust is not None
     assert rust.body_text == (
         f"unsafe {{ return core::arch::x86_64::_mm256_add_{suffix}(left, right); }}"
@@ -91,17 +95,23 @@ def test_lower_add_avx2(catalog: Catalog, machine_profiles, type_tag, suffix) ->
 
 def test_lower_scalar_add_has_no_unsafe(catalog: Catalog, machine_profiles) -> None:
     slot = _by_key(catalog, machine_profiles["scalar"], "add")[("si32", "scalar")]
-    cpp = Lowerer().lower(slot, catalog, BackendTranslation(catalog, "cpp")).specialization
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_translation(catalog, "cpp")
+    ).specialization
     assert cpp.base_type_spelling == "int32_t"
     assert cpp.body_text == "return left + right;"
-    rust = Lowerer().lower(slot, catalog, BackendTranslation(catalog, "rust")).specialization
+    rust = Lowerer().lower(
+        slot, catalog, create_backend_translation(catalog, "rust")
+    ).specialization
     assert rust.base_type_spelling == "i32"
     assert rust.body_text == "return left + right;"
 
 
 def test_hadd_reduction_lowers_for_f64(catalog: Catalog, machine_profiles) -> None:
     slot = _by_key(catalog, machine_profiles["avx2"], "hadd")[("f64", "avx2")]
-    cpp = Lowerer().lower(slot, catalog, BackendTranslation(catalog, "cpp")).specialization
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_translation(catalog, "cpp")
+    ).specialization
     assert cpp is not None
     assert cpp.result_kind == "s"  # s:=v -> scalar result
     assert cpp.param_names == ("vec",)

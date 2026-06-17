@@ -137,6 +137,49 @@ registration rendering. The split keeps the render package flat and avoids a
 new rendering framework, while making the non-presentation naming step explicit
 in `emitted_names.py`.
 
+### `tslc/src/tslc/backend/`
+
+The lowering-time backend translation boundary was changed from a single
+`BackendTranslation(catalog, backend_id)` class with internal
+`backend_id == "rust"` branches to a protocol plus concrete translators.
+
+Added modules:
+
+- `translation_common.py`: backend-neutral type-tag helpers, scalar spelling
+  lookup, template lookup/rendering, return framing, intrinsic prefix/suffix
+  composition, and the shared `X86_REGISTER_BITS` fact.
+- `cpp_translation.py`: C++ lowering-time target-language behavior.
+- `rust_translation.py`: Rust lowering-time target-language behavior.
+
+`translation.py` remains the stable public import surface. It now exports:
+
+- `BackendTranslator`
+- `create_backend_translation(catalog, backend_id)`
+- the existing helper functions such as `signed_of`, `unsigned_of`,
+  `is_signed`, `is_type_tag`, `normalize_scalar_tag`
+- `X86_REGISTER_BITS`
+
+Lowering code now receives a `BackendTranslator` protocol instance and direct
+construction sites use `create_backend_translation(...)`.
+
+The backend-specific behavior moved behind concrete translator methods:
+
+- wrapper call spelling;
+- vector and generic-vector type spelling;
+- target register spelling;
+- register/mask/imask type spelling;
+- pointer casts;
+- direct intrinsic qualification;
+- body framing and Rust unsafe wrapping;
+- assume-aligned rendering;
+- compile-switch rendering;
+- immediate intrinsic forwarding and Rust literal-match intrinsic rendering;
+- generic const parameter type spelling.
+
+Reason: lowering extensibility should not depend on adding more
+`if backend_id == "..."` checks. A future backend should add a concrete
+translator instead of modifying lowering behavior across multiple modules.
+
 ## TSL Data Changes
 
 ### `tsldata/primitives/conversion/repr_change.tsl`
@@ -477,6 +520,33 @@ devcontainer.cmd exec --workspace-folder C:\Users\johan\own\work\tmp\py-bench py
 
 Result: passed.
 
+After the backend translator protocol cleanup, validation was rerun through the
+devcontainer:
+
+```powershell
+devcontainer.cmd exec --workspace-folder C:\Users\johan\own\work\tmp\py-bench python -m compileall -q tslc/src/tslc
+```
+
+Result: passed.
+
+```powershell
+devcontainer.cmd exec --workspace-folder C:\Users\johan\own\work\tmp\py-bench pytest --basetemp=tslctmp/pytest_backend_translation_select tslc/tests/test_select_and_lower.py -q
+```
+
+Result: `10 passed`.
+
+```powershell
+devcontainer.cmd exec --workspace-folder C:\Users\johan\own\work\tmp\py-bench pytest --basetemp=tslctmp/pytest_backend_translation_conditions tslc/tests/test_generation_conditionals.py -q
+```
+
+Result: `19 passed`.
+
+```powershell
+devcontainer.cmd exec --workspace-folder C:\Users\johan\own\work\tmp\py-bench pytest --basetemp=tslctmp/pytest_backend_translation_calls tslc/tests/test_masks_and_calls.py -q
+```
+
+Result: `8 passed`.
+
 ```powershell
 devcontainer.cmd exec --workspace-folder C:\Users\johan\own\work\tmp\py-bench pytest --basetemp=tslctmp/pytest_render_project_calls tslc/tests/test_masks_and_calls.py -q
 ```
@@ -537,6 +607,9 @@ The current slice is in line with the intended TSLc separation of concerns:
   `project.py` kept as a thin public orchestrator.
 - Emitted wrapper-name finalization is explicit in `render/emitted_names.py`
   instead of being hidden inside project artifact formatting.
+- Backend lowering translation now uses a protocol/factory plus concrete C++
+  and Rust translators, so backend behavior is not selected by conditional
+  branches inside lowering.
 - Backend/render code does not receive intrinsic-specific rules for `convert_down`.
 - TSL data remains responsible for expressing primitive-to-primitive calls.
 - The fix does not duplicate insert intrinsics in conversion bodies.
