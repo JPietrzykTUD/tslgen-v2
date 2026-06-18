@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 
 # A ``[name]`` index annotation on a param kind (``v[idx]`` = a vector indexed by a compile-time
 # index, the lane `extract_value` returns). Decorative — the index itself is a `generic_params`
@@ -24,6 +25,7 @@ class SignatureShape:
     param_kinds: tuple[str, ...]
 
 
+@lru_cache(maxsize=None)
 def parse_signature(text: str) -> SignatureShape | None:
     """Parse ``RESULT:=PARAMS`` into a :class:`SignatureShape`.
 

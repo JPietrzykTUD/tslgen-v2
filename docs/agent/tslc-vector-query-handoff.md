@@ -35,6 +35,80 @@ The implemented direction keeps the TSLc boundaries strict:
 
 No intrinsic names were embedded into lowering or backend logic to fix `convert_down`. The changes are catalog/query driven and preserve the primitive-call style in the TSL source.
 
+## Performance-Oriented Follow-Up Changes
+
+After the vector-query and primitive-call slice, the generator was profiled for
+avoidable repeated work during `verify.py` generation. Two focused performance
+changes were applied without changing generated artifacts or moving semantic
+ownership into the pipeline.
+
+### `tslc/src/tslc/catalog/signatures.py`
+
+`parse_signature(...)` is now cached with an unbounded `lru_cache`.
+
+Reason: signature parsing is pure for a given signature string, and generation
+repeatedly parses the same small signature vocabulary while specializing many
+primitive/backend/type combinations. Caching the parser result removes that
+repeat cost without introducing generator-global mutable pipeline state.
+
+### `tslc/src/tslc/lower/lowerer.py` and `context.py`
+
+`Lowerer` now owns a private `_LowererCatalogFacts` cache keyed by catalog
+identity. The cached facts are derived once per catalog/generation and reused
+for each specialization:
+
+- primitive boolean axes;
+- primitive type-argument generic counts;
+- mask-policy split primitive names;
+- immediate split primitive names.
+
+`LoweringEnv.__post_init__` now avoids re-copying mappings that are already
+frozen `MappingProxyType` instances, so these cached immutable facts remain
+cheap to pass into each lowering session.
+
+Reason: these maps are lowerer-specific, read-only interpretations of the
+catalog. Passing them in from `pipeline.py` would make the orchestration layer
+know lowerer internals and weaken separation of concerns. Keeping the cache
+inside `Lowerer` makes the optimization local to the owner of those facts.
+
+### `tslc/src/tslc/lower/dependencies.py`, `lowerer.py`, and `pipeline.py`
+
+Dependency extraction can now consume already-scanned TSIL segments through
+`extract_call_dependencies_from_segments(...)`. The existing
+`extract_call_dependencies(...)` API remains as a compatibility wrapper that
+scans raw body text before delegating.
+
+`Lowerer.lower(...)` accepts an optional keyword-only `body_segments` tuple.
+When supplied, backend lowering and `_type_param_bounds(...)` reuse that
+segment sequence instead of scanning the implementation body again. The private
+`_type_param_bounds(...)` helper still accepts raw body text for existing tests
+and compatibility callers.
+
+`pipeline.py` now scans each selected implementation body once, with source
+span information when available, then passes the same immutable segment tuple
+to dependency extraction and to each backend lower call.
+
+Reason: TSIL scanning is a lexical source-body boundary already shared by
+lowering and dependency extraction. Reusing the scanned `Segment` tuple removes
+one dependency scan plus one scan per backend lower without making the pipeline
+parse call selectors, evaluate queries, decide dependencies, or lower regions.
+The pipeline owns reuse of the shared input representation; the lower modules
+still own semantic interpretation.
+
+### Observed Impact
+
+The first cache-oriented pass reduced the measured generation time for the
+`add,hadd` probe from about `9.1s` to `3.5-3.8s`, and the 20-primitive probe
+from about `21.6s` to `6.17s`.
+
+The scanned-segment reuse pass then reduced the same probes further to about
+`2.8-2.9s` for `add,hadd` and `4.25s` for the 20-primitive set.
+
+Coverage and pruning counts stayed unchanged in the timing probes:
+
+- `add,hadd`: `coverage=5720`, `skipped=176`, `diagnostics=0`;
+- 20-primitive probe: `coverage=15920`, `skipped=736`, `diagnostics=0`.
+
 ## Files Added
 
 ### `tslc/src/tslc/lower/calls.py`
@@ -708,6 +782,31 @@ explicit `Catalog`, query/dependency code no longer reaches through
 `BackendTranslator`/`create_backend_translation`/`env.translation` do not
 remain in source or tests.
 
+After the performance follow-up changes, local validation was rerun:
+
+```bash
+python -B -m py_compile tslc/src/tslc/catalog/signatures.py tslc/src/tslc/lower/context.py tslc/src/tslc/lower/dependencies.py tslc/src/tslc/lower/lowerer.py tslc/src/tslc/pipeline.py
+```
+
+Result: passed.
+
+Focused lowerer, dependency, query, and TSIL-scan tests were rerun.
+
+Result: `41 passed`.
+
+```bash
+python -m pytest -q -k 'not build' tslc/tests
+```
+
+Result: `80 passed, 40 deselected in 63.17s`.
+
+The performance timing probes were rerun after each pass. The first pass
+covered `parse_signature` caching, lowerer-owned catalog fact caching, and
+cheaper frozen mapping reuse. The second pass covered scanned TSIL segment
+reuse across dependency extraction and backend lowering. Build-verification
+tests were not rerun as part of the performance pass; the build caveats below
+still apply.
+
 ## Known Caveats
 
 Full `tslc/tests/test_build_verify.py` was attempted with fresh temp
@@ -746,7 +845,9 @@ The current slice is in line with the intended TSLc separation of concerns:
   `LoweringEffects` under one `LoweringSession`, so handlers still have low
   plumbing while selected facts, alias mutation, and diagnostics are separate.
 - Dependency extraction reuses the shared parser and query evaluator.
-- Pipeline code is orchestration, not a source scanner.
+- Pipeline code orchestrates one shared TSIL scan per selected body, then passes
+  immutable segments to dependency extraction and backend lowering; it does not
+  parse call selectors or own dependency semantics.
 - TSIL keyword lowerers are split by keyword family under `lower/region_handlers/`.
 - `lower/regions.py` is a small compatibility facade, not a second implementation.
 - Project rendering is split by responsibility under `render/`, with
@@ -760,7 +861,11 @@ The current slice is in line with the intended TSLc separation of concerns:
 - TSL data remains responsible for expressing primitive-to-primitive calls.
 - The fix does not duplicate insert intrinsics in conversion bodies.
 
-The most important hygiene property is that there is now one parser for call selector syntax and one evaluator for vector/type query semantics. This reduces drift between call lowering and dependency pruning.
+The most important hygiene property is that there is now one parser for call
+selector syntax, one evaluator for vector/type query semantics, and one scanned
+TSIL segment sequence shared by dependency extraction and backend lowering for a
+selected body. This reduces drift between call lowering and dependency pruning
+while avoiding redundant lexical scans.
 
 The later `regions.py` cleanup also reduces the review surface of the lowering
 slice without changing the source/lowering/backend boundary. It is a module

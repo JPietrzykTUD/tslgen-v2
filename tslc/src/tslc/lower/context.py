@@ -21,6 +21,8 @@ from tslc.backend.translation import BackendDialect
 from tslc.catalog.model import Catalog, Extension
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
 
+_MAPPING_PROXY_TYPE = type(MappingProxyType({}))
+
 
 @dataclass(frozen=True, slots=True)
 class VectorValue:
@@ -78,14 +80,14 @@ class LoweringEnv:
     generic_param_names: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "attributes", MappingProxyType(dict(self.attributes)))
+        object.__setattr__(self, "attributes", _frozen_mapping(self.attributes))
         object.__setattr__(
-            self, "primitive_axes", MappingProxyType(dict(self.primitive_axes))
+            self, "primitive_axes", _frozen_mapping(self.primitive_axes)
         )
         object.__setattr__(
             self,
             "primitive_arg_generics",
-            MappingProxyType(dict(self.primitive_arg_generics)),
+            _frozen_mapping(self.primitive_arg_generics),
         )
 
 
@@ -182,3 +184,9 @@ class LoweringSession:
     env: LoweringEnv
     scope: LoweringScope = field(default_factory=LoweringScope)
     effects: LoweringEffects = field(default_factory=LoweringEffects)
+
+
+def _frozen_mapping(value: Mapping) -> Mapping:
+    if isinstance(value, _MAPPING_PROXY_TYPE):
+        return value
+    return MappingProxyType(dict(value))

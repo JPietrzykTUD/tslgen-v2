@@ -55,6 +55,30 @@ def extract_call_dependencies(
     ``let<type>`` aliases, so extraction walks the shared TSIL segment stream in source order.
     """
 
+    return extract_call_dependencies_from_segments(
+        scan(body_text, source=source),
+        current_primitive,
+        current_extension,
+        current_type_tag,
+        target_alias,
+        target_base,
+        target_extension,
+        catalog,
+    )
+
+
+def extract_call_dependencies_from_segments(
+    segments: tuple[Segment, ...],
+    current_primitive: str,
+    current_extension: str,
+    current_type_tag: str,
+    target_alias: str | None,
+    target_base: str | None,
+    target_extension: str | None,
+    catalog: Catalog,
+) -> frozenset[CallDependency]:
+    """Return call dependencies from an already-scanned TSIL segment sequence."""
+
     resolver = _DependencyResolver(
         catalog=catalog,
         current_primitive=current_primitive,
@@ -63,7 +87,7 @@ def extract_call_dependencies(
         target_base=target_base,
         target_extension=target_extension,
     )
-    resolver.visit(scan(body_text, source=source))
+    resolver.visit(segments)
     return frozenset(resolver.calls)
 
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from types import MappingProxyType
 
 from tslc.backend.translation import BackendDialect
 from tslc.catalog.model import (
@@ -117,6 +118,23 @@ class LoweringResult:
     diagnostics: tuple[Diagnostic, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class _LowererCatalogFacts:
+    primitive_axes: MappingProxyType[str, tuple[str, ...]]
+    primitive_arg_generics: MappingProxyType[str, int]
+    policy_split_names: frozenset[str]
+    immediate_split_names: frozenset[str]
+
+    @classmethod
+    def build(cls, catalog: Catalog) -> "_LowererCatalogFacts":
+        return cls(
+            primitive_axes=MappingProxyType(_primitive_axes(catalog)),
+            primitive_arg_generics=MappingProxyType(_primitive_arg_generics(catalog)),
+            policy_split_names=policy_split_names(catalog),
+            immediate_split_names=immediate_split_names(catalog),
+        )
+
+
 class ExpressionRenderer:
     """Render a TSIL expression (segment sequence) to target text."""
 
@@ -151,12 +169,16 @@ class Lowerer:
         self, region_lowerers: tuple[RegionLowerer, ...] = DEFAULT_REGION_LOWERERS
     ) -> None:
         self._region_lowerers = region_lowerers
+        self._catalog_facts_id: int | None = None
+        self._catalog_facts: _LowererCatalogFacts | None = None
 
     def lower(
         self,
         selected: SelectedImplementation,
         catalog: Catalog,
         backend: BackendDialect,
+        *,
+        body_segments: tuple[Segment, ...] | None = None,
     ) -> LoweringResult:
         shape = parse_signature(selected.primitive.signature)
         if shape is None:
@@ -285,6 +307,7 @@ class Lowerer:
                     imm_param, selected.type_tag
                 )
 
+        catalog_facts = self._facts_for(catalog)
         context = LoweringSession(
             env=LoweringEnv(
                 catalog=catalog,
@@ -292,10 +315,10 @@ class Lowerer:
                 extension=selected.extension,
                 type_tag=selected.type_tag,
                 attributes=dict(selected.primitive.attributes),
-                primitive_axes=_primitive_axes(catalog),
-                primitive_arg_generics=_primitive_arg_generics(catalog),
-                policy_split_names=policy_split_names(catalog),
-                immediate_split_names=immediate_split_names(catalog),
+                primitive_axes=catalog_facts.primitive_axes,
+                primitive_arg_generics=catalog_facts.primitive_arg_generics,
+                policy_split_names=catalog_facts.policy_split_names,
+                immediate_split_names=catalog_facts.immediate_split_names,
                 current_primitive=selected.primitive.name,
                 immediate_name=immediate_name,
                 immediate_dispatch=immediate_dispatch,
@@ -313,9 +336,13 @@ class Lowerer:
         if "ptr" in shape.param_kinds or "ptr+" in shape.param_kinds:
             context.effects.mark_unsafe()
 
-        segments = scan(
-            selected.implementation.body_text,
-            source=selected.implementation.body_source,
+        segments = (
+            body_segments
+            if body_segments is not None
+            else scan(
+                selected.implementation.body_text,
+                source=selected.implementation.body_source,
+            )
         )
         # A `void` primitive (e.g. `store`) has no return value, so it carries no
         # top-level `emit_return`; only value-returning bodies require one.
@@ -378,7 +405,7 @@ class Lowerer:
                 if gp.kind != "simd_type"
             ),
             type_params=tuple(
-                (gp.name, _type_param_bounds(selected.implementation.body_text, gp.name))
+                (gp.name, _type_param_bounds(segments, gp.name))
                 for gp in selected.primitive.generic_params
                 if gp.kind == "simd_type"
             ),
@@ -393,6 +420,13 @@ class Lowerer:
             specialization=specialization,
             diagnostics=sort_diagnostics(context.effects.diagnostics),
         )
+
+    def _facts_for(self, catalog: Catalog) -> _LowererCatalogFacts:
+        catalog_id = id(catalog)
+        if self._catalog_facts_id != catalog_id or self._catalog_facts is None:
+            self._catalog_facts = _LowererCatalogFacts.build(catalog)
+            self._catalog_facts_id = catalog_id
+        return self._catalog_facts
 
 
 def _resolve_immediate_range(
@@ -421,14 +455,17 @@ _SUPPORTED_KINDS = frozenset(
 )
 
 
-def _type_param_bounds(body: str, type_param_name: str) -> tuple[str, ...]:
+def _type_param_bounds(
+    body: str | tuple[Segment, ...], type_param_name: str
+) -> tuple[str, ...]:
     """The primitive names a body calls *on* a free SIMD type param (`primitive=NAME[<param>]`).
     Each is a trait the type param must satisfy in Rust (`to_array[IndicesType]` ->
     `IndicesType: To_arrayImpl`); C++ templates are duck-typed and ignore them. Derived from the
     TSIL segment stream and the shared call selector parser so neither backend needs to know which
     primitives a body invokes — the Rust backend only maps a recorded name to its trait spelling."""
 
-    return tuple(sorted(_type_param_bound_names(scan(body), type_param_name)))
+    segments = scan(body) if isinstance(body, str) else body
+    return tuple(sorted(_type_param_bound_names(segments, type_param_name)))
 
 
 def _type_param_bound_names(

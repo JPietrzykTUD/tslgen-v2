@@ -16,10 +16,11 @@ from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import load_machine_profiles
 from tslc.catalog.model import Extension, RESULT_DIM_BASE, RESULT_DIM_EXTENSION
 from tslc.diagnostics import Diagnostic, has_errors, sort_diagnostics
+from tslc.ir.scan import scan
 from tslc.lower.dependencies import (
     CallDependency,
     VectorIdentity,
-    extract_call_dependencies,
+    extract_call_dependencies_from_segments,
 )
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc.output.artifacts import ArtifactSet
@@ -157,8 +158,12 @@ def generate(request: GenerationRequest) -> GenerationResult:
                     and slot.primitive.result_target[0] == RESULT_DIM_EXTENSION
                     else None
                 )
-                callees = extract_call_dependencies(
+                body_segments = scan(
                     slot.implementation.body_text,
+                    source=slot.implementation.body_source,
+                )
+                callees = extract_call_dependencies_from_segments(
+                    body_segments,
                     primitive,
                     slot.extension.isa_name,
                     slot.type_tag,
@@ -166,12 +171,16 @@ def generate(request: GenerationRequest) -> GenerationResult:
                     target_base,
                     target_extension,
                     catalog,
-                    slot.implementation.body_source,
                 )
                 slot_lowered = False
                 for backend in request.backends:
                     dialect = create_backend_dialect(catalog, backend)
-                    lowered = lowerer.lower(slot, catalog, dialect)
+                    lowered = lowerer.lower(
+                        slot,
+                        catalog,
+                        dialect,
+                        body_segments=body_segments,
+                    )
                     # Real diagnostics (warnings/errors) bubble up; a not-yet-lowerable
                     # body is an "info" skip -> recorded as a coverage gap, not noise.
                     diagnostics.extend(d for d in lowered.diagnostics if d.severity != "info")
