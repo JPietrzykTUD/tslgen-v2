@@ -14,7 +14,7 @@ from pathlib import Path
 from tslc.api import generate_project
 from tslc.backend.translation import create_backend_translation
 from tslc.catalog.model import Catalog
-from tslc.lower.context import LoweringContext, VectorValue
+from tslc.lower.context import LoweringEnv, LoweringScope, LoweringSession, VectorValue
 from tslc.lower.lowerer import Lowerer
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue, TypeValue
 from tslc.select.selector import Selector
@@ -32,10 +32,12 @@ def _spec(catalog, machine_profiles, profile, primitive, ext, type_tag, backend=
 
 
 def _ctx(catalog, ext_name, type_tag, backend="cpp"):
-    return LoweringContext(
-        extension=catalog.extensions[ext_name],
-        type_tag=type_tag,
-        translation=create_backend_translation(catalog, backend),
+    return LoweringSession(
+        env=LoweringEnv(
+            extension=catalog.extensions[ext_name],
+            type_tag=type_tag,
+            translation=create_backend_translation(catalog, backend),
+        )
     )
 
 
@@ -58,13 +60,17 @@ def test_named_stream_suffix_resolves_per_extension(catalog: Catalog) -> None:
 
 def test_query_evaluator_returns_source_identities_for_type_and_vector_terms(catalog: Catalog) -> None:
     ev = QueryEvaluator()
-    ctx = LoweringContext(
-        extension=catalog.extensions["avx2"],
-        type_tag="si32",
-        translation=create_backend_translation(catalog, "cpp"),
-        target_type_aliases={"ToBase": "ui16", "ToType": "ui16"},
-        target_extension_aliases={"ToExtension": "sse"},
-        type_value_aliases={"AliasBase": "ui32"},
+    ctx = LoweringSession(
+        env=LoweringEnv(
+            extension=catalog.extensions["avx2"],
+            type_tag="si32",
+            translation=create_backend_translation(catalog, "cpp"),
+        ),
+        scope=LoweringScope(
+            target_type_symbols={"ToBase": "ui16", "ToType": "ui16"},
+            type_symbols={"AliasBase": "ui32"},
+            extension_symbols={"ToExtension": "sse"},
+        ),
     )
 
     assert ev.evaluate("type<backend>(scalar::si16)", ctx) == TypeValue("si16")

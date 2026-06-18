@@ -2,8 +2,8 @@
 
 Pieces, each with one job:
 
-- :class:`LoweringContext` (in ``context.py``) holds the selected extension/type,
-  the backend translation, the diagnostics sink, and the ``unsafe`` flag.
+- :class:`LoweringSession` (in ``context.py``) groups immutable selected facts,
+  body-local aliases, diagnostics, and the ``unsafe`` flag.
 - :class:`ExpressionRenderer` walks a body's segment sequence: raw text passes
   through, regions dispatch to per-keyword :class:`RegionLowerer` handlers.
 - :class:`Lowerer` is the orchestrator: read the signature kinds, locate the
@@ -31,7 +31,12 @@ from tslc.diagnostics import Diagnostic, sort_diagnostics
 from tslc.ir.scan import scan
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower.calls import parse_call_selector
-from tslc.lower.context import LoweringContext
+from tslc.lower.context import (
+    LoweringEffects,
+    LoweringEnv,
+    LoweringScope,
+    LoweringSession,
+)
 from tslc.lower.regions import DEFAULT_REGION_LOWERERS, RegionLowerer
 from tslc.select.selector import (
     SelectedImplementation,
@@ -117,7 +122,7 @@ class ExpressionRenderer:
 
     def __init__(
         self,
-        context: LoweringContext,
+        context: LoweringSession,
         region_lowerers: tuple[RegionLowerer, ...] = DEFAULT_REGION_LOWERERS,
     ) -> None:
         self._context = context
@@ -132,7 +137,7 @@ class ExpressionRenderer:
             return segment.text
         lowerer = self._lowerers.get(segment.keyword)
         if lowerer is None:
-            self._context.skip(
+            self._context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-REGION",
                 f"region {segment.keyword!r} is not supported yet: {segment.full_text!r}",
             )
@@ -152,19 +157,6 @@ class Lowerer:
         catalog: Catalog,
         translation: BackendTranslator,
     ) -> LoweringResult:
-        context = LoweringContext(
-            extension=selected.extension,
-            type_tag=selected.type_tag,
-            translation=translation,
-            attributes=dict(selected.primitive.attributes),
-            primitive_axes=_primitive_axes(catalog),
-            primitive_arg_generics=_primitive_arg_generics(catalog),
-            policy_split_names=policy_split_names(catalog),
-            immediate_split_names=immediate_split_names(catalog),
-            current_primitive=selected.primitive.name,
-            generic_param_names=tuple(gp.name for gp in selected.primitive.generic_params),
-        )
-
         shape = parse_signature(selected.primitive.signature)
         if shape is None:
             return _error(
@@ -189,11 +181,11 @@ class Lowerer:
                 f"but signature {selected.primitive.signature!r} has {len(shape.param_kinds)}",
             )
 
-        base_type_spelling = translation.scalar_spelling(context.type_tag)
+        base_type_spelling = translation.scalar_spelling(selected.type_tag)
         if base_type_spelling is None:
             return _error(
                 "TSL-LOWER-NO-BASE-TYPE",
-                f"no {translation.backend_id} base-type spelling for {context.type_tag!r}",
+                f"no {translation.backend_id} base-type spelling for {selected.type_tag!r}",
             )
 
         # A representation-change primitive (`return_type: base|extension: …`) produces a
@@ -201,11 +193,12 @@ class Lowerer:
         # of it as one `TargetVector` and bind the target alias declared by the primitive.
         # Current source bodies also use `ToType` as a target-base synonym, so keep it bound
         # to the same value without treating `ToBase` itself as a keyword.
+        scope = LoweringScope()
         target: TargetVector | None = None
         if selected.primitive.result_target is not None and selected.to_target is not None:
             # The generic vector is sized by `LANES`; a target vector under it needs that
             # threaded into the second type param — deferred (the x86/scalar reinterpret slice).
-            if context.extension.isa_name == "generic":
+            if selected.extension.isa_name == "generic":
                 return _skip(
                     "TSL-LOWER-UNSUPPORTED-TARGET-VECTOR",
                     f"representation-change on the generic vector (LANES-sized target) is "
@@ -223,34 +216,32 @@ class Lowerer:
                     )
                 target = TargetVector(
                     vector_spelling=translation.vector_type_spelling(
-                        to_base_spelling, context.extension.isa_name
+                        to_base_spelling, selected.extension.isa_name
                     ),
                     register_spelling=translation.target_register_spelling(
-                        selected.to_target, context.extension.isa_name
+                        selected.to_target, selected.extension.isa_name
                     ),
-                    extension_isa=context.extension.isa_name,
+                    extension_isa=selected.extension.isa_name,
                     base_tag=selected.to_target,
                     base_spelling=to_base_spelling,
                 )
-                context.target_type_aliases = {
-                    selected.primitive.result_target[1]: selected.to_target,
-                    "ToType": selected.to_target,
-                }
+                scope.bind_target_type_symbol(
+                    selected.primitive.result_target[1], selected.to_target
+                )
+                scope.bind_target_type_symbol("ToType", selected.to_target)
             else:  # RESULT_DIM_EXTENSION: another extension, same base type
                 target_ext = catalog.extensions.get(selected.to_target)
                 target_isa = target_ext.isa_name if target_ext else selected.to_target
-                context.target_extension_aliases = {
-                    selected.primitive.result_target[1]: target_isa,
-                }
+                scope.bind_extension_symbol(selected.primitive.result_target[1], target_isa)
                 target = TargetVector(
                     vector_spelling=translation.vector_type_spelling(
                         base_type_spelling, target_isa
                     ),
                     register_spelling=translation.target_register_spelling(
-                        context.type_tag, target_isa
+                        selected.type_tag, target_isa
                     ),
                     extension_isa=target_isa,
-                    base_tag=context.type_tag,
+                    base_tag=selected.type_tag,
                     base_spelling=base_type_spelling,
                 )
 
@@ -259,6 +250,9 @@ class Lowerer:
         # per-backend forwarding strategy, and legal range come from the `params:` block
         # (`immediate_param`); absent metadata defaults to `ui32` with positional forwarding.
         immediate: tuple[str, str] | None = None
+        immediate_name: str | None = None
+        immediate_dispatch: str | None = None
+        immediate_range: tuple[int, int, bool] | None = None
         if "sImm" in shape.param_kinds:
             idx = shape.param_kinds.index("sImm")
             imm_name = parameters[idx]
@@ -272,17 +266,39 @@ class Lowerer:
                     f"{selected.primitive.name!r}",
                 )
             immediate = (imm_name, imm_spelling)
-            context.immediate_name = imm_name
+            immediate_name = imm_name
             if imm_param is not None:
-                context.immediate_dispatch = imm_param.dispatch_for(translation.backend_id)
-                context.immediate_range = _resolve_immediate_range(
-                    imm_param, context.type_tag
+                immediate_dispatch = imm_param.dispatch_for(translation.backend_id)
+                immediate_range = _resolve_immediate_range(
+                    imm_param, selected.type_tag
                 )
+
+        context = LoweringSession(
+            env=LoweringEnv(
+                extension=selected.extension,
+                type_tag=selected.type_tag,
+                translation=translation,
+                attributes=dict(selected.primitive.attributes),
+                primitive_axes=_primitive_axes(catalog),
+                primitive_arg_generics=_primitive_arg_generics(catalog),
+                policy_split_names=policy_split_names(catalog),
+                immediate_split_names=immediate_split_names(catalog),
+                current_primitive=selected.primitive.name,
+                immediate_name=immediate_name,
+                immediate_dispatch=immediate_dispatch,
+                immediate_range=immediate_range,
+                generic_param_names=tuple(
+                    gp.name for gp in selected.primitive.generic_params
+                ),
+            ),
+            scope=scope,
+            effects=LoweringEffects(),
+        )
 
         # Dereferencing a raw pointer is `unsafe` in Rust, so a `ptr`/`ptr+`-taking body needs
         # the unsafe frame even when it uses no intrinsics (e.g. scalar `*ptr = data;`).
         if "ptr" in shape.param_kinds or "ptr+" in shape.param_kinds:
-            context.mark_unsafe()
+            context.effects.mark_unsafe()
 
         segments = scan(selected.implementation.body_text)
         # A `void` primitive (e.g. `store`) has no return value, so it carries no
@@ -307,21 +323,25 @@ class Lowerer:
         # handlers, and raw text (assignment LHS, newlines, ";") passes through.
         renderer = ExpressionRenderer(context, self._region_lowerers)
         rendered = renderer.render(segments)
-        if context.unsupported or context.has_errors:
+        if context.effects.unsupported or context.effects.has_errors:
             # A not-yet-lowerable construct was hit: skip this specialization.
-            return LoweringResult(specialization=None, diagnostics=tuple(context.diagnostics))
+            return LoweringResult(
+                specialization=None, diagnostics=tuple(context.effects.diagnostics)
+            )
         # Inline `let<type>` aliases at their use sites (whole-word) — see LetLowerer.
-        for alias, spelling in context.type_aliases.items():
+        for alias, spelling in context.scope.type_aliases.items():
             rendered = re.sub(rf"\b{re.escape(alias)}\b", lambda _m, s=spelling: s, rendered)
-        body_text = translation.frame_body(rendered, requires_unsafe=context.requires_unsafe)
+        body_text = translation.frame_body(
+            rendered, requires_unsafe=context.effects.requires_unsafe
+        )
 
         specialization = LoweredSpecialization(
             backend_id=translation.backend_id,
             primitive_name=selected.primitive.name,
             # Emit the ISA name (avx2), not the internal block name (avx2_vl):
             # the `_vl` distinction only steers selection, never the generated type.
-            extension_name=context.extension.isa_name,
-            type_tag=context.type_tag,
+            extension_name=context.env.extension.isa_name,
+            type_tag=context.env.type_tag,
             base_type_spelling=base_type_spelling,
             result_kind=shape.result_kind,
             param_names=parameters,
@@ -348,13 +368,13 @@ class Lowerer:
             # True only when the register type *is* the base type (scalar). The generic
             # vector also has vector_bits 0 but its register is the lane array, not the base,
             # so its `v`/`s` overloads must stay distinct.
-            register_is_base=context.extension.isa_name == "scalar",
+            register_is_base=context.env.extension.isa_name == "scalar",
             target=target,
             mask_policy=selected.primitive.attributes.get("mask"),
         )
         return LoweringResult(
             specialization=specialization,
-            diagnostics=sort_diagnostics(context.diagnostics),
+            diagnostics=sort_diagnostics(context.effects.diagnostics),
         )
 
 

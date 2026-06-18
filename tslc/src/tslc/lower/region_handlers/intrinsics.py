@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from tslc.ir.segments import Region
 from tslc.lower._text import skip_string
-from tslc.lower.context import LoweringContext
+from tslc.lower.context import LoweringSession
 from tslc.lower.queries import QueryEvaluator, TextValue
 from tslc.lower.region_handlers.common import _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
@@ -89,11 +89,13 @@ class IntrinComposeLowerer:
     def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
         self._evaluator = evaluator or QueryEvaluator()
 
-    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
-        context.mark_unsafe()
+    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+        context.effects.mark_unsafe()
         modifiers = ComposeModifiers.parse(region.selector_text)
         if modifiers.base is None:
-            context.skip("TSL-LOWER-EMPTY-INTRIN-COMPOSE", "intrin_compose has no base name")
+            context.effects.skip(
+                "TSL-LOWER-EMPTY-INTRIN-COMPOSE", "intrin_compose has no base name"
+            )
             return region.full_text
 
         # An `infix`/`infix_sep` modifier folds into the base: `base + infix_sep + infix`
@@ -101,21 +103,24 @@ class IntrinComposeLowerer:
         # -> `cvtepi8` -> `_mm256_cvtepi8_epi16`). Unresolvable -> skip.
         base = self._compose_base(modifiers, modifiers.base, context)
         if base is None:
-            context.skip(
+            context.effects.skip(
                 "TSL-LOWER-UNRESOLVED-INFIX",
                 f"could not resolve intrin_compose infix in {region.selector_text!r}",
             )
             return region.full_text
 
         suffix = self._suffix(modifiers, context)
-        if context.has_errors:
+        if context.effects.has_errors:
             return region.full_text
 
-        name = context.translation.compose_intrinsic_name(context.extension, base, suffix)
+        name = context.env.translation.compose_intrinsic_name(
+            context.env.extension, base, suffix
+        )
         if name is None:
-            context.skip(
+            context.effects.skip(
                 "TSL-LOWER-NO-INTRINSIC-PREFIX",
-                f"extension {context.extension.name!r} has no {context.translation.backend_id} "
+                f"extension {context.env.extension.name!r} has no "
+                f"{context.env.translation.backend_id} "
                 f"intrinsic prefix for intrin_compose<{modifiers.base}>",
             )
             return region.full_text
@@ -125,7 +130,7 @@ class IntrinComposeLowerer:
         # stays a no-op.
         if (
             modifiers.get("post") == "mask"
-            and context.extension.mask_policy.kind == "native_predicate_by_lanes"
+            and context.env.extension.mask_policy.kind == "native_predicate_by_lanes"
         ):
             name = f"{name}_mask"
         # Const-generic immediate bridge: a Rust immediate intrinsic takes the count as a
@@ -148,7 +153,7 @@ class IntrinComposeLowerer:
         name: str,
         forward: tuple[int, str],
         region: Region,
-        context: LoweringContext,
+        context: LoweringSession,
         render: RenderBody,
     ) -> str:
         """Emit an intrinsic whose arg at position ``N`` is a compile-time immediate ``V``
@@ -158,12 +163,12 @@ class IntrinComposeLowerer:
 
         position, value = forward
         args = tuple(render(group).strip() for group in _split_arg_groups(region.body))
-        return context.translation.render_immediate_intrinsic_call(
+        return context.env.translation.render_immediate_intrinsic_call(
             name, value, position, args
         )
 
     def _literal_match(
-        self, name: str, region: Region, context: LoweringContext, render: RenderBody
+        self, name: str, region: Region, context: LoweringSession, render: RenderBody
     ) -> str | None:
         """A Rust `literal_match` immediate intrinsic -> a literal match over the immediate's
         legal range: `match shift { 0 => name::<0>(rest), … hi-1 => …, _ => name::<lo>(rest) }`.
@@ -171,18 +176,18 @@ class IntrinComposeLowerer:
         immediate isn't among the args)."""
 
         if (
-            context.immediate_dispatch != "literal_match"
-            or context.immediate_name is None
-            or context.immediate_range is None
+            context.env.immediate_dispatch != "literal_match"
+            or context.env.immediate_name is None
+            or context.env.immediate_range is None
         ):
             return None
         args = tuple(render(group).strip() for group in _split_arg_groups(region.body))
-        return context.translation.render_literal_match_intrinsic_call(
-            name, context.immediate_name, context.immediate_range, args
+        return context.env.translation.render_literal_match_intrinsic_call(
+            name, context.env.immediate_name, context.env.immediate_range, args
         )
 
     def _compose_base(
-        self, modifiers: ComposeModifiers, base: str, context: LoweringContext
+        self, modifiers: ComposeModifiers, base: str, context: LoweringSession
     ) -> str | None:
         """Fold an ``infix``/``infix_sep`` modifier into the intrinsic base: ``base + infix_sep +
         infix`` (both resolved as query values — ``infix`` is typically a type's intrinsic suffix,
@@ -203,15 +208,17 @@ class IntrinComposeLowerer:
             return None
         return f"{base}{separator.text}{infix.text}"
 
-    def _suffix(self, modifiers: ComposeModifiers, context: LoweringContext) -> str | None:
+    def _suffix(self, modifiers: ComposeModifiers, context: LoweringSession) -> str | None:
         explicit = modifiers.get("suffix")
         if explicit is None:
             # No explicit modifier: use the extension's default suffix for the selected type.
-            return context.translation.default_suffix(context.extension, context.type_tag)
+            return context.env.translation.default_suffix(
+                context.env.extension, context.env.type_tag
+            )
         value = self._evaluator.evaluate(explicit, context)
         if isinstance(value, TextValue):
             return value.text
-        context.skip(
+        context.effects.skip(
             "TSL-LOWER-UNRESOLVED-SUFFIX",
             f"could not resolve intrinsic suffix from {explicit!r}",
         )
@@ -226,9 +233,9 @@ class IntrinLowerer:
 
     keyword = "intrin"
 
-    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
-        context.mark_unsafe()
-        name = context.translation.qualify_intrinsic(
-            context.extension, region.selector_text.strip()
+    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+        context.effects.mark_unsafe()
+        name = context.env.translation.qualify_intrinsic(
+            context.env.extension, region.selector_text.strip()
         )
         return f"{name}({render(region.body)})"

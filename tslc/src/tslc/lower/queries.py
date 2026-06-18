@@ -33,7 +33,7 @@ from tslc.backend.translation import (
 )
 from tslc.catalog.model import Extension
 from tslc.lower._text import split_head_arg, split_top_level
-from tslc.lower.context import LoweringContext, VectorValue
+from tslc.lower.context import LoweringSession, VectorValue
 
 
 # --- query value types (extend as new queries need new result kinds) ---------
@@ -62,14 +62,14 @@ def _type_bits(base_tag: str) -> int:
     return int(digits) if digits else 8
 
 
-def _vector_value(base_tag: str, context: LoweringContext) -> VectorValue:
+def _vector_value(base_tag: str, context: LoweringSession) -> VectorValue:
     """A :class:`VectorValue` for ``base_tag`` in the *current* extension."""
 
-    return _vector_value_from_extension(base_tag, context.extension)
+    return _vector_value_from_extension(base_tag, context.env.extension)
 
 
 def _vector_value_for_extension(
-    base_tag: str, extension_name: str, context: LoweringContext
+    base_tag: str, extension_name: str, context: LoweringSession
 ) -> VectorValue | None:
     """A source-level vector identity for ``base_tag`` under ``extension_name``.
 
@@ -96,8 +96,8 @@ def _vector_value_from_extension(base_tag: str, extension: Extension) -> VectorV
     return VectorValue(base_tag=base_tag, extension_isa=extension_isa, lanes=lanes)
 
 
-def _catalog_extension(extension_name: str, context: LoweringContext) -> Extension | None:
-    catalog = context.translation.catalog
+def _catalog_extension(extension_name: str, context: LoweringSession) -> Extension | None:
+    catalog = context.env.translation.catalog
     extension = catalog.extensions.get(extension_name)
     if extension is not None:
         return extension
@@ -107,8 +107,8 @@ def _catalog_extension(extension_name: str, context: LoweringContext) -> Extensi
     return None
 
 
-def _generic_vector_value(base_tag: str, context: LoweringContext) -> VectorValue | None:
-    bits = context.extension.vector_bits
+def _generic_vector_value(base_tag: str, context: LoweringSession) -> VectorValue | None:
+    bits = context.env.extension.vector_bits
     if bits == 0:
         return None
     return VectorValue(
@@ -161,7 +161,7 @@ class QueryFunction(Protocol):
     head: str
 
     def apply(
-        self, args: tuple[QueryValue, ...], context: LoweringContext
+        self, args: tuple[QueryValue, ...], context: LoweringSession
     ) -> QueryValue | None:
         """Resolve this query from already-evaluated arguments, or None if invalid."""
 
@@ -170,7 +170,7 @@ class BaseInQuery:
     head = "base::in"
 
     def apply(self, args, context):  # noqa: ANN001 - protocol-typed
-        return TypeValue(context.type_tag)
+        return TypeValue(context.env.type_tag)
 
 
 class SignedOfQuery:
@@ -225,17 +225,17 @@ class IntrinSuffixQuery:
 
     def apply(self, args, context):  # noqa: ANN001
         if not args:  # `intrin::suffix` (no arg) -> the CURRENT type's suffix fragment
-            fragment = context.extension.compose_suffix_by_type.get(context.type_tag)
+            fragment = context.env.extension.compose_suffix_by_type.get(context.env.type_tag)
             return TextValue(fragment) if fragment is not None else None
         if len(args) != 1:
             return None
         arg = args[0]
         if isinstance(arg, TypeValue):
-            fragment = context.extension.compose_suffix_by_type.get(arg.type_tag)
+            fragment = context.env.extension.compose_suffix_by_type.get(arg.type_tag)
             return TextValue(fragment) if fragment is not None else None
         if isinstance(arg, TextValue):  # a named suffix policy, keyed by extension block name
-            key = f"intrinsic_suffix_{arg.text}_{context.extension.name}"
-            fragment = context.translation.template(key)
+            key = f"intrinsic_suffix_{arg.text}_{context.env.extension.name}"
+            fragment = context.env.translation.template(key)
             return TextValue(fragment) if fragment is not None else None
         return None
 
@@ -280,7 +280,7 @@ class AttributeQuery:
     def apply(self, args, context):  # noqa: ANN001
         if len(args) != 1 or not isinstance(args[0], TextValue):
             return None
-        return BoolValue(context.attributes.get(args[0].text) == "true")
+        return BoolValue(context.env.attributes.get(args[0].text) == "true")
 
 
 class RegisterQuery:
@@ -290,7 +290,7 @@ class RegisterQuery:
     head = "vector::register"
 
     def apply(self, args, context):  # noqa: ANN001
-        return TextValue(context.translation.register_type_spelling())
+        return TextValue(context.env.translation.register_type_spelling())
 
 
 class RegisterGenericQuery:
@@ -311,12 +311,12 @@ class RegisterGenericQuery:
         # own extension, so the target register is read from it (needed when it differs, e.g. a
         # widening load's input vector).
         if isinstance(arg, TypeValue):
-            base_tag, isa = arg.type_tag, context.extension.isa_name
+            base_tag, isa = arg.type_tag, context.env.extension.isa_name
         elif isinstance(arg, VectorValue):
             base_tag, isa = arg.base_tag, arg.extension_isa
         else:
             return None
-        spelling = context.translation.target_register_spelling(base_tag, isa)
+        spelling = context.env.translation.target_register_spelling(base_tag, isa)
         return TextValue(spelling) if spelling is not None else None
 
 
@@ -327,7 +327,7 @@ class MaskQuery:
     head = "vector::mask"
 
     def apply(self, args, context):  # noqa: ANN001
-        return TextValue(context.translation.mask_type_spelling())
+        return TextValue(context.env.translation.mask_type_spelling())
 
 
 class ImaskQuery:
@@ -338,7 +338,7 @@ class ImaskQuery:
     head = "vector::imask"
 
     def apply(self, args, context):  # noqa: ANN001
-        return TextValue(context.translation.imask_type_spelling())
+        return TextValue(context.env.translation.imask_type_spelling())
 
 
 class MaskLaneQuery:
@@ -354,10 +354,12 @@ class MaskLaneQuery:
     def apply(self, args, context):  # noqa: ANN001
         if args:
             return None
-        base = context.translation.scalar_spelling(context.type_tag)
-        if base is None or context.translation.template(self._template_key) is None:
+        base = context.env.translation.scalar_spelling(context.env.type_tag)
+        if base is None or context.env.translation.template(self._template_key) is None:
             return None
-        return TextValue(context.translation.render_template(self._template_key, base=base))
+        return TextValue(
+            context.env.translation.render_template(self._template_key, base=base)
+        )
 
 
 class VectorAlignmentQuery:
@@ -369,10 +371,10 @@ class VectorAlignmentQuery:
         # The register's natural byte alignment — used by the *aligned* load/store variants
         # (e.g. avx2 -> 32). The generic vector has no hardware register, so it reports its
         # element alignment instead.
-        if context.extension.isa_name == "generic":
-            digits = "".join(c for c in context.type_tag if c.isdigit())
+        if context.env.extension.isa_name == "generic":
+            digits = "".join(c for c in context.env.type_tag if c.isdigit())
             return TextValue(str((int(digits) if digits else 8) // 8))
-        return TextValue(str(context.extension.vector_bits // 8))
+        return TextValue(str(context.env.extension.vector_bits // 8))
 
 
 class VectorLengthQuery:
@@ -384,12 +386,12 @@ class VectorLengthQuery:
     def apply(self, args, context):  # noqa: ANN001
         # The `generic` vector is sized: its lane count is the `LANES` template parameter,
         # not a concrete integer — emit the symbol so the body keys off the template param.
-        if context.extension.isa_name == "generic":
+        if context.env.extension.isa_name == "generic":
             return TextValue("LANES")
-        bits = context.extension.vector_bits
+        bits = context.env.extension.vector_bits
         if bits == 0:
             return TextValue("1")
-        digits = "".join(c for c in context.type_tag if c.isdigit())
+        digits = "".join(c for c in context.env.type_tag if c.isdigit())
         type_bits = int(digits) if digits else 8
         return TextValue(str(bits // type_bits))
 
@@ -406,10 +408,10 @@ class AsExtensionQuery:
         if len(args) != 1 or not isinstance(args[0], TextValue):
             return None
         if args[0].text == "scalar":
-            return _vector_value_for_extension(context.type_tag, "scalar", context)
+            return _vector_value_for_extension(context.env.type_tag, "scalar", context)
         if args[0].text == "generic":
-            return _generic_vector_value(context.type_tag, context)
-        return _vector_value_for_extension(context.type_tag, args[0].text, context)
+            return _generic_vector_value(context.env.type_tag, context)
+        return _vector_value_for_extension(context.env.type_tag, args[0].text, context)
 
 
 class AsBaseQuery:
@@ -504,13 +506,13 @@ class QueryEvaluator:
         self._functions = {function.head: function for function in functions}
         self._parser = parser or QueryParser()
 
-    def evaluate(self, text: str, context: LoweringContext) -> QueryValue | None:
+    def evaluate(self, text: str, context: LoweringSession) -> QueryValue | None:
         term = self._parser.parse(text)
         if term is None:
             return None
         return self.evaluate_term(term, context)
 
-    def evaluate_term(self, term: QueryTerm, context: LoweringContext) -> QueryValue | None:
+    def evaluate_term(self, term: QueryTerm, context: LoweringSession) -> QueryValue | None:
         evaluated_args: list[QueryValue] = []
         for arg in term.args:
             value = self.evaluate_term(arg, context)
@@ -524,19 +526,27 @@ class QueryEvaluator:
         # A representation-change target alias (the declaration's alias, plus the current
         # `ToType` synonym) -> the target base type tag, so `register::generic(ToType)` and
         # sibling queries resolve against the target.
-        if not term.args and term.head in context.target_type_aliases:
-            return TypeValue(context.target_type_aliases[term.head])
+        if not term.args:
+            target_type_symbol = context.scope.resolve_target_type_symbol(term.head)
+            if target_type_symbol is not None:
+                return TypeValue(target_type_symbol)
         # A representation-change extension target alias (`ToExtension`) names another vector
         # extension/ISA. It stays textual until consumed by `vector::as_extension`.
-        if not term.args and term.head in context.target_extension_aliases:
-            return TextValue(context.target_extension_aliases[term.head])
+        if not term.args:
+            extension_symbol = context.scope.resolve_extension_symbol(term.head)
+            if extension_symbol is not None:
+                return TextValue(extension_symbol)
         # A `let<type>` alias whose value is a source type tag (`AliasBase`) -> that type.
-        if not term.args and term.head in context.type_value_aliases:
-            return TypeValue(context.type_value_aliases[term.head])
+        if not term.args:
+            type_symbol = context.scope.resolve_type_symbol(term.head)
+            if type_symbol is not None:
+                return TypeValue(type_symbol)
         # A `let<type>` vector alias (`OutVec`) -> its structured VectorValue, so a query arg that
         # names it (`generic::length(OutVec)` / `base::generic(OutVec)`) resolves to the vector.
-        if not term.args and term.head in context.vector_aliases:
-            return context.vector_aliases[term.head]
+        if not term.args:
+            vector_alias = context.scope.resolve_vector_alias(term.head)
+            if vector_alias is not None:
+                return vector_alias
         # A bare leaf that names a concrete type tag resolves to itself.
         if not term.args and is_type_tag(term.head):
             return TypeValue(term.head)
@@ -547,7 +557,7 @@ class QueryEvaluator:
             scalar_tag = term.head[len("scalar::") :]
             if is_type_tag(scalar_tag):
                 return TypeValue(scalar_tag)
-            spelling = context.translation.scalar_spelling(scalar_tag)
+            spelling = context.env.translation.scalar_spelling(scalar_tag)
             return TextValue(spelling) if spelling is not None else None
         # A bare quoted string literal (e.g. a named suffix policy) is text.
         if not term.args and len(term.head) >= 2 and term.head[0] == '"' == term.head[-1]:

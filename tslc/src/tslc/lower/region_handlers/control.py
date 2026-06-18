@@ -6,7 +6,7 @@ import re
 
 from tslc.ir.segments import Region
 from tslc.lower._text import skip_string
-from tslc.lower.context import LoweringContext
+from tslc.lower.context import LoweringSession
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue
 from tslc.lower.region_handlers.common import _segment_text, _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
@@ -84,7 +84,7 @@ class IfLowerer:
     def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
         self._evaluator = evaluator or QueryEvaluator()
 
-    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
         selector = region.selector_text.strip()
         if selector not in self._SPLICE_SELECTORS:
             return self._runtime(region, render)
@@ -105,7 +105,7 @@ class IfLowerer:
         if selector == "compile":
             rendered = self._render_condition(condition, context)
             if rendered is not None:
-                header = context.translation.render_template(
+                header = context.env.translation.render_template(
                     "flow_if_static", "if constexpr ({cond})", cond=rendered
                 )
                 then = render(region.block) if region.block is not None else ""
@@ -114,7 +114,7 @@ class IfLowerer:
                     out += f" else {{\n        {render(region.else_block)}\n      }}"
                 return out
 
-        context.skip(
+        context.effects.skip(
             "TSL-LOWER-UNRESOLVED-IF-CONDITION",
             f"could not evaluate generation-time condition in {region.full_text!r}",
         )
@@ -138,7 +138,7 @@ class IfLowerer:
                 out += f" else {{\n        {render(region.else_block)}\n      }}"
         return out
 
-    def _evaluate_condition(self, text: str, context: LoweringContext) -> bool | None:
+    def _evaluate_condition(self, text: str, context: LoweringSession) -> bool | None:
         """Evaluate a generation-time boolean condition. Supports ``||`` / ``&&`` of
         query sub-conditions (``&&`` binds tighter), e.g.
         ``is_same(..., si64) || is_same(..., ui64)``. Returns None if unresolvable."""
@@ -159,7 +159,7 @@ class IfLowerer:
         value = self._evaluator.evaluate(text.strip(), context)
         return value.value if isinstance(value, BoolValue) else None
 
-    def _render_condition(self, text: str, context: LoweringContext) -> str | None:
+    def _render_condition(self, text: str, context: LoweringSession) -> str | None:
         """Render a partially-symbolic `if<compile>` predicate as a target expression: each
         leaf is either a generation-time query (folded to ``true``/``false``) or a symbolic
         ``generic_params`` reference (`!PreserveSign`) passed through verbatim. Returns None
@@ -180,7 +180,7 @@ class IfLowerer:
             return "true" if value.value else "false"
         if any(
             re.search(rf"\b{re.escape(name)}\b", leaf)
-            for name in context.generic_param_names
+            for name in context.env.generic_param_names
         ):
             return leaf  # a symbolic generic_params predicate; the param is in scope
         return None
@@ -197,16 +197,16 @@ class AssumeAlignedLowerer:
     def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
         self._evaluator = evaluator or QueryEvaluator()
 
-    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
         expr = render(region.body)
         value = self._evaluator.evaluate(region.selector_text.strip(), context)
         if not isinstance(value, TextValue):
-            context.skip(
+            context.effects.skip(
                 "TSL-LOWER-UNRESOLVED-ASSUME-ALIGNED",
                 f"could not resolve alignment in {region.full_text!r}",
             )
             return region.full_text
-        return context.translation.render_assume_aligned(expr, value.text)
+        return context.env.translation.render_assume_aligned(expr, value.text)
 
 
 class LoopLowerer:
@@ -219,11 +219,11 @@ class LoopLowerer:
 
     keyword = "loop"
 
-    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
         variant = region.selector_text.strip()
         key = f"loop_{variant}"
-        if context.translation.template(key) is None:
-            context.skip(
+        if context.env.translation.template(key) is None:
+            context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-LOOP",
                 f"unsupported loop<{variant}>: {region.full_text!r}",
             )
@@ -232,18 +232,20 @@ class LoopLowerer:
         if variant == "range":
             groups = _split_arg_groups(region.body)
             if len(groups) != 4:
-                context.skip(
+                context.effects.skip(
                     "TSL-LOWER-UNSUPPORTED-LOOP",
                     f"loop<range> needs (var, start, end, step): {region.full_text!r}",
                 )
                 return region.full_text
             var, start, end, step = (render(group).strip() for group in groups)
-            header = context.translation.render_template(
+            header = context.env.translation.render_template(
                 key, var=var, start=start, end=end, step=step
             )
             return f"{header} {{\n        {block}\n      }}"
         # unroll: a bare hint (no block of its own; it precedes a loop).
-        header = context.translation.render_template(key, count=render(region.body).strip())
+        header = context.env.translation.render_template(
+            key, count=render(region.body).strip()
+        )
         return f"{header} {{\n        {block}\n      }}" if region.block else header
 
 class SwitchLowerer:
@@ -260,13 +262,13 @@ class SwitchLowerer:
 
     keyword = "switch"
 
-    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
         if region.arms is None:
-            context.skip(
+            context.effects.skip(
                 "TSL-LOWER-SWITCH-NO-ARMS",
                 f"switch without arms is not supported: {region.full_text!r}",
             )
             return region.full_text
         selector = render(region.body).strip()
         arms = tuple((label, render(body)) for label, body in region.arms)
-        return context.translation.render_compile_switch(selector, arms)
+        return context.env.translation.render_compile_switch(selector, arms)

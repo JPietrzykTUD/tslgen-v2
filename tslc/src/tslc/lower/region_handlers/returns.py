@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from tslc.ir.segments import Region
-from tslc.lower.context import LoweringContext
+from tslc.lower.context import LoweringSession
 from tslc.lower.region_handlers.protocol import RenderBody
 
 class EmitReturnLowerer:
@@ -16,5 +16,5 @@ class EmitReturnLowerer:
 
     keyword = "emit_return"
 
-    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
-        return context.translation.frame_return(render(region.body))
+    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+        return context.env.translation.frame_return(render(region.body))

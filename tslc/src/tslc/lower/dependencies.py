@@ -18,7 +18,7 @@ from tslc.ir.scan import scan
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower._text import split_top_level
 from tslc.lower.calls import parse_call_selector
-from tslc.lower.context import LoweringContext, VectorValue
+from tslc.lower.context import LoweringEnv, LoweringScope, LoweringSession, VectorValue
 from tslc.lower.queries import QueryEvaluator, QueryValue, TypeValue
 
 
@@ -75,7 +75,7 @@ class _DependencyResolver:
     target_extension: str | None
     evaluator: QueryEvaluator = field(default_factory=QueryEvaluator)
     vector_aliases: dict[str, VectorValue] = field(default_factory=dict)
-    type_value_aliases: dict[str, str] = field(default_factory=dict)
+    type_symbols: dict[str, str] = field(default_factory=dict)
     calls: set[CallDependency] = field(default_factory=set)
 
     def visit(self, segments: tuple[Segment, ...] | None) -> None:
@@ -109,7 +109,7 @@ class _DependencyResolver:
         if isinstance(value, VectorValue):
             self.vector_aliases[name] = value
         elif isinstance(value, TypeValue):
-            self.type_value_aliases[name] = value.type_tag
+            self.type_symbols[name] = value.type_tag
 
     def _call_dependency(self, region: Region) -> CallDependency | None:
         parsed = parse_call_selector(region.selector_text)
@@ -179,7 +179,7 @@ class _DependencyResolver:
             return None
         return self.evaluator.evaluate(expr, context)
 
-    def _query_context(self) -> LoweringContext | None:
+    def _query_context(self) -> LoweringSession | None:
         extension = _extension_for_isa(self.catalog, self.current.extension_isa)
         if extension is None:
             return None
@@ -193,14 +193,18 @@ class _DependencyResolver:
             if self.target_extension is not None and self.target_alias is not None
             else {}
         )
-        return LoweringContext(
-            extension=extension,
-            type_tag=self.current.base_tag,
-            translation=create_backend_translation(self.catalog, "cpp"),
-            type_value_aliases=self.type_value_aliases,
-            target_type_aliases=target_type_aliases,
-            target_extension_aliases=target_extension_aliases,
-            vector_aliases=self.vector_aliases,
+        return LoweringSession(
+            env=LoweringEnv(
+                extension=extension,
+                type_tag=self.current.base_tag,
+                translation=create_backend_translation(self.catalog, "cpp"),
+            ),
+            scope=LoweringScope(
+                target_type_symbols=target_type_aliases,
+                type_symbols=self.type_symbols,
+                extension_symbols=target_extension_aliases,
+                vector_aliases=self.vector_aliases,
+            ),
         )
 
 

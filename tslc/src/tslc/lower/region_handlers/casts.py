@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from tslc.ir.segments import Region
-from tslc.lower.context import LoweringContext
+from tslc.lower.context import LoweringSession
 from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.common import _segment_text, _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
+
 
 class CastLowerer:
     """``cast<variant>(type<...>(...), expr)`` -> the backend's cast template.
@@ -22,10 +23,13 @@ class CastLowerer:
     def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
         self._evaluator = evaluator or QueryEvaluator()
 
-    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
         args = _split_arg_groups(region.body)
         if len(args) != 2:
-            context.skip("TSL-LOWER-UNSUPPORTED-CAST", f"unsupported cast: {region.full_text!r}")
+            context.effects.skip(
+                "TSL-LOWER-UNSUPPORTED-CAST",
+                f"unsupported cast: {region.full_text!r}",
+            )
             return region.full_text
 
         # A trailing `*` on the type argument means a pointer reinterpret. This infers
@@ -37,21 +41,26 @@ class CastLowerer:
             return self._pointer_cast(type_text, region, context, render(args[1]))
 
         key = f"cast_{region.selector_text.strip()}"
-        if context.translation.template(key) is None:
-            context.skip("TSL-LOWER-UNSUPPORTED-CAST", f"unsupported cast: {region.full_text!r}")
+        if context.env.translation.template(key) is None:
+            context.effects.skip(
+                "TSL-LOWER-UNSUPPORTED-CAST",
+                f"unsupported cast: {region.full_text!r}",
+            )
             return region.full_text
 
         spelling = self._type_spelling(type_text, context)
         if spelling is None:
-            context.skip(
+            context.effects.skip(
                 "TSL-LOWER-UNRESOLVED-CAST-TYPE",
                 f"could not resolve cast type in {region.full_text!r}",
             )
             return region.full_text
-        return context.translation.render_template(key, type=spelling, expr=render(args[1]))
+        return context.env.translation.render_template(
+            key, type=spelling, expr=render(args[1])
+        )
 
     def _pointer_cast(
-        self, type_text: str, region: Region, context: LoweringContext, expr: str
+        self, type_text: str, region: Region, context: LoweringSession, expr: str
     ) -> str:
         """``cast<reinterpret>(type<…>() [const] *, ptr)`` -> a backend pointer cast."""
 
@@ -60,14 +69,16 @@ class CastLowerer:
         inner_text = stripped[: -len("const")].rstrip() if is_const else stripped
         inner = self._type_spelling(inner_text, context)
         if inner is None:
-            context.skip(
+            context.effects.skip(
                 "TSL-LOWER-UNRESOLVED-CAST-TYPE",
                 f"could not resolve pointer cast type in {region.full_text!r}",
             )
             return region.full_text
-        return context.translation.render_pointer_cast(inner, is_const=is_const, expr=expr)
+        return context.env.translation.render_pointer_cast(
+            inner, is_const=is_const, expr=expr
+        )
 
-    def _type_spelling(self, type_text: str, context: LoweringContext) -> str | None:
+    def _type_spelling(self, type_text: str, context: LoweringSession) -> str | None:
         """Resolve a type expression to its backend spelling — a register spelling
         (``vector::register`` -> ``TextValue``) or a base type tag (-> scalar spelling)."""
 
@@ -75,5 +86,5 @@ class CastLowerer:
         if isinstance(value, TextValue):
             return value.text
         if isinstance(value, TypeValue):
-            return context.translation.scalar_spelling(value.type_tag)
+            return context.env.translation.scalar_spelling(value.type_tag)
         return None

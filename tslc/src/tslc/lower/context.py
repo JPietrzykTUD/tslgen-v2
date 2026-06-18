@@ -1,15 +1,21 @@
-"""Mutable lowering context threaded through region and query handlers.
+"""Lowering session state threaded through region and query handlers.
 
-Holds the selected extension/type and the backend translation facts, plus the
-two side channels handlers need: a diagnostics sink and the "this body needs
-``unsafe``" flag. Keeping this in one object means handlers stay pure-ish
-strategy classes that read context and append diagnostics, rather than each
-carrying their own bespoke state.
+Lowering has three kinds of state with different ownership:
+
+* :class:`LoweringEnv` contains immutable facts selected before rendering one body.
+* :class:`LoweringScope` contains lexical aliases introduced while walking that body.
+* :class:`LoweringEffects` contains diagnostics and body-level side effects.
+
+Handlers still receive one :class:`LoweringSession`, but field access makes the
+dependency explicit: selected facts live under ``env``, alias mutation under
+``scope``, and diagnostics/unsafe/unsupported state under ``effects``.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
 from tslc.backend.translation import BackendTranslator
 from tslc.catalog.model import Extension
@@ -21,41 +27,34 @@ class VectorValue:
     """A SIMD vector type as a query value: an element base tag + the extension ISA it lives in
     + its concrete lane count (None for the LANES-sized generic vector). Returned by
     ``vector::as_base``/``vector::as_extension``/``vector::as`` and consumed by ``base::generic`` /
-    ``generic::length`` / ``register::generic``. Stored in :attr:`LoweringContext.vector_aliases`
-    so a query argument that names a ``let<type>`` alias (``generic::length(OutVec)``) resolves to
-    the structured vector, not its rendered spelling string. (Defined here, not in ``queries``, so
-    ``context`` stays import-cycle-free — ``queries`` imports ``context``.)"""
+    ``generic::length`` / ``register::generic``. Stored in
+    :attr:`LoweringScope.vector_aliases` so a query argument that names a ``let<type>`` alias
+    (``generic::length(OutVec)``) resolves to the structured vector, not its rendered spelling
+    string. (Defined here, not in ``queries``, so ``context`` stays import-cycle-free —
+    ``queries`` imports ``context``.)"""
 
     base_tag: str
     extension_isa: str
     lanes: int | None
 
 
-@dataclass(slots=True)
-class LoweringContext:
+@dataclass(frozen=True, slots=True)
+class LoweringEnv:
     extension: Extension
     type_tag: str
     translation: BackendTranslator
     # the name of the primitive currently being lowered, so a `@self[...]` call can recurse
     # into it for a different vector (e.g. generic delegating per-lane to scalar).
     current_primitive: str = ""
-    # `let<type>(Name, …)` aliases: Name -> its resolved backend type spelling. Substituted
-    # into the rendered body (a Rust local `type Alias = Self::…;` item is illegal — E0401 —
-    # so the alias is inlined at use sites instead).
-    type_aliases: dict[str, str] = field(default_factory=dict)
-    # `let<type>` aliases that resolve to source type tags, not backend spellings. Query
-    # evaluation consumes this channel so aliases can participate in semantic expressions such as
-    # `base::signed_of(AliasBase)` without reading rendered text from `type_aliases`.
-    type_value_aliases: dict[str, str] = field(default_factory=dict)
     # the selected primitive's attribute values (concrete after wildcard expansion),
     # e.g. {"aligned": "false"} — read by the `primitive::attribute` query.
-    attributes: dict[str, str] = field(default_factory=dict)
+    attributes: Mapping[str, str] = field(default_factory=dict)
     # callee name -> its boolean-wildcard axis keys (e.g. {"store": ("aligned",)}), so a
     # `call<primitive=…>` can pass the axis value the callee's wrapper requires.
-    primitive_axes: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    primitive_axes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     # callee name -> count of overload-dispatch generic params (one per varying argument
     # position), so a Rust call site can spell the inferred `_` turbofish args.
-    primitive_arg_generics: dict[str, int] = field(default_factory=dict)
+    primitive_arg_generics: Mapping[str, int] = field(default_factory=dict)
     # names with >1 emitted form (unmasked + value-masking mask policies), so a
     # `call<…attrs[mask=…]>` to them is mangled to `<name>_mask`/`<name>_maskz` (matching the
     # render rename). Single-form callees (`blend`) are absent → keep their bare names.
@@ -76,20 +75,78 @@ class LoweringContext:
     # render knows which condition leaves are symbolic template params (rendered raw) vs
     # generation-time queries (folded to a literal).
     generic_param_names: tuple[str, ...] = ()
-    # For a representation-change primitive (`return_type: base: Alias`), the declared target
-    # alias plus the established `ToType` synonym resolve to the target base type tag, so a query
-    # like `register::generic(ToType)` resolves against the target. Empty for ordinary primitives.
-    target_type_aliases: dict[str, str] = field(default_factory=dict)
-    # For `return_type: extension: Alias`, the declared target alias resolves to the target
-    # extension/ISA. Rendering still uses the explicit target vector carried by the lowered
-    # specialization.
-    target_extension_aliases: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "attributes", MappingProxyType(dict(self.attributes)))
+        object.__setattr__(
+            self, "primitive_axes", MappingProxyType(dict(self.primitive_axes))
+        )
+        object.__setattr__(
+            self,
+            "primitive_arg_generics",
+            MappingProxyType(dict(self.primitive_arg_generics)),
+        )
+
+
+@dataclass(slots=True)
+class LoweringScope:
+    # `let<type>(Name, …)` aliases: Name -> its resolved backend type spelling. Substituted
+    # into the rendered body (a Rust local `type Alias = Self::…;` item is illegal — E0401 —
+    # so the alias is inlined at use sites instead).
+    type_aliases: dict[str, str] = field(default_factory=dict)
+    # Representation-change target type aliases such as `ToType`. They resolve before ordinary
+    # `let<type>` symbols, matching the pre-split lookup order.
+    target_type_symbols: dict[str, str] = field(default_factory=dict)
+    # Type symbols that resolve to source type tags, not backend spellings. These come from
+    # `let<type>` aliases.
+    type_symbols: dict[str, str] = field(default_factory=dict)
+    # Representation-change extension target aliases resolve to target extension/ISA text.
+    extension_symbols: dict[str, str] = field(default_factory=dict)
     # `let<type>(Name, …)` aliases whose value is a SIMD vector (e.g. `OutVec` from
     # `vector::as_base(ToBase)`): Name -> its :class:`VectorValue`. A query arg that
     # names one of these resolves to the structured vector, so `generic::length(OutVec)` /
     # `base::generic(OutVec)` work. (`type_aliases` still holds the rendered spelling for
     # type-position uses like `to_array[OutVec]`.)
     vector_aliases: dict[str, VectorValue] = field(default_factory=dict)
+
+    def bind_type_alias(
+        self,
+        name: str,
+        rendered_spelling: str,
+        *,
+        type_tag: str | None = None,
+        vector: VectorValue | None = None,
+    ) -> None:
+        self.type_aliases[name] = rendered_spelling
+        if type_tag is not None:
+            self.type_symbols[name] = type_tag
+        if vector is not None:
+            self.vector_aliases[name] = vector
+
+    def bind_type_symbol(self, name: str, type_tag: str) -> None:
+        self.type_symbols[name] = type_tag
+
+    def bind_target_type_symbol(self, name: str, type_tag: str) -> None:
+        self.target_type_symbols[name] = type_tag
+
+    def resolve_target_type_symbol(self, name: str) -> str | None:
+        return self.target_type_symbols.get(name)
+
+    def bind_extension_symbol(self, name: str, extension_isa: str) -> None:
+        self.extension_symbols[name] = extension_isa
+
+    def resolve_type_symbol(self, name: str) -> str | None:
+        return self.type_symbols.get(name)
+
+    def resolve_extension_symbol(self, name: str) -> str | None:
+        return self.extension_symbols.get(name)
+
+    def resolve_vector_alias(self, name: str) -> VectorValue | None:
+        return self.vector_aliases.get(name)
+
+
+@dataclass(slots=True)
+class LoweringEffects:
     diagnostics: list[Diagnostic] = field(default_factory=list)
     requires_unsafe: bool = False
     unsupported: bool = False  # a not-yet-supported construct -> skip this specialization
@@ -109,3 +166,10 @@ class LoweringContext:
     @property
     def has_errors(self) -> bool:
         return any(diagnostic.severity == "error" for diagnostic in self.diagnostics)
+
+
+@dataclass(slots=True)
+class LoweringSession:
+    env: LoweringEnv
+    scope: LoweringScope = field(default_factory=LoweringScope)
+    effects: LoweringEffects = field(default_factory=LoweringEffects)

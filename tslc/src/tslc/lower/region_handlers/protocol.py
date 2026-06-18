@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Protocol
 
 from tslc.ir.segments import Region, Segment
-from tslc.lower.context import LoweringContext
+from tslc.lower.context import LoweringSession
 
 RenderBody = Callable[[tuple[Segment, ...]], str]
 
@@ -14,5 +14,5 @@ RenderBody = Callable[[tuple[Segment, ...]], str]
 class RegionLowerer(Protocol):
     keyword: str
 
-    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
         """Render one region to target text (recursing into its body via ``render``)."""

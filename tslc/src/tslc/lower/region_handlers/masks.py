@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from tslc.ir.segments import Region
-from tslc.lower.context import LoweringContext
+from tslc.lower.context import LoweringSession
 from tslc.lower.region_handlers.common import _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
+
 
 class MaskLowerer:
     """``mask<zero>() / mask<set:1|0>(m,i) / mask<set>(m,i,v) / mask<test>(m,i)`` -> mask-bit
@@ -18,10 +19,14 @@ class MaskLowerer:
 
     keyword = "mask"
 
-    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
         op, _, bit = region.selector_text.strip().partition(":")
-        repr_kind = context.extension.mask_policy.kind
-        args = [render(group).strip() for group in _split_arg_groups(region.body) if render(group).strip()]
+        repr_kind = context.env.extension.mask_policy.kind
+        args = [
+            render(group).strip()
+            for group in _split_arg_groups(region.body)
+            if render(group).strip()
+        ]
         if op == "zero":
             key, fields = f"mask_zero_{repr_kind}", {}
         elif op == "test" and len(args) == 2:
@@ -35,11 +40,11 @@ class MaskLowerer:
             fields = {"name": args[0], "index": args[1], "value": args[2]}
         else:
             key, fields = "", {}
-        if not key or context.translation.template(key) is None:
-            context.skip(
+        if not key or context.env.translation.template(key) is None:
+            context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-MASK",
                 f"unsupported mask<{region.selector_text.strip()}> for {repr_kind!r}: "
                 f"{region.full_text!r}",
             )
             return region.full_text
-        return context.translation.render_template(key, **fields)
+        return context.env.translation.render_template(key, **fields)

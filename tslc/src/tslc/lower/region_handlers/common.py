@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 from tslc.ir.segments import RawText, Region, Segment
-from tslc.lower.context import LoweringContext, VectorValue
+from tslc.lower.context import LoweringSession, VectorValue
 
-def _vector_spelling(value: VectorValue, context: LoweringContext) -> str | None:
+
+def _vector_spelling(value: VectorValue, context: LoweringSession) -> str | None:
     """The backend type spelling of a :class:`VectorValue` (`simd<base, ext>`)."""
 
-    base = context.translation.scalar_spelling(value.base_tag)
+    base = context.env.translation.scalar_spelling(value.base_tag)
     if base is None:
         return None
     if value.extension_isa == "generic" and value.lanes is not None:
-        return context.translation.generic_vector_spelling(base, value.lanes)
-    return context.translation.vector_type_spelling(base, value.extension_isa)
+        return context.env.translation.generic_vector_spelling(base, value.lanes)
+    return context.env.translation.vector_type_spelling(base, value.extension_isa)
+
 
 def _split_arg_groups(segments: tuple[Segment, ...]) -> list[tuple[Segment, ...]]:
     """Split a body segment sequence into top-level comma-separated argument groups.

@@ -255,7 +255,7 @@ The following forms are not accepted:
 The `X86_REGISTER_BITS` fallback was removed from `lower/queries.py`. Extension width resolution is now catalog driven:
 
 - current extension resolution uses the selected `Extension` object;
-- named extension resolution uses `context.translation.catalog.extensions`;
+- named extension resolution uses `context.env.translation.catalog.extensions`;
 - lookup can match extension block names and emitted `isa_name`;
 - unknown extension names fail unresolved instead of falling back to a backend table.
 
@@ -263,21 +263,38 @@ Reason: lowering must not import backend x86 register-width constants. Width and
 
 ### `tslc/src/tslc/lower/context.py`
 
-`LoweringContext` gained explicit alias and naming metadata:
+The old all-purpose `LoweringContext` was replaced by an explicit
+`LoweringSession` aggregate:
 
-- `type_value_aliases`
-- `target_extension_aliases`
-- `immediate_split_names`
+- `LoweringEnv`: frozen selected facts for one specialization.
+- `LoweringScope`: mutable body-local aliases and query symbols.
+- `LoweringEffects`: diagnostics, unsupported state, and Rust `unsafe`
+  marking.
+- `LoweringSession`: the thin object threaded through query and region
+  handlers.
 
-It also continues to carry `target_type_aliases`.
+The split keeps the low-plumbing handler API: handlers still receive one
+argument named `context`. The difference is that field access now makes the
+dependency visible:
 
-The important distinction is:
+- selected facts live under `context.env`;
+- aliases and query symbols live under `context.scope`;
+- diagnostics and side effects live under `context.effects`.
 
-- `target_type_aliases` maps declared target type aliases and the compatibility synonym `ToType` to selected target base tags.
-- `target_extension_aliases` maps declared target extension aliases to selected target ISA/profile names.
-- `type_value_aliases` maps `let<type>(...)` aliases to typed values, not only rendered strings.
+The scope keeps separate channels for:
+
+- `target_type_symbols`: declared return-target type aliases plus the
+  compatibility synonym `ToType`;
+- `extension_symbols`: declared return-target extension aliases;
+- `type_symbols`: `let<type>(...)` aliases that resolve to source type tags;
+- `vector_aliases`: `let<type>(...)` aliases that resolve to structured
+  `VectorValue` identities;
+- `type_aliases`: rendered type spellings used for post-render substitution.
 
 Reason: query evaluation and dependency extraction need semantic type/vector identities, not just rendered C++ spellings.
+The old mutable context made selected facts, body-local alias state, call
+naming policy, diagnostics, and unsafe state look equivalent. The split keeps
+the implementation simple while making handler dependencies auditable.
 
 ### `tslc/src/tslc/lower/lowerer.py`
 
@@ -288,11 +305,19 @@ The lowerer now binds return-target aliases more precisely:
 
 `ToType` remains an implicit synonym for the target base. It is not a declared return alias by itself. The declared alias from `return_type` is now respected as the primary source-data name.
 
-`LetLowerer` records `let<type>(...)` aliases as typed `TypeValue` entries in `type_value_aliases`, while still preserving rendered alias behavior where needed.
+`Lowerer.lower(...)` now computes base type, representation-change target
+facts, and immediate metadata before constructing `LoweringEnv`. That lets the
+environment remain frozen after session creation.
+
+`LetLowerer` records `let<type>(...)` aliases through
+`LoweringScope.bind_type_alias(...)`, while still preserving rendered alias
+behavior where needed.
 
 The helper that computes type parameter bounds no longer searches raw body text with regex. It scans TSIL fragments and parses call selectors through `parse_call_selector(...)`.
 
 Reason: raw string scanning could match call-looking text inside string literals. The shared scanner/parser path is less brittle and keeps call metadata extraction consistent.
+The session split is intentionally not a new lowering stage or IR taxonomy; it
+is ownership cleanup around existing lowering state.
 
 ### `tslc/src/tslc/lower/regions.py` and `region_handlers/`
 
@@ -301,7 +326,7 @@ Reason: raw string scanning could match call-looking text inside string literals
 
 It still owns semantic call lowering:
 
-- resolves `@self` to `context.current_primitive`;
+- resolves `@self` to `context.env.current_primitive`;
 - evaluates type and vector arguments through `QueryEvaluator`;
 - renders extra type and constant arguments;
 - applies mask-policy naming only when the callee is policy split;
@@ -565,6 +590,57 @@ devcontainer.cmd exec --workspace-folder C:\Users\johan\own\work\tmp\py-bench gi
 
 Result: passed.
 
+After the `LoweringContext` ownership cleanup into
+`LoweringSession(env, scope, effects)`, validation was rerun in the local
+workspace:
+
+```bash
+python -B -m compileall -q tslc/src/tslc tslc/tests
+```
+
+Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_generation_conditionals.py tslc/tests/test_select_and_lower.py
+```
+
+Result: `29 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_masks_and_calls.py
+```
+
+Result: `8 passed`.
+
+```bash
+python -m pytest -q tslc/tests --ignore=tslc/tests/test_build_verify.py
+```
+
+Result: `75 passed`.
+
+```bash
+git diff --check
+```
+
+Result: passed.
+
+The full suite was also probed with:
+
+```bash
+python -m pytest -q -x tslc/tests
+```
+
+Result: stopped at
+`tslc/tests/test_build_verify.py::test_generated_profiles_build`. This was an
+environmental C++ configure failure, not a Python/lowering failure:
+`CXX=zig c++`, and CMake's compiler-identification step attempted to create
+`/root/.cache/zig/tmp/...`, which failed with `ReadOnlyFileSystem`.
+
+`docs/redesign/design-decisions.md` was checked after the session split. No
+ADR update was made because the change is a local `tslc` ownership refactor
+that implements the existing separation-of-concerns policy rather than a new
+source-language or repository-wide architecture decision.
+
 ## Known Caveats
 
 Full `tslc/tests/test_build_verify.py` was attempted with fresh temp
@@ -599,6 +675,9 @@ The current slice is in line with the intended TSLc separation of concerns:
 
 - Call selector syntax is centralized but semantic-free.
 - Query evaluation is catalog-driven and typed.
+- Lowering state is split into `LoweringEnv`, `LoweringScope`, and
+  `LoweringEffects` under one `LoweringSession`, so handlers still have low
+  plumbing while selected facts, alias mutation, and diagnostics are separate.
 - Dependency extraction reuses the shared parser and query evaluator.
 - Pipeline code is orchestration, not a source scanner.
 - TSIL keyword lowerers are split by keyword family under `lower/region_handlers/`.

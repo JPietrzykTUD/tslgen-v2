@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from tslc.ir.segments import Region, Segment
-from tslc.lower.context import LoweringContext, VectorValue
+from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.queries import QueryEvaluator, TypeValue
 from tslc.lower.region_handlers.common import _segment_text, _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
@@ -22,7 +22,7 @@ class VarLowerer:
 
     keyword = "var"
 
-    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
         variant = region.selector_text.strip()
         groups = _split_arg_groups(region.body)
         if variant == "typed":
@@ -31,37 +31,42 @@ class VarLowerer:
             # A zero-initialized register declaration: `var<init_register>(name)`. The type is
             # the vector's register type (C++ template uses it; the Rust template builds
             # `[BaseType::default(); LANES]` and ignores it).
-            if len(groups) != 1 or context.translation.template("var_init_register") is None:
-                context.skip(
+            if (
+                len(groups) != 1
+                or context.env.translation.template("var_init_register") is None
+            ):
+                context.effects.skip(
                     "TSL-LOWER-UNSUPPORTED-VAR",
                     f"unsupported var<init_register>: {region.full_text!r}",
                 )
                 return region.full_text
-            return context.translation.render_template(
+            return context.env.translation.render_template(
                 "var_init_register",
-                type=context.translation.register_type_spelling(),
+                type=context.env.translation.register_type_spelling(),
                 name=render(groups[0]).strip(),
             )
-        if len(groups) < 2 or context.translation.template(f"var_{variant}") is None:
-            context.skip(
+        if len(groups) < 2 or context.env.translation.template(f"var_{variant}") is None:
+            context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-VAR",
                 f"unsupported var<{variant}> declaration: {region.full_text!r}",
             )
             return region.full_text
         name = render(groups[0]).strip()
         value = ", ".join(render(group) for group in groups[1:])
-        return context.translation.render_template(f"var_{variant}", name=name, value=value)
+        return context.env.translation.render_template(
+            f"var_{variant}", name=name, value=value
+        )
 
     def _typed(
         self,
         variant: str,
         groups: list[tuple[Segment, ...]],
         region: Region,
-        context: LoweringContext,
+        context: LoweringSession,
         render: RenderBody,
     ) -> str:
         if len(groups) != 3:
-            context.skip(
+            context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-VAR",
                 f"unsupported var<typed> declaration: {region.full_text!r}",
             )
@@ -70,16 +75,18 @@ class VarLowerer:
         name = render(groups[1]).strip()
         # An uninitialized array uses the type-carrying template (see class docstring).
         key = "var_array_uninit" if "uninit" in _segment_text(groups[2]) else f"var_{variant}"
-        if context.translation.template(key) is None:
-            context.skip(
+        if context.env.translation.template(key) is None:
+            context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-VAR",
                 f"unsupported var<typed> declaration: {region.full_text!r}",
             )
             return region.full_text
         if key == "var_array_uninit":
-            return context.translation.render_template(key, type=type_text, name=name)
+            return context.env.translation.render_template(key, type=type_text, name=name)
         value = render(groups[2])
-        return context.translation.render_template(key, type=type_text, name=name, value=value)
+        return context.env.translation.render_template(
+            key, type=type_text, name=name, value=value
+        )
 
 
 class LetLowerer:
@@ -95,11 +102,11 @@ class LetLowerer:
     def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
         self._evaluator = evaluator or QueryEvaluator()
 
-    def lower(self, region: Region, context: LoweringContext, render: RenderBody) -> str:
+    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
         variant = region.selector_text.strip()
         groups = _split_arg_groups(region.body)
         if variant != "type" or len(groups) != 2:
-            context.skip(
+            context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-LET",
                 f"unsupported let<{variant}>: {region.full_text!r}",
             )
@@ -109,9 +116,16 @@ class LetLowerer:
         # structurally too, so a later `generic::length(OutVec)` query arg resolves to the vector
         # (the rendered spelling below still drives type-position substitution like `to_array[OutVec]`).
         value = self._evaluator.evaluate(_segment_text(groups[1]), context)
+        type_tag: str | None = None
+        vector: VectorValue | None = None
         if isinstance(value, VectorValue):
-            context.vector_aliases[name] = value
+            vector = value
         elif isinstance(value, TypeValue):
-            context.type_value_aliases[name] = value.type_tag
-        context.type_aliases[name] = render(groups[1]).strip()
+            type_tag = value.type_tag
+        context.scope.bind_type_alias(
+            name,
+            render(groups[1]).strip(),
+            type_tag=type_tag,
+            vector=vector,
+        )
         return ""
