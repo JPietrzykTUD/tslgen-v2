@@ -3746,3 +3746,55 @@ Consequences:
   focused query tests cover accepted forms plus rejected old arities.
 - Backend translation and rendering remain consumers of typed vector values;
   they do not decide which vector axis changed.
+
+## ADR-075: Diagnostics Carry Domain Provenance Past Parsing
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+The parser already records source spans for outer TSL declarations and body
+payloads, but selector, catalog, and lowerer diagnostics historically lost that
+provenance after promotion. Later stages often constructed diagnostics from
+semantic objects or selected implementation state without a file/line/column,
+making errors and coverage skips difficult for `.tsl` authors to act on.
+
+At the same time, downstream stages should not depend on parser-private AST
+span types. The source-body scanner also needs to identify exact TSIL keyword
+islands inside a quoted implementation payload, but that must remain lexical
+provenance, not a broad TSIL parser or source repair mechanism.
+
+Decision:
+
+Introduce a stable domain provenance value, `SourceSpan`, separate from
+parser-boundary span objects. Parser/catalog promotion converts parser spans
+into optional `SourceSpan` fields on source-authored domain objects such as
+primitives, implementations, signatures, selectors, bodies, immediate
+parameters, and generic parameters. Hand-built fixtures may omit these fields.
+
+Keep `Diagnostic.location` as the public point-location contract for now.
+Diagnostic helpers derive that point from `SourceSpan.start`; this records
+actionable source locations without introducing diagnostic notes, secondary
+locations, or a new reporting framework.
+
+The TSIL body scanner may accept an optional body `SourceSpan` and attach
+optional spans to lexical `RawText` and `Region` segments. Nested payloads,
+blocks, and switch arms compute spans relative to the original body payload.
+Lowering handlers use `Region.source` for handler diagnostics, so diagnostics
+for unsupported or unresolved TSIL islands point at the exact island when
+known. The scanner still owns only lexical region discovery; keyword handlers
+own semantic support and diagnostics.
+
+Consequences:
+
+- Source-authored catalog, selector, and lowerer diagnostics can report
+  actionable file/line/column locations after parsing.
+- Parser-private AST span types do not leak into catalog, selector, lowering,
+  or handler APIs.
+- Exact TSIL island locations are available for handler diagnostics without
+  parsing TSIL as a complete expression or statement language.
+- Generated text, selection, dependency closure, lowering semantics, rendering,
+  and source bodies remain unchanged by provenance threading.
+- Diagnostic notes, secondary locations, CLI request provenance, build
+  verifier/output writer locations, source repair, and broad diagnostic
+  framework replacement remain future explicitly selected work.

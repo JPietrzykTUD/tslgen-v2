@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from tslc.diagnostics import SourceSpan
 from tslc.ir.scan import scan
 from tslc.ir.segments import RawText, Region
 
@@ -46,6 +49,24 @@ def test_keyword_inside_identifier_is_not_matched() -> None:
 def test_keyword_inside_string_is_not_matched() -> None:
     segments = scan('a = "call<primitive=x>(y)";')
     assert segments == (RawText('a = "call<primitive=x>(y)";'),)
+
+
+def test_scan_carries_nested_source_spans() -> None:
+    body = "  emit_return(\n    intrin_compose<add>(left, right)\n  );"
+    source = SourceSpan(Path("body.tsl"), 10, 5, 12, 7)
+
+    segments = scan(body, source=source)
+    assert segments[0] == RawText(
+        "  ",
+        source=SourceSpan(Path("body.tsl"), 10, 5, 10, 7),
+    )
+    emit = segments[1]
+    assert isinstance(emit, Region)
+    assert emit.source == SourceSpan(Path("body.tsl"), 10, 7, 12, 4)
+
+    compose = next(segment for segment in emit.body if isinstance(segment, Region))
+    assert compose.keyword == "intrin_compose"
+    assert compose.source == SourceSpan(Path("body.tsl"), 11, 5, 11, 37)
 
 
 def _joined(segments) -> str:

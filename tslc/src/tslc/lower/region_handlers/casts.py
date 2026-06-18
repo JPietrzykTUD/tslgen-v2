@@ -29,6 +29,7 @@ class CastLowerer:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-CAST",
                 f"unsupported cast: {region.full_text!r}",
+                source=region.source,
             )
             return region.full_text
 
@@ -45,6 +46,7 @@ class CastLowerer:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-CAST",
                 f"unsupported cast: {region.full_text!r}",
+                source=region.source,
             )
             return region.full_text
 
@@ -53,6 +55,7 @@ class CastLowerer:
             context.effects.skip(
                 "TSL-LOWER-UNRESOLVED-CAST-TYPE",
                 f"could not resolve cast type in {region.full_text!r}",
+                source=region.source,
             )
             return region.full_text
         return context.env.backend.templates.render_template(
@@ -72,6 +75,7 @@ class CastLowerer:
             context.effects.skip(
                 "TSL-LOWER-UNRESOLVED-CAST-TYPE",
                 f"could not resolve pointer cast type in {region.full_text!r}",
+                source=region.source,
             )
             return region.full_text
         return context.env.backend.syntax.render_pointer_cast(

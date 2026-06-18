@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import NewType
 
+from tslc.diagnostics import SourceSpan
+
 TypeTag = NewType("TypeTag", str)
 BackendId = NewType("BackendId", str)
 ExtensionName = NewType("ExtensionName", str)
@@ -59,6 +61,9 @@ class Implementation:
     # branch below it (the target type-group `?i?` / a target extension name `sse`). The
     # source type-group stays in `type_group`. None for ordinary single-axis primitives.
     to_target_group: str | None = None
+    source: SourceSpan | None = None
+    selector_source: SourceSpan | None = None
+    body_source: SourceSpan | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +93,9 @@ class Primitive:
     # or `("extension", "ToExtension")` (extract). The target is a *second type axis* — its
     # values come from each impl's `to_target_group`. None for ordinary primitives.
     result_target: tuple[str, str] | None = None
+    source: SourceSpan | None = None
+    header_source: SourceSpan | None = None
+    signature_source: SourceSpan | None = None
 
     def immediate_param(self, name: str) -> "ImmediateParam | None":
         """The `params:` metadata for the `sImm` parameter `name`, or None."""
@@ -116,6 +124,7 @@ class ImmediateParam:
     type_tag: str = "ui32"
     value_range: tuple[int, str, bool] | None = None
     dispatch: tuple[tuple[str, str], ...] = ()
+    source: SourceSpan | None = None
 
     def dispatch_for(self, backend_id: str) -> str | None:
         for backend, strategy in self.dispatch:
@@ -131,6 +140,7 @@ class GenericParam:
     name: str
     kind: str  # currently always "bool"
     default: str  # e.g. "true"
+    source: SourceSpan | None = None
 
 
 @dataclass(frozen=True, slots=True)

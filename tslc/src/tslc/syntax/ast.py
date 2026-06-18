@@ -158,6 +158,7 @@ class ParsedPrimitiveDeclaration:
     body_envelopes: tuple[ParsedImplementationBodyEnvelope, ...]
     source: ParsedTslSourceSpan
     header_source: ParsedTslSourceSpan
+    signature_source: ParsedTslSourceSpan
     source_order: int
 
     def fields_by_name(self, name: str) -> tuple[ParsedPrimitiveField, ...]:

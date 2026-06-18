@@ -166,6 +166,7 @@ def generate(request: GenerationRequest) -> GenerationResult:
                     target_base,
                     target_extension,
                     catalog,
+                    slot.implementation.body_source,
                 )
                 slot_lowered = False
                 for backend in request.backends:

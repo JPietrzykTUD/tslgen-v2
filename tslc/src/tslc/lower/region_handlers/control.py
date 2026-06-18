@@ -117,6 +117,7 @@ class IfLowerer:
         context.effects.skip(
             "TSL-LOWER-UNRESOLVED-IF-CONDITION",
             f"could not evaluate generation-time condition in {region.full_text!r}",
+            source=region.source,
         )
         return region.full_text
 
@@ -204,6 +205,7 @@ class AssumeAlignedLowerer:
             context.effects.skip(
                 "TSL-LOWER-UNRESOLVED-ASSUME-ALIGNED",
                 f"could not resolve alignment in {region.full_text!r}",
+                source=region.source,
             )
             return region.full_text
         return context.env.backend.syntax.render_assume_aligned(expr, value.text)
@@ -226,6 +228,7 @@ class LoopLowerer:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-LOOP",
                 f"unsupported loop<{variant}>: {region.full_text!r}",
+                source=region.source,
             )
             return region.full_text
         block = render(region.block) if region.block else ""
@@ -235,6 +238,7 @@ class LoopLowerer:
                 context.effects.skip(
                     "TSL-LOWER-UNSUPPORTED-LOOP",
                     f"loop<range> needs (var, start, end, step): {region.full_text!r}",
+                    source=region.source,
                 )
                 return region.full_text
             var, start, end, step = (render(group).strip() for group in groups)
@@ -267,6 +271,7 @@ class SwitchLowerer:
             context.effects.skip(
                 "TSL-LOWER-SWITCH-NO-ARMS",
                 f"switch without arms is not supported: {region.full_text!r}",
+                source=region.source,
             )
             return region.full_text
         selector = render(region.body).strip()

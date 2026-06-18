@@ -94,7 +94,9 @@ class IntrinComposeLowerer:
         modifiers = ComposeModifiers.parse(region.selector_text)
         if modifiers.base is None:
             context.effects.skip(
-                "TSL-LOWER-EMPTY-INTRIN-COMPOSE", "intrin_compose has no base name"
+                "TSL-LOWER-EMPTY-INTRIN-COMPOSE",
+                "intrin_compose has no base name",
+                source=region.source,
             )
             return region.full_text
 
@@ -106,6 +108,7 @@ class IntrinComposeLowerer:
             context.effects.skip(
                 "TSL-LOWER-UNRESOLVED-INFIX",
                 f"could not resolve intrin_compose infix in {region.selector_text!r}",
+                source=region.source,
             )
             return region.full_text
 
@@ -122,6 +125,7 @@ class IntrinComposeLowerer:
                 f"extension {context.env.extension.name!r} has no "
                 f"{context.env.backend.backend_id} "
                 f"intrinsic prefix for intrin_compose<{modifiers.base}>",
+                source=region.source,
             )
             return region.full_text
         # `post=mask` selects the mask-returning intrinsic on native-predicate
@@ -221,6 +225,7 @@ class IntrinComposeLowerer:
         context.effects.skip(
             "TSL-LOWER-UNRESOLVED-SUFFIX",
             f"could not resolve intrinsic suffix from {explicit!r}",
+            source=region.source,
         )
         return None
 

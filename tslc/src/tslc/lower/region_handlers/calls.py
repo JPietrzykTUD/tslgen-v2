@@ -35,6 +35,7 @@ class CallLowerer:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-CALL",
                 f"unsupported call: {region.full_text!r}",
+                source=region.source,
             )
             return region.full_text
         name = parsed.primitive_ref
@@ -59,6 +60,7 @@ class CallLowerer:
                 context.effects.skip(
                     "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS",
                     f"call type-args {parsed.type_args!r} not supported yet: {region.full_text!r}",
+                    source=region.source,
                 )
                 return region.full_text
         extra_args: list[str] = []
@@ -68,6 +70,7 @@ class CallLowerer:
                 context.effects.skip(
                     "TSL-LOWER-UNSUPPORTED-CALL-TYPEARGS",
                     f"call type-args {parsed.type_args!r} not supported yet: {region.full_text!r}",
+                    source=region.source,
                 )
                 return region.full_text
             extra_args.append(rendered)

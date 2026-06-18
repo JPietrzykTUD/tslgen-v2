@@ -29,7 +29,7 @@ from tslc.catalog.model import (
     Primitive,
 )
 from tslc.catalog.signatures import parse_signature
-from tslc.diagnostics import Diagnostic
+from tslc.diagnostics import Diagnostic, diagnostic_at
 
 
 @dataclass(frozen=True, slots=True)
@@ -287,10 +287,11 @@ class Selector:
             )
             warnings.setdefault(
                 message,
-                Diagnostic(
+                diagnostic_at(
                     severity="warning",
                     code="TSL-SELECT-AMBIGUOUS-SPECIFICITY",
                     message=message,
+                    source=best.selector_source or best.source or primitive.source,
                 ),
             )
         return best

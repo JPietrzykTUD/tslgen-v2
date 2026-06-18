@@ -34,5 +34,6 @@ class QueryRegionLowerer:
         context.effects.skip(
             "TSL-LOWER-UNRESOLVED-QUERY-REGION",
             f"could not resolve {region.keyword}<...> region: {region.full_text!r}",
+            source=region.source,
         )
         return region.full_text

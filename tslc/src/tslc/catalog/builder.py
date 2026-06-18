@@ -21,13 +21,14 @@ from tslc.catalog.model import (
     RequirementClause,
 )
 from tslc.catalog.signatures import parse_signature
-from tslc.diagnostics import Diagnostic
+from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedBlockDeclaration,
     ParsedImplementationSelectorEntry,
     ParsedPrimitiveDeclaration,
     ParsedRequiresValue,
+    ParsedTslSourceSpan,
     ParsedTslField,
     ParsedTslListValue,
     ParsedTslMapValue,
@@ -96,6 +97,18 @@ class CatalogBuilder:
 _BOOLEAN_WILDCARD_VALUES = ("true", "false")
 
 
+def _source_span(source: ParsedTslSourceSpan | None) -> SourceSpan | None:
+    if source is None:
+        return None
+    return SourceSpan(
+        path=source.path,
+        line=source.line,
+        column=source.column,
+        end_line=source.end_line,
+        end_column=source.end_column,
+    )
+
+
 def _build_primitives(
     declaration: ParsedPrimitiveDeclaration,
     extension_names: frozenset[str],
@@ -133,6 +146,9 @@ def _build_primitives(
             immediate_params=immediate_params,
             generic_params=generic_params,
             result_target=result_target,
+            source=_source_span(declaration.source),
+            header_source=_source_span(declaration.header_source),
+            signature_source=_source_span(declaration.signature_source),
         )
 
     return [make(attrs) for attrs in _expand_wildcards(base_attributes)]
@@ -189,6 +205,9 @@ def _implementations_from_entries(
                         requirements=requirements,
                         source_order=envelope.source_order,
                         to_target_group=to_target_group,
+                        source=_source_span(envelope.envelope_source),
+                        selector_source=_source_span(entry.source),
+                        body_source=_source_span(envelope.payload_source),
                     )
                 )
         implementations.extend(
@@ -412,6 +431,7 @@ def _generic_params(declaration: ParsedPrimitiveDeclaration) -> tuple[GenericPar
             name=entry.key.text,
             kind=_field_text(_child(entry, "kind")) or "bool",
             default=_field_text(_child(entry, "default")) or "false",
+            source=_source_span(entry.source),
         )
         for entry in _children(fields[0].field)
     )
@@ -460,26 +480,28 @@ def _immediate_params(
         param_name = entry.key.text
         if param_name in seen:
             diagnostics.append(
-                Diagnostic(
+                diagnostic_at(
                     severity="error",
                     code="TSL-PARAMS-DUPLICATE",
                     message=f"duplicate `params` entry {param_name!r} on {name!r}",
+                    source=_source_span(entry.source),
                 )
             )
             continue
         seen.add(param_name)
         if param_name not in kinds:
             diagnostics.append(
-                Diagnostic(
+                diagnostic_at(
                     severity="error",
                     code="TSL-PARAMS-UNKNOWN-PARAM",
                     message=f"`params` entry {param_name!r} is not a parameter of {name!r}",
+                    source=_source_span(entry.source),
                 )
             )
             continue
         if kinds[param_name] != "sImm":
             diagnostics.append(
-                Diagnostic(
+                diagnostic_at(
                     severity="error",
                     code="TSL-PARAMS-NOT-IMMEDIATE",
                     message=(
@@ -487,20 +509,24 @@ def _immediate_params(
                         "immediate (its signature kind is "
                         f"{kinds[param_name]!r})"
                     ),
+                    source=_source_span(entry.source),
                 )
             )
             continue
-        range_text = _field_text(_child(entry, "value_range"))
+        range_field = _child(entry, "value_range")
+        range_text = _field_text(range_field)
         value_range = _parse_value_range(range_text)
         if range_text is not None and value_range is None:
+            range_source = range_field.source if range_field is not None else entry.source
             diagnostics.append(
-                Diagnostic(
+                diagnostic_at(
                     severity="error",
                     code="TSL-PARAMS-BAD-RANGE",
                     message=(
                         f"malformed `value_range` {range_text!r} for {param_name!r} on "
                         f"{name!r} (expected `lo..hi` or `lo..=hi`)"
                     ),
+                    source=_source_span(range_source),
                 )
             )
         dispatch = tuple(
@@ -513,6 +539,7 @@ def _immediate_params(
                 type_tag=_field_text(_child(entry, "type")) or "ui32",
                 value_range=value_range,
                 dispatch=dispatch,
+                source=_source_span(entry.source),
             )
         )
     return tuple(result)

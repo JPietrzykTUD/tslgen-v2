@@ -38,6 +38,7 @@ class VarLowerer:
                 context.effects.skip(
                     "TSL-LOWER-UNSUPPORTED-VAR",
                     f"unsupported var<init_register>: {region.full_text!r}",
+                    source=region.source,
                 )
                 return region.full_text
             return context.env.backend.templates.render_template(
@@ -49,6 +50,7 @@ class VarLowerer:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-VAR",
                 f"unsupported var<{variant}> declaration: {region.full_text!r}",
+                source=region.source,
             )
             return region.full_text
         name = render(groups[0]).strip()
@@ -69,6 +71,7 @@ class VarLowerer:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-VAR",
                 f"unsupported var<typed> declaration: {region.full_text!r}",
+                source=region.source,
             )
             return region.full_text
         type_text = render(groups[0]).strip()
@@ -79,6 +82,7 @@ class VarLowerer:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-VAR",
                 f"unsupported var<typed> declaration: {region.full_text!r}",
+                source=region.source,
             )
             return region.full_text
         if key == "var_array_uninit":
@@ -109,6 +113,7 @@ class LetLowerer:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-LET",
                 f"unsupported let<{variant}>: {region.full_text!r}",
+                source=region.source,
             )
             return region.full_text
         name = render(groups[0]).strip()

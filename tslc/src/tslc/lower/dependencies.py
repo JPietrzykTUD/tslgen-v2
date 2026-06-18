@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 
 from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.model import Catalog, Extension
+from tslc.diagnostics import SourceSpan
 from tslc.ir.scan import scan
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower._text import split_top_level
@@ -45,6 +46,7 @@ def extract_call_dependencies(
     target_base: str | None,
     target_extension: str | None,
     catalog: Catalog,
+    source: SourceSpan | None = None,
 ) -> frozenset[CallDependency]:
     """Return the typed primitive-call dependencies in one implementation body.
 
@@ -61,7 +63,7 @@ def extract_call_dependencies(
         target_base=target_base,
         target_extension=target_extension,
     )
-    resolver.visit(scan(body_text))
+    resolver.visit(scan(body_text, source=source))
     return frozenset(resolver.calls)
 
 

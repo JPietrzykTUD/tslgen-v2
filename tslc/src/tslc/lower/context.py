@@ -19,7 +19,7 @@ from types import MappingProxyType
 
 from tslc.backend.translation import BackendDialect
 from tslc.catalog.model import Catalog, Extension
-from tslc.diagnostics import Diagnostic
+from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,14 +152,22 @@ class LoweringEffects:
     requires_unsafe: bool = False
     unsupported: bool = False  # a not-yet-supported construct -> skip this specialization
 
-    def error(self, code: str, message: str) -> None:
-        self.diagnostics.append(Diagnostic(severity="error", code=code, message=message))
+    def error(
+        self, code: str, message: str, *, source: SourceSpan | None = None
+    ) -> None:
+        self.diagnostics.append(
+            diagnostic_at(severity="error", code=code, message=message, source=source)
+        )
 
-    def skip(self, code: str, message: str) -> None:
+    def skip(
+        self, code: str, message: str, *, source: SourceSpan | None = None
+    ) -> None:
         """Mark the body as not-yet-lowerable. It is skipped, not failed."""
 
         self.unsupported = True
-        self.diagnostics.append(Diagnostic(severity="info", code=code, message=message))
+        self.diagnostics.append(
+            diagnostic_at(severity="info", code=code, message=message, source=source)
+        )
 
     def mark_unsafe(self) -> None:
         self.requires_unsafe = True

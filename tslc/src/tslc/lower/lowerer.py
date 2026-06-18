@@ -27,7 +27,7 @@ from tslc.catalog.model import (
     ImmediateParam,
 )
 from tslc.catalog.signatures import parse_signature
-from tslc.diagnostics import Diagnostic, sort_diagnostics
+from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at, sort_diagnostics
 from tslc.ir.scan import scan
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower.calls import parse_call_selector
@@ -140,6 +140,7 @@ class ExpressionRenderer:
             self._context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-REGION",
                 f"region {segment.keyword!r} is not supported yet: {segment.full_text!r}",
+                source=segment.source,
             )
             return segment.full_text
         return lowerer.lower(segment, self._context, self.render)
@@ -162,6 +163,7 @@ class Lowerer:
             return _error(
                 "TSL-LOWER-BAD-SIGNATURE",
                 f"could not parse signature {selected.primitive.signature!r}",
+                source=_primitive_signature_source(selected),
             )
         if shape.result_kind not in _SUPPORTED_KINDS or any(
             kind not in _SUPPORTED_KINDS for kind in shape.param_kinds
@@ -172,6 +174,7 @@ class Lowerer:
                 "TSL-LOWER-UNSUPPORTED-KIND",
                 f"signature {selected.primitive.signature!r} uses an unsupported kind "
                 f"(supported: {', '.join(sorted(_SUPPORTED_KINDS))})",
+                source=_primitive_signature_source(selected),
             )
         parameters = selected.primitive.parameters
         if len(parameters) != len(shape.param_kinds):
@@ -179,6 +182,7 @@ class Lowerer:
                 "TSL-LOWER-SIGNATURE-ARITY",
                 f"primitive {selected.primitive.name!r} has {len(parameters)} parameters "
                 f"but signature {selected.primitive.signature!r} has {len(shape.param_kinds)}",
+                source=_primitive_signature_source(selected),
             )
 
         base_type_spelling = backend.types.scalar_spelling(selected.type_tag)
@@ -186,6 +190,7 @@ class Lowerer:
             return _error(
                 "TSL-LOWER-NO-BASE-TYPE",
                 f"no {backend.backend_id} base-type spelling for {selected.type_tag!r}",
+                source=_implementation_source(selected),
             )
 
         # A representation-change primitive (`return_type: base|extension: …`) produces a
@@ -203,6 +208,7 @@ class Lowerer:
                     "TSL-LOWER-UNSUPPORTED-TARGET-VECTOR",
                     f"representation-change on the generic vector (LANES-sized target) is "
                     f"not supported yet: {selected.primitive.name!r}",
+                    source=_implementation_source(selected),
                 )
             dim = selected.primitive.result_target[0]
             if dim == RESULT_DIM_BASE:
@@ -213,6 +219,7 @@ class Lowerer:
                         "TSL-LOWER-NO-BASE-TYPE",
                         f"no {backend.backend_id} base-type spelling for the target "
                         f"{selected.to_target!r}",
+                        source=_implementation_source(selected),
                     )
                 target = TargetVector(
                     vector_spelling=backend.types.vector_type_spelling(
@@ -264,6 +271,11 @@ class Lowerer:
                     "TSL-LOWER-NO-IMMEDIATE-TYPE",
                     f"no {backend.backend_id} spelling for the immediate type of "
                     f"{selected.primitive.name!r}",
+                    source=(
+                        imm_param.source
+                        if imm_param is not None and imm_param.source is not None
+                        else _implementation_source(selected)
+                    ),
                 )
             immediate = (imm_name, imm_spelling)
             immediate_name = imm_name
@@ -301,7 +313,10 @@ class Lowerer:
         if "ptr" in shape.param_kinds or "ptr+" in shape.param_kinds:
             context.effects.mark_unsafe()
 
-        segments = scan(selected.implementation.body_text)
+        segments = scan(
+            selected.implementation.body_text,
+            source=selected.implementation.body_source,
+        )
         # A `void` primitive (e.g. `store`) has no return value, so it carries no
         # top-level `emit_return`; only value-returning bodies require one.
         if shape.result_kind != "void" and _find_region(segments, _RETURN_KEYWORD) is None:
@@ -309,13 +324,14 @@ class Lowerer:
             return LoweringResult(
                 specialization=None,
                 diagnostics=(
-                    Diagnostic(
+                    diagnostic_at(
                         severity="info",
                         code="TSL-LOWER-NO-EMIT-RETURN",
                         message=(
                             f"implementation for {selected.primitive.name!r} has no top-level "
                             "emit_return(...); skipped"
                         ),
+                        source=_implementation_body_source(selected),
                     ),
                 ),
             )
@@ -531,17 +547,57 @@ def _find_region(segments: tuple[Segment, ...], keyword: str) -> Region | None:
     return None
 
 
-def _error(code: str, message: str) -> LoweringResult:
-    return LoweringResult(
-        specialization=None,
-        diagnostics=(Diagnostic(severity="error", code=code, message=message),),
+def _primitive_signature_source(selected: SelectedImplementation) -> SourceSpan | None:
+    return (
+        selected.primitive.signature_source
+        or selected.primitive.header_source
+        or selected.primitive.source
     )
 
 
-def _skip(code: str, message: str) -> LoweringResult:
+def _implementation_source(selected: SelectedImplementation) -> SourceSpan | None:
+    return (
+        selected.implementation.selector_source
+        or selected.implementation.body_source
+        or selected.implementation.source
+        or selected.primitive.source
+    )
+
+
+def _implementation_body_source(selected: SelectedImplementation) -> SourceSpan | None:
+    return (
+        selected.implementation.body_source
+        or selected.implementation.source
+        or selected.implementation.selector_source
+        or selected.primitive.source
+    )
+
+
+def _error(code: str, message: str, *, source: SourceSpan | None = None) -> LoweringResult:
+    return LoweringResult(
+        specialization=None,
+        diagnostics=(
+            diagnostic_at(
+                severity="error",
+                code=code,
+                message=message,
+                source=source,
+            ),
+        ),
+    )
+
+
+def _skip(code: str, message: str, *, source: SourceSpan | None = None) -> LoweringResult:
     """A not-yet-lowerable specialization: recorded as a coverage gap, not a failure."""
 
     return LoweringResult(
         specialization=None,
-        diagnostics=(Diagnostic(severity="info", code=code, message=message),),
+        diagnostics=(
+            diagnostic_at(
+                severity="info",
+                code=code,
+                message=message,
+                source=source,
+            ),
+        ),
     )

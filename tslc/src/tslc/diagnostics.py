@@ -16,11 +16,43 @@ class SourceLocation:
 
 
 @dataclass(frozen=True, slots=True)
+class SourceSpan:
+    path: Path
+    line: int
+    column: int
+    end_line: int
+    end_column: int
+
+    @property
+    def start(self) -> SourceLocation:
+        return SourceLocation(self.path, self.line, self.column)
+
+
+@dataclass(frozen=True, slots=True)
 class Diagnostic:
     severity: Severity
     code: str
     message: str
     location: SourceLocation | None = None
+
+
+def source_location(source: SourceSpan | None) -> SourceLocation | None:
+    return source.start if source is not None else None
+
+
+def diagnostic_at(
+    *,
+    severity: Severity,
+    code: str,
+    message: str,
+    source: SourceSpan | None,
+) -> Diagnostic:
+    return Diagnostic(
+        severity=severity,
+        code=code,
+        message=message,
+        location=source_location(source),
+    )
 
 
 def has_errors(diagnostics: Iterable[Diagnostic]) -> bool:

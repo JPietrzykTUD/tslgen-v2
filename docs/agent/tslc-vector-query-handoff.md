@@ -699,6 +699,15 @@ changes implement the existing separation-of-concerns and capability-boundary
 policies rather than a new source-language or repository-wide architecture
 decision.
 
+The backend dialect facet split then went through a focused review pass. The
+review verdict was `Accept`: no blocking architecture, boundary, migration, or
+validation issues were found. The review confirmed that lowering-time backend
+access now runs through the `BackendDialect` facets, `LoweringEnv` carries the
+explicit `Catalog`, query/dependency code no longer reaches through
+`translation.catalog`, and the removed names
+`BackendTranslator`/`create_backend_translation`/`env.translation` do not
+remain in source or tests.
+
 ## Known Caveats
 
 Full `tslc/tests/test_build_verify.py` was attempted with fresh temp
@@ -764,3 +773,162 @@ Before committing, a follow-up agent should:
 1. Run full `tslc/tests/test_build_verify.py` with a fresh `--basetemp` in an environment that can allow more than 40 minutes, or split the file deliberately if full-file runtime remains impractical.
 2. Re-run `git diff --check` after any further edits.
 3. Keep old vector query forms unsupported unless the user explicitly revises the decision.
+
+### Diagnostic Provenance Slice
+
+The diagnostic provenance slice now carries source-authored object provenance
+past parsing without changing selection, lowering, rendering, or generated text.
+
+Implemented pieces:
+
+1. `tslc.diagnostics.SourceSpan` is the stable domain provenance value,
+   separate from parser-private `ParsedTslSourceSpan`.
+2. `source_location(...)` and `diagnostic_at(...)` keep diagnostics on the
+   existing `Diagnostic.location` point-location contract.
+3. `ParsedPrimitiveDeclaration` now exposes `signature_source`; catalog
+   promotion converts parser spans into `SourceSpan`.
+4. `Primitive`, `Implementation`, `ImmediateParam`, and `GenericParam` carry
+   optional source fields so hand-built fixtures stay lightweight.
+5. `CatalogBuilder` attaches locations to `params:` diagnostics for duplicate,
+   unknown, non-`sImm`, and malformed-range entries.
+6. Selector ambiguity warnings use implementation/primitive provenance when a
+   source-authored ambiguous body is known.
+7. Lowerer early-return diagnostics for bad signatures, unsupported signature
+   kinds, signature arity mismatch, missing base/immediate type spellings,
+   unsupported representation-change target vectors, and missing top-level
+   `emit_return` now attach the nearest available source-authored span.
+
+Focused coverage lives in `tslc/tests/test_diagnostic_provenance.py` and asserts
+diagnostic `path`, `line`, and `column` for catalog, selector, and lowerer
+diagnostics.
+
+Validation for this slice:
+
+```bash
+python -B -m compileall -q tslc/src/tslc tslc/tests
+```
+
+Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_diagnostic_provenance.py tslc/tests/test_immediate_params.py
+```
+
+Result: `8 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_select_and_lower.py
+```
+
+Result: `10 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_generation_conditionals.py
+```
+
+Result: `19 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_masks_and_calls.py
+```
+
+Result: `8 passed`.
+
+```bash
+python -m pytest -q tslc/tests --ignore=tslc/tests/test_build_verify.py
+```
+
+Result: `78 passed`.
+
+```bash
+git diff --check
+```
+
+Result: passed.
+
+Still out of scope for this domain-provenance slice: diagnostic notes or
+secondary locations, CLI/API request provenance, build verifier/output writer
+locations, generated text changes, source repair, and any broad diagnostic
+framework replacement.
+
+### TSIL Region Span Slice
+
+The follow-up TSIL span slice now refines provenance inside implementation body
+payloads. It preserves generated text, selection behavior, lowering behavior,
+and render structure.
+
+Implemented pieces:
+
+1. `scan(text, source=...)` accepts an optional `SourceSpan` for the body
+   payload and keeps the existing `scan(text)` behavior for callers that do not
+   have source provenance.
+2. `RawText` and `Region` now carry optional `source` spans. Nested payloads,
+   `if`/`else` blocks, loop blocks, and switch arms compute spans relative to
+   the original body payload, not their local substring.
+3. The main lowerer calls `scan(selected.implementation.body_text,
+   source=selected.implementation.body_source)`.
+4. Dependency extraction accepts an optional body source and passes it to the
+   shared scanner; dependency behavior remains source-semantic and diagnostics
+   free.
+5. `LoweringEffects.error(...)` and `skip(...)` accept optional source spans,
+   and region handlers pass `source=region.source` for handler diagnostics.
+6. Unsupported-region diagnostics from `ExpressionRenderer` use
+   `source=segment.source`.
+
+Focused coverage:
+
+- `tslc/tests/test_tsil_scan.py` asserts nested `RawText` and `Region` source
+  spans from a synthetic body payload.
+- `tslc/tests/test_diagnostic_provenance.py` asserts an unresolved inner
+  `value<generation>(...)` handler diagnostic points at the exact query island,
+  not the body start.
+
+Validation for this slice:
+
+```bash
+python -B -m compileall -q tslc/src/tslc tslc/tests
+```
+
+Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/test_diagnostic_provenance.py
+```
+
+Result: `14 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_select_and_lower.py
+```
+
+Result: `10 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_generation_conditionals.py
+```
+
+Result: `19 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_masks_and_calls.py
+```
+
+Result: `8 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_immediate_params.py
+```
+
+Result: `5 passed`.
+
+```bash
+python -m pytest -q tslc/tests --ignore=tslc/tests/test_build_verify.py
+```
+
+Result: `80 passed`.
+
+```bash
+git diff --check
+```
+
+Result: passed.

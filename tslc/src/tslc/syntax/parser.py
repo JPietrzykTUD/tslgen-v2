@@ -184,6 +184,7 @@ class _DocumentTransformer:
             body_envelopes=body_envelopes,
             source=self._span(tree),
             header_source=self._header_span(tree),
+            signature_source=self._span(signature),
             source_order=self._next_source_order(),
         )
 

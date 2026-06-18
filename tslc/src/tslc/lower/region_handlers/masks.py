@@ -45,6 +45,7 @@ class MaskLowerer:
                 "TSL-LOWER-UNSUPPORTED-MASK",
                 f"unsupported mask<{region.selector_text.strip()}> for {repr_kind!r}: "
                 f"{region.full_text!r}",
+                source=region.source,
             )
             return region.full_text
         return context.env.backend.templates.render_template(key, **fields)

@@ -16,10 +16,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tslc.diagnostics import SourceSpan
+
 
 @dataclass(frozen=True, slots=True)
 class RawText:
     text: str
+    source: SourceSpan | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +31,7 @@ class Region:
     selector_text: str  # raw text inside <...>, "" when the keyword has no selector
     body: tuple["Segment", ...]  # recursively scanned (...) payload
     full_text: str  # original source text of the whole region (provenance)
+    source: SourceSpan | None = None
     # Brace-delimited trailing block(s), for block-bearing keywords like
     # ``if<generation>(cond) { ... } else<generation> { ... }``. Empty/None for
     # ordinary ``keyword<sel>(args)`` regions. ``else_block`` holds either the

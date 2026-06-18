@@ -10,6 +10,7 @@ matched.
 
 from __future__ import annotations
 
+from tslc.diagnostics import SourceSpan
 from tslc.ir.segments import RawText, Region, Segment
 
 # Keywords that introduce a region. Growth happens by adding entries here (and
@@ -44,11 +45,16 @@ _IDENT_START = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 _IDENT_CONT = _IDENT_START | frozenset("0123456789")
 
 
-def scan(text: str) -> tuple[Segment, ...]:
-    return tuple(_scan(text))
+def scan(text: str, *, source: SourceSpan | None = None) -> tuple[Segment, ...]:
+    return tuple(_scan(text, source, text, 0))
 
 
-def _scan(text: str) -> list[Segment]:
+def _scan(
+    text: str,
+    source: SourceSpan | None,
+    root_text: str,
+    base_offset: int,
+) -> list[Segment]:
     segments: list[Segment] = []
     n = len(text)
     i = 0
@@ -61,10 +67,22 @@ def _scan(text: str) -> list[Segment]:
         if ch in _IDENT_START and _boundary_before(text, i):
             keyword, after = _read_ident(text, i)
             if keyword in KEYWORDS:
-                region, end = _try_region(text, i, keyword, after)
+                region, end = _try_region(
+                    text, i, keyword, after, source, root_text, base_offset
+                )
                 if region is not None:
                     if raw_start < i:
-                        segments.append(RawText(text[raw_start:i]))
+                        segments.append(
+                            RawText(
+                                text[raw_start:i],
+                                source=_span_for(
+                                    source,
+                                    root_text,
+                                    base_offset + raw_start,
+                                    base_offset + i,
+                                ),
+                            )
+                        )
                     segments.append(region)
                     i = end
                     raw_start = end
@@ -73,12 +91,23 @@ def _scan(text: str) -> list[Segment]:
             continue
         i += 1
     if raw_start < n:
-        segments.append(RawText(text[raw_start:n]))
+        segments.append(
+            RawText(
+                text[raw_start:n],
+                source=_span_for(source, root_text, base_offset + raw_start, base_offset + n),
+            )
+        )
     return segments
 
 
 def _try_region(
-    text: str, start: int, keyword: str, after_keyword: int
+    text: str,
+    start: int,
+    keyword: str,
+    after_keyword: int,
+    source: SourceSpan | None,
+    root_text: str,
+    base_offset: int,
 ) -> tuple[Region | None, int]:
     pos = _skip_ws(text, after_keyword)
     selector_text = ""
@@ -95,22 +124,51 @@ def _try_region(
     if close is None:
         return None, start
     body_text = text[pos + 1 : close]
+    body = tuple(_scan(body_text, source, root_text, base_offset + pos + 1))
     if keyword == "if":
         # A block-bearing region: capture the `{ ... }` body (and any `else`) too.
-        return _try_if_region(text, start, selector_text, tuple(_scan(body_text)), close + 1)
+        return _try_if_region(
+            text,
+            start,
+            selector_text,
+            body,
+            close + 1,
+            source,
+            root_text,
+            base_offset,
+        )
     if keyword == "loop":
         # `loop<range>(…) { body }` captures its `{ ... }` block; `loop<unroll>(n)` is a bare
         # hint with no block. Either way the lowerer translates it to a native loop construct.
-        return _try_loop_region(text, start, selector_text, tuple(_scan(body_text)), close + 1)
+        return _try_loop_region(
+            text,
+            start,
+            selector_text,
+            body,
+            close + 1,
+            source,
+            root_text,
+            base_offset,
+        )
     if keyword == "switch":
         # `switch<compile>(sel) { label => { body } … }`: capture the arm blocks so the lowerer
         # can emit a compile-time multi-way selection over the selector.
-        return _try_switch_region(text, start, selector_text, tuple(_scan(body_text)), close + 1)
+        return _try_switch_region(
+            text,
+            start,
+            selector_text,
+            body,
+            close + 1,
+            source,
+            root_text,
+            base_offset,
+        )
     region = Region(
         keyword=keyword,
         selector_text=selector_text,
-        body=tuple(_scan(body_text)),
+        body=body,
         full_text=text[start : close + 1],
+        source=_span_for(source, root_text, base_offset + start, base_offset + close + 1),
     )
     return region, close + 1
 
@@ -121,6 +179,9 @@ def _try_if_region(
     selector_text: str,
     condition: tuple[Segment, ...],
     after_condition: int,
+    source: SourceSpan | None,
+    root_text: str,
+    base_offset: int,
 ) -> tuple[Region | None, int]:
     """Capture ``if<sel>(cond) { then } [else<sel> ({else} | if...)]`` from
     ``after_condition`` (just past the condition's ``)``). The taken-branch logic
@@ -132,13 +193,15 @@ def _try_if_region(
     close = _match_bracket(text, pos, "{", "}")
     if close is None:
         return None, start
-    then_block = tuple(_scan(text[pos + 1 : close]))
+    then_block = tuple(_scan(text[pos + 1 : close], source, root_text, base_offset + pos + 1))
     end = close + 1
 
     else_block: tuple[Segment, ...] | None = None
     after_then = _skip_ws(text, end)
     if _matches_keyword(text, after_then, "else"):
-        else_block, end = _scan_else(text, after_then + len("else"))
+        else_block, end = _scan_else(
+            text, after_then + len("else"), source, root_text, base_offset
+        )
         if else_block is None:
             return None, start
 
@@ -147,6 +210,7 @@ def _try_if_region(
         selector_text=selector_text,
         body=condition,
         full_text=text[start:end],
+        source=_span_for(source, root_text, base_offset + start, base_offset + end),
         block=then_block,
         else_block=else_block,
     )
@@ -159,6 +223,9 @@ def _try_loop_region(
     selector_text: str,
     body: tuple[Segment, ...],
     after_body: int,
+    source: SourceSpan | None,
+    root_text: str,
+    base_offset: int,
 ) -> tuple[Region | None, int]:
     """Capture ``loop<sel>(args) [{ block }]`` from ``after_body`` (just past the args'
     ``)``). A trailing ``{ ... }`` (``loop<range>``'s body) goes in ``Region.block``; a bare
@@ -171,13 +238,14 @@ def _try_loop_region(
         close = _match_bracket(text, pos, "{", "}")
         if close is None:
             return None, start
-        block = tuple(_scan(text[pos + 1 : close]))
+        block = tuple(_scan(text[pos + 1 : close], source, root_text, base_offset + pos + 1))
         end = close + 1
     region = Region(
         keyword="loop",
         selector_text=selector_text,
         body=body,
         full_text=text[start:end],
+        source=_span_for(source, root_text, base_offset + start, base_offset + end),
         block=block,
     )
     return region, end
@@ -189,6 +257,9 @@ def _try_switch_region(
     selector_text: str,
     selector: tuple[Segment, ...],
     after_selector: int,
+    source: SourceSpan | None,
+    root_text: str,
+    base_offset: int,
 ) -> tuple[Region | None, int]:
     """Capture ``switch<sel>(selector) { label => { body } … }`` from ``after_selector`` (just
     past the selector's ``)``). Each arm is ``label => { block }``; ``label`` is a literal or
@@ -200,7 +271,9 @@ def _try_switch_region(
     outer_close = _match_bracket(text, pos, "{", "}")
     if outer_close is None:
         return None, start
-    arms = _scan_switch_arms(text[pos + 1 : outer_close])
+    arms = _scan_switch_arms(
+        text[pos + 1 : outer_close], source, root_text, base_offset + pos + 1
+    )
     if arms is None:
         return None, start
     region = Region(
@@ -208,6 +281,9 @@ def _try_switch_region(
         selector_text=selector_text,
         body=selector,
         full_text=text[start : outer_close + 1],
+        source=_span_for(
+            source, root_text, base_offset + start, base_offset + outer_close + 1
+        ),
         arms=arms,
     )
     return region, outer_close + 1
@@ -215,6 +291,9 @@ def _try_switch_region(
 
 def _scan_switch_arms(
     inner: str,
+    source: SourceSpan | None,
+    root_text: str,
+    base_offset: int,
 ) -> tuple[tuple[str, tuple[Segment, ...]], ...] | None:
     """Parse ``label => { body } …`` arms from a switch block's inner text. Returns None if the
     shape doesn't hold (so the caller leaves the text as a non-region)."""
@@ -235,12 +314,30 @@ def _scan_switch_arms(
         close = _match_bracket(inner, brace, "{", "}")
         if close is None:
             return None
-        arms.append((label, tuple(_scan(inner[brace + 1 : close]))))
+        arms.append(
+            (
+                label,
+                tuple(
+                    _scan(
+                        inner[brace + 1 : close],
+                        source,
+                        root_text,
+                        base_offset + brace + 1,
+                    )
+                ),
+            )
+        )
         i = close + 1
     return tuple(arms) if arms else None
 
 
-def _scan_else(text: str, after_else: int) -> tuple[tuple[Segment, ...] | None, int]:
+def _scan_else(
+    text: str,
+    after_else: int,
+    source: SourceSpan | None,
+    root_text: str,
+    base_offset: int,
+) -> tuple[tuple[Segment, ...] | None, int]:
     """Parse the tail of ``else<sel> ( { ... } | if<sel>(...){...} )``.
 
     Returns ``(segments, end)``; ``segments`` is the else body (a brace block, or a
@@ -258,10 +355,13 @@ def _scan_else(text: str, after_else: int) -> tuple[tuple[Segment, ...] | None, 
         close = _match_bracket(text, pos, "{", "}")
         if close is None:
             return None, pos
-        return tuple(_scan(text[pos + 1 : close])), close + 1
+        return (
+            tuple(_scan(text[pos + 1 : close], source, root_text, base_offset + pos + 1)),
+            close + 1,
+        )
     if _matches_keyword(text, pos, "if"):
         keyword, after = _read_ident(text, pos)
-        region, end = _try_region(text, pos, keyword, after)
+        region, end = _try_region(text, pos, keyword, after, source, root_text, base_offset)
         if region is None:
             return None, pos
         return (region,), end
@@ -321,6 +421,37 @@ def _skip_ws(text: str, index: int) -> int:
     while i < n and text[i] in " \t\r\n":
         i += 1
     return i
+
+
+def _span_for(
+    source: SourceSpan | None,
+    root_text: str,
+    start: int,
+    end: int,
+) -> SourceSpan | None:
+    if source is None:
+        return None
+    line, column = _line_column(source, root_text, start)
+    end_line, end_column = _line_column(source, root_text, end)
+    return SourceSpan(
+        path=source.path,
+        line=line,
+        column=column,
+        end_line=end_line,
+        end_column=end_column,
+    )
+
+
+def _line_column(source: SourceSpan, text: str, offset: int) -> tuple[int, int]:
+    line = source.line
+    column = source.column
+    for character in text[:offset]:
+        if character == "\n":
+            line += 1
+            column = 1
+        else:
+            column += 1
+    return line, column
 
 
 def _boundary_before(text: str, index: int) -> bool:
