@@ -11,10 +11,10 @@ class EmitReturnLowerer:
 
     Backend-neutral: the ``return`` spelling comes from the backend's
     ``emit_return`` translate template. Any required ``unsafe`` framing is applied
-    once to the whole body by ``translation.frame_body`` in the lowerer.
+    once to the whole body by ``backend.syntax.frame_body`` in the lowerer.
     """
 
     keyword = "emit_return"
 
     def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
-        return context.env.translation.frame_return(render(region.body))
+        return context.env.backend.syntax.frame_return(render(region.body))

@@ -15,7 +15,7 @@ class CallLowerer:
     """``call<primitive=NAME[Vec] attrs[aligned=…]>(args)`` -> a call to NAME's wrapper.
 
     Primitives are generated independently; this only renders the *call* (via
-    ``translation.render_call``), it does not inline NAME's body. The selector shape is parsed by
+    ``backend.syntax.render_call``), it does not inline NAME's body. The selector shape is parsed by
     :func:`tslc.lower.calls.parse_call_selector`; this lowerer owns only rendering decisions.
 
     A callee carrying a boolean-wildcard axis (e.g. ``store``/``load`` with ``aligned``)
@@ -89,7 +89,7 @@ class CallLowerer:
         axis_values = tuple(
             attrs.get(key, "false") for key in context.env.primitive_axes.get(name, ())
         )
-        return context.env.translation.render_call(
+        return context.env.backend.syntax.render_call(
             call_name,
             render(region.body),
             axis_values,
@@ -132,9 +132,9 @@ class CallLowerer:
         # A bare `Vec` target (`reinterpret[Vec<UnsignedT>, Vec]`) is the current vector — spell
         # it concretely (Rust has no `Vec` alias, and an arg-trait `Self` is the argument type).
         if entry == "Vec":
-            base = context.env.translation.scalar_spelling(context.env.type_tag)
+            base = context.env.backend.types.scalar_spelling(context.env.type_tag)
             return (
-                context.env.translation.vector_type_spelling(
+                context.env.backend.types.vector_type_spelling(
                     base, context.env.extension.isa_name
                 )
                 if base is not None
@@ -147,11 +147,11 @@ class CallLowerer:
             for name in context.env.generic_param_names
         ):
             return entry
-        extension = context.env.translation.catalog.extensions.get(entry)
+        extension = context.env.catalog.extensions.get(entry)
         if extension is not None:
-            base = context.env.translation.scalar_spelling(context.env.type_tag)
+            base = context.env.backend.types.scalar_spelling(context.env.type_tag)
             return (
-                context.env.translation.vector_type_spelling(base, extension.isa_name)
+                context.env.backend.types.vector_type_spelling(base, extension.isa_name)
                 if base is not None
                 else None
             )
@@ -161,9 +161,9 @@ class CallLowerer:
         # A base tag (`cast[Vec, ToBase]`'s `ToBase`) -> the target vector (`ToVec`) the cast/convert
         # wrapper takes as its second type param: `simd<ToBase, current_ext>`.
         if isinstance(value, TypeValue):
-            base = context.env.translation.scalar_spelling(value.type_tag)
+            base = context.env.backend.types.scalar_spelling(value.type_tag)
             return (
-                context.env.translation.vector_type_spelling(
+                context.env.backend.types.vector_type_spelling(
                     base, context.env.extension.isa_name
                 )
                 if base is not None
@@ -189,13 +189,13 @@ class CallLowerer:
             else:
                 value = self._evaluator.evaluate(inner, context)
                 base = (
-                    context.env.translation.scalar_spelling(value.type_tag)
+                    context.env.backend.types.scalar_spelling(value.type_tag)
                     if isinstance(value, TypeValue)
                     else None
                 )
             if base is None:
                 return None
-            return context.env.translation.vector_type_spelling(
+            return context.env.backend.types.vector_type_spelling(
                 base, context.env.extension.isa_name
             )
         value = self._evaluator.evaluate(entry, context)

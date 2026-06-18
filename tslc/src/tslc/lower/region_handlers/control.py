@@ -105,7 +105,7 @@ class IfLowerer:
         if selector == "compile":
             rendered = self._render_condition(condition, context)
             if rendered is not None:
-                header = context.env.translation.render_template(
+                header = context.env.backend.templates.render_template(
                     "flow_if_static", "if constexpr ({cond})", cond=rendered
                 )
                 then = render(region.block) if region.block is not None else ""
@@ -206,7 +206,7 @@ class AssumeAlignedLowerer:
                 f"could not resolve alignment in {region.full_text!r}",
             )
             return region.full_text
-        return context.env.translation.render_assume_aligned(expr, value.text)
+        return context.env.backend.syntax.render_assume_aligned(expr, value.text)
 
 
 class LoopLowerer:
@@ -222,7 +222,7 @@ class LoopLowerer:
     def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
         variant = region.selector_text.strip()
         key = f"loop_{variant}"
-        if context.env.translation.template(key) is None:
+        if context.env.backend.templates.template(key) is None:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-LOOP",
                 f"unsupported loop<{variant}>: {region.full_text!r}",
@@ -238,12 +238,12 @@ class LoopLowerer:
                 )
                 return region.full_text
             var, start, end, step = (render(group).strip() for group in groups)
-            header = context.env.translation.render_template(
+            header = context.env.backend.templates.render_template(
                 key, var=var, start=start, end=end, step=step
             )
             return f"{header} {{\n        {block}\n      }}"
         # unroll: a bare hint (no block of its own; it precedes a loop).
-        header = context.env.translation.render_template(
+        header = context.env.backend.templates.render_template(
             key, count=render(region.body).strip()
         )
         return f"{header} {{\n        {block}\n      }}" if region.block else header
@@ -271,4 +271,4 @@ class SwitchLowerer:
             return region.full_text
         selector = render(region.body).strip()
         arms = tuple((label, render(body)) for label, body in region.arms)
-        return context.env.translation.render_compile_switch(selector, arms)
+        return context.env.backend.syntax.render_compile_switch(selector, arms)

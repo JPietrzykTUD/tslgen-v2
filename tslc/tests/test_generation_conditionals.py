@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tslc.api import generate_project
-from tslc.backend.translation import create_backend_translation
+from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.lower.context import LoweringEnv, LoweringScope, LoweringSession, VectorValue
 from tslc.lower.lowerer import Lowerer
@@ -28,15 +28,16 @@ def _spec(catalog, machine_profiles, profile, primitive, ext, type_tag, backend=
         .selected
         if s.extension.name == ext
     )
-    return Lowerer().lower(slot, catalog, create_backend_translation(catalog, backend)).specialization
+    return Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend)).specialization
 
 
 def _ctx(catalog, ext_name, type_tag, backend="cpp"):
     return LoweringSession(
         env=LoweringEnv(
+            catalog=catalog,
+            backend=create_backend_dialect(catalog, backend),
             extension=catalog.extensions[ext_name],
             type_tag=type_tag,
-            translation=create_backend_translation(catalog, backend),
         )
     )
 
@@ -62,9 +63,10 @@ def test_query_evaluator_returns_source_identities_for_type_and_vector_terms(cat
     ev = QueryEvaluator()
     ctx = LoweringSession(
         env=LoweringEnv(
+            catalog=catalog,
+            backend=create_backend_dialect(catalog, "cpp"),
             extension=catalog.extensions["avx2"],
             type_tag="si32",
-            translation=create_backend_translation(catalog, "cpp"),
         ),
         scope=LoweringScope(
             target_type_symbols={"ToBase": "ui16", "ToType": "ui16"},
@@ -274,7 +276,7 @@ def test_simd_store_pointer_cast_rust(catalog: Catalog, machine_profiles) -> Non
     from tslc.lower.lowerer import Lowerer  # noqa: PLC0415
 
     body = Lowerer().lower(
-        spec, catalog, create_backend_translation(catalog, "rust")
+        spec, catalog, create_backend_dialect(catalog, "rust")
     ).specialization.body_text
     assert "ptr as *mut Self::RegisterType" in body
 

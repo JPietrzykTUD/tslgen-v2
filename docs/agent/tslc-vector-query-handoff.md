@@ -139,46 +139,41 @@ in `emitted_names.py`.
 
 ### `tslc/src/tslc/backend/`
 
-The lowering-time backend translation boundary was changed from a single
-`BackendTranslation(catalog, backend_id)` class with internal
-`backend_id == "rust"` branches to a protocol plus concrete translators.
+The lowering-time backend boundary is now a `BackendDialect` protocol with four
+explicit facets:
 
-Added modules:
+- `types`: scalar/vector/register/mask/imask spelling and const-param type
+  spelling.
+- `intrinsics`: intrinsic suffix/name/qualification and immediate intrinsic
+  call forms.
+- `templates`: backend template lookup and placeholder rendering.
+- `syntax`: return/body framing, primitive calls, pointer casts,
+  assume-aligned, and compile-switch rendering.
 
-- `translation_common.py`: backend-neutral type-tag helpers, scalar spelling
-  lookup, template lookup/rendering, return framing, intrinsic prefix/suffix
-  composition, and the shared `X86_REGISTER_BITS` fact.
-- `cpp_translation.py`: C++ lowering-time target-language behavior.
-- `rust_translation.py`: Rust lowering-time target-language behavior.
+`translation.py` remains the stable public import surface. It exports
+`BackendDialect`, the four facet protocols, `create_backend_dialect(catalog,
+backend_id)`, the existing type-tag helper functions, and `X86_REGISTER_BITS`.
+The old `BackendTranslator` and `create_backend_translation(...)` names were
+removed from source/tests instead of kept as compatibility aliases.
 
-`translation.py` remains the stable public import surface. It now exports:
+Concrete behavior stays in the existing backend files:
 
-- `BackendTranslator`
-- `create_backend_translation(catalog, backend_id)`
-- the existing helper functions such as `signed_of`, `unsigned_of`,
-  `is_signed`, `is_type_tag`, `normalize_scalar_tag`
-- `X86_REGISTER_BITS`
+- `translation_common.py`: shared backend-neutral helpers and facts.
+- `cpp_translation.py`: `CppBackendDialect` assembling private `_CppTypes`,
+  `_CppIntrinsics`, `_CppTemplates`, and `_CppSyntax` facets.
+- `rust_translation.py`: `RustBackendDialect` assembling private `_RustTypes`,
+  `_RustIntrinsics`, `_RustTemplates`, and `_RustSyntax` facets.
 
-Lowering code now receives a `BackendTranslator` protocol instance and direct
-construction sites use `create_backend_translation(...)`.
+`LoweringEnv` now carries both `catalog` and `backend`. Query/dependency code
+reads extension/catalog facts from `context.env.catalog`; backend-specific
+spelling or rendering goes through the relevant dialect facet. This preserves
+generated behavior while making handler dependencies visible.
 
-The backend-specific behavior moved behind concrete translator methods:
-
-- wrapper call spelling;
-- vector and generic-vector type spelling;
-- target register spelling;
-- register/mask/imask type spelling;
-- pointer casts;
-- direct intrinsic qualification;
-- body framing and Rust unsafe wrapping;
-- assume-aligned rendering;
-- compile-switch rendering;
-- immediate intrinsic forwarding and Rust literal-match intrinsic rendering;
-- generic const parameter type spelling.
-
-Reason: lowering extensibility should not depend on adding more
-`if backend_id == "..."` checks. A future backend should add a concrete
-translator instead of modifying lowering behavior across multiple modules.
+Reason: the previous translator protocol correctly removed backend-ID
+conditionals from lowering, but it still mixed semantic translation, type
+spelling, template lookup, call rendering, immediate handling, and body framing
+in one wide object. The facet split keeps the simple protocol/factory shape
+while avoiding a new backend framework or pipeline stage.
 
 ## TSL Data Changes
 
@@ -255,7 +250,7 @@ The following forms are not accepted:
 The `X86_REGISTER_BITS` fallback was removed from `lower/queries.py`. Extension width resolution is now catalog driven:
 
 - current extension resolution uses the selected `Extension` object;
-- named extension resolution uses `context.env.translation.catalog.extensions`;
+- named extension resolution uses `context.env.catalog.extensions`;
 - lookup can match extension block names and emitted `isa_name`;
 - unknown extension names fail unresolved instead of falling back to a backend table.
 
@@ -636,10 +631,73 @@ environmental C++ configure failure, not a Python/lowering failure:
 `CXX=zig c++`, and CMake's compiler-identification step attempted to create
 `/root/.cache/zig/tmp/...`, which failed with `ReadOnlyFileSystem`.
 
-`docs/redesign/design-decisions.md` was checked after the session split. No
-ADR update was made because the change is a local `tslc` ownership refactor
-that implements the existing separation-of-concerns policy rather than a new
-source-language or repository-wide architecture decision.
+After the backend dialect facet split, validation was rerun in the local
+workspace:
+
+```bash
+python -B -m compileall -q tslc/src/tslc tslc/tests
+```
+
+Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_select_and_lower.py
+```
+
+Result: `10 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_generation_conditionals.py
+```
+
+Result: `19 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_masks_and_calls.py
+```
+
+Result: `8 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_determinism.py
+```
+
+Result: `1 passed`.
+
+```bash
+python -m pytest -q tslc/tests --ignore=tslc/tests/test_build_verify.py
+```
+
+Result: `75 passed`.
+
+```bash
+rg "BackendTranslator|create_backend_translation|env\\.translation|translation\\.catalog" tslc/src/tslc tslc/tests
+```
+
+Result: no hits.
+
+```bash
+git diff --check
+```
+
+Result: passed.
+
+The full suite was also probed after the dialect split with:
+
+```bash
+python -m pytest -q -x tslc/tests
+```
+
+Result: stopped at
+`tslc/tests/test_build_verify.py::test_generated_profiles_build`. This remains
+the environmental Zig/CMake failure: `/opt/zig/zig c++` attempts to create
+`/root/.cache/zig/tmp/...` and fails with `ReadOnlyFileSystem`.
+
+`docs/redesign/design-decisions.md` was checked after the session split and
+again after the backend dialect split. No ADR update was made because both
+changes implement the existing separation-of-concerns and capability-boundary
+policies rather than a new source-language or repository-wide architecture
+decision.
 
 ## Known Caveats
 
@@ -686,9 +744,9 @@ The current slice is in line with the intended TSLc separation of concerns:
   `project.py` kept as a thin public orchestrator.
 - Emitted wrapper-name finalization is explicit in `render/emitted_names.py`
   instead of being hidden inside project artifact formatting.
-- Backend lowering translation now uses a protocol/factory plus concrete C++
-  and Rust translators, so backend behavior is not selected by conditional
-  branches inside lowering.
+- Backend lowering translation now uses `BackendDialect` facets (`types`,
+  `intrinsics`, `templates`, `syntax`) plus concrete C++ and Rust dialects, so
+  lowering handlers can depend on the narrow backend capability they need.
 - Backend/render code does not receive intrinsic-specific rules for `convert_down`.
 - TSL data remains responsible for expressing primitive-to-primitive calls.
 - The fix does not duplicate insert intrinsics in conversion bodies.

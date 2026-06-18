@@ -17,8 +17,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
-from tslc.backend.translation import BackendTranslator
-from tslc.catalog.model import Extension
+from tslc.backend.translation import BackendDialect
+from tslc.catalog.model import Catalog, Extension
 from tslc.diagnostics import Diagnostic
 
 
@@ -40,9 +40,10 @@ class VectorValue:
 
 @dataclass(frozen=True, slots=True)
 class LoweringEnv:
+    catalog: Catalog
+    backend: BackendDialect
     extension: Extension
     type_tag: str
-    translation: BackendTranslator
     # the name of the primitive currently being lowered, so a `@self[...]` call can recurse
     # into it for a different vector (e.g. generic delegating per-lane to scalar).
     current_primitive: str = ""

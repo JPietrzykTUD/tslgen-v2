@@ -113,14 +113,14 @@ class IntrinComposeLowerer:
         if context.effects.has_errors:
             return region.full_text
 
-        name = context.env.translation.compose_intrinsic_name(
+        name = context.env.backend.intrinsics.compose_intrinsic_name(
             context.env.extension, base, suffix
         )
         if name is None:
             context.effects.skip(
                 "TSL-LOWER-NO-INTRINSIC-PREFIX",
                 f"extension {context.env.extension.name!r} has no "
-                f"{context.env.translation.backend_id} "
+                f"{context.env.backend.backend_id} "
                 f"intrinsic prefix for intrin_compose<{modifiers.base}>",
             )
             return region.full_text
@@ -163,7 +163,7 @@ class IntrinComposeLowerer:
 
         position, value = forward
         args = tuple(render(group).strip() for group in _split_arg_groups(region.body))
-        return context.env.translation.render_immediate_intrinsic_call(
+        return context.env.backend.intrinsics.render_immediate_intrinsic_call(
             name, value, position, args
         )
 
@@ -182,7 +182,7 @@ class IntrinComposeLowerer:
         ):
             return None
         args = tuple(render(group).strip() for group in _split_arg_groups(region.body))
-        return context.env.translation.render_literal_match_intrinsic_call(
+        return context.env.backend.intrinsics.render_literal_match_intrinsic_call(
             name, context.env.immediate_name, context.env.immediate_range, args
         )
 
@@ -212,7 +212,7 @@ class IntrinComposeLowerer:
         explicit = modifiers.get("suffix")
         if explicit is None:
             # No explicit modifier: use the extension's default suffix for the selected type.
-            return context.env.translation.default_suffix(
+            return context.env.backend.intrinsics.default_suffix(
                 context.env.extension, context.env.type_tag
             )
         value = self._evaluator.evaluate(explicit, context)
@@ -235,7 +235,7 @@ class IntrinLowerer:
 
     def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
         context.effects.mark_unsafe()
-        name = context.env.translation.qualify_intrinsic(
+        name = context.env.backend.intrinsics.qualify_intrinsic(
             context.env.extension, region.selector_text.strip()
         )
         return f"{name}({render(region.body)})"

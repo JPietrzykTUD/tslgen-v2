@@ -41,7 +41,7 @@ class CastLowerer:
             return self._pointer_cast(type_text, region, context, render(args[1]))
 
         key = f"cast_{region.selector_text.strip()}"
-        if context.env.translation.template(key) is None:
+        if context.env.backend.templates.template(key) is None:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-CAST",
                 f"unsupported cast: {region.full_text!r}",
@@ -55,7 +55,7 @@ class CastLowerer:
                 f"could not resolve cast type in {region.full_text!r}",
             )
             return region.full_text
-        return context.env.translation.render_template(
+        return context.env.backend.templates.render_template(
             key, type=spelling, expr=render(args[1])
         )
 
@@ -74,7 +74,7 @@ class CastLowerer:
                 f"could not resolve pointer cast type in {region.full_text!r}",
             )
             return region.full_text
-        return context.env.translation.render_pointer_cast(
+        return context.env.backend.syntax.render_pointer_cast(
             inner, is_const=is_const, expr=expr
         )
 
@@ -86,5 +86,5 @@ class CastLowerer:
         if isinstance(value, TextValue):
             return value.text
         if isinstance(value, TypeValue):
-            return context.env.translation.scalar_spelling(value.type_tag)
+            return context.env.backend.types.scalar_spelling(value.type_tag)
         return None

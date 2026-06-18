@@ -40,11 +40,11 @@ class MaskLowerer:
             fields = {"name": args[0], "index": args[1], "value": args[2]}
         else:
             key, fields = "", {}
-        if not key or context.env.translation.template(key) is None:
+        if not key or context.env.backend.templates.template(key) is None:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-MASK",
                 f"unsupported mask<{region.selector_text.strip()}> for {repr_kind!r}: "
                 f"{region.full_text!r}",
             )
             return region.full_text
-        return context.env.translation.render_template(key, **fields)
+        return context.env.backend.templates.render_template(key, **fields)

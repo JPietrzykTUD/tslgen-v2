@@ -1,4 +1,4 @@
-"""Rust lowering-time backend translation."""
+"""Rust backend dialect used by lowering."""
 
 from __future__ import annotations
 
@@ -21,46 +21,12 @@ _RUST_EXT_TAG: dict[str, str] = {
 
 
 @dataclass(frozen=True, slots=True)
-class RustBackendTranslator:
+class _RustTypes:
     catalog: Catalog
-    backend_id: str = field(default="rust", init=False)
+    backend_id: str
 
     def scalar_spelling(self, type_tag: str) -> str | None:
         return common.scalar_spelling(self.catalog, self.backend_id, type_tag)
-
-    def compose_prefix(self, extension: Extension) -> str | None:
-        return common.compose_prefix(self.backend_id, extension)
-
-    def default_suffix(self, extension: Extension, type_tag: str) -> str | None:
-        return common.default_suffix(extension, type_tag)
-
-    def compose_intrinsic_name(
-        self, extension: Extension, base: str, suffix: str | None
-    ) -> str | None:
-        return common.compose_intrinsic_name(self.backend_id, extension, base, suffix)
-
-    def template(self, key: str) -> str | None:
-        return common.template(self.catalog, self.backend_id, key)
-
-    def render_template(self, key: str, fallback: str | None = None, /, **fields: str) -> str:
-        return common.render_template(self.catalog, self.backend_id, key, fallback, **fields)
-
-    def frame_return(self, value: str) -> str:
-        return common.frame_return(self.catalog, self.backend_id, value)
-
-    def render_call(
-        self,
-        name: str,
-        args: str,
-        axis_values: tuple[str, ...] = (),
-        arg_generics: int = 0,
-        vec_override: str | None = None,
-        extra_args: tuple[str, ...] = (),
-    ) -> str:
-        axis = "".join(f", {value}" for value in axis_values)
-        extra = "".join(f", {value}" for value in extra_args)
-        inferred = ", _" * arg_generics
-        return f"{name}::<{vec_override or 'Self'}{axis}{extra}{inferred}>({args})"
 
     def vector_type_spelling(self, base_spelling: str, extension_name: str) -> str:
         tag = _RUST_EXT_TAG.get(extension_name, extension_name.capitalize())
@@ -91,28 +57,27 @@ class RustBackendTranslator:
     def imask_type_spelling(self) -> str:
         return "Self::ImaskType"
 
-    def render_pointer_cast(self, inner: str, *, is_const: bool, expr: str) -> str:
-        return f"({expr} as *{'const' if is_const else 'mut'} {inner})"
+    def const_param_type(self, kind: str) -> str:
+        if kind == "int":
+            return "usize"
+        return "bool"
+
+
+@dataclass(frozen=True, slots=True)
+class _RustIntrinsics:
+    backend_id: str
+
+    def default_suffix(self, extension: Extension, type_tag: str) -> str | None:
+        return common.default_suffix(extension, type_tag)
+
+    def compose_intrinsic_name(
+        self, extension: Extension, base: str, suffix: str | None
+    ) -> str | None:
+        return common.compose_intrinsic_name(self.backend_id, extension, base, suffix)
 
     def qualify_intrinsic(self, extension: Extension, name: str) -> str:
         module = _RUST_ARCH_MODULE.get(extension.family)
         return f"core::arch::{module}::{name}" if module is not None else name
-
-    def frame_body(self, body_text: str, *, requires_unsafe: bool) -> str:
-        body_text = body_text.replace("~", "!")
-        if requires_unsafe:
-            return f"unsafe {{ {body_text} }}"
-        return body_text
-
-    def render_assume_aligned(self, expr: str, alignment: str) -> str:
-        del alignment
-        return expr
-
-    def render_compile_switch(self, selector: str, arms: tuple[tuple[str, str], ...]) -> str:
-        rendered_arms = "".join(
-            f"{label} => {{\n        {body}\n      }}\n      " for label, body in arms
-        )
-        return f"match {selector} {{\n      {rendered_arms}}}"
 
     def render_immediate_intrinsic_call(
         self,
@@ -148,7 +113,74 @@ class RustBackendTranslator:
         arms = "".join(f"{k} => {name}::<{k}>({rest_text}), " for k in values)
         return f"match {imm} {{ {arms}_ => {name}::<{lo}>({rest_text}) }}"
 
-    def const_param_type(self, kind: str) -> str:
-        if kind == "int":
-            return "usize"
-        return "bool"
+
+@dataclass(frozen=True, slots=True)
+class _RustTemplates:
+    catalog: Catalog
+    backend_id: str
+
+    def template(self, key: str) -> str | None:
+        return common.template(self.catalog, self.backend_id, key)
+
+    def render_template(self, key: str, fallback: str | None = None, /, **fields: str) -> str:
+        return common.render_template(self.catalog, self.backend_id, key, fallback, **fields)
+
+
+@dataclass(frozen=True, slots=True)
+class _RustSyntax:
+    catalog: Catalog
+    backend_id: str
+
+    def frame_return(self, value: str) -> str:
+        return common.frame_return(self.catalog, self.backend_id, value)
+
+    def render_call(
+        self,
+        name: str,
+        args: str,
+        axis_values: tuple[str, ...] = (),
+        arg_generics: int = 0,
+        vec_override: str | None = None,
+        extra_args: tuple[str, ...] = (),
+    ) -> str:
+        axis = "".join(f", {value}" for value in axis_values)
+        extra = "".join(f", {value}" for value in extra_args)
+        inferred = ", _" * arg_generics
+        return f"{name}::<{vec_override or 'Self'}{axis}{extra}{inferred}>({args})"
+
+    def render_pointer_cast(self, inner: str, *, is_const: bool, expr: str) -> str:
+        return f"({expr} as *{'const' if is_const else 'mut'} {inner})"
+
+    def frame_body(self, body_text: str, *, requires_unsafe: bool) -> str:
+        body_text = body_text.replace("~", "!")
+        if requires_unsafe:
+            return f"unsafe {{ {body_text} }}"
+        return body_text
+
+    def render_assume_aligned(self, expr: str, alignment: str) -> str:
+        del alignment
+        return expr
+
+    def render_compile_switch(self, selector: str, arms: tuple[tuple[str, str], ...]) -> str:
+        rendered_arms = "".join(
+            f"{label} => {{\n        {body}\n      }}\n      " for label, body in arms
+        )
+        return f"match {selector} {{\n      {rendered_arms}}}"
+
+
+@dataclass(frozen=True, slots=True)
+class RustBackendDialect:
+    catalog: Catalog
+    backend_id: str = field(default="rust", init=False)
+    types: _RustTypes = field(init=False)
+    intrinsics: _RustIntrinsics = field(init=False)
+    templates: _RustTemplates = field(init=False)
+    syntax: _RustSyntax = field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "types", _RustTypes(self.catalog, self.backend_id))
+        object.__setattr__(self, "intrinsics", _RustIntrinsics(self.backend_id))
+        object.__setattr__(
+            self, "templates", _RustTemplates(self.catalog, self.backend_id)
+        )
+        object.__setattr__(self, "syntax", _RustSyntax(self.catalog, self.backend_id))

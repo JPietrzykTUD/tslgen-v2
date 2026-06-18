@@ -97,7 +97,7 @@ def _vector_value_from_extension(base_tag: str, extension: Extension) -> VectorV
 
 
 def _catalog_extension(extension_name: str, context: LoweringSession) -> Extension | None:
-    catalog = context.env.translation.catalog
+    catalog = context.env.catalog
     extension = catalog.extensions.get(extension_name)
     if extension is not None:
         return extension
@@ -235,7 +235,7 @@ class IntrinSuffixQuery:
             return TextValue(fragment) if fragment is not None else None
         if isinstance(arg, TextValue):  # a named suffix policy, keyed by extension block name
             key = f"intrinsic_suffix_{arg.text}_{context.env.extension.name}"
-            fragment = context.env.translation.template(key)
+            fragment = context.env.backend.templates.template(key)
             return TextValue(fragment) if fragment is not None else None
         return None
 
@@ -290,7 +290,7 @@ class RegisterQuery:
     head = "vector::register"
 
     def apply(self, args, context):  # noqa: ANN001
-        return TextValue(context.env.translation.register_type_spelling())
+        return TextValue(context.env.backend.types.register_type_spelling())
 
 
 class RegisterGenericQuery:
@@ -316,7 +316,7 @@ class RegisterGenericQuery:
             base_tag, isa = arg.base_tag, arg.extension_isa
         else:
             return None
-        spelling = context.env.translation.target_register_spelling(base_tag, isa)
+        spelling = context.env.backend.types.target_register_spelling(base_tag, isa)
         return TextValue(spelling) if spelling is not None else None
 
 
@@ -327,7 +327,7 @@ class MaskQuery:
     head = "vector::mask"
 
     def apply(self, args, context):  # noqa: ANN001
-        return TextValue(context.env.translation.mask_type_spelling())
+        return TextValue(context.env.backend.types.mask_type_spelling())
 
 
 class ImaskQuery:
@@ -338,7 +338,7 @@ class ImaskQuery:
     head = "vector::imask"
 
     def apply(self, args, context):  # noqa: ANN001
-        return TextValue(context.env.translation.imask_type_spelling())
+        return TextValue(context.env.backend.types.imask_type_spelling())
 
 
 class MaskLaneQuery:
@@ -354,11 +354,11 @@ class MaskLaneQuery:
     def apply(self, args, context):  # noqa: ANN001
         if args:
             return None
-        base = context.env.translation.scalar_spelling(context.env.type_tag)
-        if base is None or context.env.translation.template(self._template_key) is None:
+        base = context.env.backend.types.scalar_spelling(context.env.type_tag)
+        if base is None or context.env.backend.templates.template(self._template_key) is None:
             return None
         return TextValue(
-            context.env.translation.render_template(self._template_key, base=base)
+            context.env.backend.templates.render_template(self._template_key, base=base)
         )
 
 
@@ -557,7 +557,7 @@ class QueryEvaluator:
             scalar_tag = term.head[len("scalar::") :]
             if is_type_tag(scalar_tag):
                 return TypeValue(scalar_tag)
-            spelling = context.env.translation.scalar_spelling(scalar_tag)
+            spelling = context.env.backend.types.scalar_spelling(scalar_tag)
             return TextValue(spelling) if spelling is not None else None
         # A bare quoted string literal (e.g. a named suffix policy) is text.
         if not term.args and len(term.head) >= 2 and term.head[0] == '"' == term.head[-1]:

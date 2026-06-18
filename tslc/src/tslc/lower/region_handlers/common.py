@@ -9,12 +9,12 @@ from tslc.lower.context import LoweringSession, VectorValue
 def _vector_spelling(value: VectorValue, context: LoweringSession) -> str | None:
     """The backend type spelling of a :class:`VectorValue` (`simd<base, ext>`)."""
 
-    base = context.env.translation.scalar_spelling(value.base_tag)
+    base = context.env.backend.types.scalar_spelling(value.base_tag)
     if base is None:
         return None
     if value.extension_isa == "generic" and value.lanes is not None:
-        return context.env.translation.generic_vector_spelling(base, value.lanes)
-    return context.env.translation.vector_type_spelling(base, value.extension_isa)
+        return context.env.backend.types.generic_vector_spelling(base, value.lanes)
+    return context.env.backend.types.vector_type_spelling(base, value.extension_isa)
 
 
 def _split_arg_groups(segments: tuple[Segment, ...]) -> list[tuple[Segment, ...]]:

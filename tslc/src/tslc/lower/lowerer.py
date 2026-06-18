@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from tslc.backend.translation import BackendTranslator
+from tslc.backend.translation import BackendDialect
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     RESULT_DIM_BASE,
@@ -155,7 +155,7 @@ class Lowerer:
         self,
         selected: SelectedImplementation,
         catalog: Catalog,
-        translation: BackendTranslator,
+        backend: BackendDialect,
     ) -> LoweringResult:
         shape = parse_signature(selected.primitive.signature)
         if shape is None:
@@ -181,11 +181,11 @@ class Lowerer:
                 f"but signature {selected.primitive.signature!r} has {len(shape.param_kinds)}",
             )
 
-        base_type_spelling = translation.scalar_spelling(selected.type_tag)
+        base_type_spelling = backend.types.scalar_spelling(selected.type_tag)
         if base_type_spelling is None:
             return _error(
                 "TSL-LOWER-NO-BASE-TYPE",
-                f"no {translation.backend_id} base-type spelling for {selected.type_tag!r}",
+                f"no {backend.backend_id} base-type spelling for {selected.type_tag!r}",
             )
 
         # A representation-change primitive (`return_type: base|extension: …`) produces a
@@ -207,18 +207,18 @@ class Lowerer:
             dim = selected.primitive.result_target[0]
             if dim == RESULT_DIM_BASE:
                 # base dim: same extension, replace the element type with the target tag.
-                to_base_spelling = translation.scalar_spelling(selected.to_target)
+                to_base_spelling = backend.types.scalar_spelling(selected.to_target)
                 if to_base_spelling is None:
                     return _error(
                         "TSL-LOWER-NO-BASE-TYPE",
-                        f"no {translation.backend_id} base-type spelling for the target "
+                        f"no {backend.backend_id} base-type spelling for the target "
                         f"{selected.to_target!r}",
                     )
                 target = TargetVector(
-                    vector_spelling=translation.vector_type_spelling(
+                    vector_spelling=backend.types.vector_type_spelling(
                         to_base_spelling, selected.extension.isa_name
                     ),
-                    register_spelling=translation.target_register_spelling(
+                    register_spelling=backend.types.target_register_spelling(
                         selected.to_target, selected.extension.isa_name
                     ),
                     extension_isa=selected.extension.isa_name,
@@ -234,10 +234,10 @@ class Lowerer:
                 target_isa = target_ext.isa_name if target_ext else selected.to_target
                 scope.bind_extension_symbol(selected.primitive.result_target[1], target_isa)
                 target = TargetVector(
-                    vector_spelling=translation.vector_type_spelling(
+                    vector_spelling=backend.types.vector_type_spelling(
                         base_type_spelling, target_isa
                     ),
-                    register_spelling=translation.target_register_spelling(
+                    register_spelling=backend.types.target_register_spelling(
                         selected.type_tag, target_isa
                     ),
                     extension_isa=target_isa,
@@ -258,26 +258,27 @@ class Lowerer:
             imm_name = parameters[idx]
             imm_param = selected.primitive.immediate_param(imm_name)
             imm_type = imm_param.type_tag if imm_param is not None else "ui32"
-            imm_spelling = translation.scalar_spelling(imm_type)
+            imm_spelling = backend.types.scalar_spelling(imm_type)
             if imm_spelling is None:
                 return _error(
                     "TSL-LOWER-NO-IMMEDIATE-TYPE",
-                    f"no {translation.backend_id} spelling for the immediate type of "
+                    f"no {backend.backend_id} spelling for the immediate type of "
                     f"{selected.primitive.name!r}",
                 )
             immediate = (imm_name, imm_spelling)
             immediate_name = imm_name
             if imm_param is not None:
-                immediate_dispatch = imm_param.dispatch_for(translation.backend_id)
+                immediate_dispatch = imm_param.dispatch_for(backend.backend_id)
                 immediate_range = _resolve_immediate_range(
                     imm_param, selected.type_tag
                 )
 
         context = LoweringSession(
             env=LoweringEnv(
+                catalog=catalog,
+                backend=backend,
                 extension=selected.extension,
                 type_tag=selected.type_tag,
-                translation=translation,
                 attributes=dict(selected.primitive.attributes),
                 primitive_axes=_primitive_axes(catalog),
                 primitive_arg_generics=_primitive_arg_generics(catalog),
@@ -331,12 +332,12 @@ class Lowerer:
         # Inline `let<type>` aliases at their use sites (whole-word) — see LetLowerer.
         for alias, spelling in context.scope.type_aliases.items():
             rendered = re.sub(rf"\b{re.escape(alias)}\b", lambda _m, s=spelling: s, rendered)
-        body_text = translation.frame_body(
+        body_text = backend.syntax.frame_body(
             rendered, requires_unsafe=context.effects.requires_unsafe
         )
 
         specialization = LoweredSpecialization(
-            backend_id=translation.backend_id,
+            backend_id=backend.backend_id,
             primitive_name=selected.primitive.name,
             # Emit the ISA name (avx2), not the internal block name (avx2_vl):
             # the `_vl` distinction only steers selection, never the generated type.
@@ -356,7 +357,7 @@ class Lowerer:
             # `generic_params` split by kind: `bool`/`int` are non-type (const) params; a
             # `simd_type` is a free type param (see `type_params`).
             generic_params=tuple(
-                (gp.name, translation.const_param_type(gp.kind), gp.default)
+                (gp.name, backend.types.const_param_type(gp.kind), gp.default)
                 for gp in selected.primitive.generic_params
                 if gp.kind != "simd_type"
             ),

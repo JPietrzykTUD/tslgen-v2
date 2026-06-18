@@ -24,7 +24,7 @@ class QueryRegionLowerer:
         if isinstance(value, TextValue):
             return value.text
         if isinstance(value, TypeValue):
-            spelling = context.env.translation.scalar_spelling(value.type_tag)
+            spelling = context.env.backend.types.scalar_spelling(value.type_tag)
             if spelling is not None:
                 return spelling
         if isinstance(value, VectorValue):  # e.g. `type<generation>(transform_extension(ToBase))`

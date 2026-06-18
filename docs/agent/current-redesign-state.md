@@ -1189,21 +1189,31 @@ Milestone 254.91: ImplementationBody Full Deletion.
 Latest review verdict:
 
 ```text
-M254.9 execution-review returned Accept. Architecture/boundary, evidence, test,
-documentation, and validation audits accepted the slice. The required read-only
-subagent spawns were attempted but the subagent tool reported a usage-limit
-error before returning reviews; the orchestrator closed the failed handles and
-completed equivalent read-only audits locally. Final validation:
-`git diff --check` exit 0 with no output after marking new M254.9/M254.91
-files intent-to-add;
-`python -B -m compileall -q tslgen/src/tslgen tslgen/tests` exit 0 with no
-output; required pytest bundle exit 0 with 282 tests passed in 63.81s.
-`rg -n "\bImplementationBody\b" tslgen/src tslgen/tests` exited 0 and printed
-the exact accounting output recorded in
-`docs/agent/m254.9-implementationbody-accounting.txt`. Initial `find tslgen
--type d -name __pycache__ -print` listed validation caches; after removing
-caches, the final `find` command exited 0 with no output. `.pytest_cache`,
-`.mypy_cache`, and `.ruff_cache` checks all exited 0 with no output.
+TSLc backend dialect facet split review returned Accept. The review found no
+blocking issues. The slice replaces `BackendTranslator` with `BackendDialect`
+plus `types`, `intrinsics`, `templates`, and `syntax` facets; updates
+`LoweringEnv` to carry explicit `catalog` and `backend` fields; migrates
+lowering/query/dependency call sites; updates tests; and records the change in
+`docs/agent/tslc-vector-query-handoff.md`.
+
+Review validation:
+`python -B -m compileall -q tslc/src/tslc tslc/tests` passed;
+`python -m pytest -q tslc/tests/test_select_and_lower.py` passed with
+10 tests; `python -m pytest -q tslc/tests/test_generation_conditionals.py`
+passed with 19 tests; `python -m pytest -q tslc/tests/test_masks_and_calls.py`
+passed with 8 tests; `python -m pytest -q tslc/tests/test_determinism.py`
+passed with 1 test;
+`python -m pytest -q tslc/tests --ignore=tslc/tests/test_build_verify.py`
+passed with 75 tests; migration search
+`rg "BackendTranslator|create_backend_translation|env\\.translation|translation\\.catalog" tslc/src/tslc tslc/tests`
+returned no hits; `git diff --check` passed. The full-suite probe
+`python -m pytest -q -x tslc/tests` stopped at
+`tslc/tests/test_build_verify.py::test_generated_profiles_build` because
+`/opt/zig/zig c++` attempted to create `/root/.cache/zig/tmp/...` and failed
+with `ReadOnlyFileSystem`.
+
+No `docs/redesign/design-decisions.md` update was made because the TSLc slice
+implements the existing capability-boundary direction rather than a new policy.
 
 M254.91 is selected next to finish the removal series by deleting all remaining
 `ImplementationBody` production and test references if possible in one coherent
@@ -1375,7 +1385,7 @@ M255 real generic self-call selector specialization lowering execution-review.
 Completed prompt:
 
 ```text
-docs/agent/runs/m254-real-generic-unmasked-binary-arithmetic-body-lowering-execution-review-loop-prompt.md
+docs/agent/runs/tslc-backend-dialect-facet-split-review-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

@@ -33,19 +33,19 @@ class VarLowerer:
             # `[BaseType::default(); LANES]` and ignores it).
             if (
                 len(groups) != 1
-                or context.env.translation.template("var_init_register") is None
+                or context.env.backend.templates.template("var_init_register") is None
             ):
                 context.effects.skip(
                     "TSL-LOWER-UNSUPPORTED-VAR",
                     f"unsupported var<init_register>: {region.full_text!r}",
                 )
                 return region.full_text
-            return context.env.translation.render_template(
+            return context.env.backend.templates.render_template(
                 "var_init_register",
-                type=context.env.translation.register_type_spelling(),
+                type=context.env.backend.types.register_type_spelling(),
                 name=render(groups[0]).strip(),
             )
-        if len(groups) < 2 or context.env.translation.template(f"var_{variant}") is None:
+        if len(groups) < 2 or context.env.backend.templates.template(f"var_{variant}") is None:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-VAR",
                 f"unsupported var<{variant}> declaration: {region.full_text!r}",
@@ -53,7 +53,7 @@ class VarLowerer:
             return region.full_text
         name = render(groups[0]).strip()
         value = ", ".join(render(group) for group in groups[1:])
-        return context.env.translation.render_template(
+        return context.env.backend.templates.render_template(
             f"var_{variant}", name=name, value=value
         )
 
@@ -75,16 +75,16 @@ class VarLowerer:
         name = render(groups[1]).strip()
         # An uninitialized array uses the type-carrying template (see class docstring).
         key = "var_array_uninit" if "uninit" in _segment_text(groups[2]) else f"var_{variant}"
-        if context.env.translation.template(key) is None:
+        if context.env.backend.templates.template(key) is None:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-VAR",
                 f"unsupported var<typed> declaration: {region.full_text!r}",
             )
             return region.full_text
         if key == "var_array_uninit":
-            return context.env.translation.render_template(key, type=type_text, name=name)
+            return context.env.backend.templates.render_template(key, type=type_text, name=name)
         value = render(groups[2])
-        return context.env.translation.render_template(
+        return context.env.backend.templates.render_template(
             key, type=type_text, name=name, value=value
         )
 

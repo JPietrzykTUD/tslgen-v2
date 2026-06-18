@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from tslc.backend.translation import create_backend_translation
+from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.model import Catalog, Extension
 from tslc.ir.scan import scan
 from tslc.ir.segments import RawText, Region, Segment
@@ -195,9 +195,10 @@ class _DependencyResolver:
         )
         return LoweringSession(
             env=LoweringEnv(
+                catalog=self.catalog,
+                backend=create_backend_dialect(self.catalog, "cpp"),
                 extension=extension,
                 type_tag=self.current.base_tag,
-                translation=create_backend_translation(self.catalog, "cpp"),
             ),
             scope=LoweringScope(
                 target_type_symbols=target_type_aliases,
