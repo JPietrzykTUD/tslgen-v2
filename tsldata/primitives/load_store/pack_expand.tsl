@@ -105,7 +105,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
           tsil """
                var<infer>(offset, 0) 
                loop<range>(i, 0, value<generation>(vector::length), 1) {
-                if(details::mask_test<Vec>(m, i)){
+                if(mask<test>(m, i)){
                   *ptr_add_mut(ptr, offset) = a[i];
                   offset += 1;
                 }
@@ -219,7 +219,7 @@ prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
                var<infer>(offset, 0) 
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
-                if(details::mask_test<Vec>(m, i)) {
+                if(mask<test>(m, i)) {
                   result[i] = *ptr_add(ptr, offset);
                   offset += 1;
                 }

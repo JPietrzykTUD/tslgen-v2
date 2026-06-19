@@ -740,6 +740,7 @@ translation rust:
   mask_clear_lane_bitmask "{name} &= !(1u64 << {index})"
   mask_set_to_lane_bitmask "{name} = ({name} & !(1u64 << {index})) | (((({value}) as u64) & 1u64) << {index})"
   mask_test_lane_bitmask "((({mask} >> {index}) & 1u64) != 0)"
+  mask_test_lane_register "Self::mask_lane_test({mask}, {index})"
   flow_if_static "if {cond}"
   flow_else_if_static "else if {cond}"
   flow_if_runtime "if {cond}"

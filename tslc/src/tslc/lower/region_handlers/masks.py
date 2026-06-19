@@ -21,7 +21,14 @@ class MaskLowerer:
 
     def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
         op, _, bit = region.selector_text.strip().partition(":")
-        repr_kind = context.env.extension.mask_policy.kind
+        extension = context.env.extension
+        repr_kind = extension.mask_policy.kind
+        # `lane_bitmask` covers two physical reprs: the generic vector's integer bitset (one bit
+        # per lane) and the sse/avx2 register lane-mask (the mask IS a data register, one
+        # all-ones/all-zeros lane per element). They test differently, so a register-backed
+        # lane mask (a real vector width) gets its own `*_lane_register` key.
+        if repr_kind == "lane_bitmask" and extension.vector_bits > 0:
+            repr_kind = "lane_register"
         args = [
             render(group).strip()
             for group in _split_arg_groups(region.body)

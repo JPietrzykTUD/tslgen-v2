@@ -217,7 +217,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
               var<init_register>(result)
               loop<unroll>(value<generation>(vector::length))
               loop<range>(i, 0, value<generation>(vector::length), 1)  {
-                if (details::mask_test<Vec>(mask, i)) {
+                if (mask<test>(mask, i)) {
                   result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), shift]>(data[i]);
                 } else {
                   result[i] = data[i];

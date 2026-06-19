@@ -70,6 +70,7 @@ translation cpp:
   mask_clear_lane_bitmask "{name} &= ~(1ull << {index})"
   mask_set_to_lane_bitmask "{name} = ({name} & ~(1ull << {index})) | ((static_cast<std::uint64_t>({value}) & 1ull) << {index})"
   mask_test_lane_bitmask "((({mask} >> {index}) & 1ull) != 0)"
+  mask_test_lane_register "::tsl::details::mask_test<Vec>({mask}, {index})"
   flow_if_static "if constexpr ({cond})"
   flow_else_if_static "else if constexpr ({cond})"
   flow_if_runtime "if ({cond})"

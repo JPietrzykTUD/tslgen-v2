@@ -99,7 +99,7 @@ prim<im:=m> to_integral(mask):
               ImaskT result = 0;
               const  type<backend>(scalar::size)  mask_bits = value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8;
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
-                if (i < mask_bits && details::mask_test<Vec>(mask, i)) {
+                if (i < mask_bits && mask<test>(mask, i)) {
                   result |= cast<static>(ImaskT, 1) << i;
                 }
               }
@@ -125,7 +125,7 @@ prim<im:=m> to_integral(mask):
               ImaskT result = 0;
               const  type<backend>(scalar::size)  mask_bits = value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8;
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
-                if (i < mask_bits && details::mask_test<Vec>(mask, i)) {
+                if (i < mask_bits && mask<test>(mask, i)) {
                   result |= cast<static>(ImaskT, 1) << i;
                 }
               }

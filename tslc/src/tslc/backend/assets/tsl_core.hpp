@@ -182,6 +182,24 @@ inline std::uint32_t ctz(T v) {
         __builtin_ctzll(static_cast<unsigned long long>(static_cast<U>(v)))
     );
 }
+// Test lane `index` of an emulated mask, agnostic to how the vector stores it. Two reprs:
+// an integer bitset (the generic vector's `std::uint64_t`, or a native `__mmaskN`) tests bit
+// `index`; a register lane-mask (sse/avx2, where the mask IS a data register whose lanes are
+// all-ones/all-zeros) reads lane `index`'s base-sized chunk and tests it for nonzero. The
+// `if constexpr` keeps each branch well-formed for only the matching `mask_type`. (`mask<test>`
+// routes register reprs here; the bitset repr stays the inline shift template.)
+template <class Vec>
+inline bool mask_test(const typename Vec::mask_type& mask, std::size_t index) {
+    using MaskT = typename Vec::mask_type;
+    if constexpr (std::is_integral_v<MaskT>) {
+        return ((mask >> index) & 1ull) != 0;
+    } else {
+        using BaseT = typename Vec::base_type;
+        BaseT lanes[sizeof(MaskT) / sizeof(BaseT)];
+        std::memcpy(lanes, &mask, sizeof(mask));
+        return lanes[index] != BaseT(0);
+    }
+}
 }  // namespace details
 
 }  // namespace tsl

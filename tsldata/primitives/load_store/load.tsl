@@ -163,7 +163,7 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
             var<init_register>(result)
             loop<unroll>(value<generation>(vector::length)) 
             loop<range>(i, 0, value<generation>(vector::length), 1)  {
-              if (details::mask_test<Vec>(mask, i)) {
+              if (mask<test>(mask, i)) {
                 result[i] = *ptr_add(ptr, i);
               } else {
                 result[i] = cast<static>(type<generation>(base::in), 0);
@@ -288,7 +288,7 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
             var<init_register>(result)
             loop<unroll>(value<generation>(vector::length)) 
             loop<range>(i, 0, value<generation>(vector::length), 1)  {
-              if (details::mask_test<Vec>(mask, i)) {
+              if (mask<test>(mask, i)) {
                 result[i] = *ptr_add(ptr, i);
               } else {
                 result[i] = data[i];

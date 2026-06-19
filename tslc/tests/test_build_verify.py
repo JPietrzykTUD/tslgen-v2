@@ -1114,26 +1114,27 @@ def test_bit_reductions_build(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
-@pytest.mark.skip(
-    reason="needs a universal details::mask_test<Vec> mask-model slice (Phase B2). The "
-    "load_mask/store_mask/masked_set1/compress/expand_load fallbacks loop over lanes testing "
-    "the mask. The sse/avx2 mask is a REGISTER (__m128/__m256i), not the generic vector's u64 "
-    "bitset, so the lane-bitmask `(m>>i)&1` form is invalid there (`value where integer is "
-    "required`); they need a universal helper that branches integral-bitset vs register-lane "
-    "extraction. The C++ helper is tractable; the Rust register->lane transmute is the hard "
-    "part and risks the verified generic mask<test> path."
-)
 def test_masked_memory_build(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
     # The masked / sparse memory family: `load_mask` (`m:=ptr`) / `store_mask`
     # (`void:=(ptr,m)`), `masked_set1` (`v:=(m,v,s)`), `compress` (`v:=(m,v)`),
-    # `expand_load` (`v:=(m,ptr)`). See skip reason above.
+    # `expand_load` (`v:=(m,ptr)`). avx512 native mask_compress/mask_expandload plus the
+    # generic/sse/avx2 per-lane fallbacks whose loop tests the mask with `mask<test>`. That
+    # region now lowers per physical mask repr: the generic vector's integer bitset uses the
+    # inline `(m>>i)&1` shift, while sse/avx2 register lane-masks route to the universal
+    # `tsl::details::mask_test<Vec>` / `Self::mask_lane_test` lane-extraction helper. sse2/avx2
+    # exercise the register-mask loop fallback (the path the helper fixes); skylake exercises
+    # the AVX-512 native paths plus the generic fallback for the vbmi2-gated i8/i16 `compress`
+    # (Skylake-X lacks VBMI2, so those `compress` bodies skip and fall back to the loop).
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["load_mask", "store_mask", "masked_set1", "compress", "expand_load"],
-        profiles=["avx2", "skylake"],
+        primitives=[
+            "load_mask", "store_mask", "masked_set1", "compress", "compress_store",
+            "expand_load",
+        ],
+        profiles=["sse2", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None

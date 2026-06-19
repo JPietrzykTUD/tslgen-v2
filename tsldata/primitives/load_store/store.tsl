@@ -203,7 +203,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
                   cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)
                 );
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
-                  if (details::mask_test<Vec>(mask, i)) {
+                  if (mask<test>(mask, i)) {
                     *ptr_add_mut(ptr, i) = one_bits;
                   } else {
                     *ptr_add_mut(ptr, i) = cast<static>(MaskWord, 0);
@@ -256,7 +256,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
               }
 
               loop<range>(lane, 0, lanes, 1) {
-                if (details::mask_test<Vec>(mask, lane)) {
+                if (mask<test>(mask, lane)) {
                   *ptr_add_mut(bytes, lane >> 3) =
                     *ptr_add(bytes, lane >> 3) |
                     cast<static>(type<backend>(scalar::ui8), (1 << (lane & 7)));
@@ -269,7 +269,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
                 cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)
               );
               loop<range>(i, 0, value<generation>(vector::length), 1) {
-                if (details::mask_test<Vec>(mask, i)) {
+                if (mask<test>(mask, i)) {
                   *ptr_add_mut(ptr, i) = one_bits;
                 } else {
                   *ptr_add_mut(ptr, i) = cast<static>(MaskWord, 0);
@@ -371,7 +371,7 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
         implementation:
           tsil """
             loop<range>(i, 0, value<generation>(vector::length), 1)  {
-              if (details::mask_test<Vec>(mask, i)) {
+              if (mask<test>(mask, i)) {
                 *ptr_add_mut(ptr, i) = data[i];
               }
             }

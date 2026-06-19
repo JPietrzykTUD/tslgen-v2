@@ -212,7 +212,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
               T result;
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = data[i];
-                if (details::mask_test<Vec>(mask, i)) {
+                if (mask<test>(mask, i)) {
                   result[i] = scalar;
                 }
               }

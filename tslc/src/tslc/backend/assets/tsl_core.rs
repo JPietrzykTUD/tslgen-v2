@@ -19,6 +19,25 @@ pub trait SimdVector {
     // an element-wise loop body in a *generic* context — e.g. gather's `idx_array[i]` over a free
     // `IndicesType` — can read/write lanes; concrete `array_type` already satisfies this.
     type Array: Index<usize, Output = Self::BaseType> + IndexMut<usize>;
+
+    // Test lane `index` of a register-backed lane mask (sse/avx2): the mask IS a data register
+    // whose lanes are all-ones (set) or all-zeros (clear), so lane `index` is a BaseType-sized
+    // byte chunk and nonzero means set. Counterpart to the register branch of C++
+    // `tsl::details::mask_test`. `mask<test>` calls this only for register reprs; the integer
+    // bitset repr (generic `u64`, native `__mmaskN`) uses the inline shift template, so the
+    // default body is never reached for those.
+    fn mask_lane_test(mask: Self::MaskType, index: usize) -> bool {
+        let lane_bytes = core::mem::size_of::<Self::BaseType>();
+        let bytes = unsafe {
+            core::slice::from_raw_parts(
+                (&mask as *const Self::MaskType) as *const u8,
+                core::mem::size_of::<Self::MaskType>(),
+            )
+        };
+        bytes[index * lane_bytes..(index + 1) * lane_bytes]
+            .iter()
+            .any(|&b| b != 0)
+    }
 }
 
 // scalar is always available and needs no SIMD substrate.

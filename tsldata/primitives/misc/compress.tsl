@@ -120,7 +120,21 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
                 )
               );
             """
-      [?i16, ?i32, ?i64]:
+      ?i16:
+        requires:
+          sse [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
+          sse_vl [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
+        implementation:
+          tsil """
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              emit_return(
+                intrin_compose<maskz_compress, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                  cast<static>(ui8, imask),
+                  data
+                )
+              );
+            """
+      [?i32, ?i64]:
         requires:
           sse [avx512f, avx512vl, sse, sse2]
           sse_vl [avx512f, avx512vl, sse, sse2]
