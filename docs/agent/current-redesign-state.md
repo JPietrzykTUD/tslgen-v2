@@ -4,6 +4,24 @@ This file is the handoff state for Codex tasks. It is intentionally concise and
 must be updated after accepted milestones, accepted documentation corrections,
 or accepted planning passes.
 
+## Active Line: `tslc` (updated 2026-06-19)
+
+The active codebase is **`tslc/`**. The `tslgen/` line documented by the
+milestone history below (M1–M254.x) is the **prior, now-superseded** approach;
+it has not been touched in recent history (the last 20+ commits are entirely
+`tslc/` + `tsldata/` + `docs/`). Do not run the old `tslgen` milestone prompts.
+
+The authoritative running handoff for the active `tslc` work is
+`docs/agent/tslc-vector-query-handoff.md`. Source-language and architecture
+decisions for `tslc` are recorded in `docs/redesign/design-decisions.md`
+(most recently ADR-074 vector-query vocabulary and ADR-075 diagnostic
+provenance). The `## Current Work State` section near the end of this file has
+been refreshed to describe `tslc`; the long milestone history that follows it is
+retained only as the `tslgen` record.
+
+The `## Accepted Through` list and the milestone narrative immediately below are
+`tslgen` history, kept for reference.
+
 ## Accepted Through
 
 Milestone 225 is accepted. Milestone 226.5 planning is accepted. Milestone 227
@@ -1168,22 +1186,53 @@ selected implementations without fragments. Exact remaining
 
 ## Current Work State
 
-Current required action:
+> The pointers below describe the active `tslc` line. The `tslgen` milestone
+> blocks above this section, and the "Previous review verdict" block below, are
+> retained `tslgen` history and are not active work.
+
+Active codebase:
 
 ```text
-Run M254.91 ImplementationBody full deletion execution-review loop.
+tslc/ (with source corpus tsldata/). Authoritative handoff:
+docs/agent/tslc-vector-query-handoff.md
 ```
 
-Active run prompt:
+Last accepted work (committed):
 
 ```text
-docs/agent/runs/m254.91-implementation-body-full-deletion-execution-review-loop-prompt.md
+- 791d27d Fix vector primitive calls and modularize lowering/rendering
+- 412cb36 Refactor backend translation behind protocol
+- 3dafc32 Refactor tslc lowering state into explicit session parts
+- 418a287 Split TSLc backend translation into dialect facets
+- 0b04bb6 Thread source provenance through TSLc diagnostics (ADR-075)
+- 650d055 Speed up TSLc generation with cached lowering inputs
 ```
 
-Active execution milestone:
+Verification status (2026-06-19):
 
 ```text
-Milestone 254.91: ImplementationBody Full Deletion.
+- Non-build suite: 80 passed, 40 deselected (`pytest -k 'not build'`).
+- The convert_down insert-based narrowing bug is FIXED and build-verified.
+  `tslc/tests/test_build_verify.py::test_convert_builds` passes (exit 0, ~39s)
+  for convert_up/convert_down/load_convert_up across scalar/sse2/avx/avx2/
+  skylake in BOTH C++ and Rust. The insert-based convert_down bodies are
+  actually emitted (not pruned): insert calls resolve to vector types such as
+  `::tsl::insert<tsl::simd<int8_t, tsl::avx2>, tsl::simd<int8_t, tsl::avx512>,
+  index>(...)` instead of the old bare `avx2` identifier, and the dependent
+  `insert_impl` specializations are present. Zero bare-extension insert lines.
+- Toolchain note: build verification needs `cmake`+`zig c++` (CXX=zig c++) and
+  `cargo`; it requires a writable `/root/.cache/zig`. Earlier timeouts/failures
+  were the read-only-cache environment, now resolved in this container.
+```
+
+Suggested next actions:
+
+```text
+- Optionally run the full `tslc/tests/test_build_verify.py` (slow; the other
+  build tests cover the broad primitive set) in an environment that allows it.
+- Keep the old `tslgen` vector-query forms unsupported (ADR-074).
+- `pytest.ini` still sets `pythonpath = tslgen/src`; the `tslc` tests work via
+  their own conftest. Run `tslc` modules directly with `PYTHONPATH=tslc/src`.
 ```
 
 Latest review verdict:
@@ -1206,47 +1255,28 @@ passed with 1 test;
 `python -m pytest -q tslc/tests --ignore=tslc/tests/test_build_verify.py`
 passed with 75 tests; migration search
 `rg "BackendTranslator|create_backend_translation|env\\.translation|translation\\.catalog" tslc/src/tslc tslc/tests`
-returned no hits; `git diff --check` passed. The full-suite probe
-`python -m pytest -q -x tslc/tests` stopped at
-`tslc/tests/test_build_verify.py::test_generated_profiles_build` because
-`/opt/zig/zig c++` attempted to create `/root/.cache/zig/tmp/...` and failed
-with `ReadOnlyFileSystem`.
+returned no hits; `git diff --check` passed. At review time the build-verify
+suite was blocked by a read-only `/root/.cache/zig`; that environment limitation
+is now resolved (see Verification status above), and the targeted build tests
+pass.
 
 No `docs/redesign/design-decisions.md` update was made because the TSLc slice
 implements the existing capability-boundary direction rather than a new policy.
-
-M254.91 is selected next to finish the removal series by deleting all remaining
-`ImplementationBody` production and test references if possible in one coherent
-mechanical slice. If full deletion proves unsafe in one slice, M254.91 must
-stop and create a narrower M254.92 prompt with exact remaining-reference
-accounting.
 ```
 
-Next expected action:
-
-```text
-Run the active M254.91 execution-review loop. Focus on deleting
-`ImplementationBody` rather than wrapping or renaming it. Replace the domain
-field with direct typed body fields, update production construction/consumers,
-and mechanically update tests. Preserve fragment-present authority and
-fragment-absent token-only fallback. Do not add new TSIL semantics, source
-scanners, parser paths, pairwise keyword handlers, backend rendering/build
-verification, or fixture-shaped architecture.
-```
-
-Validation expectations for the active M254.91 prompt:
+Validation commands for the active `tslc` line:
 
 ```bash
 git diff --check
-python -B -m compileall -q tslgen/src/tslgen tslgen/tests
-PYTHONPATH=tslgen/src python -B -m pytest -p no:cacheprovider tslgen/tests
-rg -n "\bImplementationBody\b" tslgen/src tslgen/tests
-find tslgen -type d -name __pycache__ -print
+python -B -m compileall -q tslc/src/tslc tslc/tests
+python -m pytest -q -k 'not build' tslc/tests          # fast: lowering/render/etc.
+python -m pytest -q tslc/tests/test_build_verify.py     # slow: real C++/Rust builds
 ```
 
-For M254.91 the `rg` command is a deletion gate. Expected output is empty with
-exit code 1. If validation creates caches under `tslgen`, remove them and rerun
-the final `find` command before reporting.
+> The block below this point is `tslgen` history. The "Next expected action" and
+> validation expectations that previously pointed at `tslgen` Milestone 254.91
+> (ImplementationBody deletion) have been removed: that milestone belongs to the
+> superseded `tslgen` line and is not active work.
 
 Previous review verdict:
 

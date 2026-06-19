@@ -474,43 +474,37 @@ def _immediate_params(
         dict(zip(declaration.parameters, shape.param_kinds)) if shape is not None else {}
     )
     name = declaration.name
+
+    def reject(code: str, message: str, source: SourceSpan | None) -> None:
+        diagnostics.append(
+            diagnostic_at(severity="error", code=code, message=message, source=source)
+        )
+
     result: list[ImmediateParam] = []
     seen: set[str] = set()
     for entry in _children(fields[0].field):
         param_name = entry.key.text
         if param_name in seen:
-            diagnostics.append(
-                diagnostic_at(
-                    severity="error",
-                    code="TSL-PARAMS-DUPLICATE",
-                    message=f"duplicate `params` entry {param_name!r} on {name!r}",
-                    source=_source_span(entry.source),
-                )
+            reject(
+                "TSL-PARAMS-DUPLICATE",
+                f"duplicate `params` entry {param_name!r} on {name!r}",
+                _source_span(entry.source),
             )
             continue
         seen.add(param_name)
         if param_name not in kinds:
-            diagnostics.append(
-                diagnostic_at(
-                    severity="error",
-                    code="TSL-PARAMS-UNKNOWN-PARAM",
-                    message=f"`params` entry {param_name!r} is not a parameter of {name!r}",
-                    source=_source_span(entry.source),
-                )
+            reject(
+                "TSL-PARAMS-UNKNOWN-PARAM",
+                f"`params` entry {param_name!r} is not a parameter of {name!r}",
+                _source_span(entry.source),
             )
             continue
         if kinds[param_name] != "sImm":
-            diagnostics.append(
-                diagnostic_at(
-                    severity="error",
-                    code="TSL-PARAMS-NOT-IMMEDIATE",
-                    message=(
-                        f"`params` entry {param_name!r} on {name!r} is not an `sImm` "
-                        "immediate (its signature kind is "
-                        f"{kinds[param_name]!r})"
-                    ),
-                    source=_source_span(entry.source),
-                )
+            reject(
+                "TSL-PARAMS-NOT-IMMEDIATE",
+                f"`params` entry {param_name!r} on {name!r} is not an `sImm` immediate "
+                f"(its signature kind is {kinds[param_name]!r})",
+                _source_span(entry.source),
             )
             continue
         range_field = _child(entry, "value_range")
@@ -518,16 +512,11 @@ def _immediate_params(
         value_range = _parse_value_range(range_text)
         if range_text is not None and value_range is None:
             range_source = range_field.source if range_field is not None else entry.source
-            diagnostics.append(
-                diagnostic_at(
-                    severity="error",
-                    code="TSL-PARAMS-BAD-RANGE",
-                    message=(
-                        f"malformed `value_range` {range_text!r} for {param_name!r} on "
-                        f"{name!r} (expected `lo..hi` or `lo..=hi`)"
-                    ),
-                    source=_source_span(range_source),
-                )
+            reject(
+                "TSL-PARAMS-BAD-RANGE",
+                f"malformed `value_range` {range_text!r} for {param_name!r} on "
+                f"{name!r} (expected `lo..hi` or `lo..=hi`)",
+                _source_span(range_source),
             )
         dispatch = tuple(
             (child.key.text, _field_text(child) or "")

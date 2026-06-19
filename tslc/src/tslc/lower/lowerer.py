@@ -27,7 +27,7 @@ from tslc.catalog.model import (
     Catalog,
     ImmediateParam,
 )
-from tslc.catalog.signatures import parse_signature
+from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at, sort_diagnostics
 from tslc.ir.scan import scan
 from tslc.ir.segments import RawText, Region, Segment
@@ -215,97 +215,19 @@ class Lowerer:
                 source=_implementation_source(selected),
             )
 
-        # A representation-change primitive (`return_type: base|extension: …`) produces a
-        # TARGET vector — the source vector with one dimension replaced. Resolve every spelling
-        # of it as one `TargetVector` and bind the target alias declared by the primitive.
-        # Current source bodies also use `ToType` as a target-base synonym, so keep it bound
-        # to the same value without treating `ToBase` itself as a keyword.
+        # A representation-change primitive produces a TARGET vector; resolve it (and bind
+        # its declared target alias into the scope), or propagate the skip/error it returns.
         scope = LoweringScope()
-        target: TargetVector | None = None
-        if selected.primitive.result_target is not None and selected.to_target is not None:
-            # The generic vector is sized by `LANES`; a target vector under it needs that
-            # threaded into the second type param — deferred (the x86/scalar reinterpret slice).
-            if selected.extension.isa_name == "generic":
-                return _skip(
-                    "TSL-LOWER-UNSUPPORTED-TARGET-VECTOR",
-                    f"representation-change on the generic vector (LANES-sized target) is "
-                    f"not supported yet: {selected.primitive.name!r}",
-                    source=_implementation_source(selected),
-                )
-            dim = selected.primitive.result_target[0]
-            if dim == RESULT_DIM_BASE:
-                # base dim: same extension, replace the element type with the target tag.
-                to_base_spelling = backend.types.scalar_spelling(selected.to_target)
-                if to_base_spelling is None:
-                    return _error(
-                        "TSL-LOWER-NO-BASE-TYPE",
-                        f"no {backend.backend_id} base-type spelling for the target "
-                        f"{selected.to_target!r}",
-                        source=_implementation_source(selected),
-                    )
-                target = TargetVector(
-                    vector_spelling=backend.types.vector_type_spelling(
-                        to_base_spelling, selected.extension.isa_name
-                    ),
-                    register_spelling=backend.types.target_register_spelling(
-                        selected.to_target, selected.extension.isa_name
-                    ),
-                    extension_isa=selected.extension.isa_name,
-                    base_tag=selected.to_target,
-                    base_spelling=to_base_spelling,
-                )
-                scope.bind_target_type_symbol(
-                    selected.primitive.result_target[1], selected.to_target
-                )
-                scope.bind_target_type_symbol("ToType", selected.to_target)
-            else:  # RESULT_DIM_EXTENSION: another extension, same base type
-                target_ext = catalog.extensions.get(selected.to_target)
-                target_isa = target_ext.isa_name if target_ext else selected.to_target
-                scope.bind_extension_symbol(selected.primitive.result_target[1], target_isa)
-                target = TargetVector(
-                    vector_spelling=backend.types.vector_type_spelling(
-                        base_type_spelling, target_isa
-                    ),
-                    register_spelling=backend.types.target_register_spelling(
-                        selected.type_tag, target_isa
-                    ),
-                    extension_isa=target_isa,
-                    base_tag=selected.type_tag,
-                    base_spelling=base_type_spelling,
-                )
+        target = _resolve_target_vector(selected, catalog, backend, base_type_spelling, scope)
+        if isinstance(target, LoweringResult):
+            return target
 
-        # An `sImm` operand is a compile-time immediate: resolve its (name, backend type
-        # spelling) so the backend can emit it as a template/const-generic param. Its type,
-        # per-backend forwarding strategy, and legal range come from the `params:` block
-        # (`immediate_param`); absent metadata defaults to `ui32` with positional forwarding.
-        immediate: tuple[str, str] | None = None
-        immediate_name: str | None = None
-        immediate_dispatch: str | None = None
-        immediate_range: tuple[int, int, bool] | None = None
-        if "sImm" in shape.param_kinds:
-            idx = shape.param_kinds.index("sImm")
-            imm_name = parameters[idx]
-            imm_param = selected.primitive.immediate_param(imm_name)
-            imm_type = imm_param.type_tag if imm_param is not None else "ui32"
-            imm_spelling = backend.types.scalar_spelling(imm_type)
-            if imm_spelling is None:
-                return _error(
-                    "TSL-LOWER-NO-IMMEDIATE-TYPE",
-                    f"no {backend.backend_id} spelling for the immediate type of "
-                    f"{selected.primitive.name!r}",
-                    source=(
-                        imm_param.source
-                        if imm_param is not None and imm_param.source is not None
-                        else _implementation_source(selected)
-                    ),
-                )
-            immediate = (imm_name, imm_spelling)
-            immediate_name = imm_name
-            if imm_param is not None:
-                immediate_dispatch = imm_param.dispatch_for(backend.backend_id)
-                immediate_range = _resolve_immediate_range(
-                    imm_param, selected.type_tag
-                )
+        # Resolve the `sImm` compile-time immediate, if any (operand + forwarding facts).
+        resolved_immediate = _resolve_immediate(selected, shape, backend)
+        if isinstance(resolved_immediate, LoweringResult):
+            return resolved_immediate
+        immediate, immediate_dispatch, immediate_range = resolved_immediate
+        immediate_name = immediate[0] if immediate is not None else None
 
         catalog_facts = self._facts_for(catalog)
         context = LoweringSession(
@@ -448,6 +370,115 @@ def _resolve_immediate_range(
     else:
         return None
     return (lo, hi, inclusive)
+
+
+def _resolve_target_vector(
+    selected: SelectedImplementation,
+    catalog: Catalog,
+    backend: BackendDialect,
+    base_type_spelling: str,
+    scope: LoweringScope,
+) -> "TargetVector | None | LoweringResult":
+    """Resolve the target of a representation-change primitive and bind its declared target
+    alias into ``scope``.
+
+    A representation-change primitive (`return_type: base|extension: …`) produces a TARGET
+    vector — the source vector with one dimension replaced. Every spelling of it is bundled as
+    one :class:`TargetVector`. Current source bodies also use `ToType` as a target-base synonym,
+    so it is bound to the same value without treating `ToBase` itself as a keyword.
+
+    Returns ``None`` for an ordinary primitive, a :class:`TargetVector` for a representation-change
+    one, or a :class:`LoweringResult` (skip/error) to propagate when the target can't be expressed
+    yet.
+    """
+
+    if selected.primitive.result_target is None or selected.to_target is None:
+        return None
+    # The generic vector is sized by `LANES`; a target vector under it needs that threaded
+    # into the second type param — deferred (the x86/scalar reinterpret slice).
+    if selected.extension.isa_name == "generic":
+        return _skip(
+            "TSL-LOWER-UNSUPPORTED-TARGET-VECTOR",
+            f"representation-change on the generic vector (LANES-sized target) is "
+            f"not supported yet: {selected.primitive.name!r}",
+            source=_implementation_source(selected),
+        )
+    dim, alias = selected.primitive.result_target
+    if dim == RESULT_DIM_BASE:
+        # base dim: same extension, replace the element type with the target tag.
+        to_base_spelling = backend.types.scalar_spelling(selected.to_target)
+        if to_base_spelling is None:
+            return _error(
+                "TSL-LOWER-NO-BASE-TYPE",
+                f"no {backend.backend_id} base-type spelling for the target "
+                f"{selected.to_target!r}",
+                source=_implementation_source(selected),
+            )
+        scope.bind_target_type_symbol(alias, selected.to_target)
+        scope.bind_target_type_symbol("ToType", selected.to_target)
+        return TargetVector(
+            vector_spelling=backend.types.vector_type_spelling(
+                to_base_spelling, selected.extension.isa_name
+            ),
+            register_spelling=backend.types.target_register_spelling(
+                selected.to_target, selected.extension.isa_name
+            ),
+            extension_isa=selected.extension.isa_name,
+            base_tag=selected.to_target,
+            base_spelling=to_base_spelling,
+        )
+    # RESULT_DIM_EXTENSION: another extension, same base type.
+    target_ext = catalog.extensions.get(selected.to_target)
+    target_isa = target_ext.isa_name if target_ext else selected.to_target
+    scope.bind_extension_symbol(alias, target_isa)
+    return TargetVector(
+        vector_spelling=backend.types.vector_type_spelling(base_type_spelling, target_isa),
+        register_spelling=backend.types.target_register_spelling(selected.type_tag, target_isa),
+        extension_isa=target_isa,
+        base_tag=selected.type_tag,
+        base_spelling=base_type_spelling,
+    )
+
+
+def _resolve_immediate(
+    selected: SelectedImplementation,
+    shape: SignatureShape,
+    backend: BackendDialect,
+) -> tuple[tuple[str, str] | None, str | None, tuple[int, int, bool] | None] | LoweringResult:
+    """Resolve an `sImm` operand into ``(operand, dispatch, value_range)``.
+
+    ``operand`` is the ``(name, backend type spelling)`` the backend emits as a
+    template/const-generic param (NOT a runtime arg); ``dispatch``/``value_range`` are the
+    per-backend forwarding facts. All come from the `params:` block (`immediate_param`);
+    absent metadata defaults to `ui32` with positional forwarding. Returns ``(None, None,
+    None)`` when the signature has no `sImm`, or a :class:`LoweringResult` error when the
+    immediate type has no backend spelling.
+    """
+
+    if "sImm" not in shape.param_kinds:
+        return (None, None, None)
+    imm_name = selected.primitive.parameters[shape.param_kinds.index("sImm")]
+    imm_param = selected.primitive.immediate_param(imm_name)
+    imm_type = imm_param.type_tag if imm_param is not None else "ui32"
+    imm_spelling = backend.types.scalar_spelling(imm_type)
+    if imm_spelling is None:
+        return _error(
+            "TSL-LOWER-NO-IMMEDIATE-TYPE",
+            f"no {backend.backend_id} spelling for the immediate type of "
+            f"{selected.primitive.name!r}",
+            source=(
+                imm_param.source
+                if imm_param is not None and imm_param.source is not None
+                else _implementation_source(selected)
+            ),
+        )
+    if imm_param is None:
+        return ((imm_name, imm_spelling), None, None)
+    return (
+        (imm_name, imm_spelling),
+        imm_param.dispatch_for(backend.backend_id),
+        _resolve_immediate_range(imm_param, selected.type_tag),
+    )
 
 
 _SUPPORTED_KINDS = frozenset(
