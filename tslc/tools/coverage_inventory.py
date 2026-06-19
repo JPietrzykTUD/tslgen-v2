@@ -38,20 +38,35 @@ _OUT = _REPO_ROOT / "docs" / "redesign" / "primitive-coverage-inventory.md"
 _DATE = "2026-06-19"
 
 
+def _has_skip_decorator(fn: ast.FunctionDef) -> bool:
+    """True if the test is decorated `@pytest.mark.skip[(...)]` (so it does not verify)."""
+
+    for decorator in fn.decorator_list:
+        target = decorator.func if isinstance(decorator, ast.Call) else decorator
+        while isinstance(target, ast.Attribute):
+            if target.attr == "skip":
+                return True
+            target = target.value
+    return False
+
+
 def _build_verified_primitives() -> set[str]:
-    """The primitives named in any ``primitives=[...]`` list in the build-verify tests."""
+    """Primitives named in a ``primitives=[...]`` list of a NON-skipped build-verify test."""
 
     tree = ast.parse(_BUILD_TEST.read_text())
     verified: set[str] = set()
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.keyword)
-            and node.arg == "primitives"
-            and isinstance(node.value, ast.List)
-        ):
-            verified |= {
-                el.value for el in node.value.elts if isinstance(el, ast.Constant)
-            }
+    for fn in tree.body:
+        if not isinstance(fn, ast.FunctionDef) or _has_skip_decorator(fn):
+            continue
+        for node in ast.walk(fn):
+            if (
+                isinstance(node, ast.keyword)
+                and node.arg == "primitives"
+                and isinstance(node.value, ast.List)
+            ):
+                verified |= {
+                    el.value for el in node.value.elts if isinstance(el, ast.Constant)
+                }
     return verified
 
 

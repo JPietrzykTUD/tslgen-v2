@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.translation import X86_REGISTER_BITS
 from tslc.lower.lowerer import (
     LoweredSpecialization,
@@ -223,7 +224,8 @@ class RustBackend:
         trait_args = f"<{', '.join(targs)}>" if targs else ""
         decls = "".join(f", {d}" for d in decl_list)
         return (
-            f"pub fn {primitive_name}<S: {_trait_name(primitive_name)}{trait_args}{decls}>"
+            f"pub fn {rust_raw_identifier(primitive_name)}"
+            f"<S: {_trait_name(primitive_name)}{trait_args}{decls}>"
             f"({params}) -> {ret}{_index_where(shape)} {{\n"
             f"    {call}\n"
             f"}}"

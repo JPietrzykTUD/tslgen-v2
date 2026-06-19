@@ -173,6 +173,30 @@ impl_tsl_popcount!(u16);
 impl_tsl_popcount!(u32);
 impl_tsl_popcount!(u64);
 
+// Trailing-zero count of an integer mask (used by `tzc`). Counterpart to C++
+// `tsl::details::ctz`; Rust's `trailing_zeros` already returns the bit-width for a zero input.
+pub trait TslCtz: Copy {
+    fn ctz(self) -> u32;
+}
+macro_rules! impl_tsl_ctz {
+    ($ty:ty) => {
+        impl TslCtz for $ty {
+            #[inline]
+            fn ctz(self) -> u32 {
+                self.trailing_zeros()
+            }
+        }
+    };
+}
+impl_tsl_ctz!(i8);
+impl_tsl_ctz!(i16);
+impl_tsl_ctz!(i32);
+impl_tsl_ctz!(i64);
+impl_tsl_ctz!(u8);
+impl_tsl_ctz!(u16);
+impl_tsl_ctz!(u32);
+impl_tsl_ctz!(u64);
+
 pub fn ptr_add<T>(p: *mut T, i: usize) -> *mut T {
     p.wrapping_add(i)
 }
@@ -205,7 +229,15 @@ pub mod details {
     pub fn arith_mul<T: core::ops::Mul<Output = T>>(a: T, b: T) -> T {
         a * b
     }
+    // Remainder for emulated `mod` loops. Rust `%` is integer remainder / float fmod, so one
+    // bound covers both; counterpart to C++ `tsl::details::arith_rem`.
+    pub fn arith_rem<T: core::ops::Rem<Output = T>>(a: T, b: T) -> T {
+        a % b
+    }
     pub fn popcount<T: super::TslPopCount>(v: T) -> u32 {
         v.popcount()
+    }
+    pub fn ctz<T: super::TslCtz>(v: T) -> u32 {
+        v.ctz()
     }
 }

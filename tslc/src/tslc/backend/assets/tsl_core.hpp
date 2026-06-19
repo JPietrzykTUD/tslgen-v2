@@ -3,9 +3,11 @@
 // add the `simd<>` registrations for the extensions that profile actually uses.
 #pragma once
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <type_traits>
 
 // Loop-unroll hint for `loop<unroll>`. A no-op by default (a real unroll pragma is
 // compiler-specific and only a hint); kept as a macro so generated bodies always compile.
@@ -150,12 +152,35 @@ template <class T>
 inline T arith_mul(T a, T b) {
     return a * b;
 }
+// Remainder for emulated `mod` loops: integer `%`, or `std::fmod` for floats (where `%`
+// is ill-formed). Matches the frozen runtime-support `arith_rem`.
+template <class T>
+inline T arith_rem(T a, T b) {
+    if constexpr (std::is_integral_v<T>) {
+        return static_cast<T>(a % b);
+    } else {
+        return static_cast<T>(std::fmod(a, b));
+    }
+}
 // Population count of an integer mask: the number of set bits, an unsigned count (not the
 // input type). Used by `mask_population_count` after `to_integral`. `__builtin_popcountll`
 // keeps this C++17 (no `<bit>`/`std::popcount`).
 template <class T>
 inline std::uint32_t popcount(T v) {
     return static_cast<std::uint32_t>(__builtin_popcountll(static_cast<unsigned long long>(v)));
+}
+// Trailing-zero count of an integer mask (used by `tzc`): the index of the lowest set bit,
+// or the full bit-width when the mask is zero. `__builtin_ctzll(0)` is undefined, hence the
+// guard. Matches the frozen runtime-support `ctz` / Rust's `trailing_zeros`.
+template <class T>
+inline std::uint32_t ctz(T v) {
+    using U = std::make_unsigned_t<T>;
+    if (v == 0) {
+        return static_cast<std::uint32_t>(sizeof(T) * 8);
+    }
+    return static_cast<std::uint32_t>(
+        __builtin_ctzll(static_cast<unsigned long long>(static_cast<U>(v)))
+    );
 }
 }  // namespace details
 

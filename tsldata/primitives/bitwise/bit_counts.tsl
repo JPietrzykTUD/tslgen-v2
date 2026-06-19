@@ -229,4 +229,4 @@ prim<s:=m> tzc(value):
           scalar []
           generic []
         implementation:
-          tsil "emit_return(details::ctz(call<primitive=to_integral[Vec]>(value)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), details::ctz(call<primitive=to_integral[Vec]>(value))));"

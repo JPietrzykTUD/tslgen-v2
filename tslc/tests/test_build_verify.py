@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.diagnostics import has_errors
 
@@ -967,6 +969,171 @@ def test_mask_population_count_builds(
         machine_profiles_path=machine_profiles_path,
         primitives=["mask_population_count"],
         profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_nullary_constants_build(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # The `v:=()` / `m:=()` nullary constructors: `set_zero` (native `setzero`/`0`),
+    # `set_undef` (native `undefined`/uninit), `mask_false` (`set_zero`-of-mask /
+    # scalar `false`). No call closure of their own — they ARE the building blocks other
+    # bodies call. Builds in C++ and Rust across scalar + SIMD.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["set_zero", "set_undef", "mask_false"],
+        profiles=["scalar", "sse2", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_simple_memory_build(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # `load_scalar` (`s:=ptr`, a scalar dereference / masked-zero variant). Builds in both
+    # backends across scalar + SIMD. (Deferred siblings: `memory_cp`'s `mem<copy>` directive
+    # and `void`-pointer types aren't lowered for Rust yet; `compress_store`'s generic
+    # fallback needs `details::mask_test` — see test_masked_memory_build, skipped.)
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["load_scalar"],
+        profiles=["scalar", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_modulo_build(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `mod` (`v:=(v,v)`) and `mod_imm` (`v:=(v,sImm)`, which calls `mod(x, set1(imm))`).
+    # x86 has no integer-vector modulo intrinsic, so the SIMD bodies delegate to the
+    # generic per-lane vector and the scalar `%` (the closure pulls `set1`/`to_array`/
+    # `from_array`). Exercises cross-extension arithmetic delegation + an `sImm` forwarded
+    # to a sibling call. Builds in C++ and Rust; scalar + avx2 + skylake.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["mod", "mod_imm"],
+        profiles=["scalar", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_blend_add_sequence_build(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # `blend_add` (`v:=(m,v,v,v)`, the composite `mov[mask=pass_through](mask, add(left,
+    # right))`-shaped masked add) and `custom_sequence` (`v:=(s,s)`, an iota from a start
+    # + stepwidth built over to_array/from_array + scalar `details::arith_add`). The
+    # closure pulls `mov`/`add` and the array layer. Builds in C++ and Rust across scalar
+    # + SIMD.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["blend_add", "custom_sequence"],
+        profiles=["scalar", "sse2", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_conflict_counting_build(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # `conflict` (`v:=v`, avx512cd native `_mm*_conflict_*` + the array-loop fallback),
+    # `conflict_free` (`m:=(m,v)` = `mask_binary_and(mask, equal(conflict(data), zero))`),
+    # and `count_matches` (`s:=(v,s)` = `mask_population_count(equal(data, set1(value)))`).
+    # The closure pulls the comparison + mask-algebra families. avx2 + skylake (the
+    # `type::size_bytes`-gated generic conflict bound-check path skips until Phase B1).
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["conflict", "conflict_free", "count_matches"],
+        profiles=["avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_bit_reductions_build(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # `hand`/`hor` (`s:=v` horizontal AND/OR: native reduce + the extract/shuffle x86 path,
+    # plus the `to_array` + `var<typed>` accumulator loop) and `popcnt` (`v:=v`, per-lane
+    # population count on the AVX512 VPOPCNTDQ/BITALG native path — hence icelake-rockerlake —
+    # plus the sse/avx2 intrinsic slots), and `tzc` (`s:=m`, `details::ctz` of the integral
+    # mask, cast to the result scalar). Both backends; the generic
+    # `details::popcount<T,offset>` fallback is gated on `vector::offset_base` (Phase B2).
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["popcnt", "hand", "hor", "tzc"],
+        profiles=["sse2", "avx2", "skylake", "icelake-rockerlake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+@pytest.mark.skip(
+    reason="needs a universal details::mask_test<Vec> mask-model slice (Phase B2). The "
+    "load_mask/store_mask/masked_set1/compress/expand_load fallbacks loop over lanes testing "
+    "the mask. The sse/avx2 mask is a REGISTER (__m128/__m256i), not the generic vector's u64 "
+    "bitset, so the lane-bitmask `(m>>i)&1` form is invalid there (`value where integer is "
+    "required`); they need a universal helper that branches integral-bitset vs register-lane "
+    "extraction. The C++ helper is tractable; the Rust register->lane transmute is the hard "
+    "part and risks the verified generic mask<test> path."
+)
+def test_masked_memory_build(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # The masked / sparse memory family: `load_mask` (`m:=ptr`) / `store_mask`
+    # (`void:=(ptr,m)`), `masked_set1` (`v:=(m,v,s)`), `compress` (`v:=(m,v)`),
+    # `expand_load` (`v:=(m,ptr)`). See skip reason above.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["load_mask", "store_mask", "masked_set1", "compress", "expand_load"],
+        profiles=["avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None

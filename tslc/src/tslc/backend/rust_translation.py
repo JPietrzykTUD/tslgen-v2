@@ -19,6 +19,29 @@ _RUST_EXT_TAG: dict[str, str] = {
     "avx512": "Avx512",
 }
 
+# Rust reserved words that can occur as a primitive name (e.g. `mod`). Emitting one as a
+# bare value identifier is a syntax error, so it is escaped as a raw identifier (`r#mod`).
+# `crate`/`self`/`super`/`Self` cannot be raw identifiers, but those never occur as
+# primitive names. (Type-position names like the `…Impl` trait are capitalized, so they
+# never collide.)
+_RUST_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else",
+        "enum", "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop",
+        "match", "mod", "move", "mut", "pub", "ref", "return", "self", "Self", "static",
+        "struct", "super", "trait", "true", "type", "unsafe", "use", "where", "while",
+        "abstract", "become", "box", "do", "final", "macro", "override", "priv", "try",
+        "typeof", "unsized", "virtual", "yield",
+    }
+)
+
+
+def rust_raw_identifier(name: str) -> str:
+    """Escape a primitive name that collides with a Rust keyword as a raw identifier."""
+
+    return f"r#{name}" if name in _RUST_KEYWORDS else name
+
+
 
 @dataclass(frozen=True, slots=True)
 class _RustTypes:
@@ -146,7 +169,10 @@ class _RustSyntax:
         axis = "".join(f", {value}" for value in axis_values)
         extra = "".join(f", {value}" for value in extra_args)
         inferred = ", _" * arg_generics
-        return f"{name}::<{vec_override or 'Self'}{axis}{extra}{inferred}>({args})"
+        return (
+            f"{rust_raw_identifier(name)}::<{vec_override or 'Self'}{axis}{extra}{inferred}>"
+            f"({args})"
+        )
 
     def render_pointer_cast(self, inner: str, *, is_const: bool, expr: str) -> str:
         return f"({expr} as *{'const' if is_const else 'mut'} {inner})"
