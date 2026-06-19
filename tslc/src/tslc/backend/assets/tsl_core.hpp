@@ -182,6 +182,21 @@ inline std::uint32_t ctz(T v) {
         __builtin_ctzll(static_cast<unsigned long long>(static_cast<U>(v)))
     );
 }
+// Leading-zero count of an integer (used by `lzc`/`lzc_imask`): the number of high-order
+// zero bits, width-aware via `sizeof(T)` (so a `u8` counts within 8 bits), and the full
+// bit-width when the value is zero (`__builtin_clzll(0)` is undefined). Matches the frozen
+// runtime-support `clz` / Rust's `leading_zeros`.
+template <class T>
+inline std::uint32_t clz(T v) {
+    using U = std::make_unsigned_t<T>;
+    if (v == 0) {
+        return static_cast<std::uint32_t>(sizeof(T) * 8);
+    }
+    constexpr int width = static_cast<int>(sizeof(T) * 8);
+    constexpr int ull_width = static_cast<int>(sizeof(unsigned long long) * 8);
+    const int leading = __builtin_clzll(static_cast<unsigned long long>(static_cast<U>(v)));
+    return static_cast<std::uint32_t>(leading - (ull_width - width));
+}
 // Test lane `index` of an emulated mask, agnostic to how the vector stores it. Two reprs:
 // an integer bitset (the generic vector's `std::uint64_t`, or a native `__mmaskN`) tests bit
 // `index`; a register lane-mask (sse/avx2, where the mask IS a data register whose lanes are

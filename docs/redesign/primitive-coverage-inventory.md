@@ -6,11 +6,11 @@ Generated 2026-06-19 by `tslc/tools/coverage_inventory.py`. **Regenerate** with
 ## Summary
 
 - **89 distinct primitives** in `tsldata/`.
-- **80 build-verified** (compile in C++ *and* Rust via `tslc/tests/test_build_verify.py`).
+- **83 build-verified** (compile in C++ *and* Rust via `tslc/tests/test_build_verify.py`).
 - **1 lower cleanly but are not build-verified** (codegen succeeds, 0 skips; compilation unconfirmed).
-- **2 partial** (emit for some extension/type slots, skip others).
-- **6 emit nothing** under the probed profiles.
-- **50914 / 58586 (profile×backend×ext×type) slots lower**; **0 errors**.
+- **0 partial** (emit for some extension/type slots, skip others).
+- **5 emit nothing** under the probed profiles.
+- **51414 / 58586 (profile×backend×ext×type) slots lower**; **0 errors**.
 - **C++/Rust parity is exact**: every primitive emits the identical extension set for both backends.
 
 Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen clean, 0 skips, no build test; **partial** = some slots lower, some skip; **NONE** = nothing emitted.
@@ -19,21 +19,21 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 
 ## Tiers
 
-### Build-verified (80) — compile in C++ & Rust
+### Build-verified (83) — compile in C++ & Rust
 
-`add`, `between_exclusive`, `between_inclusive`, `between_left_inclusive`, `between_right_inclusive`, `binary_and`, `binary_andnot`, `binary_or`, `binary_xor`, `blend`, `blend_add`, `cast`, `compress`, `compress_store`, `conflict`, `conflict_free`, `convert_down`, `convert_up`, `count_matches`, `custom_sequence`, `div`, `equal`, `expand_load`, `extract`, `extract_imask`, `extract_value`, `from_array`, `gather`, `greater_than`, `greater_than_or_equal`, `hadd`, `hand`, `hmax`, `hmin`, `hor`, `insert`, `insert_imask`, `inv`, `less_than`, `less_than_or_equal`, `load`, `load_convert_up`, `load_mask`, `load_scalar`, `mask_binary_and`, `mask_binary_not`, `mask_binary_or`, `mask_binary_xor`, `mask_false`, `mask_population_count`, `mask_true`, `masked_set1`, `max`, `min`, `mod`, `mod_imm`, `mov`, `mul`, `mul_imm`, `nequal`, `popcnt`, `reinterpret`, `scatter`, `sequence`, `set1`, `set_undef`, `set_zero`, `shift_left`, `shift_right`, `shift_right_imask`, `store`, `store_mask`, `sub`, `test_imask`, `to_array`, `to_integral`, `to_mask`, `to_vector`, `tzc`, `unequal_zero`
+`add`, `between_exclusive`, `between_inclusive`, `between_left_inclusive`, `between_right_inclusive`, `binary_and`, `binary_andnot`, `binary_or`, `binary_xor`, `blend`, `blend_add`, `cast`, `compress`, `compress_store`, `conflict`, `conflict_free`, `convert_down`, `convert_up`, `count_matches`, `custom_sequence`, `div`, `equal`, `expand_load`, `extract`, `extract_imask`, `extract_value`, `from_array`, `gather`, `greater_than`, `greater_than_or_equal`, `hadd`, `hand`, `hmax`, `hmin`, `hor`, `insert`, `insert_imask`, `inv`, `less_than`, `less_than_or_equal`, `load`, `load_convert_up`, `load_mask`, `load_scalar`, `lzc`, `lzc_imask`, `lzc_scalar`, `mask_binary_and`, `mask_binary_not`, `mask_binary_or`, `mask_binary_xor`, `mask_false`, `mask_population_count`, `mask_true`, `masked_set1`, `max`, `min`, `mod`, `mod_imm`, `mov`, `mul`, `mul_imm`, `nequal`, `popcnt`, `reinterpret`, `scatter`, `sequence`, `set1`, `set_undef`, `set_zero`, `shift_left`, `shift_right`, `shift_right_imask`, `store`, `store_mask`, `sub`, `test_imask`, `to_array`, `to_integral`, `to_mask`, `to_vector`, `tzc`, `unequal_zero`
 
 ### Lower but not build-verified (1) — codegen clean, compilation unconfirmed
 
 `memory_cp`
 
-### Partial (2) — some slots lower, some skip
+### Partial (0) — some slots lower, some skip
 
-`lzc`, `lzc_imask`
 
-### Emit nothing (6)
 
-`allocate`, `allocate_aligned`, `deallocate`, `lzc_scalar`, `set`, `to_ostream`
+### Emit nothing (5)
+
+`allocate`, `allocate_aligned`, `deallocate`, `set`, `to_ostream`
 
 ## Per-primitive table
 
@@ -53,7 +53,7 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `blend` | `v:=(m,v,v)` | VERIFIED | avx2/avx512/scalar/sse | 0 | — |
 | `blend_add` | `v:=(m,v,v,v)` | VERIFIED | avx2/avx512/scalar/sse | 0 | — |
 | `cast` | `v:=v` | VERIFIED | avx2/avx512/scalar/sse | 1500 | generic-vector repr-change (deferred) |
-| `compress` | `v:=(m,v)` | VERIFIED | avx2/avx512/sse | 136 | no top-level emit_return |
+| `compress` | `v:=(m,v)` | VERIFIED | avx2/avx512/sse | 140 | no top-level emit_return |
 | `compress_store` | `void:=(m,ptr,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `conflict` | `v:=v` | VERIFIED | avx2/avx512/scalar/sse | 208 | unresolved value query |
 | `conflict_free` | `m:=(m,v)` | VERIFIED | avx2/avx512/scalar/sse | 208 | pruned (closure) |
@@ -86,9 +86,9 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `load_convert_up` | `v:=ptr+` | VERIFIED | avx2/avx512 | 4 | pruned (closure) |
 | `load_mask` | `m:=ptr` | VERIFIED | avx2/avx512/scalar/sse | 644 | pruned (closure) |
 | `load_scalar` | `s:=ptr` | VERIFIED | avx2/avx512/generic/sse | 0 | — |
-| `lzc` | `v:=v` | partial | avx2/avx512/sse | 412 | pruned (closure) |
-| `lzc_imask` | `s:=m` | partial | avx2/avx512/scalar/sse | 128 | pruned (closure) |
-| `lzc_scalar` | `s:=s` | NONE | — | 240 | unresolved type query |
+| `lzc` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 100 | pruned (closure) |
+| `lzc_imask` | `s:=m` | VERIFIED | avx2/avx512/scalar/sse | 128 | pruned (closure) |
+| `lzc_scalar` | `s:=s` | VERIFIED | generic/scalar | 48 | unresolved type query |
 | `mask_binary_and` | `m:=(m,m)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `mask_binary_not` | `m:=m` | VERIFIED | avx2/avx512/generic/scalar/sse | 40 | pruned (closure) |
 | `mask_binary_or` | `m:=(m,m)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
@@ -133,16 +133,16 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 
 | skips | category | meaning / action |
 |--:|---|---|
-| 2764 | pruned (closure) | Dependency-closure dropped a body whose callee is unavailable in that profile. **Structural, not a defect** — expected behavior. |
+| 2452 | pruned (closure) | Dependency-closure dropped a body whose callee is unavailable in that profile. **Structural, not a defect** — expected behavior. |
 | 1512 | generic-vector repr-change (deferred) | `cast`/`reinterpret` on the `simd<T, generic<LANES>>` vector (LANES-sized target). Known deferred slice. |
-| 1320 | unresolved type query | A `type<generation>(...)` query is not yet evaluated (e.g. `vector::offset_base`, `vector::mask_underlying_t`, `vector::transform(...)`). Blocks compress/expand/conflict/popcnt/lzc/hand/hor/store_mask generic paths. |
+| 1128 | unresolved type query | A `type<generation>(...)` query is not yet evaluated (e.g. `vector::offset_base`, `vector::mask_underlying_t`, `vector::transform(...)`). Blocks compress/expand/conflict/popcnt/lzc/hand/hor/store_mask generic paths. |
 | 498 | unresolved value query | A `value<generation>(...)` / `value<backend>(...)` query unevaluated (e.g. `type::size_bytes(...)`, `x86::mm_fround_to_zero`). Blocks to_integral/to_mask generic + div/mod float rounding. |
 | 460 | unsupported signature kind v:=s... | Unsupported signature kind: variadic `set` (`v:=s...`) and `to_ostream` (`o:=(o,v,s)`). |
 | 398 | no top-level emit_return | Body has no top-level `emit_return(...)` (where:-clause / switch-bodied forms) — not lowerable yet (reinterpret, compress, cast). |
 | 340 | unsupported signature kind o:=(o,v,s) | Unsupported signature kind: variadic `set` (`v:=s...`) and `to_ostream` (`o:=(o,v,s)`). |
 | 216 | call type-args (bare-ext/index) | `call<primitive=extract[Vec, sse, 0]>` style: a bare extension + literal index in call type-args not yet supported. |
 | 152 | unresolved pointer-cast type | `cast<reinterpret>` to a `vector::mask_underlying_t` pointer not resolved. |
-| 12 | unsupported mask<test> | `mask<test>` on the `native_predicate_by_lanes` (avx512 `__mmaskN`) representation. |
+| 16 | unsupported mask<test> | `mask<test>` on the `native_predicate_by_lanes` (avx512 `__mmaskN`) representation. |
 
 ### NONE primitives — why nothing emits
 

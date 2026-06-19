@@ -87,7 +87,7 @@ prim<s:=s> lzc_scalar(data):
           scalar []
           generic []
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), details::clz<type<generation>(base::in), type<generation>(vector::offset_base)>(data)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), details::clz(data)));"
       f?:
         requires:
           scalar []
@@ -204,7 +204,7 @@ prim<s:=m> lzc_imask(value):
           scalar []
           generic []
         implementation:
-          tsil "emit_return(details::clz(call<primitive=to_integral[Vec]>(value)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), details::clz(call<primitive=to_integral[Vec]>(value))));"
     [oneAPIfpga, oneAPIfpgaRTL]:
       ?i?:
         requires:

@@ -216,6 +216,31 @@ impl_tsl_ctz!(u16);
 impl_tsl_ctz!(u32);
 impl_tsl_ctz!(u64);
 
+// Leading-zero count of an integer (used by `lzc`/`lzc_imask`). Counterpart to C++
+// `tsl::details::clz`; Rust's `leading_zeros` is already width-aware (a `u8` counts in 8 bits)
+// and returns the bit-width for a zero input.
+pub trait TslClz: Copy {
+    fn clz(self) -> u32;
+}
+macro_rules! impl_tsl_clz {
+    ($ty:ty) => {
+        impl TslClz for $ty {
+            #[inline]
+            fn clz(self) -> u32 {
+                self.leading_zeros()
+            }
+        }
+    };
+}
+impl_tsl_clz!(i8);
+impl_tsl_clz!(i16);
+impl_tsl_clz!(i32);
+impl_tsl_clz!(i64);
+impl_tsl_clz!(u8);
+impl_tsl_clz!(u16);
+impl_tsl_clz!(u32);
+impl_tsl_clz!(u64);
+
 pub fn ptr_add<T>(p: *mut T, i: usize) -> *mut T {
     p.wrapping_add(i)
 }
@@ -258,5 +283,8 @@ pub mod details {
     }
     pub fn ctz<T: super::TslCtz>(v: T) -> u32 {
         v.ctz()
+    }
+    pub fn clz<T: super::TslClz>(v: T) -> u32 {
+        v.clz()
     }
 }

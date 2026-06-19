@@ -1114,6 +1114,31 @@ def test_bit_reductions_build(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_leading_zeros_build(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # Leading-zero counts: `lzc` (`v:=v`, the avx512cd `_mm*_lzcnt_epi32/64` native plus the
+    # per-lane loop fallback that delegates to `lzc_scalar` over the scalar vector) and
+    # `lzc_imask` (`s:=m`, `details::clz` of the integral mask, cast to the result scalar). The
+    # closure pulls `lzc_scalar` (`s:=s`), whose integer body is `details::clz(data)` — the
+    # `clz` helper is width-aware via `sizeof(T)` / Rust `leading_zeros`, so no offset arg is
+    # needed. Integer types only (lzc has no float tests; the float `lzc_scalar` bit-reinterpret
+    # path needs `mem<copy>` and stays deferred). Both backends, scalar + sse2 + avx2 + skylake.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["lzc", "lzc_imask", "lzc_scalar"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_masked_memory_build(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
