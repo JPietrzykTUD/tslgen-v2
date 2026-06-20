@@ -1,0 +1,1 @@
+# Keeps tslctmp/ present for pytest's configured basetemp parent.

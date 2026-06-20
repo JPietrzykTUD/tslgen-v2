@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from tslc.output.artifacts import ArtifactSet
 from tslc.output.verify import (
     BuildVerificationReport,
+    BuildVerifierConfig,
     VerifyProject,
     verify_generated_project,
 )
@@ -86,5 +87,15 @@ def write_artifacts(
 def verify_project(
     output_root: Path | str,
     verify: VerifyProject,
+    *,
+    cpp_compiler: str | Sequence[str] | None = None,
+    rust_compiler: str | None = None,
 ) -> BuildVerificationReport:
-    return verify_generated_project(Path(output_root), verify)
+    return verify_generated_project(
+        Path(output_root),
+        verify,
+        config=BuildVerifierConfig.create(
+            cpp_compiler=cpp_compiler,
+            rust_compiler=rust_compiler,
+        ),
+    )

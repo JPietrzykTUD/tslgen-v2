@@ -38,6 +38,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-root", default=None, help="write artifacts under this root")
     parser.add_argument("--verify", action="store_true", help="build-verify after writing")
     parser.add_argument(
+        "--cpp-compiler",
+        default=None,
+        help="C++ compiler command for build verification, e.g. /usr/bin/c++",
+    )
+    parser.add_argument(
+        "--rust-compiler",
+        default=None,
+        help="Rust compiler executable for build verification, e.g. rustc",
+    )
+    parser.add_argument(
         "--coverage", action="store_true", help="print a behavior-coverage report"
     )
     args = parser.parse_args(argv)
@@ -77,7 +87,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {len(write_report.written)} files under {write_report.output_root}")
 
         if args.verify and result.rendered is not None:
-            verify_report = verify_project(args.output_root, result.rendered.verify)
+            verify_report = verify_project(
+                args.output_root,
+                result.rendered.verify,
+                cpp_compiler=args.cpp_compiler,
+                rust_compiler=args.rust_compiler,
+            )
             for note in verify_report.skipped:
                 print(f"[verify-skip] {note}", file=sys.stderr)
             for diagnostic in verify_report.diagnostics:

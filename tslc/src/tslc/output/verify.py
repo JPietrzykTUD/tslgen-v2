@@ -9,8 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import os
 from pathlib import Path
+import shlex
 import shutil
 import subprocess
+from collections.abc import Sequence
 from typing import Protocol
 
 from tslc.diagnostics import Diagnostic
@@ -35,6 +37,30 @@ class VerifyBackend:
 @dataclass(frozen=True, slots=True)
 class VerifyProject:
     backends: tuple[VerifyBackend, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class BuildVerifierConfig:
+    """Optional toolchain configuration for after-write verification."""
+
+    # None means: use the ambient CXX setting when present, otherwise try `c++`.
+    # A tuple pins the compiler command, e.g. ("/usr/bin/c++",) or ("zig", "c++").
+    cpp_compiler: tuple[str, ...] | None = None
+    # None means: use the ambient RUSTC setting when present, otherwise try `rustc`.
+    # Cargo expects RUSTC to name the compiler executable; use RUSTFLAGS for flags.
+    rust_compiler: str | None = None
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        cpp_compiler: str | Sequence[str] | None = None,
+        rust_compiler: str | None = None,
+    ) -> "BuildVerifierConfig":
+        return cls(
+            cpp_compiler=_normalize_compiler_command(cpp_compiler),
+            rust_compiler=_normalize_compiler_executable(rust_compiler),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +120,8 @@ def verify_generated_project(
     output_root: Path,
     project: VerifyProject,
     runner: BuildCommandRunner = run_subprocess_build_command,
+    *,
+    config: BuildVerifierConfig | None = None,
 ) -> BuildVerificationReport:
     """Configure/build/test every generated backend profile.
 
@@ -102,6 +130,7 @@ def verify_generated_project(
     """
 
     root = output_root.resolve()
+    config = config or BuildVerifierConfig()
     results: list[BuildCommandResult] = []
     diagnostics: list[Diagnostic] = []
     skipped: list[str] = []
@@ -111,7 +140,37 @@ def verify_generated_project(
         if missing is not None:
             skipped.append(f"{backend.backend_id}: {missing} not found")
             continue
-        for group in _command_groups(root, backend):
+        if backend.backend_id == "cpp":
+            compiler = _effective_cpp_compiler(config)
+            missing_compiler = _missing_executable(compiler[0])
+            if missing_compiler is not None:
+                skipped.append(f"cpp: C++ compiler {missing_compiler} not found")
+                continue
+            preflight = _cpp_preflight_command(root, backend, compiler)
+            if isinstance(preflight, Diagnostic):
+                diagnostics.append(preflight)
+                continue
+            result = runner(preflight)
+            results.append(result)
+            if result.returncode != 0:
+                skipped.append(_cpp_preflight_skip(result))
+                continue
+        if backend.backend_id == "rust":
+            compiler = _effective_rust_compiler(config)
+            missing_compiler = _missing_executable(compiler)
+            if missing_compiler is not None:
+                skipped.append(f"rust: Rust compiler {missing_compiler} not found")
+                continue
+            preflight = _rust_preflight_command(root, backend, compiler)
+            if isinstance(preflight, Diagnostic):
+                diagnostics.append(preflight)
+                continue
+            result = runner(preflight)
+            results.append(result)
+            if result.returncode != 0:
+                skipped.append(_rust_preflight_skip(result))
+                continue
+        for group in _command_groups(root, backend, config):
             for command in group:
                 result = runner(command)
                 results.append(result)
@@ -129,21 +188,34 @@ def verify_generated_project(
 def _missing_tool(backend_id: str) -> str | None:
     needed = {"cpp": ("cmake",), "rust": ("cargo",)}.get(backend_id, ())
     for tool in needed:
-        if shutil.which(tool) is None:
+        if _missing_executable(tool) is not None:
             return tool
     return None
 
 
-def _command_groups(root: Path, backend: VerifyBackend) -> tuple[tuple[BuildCommand, ...], ...]:
+def _missing_executable(executable: str) -> str | None:
+    return executable if shutil.which(executable) is None else None
+
+
+def _command_groups(
+    root: Path,
+    backend: VerifyBackend,
+    config: BuildVerifierConfig,
+) -> tuple[tuple[BuildCommand, ...], ...]:
     if backend.backend_id == "cpp":
-        return _cpp_command_groups(root, backend)
+        return _cpp_command_groups(root, backend, config)
     if backend.backend_id == "rust":
-        return _rust_command_groups(root, backend)
+        return _rust_command_groups(root, backend, config)
     return ()
 
 
-def _cpp_command_groups(root: Path, backend: VerifyBackend) -> tuple[tuple[BuildCommand, ...], ...]:
+def _cpp_command_groups(
+    root: Path,
+    backend: VerifyBackend,
+    config: BuildVerifierConfig,
+) -> tuple[tuple[BuildCommand, ...], ...]:
     project_root = root / backend.root_path
+    env = _cpp_environment(config)
     groups: list[tuple[BuildCommand, ...]] = []
     for profile in backend.profiles:
         build_dir = project_root / "build" / profile.file_stem
@@ -162,6 +234,7 @@ def _cpp_command_groups(root: Path, backend: VerifyBackend) -> tuple[tuple[Build
                         f"-DTSL_PROFILE={profile.profile_name}",
                     ),
                     cwd=root,
+                    env=env,
                 ),
                 BuildCommand(
                     backend_id="cpp",
@@ -169,13 +242,18 @@ def _cpp_command_groups(root: Path, backend: VerifyBackend) -> tuple[tuple[Build
                     step="build",
                     argv=("cmake", "--build", str(build_dir)),
                     cwd=root,
+                    env=env,
                 ),
             )
         )
     return tuple(groups)
 
 
-def _rust_command_groups(root: Path, backend: VerifyBackend) -> tuple[tuple[BuildCommand, ...], ...]:
+def _rust_command_groups(
+    root: Path,
+    backend: VerifyBackend,
+    config: BuildVerifierConfig,
+) -> tuple[tuple[BuildCommand, ...], ...]:
     project_root = root / backend.root_path
     manifest = project_root / "Cargo.toml"
     groups: list[tuple[BuildCommand, ...]] = []
@@ -196,18 +274,161 @@ def _rust_command_groups(root: Path, backend: VerifyBackend) -> tuple[tuple[Buil
                         profile.profile_name,
                     ),
                     cwd=root,
-                    env=_rust_profile_environment(profile),
+                    env=_rust_environment(profile, config),
                 ),
             )
         )
     return tuple(groups)
 
 
-def _rust_profile_environment(profile: VerifyProfile) -> tuple[BuildCommandEnvironment, ...]:
+def _rust_environment(
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+) -> tuple[BuildCommandEnvironment, ...]:
+    environment: list[BuildCommandEnvironment] = []
+    if config.rust_compiler is not None:
+        environment.append(BuildCommandEnvironment(key="RUSTC", value=config.rust_compiler))
     if not profile.rust_target_features:
-        return ()
+        return tuple(environment)
     joined = ",".join(profile.rust_target_features)
-    return (BuildCommandEnvironment(key="RUSTFLAGS", value=f"-C target-feature={joined}"),)
+    environment.append(BuildCommandEnvironment(key="RUSTFLAGS", value=f"-C target-feature={joined}"))
+    return tuple(environment)
+
+
+def _normalize_compiler_command(compiler: str | Sequence[str] | None) -> tuple[str, ...] | None:
+    if compiler is None:
+        return None
+    if isinstance(compiler, str):
+        normalized = tuple(shlex.split(compiler))
+    else:
+        normalized = tuple(str(part) for part in compiler)
+    return normalized or None
+
+
+def _normalize_compiler_executable(compiler: str | None) -> str | None:
+    if compiler is None:
+        return None
+    normalized = compiler.strip()
+    return normalized or None
+
+
+def _effective_cpp_compiler(config: BuildVerifierConfig) -> tuple[str, ...]:
+    if config.cpp_compiler is not None:
+        return config.cpp_compiler
+    ambient = os.environ.get("CXX")
+    if ambient:
+        parsed = tuple(shlex.split(ambient))
+        if parsed:
+            return parsed
+    return ("c++",)
+
+
+def _effective_rust_compiler(config: BuildVerifierConfig) -> str:
+    if config.rust_compiler is not None:
+        return config.rust_compiler
+    ambient = os.environ.get("RUSTC")
+    if ambient:
+        normalized = _normalize_compiler_executable(ambient)
+        if normalized is not None:
+            return normalized
+    return "rustc"
+
+
+def _cpp_environment(config: BuildVerifierConfig) -> tuple[BuildCommandEnvironment, ...]:
+    if config.cpp_compiler is None:
+        return ()
+    return (BuildCommandEnvironment(key="CXX", value=shlex.join(config.cpp_compiler)),)
+
+
+def _cpp_preflight_command(
+    root: Path,
+    backend: VerifyBackend,
+    compiler: tuple[str, ...],
+) -> BuildCommand | Diagnostic:
+    project_root = root / backend.root_path
+    preflight_dir = project_root / "build" / "_compiler_preflight"
+    source_path = preflight_dir / "tslc_compiler_check.cpp"
+    object_path = preflight_dir / "tslc_compiler_check.o"
+    try:
+        preflight_dir.mkdir(parents=True, exist_ok=True)
+        source_path.write_text("int main() { return 0; }\n", encoding="utf-8")
+    except OSError as exc:
+        return Diagnostic(
+            severity="error",
+            code="TSL-BUILD-VERIFY-PREFLIGHT-ERROR",
+            message=f"could not write C++ compiler preflight source under {preflight_dir}: {exc}",
+        )
+
+    return BuildCommand(
+        backend_id="cpp",
+        profile_name="_toolchain",
+        step="preflight",
+        argv=(
+            *compiler,
+            "-x",
+            "c++",
+            "-std=c++17",
+            "-c",
+            str(source_path),
+            "-o",
+            str(object_path),
+        ),
+        cwd=root,
+    )
+
+
+def _rust_preflight_command(
+    root: Path,
+    backend: VerifyBackend,
+    compiler: str,
+) -> BuildCommand | Diagnostic:
+    project_root = root / backend.root_path
+    preflight_dir = project_root / "target" / "_compiler_preflight"
+    source_path = preflight_dir / "tslc_compiler_check.rs"
+    binary_path = preflight_dir / "tslc_compiler_check"
+    try:
+        preflight_dir.mkdir(parents=True, exist_ok=True)
+        source_path.write_text("fn main() {}\n", encoding="utf-8")
+    except OSError as exc:
+        return Diagnostic(
+            severity="error",
+            code="TSL-BUILD-VERIFY-PREFLIGHT-ERROR",
+            message=f"could not write Rust compiler preflight source under {preflight_dir}: {exc}",
+        )
+
+    return BuildCommand(
+        backend_id="rust",
+        profile_name="_toolchain",
+        step="preflight",
+        argv=(
+            compiler,
+            "--edition=2021",
+            str(source_path),
+            "-o",
+            str(binary_path),
+        ),
+        cwd=root,
+    )
+
+
+def _cpp_preflight_skip(result: BuildCommandResult) -> str:
+    command_text = " ".join(result.command.argv)
+    detail = result.stderr.strip() or result.stdout.strip()
+    suffix = f": {detail}" if detail else ""
+    return (
+        "cpp: C++ compiler preflight failed with exit code "
+        f"{result.returncode}: {command_text}{suffix}"
+    )
+
+
+def _rust_preflight_skip(result: BuildCommandResult) -> str:
+    command_text = " ".join(result.command.argv)
+    detail = result.stderr.strip() or result.stdout.strip()
+    suffix = f": {detail}" if detail else ""
+    return (
+        "rust: Rust compiler preflight failed with exit code "
+        f"{result.returncode}: {command_text}{suffix}"
+    )
 
 
 def _command_diagnostic(result: BuildCommandResult) -> Diagnostic:
