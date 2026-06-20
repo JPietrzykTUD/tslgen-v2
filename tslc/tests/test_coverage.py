@@ -6,6 +6,7 @@ from pathlib import Path
 
 from tslc.api import generate_project
 from tslc.coverage import coverage_by_primitive, format_coverage_report
+from tslc.diagnostics import has_errors
 
 
 def _result(data_root: Path, machine_profiles_path: Path):
@@ -54,3 +55,24 @@ def test_report_text_is_actionable(data_root: Path, machine_profiles_path: Path)
     assert "skipped because" in report
     # the report names the construct blocking the remaining bodies (here: the cast type).
     assert any(token in report for token in ("cast", "region", "kind", "signature", "if"))
+
+
+def test_strict_generation_reports_support_gaps_as_errors(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["to_integral"],
+        profiles=["scalar", "avx2"],
+        generation_mode="strict",
+    )
+
+    assert result.skipped
+    assert has_errors(result.diagnostics)
+    assert result.rendered is None
+    assert result.artifacts.artifacts == ()
+    assert any(
+        diagnostic.severity == "error" and diagnostic.code.startswith("TSL-LOWER-")
+        for diagnostic in result.diagnostics
+    )

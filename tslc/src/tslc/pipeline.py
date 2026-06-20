@@ -8,27 +8,35 @@ headers/modules with a top-level dispatch.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.builder import CatalogBuilder
-from tslc.catalog.machine_profiles import load_machine_profiles
-from tslc.catalog.model import Extension, RESULT_DIM_BASE, RESULT_DIM_EXTENSION
-from tslc.diagnostics import Diagnostic, has_errors, sort_diagnostics
+from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles
+from tslc.catalog.model import Catalog, Extension, RESULT_DIM_BASE, RESULT_DIM_EXTENSION
+from tslc.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
 from tslc.lower.dependencies import (
     CallDependency,
     VectorIdentity,
     extract_call_dependencies_from_segments,
 )
-from tslc.lower.lowerer import LoweredSpecialization, Lowerer
+from tslc.lower.lowerer import LoweredSpecialization, Lowerer, LoweringResult
 from tslc.output.artifacts import ArtifactSet
 from tslc.render.project import ProfileRender, RenderedProject, render_project
-from tslc.select.selector import Selector, immediate_split_names, policy_split_names
+from tslc.select.selector import (
+    SelectedImplementation,
+    Selector,
+    immediate_split_names,
+    policy_split_names,
+)
 from tslc.sources import SourceLoader
 
 _DEFAULT_BACKENDS = ("cpp", "rust")
+GenerationMode = Literal["partial", "strict"]
 _TYPE_ORDER = {
     tag: index
     for index, tag in enumerate(
@@ -45,6 +53,7 @@ class GenerationRequest:
     profiles: tuple[str, ...]
     type_tags: tuple[str, ...]
     backends: tuple[str, ...] = _DEFAULT_BACKENDS
+    mode: GenerationMode = "partial"
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,25 +86,52 @@ class GenerationResult:
     skipped: tuple[SkippedEntry, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class _PipelineInputs:
+    catalog: Catalog
+    machine_profiles: Mapping[str, MachineProfile]
+    split_names: frozenset[str]
+    imm_split_names: frozenset[str]
+
+
 def generate(request: GenerationRequest) -> GenerationResult:
+    if request.mode not in ("partial", "strict"):
+        return _empty(
+            [
+                Diagnostic(
+                    severity="error",
+                    code="TSL-PIPELINE-BAD-GENERATION-MODE",
+                    message=f"generation mode must be 'partial' or 'strict', got {request.mode!r}",
+                )
+            ]
+        )
+
+    inputs, diagnostics = _load_inputs(request)
+    if inputs is None:
+        return _empty(diagnostics)
+
+    return _GenerationSession(request, inputs, diagnostics).run()
+
+
+def _load_inputs(request: GenerationRequest) -> tuple[_PipelineInputs | None, list[Diagnostic]]:
     diagnostics: list[Diagnostic] = []
 
     load_result = SourceLoader().load(request.source_paths)
     diagnostics.extend(load_result.diagnostics)
     if has_errors(diagnostics):
-        return _empty(diagnostics)
+        return None, diagnostics
 
     from tslc.syntax.parser import TslParser
 
     parse_result = TslParser().parse(load_result.documents)
     diagnostics.extend(parse_result.diagnostics)
     if has_errors(diagnostics):
-        return _empty(diagnostics)
+        return None, diagnostics
 
     catalog_result = CatalogBuilder().build(parse_result)
     diagnostics.extend(catalog_result.diagnostics)
     if catalog_result.catalog is None or has_errors(diagnostics):
-        return _empty(diagnostics)
+        return None, diagnostics
     catalog = catalog_result.catalog
     # Names emitted in >1 form (split to `_mask`/`_maskz`). Only these are policy-distinguished by
     # `CallLowerer`; a single-form masked name (`blend`, `[mask=pass_through]`) stays bare, so the
@@ -103,144 +139,97 @@ def generate(request: GenerationRequest) -> GenerationResult:
     split_names = policy_split_names(catalog)
     imm_split_names = immediate_split_names(catalog)
     machine_profiles = load_machine_profiles(request.machine_profiles_path)
+    return (
+        _PipelineInputs(
+            catalog=catalog,
+            machine_profiles=machine_profiles,
+            split_names=split_names,
+            imm_split_names=imm_split_names,
+        ),
+        diagnostics,
+    )
 
-    selector = Selector()
-    lowerer = Lowerer()
-    type_tags = _sorted_type_tags(request.type_tags)
-    coverage: list[CoverageEntry] = []
-    skipped: list[SkippedEntry] = []
-    profile_renders: list[ProfileRender] = []
 
-    for profile_name in sorted(request.profiles):
-        profile = machine_profiles.get(profile_name)
-        if profile is None:
-            diagnostics.append(
-                Diagnostic(
-                    severity="error",
-                    code="TSL-PIPELINE-UNKNOWN-PROFILE",
-                    message=f"no machine profile named {profile_name!r}",
-                )
+class _GenerationSession:
+    def __init__(
+        self,
+        request: GenerationRequest,
+        inputs: _PipelineInputs,
+        diagnostics: list[Diagnostic],
+    ) -> None:
+        self.request = request
+        self.inputs = inputs
+        self.selector = Selector()
+        self.lowerer = Lowerer()
+        self.type_tags = _sorted_type_tags(request.type_tags)
+        self.diagnostics = diagnostics
+        self.coverage: list[CoverageEntry] = []
+        self.skipped: list[SkippedEntry] = []
+        self.profile_renders: list[ProfileRender] = []
+
+    def run(self) -> GenerationResult:
+        for profile_name in sorted(self.request.profiles):
+            profile = self.inputs.machine_profiles.get(profile_name)
+            if profile is None:
+                self._record_unknown_profile(profile_name)
+                continue
+            self._generate_profile(profile_name, profile)
+
+        if self.request.mode == "strict" and (
+            self.skipped or has_errors(self.diagnostics)
+        ):
+            return _result_without_artifacts(
+                self.diagnostics, self.coverage, self.skipped
             )
-            continue
 
-        # Profile-scoped dependency closure: start from the requested primitives and pull
-        # in only the callees referenced by bodies actually *selected* for this profile
-        # (so scalar's call-free comparison bodies don't drag in SIMD-only callees).
+        rendered = (
+            render_project(
+                tuple(self.profile_renders),
+                self.request.backends,
+                self.inputs.imm_split_names,
+            )
+            if self.profile_renders
+            else None
+        )
+        artifacts = rendered.artifacts if rendered is not None else ArtifactSet.create(())
+        return _result(artifacts, rendered, self.diagnostics, self.coverage, self.skipped)
+
+    def _record_unknown_profile(self, profile_name: str) -> None:
+        self.diagnostics.append(
+            Diagnostic(
+                severity="error",
+                code="TSL-PIPELINE-UNKNOWN-PROFILE",
+                message=f"no machine profile named {profile_name!r}",
+            )
+        )
+
+    def _generate_profile(self, profile_name: str, profile: MachineProfile) -> None:
+        # Profile-scoped dependency closure: start from the requested primitives and pull in only
+        # callees referenced by bodies actually selected and lowered for this profile.
         lowered_specs: list[_LoweredSlot] = []
-        # Which extension block this profile selected for each emitted ISA tag, so the
-        # renderer can register the right mask_type (lane-bitmask vs native __mmaskN).
+        # Which extension block this profile selected for each emitted ISA tag, so the renderer
+        # can register the right mask_type (lane-bitmask vs native __mmaskN).
         selected_extensions: dict[str, Extension] = {}
-        worklist = list(request.primitives)
+        worklist = list(self.request.primitives)
         processed: set[str] = set()
         while worklist:
             primitive = worklist.pop(0)
             if primitive in processed:
                 continue
             processed.add(primitive)
-            selection = selector.select_profile(catalog, profile, primitive, type_tags)
-            diagnostics.extend(selection.diagnostics)
-            for slot in selection.selected:
-                selected_extensions[slot.extension.isa_name] = slot.extension
-                target_alias = (
-                    slot.primitive.result_target[1]
-                    if slot.primitive.result_target is not None
-                    else None
-                )
-                target_base = (
-                    slot.to_target
-                    if slot.primitive.result_target is not None
-                    and slot.primitive.result_target[0] == RESULT_DIM_BASE
-                    else None
-                )
-                target_extension = (
-                    slot.to_target
-                    if slot.primitive.result_target is not None
-                    and slot.primitive.result_target[0] == RESULT_DIM_EXTENSION
-                    else None
-                )
-                body_segments = scan(
-                    slot.implementation.body_text,
-                    source=slot.implementation.body_source,
-                )
-                callees = extract_call_dependencies_from_segments(
-                    body_segments,
-                    primitive,
-                    slot.extension.isa_name,
-                    slot.type_tag,
-                    target_alias,
-                    target_base,
-                    target_extension,
-                    catalog,
-                )
-                slot_lowered = False
-                for backend in request.backends:
-                    dialect = create_backend_dialect(catalog, backend)
-                    lowered = lowerer.lower(
-                        slot,
-                        catalog,
-                        dialect,
-                        body_segments=body_segments,
-                    )
-                    # Real diagnostics (warnings/errors) bubble up; a not-yet-lowerable
-                    # body is an "info" skip -> recorded as a coverage gap, not noise.
-                    diagnostics.extend(d for d in lowered.diagnostics if d.severity != "info")
-                    if lowered.specialization is None:
-                        skipped.append(
-                            SkippedEntry(
-                                profile=profile_name,
-                                backend=backend,
-                                primitive=primitive,
-                                extension=slot.extension.name,
-                                type_tag=slot.type_tag,
-                                reason=next(
-                                    (d.message for d in lowered.diagnostics), "unsupported body"
-                                ),
-                            )
-                        )
-                        continue
-                    lowered_specs.append(
-                        _LoweredSlot(backend=backend, spec=lowered.specialization, callees=callees)
-                    )
-                    slot_lowered = True
-                # Only pull callees referenced by a body that actually lowered — a skipped
-                # body (e.g. a deferred `let<type>`/`mask<test>` delegation) must not drag its
-                # callees (to_array/store/…) into the emitted set, where they would otherwise
-                # surface as unbuildable generic instantiations.
-                if slot_lowered:
-                    for dependency in callees:
-                        # `primitives_named(unmasked=False)` so a masked-ONLY callee
-                        # (`blend`/`mov`) is pulled too — a masked body delegates to them, and
-                        # `catalog.primitive` (unmasked-only) would miss them and prune the caller.
-                        if dependency.primitive not in processed and catalog.primitives_named(
-                            dependency.primitive, unmasked=False
-                        ):
-                            worklist.append(dependency.primitive)
-
-        grouped, pruned = _prune_unresolved(lowered_specs, split_names)
-        for slot in pruned:
-            skipped.append(
-                SkippedEntry(
-                    profile=profile_name,
-                    backend=slot.backend,
-                    primitive=slot.spec.primitive_name,
-                    extension=slot.spec.extension_name,
-                    type_tag=slot.spec.type_tag,
-                    reason="pruned: a called primitive is not generated for this profile",
-                )
+            primitive_slots, discovered_primitives = self._process_primitive(
+                profile, profile_name, primitive, selected_extensions
             )
-        for slot in lowered_specs:
-            if slot not in pruned:
-                coverage.append(
-                    CoverageEntry(
-                        profile=profile_name,
-                        backend=slot.backend,
-                        primitive=slot.spec.primitive_name,
-                        extension=slot.spec.extension_name,
-                        type_tag=slot.spec.type_tag,
-                    )
-                )
+            lowered_specs.extend(primitive_slots)
+            for dependency_primitive in discovered_primitives:
+                if dependency_primitive not in processed:
+                    worklist.append(dependency_primitive)
 
-        profile_renders.append(
+        grouped, pruned = _prune_unresolved(lowered_specs, self.inputs.split_names)
+        for slot in pruned:
+            self._record_pruned_skip(profile_name, slot)
+        self._record_coverage(profile_name, lowered_specs, pruned)
+        self.profile_renders.append(
             ProfileRender(
                 profile=profile,
                 cpp=_finalize(grouped.get("cpp", {})),
@@ -249,19 +238,117 @@ def generate(request: GenerationRequest) -> GenerationResult:
             )
         )
 
-    rendered = (
-        render_project(tuple(profile_renders), request.backends, imm_split_names)
-        if profile_renders
-        else None
-    )
-    artifacts = rendered.artifacts if rendered is not None else ArtifactSet.create(())
-    return GenerationResult(
-        artifacts=artifacts,
-        rendered=rendered,
-        diagnostics=sort_diagnostics(diagnostics),
-        coverage=tuple(sorted(coverage, key=_coverage_key)),
-        skipped=tuple(sorted(skipped, key=_skipped_key)),
-    )
+    def _process_primitive(
+        self,
+        profile: MachineProfile,
+        profile_name: str,
+        primitive: str,
+        selected_extensions: dict[str, Extension],
+    ) -> tuple[list["_LoweredSlot"], list[str]]:
+        catalog = self.inputs.catalog
+        selection = self.selector.select_profile(
+            catalog, profile, primitive, self.type_tags
+        )
+        self.diagnostics.extend(selection.diagnostics)
+        lowered_slots: list[_LoweredSlot] = []
+        discovered_primitives: list[str] = []
+
+        for slot in selection.selected:
+            selected_extensions[slot.extension.isa_name] = slot.extension
+            body_segments = scan(
+                slot.implementation.body_text,
+                source=slot.implementation.body_source,
+            )
+            callees = extract_call_dependencies_from_segments(
+                body_segments,
+                primitive,
+                slot.extension.isa_name,
+                slot.type_tag,
+                *_target_dependency_context(slot),
+                catalog,
+            )
+            slot_lowered = False
+            for backend in self.request.backends:
+                dialect = create_backend_dialect(catalog, backend)
+                lowered = self.lowerer.lower(
+                    slot,
+                    catalog,
+                    dialect,
+                    body_segments=body_segments,
+                )
+                self._record_lowering_diagnostics(
+                    profile_name, backend, primitive, slot, lowered
+                )
+                if lowered.specialization is None:
+                    continue
+                lowered_slots.append(
+                    _LoweredSlot(
+                        backend=backend,
+                        spec=lowered.specialization,
+                        callees=callees,
+                    )
+                )
+                slot_lowered = True
+
+            if slot_lowered:
+                discovered_primitives.extend(
+                    dependency.primitive
+                    for dependency in callees
+                    if catalog.primitives_named(dependency.primitive, unmasked=False)
+                )
+
+        return lowered_slots, discovered_primitives
+
+    def _record_lowering_diagnostics(
+        self,
+        profile_name: str,
+        backend: str,
+        primitive: str,
+        slot: SelectedImplementation,
+        lowered: LoweringResult,
+    ) -> None:
+        # In partial mode, lowerer "info" diagnostics are coverage gaps. Strict mode promotes
+        # them below, scoped to the selected profile/backend slot.
+        self.diagnostics.extend(d for d in lowered.diagnostics if d.severity != "info")
+        if lowered.specialization is not None:
+            return
+        entry = _lowering_skipped_entry(profile_name, backend, primitive, slot, lowered)
+        self.skipped.append(entry)
+        if self.request.mode == "strict":
+            self.diagnostics.extend(
+                _strict_lowering_diagnostics(entry, lowered.diagnostics)
+            )
+
+    def _record_pruned_skip(self, profile_name: str, slot: "_LoweredSlot") -> None:
+        entry = SkippedEntry(
+            profile=profile_name,
+            backend=slot.backend,
+            primitive=slot.spec.primitive_name,
+            extension=slot.spec.extension_name,
+            type_tag=slot.spec.type_tag,
+            reason="pruned: a called primitive is not generated for this profile",
+        )
+        self.skipped.append(entry)
+        if self.request.mode == "strict":
+            self.diagnostics.append(_strict_pruned_diagnostic(entry))
+
+    def _record_coverage(
+        self,
+        profile_name: str,
+        lowered_specs: list["_LoweredSlot"],
+        pruned: list["_LoweredSlot"],
+    ) -> None:
+        self.coverage.extend(
+            CoverageEntry(
+                profile=profile_name,
+                backend=slot.backend,
+                primitive=slot.spec.primitive_name,
+                extension=slot.spec.extension_name,
+                type_tag=slot.spec.type_tag,
+            )
+            for slot in lowered_specs
+            if slot not in pruned
+        )
 
 
 @dataclass(slots=True, eq=False)
@@ -269,6 +356,97 @@ class _LoweredSlot:
     backend: str
     spec: LoweredSpecialization
     callees: frozenset[CallDependency]
+
+
+def _target_dependency_context(
+    slot: SelectedImplementation,
+) -> tuple[str | None, str | None, str | None]:
+    target_alias = (
+        slot.primitive.result_target[1] if slot.primitive.result_target is not None else None
+    )
+    target_base = (
+        slot.to_target
+        if slot.primitive.result_target is not None
+        and slot.primitive.result_target[0] == RESULT_DIM_BASE
+        else None
+    )
+    target_extension = (
+        slot.to_target
+        if slot.primitive.result_target is not None
+        and slot.primitive.result_target[0] == RESULT_DIM_EXTENSION
+        else None
+    )
+    return target_alias, target_base, target_extension
+
+
+def _lowering_skipped_entry(
+    profile_name: str,
+    backend: str,
+    primitive: str,
+    slot: SelectedImplementation,
+    lowered: LoweringResult,
+) -> SkippedEntry:
+    return SkippedEntry(
+        profile=profile_name,
+        backend=backend,
+        primitive=primitive,
+        extension=slot.extension.name,
+        type_tag=slot.type_tag,
+        reason=next((d.message for d in lowered.diagnostics), "unsupported body"),
+    )
+
+
+def _strict_lowering_diagnostics(
+    entry: SkippedEntry, diagnostics: tuple[Diagnostic, ...]
+) -> tuple[Diagnostic, ...]:
+    coverage_gaps = tuple(d for d in diagnostics if d.severity == "info")
+    if not coverage_gaps:
+        return (
+            _strict_skip_diagnostic(
+                entry,
+                code="TSL-PIPELINE-SKIPPED-SPECIALIZATION",
+                message=entry.reason,
+            ),
+        )
+    return tuple(
+        _strict_skip_diagnostic(
+            entry,
+            code=diagnostic.code,
+            message=diagnostic.message,
+            location=diagnostic.location,
+        )
+        for diagnostic in coverage_gaps
+    )
+
+
+def _strict_pruned_diagnostic(entry: SkippedEntry) -> Diagnostic:
+    return _strict_skip_diagnostic(
+        entry,
+        code="TSL-PIPELINE-PRUNED-SPECIALIZATION",
+        message=entry.reason,
+    )
+
+
+def _strict_skip_diagnostic(
+    entry: SkippedEntry,
+    *,
+    code: str,
+    message: str,
+    location: SourceLocation | None = None,
+) -> Diagnostic:
+    return Diagnostic(
+        severity="error",
+        code=code,
+        message=f"{_skipped_label(entry)} skipped: {message}",
+        location=location,
+    )
+
+
+def _skipped_label(entry: SkippedEntry) -> str:
+    return (
+        f"{entry.profile}/{entry.backend} "
+        f"{entry.primitive}<{entry.extension}, {entry.type_tag}>"
+    )
 
 
 def _prune_unresolved(
@@ -376,10 +554,29 @@ def _skipped_key(entry: SkippedEntry) -> tuple[str, str, str, str, int, str]:
     )
 
 
-def _empty(diagnostics: list[Diagnostic]) -> GenerationResult:
+def _result_without_artifacts(
+    diagnostics: list[Diagnostic],
+    coverage: list[CoverageEntry],
+    skipped: list[SkippedEntry],
+) -> GenerationResult:
+    return _result(ArtifactSet.create(()), None, diagnostics, coverage, skipped)
+
+
+def _result(
+    artifacts: ArtifactSet,
+    rendered: RenderedProject | None,
+    diagnostics: list[Diagnostic],
+    coverage: list[CoverageEntry],
+    skipped: list[SkippedEntry],
+) -> GenerationResult:
     return GenerationResult(
-        artifacts=ArtifactSet.create(()),
-        rendered=None,
+        artifacts=artifacts,
+        rendered=rendered,
         diagnostics=sort_diagnostics(diagnostics),
-        coverage=(),
+        coverage=tuple(sorted(coverage, key=_coverage_key)),
+        skipped=tuple(sorted(skipped, key=_skipped_key)),
     )
+
+
+def _empty(diagnostics: list[Diagnostic]) -> GenerationResult:
+    return _result(ArtifactSet.create(()), None, diagnostics, [], [])

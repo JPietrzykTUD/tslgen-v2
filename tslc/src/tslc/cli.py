@@ -35,6 +35,12 @@ def main(argv: list[str] | None = None) -> int:
         help="comma-separated type tags",
     )
     parser.add_argument("--backends", default="cpp,rust", help="comma-separated backends")
+    parser.add_argument(
+        "--generation-mode",
+        choices=("partial", "strict"),
+        default="partial",
+        help="partial records unsupported selected slots as coverage skips; strict fails on them",
+    )
     parser.add_argument("--output-root", default=None, help="write artifacts under this root")
     parser.add_argument("--verify", action="store_true", help="build-verify after writing")
     parser.add_argument(
@@ -59,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
         profiles=_split(args.profiles),
         type_tags=_split(args.types),
         backends=_split(args.backends),
+        generation_mode=args.generation_mode,
     )
 
     for diagnostic in result.diagnostics:
