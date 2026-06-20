@@ -79,6 +79,9 @@ class LoweringEnv:
     # render knows which condition leaves are symbolic template params (rendered raw) vs
     # generation-time queries (folded to a literal).
     generic_param_names: tuple[str, ...] = ()
+    # The lane count of a variadic (`s...`) primitive (`set`), so `pack<expand>`/`pack<first>`
+    # know how many scalar args there are. None for non-variadic primitives.
+    variadic_lanes: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "attributes", _frozen_mapping(self.attributes))

@@ -380,7 +380,7 @@ def _kind_type(kind: str, owner: str) -> str:
         return f"*mut {owner}::BaseType"
     if kind == "void":
         return "()"
-    if kind == "s[]":
+    if kind in ("s[]", "s..."):  # `s...` (set's variadic pack) renders as the lane-count array
         return f"{owner}::Array"
     if kind == "usize":  # a fixed count type, not a vector projection
         return "usize"

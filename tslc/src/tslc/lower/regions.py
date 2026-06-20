@@ -25,6 +25,7 @@ from tslc.lower.region_handlers.intrinsics import (
 )
 from tslc.lower.region_handlers.masks import MaskLowerer
 from tslc.lower.region_handlers.memory import MemLowerer
+from tslc.lower.region_handlers.pack import PackLowerer
 from tslc.lower.region_handlers.protocol import RegionLowerer, RenderBody
 from tslc.lower.region_handlers.queries import QueryRegionLowerer
 from tslc.lower.region_handlers.registry import DEFAULT_REGION_LOWERERS
@@ -45,6 +46,7 @@ __all__ = [
     "LoopLowerer",
     "MaskLowerer",
     "MemLowerer",
+    "PackLowerer",
     "QueryRegionLowerer",
     "RegionLowerer",
     "RenderBody",

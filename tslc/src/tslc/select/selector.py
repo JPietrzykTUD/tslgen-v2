@@ -108,6 +108,11 @@ class Selector:
             # emit a single slot — the free-function render emits one `tsl::name(...)`.
             shape = parse_signature(primitive.signature)
             free_function = shape is not None and shape.is_free_function
+            # A variadic (`s...`) primitive (`set`) renders as a C++ variadic template, which has
+            # no runtime indexing — so the generic `<LANES>` vector's per-lane fallback loop is not
+            # expressible. Skip it on every backend (keeping C++/Rust parity); scalar + concrete
+            # SIMD use the positional intrinsic / pack-first bodies.
+            variadic = shape is not None and "s..." in shape.param_kinds
             primitive_type_tags = (
                 tuple(
                     sorted(
@@ -130,6 +135,8 @@ class Selector:
                 # `if` doesn't translate to Rust). Defer masked variants on the generic vector;
                 # the SIMD (blend/mov/maskz) and scalar (if/set_zero) masked bodies are emitted.
                 if masked and catalog.extensions[extension_name].family == "generic_like":
+                    continue
+                if variadic and catalog.extensions[extension_name].family == "generic_like":
                     continue
                 for type_tag in primitive_type_tags:
                     # A representation-change primitive has a SECOND axis (the target type /

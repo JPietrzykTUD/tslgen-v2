@@ -138,6 +138,15 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
             lines.append(f"auto* _tsl_use_{index} = &tsl::{name};")
             index += 1
             continue
+        if "s..." in first.param_kinds:
+            # A variadic (`s...`) primitive (`set`): a C++ variadic template. Address-take each
+            # specialization with the lane-count scalar args spelled out so the body compiles.
+            for spec in specs:
+                vec = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
+                args = ", ".join([f"{vec}::base_type"] * (spec.variadic_lanes or 0))
+                lines.append(f"auto* _tsl_use_{index} = &tsl::{name}<{vec}, {args}>;")
+                index += 1
+            continue
         varying = varying_positions(specs)
         for spec in specs:
             if spec.extension_name == "generic":

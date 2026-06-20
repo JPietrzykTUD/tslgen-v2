@@ -15,6 +15,7 @@ from tslc.lower.region_handlers.declarations import LetLowerer, VarLowerer
 from tslc.lower.region_handlers.intrinsics import IntrinComposeLowerer, IntrinLowerer
 from tslc.lower.region_handlers.masks import MaskLowerer
 from tslc.lower.region_handlers.memory import MemLowerer
+from tslc.lower.region_handlers.pack import PackLowerer
 from tslc.lower.region_handlers.protocol import RegionLowerer
 from tslc.lower.region_handlers.queries import QueryRegionLowerer
 from tslc.lower.region_handlers.returns import EmitReturnLowerer
@@ -27,6 +28,7 @@ DEFAULT_REGION_LOWERERS: tuple[RegionLowerer, ...] = (
     LetLowerer(),
     MaskLowerer(),
     MemLowerer(),
+    PackLowerer(),
     CastLowerer(),
     CallLowerer(),
     IfLowerer(),

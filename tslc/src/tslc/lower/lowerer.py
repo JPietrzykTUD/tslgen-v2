@@ -119,6 +119,11 @@ class LoweredSpecialization:
     # unmasked spec. Survives lowering (the boolean `axis` does not carry it) so pruning can match
     # callees per-policy and the render rename can split a dual name to `<name>_mask`/`_maskz`.
     mask_policy: str | None = None
+    # The lane count of a variadic (`s...`) primitive (`set`): the number of scalar args, equal
+    # to the vector length for this specialization (16 for `simd<i8,sse>`, 1 for scalar). None
+    # for non-variadic primitives. The render uses it for the C++ variadic-template arity in the
+    # smoke test and for the Rust `args[0..N-1]` pack expansion.
+    variadic_lanes: int | None = None
 
     @property
     def body_text(self) -> str:
@@ -216,7 +221,17 @@ class Lowerer:
                 f"(supported: {', '.join(sorted(_SUPPORTED_KINDS))})",
                 source=_primitive_signature_source(selected),
             )
-        parameters = selected.primitive.parameters
+        # A variadic param is authored `name...`; strip the marker for the emitted parameter
+        # name (the `...` lives in the `s...` kind, not the identifier).
+        parameters = tuple(p.removesuffix("...") for p in selected.primitive.parameters)
+        # A variadic (`s...`) primitive takes one scalar arg per lane; the generic `<LANES>`
+        # vector is excluded by selection, so the lane count is concrete here (1 for scalar).
+        variadic_lanes: int | None = None
+        if "s..." in shape.param_kinds:
+            ext_bits = selected.extension.vector_bits
+            variadic_lanes = (
+                ext_bits // _type_bit_width(selected.type_tag) if ext_bits else 1
+            )
         if len(parameters) != len(shape.param_kinds):
             return _error(
                 "TSL-LOWER-SIGNATURE-ARITY",
@@ -266,6 +281,7 @@ class Lowerer:
                 generic_param_names=tuple(
                     gp.name for gp in selected.primitive.generic_params
                 ),
+                variadic_lanes=variadic_lanes,
             ),
             scope=scope,
             effects=LoweringEffects(),
@@ -354,6 +370,7 @@ class Lowerer:
             register_is_base=context.env.extension.isa_name == "scalar",
             target=target,
             mask_policy=selected.primitive.attributes.get("mask"),
+            variadic_lanes=variadic_lanes,
         )
         return LoweringResult(
             specialization=specialization,
@@ -560,8 +577,19 @@ def _resolve_immediate(
 
 
 _SUPPORTED_KINDS = frozenset(
-    {"v", "s", "m", "im", "usize", "sImm", "ptr", "ptr+", "void", "s[]", "vt", "vidx"}
+    {"v", "s", "m", "im", "usize", "sImm", "ptr", "ptr+", "void", "s[]", "vt", "vidx", "s..."}
 )
+
+
+def _type_bit_width(type_tag: str) -> int:
+    """The bit width of a scalar type tag (``si8`` -> 8, ``f64`` -> 64)."""
+
+    digits = ""
+    for char in reversed(type_tag):
+        if not char.isdigit():
+            break
+        digits = char + digits
+    return int(digits) if digits else 8
 
 
 def _type_param_bounds(

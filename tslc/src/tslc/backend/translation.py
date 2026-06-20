@@ -75,6 +75,10 @@ class BackendSyntaxDialect(Protocol):
     def render_compile_switch(
         self, selector: RenderField, arms: tuple[tuple[str, RenderField], ...]
     ) -> RenderText: ...
+    def render_pack_expand(
+        self, name: RenderField, lanes: int, cast_to: str | None
+    ) -> RenderText: ...
+    def render_pack_first(self, name: RenderField, lanes: int) -> RenderText: ...
 
 
 class BackendDialect(Protocol):

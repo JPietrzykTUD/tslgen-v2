@@ -1213,3 +1213,25 @@ def test_allocate_family_builds(data_root: Path, machine_profiles_path: Path, tm
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_set_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `set` (`v:=s...`) is the first per-specialization-variadic primitive: the number of scalar
+    # args equals the lane count. `s...` renders as a C++ variadic template (Args... args ->
+    # _mm_set_epiN(args...)) and a Rust lane-count array param (Self::Array -> _mm_set_epiN(
+    # args[0..N-1]) via pack<expand>). The scalar body uses pack<first> (tsl::pack_first / args[0]).
+    # The generic <LANES> vector is skipped (a C++ pack can't be runtime-indexed), keeping C++/Rust
+    # parity; scalar + concrete SIMD build in both.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["set"],
+        profiles=["scalar", "sse2", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"

@@ -234,6 +234,25 @@ class _RustSyntax:
         parts.append(literal_text("}"))
         return render_sequence(tuple(parts))
 
+    def render_pack_expand(
+        self, name: RenderField, lanes: int, cast_to: str | None
+    ) -> RenderText:
+        # Rust has no variadics; the lane-count array is expanded to positional elements
+        # `args[0], args[1], …, args[N-1]` for an intrinsic's fixed argument list. The x86 set
+        # intrinsics take signed ints, so unlike C++ (implicit conversion) each integer element
+        # is cast (`args[i] as i8`); `cast_to` is None for float bases (no cast).
+        suffix = f" as {cast_to}" if cast_to is not None else ""
+        parts: list[RenderField] = []
+        for index in range(lanes):
+            if index:
+                parts.append(literal_text(", "))
+            parts.extend((name, literal_text(f"[{index}]{suffix}")))
+        return render_sequence(tuple(parts))
+
+    def render_pack_first(self, name: RenderField, lanes: int) -> RenderText:
+        del lanes
+        return render_sequence((name, literal_text("[0]")))
+
 
 @dataclass(frozen=True, slots=True)
 class RustBackendDialect:

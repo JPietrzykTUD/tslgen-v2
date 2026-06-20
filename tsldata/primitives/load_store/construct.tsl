@@ -420,11 +420,11 @@ prim<v:=s...>[arg_count(args)=return_vector_length] set(args...):
           tsil """
             if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
               emit_return(
-                intrin_compose<set, suffix="epi64">(args...)
+                intrin_compose<set, suffix="epi64">(pack<expand>(args))
               );
             } else<generation> {
               emit_return(
-                intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(args...)
+                intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(pack<expand>(args))
               );
             }
           """
@@ -433,7 +433,7 @@ prim<v:=s...>[arg_count(args)=return_vector_length] set(args...):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set>(args...)
+              intrin_compose<set>(pack<expand>(args))
             );
           """
     [avx2, sse]:
@@ -445,11 +445,11 @@ prim<v:=s...>[arg_count(args)=return_vector_length] set(args...):
           tsil """
             if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
               emit_return(
-                intrin_compose<set, suffix="epi64x">(args...)
+                intrin_compose<set, suffix="epi64x">(pack<expand>(args))
               );
             } else<generation> {
               emit_return(
-                intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(args...)
+                intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(pack<expand>(args))
               );
             }
           """
@@ -460,7 +460,7 @@ prim<v:=s...>[arg_count(args)=return_vector_length] set(args...):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set>(args...)
+              intrin_compose<set>(pack<expand>(args))
             );
           """
     [neon, sve, generic, oneAPIfpga]:
@@ -483,4 +483,4 @@ prim<v:=s...>[arg_count(args)=return_vector_length] set(args...):
       arith:
         requires []
         implementation:
-          tsil "emit_return(pack<first>(args...));"
+          tsil "emit_return(pack<first>(args));"
