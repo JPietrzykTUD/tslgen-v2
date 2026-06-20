@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -28,7 +29,7 @@ def machine_profiles_path() -> Path:
 
 
 @pytest.fixture(scope="session")
-def machine_profiles() -> dict[str, MachineProfile]:
+def machine_profiles() -> Mapping[str, MachineProfile]:
     return load_machine_profiles(_MACHINE_PROFILES)
 
 

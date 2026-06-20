@@ -9,9 +9,11 @@ specializations are emitted.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 
 # Sentinel used by the generic/scalar profile to mean "no SIMD features".
 _NO_SIMD = "NOSIMD-INVALID"
@@ -24,10 +26,13 @@ class MachineProfile:
     features: frozenset[str]
     # feature -> its compiler/target-feature spelling when it differs from the token
     # (e.g. avx512_vpclmulqdq -> vpclmulqdq, neon -> asimd).
-    alternatives: dict[str, str]
+    alternatives: Mapping[str, str]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "alternatives", MappingProxyType(dict(self.alternatives)))
 
 
-def load_machine_profiles(path: Path) -> dict[str, MachineProfile]:
+def load_machine_profiles(path: Path) -> Mapping[str, MachineProfile]:
     """Load every machine profile, keyed by name. The filesystem-read boundary."""
 
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -47,4 +52,4 @@ def load_machine_profiles(path: Path) -> dict[str, MachineProfile]:
                 features=features,
                 alternatives=dict(entry.get("alternatives", {})),
             )
-    return profiles
+    return MappingProxyType(profiles)

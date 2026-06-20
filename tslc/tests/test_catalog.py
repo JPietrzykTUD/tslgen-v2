@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+
+from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
 
 
@@ -96,3 +99,37 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     assert "avx2" in machine_profiles["avx2"].features
     assert "avx2" not in machine_profiles["avx"].features
     assert "avx512f" in machine_profiles["skylake"].features
+
+
+def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:
+    add = catalog.primitive("add")
+    assert add is not None
+    avx2 = catalog.extensions["avx2"]
+    avx512 = catalog.extensions["avx512"]
+
+    with pytest.raises(TypeError):
+        catalog.type_groups["new"] = ("si32",)  # type: ignore[index]
+    with pytest.raises(TypeError):
+        catalog.extensions["new"] = avx2  # type: ignore[index]
+    with pytest.raises(TypeError):
+        catalog.type_spellings["cpp"]["s32"] = "bad"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        catalog.translations["cpp"]["emit_return"] = "bad"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        add.attributes["mask"] = "zero"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        avx2.compose_prefix["cpp"] = "bad"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        avx2.compose_suffix_by_type["si32"] = "bad"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        avx512.mask_policy.cpp_by_lanes[16] = "bad"  # type: ignore[index]
+
+
+def test_machine_profile_mappings_are_read_only(machine_profiles) -> None:
+    alternate_feature = "avx512_vpclmulqdq"
+    with pytest.raises(TypeError):
+        machine_profiles["new"] = MachineProfile(  # type: ignore[index]
+            "new", "x86", frozenset(), {}
+        )
+    with pytest.raises(TypeError):
+        machine_profiles["skylake"].alternatives[alternate_feature] = "bad"  # type: ignore[index]

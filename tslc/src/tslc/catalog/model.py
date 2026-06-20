@@ -7,14 +7,20 @@ What it is not is plumbing — there are no result/handoff wrappers here.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import NewType
+from types import MappingProxyType
+from typing import NewType, TypeVar
 
 from tslc.diagnostics import SourceSpan
 
 TypeTag = NewType("TypeTag", str)
 BackendId = NewType("BackendId", str)
 ExtensionName = NewType("ExtensionName", str)
+_K = TypeVar("_K")
+_V = TypeVar("_V")
+_InnerK = TypeVar("_InnerK")
+_InnerV = TypeVar("_InnerV")
 
 # Boolean attributes whose `*` value is a generation axis: a `[aligned=*]` primitive
 # expands into concrete `true`/`false` variants, each an independent generation, and the
@@ -76,7 +82,7 @@ class Primitive:
     # attribute key -> value (e.g. {"aligned": "false"}). A `*`-valued boolean wildcard
     # (aligned/packed) is expanded by the builder into concrete-value copies, so here the
     # value is always concrete. `attribute_keys` is kept for the masked-variant filter.
-    attributes: dict[str, str] = field(default_factory=dict)
+    attributes: Mapping[str, str] = field(default_factory=dict)
     # Per-parameter metadata for `sImm` compile-time immediates, from the `params:` block
     # (keyed by the signature parameter name). Empty when absent — the lowerer then defaults
     # the immediate to ``ui32`` with no forwarding strategy (a positional const arg). See
@@ -96,6 +102,9 @@ class Primitive:
     source: SourceSpan | None = None
     header_source: SourceSpan | None = None
     signature_source: SourceSpan | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "attributes", _freeze_mapping(self.attributes))
 
     def immediate_param(self, name: str) -> "ImmediateParam | None":
         """The `params:` metadata for the `sImm` parameter `name`, or None."""
@@ -156,8 +165,12 @@ class MaskPolicy:
     """
 
     kind: str = "lane_bitmask"
-    cpp_by_lanes: dict[int, str] = field(default_factory=dict)
-    rust_by_lanes: dict[int, str] = field(default_factory=dict)
+    cpp_by_lanes: Mapping[int, str] = field(default_factory=dict)
+    rust_by_lanes: Mapping[int, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "cpp_by_lanes", _freeze_mapping(self.cpp_by_lanes))
+        object.__setattr__(self, "rust_by_lanes", _freeze_mapping(self.rust_by_lanes))
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,24 +203,46 @@ class Extension:
     name: str  # internal identity = TSL block name (e.g. "avx2_vl"); drives selection
     isa_name: str  # emitted tag = `extension_name` (e.g. "avx2"); `_vl` is internal only
     family: str  # "x86" | "arm" | "scalar" | … — picks the Rust core::arch module
-    compose_prefix: dict[str, str]  # backend_id -> intrinsic prefix
-    compose_suffix_by_type: dict[str, str]  # type tag -> suffix fragment
+    compose_prefix: Mapping[str, str]  # backend_id -> intrinsic prefix
+    compose_suffix_by_type: Mapping[str, str]  # type tag -> suffix fragment
     inherits: str | None = None  # extension this one borrows impls/metadata from
     lscpu_flags: frozenset[str] = frozenset()  # features that make this extension available
     vector_bits: int = 0  # register width (sse=128, avx2=256, avx512=512); 0 for scalar
     mask_policy: MaskPolicy = field(default_factory=MaskPolicy)  # how masks are represented
     imask_policy: ImaskPolicy = field(default_factory=ImaskPolicy)  # how integral masks are represented
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "compose_prefix", _freeze_mapping(self.compose_prefix))
+        object.__setattr__(
+            self,
+            "compose_suffix_by_type",
+            _freeze_mapping(self.compose_suffix_by_type),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class Catalog:
     primitives: tuple[Primitive, ...]
-    type_groups: dict[str, tuple[str, ...]]
-    extensions: dict[str, Extension]
+    type_groups: Mapping[str, tuple[str, ...]]
+    extensions: Mapping[str, Extension]
     # backend_id -> normalized scalar tag (s32/u32/f32) -> spelling
-    type_spellings: dict[str, dict[str, str]]
+    type_spellings: Mapping[str, Mapping[str, str]]
     # backend_id -> translation-template key (e.g. "emit_return", "loop_range") -> template
-    translations: dict[str, dict[str, str]]
+    translations: Mapping[str, Mapping[str, str]]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "type_groups", _freeze_mapping(self.type_groups))
+        object.__setattr__(self, "extensions", _freeze_mapping(self.extensions))
+        object.__setattr__(
+            self,
+            "type_spellings",
+            _freeze_nested_mapping(self.type_spellings),
+        )
+        object.__setattr__(
+            self,
+            "translations",
+            _freeze_nested_mapping(self.translations),
+        )
 
     def primitive(self, name: str, *, unmasked: bool = True) -> Primitive | None:
         for primitive in self.primitives:
@@ -272,3 +307,15 @@ class Catalog:
         """Fewer members = more specific (used as the primary selection key)."""
 
         return len(self.type_group_members(type_group))
+
+
+def _freeze_mapping(mapping: Mapping[_K, _V]) -> Mapping[_K, _V]:
+    return MappingProxyType(dict(mapping))
+
+
+def _freeze_nested_mapping(
+    mapping: Mapping[_K, Mapping[_InnerK, _InnerV]],
+) -> Mapping[_K, Mapping[_InnerK, _InnerV]]:
+    return MappingProxyType(
+        {key: _freeze_mapping(value) for key, value in mapping.items()}
+    )

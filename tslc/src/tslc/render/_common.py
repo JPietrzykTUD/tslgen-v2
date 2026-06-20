@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 import re
 from importlib import resources
 
@@ -17,7 +18,7 @@ def slug(profile_name: str) -> str:
     return re.sub(r"[^0-9A-Za-z_]", "_", profile_name)
 
 
-def feature_spelling(feature: str, alternatives: dict[str, str]) -> str:
+def feature_spelling(feature: str, alternatives: Mapping[str, str]) -> str:
     """A feature's compiler/target-feature spelling."""
 
     if feature in alternatives:
