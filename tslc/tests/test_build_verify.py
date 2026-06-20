@@ -1191,3 +1191,25 @@ def test_memory_cp_builds(data_root: Path, machine_profiles_path: Path, tmp_path
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_allocate_family_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # The memory-allocation family is non-vector (`allocate` ptr:=(usize), `allocate_aligned`
+    # ptr:=(usize,usize), `deallocate` void:=(ptr)) — derived `is_free_function` from the
+    # signature, so each emits a single plain `tsl::` free function (no simd<> template), not a
+    # per-(type,ext) wrapper. Bodies lower mem<alloc|alloc_aligned|free> to std::malloc/
+    # aligned_alloc/free (C++) and crate::tsl_core::mem_* (Rust). ISA-independent, so one slot
+    # regardless of profile; builds in C++ and Rust across scalar + SIMD.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["allocate", "allocate_aligned", "deallocate"],
+        profiles=["scalar", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"

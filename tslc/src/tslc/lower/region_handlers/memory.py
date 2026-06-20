@@ -35,7 +35,9 @@ class MemLowerer:
         elif op == "alloc" and len(args) == 1:
             key, fields = "mem_alloc", {"count": args[0]}
         elif op == "alloc_aligned" and len(args) == 2:
-            key, fields = "mem_alloc_aligned", {"align": args[0], "count": args[1]}
+            # The corpus body passes (count_bytes, alignment); the template orders them per
+            # backend (C++ `aligned_alloc(align, count)`).
+            key, fields = "mem_alloc_aligned", {"count": args[0], "align": args[1]}
         elif op == "free" and len(args) == 1:
             key, fields = "mem_free", {"ptr": args[0]}
         else:

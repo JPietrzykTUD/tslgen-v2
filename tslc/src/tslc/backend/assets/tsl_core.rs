@@ -290,6 +290,40 @@ pub unsafe fn mem_copy<C: TslByteCount>(dst: *mut u8, src: *const u8, count: C) 
     core::ptr::copy_nonoverlapping(src, dst, count.tsl_byte_count());
 }
 
+// The C allocator, declared directly (no `libc` crate dependency): every Rust `std` binary
+// links the C runtime, so these symbols resolve. Using malloc/aligned_alloc/free here — rather
+// than Rust's `Layout`-based global allocator — lets `deallocate(ptr)` free with only the
+// pointer (the C contract), and mirrors the C++ `std::malloc`/`std::aligned_alloc`/`std::free`
+// lowering exactly. Alloc and free MUST share an allocator, so all three go through libc.
+extern "C" {
+    fn malloc(size: usize) -> *mut core::ffi::c_void;
+    fn aligned_alloc(alignment: usize, size: usize) -> *mut core::ffi::c_void;
+    fn free(ptr: *mut core::ffi::c_void);
+}
+
+/// `std::malloc` counterpart for the `allocate` free function: a `count_bytes` block as an
+/// untyped pointer (null on failure, per the C contract).
+#[inline]
+pub unsafe fn mem_alloc(count_bytes: usize) -> *mut core::ffi::c_void {
+    malloc(count_bytes)
+}
+
+/// `std::aligned_alloc` counterpart for `allocate_aligned`. Argument order mirrors the
+/// translate template (`alignment` then `count_bytes`); `aligned_alloc` requires the size be a
+/// multiple of the alignment.
+#[inline]
+pub unsafe fn mem_alloc_aligned(alignment: usize, count_bytes: usize) -> *mut core::ffi::c_void {
+    aligned_alloc(alignment, count_bytes)
+}
+
+/// `std::free` counterpart for `deallocate`: frees a malloc/aligned_alloc block by pointer
+/// alone, so no `Layout` reconstruction is needed. (`free` reclaims `aligned_alloc` memory on
+/// conforming platforms.)
+#[inline]
+pub unsafe fn mem_free(ptr: *mut core::ffi::c_void) {
+    free(ptr);
+}
+
 pub mod details {
     pub fn arith_add<T: core::ops::Add<Output = T>>(a: T, b: T) -> T {
         a + b

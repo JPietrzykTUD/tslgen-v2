@@ -6,11 +6,11 @@ Generated 2026-06-19 by `tslc/tools/coverage_inventory.py`. **Regenerate** with
 ## Summary
 
 - **89 distinct primitives** in `tsldata/`.
-- **84 build-verified** (compile in C++ *and* Rust via `tslc/tests/test_build_verify.py`).
+- **87 build-verified** (compile in C++ *and* Rust via `tslc/tests/test_build_verify.py`).
 - **0 lower cleanly but are not build-verified** (codegen succeeds, 0 skips; compilation unconfirmed).
 - **0 partial** (emit for some extension/type slots, skip others).
-- **5 emit nothing** under the probed profiles.
-- **51414 / 58586 (profile×backend×ext×type) slots lower**; **0 errors**.
+- **2 emit nothing** under the probed profiles.
+- **51450 / 58622 (profile×backend×ext×type) slots lower**; **0 errors**.
 - **C++/Rust parity is exact**: every primitive emits the identical extension set for both backends.
 
 Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen clean, 0 skips, no build test; **partial** = some slots lower, some skip; **NONE** = nothing emitted.
@@ -19,9 +19,9 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 
 ## Tiers
 
-### Build-verified (84) — compile in C++ & Rust
+### Build-verified (87) — compile in C++ & Rust
 
-`add`, `between_exclusive`, `between_inclusive`, `between_left_inclusive`, `between_right_inclusive`, `binary_and`, `binary_andnot`, `binary_or`, `binary_xor`, `blend`, `blend_add`, `cast`, `compress`, `compress_store`, `conflict`, `conflict_free`, `convert_down`, `convert_up`, `count_matches`, `custom_sequence`, `div`, `equal`, `expand_load`, `extract`, `extract_imask`, `extract_value`, `from_array`, `gather`, `greater_than`, `greater_than_or_equal`, `hadd`, `hand`, `hmax`, `hmin`, `hor`, `insert`, `insert_imask`, `inv`, `less_than`, `less_than_or_equal`, `load`, `load_convert_up`, `load_mask`, `load_scalar`, `lzc`, `lzc_imask`, `lzc_scalar`, `mask_binary_and`, `mask_binary_not`, `mask_binary_or`, `mask_binary_xor`, `mask_false`, `mask_population_count`, `mask_true`, `masked_set1`, `max`, `memory_cp`, `min`, `mod`, `mod_imm`, `mov`, `mul`, `mul_imm`, `nequal`, `popcnt`, `reinterpret`, `scatter`, `sequence`, `set1`, `set_undef`, `set_zero`, `shift_left`, `shift_right`, `shift_right_imask`, `store`, `store_mask`, `sub`, `test_imask`, `to_array`, `to_integral`, `to_mask`, `to_vector`, `tzc`, `unequal_zero`
+`add`, `allocate`, `allocate_aligned`, `between_exclusive`, `between_inclusive`, `between_left_inclusive`, `between_right_inclusive`, `binary_and`, `binary_andnot`, `binary_or`, `binary_xor`, `blend`, `blend_add`, `cast`, `compress`, `compress_store`, `conflict`, `conflict_free`, `convert_down`, `convert_up`, `count_matches`, `custom_sequence`, `deallocate`, `div`, `equal`, `expand_load`, `extract`, `extract_imask`, `extract_value`, `from_array`, `gather`, `greater_than`, `greater_than_or_equal`, `hadd`, `hand`, `hmax`, `hmin`, `hor`, `insert`, `insert_imask`, `inv`, `less_than`, `less_than_or_equal`, `load`, `load_convert_up`, `load_mask`, `load_scalar`, `lzc`, `lzc_imask`, `lzc_scalar`, `mask_binary_and`, `mask_binary_not`, `mask_binary_or`, `mask_binary_xor`, `mask_false`, `mask_population_count`, `mask_true`, `masked_set1`, `max`, `memory_cp`, `min`, `mod`, `mod_imm`, `mov`, `mul`, `mul_imm`, `nequal`, `popcnt`, `reinterpret`, `scatter`, `sequence`, `set1`, `set_undef`, `set_zero`, `shift_left`, `shift_right`, `shift_right_imask`, `store`, `store_mask`, `sub`, `test_imask`, `to_array`, `to_integral`, `to_mask`, `to_vector`, `tzc`, `unequal_zero`
 
 ### Lower but not build-verified (0) — codegen clean, compilation unconfirmed
 
@@ -31,17 +31,17 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 
 
 
-### Emit nothing (5)
+### Emit nothing (2)
 
-`allocate`, `allocate_aligned`, `deallocate`, `set`, `to_ostream`
+`set`, `to_ostream`
 
 ## Per-primitive table
 
 | primitive | signatures | status | extensions (cpp=rust) | skipped slots | dominant gap |
 |---|---|---|---|--:|---|
 | `add` | `v:=(m,v,v)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
-| `allocate` | `ptr:=(s)` | NONE | — | 0 | — |
-| `allocate_aligned` | `ptr:=(s,s)` | NONE | — | 0 | — |
+| `allocate` | `ptr:=(usize)` | VERIFIED | avx2/generic | 0 | — |
+| `allocate_aligned` | `ptr:=(usize,usize)` | VERIFIED | avx2/generic | 0 | — |
 | `between_exclusive` | `m:=(m,v,v,v)` `m:=(v,v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `between_inclusive` | `m:=(m,v,v,v)` `m:=(v,v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `between_left_inclusive` | `m:=(m,v,v,v)` `m:=(v,v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
@@ -61,7 +61,7 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `convert_up` | `v:=(v,sImm)` | VERIFIED | avx2/avx512/sse | 0 | — |
 | `count_matches` | `s:=(v,s)` | VERIFIED | avx2/avx512/generic/scalar/sse | 4 | pruned (closure) |
 | `custom_sequence` | `v:=(s,s)` | VERIFIED | avx2/avx512/generic/scalar/sse | 24 | pruned (closure) |
-| `deallocate` | `void:=(ptr)` | NONE | — | 0 | — |
+| `deallocate` | `void:=(ptr)` | VERIFIED | avx2/generic | 0 | — |
 | `div` | `v:=(m,v,v)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `equal` | `m:=(m,v,v)` `m:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `expand_load` | `v:=(m,ptr)` | VERIFIED | avx2/avx512/generic/scalar/sse | 4 | pruned (closure) |

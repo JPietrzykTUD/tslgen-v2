@@ -18,11 +18,33 @@ from functools import lru_cache
 # matched: that is the array kind ``s[]``, which must be preserved.
 _INDEX_ANNOTATION = re.compile(r"\[[A-Za-z_]\w*\]$")
 
+# Kinds that do NOT project through a SIMD vector: a raw pointer (`ptr`), a size/count
+# (`usize`), or no value (`void`). A primitive whose result and every parameter are one of
+# these has no vector axis, so it is emitted as a plain free function in the `tsl` namespace
+# (e.g. `allocate`/`deallocate`) rather than a `simd<>`-templated wrapper. `s` (scalar) is
+# deliberately excluded: it projects through the vector's `base_type` (so `memory_cp`'s
+# `void:=(ptr,ptr,s,s)` stays a per-type templated primitive).
+_FREE_FUNCTION_KINDS = frozenset({"ptr", "usize", "void"})
+
+
+def is_free_function_signature(result_kind: str, param_kinds: tuple[str, ...]) -> bool:
+    """Whether a signature shape has no SIMD-vector axis (-> emitted as a free function)."""
+
+    return result_kind in _FREE_FUNCTION_KINDS and all(
+        kind in _FREE_FUNCTION_KINDS for kind in param_kinds
+    )
+
 
 @dataclass(frozen=True, slots=True)
 class SignatureShape:
     result_kind: str
     param_kinds: tuple[str, ...]
+
+    @property
+    def is_free_function(self) -> bool:
+        """A non-vector primitive (``ptr``/``usize``/``void`` only): emitted as a free function."""
+
+        return is_free_function_signature(self.result_kind, self.param_kinds)
 
 
 @lru_cache(maxsize=None)

@@ -1,4 +1,4 @@
-prim<ptr:=(s)> allocate(count_bytes):
+prim<ptr:=(usize)> allocate(count_bytes):
   brief_description "Allocates (unaligned) contiguous memory."
   operation ""
   tests:
@@ -25,7 +25,7 @@ prim<ptr:=(s)> allocate(count_bytes):
           tsil """
               emit_return(cast<reinterpret>(type<generation>(base::in), mem<alloc>(count_bytes)));
             """
-prim<ptr:=(s,s)> allocate_aligned(count_bytes, alignment):
+prim<ptr:=(usize,usize)> allocate_aligned(count_bytes, alignment):
   brief_description "Allocates aligned contiguous memory."
   operation ""
   tests:

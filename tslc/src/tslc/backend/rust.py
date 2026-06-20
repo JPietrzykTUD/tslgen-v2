@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.translation import X86_REGISTER_BITS
+from tslc.catalog.signatures import is_free_function_signature
 from tslc.lower.lowerer import (
     LoweredSpecialization,
     effective_param_types,
@@ -21,6 +22,11 @@ class RustBackend:
     def render_primitive(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
     ) -> str:
+        shape = specializations[0]
+        if is_free_function_signature(shape.result_kind, shape.param_kinds):
+            # A non-vector primitive (`allocate`/`deallocate`): a plain `pub fn` in the module,
+            # not a `SimdVector`-bound trait/impl/wrapper.
+            return _free_function(shape)
         # Rust has no fn overloading: a primitive with several signatures (e.g. store's
         # `(ptr,v)`/`(ptr,s)`) dispatches on the varying argument's type via a trait
         # implemented for that type. Single-signature primitives keep the simple trait.
@@ -239,6 +245,38 @@ class RustBackend:
             f"    {call}\n"
             f"}}"
         )
+
+
+def _free_function(spec: LoweredSpecialization) -> str:
+    """A non-vector primitive (`allocate`/`deallocate`): a plain `pub fn` in the module, with
+    concrete pointer/size types (no `SimdVector` projection). The body's `unsafe` framing is
+    already applied by the lowered body (raw pointer / allocation access)."""
+
+    params = ", ".join(
+        f"{name}: {_free_kind_type(kind, spec.base_type_spelling)}"
+        for name, kind in zip(spec.param_names, spec.param_kinds)
+    )
+    ret_clause = (
+        ""
+        if spec.result_kind == "void"
+        else f" -> {_free_kind_type(spec.result_kind, spec.base_type_spelling)}"
+    )
+    return (
+        f"pub fn {rust_raw_identifier(spec.primitive_name)}({params}){ret_clause} {{\n"
+        f"    {spec.body_text}\n"
+        f"}}"
+    )
+
+
+def _free_kind_type(kind: str, base_spelling: str) -> str:
+    """A free function's kind -> concrete Rust type (no `Self` projection). `ptr` is the base
+    spelling (the `ptr` tag spells `*mut core::ffi::c_void`); `usize` a size; `void` unit."""
+
+    if kind == "void":
+        return "()"
+    if kind == "usize":
+        return "usize"
+    return base_spelling
 
 
 def _trait_name(primitive_name: str) -> str:

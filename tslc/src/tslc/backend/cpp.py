@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tslc.catalog.signatures import is_free_function_signature
 from tslc.lower.lowerer import (
     LoweredSpecialization,
     effective_param_types,
@@ -31,6 +32,10 @@ class CppBackend:
         other primitive's wrapper (``::tsl::set1<Vec>(...)``) regardless of order."""
 
         shape = specializations[0]  # all share the same signature shape + axis keys
+        if is_free_function_signature(shape.result_kind, shape.param_kinds):
+            # A non-vector primitive: a plain prototype (the definition follows in
+            # render_definitions), so a free function can still call any wrapper.
+            return _free_function(shape, define=False)
         # A representation-change primitive carries a SECOND vector type (the target): the
         # result is `ToVec::register_type` and `ToVec` is a free template param the caller binds.
         decl_params = "class Vec" + (
@@ -57,6 +62,9 @@ class CppBackend:
         overloaded primitive (several signatures, e.g. store's `(ptr,v)`/`(ptr,s)`)
         emits one `apply` per signature in that group, resolved by C++ overloading."""
 
+        shape = specializations[0]
+        if is_free_function_signature(shape.result_kind, shape.param_kinds):
+            return _free_function(shape, define=True)
         groups: dict[tuple, list[LoweredSpecialization]] = {}
         order: list[tuple] = []
         for spec in specializations:
@@ -184,6 +192,35 @@ class CppBackend:
             f"    return {primitive_name}_impl<{impl_args}>::apply({names});\n"
             f"}}"
         )
+
+
+def _free_function(spec: LoweredSpecialization, *, define: bool) -> str:
+    """A non-vector primitive (`allocate`/`deallocate`): a plain `inline` function in the `tsl`
+    namespace, not a `simd<>`-templated wrapper. `define=False` emits just the prototype (so a
+    free function may call any wrapper regardless of emission order); `define=True` adds the body."""
+
+    params = ", ".join(
+        f"{_free_kind_type(kind, spec.base_type_spelling)} {name}"
+        for name, kind in zip(spec.param_names, spec.param_kinds)
+    )
+    signature = (
+        f"inline {_free_kind_type(spec.result_kind, spec.base_type_spelling)} "
+        f"{spec.primitive_name}({params})"
+    )
+    if not define:
+        return f"{signature};"
+    return f"{signature} {{\n    {spec.body_text}\n}}"
+
+
+def _free_kind_type(kind: str, base_spelling: str) -> str:
+    """A free function's kind -> concrete type (no `Vec` projection). `ptr` is the base spelling
+    itself (the `ptr` type tag spells `void *`); `usize` a size; `void` nothing."""
+
+    if kind == "void":
+        return "void"
+    if kind == "usize":
+        return "std::size_t"
+    return base_spelling
 
 
 def _axis_name(key: str) -> str:

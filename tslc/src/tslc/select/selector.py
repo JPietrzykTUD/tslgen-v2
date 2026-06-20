@@ -102,14 +102,36 @@ class Selector:
         warnings: dict[str, Diagnostic] = {}  # keyed by message, so each ambiguity warns once
         for primitive in variants:
             masked = "mask" in primitive.attributes
+            # A non-vector (free-function) primitive (`allocate`/`deallocate`) has no SIMD axis:
+            # its type group is a placeholder (`ptr`) that no arith tag matches, and its body is
+            # ISA-independent. Iterate its OWN type-group members (so `base::in` resolves) and
+            # emit a single slot — the free-function render emits one `tsl::name(...)`.
+            shape = parse_signature(primitive.signature)
+            free_function = shape is not None and shape.is_free_function
+            primitive_type_tags = (
+                tuple(
+                    sorted(
+                        {
+                            member
+                            for impl in primitive.implementations
+                            for member in catalog.type_group_members(impl.type_group)
+                        }
+                    )
+                )
+                if free_function
+                else type_tags
+            )
+            emitted_free = False
             for extension_name in self._emit_extensions(catalog, profile):
+                if emitted_free:
+                    break
                 # The generic (`<LANES>`) vector's masked body is a per-lane `mask<test>` loop
                 # that isn't substrate-ready (`details::mask_test` is unimplemented; the C-style
                 # `if` doesn't translate to Rust). Defer masked variants on the generic vector;
                 # the SIMD (blend/mov/maskz) and scalar (if/set_zero) masked bodies are emitted.
                 if masked and catalog.extensions[extension_name].family == "generic_like":
                     continue
-                for type_tag in type_tags:
+                for type_tag in primitive_type_tags:
                     # A representation-change primitive has a SECOND axis (the target type /
                     # extension); it emits one slot per (type_tag, to_target). An ordinary
                     # primitive has a single target-less slot.
@@ -131,6 +153,13 @@ class Selector:
                                     to_target=to_target,
                                 )
                             )
+                            if free_function:
+                                # One ISA-independent slot is enough; the body is identical
+                                # across extensions and the render ignores the extension.
+                                emitted_free = True
+                                break
+                    if emitted_free:
+                        break
         return ProfileSelectionResult(
             selected=tuple(selected), diagnostics=tuple(warnings.values())
         )
