@@ -141,3 +141,50 @@ def test_lowerer_handler_diagnostic_has_region_source_location() -> None:
     diagnostic = lowered.diagnostics[0]
     assert diagnostic.code == "TSL-LOWER-UNRESOLVED-QUERY-REGION"
     assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 13, 29)
+
+
+def test_intrin_compose_unresolved_suffix_has_region_source_location() -> None:
+    result = _build(
+        "types:\n"
+        "  si32 {types [si32]}\n"
+        "extension avx2:\n"
+        '  extension_name "avx2"\n'
+        '  family "x86"\n'
+        "  intrinsic_compose:\n"
+        "    prefix:\n"
+        '      cpp "_mm256_"\n'
+        "    suffix:\n"
+        "      by_type:\n"
+        '        si32 "epi32"\n'
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "prim<v:=v> bad_suffix(data):\n"
+        "  impls:\n"
+        "    avx2:\n"
+        "      si32:\n"
+        "        implementation:\n"
+        '          tsil "emit_return(intrin_compose<add, '
+        'suffix=value<backend>(intrin::suffix(si?))>(data));"\n'
+    )
+    assert result.catalog is not None
+    selection = Selector().select_profile(
+        result.catalog,
+        MachineProfile("avx2", "x86", frozenset(), {}),
+        "bad_suffix",
+        ("si32",),
+    )
+    assert selection.diagnostics == ()
+    assert len(selection.selected) == 1
+
+    lowered = Lowerer().lower(
+        selection.selected[0],
+        result.catalog,
+        create_backend_dialect(result.catalog, "cpp"),
+    )
+
+    assert lowered.specialization is None
+    diagnostic = lowered.diagnostics[0]
+    assert diagnostic.code == "TSL-LOWER-UNRESOLVED-SUFFIX"
+    assert diagnostic.severity == "info"
+    assert "intrin::suffix(si?)" in diagnostic.message
+    assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 19, 29)

@@ -112,8 +112,8 @@ class IntrinComposeLowerer:
             )
             return region.full_text
 
-        suffix = self._suffix(modifiers, context)
-        if context.effects.has_errors:
+        suffix = self._suffix(modifiers, region, context)
+        if context.effects.unsupported or context.effects.has_errors:
             return region.full_text
 
         name = context.env.backend.intrinsics.compose_intrinsic_name(
@@ -212,7 +212,12 @@ class IntrinComposeLowerer:
             return None
         return f"{base}{separator.text}{infix.text}"
 
-    def _suffix(self, modifiers: ComposeModifiers, context: LoweringSession) -> str | None:
+    def _suffix(
+        self,
+        modifiers: ComposeModifiers,
+        region: Region,
+        context: LoweringSession,
+    ) -> str | None:
         explicit = modifiers.get("suffix")
         if explicit is None:
             # No explicit modifier: use the extension's default suffix for the selected type.
