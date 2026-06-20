@@ -27,6 +27,7 @@ KEYWORDS: frozenset[str] = frozenset(
         "var",
         "let",
         "mask",
+        "mem",  # mem<copy|set|alloc|alloc_aligned|free>(...) -> a mem_* translate template
         "if",  # block-bearing: if<generation>(cond) { ... } else<generation> { ... }
         "assume_aligned",  # assume_aligned<N>(ptr) -> aligned-pointer hint
         # Recognized so a loop body is flagged unsupported and skips cleanly, rather than

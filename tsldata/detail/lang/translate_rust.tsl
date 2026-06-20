@@ -753,7 +753,7 @@ translation rust:
   cast_bitcast "crate::tsl_core::bit_cast::<_, {type}>({expr})"
   cast_const "({expr} as {type})"
   cast_dynamic "({expr} as {type})"
-  mem_copy "crate::tsl::mem_copy({dst}, {src}, {count})"
+  mem_copy "crate::tsl_core::mem_copy({dst}, {src}, {count})"
   mem_set "crate::tsl::mem_set({ptr}, {value}, {count})"
   mem_alloc "crate::tsl::mem_alloc({count})"
   mem_alloc_aligned "crate::tsl::mem_alloc_aligned({align}, {count})"

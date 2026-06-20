@@ -175,6 +175,10 @@ class _RustSyntax:
         )
 
     def render_pointer_cast(self, inner: str, *, is_const: bool, expr: str) -> str:
+        # Rust has no `void`; a `void`-cast (a memcpy byte pointer) becomes a `u8` pointer,
+        # matching the byte-addressed `mem_copy` helper.
+        if inner == "void":
+            inner = "u8"
         return f"({expr} as *{'const' if is_const else 'mut'} {inner})"
 
     def frame_body(self, body_text: str, *, requires_unsafe: bool) -> str:

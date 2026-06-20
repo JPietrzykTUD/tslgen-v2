@@ -1168,3 +1168,26 @@ def test_masked_memory_build(
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_memory_cp_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `memory_cp` (`void:=(ptr,ptr,s,s)`) copies raw bytes via the `mem<copy>` TSIL region:
+    # `mem<copy>(cast<reinterpret>(void *, dst), cast<reinterpret>(void const *, src),
+    # count_bytes)`. `mem` is a scanned keyword lowered by `MemLowerer` to the `mem_copy`
+    # translate template — C++ `std::memcpy` over `void *` reinterprets, Rust
+    # `crate::tsl_core::mem_copy` over `u8` byte pointers (the `void`-cast maps to `*const/*mut
+    # u8`) with a `TslByteCount` normalization of the base-typed count. Same body for every
+    # extension (no SIMD intrinsics), so it builds across scalar + SIMD in C++ and Rust.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["memory_cp"],
+        profiles=["scalar", "sse2", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"

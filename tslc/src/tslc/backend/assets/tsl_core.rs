@@ -266,6 +266,30 @@ pub fn idx_offset<I: IndexBase, S: IndexBase>(index: I, scale: S) -> usize {
     index.as_offset() * scale.as_offset()
 }
 
+/// A `mem<copy>` byte-count argument. The corpus types `count_bytes` as the vector's base
+/// type, so this normalizes any base (integer or float) to a `usize` byte count — the
+/// counterpart to the implicit `size_t` conversion C++ gets for free at the `std::memcpy` call.
+pub trait TslByteCount: Copy {
+    fn tsl_byte_count(self) -> usize;
+}
+macro_rules! impl_tsl_byte_count {
+    ($($t:ty),*) => { $(impl TslByteCount for $t {
+        #[inline]
+        fn tsl_byte_count(self) -> usize {
+            self as usize
+        }
+    })* };
+}
+impl_tsl_byte_count!(i8, i16, i32, i64, u8, u16, u32, u64, f32, f64);
+
+/// `std::memcpy` counterpart: copy `count` bytes from `src` to `dst`. Byte-addressed
+/// (`*const u8`/`*mut u8`), so a `void`-cast source/dest plus a base-typed byte count lower
+/// identically to the C++ `mem_copy` translate template.
+#[inline]
+pub unsafe fn mem_copy<C: TslByteCount>(dst: *mut u8, src: *const u8, count: C) {
+    core::ptr::copy_nonoverlapping(src, dst, count.tsl_byte_count());
+}
+
 pub mod details {
     pub fn arith_add<T: core::ops::Add<Output = T>>(a: T, b: T) -> T {
         a + b

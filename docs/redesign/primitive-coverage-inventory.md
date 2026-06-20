@@ -6,8 +6,8 @@ Generated 2026-06-19 by `tslc/tools/coverage_inventory.py`. **Regenerate** with
 ## Summary
 
 - **89 distinct primitives** in `tsldata/`.
-- **83 build-verified** (compile in C++ *and* Rust via `tslc/tests/test_build_verify.py`).
-- **1 lower cleanly but are not build-verified** (codegen succeeds, 0 skips; compilation unconfirmed).
+- **84 build-verified** (compile in C++ *and* Rust via `tslc/tests/test_build_verify.py`).
+- **0 lower cleanly but are not build-verified** (codegen succeeds, 0 skips; compilation unconfirmed).
 - **0 partial** (emit for some extension/type slots, skip others).
 - **5 emit nothing** under the probed profiles.
 - **51414 / 58586 (profile×backend×ext×type) slots lower**; **0 errors**.
@@ -19,13 +19,13 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 
 ## Tiers
 
-### Build-verified (83) — compile in C++ & Rust
+### Build-verified (84) — compile in C++ & Rust
 
-`add`, `between_exclusive`, `between_inclusive`, `between_left_inclusive`, `between_right_inclusive`, `binary_and`, `binary_andnot`, `binary_or`, `binary_xor`, `blend`, `blend_add`, `cast`, `compress`, `compress_store`, `conflict`, `conflict_free`, `convert_down`, `convert_up`, `count_matches`, `custom_sequence`, `div`, `equal`, `expand_load`, `extract`, `extract_imask`, `extract_value`, `from_array`, `gather`, `greater_than`, `greater_than_or_equal`, `hadd`, `hand`, `hmax`, `hmin`, `hor`, `insert`, `insert_imask`, `inv`, `less_than`, `less_than_or_equal`, `load`, `load_convert_up`, `load_mask`, `load_scalar`, `lzc`, `lzc_imask`, `lzc_scalar`, `mask_binary_and`, `mask_binary_not`, `mask_binary_or`, `mask_binary_xor`, `mask_false`, `mask_population_count`, `mask_true`, `masked_set1`, `max`, `min`, `mod`, `mod_imm`, `mov`, `mul`, `mul_imm`, `nequal`, `popcnt`, `reinterpret`, `scatter`, `sequence`, `set1`, `set_undef`, `set_zero`, `shift_left`, `shift_right`, `shift_right_imask`, `store`, `store_mask`, `sub`, `test_imask`, `to_array`, `to_integral`, `to_mask`, `to_vector`, `tzc`, `unequal_zero`
+`add`, `between_exclusive`, `between_inclusive`, `between_left_inclusive`, `between_right_inclusive`, `binary_and`, `binary_andnot`, `binary_or`, `binary_xor`, `blend`, `blend_add`, `cast`, `compress`, `compress_store`, `conflict`, `conflict_free`, `convert_down`, `convert_up`, `count_matches`, `custom_sequence`, `div`, `equal`, `expand_load`, `extract`, `extract_imask`, `extract_value`, `from_array`, `gather`, `greater_than`, `greater_than_or_equal`, `hadd`, `hand`, `hmax`, `hmin`, `hor`, `insert`, `insert_imask`, `inv`, `less_than`, `less_than_or_equal`, `load`, `load_convert_up`, `load_mask`, `load_scalar`, `lzc`, `lzc_imask`, `lzc_scalar`, `mask_binary_and`, `mask_binary_not`, `mask_binary_or`, `mask_binary_xor`, `mask_false`, `mask_population_count`, `mask_true`, `masked_set1`, `max`, `memory_cp`, `min`, `mod`, `mod_imm`, `mov`, `mul`, `mul_imm`, `nequal`, `popcnt`, `reinterpret`, `scatter`, `sequence`, `set1`, `set_undef`, `set_zero`, `shift_left`, `shift_right`, `shift_right_imask`, `store`, `store_mask`, `sub`, `test_imask`, `to_array`, `to_integral`, `to_mask`, `to_vector`, `tzc`, `unequal_zero`
 
-### Lower but not build-verified (1) — codegen clean, compilation unconfirmed
+### Lower but not build-verified (0) — codegen clean, compilation unconfirmed
 
-`memory_cp`
+
 
 ### Partial (0) — some slots lower, some skip
 
@@ -98,7 +98,7 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `mask_true` | `m:=()` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `masked_set1` | `v:=(m,v,s)` | VERIFIED | avx2/avx512/scalar/sse | 12 | pruned (closure) |
 | `max` | `v:=(v,v)` | VERIFIED | avx2/avx512/scalar/sse | 124 | pruned (closure) |
-| `memory_cp` | `void:=(ptr,ptr,s,s)` | lowers | avx2/avx512/generic/scalar/sse | 0 | — |
+| `memory_cp` | `void:=(ptr,ptr,s,s)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `min` | `v:=(v,v)` | VERIFIED | avx2/avx512/scalar/sse | 124 | pruned (closure) |
 | `mod` | `v:=(m,v,v)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 88 | pruned (closure) |
 | `mod_imm` | `v:=(m,v,sImm)` `v:=(v,sImm)` | VERIFIED | avx2/avx512/generic/scalar/sse | 88 | pruned (closure) |
