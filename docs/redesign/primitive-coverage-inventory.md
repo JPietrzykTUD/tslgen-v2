@@ -6,11 +6,11 @@ Generated 2026-06-19 by `tslc/tools/coverage_inventory.py`. **Regenerate** with
 ## Summary
 
 - **89 distinct primitives** in `tsldata/`.
-- **88 build-verified** (compile in C++ *and* Rust via `tslc/tests/test_build_verify.py`).
+- **89 build-verified** (compile in C++ *and* Rust via `tslc/tests/test_build_verify.py`).
 - **0 lower cleanly but are not build-verified** (codegen succeeds, 0 skips; compilation unconfirmed).
 - **0 partial** (emit for some extension/type slots, skip others).
-- **1 emit nothing** under the probed profiles.
-- **51790 / 58502 (profile×backend×ext×type) slots lower**; **0 errors**.
+- **0 emit nothing** under the probed profiles.
+- **52122 / 58502 (profile×backend×ext×type) slots lower**; **0 errors**.
 - **C++/Rust parity is exact**: every primitive emits the identical extension set for both backends.
 
 Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen clean, 0 skips, no build test; **partial** = some slots lower, some skip; **NONE** = nothing emitted.
@@ -19,9 +19,9 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 
 ## Tiers
 
-### Build-verified (88) — compile in C++ & Rust
+### Build-verified (89) — compile in C++ & Rust
 
-`add`, `allocate`, `allocate_aligned`, `between_exclusive`, `between_inclusive`, `between_left_inclusive`, `between_right_inclusive`, `binary_and`, `binary_andnot`, `binary_or`, `binary_xor`, `blend`, `blend_add`, `cast`, `compress`, `compress_store`, `conflict`, `conflict_free`, `convert_down`, `convert_up`, `count_matches`, `custom_sequence`, `deallocate`, `div`, `equal`, `expand_load`, `extract`, `extract_imask`, `extract_value`, `from_array`, `gather`, `greater_than`, `greater_than_or_equal`, `hadd`, `hand`, `hmax`, `hmin`, `hor`, `insert`, `insert_imask`, `inv`, `less_than`, `less_than_or_equal`, `load`, `load_convert_up`, `load_mask`, `load_scalar`, `lzc`, `lzc_imask`, `lzc_scalar`, `mask_binary_and`, `mask_binary_not`, `mask_binary_or`, `mask_binary_xor`, `mask_false`, `mask_population_count`, `mask_true`, `masked_set1`, `max`, `memory_cp`, `min`, `mod`, `mod_imm`, `mov`, `mul`, `mul_imm`, `nequal`, `popcnt`, `reinterpret`, `scatter`, `sequence`, `set`, `set1`, `set_undef`, `set_zero`, `shift_left`, `shift_right`, `shift_right_imask`, `store`, `store_mask`, `sub`, `test_imask`, `to_array`, `to_integral`, `to_mask`, `to_vector`, `tzc`, `unequal_zero`
+`add`, `allocate`, `allocate_aligned`, `between_exclusive`, `between_inclusive`, `between_left_inclusive`, `between_right_inclusive`, `binary_and`, `binary_andnot`, `binary_or`, `binary_xor`, `blend`, `blend_add`, `cast`, `compress`, `compress_store`, `conflict`, `conflict_free`, `convert_down`, `convert_up`, `count_matches`, `custom_sequence`, `deallocate`, `div`, `equal`, `expand_load`, `extract`, `extract_imask`, `extract_value`, `from_array`, `gather`, `greater_than`, `greater_than_or_equal`, `hadd`, `hand`, `hmax`, `hmin`, `hor`, `insert`, `insert_imask`, `inv`, `less_than`, `less_than_or_equal`, `load`, `load_convert_up`, `load_mask`, `load_scalar`, `lzc`, `lzc_imask`, `lzc_scalar`, `mask_binary_and`, `mask_binary_not`, `mask_binary_or`, `mask_binary_xor`, `mask_false`, `mask_population_count`, `mask_true`, `masked_set1`, `max`, `memory_cp`, `min`, `mod`, `mod_imm`, `mov`, `mul`, `mul_imm`, `nequal`, `popcnt`, `reinterpret`, `scatter`, `sequence`, `set`, `set1`, `set_undef`, `set_zero`, `shift_left`, `shift_right`, `shift_right_imask`, `store`, `store_mask`, `sub`, `test_imask`, `to_array`, `to_integral`, `to_mask`, `to_ostream`, `to_vector`, `tzc`, `unequal_zero`
 
 ### Lower but not build-verified (0) — codegen clean, compilation unconfirmed
 
@@ -31,9 +31,9 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 
 
 
-### Emit nothing (1)
+### Emit nothing (0)
 
-`to_ostream`
+
 
 ## Per-primitive table
 
@@ -124,7 +124,7 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `to_array` | `s[]:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `to_integral` | `im:=m` | VERIFIED | avx2/avx512/scalar/sse | 120 | unresolved value query |
 | `to_mask` | `m:=im` | VERIFIED | avx2/avx512/scalar/sse | 120 | unresolved value query |
-| `to_ostream` | `o:=(o,v,s)` | NONE | — | 340 | unsupported signature kind o:=(o,v,s) |
+| `to_ostream` | `o:=(o,v,s)` | VERIFIED | avx2/avx512/generic/sse | 8 | pruned (closure) |
 | `to_vector` | `v:=m` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `tzc` | `s:=m` | VERIFIED | avx2/avx512/scalar/sse | 128 | pruned (closure) |
 | `unequal_zero` | `m:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 4 | pruned (closure) |
@@ -133,12 +133,11 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 
 | skips | category | meaning / action |
 |--:|---|---|
-| 2452 | pruned (closure) | Dependency-closure dropped a body whose callee is unavailable in that profile. **Structural, not a defect** — expected behavior. |
+| 2460 | pruned (closure) | Dependency-closure dropped a body whose callee is unavailable in that profile. **Structural, not a defect** — expected behavior. |
 | 1512 | generic-vector repr-change (deferred) | `cast`/`reinterpret` on the `simd<T, generic<LANES>>` vector (LANES-sized target). Known deferred slice. |
 | 1128 | unresolved type query | A `type<generation>(...)` query is not yet evaluated (e.g. `vector::offset_base`, `vector::mask_underlying_t`, `vector::transform(...)`). Blocks compress/expand/conflict/popcnt/lzc/hand/hor/store_mask generic paths. |
 | 498 | unresolved value query | A `value<generation>(...)` / `value<backend>(...)` query unevaluated (e.g. `type::size_bytes(...)`, `x86::mm_fround_to_zero`). Blocks to_integral/to_mask generic + div/mod float rounding. |
 | 398 | no top-level emit_return | Body has no top-level `emit_return(...)` (where:-clause / switch-bodied forms) — not lowerable yet (reinterpret, compress, cast). |
-| 340 | unsupported signature kind o:=(o,v,s) | Unsupported signature kind: variadic `set` (`v:=s...`) and `to_ostream` (`o:=(o,v,s)`). |
 | 216 | call type-args (bare-ext/index) | `call<primitive=extract[Vec, sse, 0]>` style: a bare extension + literal index in call type-args not yet supported. |
 | 152 | unresolved pointer-cast type | `cast<reinterpret>` to a `vector::mask_underlying_t` pointer not resolved. |
 | 16 | unsupported mask<test> | `mask<test>` on the `native_predicate_by_lanes` (avx512 `__mmaskN`) representation. |

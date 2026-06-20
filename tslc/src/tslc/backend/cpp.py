@@ -269,6 +269,7 @@ def _result_type(kind: str) -> str:
         "usize": "std::size_t",
         "void": "void",
         "s[]": "typename ::tsl::array_for<Vec>::type",
+        "o": "std::string &",  # a text-buffer stream (the `o` kind)
     }[kind]
 
 
@@ -285,6 +286,8 @@ def _param_type(kind: str, index_type: str | None = None) -> str:
         return "typename Vec::imask_type"
     if kind == "usize":
         return "std::size_t"
+    if kind == "o":  # a text-buffer stream
+        return "std::string &"
     if kind in ("ptr", "ptr+"):  # `ptr+`: a widening-load source pointer (load_convert_up)
         return "typename Vec::base_type *"
     if kind == "s[]":

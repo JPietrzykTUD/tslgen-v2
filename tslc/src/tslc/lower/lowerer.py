@@ -577,7 +577,10 @@ def _resolve_immediate(
 
 
 _SUPPORTED_KINDS = frozenset(
-    {"v", "s", "m", "im", "usize", "sImm", "ptr", "ptr+", "void", "s[]", "vt", "vidx", "s..."}
+    {
+        "v", "s", "m", "im", "usize", "sImm", "ptr", "ptr+", "void", "s[]", "vt",
+        "vidx", "s...", "o",
+    }
 )
 
 

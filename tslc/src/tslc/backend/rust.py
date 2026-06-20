@@ -384,6 +384,8 @@ def _kind_type(kind: str, owner: str) -> str:
         return f"{owner}::Array"
     if kind == "usize":  # a fixed count type, not a vector projection
         return "usize"
+    if kind == "o":  # a text-buffer stream; `out` is the only reference param, so the
+        return "&mut String"  # returned `&mut String` lifetime elides to it
     suffix = {
         "v": "RegisterType",
         "s": "BaseType",

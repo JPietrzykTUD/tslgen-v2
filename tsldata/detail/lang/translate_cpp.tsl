@@ -96,6 +96,7 @@ translation cpp:
   io_write_base "{out} << std::setbase({base}) << std::setw({width}) << {value}"
   io_write_bin "{out} << std::bitset<{bits}>({value})"
   io_endl "{out} << std::endl"
+  io_format "::tsl::ostream_write({out}, {array}, {modifier})"
   emit_return "return {value}"
   value_vector_length "Vec::vector_element_count()"
   value_vector_runtime_length "Vec::vector_element_count_runtime()"

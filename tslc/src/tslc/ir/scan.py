@@ -30,6 +30,7 @@ KEYWORDS: frozenset[str] = frozenset(
         "mask",
         "mem",  # mem<copy|set|alloc|alloc_aligned|free>(...) -> a mem_* translate template
         "pack",  # pack<expand|first>(name) -> a variadic scalar pack (set)
+        "io",  # io<write>(buffer, array, modifier) -> a text-stream write (to_ostream)
         "if",  # block-bearing: if<generation>(cond) { ... } else<generation> { ... }
         "assume_aligned",  # assume_aligned<N>(ptr) -> aligned-pointer hint
         # Recognized so a loop body is flagged unsupported and skips cleanly, rather than

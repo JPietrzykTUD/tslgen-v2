@@ -23,6 +23,7 @@ from tslc.lower.region_handlers.intrinsics import (
     IntrinComposeLowerer,
     IntrinLowerer,
 )
+from tslc.lower.region_handlers.io import IoLowerer
 from tslc.lower.region_handlers.masks import MaskLowerer
 from tslc.lower.region_handlers.memory import MemLowerer
 from tslc.lower.region_handlers.pack import PackLowerer
@@ -42,6 +43,7 @@ __all__ = [
     "IfLowerer",
     "IntrinComposeLowerer",
     "IntrinLowerer",
+    "IoLowerer",
     "LetLowerer",
     "LoopLowerer",
     "MaskLowerer",

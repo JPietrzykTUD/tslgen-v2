@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <type_traits>
 
 // Loop-unroll hint for `loop<unroll>`. A no-op by default (a real unroll pragma is
@@ -129,6 +130,41 @@ struct array_for {
                             sizeof(typename Vec::register_type) / sizeof(typename Vec::base_type),
                             alignof(typename Vec::base_type)>;
 };
+
+// Format a lane array into a text buffer (the `to_ostream` body). `modifier` selects the base
+// (0 = binary, 16 = hex, 8 = octal, else decimal); each lane is cast to a 64-bit pattern and its
+// low `sizeof(T)*8` bits are emitted, high lane first, '|'-separated, with a trailing newline.
+template <class T, std::size_t N, std::size_t Align>
+inline void ostream_write(std::string &out, const array_type<T, N, Align> &arr, int modifier) {
+    constexpr std::size_t bits = sizeof(T) * 8;
+    const unsigned base =
+        (modifier == 16) ? 16u : (modifier == 8) ? 8u : (modifier == 0) ? 2u : 10u;
+    for (std::size_t lane = 0; lane < N; ++lane) {
+        std::uint64_t value = static_cast<std::uint64_t>(arr[N - 1 - lane]);
+        std::uint64_t masked = (bits >= 64) ? value : (value & ((std::uint64_t{1} << bits) - 1));
+        if (base == 2u) {
+            for (std::size_t b = bits; b-- > 0;) {
+                out += ((masked >> b) & 1u) ? '1' : '0';
+            }
+        } else {
+            char buf[88];
+            std::size_t p = 0;
+            if (masked == 0) {
+                buf[p++] = '0';
+            }
+            while (masked) {
+                unsigned d = static_cast<unsigned>(masked % base);
+                buf[p++] = (d < 10) ? char('0' + d) : char('a' + d - 10);
+                masked /= base;
+            }
+            while (p) {
+                out += buf[--p];
+            }
+        }
+        out += '|';
+    }
+    out += '\n';
+}
 
 // The `generic` portable vector: a sized, array-backed register parameterized by its lane
 // count. The tag carries `LANES` (a non-type template parameter), so `simd<T, generic<N>>`

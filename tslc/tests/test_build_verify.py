@@ -1235,3 +1235,24 @@ def test_set_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_to_ostream_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
+    # `to_ostream` (`o:=(o,v,s)`) writes a vector's lanes into a text buffer. The `o` (ostream)
+    # kind renders as a string buffer (C++ std::string& / Rust &mut String); the body collapses
+    # to_array -> io<format> -> emit_return(out), where io<format> calls the runtime
+    # tsl::ostream_write helper (the per-lane base formatting + a TslBits as_u64 in Rust). No
+    # scalar impl in the corpus, so it emits for generic + SIMD; builds in C++ and Rust.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["to_ostream"],
+        profiles=["scalar", "sse2", "avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
