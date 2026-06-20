@@ -7,6 +7,7 @@ from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.common import _vector_spelling
 from tslc.lower.region_handlers.protocol import RenderBody
+from tslc.render.model import RenderField
 
 class QueryRegionLowerer:
     """``type<generation>(x)`` / ``value<generation>(x)`` in raw expression position ->
@@ -19,7 +20,10 @@ class QueryRegionLowerer:
         self.keyword = keyword
         self._evaluator = evaluator or QueryEvaluator()
 
-    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
+        del render
         value = self._evaluator.evaluate(region.full_text, context)
         if isinstance(value, TextValue):
             return value.text

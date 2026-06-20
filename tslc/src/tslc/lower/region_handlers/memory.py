@@ -6,6 +6,7 @@ from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession
 from tslc.lower.region_handlers.common import _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
+from tslc.render.model import RenderField, RenderText, render_text, trimmed_text
 
 
 class MemLowerer:
@@ -17,14 +18,16 @@ class MemLowerer:
 
     keyword = "mem"
 
-    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
         context.effects.mark_unsafe()
         op = region.selector_text.strip()
-        args = [
-            render(group).strip()
-            for group in _split_arg_groups(region.body)
-            if render(group).strip()
-        ]
+        args: list[RenderText] = []
+        for group in _split_arg_groups(region.body):
+            rendered = render(group)
+            if render_text(rendered).strip():
+                args.append(trimmed_text(rendered))
         if op == "copy" and len(args) == 3:
             key, fields = "mem_copy", {"dst": args[0], "src": args[1], "count": args[2]}
         elif op == "set" and len(args) == 3:

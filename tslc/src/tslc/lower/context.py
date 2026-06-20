@@ -20,6 +20,7 @@ from types import MappingProxyType
 from tslc.backend.translation import BackendDialect
 from tslc.catalog.model import Catalog, Extension
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
+from tslc.render.model import RenderText, as_render_text
 
 _MAPPING_PROXY_TYPE = type(MappingProxyType({}))
 
@@ -93,10 +94,11 @@ class LoweringEnv:
 
 @dataclass(slots=True)
 class LoweringScope:
-    # `let<type>(Name, …)` aliases: Name -> its resolved backend type spelling. Substituted
-    # into the rendered body (a Rust local `type Alias = Self::…;` item is illegal — E0401 —
-    # so the alias is inlined at use sites instead).
-    type_aliases: dict[str, str] = field(default_factory=dict)
+    # `let<type>(Name, …)` aliases: Name -> its resolved backend type spelling. Raw source
+    # chunks are split into literal text plus typed alias references as the body is lowered
+    # (a Rust local `type Alias = Self::…;` item is illegal — E0401 — so the alias is inlined at
+    # use sites instead).
+    type_aliases: dict[str, RenderText] = field(default_factory=dict)
     # Representation-change target type aliases such as `ToType`. They resolve before ordinary
     # `let<type>` symbols, matching the pre-split lookup order.
     target_type_symbols: dict[str, str] = field(default_factory=dict)
@@ -115,12 +117,12 @@ class LoweringScope:
     def bind_type_alias(
         self,
         name: str,
-        rendered_spelling: str,
+        rendered_spelling: str | RenderText,
         *,
         type_tag: str | None = None,
         vector: VectorValue | None = None,
     ) -> None:
-        self.type_aliases[name] = rendered_spelling
+        self.type_aliases[name] = as_render_text(rendered_spelling)
         if type_tag is not None:
             self.type_symbols[name] = type_tag
         if vector is not None:
@@ -146,6 +148,9 @@ class LoweringScope:
 
     def resolve_vector_alias(self, name: str) -> VectorValue | None:
         return self.vector_aliases.get(name)
+
+    def resolve_type_alias(self, name: str) -> RenderText | None:
+        return self.type_aliases.get(name)
 
 
 @dataclass(slots=True)

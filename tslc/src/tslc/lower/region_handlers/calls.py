@@ -10,6 +10,7 @@ from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.common import _vector_spelling
 from tslc.lower.region_handlers.protocol import RenderBody
+from tslc.render.model import RenderField, render_text
 
 class CallLowerer:
     """``call<primitive=NAME[Vec] attrs[aligned=…]>(args)`` -> a call to NAME's wrapper.
@@ -29,7 +30,9 @@ class CallLowerer:
     def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
         self._evaluator = evaluator or QueryEvaluator()
 
-    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
         parsed = parse_call_selector(region.selector_text)
         if parsed is None:
             context.effects.skip(
@@ -111,7 +114,7 @@ class CallLowerer:
             return value
         resolved = self._evaluator.evaluate(value, context)
         if isinstance(resolved, TextValue):
-            return resolved.text
+            return resolved.as_text()
         if isinstance(resolved, BoolValue):
             return "true" if resolved.value else "false"
         return value
@@ -160,7 +163,7 @@ class CallLowerer:
             )
         value = self._evaluator.evaluate(entry, context)
         if isinstance(value, TextValue):
-            return value.text
+            return value.as_text()
         # A base tag (`cast[Vec, ToBase]`'s `ToBase`) -> the target vector (`ToVec`) the cast/convert
         # wrapper takes as its second type param: `simd<ToBase, current_ext>`.
         if isinstance(value, TypeValue):
@@ -188,7 +191,7 @@ class CallLowerer:
             # `inner` is either a `let<type>` alias (its recorded spelling is the base) or a
             # type expression that evaluates to a tag (-> its scalar spelling).
             if inner in context.scope.type_aliases:
-                base: str | None = context.scope.type_aliases[inner]
+                base: str | None = render_text(context.scope.type_aliases[inner])
             else:
                 value = self._evaluator.evaluate(inner, context)
                 base = (
@@ -203,7 +206,7 @@ class CallLowerer:
             )
         value = self._evaluator.evaluate(entry, context)
         if isinstance(value, TextValue):  # a query resolving to a vector spelling
-            return value.text
+            return value.as_text()
         if isinstance(value, VectorValue):  # a `let<type>` vector alias (`InVec`) -> its spelling
             return _vector_spelling(value, context)
         return None

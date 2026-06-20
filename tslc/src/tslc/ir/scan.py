@@ -20,6 +20,7 @@ KEYWORDS: frozenset[str] = frozenset(
         "emit_return",
         "intrin_compose",
         "intrin",
+        "bit_negate",
         "call",
         "value",
         "type",

@@ -9,14 +9,19 @@ import pytest
 
 from tslc.api import generate_project
 from tslc.backend import translation_common
+from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.model import Catalog
+from tslc.lower.lowerer import Lowerer
 from tslc.render.model import (
     LiteralText,
     LoweredBody,
+    RenderPlaceholder,
     RenderContext,
     TemplateApplication,
     TemplateRenderError,
+    render_sequence,
 )
+from tslc.select.selector import Selector
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -30,9 +35,17 @@ def test_lowered_body_default_render_preserves_rust_vector_owner() -> None:
     assert body.render() == "return to_array::<Self>(data);"
 
 
-def test_lowered_body_context_renders_current_vector_placeholders() -> None:
-    body = LoweredBody.from_text(
-        "return reinterpret::<Self, ToVec>(data as Self::RegisterType);",
+def test_lowered_body_context_renders_explicit_current_placeholders() -> None:
+    body = LoweredBody.from_render_text(
+        render_sequence(
+            (
+                "return reinterpret::<",
+                RenderPlaceholder("current_vector", "Self"),
+                ", ToVec>(data as ",
+                RenderPlaceholder("current_register", "Self::RegisterType"),
+                ");",
+            )
+        ),
         backend_id="rust",
     )
 
@@ -51,7 +64,7 @@ def test_lowered_body_context_renders_current_vector_placeholders() -> None:
     )
 
 
-def test_lowered_body_literal_text_is_not_rewritten() -> None:
+def test_lowered_body_literal_text_is_not_rewritten_by_context() -> None:
     body = LoweredBody.from_text(
         'return "~::<Self> Self::RegisterType";',
         backend_id="rust",
@@ -62,10 +75,39 @@ def test_lowered_body_literal_text_is_not_rewritten() -> None:
     )
 
 
-def test_lowered_body_rust_bitwise_not_is_lowered_before_rendering() -> None:
+def test_lowered_body_from_text_keeps_source_operator_literal() -> None:
     body = LoweredBody.from_text("return ~mask;", backend_id="rust")
 
-    assert body.render() == "return !mask;"
+    assert body.render() == "return ~mask;"
+
+
+def test_rust_bit_negate_keyword_lowers_before_body_rendering(
+    catalog: Catalog, machine_profiles
+) -> None:
+    selected = Selector().select_profile(
+        catalog, machine_profiles["scalar"], "binary_andnot", ("si32",)
+    ).selected
+    slot = next(
+        slot
+        for slot in selected
+        if slot.extension.name == "scalar" and slot.type_tag == "si32"
+    )
+
+    rust = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+
+    assert rust is not None
+    assert rust.body_text == "return (!left) & right;"
+
+
+def test_raw_text_lowering_does_not_translate_bitwise_not_operator() -> None:
+    text = (_REPO_ROOT / "tslc" / "src" / "tslc" / "lower" / "lowerer.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "render_bitwise_not_operator" not in text
+    assert 'char == "~"' not in text
 
 
 def test_lowered_body_renders_unsafe_wrapper() -> None:
@@ -79,6 +121,18 @@ def test_template_application_requires_all_placeholders() -> None:
 
     with pytest.raises(TemplateRenderError, match="missing"):
         template.render()
+
+
+def test_template_application_freezes_fields_and_placeholders() -> None:
+    fields = {"value": "ok"}
+    template = TemplateApplication("demo", "{value}", fields)
+
+    fields["value"] = "{leaked}"
+
+    assert template.placeholders == ("value",)
+    assert template.render() == "ok"
+    with pytest.raises(TypeError):
+        template.fields["value"] = "changed"  # type: ignore[index]
 
 
 def test_template_application_rejects_unresolved_field_values() -> None:
@@ -125,6 +179,17 @@ def test_backend_renderers_do_not_rewrite_body_text_semantics() -> None:
         text = path.read_text(encoding="utf-8")
         assert "_concretize_simd_assoc" not in text
         assert ".replace(" not in text
+
+
+def test_lowered_body_model_does_not_scan_for_semantic_spellings() -> None:
+    text = (_REPO_ROOT / "tslc" / "src" / "tslc" / "render" / "model.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "_rust_body_text" not in text
+    assert "_rust_vector_placeholders" not in text
+    assert "::<Self>" not in text
+    assert "Self::RegisterType" not in text
 
 
 def test_generated_artifacts_have_no_unresolved_template_placeholders(

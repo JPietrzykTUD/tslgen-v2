@@ -101,6 +101,8 @@ class RustBackend:
                         spec.extension_name, spec.base_type_spelling
                     ),
                     current_base=spec.base_type_spelling,
+                    current_mask=f"<{vec} as SimdVector>::MaskType",
+                    current_imask=f"<{vec} as SimdVector>::ImaskType",
                 )
             )
             impls.append(

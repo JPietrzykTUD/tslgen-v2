@@ -5,6 +5,7 @@ from __future__ import annotations
 from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession
 from tslc.lower.region_handlers.protocol import RenderBody
+from tslc.render.model import RenderField
 
 class EmitReturnLowerer:
     """``emit_return(expr)`` -> the backend's return framing around the value.
@@ -16,5 +17,7 @@ class EmitReturnLowerer:
 
     keyword = "emit_return"
 
-    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
         return context.env.backend.syntax.frame_return(render(region.body))

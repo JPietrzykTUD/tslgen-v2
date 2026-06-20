@@ -10,6 +10,7 @@ from tslc.lower.context import LoweringSession
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue
 from tslc.lower.region_handlers.common import _segment_text, _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
+from tslc.render.model import RenderField, literal_text, render_sequence, render_text
 
 def _split_top_level_op(text: str, op: str) -> list[str]:
     """Split ``text`` on the two-char operator ``op`` at paren/bracket/string depth
@@ -84,7 +85,9 @@ class IfLowerer:
     def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
         self._evaluator = evaluator or QueryEvaluator()
 
-    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
         selector = region.selector_text.strip()
         if selector not in self._SPLICE_SELECTORS:
             return self._runtime(region, render)
@@ -109,9 +112,18 @@ class IfLowerer:
                     "flow_if_static", "if constexpr ({cond})", cond=rendered
                 )
                 then = render(region.block) if region.block is not None else ""
-                out = f"{header} {{\n        {then}\n      }}"
+                out: RenderField = render_sequence(
+                    (header, literal_text(" {\n        "), then, literal_text("\n      }"))
+                )
                 if region.else_block is not None:
-                    out += f" else {{\n        {render(region.else_block)}\n      }}"
+                    out = render_sequence(
+                        (
+                            out,
+                            literal_text(" else {\n        "),
+                            render(region.else_block),
+                            literal_text("\n      }"),
+                        )
+                    )
                 return out
 
         context.effects.skip(
@@ -121,11 +133,19 @@ class IfLowerer:
         )
         return region.full_text
 
-    def _runtime(self, region: Region, render: RenderBody) -> str:
+    def _runtime(self, region: Region, render: RenderBody) -> RenderField:
         """A native runtime ``if``: emit the condition + branches verbatim for the target."""
 
         then = render(region.block) if region.block is not None else ""
-        out = f"if ({render(region.body)}) {{\n        {then}\n      }}"
+        out: RenderField = render_sequence(
+            (
+                literal_text("if ("),
+                render(region.body),
+                literal_text(") {\n        "),
+                then,
+                literal_text("\n      }"),
+            )
+        )
         if region.else_block is not None:
             # A bare nested `if` region in else position is an `else if` (no extra braces);
             # any other else body is a plain block.
@@ -134,9 +154,16 @@ class IfLowerer:
                 and isinstance(region.else_block[0], Region)
                 and region.else_block[0].keyword == "if"
             ):
-                out += f" else {render(region.else_block)}"
+                out = render_sequence((out, literal_text(" else "), render(region.else_block)))
             else:
-                out += f" else {{\n        {render(region.else_block)}\n      }}"
+                out = render_sequence(
+                    (
+                        out,
+                        literal_text(" else {\n        "),
+                        render(region.else_block),
+                        literal_text("\n      }"),
+                    )
+                )
         return out
 
     def _evaluate_condition(self, text: str, context: LoweringSession) -> bool | None:
@@ -198,7 +225,9 @@ class AssumeAlignedLowerer:
     def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
         self._evaluator = evaluator or QueryEvaluator()
 
-    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
         expr = render(region.body)
         value = self._evaluator.evaluate(region.selector_text.strip(), context)
         if not isinstance(value, TextValue):
@@ -208,7 +237,7 @@ class AssumeAlignedLowerer:
                 source=region.source,
             )
             return region.full_text
-        return context.env.backend.syntax.render_assume_aligned(expr, value.text)
+        return context.env.backend.syntax.render_assume_aligned(expr, value.as_text())
 
 
 class LoopLowerer:
@@ -221,7 +250,9 @@ class LoopLowerer:
 
     keyword = "loop"
 
-    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
         variant = region.selector_text.strip()
         key = f"loop_{variant}"
         if context.env.backend.templates.template(key) is None:
@@ -241,16 +272,24 @@ class LoopLowerer:
                     source=region.source,
                 )
                 return region.full_text
-            var, start, end, step = (render(group).strip() for group in groups)
+            var, start, end, step = (
+                render_text(render(group)).strip() for group in groups
+            )
             header = context.env.backend.templates.render_template(
                 key, var=var, start=start, end=end, step=step
             )
-            return f"{header} {{\n        {block}\n      }}"
+            return render_sequence(
+                (header, literal_text(" {\n        "), block, literal_text("\n      }"))
+            )
         # unroll: a bare hint (no block of its own; it precedes a loop).
         header = context.env.backend.templates.render_template(
-            key, count=render(region.body).strip()
+            key, count=render_text(render(region.body)).strip()
         )
-        return f"{header} {{\n        {block}\n      }}" if region.block else header
+        if region.block:
+            return render_sequence(
+                (header, literal_text(" {\n        "), block, literal_text("\n      }"))
+            )
+        return header
 
 class SwitchLowerer:
     """``switch<compile>(sel) { label => { body } … _ => { body } }`` -> a compile-time multi-way
@@ -266,7 +305,9 @@ class SwitchLowerer:
 
     keyword = "switch"
 
-    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
         if region.arms is None:
             context.effects.skip(
                 "TSL-LOWER-SWITCH-NO-ARMS",
@@ -274,6 +315,6 @@ class SwitchLowerer:
                 source=region.source,
             )
             return region.full_text
-        selector = render(region.body).strip()
+        selector = render_text(render(region.body)).strip()
         arms = tuple((label, render(body)) for label, body in region.arms)
         return context.env.backend.syntax.render_compile_switch(selector, arms)

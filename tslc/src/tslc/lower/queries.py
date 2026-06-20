@@ -34,6 +34,7 @@ from tslc.backend.translation import (
 from tslc.catalog.model import Extension
 from tslc.lower._text import split_head_arg, split_top_level
 from tslc.lower.context import LoweringSession, VectorValue
+from tslc.render.model import RenderField, render_text
 
 
 # --- query value types (extend as new queries need new result kinds) ---------
@@ -46,7 +47,10 @@ class TypeValue:
 
 @dataclass(frozen=True, slots=True)
 class TextValue:
-    text: str
+    text: RenderField
+
+    def as_text(self) -> str:
+        return render_text(self.text)
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,7 +238,7 @@ class IntrinSuffixQuery:
             fragment = context.env.extension.compose_suffix_by_type.get(arg.type_tag)
             return TextValue(fragment) if fragment is not None else None
         if isinstance(arg, TextValue):  # a named suffix policy, keyed by extension block name
-            key = f"intrinsic_suffix_{arg.text}_{context.env.extension.name}"
+            key = f"intrinsic_suffix_{arg.as_text()}_{context.env.extension.name}"
             fragment = context.env.backend.templates.template(key)
             return TextValue(fragment) if fragment is not None else None
         return None
@@ -280,7 +284,7 @@ class AttributeQuery:
     def apply(self, args, context):  # noqa: ANN001
         if len(args) != 1 or not isinstance(args[0], TextValue):
             return None
-        return BoolValue(context.env.attributes.get(args[0].text) == "true")
+        return BoolValue(context.env.attributes.get(args[0].as_text()) == "true")
 
 
 class RegisterQuery:
@@ -407,11 +411,12 @@ class AsExtensionQuery:
     def apply(self, args, context):  # noqa: ANN001
         if len(args) != 1 or not isinstance(args[0], TextValue):
             return None
-        if args[0].text == "scalar":
+        ext = args[0].as_text()
+        if ext == "scalar":
             return _vector_value_for_extension(context.env.type_tag, "scalar", context)
-        if args[0].text == "generic":
+        if ext == "generic":
             return _generic_vector_value(context.env.type_tag, context)
-        return _vector_value_for_extension(context.env.type_tag, args[0].text, context)
+        return _vector_value_for_extension(context.env.type_tag, ext, context)
 
 
 class AsBaseQuery:
@@ -440,7 +445,7 @@ class VectorAsQuery:
         ext_arg, base_arg = args
         if not isinstance(ext_arg, TextValue) or not isinstance(base_arg, TypeValue):
             return None
-        return _vector_value_for_extension(base_arg.type_tag, ext_arg.text, context)
+        return _vector_value_for_extension(base_arg.type_tag, ext_arg.as_text(), context)
 
 
 class BaseGenericQuery:
@@ -547,6 +552,13 @@ class QueryEvaluator:
             vector_alias = context.scope.resolve_vector_alias(term.head)
             if vector_alias is not None:
                 return vector_alias
+        # A `let<type>` alias whose value is a backend type spelling (`CountT` ->
+        # `std::size_t` / `usize`, `MaskT` -> current mask type) stays typed so casts and
+        # templates can render it in the active backend context.
+        if not term.args:
+            type_alias = context.scope.resolve_type_alias(term.head)
+            if type_alias is not None:
+                return TextValue(type_alias)
         # A bare leaf that names a concrete type tag resolves to itself.
         if not term.args and is_type_tag(term.head):
             return TypeValue(term.head)

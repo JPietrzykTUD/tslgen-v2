@@ -11,6 +11,7 @@ from tslc.lower.context import LoweringSession
 from tslc.lower.queries import QueryEvaluator, TextValue
 from tslc.lower.region_handlers.common import _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
+from tslc.render.model import RenderField, literal_text, render_sequence, render_text
 
 def _split_compose_terms(text: str) -> list[str]:
     """Split an ``intrin_compose`` selector into ``base`` + ``key=value`` modifiers on top-level
@@ -89,7 +90,9 @@ class IntrinComposeLowerer:
     def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
         self._evaluator = evaluator or QueryEvaluator()
 
-    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
         context.effects.mark_unsafe()
         modifiers = ComposeModifiers.parse(region.selector_text)
         if modifiers.base is None:
@@ -150,7 +153,7 @@ class IntrinComposeLowerer:
         forward = modifiers.immediate_forward()
         if forward is not None:
             return self._immediate_forward(name, forward, region, context, render)
-        return f"{name}({render(region.body)})"
+        return render_sequence((literal_text(f"{name}("), render(region.body), literal_text(")")))
 
     def _immediate_forward(
         self,
@@ -159,21 +162,23 @@ class IntrinComposeLowerer:
         region: Region,
         context: LoweringSession,
         render: RenderBody,
-    ) -> str:
+    ) -> RenderField:
         """Emit an intrinsic whose arg at position ``N`` is a compile-time immediate ``V``
         (``immediate(N)=V``). Rust forwards ``V`` as a turbofish const and drops that positional
         arg (`name::<V>(rest)`); C++ leaves ``V`` as the positional arg the body already supplies
         (`name(all args)`) — the same intrinsic shape differs between backends (gather's scale)."""
 
         position, value = forward
-        args = tuple(render(group).strip() for group in _split_arg_groups(region.body))
+        args = tuple(
+            render_text(render(group)).strip() for group in _split_arg_groups(region.body)
+        )
         return context.env.backend.intrinsics.render_immediate_intrinsic_call(
             name, value, position, args
         )
 
     def _literal_match(
         self, name: str, region: Region, context: LoweringSession, render: RenderBody
-    ) -> str | None:
+    ) -> RenderField | None:
         """A Rust `literal_match` immediate intrinsic -> a literal match over the immediate's
         legal range: `match shift { 0 => name::<0>(rest), … hi-1 => …, _ => name::<lo>(rest) }`.
         Returns None when not applicable (wrong backend, no strategy, no range, or the
@@ -185,7 +190,9 @@ class IntrinComposeLowerer:
             or context.env.immediate_range is None
         ):
             return None
-        args = tuple(render(group).strip() for group in _split_arg_groups(region.body))
+        args = tuple(
+            render_text(render(group)).strip() for group in _split_arg_groups(region.body)
+        )
         return context.env.backend.intrinsics.render_literal_match_intrinsic_call(
             name, context.env.immediate_name, context.env.immediate_range, args
         )
@@ -210,7 +217,7 @@ class IntrinComposeLowerer:
         )
         if not isinstance(infix, TextValue) or not isinstance(separator, TextValue):
             return None
-        return f"{base}{separator.text}{infix.text}"
+        return f"{base}{separator.as_text()}{infix.as_text()}"
 
     def _suffix(
         self,
@@ -226,7 +233,7 @@ class IntrinComposeLowerer:
             )
         value = self._evaluator.evaluate(explicit, context)
         if isinstance(value, TextValue):
-            return value.text
+            return value.as_text()
         context.effects.skip(
             "TSL-LOWER-UNRESOLVED-SUFFIX",
             f"could not resolve intrinsic suffix from {explicit!r}",
@@ -243,9 +250,11 @@ class IntrinLowerer:
 
     keyword = "intrin"
 
-    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
         context.effects.mark_unsafe()
         name = context.env.backend.intrinsics.qualify_intrinsic(
             context.env.extension, region.selector_text.strip()
         )
-        return f"{name}({render(region.body)})"
+        return render_sequence((literal_text(f"{name}("), render(region.body), literal_text(")")))

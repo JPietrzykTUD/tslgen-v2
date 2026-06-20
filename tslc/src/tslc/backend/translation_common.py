@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from tslc.catalog.model import Catalog, Extension
-from tslc.render.model import RenderField, TemplateApplication
+from tslc.render.model import RenderField, RenderText, TemplateApplication
 
 _KNOWN_TYPE_TAGS = frozenset(
     {"si8", "si16", "si32", "si64", "ui8", "ui16", "ui32", "ui64", "f32", "f64"}
@@ -93,13 +93,26 @@ def render_template(
     /,
     **fields: RenderField,
 ) -> str:
-    text = template(catalog, backend_id, key)
-    if text is None:
-        text = fallback if fallback is not None else ""
-    return TemplateApplication(key=key, template=text, fields=fields).render(
+    return template_application(catalog, backend_id, key, fallback, **fields).render(
         context=None
     )
 
 
-def frame_return(catalog: Catalog, backend_id: str, value: str) -> str:
-    return render_template(catalog, backend_id, "emit_return", "return {value}", value=value)
+def template_application(
+    catalog: Catalog,
+    backend_id: str,
+    key: str,
+    fallback: str | None = None,
+    /,
+    **fields: RenderField,
+) -> RenderText:
+    text = template(catalog, backend_id, key)
+    if text is None:
+        text = fallback if fallback is not None else ""
+    return TemplateApplication(key=key, template=text, fields=fields)
+
+
+def frame_return(catalog: Catalog, backend_id: str, value: RenderField) -> RenderText:
+    return template_application(
+        catalog, backend_id, "emit_return", "return {value}", value=value
+    )

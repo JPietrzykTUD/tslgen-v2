@@ -7,6 +7,7 @@ classes from ``tslc.lower.regions``.
 
 from __future__ import annotations
 
+from tslc.lower.region_handlers.bitwise import BitNegateLowerer
 from tslc.lower.region_handlers.calls import CallLowerer
 from tslc.lower.region_handlers.casts import CastLowerer
 from tslc.lower.region_handlers.common import _segment_text, _split_arg_groups, _vector_spelling
@@ -31,6 +32,7 @@ from tslc.lower.region_handlers.returns import EmitReturnLowerer
 
 __all__ = [
     "AssumeAlignedLowerer",
+    "BitNegateLowerer",
     "CallLowerer",
     "CastLowerer",
     "ComposeModifiers",

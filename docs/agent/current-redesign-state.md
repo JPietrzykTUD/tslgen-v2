@@ -1224,14 +1224,28 @@ Verification status (2026-06-20):
 ```text
 - Strict typed render rewrite validation passed:
   `python -m compileall -q tslc/src/tslc`;
-  `python -m pytest -q tslc/tests/test_render_model.py` passed with 11 tests;
+  `python -m pytest -q tslc/tests/test_render_model.py` passed with 15 tests;
   `python -m pytest -q tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py`
   passed with 29 tests;
   `python -m pytest -q tslc/tests/test_masks_and_calls.py tslc/tests/test_coverage.py`
   passed with 11 tests;
-  `./verify.sh` passed all targeted validations, including 101 non-build tests
+  `python -m pytest -q tslc/tests/test_build_verify.py::test_load_store_builds`
+  passed;
+  `python -m pytest -q tslc/tests/test_build_verify.py::test_mask_population_count_builds`
+  passed;
+  `python -m pytest -q tslc/tests/test_build_verify.py::test_conflict_counting_build`
+  passed;
+  targeted bitwise build verification for `test_elementwise_bitwise_builds`
+  and `test_mask_boolean_algebra_builds` passed with 2 tests;
+  `./verify.sh` passed all targeted validations, including 105 non-build tests
   and 49 generated-build tests across its shards.
-- Non-build suite: 80 passed, 40 deselected (`pytest -k 'not build'`).
+- Architecture guard search for `backend_id ==|backend_id !=` in
+  `tslc/src/tslc/lower` returned no matches.
+- Post-implementation design audit hardened the typed render boundary by
+  copying/freezing `TemplateApplication.fields`, parsing template literal/field
+  segments at construction time instead of rendering through string
+  replacement, and supplying Rust overloaded render contexts for the current
+  mask/imask placeholders.
 - The convert_down insert-based narrowing bug is FIXED and build-verified.
   `tslc/tests/test_build_verify.py::test_convert_builds` passes (exit 0, ~39s)
   for convert_up/convert_down/load_convert_up across scalar/sse2/avx/avx2/
@@ -1264,13 +1278,20 @@ The strict typed render rewrite is implemented and awaiting review. The slice
 adds `tslc.render.model`, stores lowered bodies as `LoweredBody`, keeps
 `body_text` as a compatibility property, removes Rust `_concretize_simd_assoc`,
 removes backend `frame_body(...)` body rewrites, validates backend template
-fields through `TemplateApplication`, adds focused render-model and guard tests,
-and records ADR-076.
+fields through `TemplateApplication`, keeps nested handler output as typed
+render values, resolves `let<type>` aliases as typed render values in raw chunks
+and type-position queries, introduces explicit `bit_negate(expr)` source
+spelling for bitwise complement, routes C++ `~` / Rust `!` rendering through
+backend syntax facets instead of lowering backend-id branches or raw `~`
+interpretation, adds focused render-model and guard tests, and records ADR-076.
 
-Review should pay particular attention to the boundary choice: existing region
-handlers may still return strings, but the successful lowerer-to-renderer handoff
-now stores typed body values and wraps surviving raw source as explicit literal
-render text.
+Review should pay particular attention to the boundary choice: handlers may
+still render to concrete strings for generation-time keys, selectors, counts,
+intrinsic suffixes, and diagnostics, but expression bodies and backend
+presentation fields, including declaration initializers and memory/mask template
+fields, remain typed until final rendering. Surviving raw source is explicit
+literal render text after source-boundary alias tokenization and explicit TSIL
+keyword lowering.
 ```
 
 Latest accepted review verdict:

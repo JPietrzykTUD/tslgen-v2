@@ -7,6 +7,7 @@ from tslc.lower.context import LoweringSession
 from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.common import _segment_text, _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
+from tslc.render.model import RenderField
 
 
 class CastLowerer:
@@ -23,7 +24,9 @@ class CastLowerer:
     def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
         self._evaluator = evaluator or QueryEvaluator()
 
-    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
         args = _split_arg_groups(region.body)
         if len(args) != 2:
             context.effects.skip(
@@ -63,8 +66,12 @@ class CastLowerer:
         )
 
     def _pointer_cast(
-        self, type_text: str, region: Region, context: LoweringSession, expr: str
-    ) -> str:
+        self,
+        type_text: str,
+        region: Region,
+        context: LoweringSession,
+        expr: RenderField,
+    ) -> RenderField:
         """``cast<reinterpret>(type<…>() [const] *, ptr)`` -> a backend pointer cast."""
 
         stripped = type_text.rstrip()[:-1].rstrip()  # drop the trailing `*`
@@ -82,7 +89,9 @@ class CastLowerer:
             inner, is_const=is_const, expr=expr
         )
 
-    def _type_spelling(self, type_text: str, context: LoweringSession) -> str | None:
+    def _type_spelling(
+        self, type_text: str, context: LoweringSession
+    ) -> RenderField | None:
         """Resolve a type expression to its backend spelling — a register spelling
         (``vector::register`` -> ``TextValue``) or a base type tag (-> scalar spelling)."""
 

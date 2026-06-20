@@ -206,17 +206,17 @@ prim<m:=m> mask_binary_not(mask):
           avx512 [avx512f]
           sve [sve]
         implementation:
-          tsil "emit_return(~mask);"
+          tsil "emit_return(bit_negate(mask));"
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
         implementation:
-          tsil "emit_return(~mask);"
+          tsil "emit_return(bit_negate(mask));"
     sse_vl:
       arith:
         requires [sse2, avx512f, avx512vl]
         implementation:
-          tsil "emit_return(~mask);"
+          tsil "emit_return(bit_negate(mask));"
     avx2:
       arith:
         requires [avx, avx2]

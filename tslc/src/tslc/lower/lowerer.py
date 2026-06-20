@@ -16,7 +16,6 @@ this file.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from types import MappingProxyType
 
@@ -46,6 +45,7 @@ from tslc.render.model import (
     RenderText,
     as_render_text,
     literal_text,
+    render_sequence,
     trimmed_text,
 )
 from tslc.select.selector import (
@@ -170,7 +170,7 @@ class ExpressionRenderer:
 
     def _render_segment(self, segment: Segment) -> RenderText:
         if isinstance(segment, RawText):
-            return literal_text(segment.text)
+            return _render_raw_text(segment.text, self._context)
         lowerer = self._lowerers.get(segment.keyword)
         if lowerer is None:
             self._context.effects.skip(
@@ -179,7 +179,7 @@ class ExpressionRenderer:
                 source=segment.source,
             )
             return literal_text(segment.full_text)
-        return as_render_text(lowerer.lower(segment, self._context, self.render_text))
+        return as_render_text(lowerer.lower(segment, self._context, self.render))
 
 
 class Lowerer:
@@ -306,17 +306,14 @@ class Lowerer:
         # Render the whole body as a statement stream: var/emit_return are registered
         # handlers, and raw text (assignment LHS, newlines, ";") passes through.
         renderer = ExpressionRenderer(context, self._region_lowerers)
-        rendered = renderer.render_text(segments)
+        rendered_body = renderer.render(segments)
         if context.effects.unsupported or context.effects.has_errors:
             # A not-yet-lowerable construct was hit: skip this specialization.
             return LoweringResult(
                 specialization=None, diagnostics=tuple(context.effects.diagnostics)
             )
-        # Inline `let<type>` aliases at their use sites (whole-word) — see LetLowerer.
-        for alias, spelling in context.scope.type_aliases.items():
-            rendered = re.sub(rf"\b{re.escape(alias)}\b", lambda _m, s=spelling: s, rendered)
-        body = LoweredBody.from_text(
-            rendered,
+        body = LoweredBody.from_render_text(
+            rendered_body,
             backend_id=backend.backend_id,
             requires_unsafe=context.effects.requires_unsafe,
         )
@@ -390,6 +387,67 @@ def _resolve_immediate_range(
     else:
         return None
     return (lo, hi, inclusive)
+
+
+def _render_raw_text(text: str, context: LoweringSession) -> RenderText:
+    """Turn raw source text into terminal literal chunks plus typed alias references.
+
+    This is a source-boundary operation: aliases introduced by earlier ``let<type>`` regions are
+    tokenized as explicit render values before the body becomes backend render text. Quoted string
+    contents remain literal.
+    """
+
+    parts: list[RenderText] = []
+    literal: list[str] = []
+    index = 0
+
+    def flush_literal() -> None:
+        if literal:
+            parts.append(literal_text("".join(literal)))
+            literal.clear()
+
+    while index < len(text):
+        char = text[index]
+        if char == '"':
+            literal.append(char)
+            index += 1
+            escaped = False
+            while index < len(text):
+                inner = text[index]
+                literal.append(inner)
+                index += 1
+                if escaped:
+                    escaped = False
+                elif inner == "\\":
+                    escaped = True
+                elif inner == '"':
+                    break
+            continue
+        if _is_identifier_start(char):
+            start = index
+            index += 1
+            while index < len(text) and _is_identifier_part(text[index]):
+                index += 1
+            name = text[start:index]
+            alias = context.scope.type_aliases.get(name)
+            if alias is None:
+                literal.append(name)
+            else:
+                flush_literal()
+                parts.append(alias)
+            continue
+        literal.append(char)
+        index += 1
+    flush_literal()
+    return render_sequence(tuple(parts))
+
+
+def _is_identifier_start(char: str) -> bool:
+    return char == "_" or char.isalpha()
+
+
+def _is_identifier_part(char: str) -> bool:
+    return char == "_" or char.isalnum()
 
 
 def _resolve_target_vector(

@@ -7,6 +7,13 @@ from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.queries import QueryEvaluator, TypeValue
 from tslc.lower.region_handlers.common import _segment_text, _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
+from tslc.render.model import (
+    RenderField,
+    RenderText,
+    literal_text,
+    render_sequence,
+    render_text,
+)
 
 class VarLowerer:
     """``var<variant>(...)`` -> the backend's local-declaration template.
@@ -22,7 +29,9 @@ class VarLowerer:
 
     keyword = "var"
 
-    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
         variant = region.selector_text.strip()
         groups = _split_arg_groups(region.body)
         if variant == "typed":
@@ -44,7 +53,7 @@ class VarLowerer:
             return context.env.backend.templates.render_template(
                 "var_init_register",
                 type=context.env.backend.types.register_type_spelling(),
-                name=render(groups[0]).strip(),
+                name=render_text(render(groups[0])).strip(),
             )
         if len(groups) < 2 or context.env.backend.templates.template(f"var_{variant}") is None:
             context.effects.skip(
@@ -53,8 +62,8 @@ class VarLowerer:
                 source=region.source,
             )
             return region.full_text
-        name = render(groups[0]).strip()
-        value = ", ".join(render(group) for group in groups[1:])
+        name = render_text(render(groups[0])).strip()
+        value = _join_rendered(groups[1:], render)
         return context.env.backend.templates.render_template(
             f"var_{variant}", name=name, value=value
         )
@@ -66,7 +75,7 @@ class VarLowerer:
         region: Region,
         context: LoweringSession,
         render: RenderBody,
-    ) -> str:
+    ) -> RenderField:
         if len(groups) != 3:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-VAR",
@@ -74,8 +83,8 @@ class VarLowerer:
                 source=region.source,
             )
             return region.full_text
-        type_text = render(groups[0]).strip()
-        name = render(groups[1]).strip()
+        type_value = render(groups[0])
+        name = render_text(render(groups[1])).strip()
         # An uninitialized array uses the type-carrying template (see class docstring).
         key = "var_array_uninit" if "uninit" in _segment_text(groups[2]) else f"var_{variant}"
         if context.env.backend.templates.template(key) is None:
@@ -86,18 +95,27 @@ class VarLowerer:
             )
             return region.full_text
         if key == "var_array_uninit":
-            return context.env.backend.templates.render_template(key, type=type_text, name=name)
+            return context.env.backend.templates.render_template(key, type=type_value, name=name)
         value = render(groups[2])
         return context.env.backend.templates.render_template(
-            key, type=type_text, name=name, value=value
+            key, type=type_value, name=name, value=value
         )
+
+
+def _join_rendered(groups: list[tuple[Segment, ...]], render: RenderBody) -> RenderText:
+    parts: list[RenderField] = []
+    for index, group in enumerate(groups):
+        if index:
+            parts.append(literal_text(", "))
+        parts.append(render(group))
+    return render_sequence(tuple(parts))
 
 
 class LetLowerer:
     """``let<type>(Name, type-expr)`` -> a type alias, applied by **substitution**: the
-    resolved type spelling is recorded and inlined at every later use of ``Name`` in the body
-    (the lowerer substitutes after rendering). A real local alias would be ``using Name = T;``
-    in C++, but Rust rejects a fn-local ``type Name = Self::T;`` (E0401), so inlining is the
+    resolved type spelling is recorded and raw source chunks become literal text plus typed
+    alias references during body rendering. A real local alias would be ``using Name = T;`` in
+    C++, but Rust rejects a fn-local ``type Name = Self::T;`` (E0401), so inlining is the
     backend-neutral form. The type-expression is resolved via the normal region path (e.g.
     ``type<generation>(vector::mask)`` -> the mask-type spelling)."""
 
@@ -106,7 +124,9 @@ class LetLowerer:
     def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
         self._evaluator = evaluator or QueryEvaluator()
 
-    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
         variant = region.selector_text.strip()
         groups = _split_arg_groups(region.body)
         if variant != "type" or len(groups) != 2:
@@ -116,7 +136,7 @@ class LetLowerer:
                 source=region.source,
             )
             return region.full_text
-        name = render(groups[0]).strip()
+        name = render_text(render(groups[0])).strip()
         # A vector-valued alias (`let<type>(OutVec, transform_extension(ToBase))`) is captured
         # structurally too, so a later `generic::length(OutVec)` query arg resolves to the vector
         # (the rendered spelling below still drives type-position substitution like `to_array[OutVec]`).
@@ -129,7 +149,7 @@ class LetLowerer:
             type_tag = value.type_tag
         context.scope.bind_type_alias(
             name,
-            render(groups[1]).strip(),
+            render(groups[1]),
             type_tag=type_tag,
             vector=vector,
         )

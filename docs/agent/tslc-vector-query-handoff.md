@@ -35,6 +35,49 @@ The implemented direction keeps the TSLc boundaries strict:
 
 No intrinsic names were embedded into lowering or backend logic to fix `convert_down`. The changes are catalog/query driven and preserve the primitive-call style in the TSL source.
 
+## Strict Typed Render Follow-Up
+
+On 2026-06-20 the active `tslc` line also tightened the lowering-to-rendering
+handoff so renderer-side semantic body rewrites are no longer needed.
+
+Key points:
+
+- `LoweredSpecialization` now stores a `LoweredBody`; `body_text` remains a
+  compatibility render property.
+- Lowered bodies carry `RenderText` values: `LiteralText` for terminal accepted
+  source fragments, `RenderPlaceholder` for context-sensitive vector/register/
+  base/mask/imask spellings, `TemplateApplication` for validated backend
+  templates, and `RenderSequence` for ordered composition.
+- `ExpressionRenderer` passes typed nested render values to region handlers.
+  Handlers render to concrete strings only for generation-time keys, selectors,
+  counts, intrinsic suffixes, or diagnostics.
+- Declaration initializers and memory/mask template fields preserve typed
+  expression fragments through final rendering.
+- `let<type>` aliases are stored as typed render values. Raw source chunks
+  tokenize alias identifiers into typed fragments, and query evaluation resolves
+  alias names for type positions such as `cast<static>(CountT, ...)`.
+- Accepted bitwise-not source spelling is explicit TSIL:
+  `bit_negate(expr)`. The backend syntax facet renders that semantic operation
+  as `~` in C++ and `!` in Rust, avoiding backend-id branches and raw `~`
+  interpretation in generic lowering.
+- Rust overloaded rendering supplies `RenderContext` values instead of running
+  `_concretize_simd_assoc` or replacing body text.
+- Backend templates use validated `TemplateApplication` fields; unchecked
+  placeholder substitution and body-text semantic rewrites remain disallowed.
+
+Validation for this follow-up:
+
+```bash
+python -m compileall -q tslc/src/tslc
+python -m pytest -q tslc/tests/test_render_model.py
+python -m pytest -q tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py
+python -m pytest -q tslc/tests/test_masks_and_calls.py tslc/tests/test_coverage.py
+./verify.sh
+```
+
+`./verify.sh` passed on 2026-06-20 with 103 non-build tests, 49 generated-build
+tests, and the final architecture guards.
+
 ## Performance-Oriented Follow-Up Changes
 
 After the vector-query and primitive-call slice, the generator was profiled for

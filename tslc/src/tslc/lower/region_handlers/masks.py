@@ -6,6 +6,7 @@ from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession
 from tslc.lower.region_handlers.common import _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
+from tslc.render.model import RenderField, RenderText, render_text, trimmed_text
 
 
 class MaskLowerer:
@@ -19,7 +20,9 @@ class MaskLowerer:
 
     keyword = "mask"
 
-    def lower(self, region: Region, context: LoweringSession, render: RenderBody) -> str:
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
         op, _, bit = region.selector_text.strip().partition(":")
         extension = context.env.extension
         repr_kind = extension.mask_policy.kind
@@ -29,11 +32,11 @@ class MaskLowerer:
         # lane mask (a real vector width) gets its own `*_lane_register` key.
         if repr_kind == "lane_bitmask" and extension.vector_bits > 0:
             repr_kind = "lane_register"
-        args = [
-            render(group).strip()
-            for group in _split_arg_groups(region.body)
-            if render(group).strip()
-        ]
+        args: list[RenderText] = []
+        for group in _split_arg_groups(region.body):
+            rendered = render(group)
+            if render_text(rendered).strip():
+                args.append(trimmed_text(rendered))
         if op == "zero":
             key, fields = f"mask_zero_{repr_kind}", {}
         elif op == "test" and len(args) == 2:

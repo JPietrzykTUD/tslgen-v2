@@ -6,7 +6,13 @@ from dataclasses import dataclass, field
 
 from tslc.backend import translation_common as common
 from tslc.catalog.model import Catalog, Extension
-from tslc.render.model import RenderField
+from tslc.render.model import (
+    RenderField,
+    RenderPlaceholder,
+    RenderText,
+    literal_text,
+    render_sequence,
+)
 
 _RUST_ARCH_MODULE: dict[str, str] = {
     "x86": "x86_64",
@@ -72,14 +78,14 @@ class _RustTypes:
             return f"core::arch::x86_64::__m{width}d"
         return f"core::arch::x86_64::__m{width}i"
 
-    def register_type_spelling(self) -> str:
-        return "Self::RegisterType"
+    def register_type_spelling(self) -> RenderText:
+        return RenderPlaceholder("current_register", "Self::RegisterType")
 
-    def mask_type_spelling(self) -> str:
-        return "Self::MaskType"
+    def mask_type_spelling(self) -> RenderText:
+        return RenderPlaceholder("current_mask", "Self::MaskType")
 
-    def imask_type_spelling(self) -> str:
-        return "Self::ImaskType"
+    def imask_type_spelling(self) -> RenderText:
+        return RenderPlaceholder("current_imask", "Self::ImaskType")
 
     def const_param_type(self, kind: str) -> str:
         if kind == "int":
@@ -148,8 +154,10 @@ class _RustTemplates:
 
     def render_template(
         self, key: str, fallback: str | None = None, /, **fields: RenderField
-    ) -> str:
-        return common.render_template(self.catalog, self.backend_id, key, fallback, **fields)
+    ) -> RenderText:
+        return common.template_application(
+            self.catalog, self.backend_id, key, fallback, **fields
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,42 +165,74 @@ class _RustSyntax:
     catalog: Catalog
     backend_id: str
 
-    def frame_return(self, value: str) -> str:
+    def render_bit_negate(self, value: RenderField) -> RenderText:
+        return render_sequence((literal_text("(!"), value, literal_text(")")))
+
+    def frame_return(self, value: RenderField) -> RenderText:
         return common.frame_return(self.catalog, self.backend_id, value)
 
     def render_call(
         self,
         name: str,
-        args: str,
+        args: RenderField,
         axis_values: tuple[str, ...] = (),
         arg_generics: int = 0,
-        vec_override: str | None = None,
-        extra_args: tuple[str, ...] = (),
-    ) -> str:
+        vec_override: RenderField | None = None,
+        extra_args: tuple[RenderField, ...] = (),
+    ) -> RenderText:
         axis = "".join(f", {value}" for value in axis_values)
-        extra = "".join(f", {value}" for value in extra_args)
+        extra_parts: list[RenderField] = []
+        for value in extra_args:
+            extra_parts.extend((", ", value))
         inferred = ", _" * arg_generics
-        return (
-            f"{rust_raw_identifier(name)}::<{vec_override or 'Self'}{axis}{extra}{inferred}>"
-            f"({args})"
+        vector: RenderField = vec_override or RenderPlaceholder("current_vector", "Self")
+        return render_sequence(
+            (
+                literal_text(f"{rust_raw_identifier(name)}::<"),
+                vector,
+                literal_text(axis),
+                *extra_parts,
+                literal_text(f"{inferred}>("),
+                args,
+                literal_text(")"),
+            )
         )
 
-    def render_pointer_cast(self, inner: str, *, is_const: bool, expr: str) -> str:
+    def render_pointer_cast(
+        self, inner: RenderField, *, is_const: bool, expr: RenderField
+    ) -> RenderText:
         # Rust has no `void`; a `void`-cast (a memcpy byte pointer) becomes a `u8` pointer,
         # matching the byte-addressed `mem_copy` helper.
         if inner == "void":
             inner = "u8"
-        return f"({expr} as *{'const' if is_const else 'mut'} {inner})"
-
-    def render_assume_aligned(self, expr: str, alignment: str) -> str:
-        del alignment
-        return expr
-
-    def render_compile_switch(self, selector: str, arms: tuple[tuple[str, str], ...]) -> str:
-        rendered_arms = "".join(
-            f"{label} => {{\n        {body}\n      }}\n      " for label, body in arms
+        return render_sequence(
+            (
+                literal_text("("),
+                expr,
+                literal_text(f" as *{'const' if is_const else 'mut'} "),
+                inner,
+                literal_text(")"),
+            )
         )
-        return f"match {selector} {{\n      {rendered_arms}}}"
+
+    def render_assume_aligned(self, expr: RenderField, alignment: str) -> RenderText:
+        del alignment
+        return literal_text(expr) if isinstance(expr, str) else expr
+
+    def render_compile_switch(
+        self, selector: RenderField, arms: tuple[tuple[str, RenderField], ...]
+    ) -> RenderText:
+        parts: list[RenderField] = [literal_text("match "), selector, literal_text(" {\n      ")]
+        for label, body in arms:
+            parts.extend(
+                (
+                    literal_text(f"{label} => {{\n        "),
+                    body,
+                    literal_text("\n      }\n      "),
+                )
+            )
+        parts.append(literal_text("}"))
+        return render_sequence(tuple(parts))
 
 
 @dataclass(frozen=True, slots=True)
