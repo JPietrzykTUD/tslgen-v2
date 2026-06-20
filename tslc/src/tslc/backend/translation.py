@@ -13,6 +13,7 @@ from tslc.backend.translation_common import (
     unsigned_of,
 )
 from tslc.catalog.model import Catalog, Extension
+from tslc.render.model import RenderField
 
 
 class BackendTypeDialect(Protocol):
@@ -50,7 +51,9 @@ class BackendIntrinsicDialect(Protocol):
 
 class BackendTemplateDialect(Protocol):
     def template(self, key: str) -> str | None: ...
-    def render_template(self, key: str, fallback: str | None = None, /, **fields: str) -> str: ...
+    def render_template(
+        self, key: str, fallback: str | None = None, /, **fields: RenderField
+    ) -> str: ...
 
 
 class BackendSyntaxDialect(Protocol):
@@ -65,7 +68,6 @@ class BackendSyntaxDialect(Protocol):
         extra_args: tuple[str, ...] = (),
     ) -> str: ...
     def render_pointer_cast(self, inner: str, *, is_const: bool, expr: str) -> str: ...
-    def frame_body(self, body_text: str, *, requires_unsafe: bool) -> str: ...
     def render_assume_aligned(self, expr: str, alignment: str) -> str: ...
     def render_compile_switch(self, selector: str, arms: tuple[tuple[str, str], ...]) -> str: ...
 

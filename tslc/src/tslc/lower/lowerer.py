@@ -39,6 +39,15 @@ from tslc.lower.context import (
     LoweringSession,
 )
 from tslc.lower.regions import DEFAULT_REGION_LOWERERS, RegionLowerer
+from tslc.render.model import (
+    LoweredBody,
+    RenderContext,
+    RenderSequence,
+    RenderText,
+    as_render_text,
+    literal_text,
+    trimmed_text,
+)
 from tslc.select.selector import (
     SelectedImplementation,
     immediate_split_names,
@@ -78,7 +87,7 @@ class LoweredSpecialization:
     result_kind: str  # "v" | "s"
     param_names: tuple[str, ...]
     param_kinds: tuple[str, ...]
-    body_text: str  # fully framed body, e.g. "return _mm256_add_epi32(left, right);"
+    body: LoweredBody
     # Boolean-wildcard attribute axis (name, concrete value), e.g. (("aligned","false"),).
     # Each becomes a `bool` template parameter (C++) / const generic (Rust) so the
     # `[aligned=*]`-expanded variants coexist as distinct callables.
@@ -110,6 +119,10 @@ class LoweredSpecialization:
     # unmasked spec. Survives lowering (the boolean `axis` does not carry it) so pruning can match
     # callees per-policy and the render rename can split a dual name to `<name>_mask`/`_maskz`.
     mask_policy: str | None = None
+
+    @property
+    def body_text(self) -> str:
+        return self.body.render()
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,13 +159,18 @@ class ExpressionRenderer:
         self._context = context
         self._lowerers = {lowerer.keyword: lowerer for lowerer in region_lowerers}
 
-    def render(self, segments: tuple[Segment, ...]) -> str:
+    def render(self, segments: tuple[Segment, ...]) -> RenderText:
         parts = [self._render_segment(segment) for segment in segments]
-        return "".join(parts).strip()
+        return trimmed_text(RenderSequence(tuple(parts)))
 
-    def _render_segment(self, segment: Segment) -> str:
+    def render_text(self, segments: tuple[Segment, ...]) -> str:
+        return self.render(segments).render(
+            RenderContext(backend_id=self._context.env.backend.backend_id)
+        )
+
+    def _render_segment(self, segment: Segment) -> RenderText:
         if isinstance(segment, RawText):
-            return segment.text
+            return literal_text(segment.text)
         lowerer = self._lowerers.get(segment.keyword)
         if lowerer is None:
             self._context.effects.skip(
@@ -160,8 +178,8 @@ class ExpressionRenderer:
                 f"region {segment.keyword!r} is not supported yet: {segment.full_text!r}",
                 source=segment.source,
             )
-            return segment.full_text
-        return lowerer.lower(segment, self._context, self.render)
+            return literal_text(segment.full_text)
+        return as_render_text(lowerer.lower(segment, self._context, self.render_text))
 
 
 class Lowerer:
@@ -288,7 +306,7 @@ class Lowerer:
         # Render the whole body as a statement stream: var/emit_return are registered
         # handlers, and raw text (assignment LHS, newlines, ";") passes through.
         renderer = ExpressionRenderer(context, self._region_lowerers)
-        rendered = renderer.render(segments)
+        rendered = renderer.render_text(segments)
         if context.effects.unsupported or context.effects.has_errors:
             # A not-yet-lowerable construct was hit: skip this specialization.
             return LoweringResult(
@@ -297,8 +315,10 @@ class Lowerer:
         # Inline `let<type>` aliases at their use sites (whole-word) — see LetLowerer.
         for alias, spelling in context.scope.type_aliases.items():
             rendered = re.sub(rf"\b{re.escape(alias)}\b", lambda _m, s=spelling: s, rendered)
-        body_text = backend.syntax.frame_body(
-            rendered, requires_unsafe=context.effects.requires_unsafe
+        body = LoweredBody.from_text(
+            rendered,
+            backend_id=backend.backend_id,
+            requires_unsafe=context.effects.requires_unsafe,
         )
 
         specialization = LoweredSpecialization(
@@ -312,7 +332,7 @@ class Lowerer:
             result_kind=shape.result_kind,
             param_names=parameters,
             param_kinds=shape.param_kinds,
-            body_text=body_text,
+            body=body,
             axis=tuple(
                 (key, selected.primitive.attributes[key])
                 for key in sorted(selected.primitive.attributes)

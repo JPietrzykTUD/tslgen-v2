@@ -10,8 +10,8 @@ class EmitReturnLowerer:
     """``emit_return(expr)`` -> the backend's return framing around the value.
 
     Backend-neutral: the ``return`` spelling comes from the backend's
-    ``emit_return`` translate template. Any required ``unsafe`` framing is applied
-    once to the whole body by ``backend.syntax.frame_body`` in the lowerer.
+    ``emit_return`` translate template. Any required ``unsafe`` framing is carried
+    by the typed lowered body, not inferred by backend renderers.
     """
 
     keyword = "emit_return"

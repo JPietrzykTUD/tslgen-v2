@@ -3798,3 +3798,46 @@ Consequences:
 - Diagnostic notes, secondary locations, CLI request provenance, build
   verifier/output writer locations, source repair, and broad diagnostic
   framework replacement remain future explicitly selected work.
+
+## ADR-076: Lowered Bodies Carry Typed Render Values
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+The active `tslc` lowerer had already moved many semantic decisions into typed
+selection, query, and lowering objects, but the final body handoff still used a
+raw `body_text` string. Rust overloaded rendering then rewrote that string to
+reinterpret `Self` as the concrete SIMD vector, and backend template rendering
+performed unchecked placeholder replacement. Those paths made semantic
+decisions easy to hide inside renderer string operations.
+
+Decision:
+
+Lowering produces a typed lowered-body value. Literal text is explicit terminal
+text, while semantic rebinding points such as current vector, current register,
+and current base type are represented as typed render placeholders. Backend
+renderers may supply a render context for cases where presentation context
+changes, such as Rust argument-dispatch impls, but they must not rediscover or
+rewrite semantic spellings from body strings.
+
+Backend translation templates render through a validated template application:
+all declared placeholders must be supplied and unresolved placeholders must not
+survive formatting. Template rendering remains a formatting boundary over typed
+fields; it must not choose types, intrinsics, mask policies, dependency
+closure, source repair, or backend fallback behavior.
+
+Rust unsafe wrapping and accepted Rust bitwise-not presentation are lowered into
+the typed body value before backend project rendering. Existing `body_text`
+access stays as a compatibility property that renders the default lowered body.
+
+Consequences:
+
+- Renderer-side semantic rewrites such as concretizing Rust `Self` in body text
+  are disallowed.
+- Raw source/body fragments may survive only as explicit literal render text
+  after TSIL regions have either lowered or produced diagnostics.
+- Existing generated C++ and Rust output remains stable for accepted behavior.
+- Broader expression/statement IR is still not introduced by default; future
+  body semantics should add typed render values only where they remove real
+  string-side semantic decisions.

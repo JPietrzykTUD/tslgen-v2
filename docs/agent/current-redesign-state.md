@@ -4,7 +4,7 @@ This file is the handoff state for Codex tasks. It is intentionally concise and
 must be updated after accepted milestones, accepted documentation corrections,
 or accepted planning passes.
 
-## Active Line: `tslc` (updated 2026-06-19)
+## Active Line: `tslc` (updated 2026-06-20)
 
 The active codebase is **`tslc/`**. The `tslgen/` line documented by the
 milestone history below (M1–M254.x) is the **prior, now-superseded** approach;
@@ -14,10 +14,10 @@ it has not been touched in recent history (the last 20+ commits are entirely
 The authoritative running handoff for the active `tslc` work is
 `docs/agent/tslc-vector-query-handoff.md`. Source-language and architecture
 decisions for `tslc` are recorded in `docs/redesign/design-decisions.md`
-(most recently ADR-074 vector-query vocabulary and ADR-075 diagnostic
-provenance). The `## Current Work State` section near the end of this file has
-been refreshed to describe `tslc`; the long milestone history that follows it is
-retained only as the `tslgen` record.
+(most recently ADR-076 lowered-body typed render values). The
+`## Current Work State` section near the end of this file has been refreshed to
+describe `tslc`; the long milestone history that follows it is retained only as
+the `tslgen` record.
 
 The `## Accepted Through` list and the milestone narrative immediately below are
 `tslgen` history, kept for reference.
@@ -1208,9 +1208,29 @@ Last accepted work (committed):
 - 650d055 Speed up TSLc generation with cached lowering inputs
 ```
 
-Verification status (2026-06-19):
+Current action:
 
 ```text
+Executor finished for the ad hoc `tslc` strict typed render rewrite. Active
+review prompt:
+docs/agent/runs/tslc-typed-render-values-review-prompt.md
+
+Next expected action: review verdict for the typed render rewrite (`Accept`,
+`Accept With Follow-Ups`, `Needs Revision`, or `Return To Planner`).
+```
+
+Verification status (2026-06-20):
+
+```text
+- Strict typed render rewrite validation passed:
+  `python -m compileall -q tslc/src/tslc`;
+  `python -m pytest -q tslc/tests/test_render_model.py` passed with 11 tests;
+  `python -m pytest -q tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py`
+  passed with 29 tests;
+  `python -m pytest -q tslc/tests/test_masks_and_calls.py tslc/tests/test_coverage.py`
+  passed with 11 tests;
+  `./verify.sh` passed all targeted validations, including 101 non-build tests
+  and 49 generated-build tests across its shards.
 - Non-build suite: 80 passed, 40 deselected (`pytest -k 'not build'`).
 - The convert_down insert-based narrowing bug is FIXED and build-verified.
   `tslc/tests/test_build_verify.py::test_convert_builds` passes (exit 0, ~39s)
@@ -1228,14 +1248,32 @@ Verification status (2026-06-19):
 Suggested next actions:
 
 ```text
-- Optionally run the full `tslc/tests/test_build_verify.py` (slow; the other
-  build tests cover the broad primitive set) in an environment that allows it.
+- Review the typed render rewrite using
+  `docs/agent/runs/tslc-typed-render-values-review-prompt.md`.
+- Confirm no renderer-side semantic body rewrites or unchecked template
+  substitutions were reintroduced.
 - Keep the old `tslgen` vector-query forms unsupported (ADR-074).
 - `pytest.ini` still sets `pythonpath = tslgen/src`; the `tslc` tests work via
   their own conftest. Run `tslc` modules directly with `PYTHONPATH=tslc/src`.
 ```
 
-Latest review verdict:
+Current pending review:
+
+```text
+The strict typed render rewrite is implemented and awaiting review. The slice
+adds `tslc.render.model`, stores lowered bodies as `LoweredBody`, keeps
+`body_text` as a compatibility property, removes Rust `_concretize_simd_assoc`,
+removes backend `frame_body(...)` body rewrites, validates backend template
+fields through `TemplateApplication`, adds focused render-model and guard tests,
+and records ADR-076.
+
+Review should pay particular attention to the boundary choice: existing region
+handlers may still return strings, but the successful lowerer-to-renderer handoff
+now stores typed body values and wraps surviving raw source as explicit literal
+render text.
+```
+
+Latest accepted review verdict:
 
 ```text
 TSLc backend dialect facet split review returned Accept. The review found no
@@ -1416,6 +1454,12 @@ Completed prompt:
 
 ```text
 docs/agent/runs/tslc-backend-dialect-facet-split-review-prompt.md
+```
+
+Active prompt:
+
+```text
+docs/agent/runs/tslc-typed-render-values-review-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

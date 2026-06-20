@@ -9,6 +9,7 @@ from tslc.lower.lowerer import (
     effective_param_types,
     varying_positions,
 )
+from tslc.render.model import RenderContext
 
 # Keyed by ISA name (the emitted tag); `_vl` variants are internal and never emitted.
 _EXT_TAG = {"scalar": "Scalar", "sse": "Sse", "avx2": "Avx2", "avx512": "Avx512"}
@@ -91,11 +92,17 @@ class RustBackend:
                 f", {n}: {_rust_concrete(spec, k)}" for n, k in fixed
             )
             ret_impl = _rust_concrete_result(spec)
-            # In an arg-trait impl, `Self` is the argument type, not the Simd vector, so
-            # the body's `Self::RegisterType`/`Self::BaseType` (Simd associated types) are
-            # concretized; the varying parameter is bound from `self`.
             bind = f"let {spec.param_names[vi]} = self;\n        "
-            body = _concretize_simd_assoc(spec.body_text, spec, vec)
+            body = spec.body.render(
+                RenderContext(
+                    backend_id=self.backend_id,
+                    current_vector=vec,
+                    current_register=rust_register_type(
+                        spec.extension_name, spec.base_type_spelling
+                    ),
+                    current_base=spec.base_type_spelling,
+                )
+            )
             impls.append(
                 f"{impl_prefix} {arg_trait}{trait_args} for {self_ty} {{\n"
                 f"    fn apply(self{fixed_impl}) -> {ret_impl} {{\n"
@@ -326,28 +333,6 @@ def _rust_concrete(spec: LoweredSpecialization, kind: str) -> str:
 
 def _rust_concrete_result(spec: LoweredSpecialization) -> str:
     return _rust_concrete(spec, spec.result_kind)
-
-
-def _concretize_simd_assoc(body: str, spec: LoweredSpecialization, simd_vec: str) -> str:
-    """Concretize references to the Simd vector inside an arg-trait impl, where `Self` is the
-    *argument* type, not the vector: a `::<Self>` call turbofish (e.g. delegating
-    `to_array::<Self>`) becomes `::<{simd_vec}>`, and the Simd associated types become their
-    concrete spellings.
-
-    Only the *overloaded* (arg-trait) path needs this: there `Self` is the argument type, so a
-    body's `Self::RegisterType` / `…::<Self, …>` would otherwise mean the wrong type. In the
-    non-overloaded `_impl` path `Self` already *is* the vector, so its body is left untouched —
-    that asymmetry is intentional, not an omission."""
-
-    register = rust_register_type(spec.extension_name, spec.base_type_spelling)
-    return (
-        body.replace("::<Self>", f"::<{simd_vec}>")
-        # A turbofish whose FIRST arg is the vector (`reinterpret::<Self, ToVec>`) — the call
-        # targets the Simd vector, not the arg-trait `Self` (the argument type).
-        .replace("::<Self,", f"::<{simd_vec},")
-        .replace("Self::RegisterType", register)
-        .replace("Self::BaseType", spec.base_type_spelling)
-    )
 
 
 def _kind_type(kind: str, owner: str) -> str:

@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from tslc.backend import translation_common as common
 from tslc.catalog.model import Catalog, Extension
+from tslc.render.model import RenderField
 
 _RUST_ARCH_MODULE: dict[str, str] = {
     "x86": "x86_64",
@@ -145,7 +146,9 @@ class _RustTemplates:
     def template(self, key: str) -> str | None:
         return common.template(self.catalog, self.backend_id, key)
 
-    def render_template(self, key: str, fallback: str | None = None, /, **fields: str) -> str:
+    def render_template(
+        self, key: str, fallback: str | None = None, /, **fields: RenderField
+    ) -> str:
         return common.render_template(self.catalog, self.backend_id, key, fallback, **fields)
 
 
@@ -180,12 +183,6 @@ class _RustSyntax:
         if inner == "void":
             inner = "u8"
         return f"({expr} as *{'const' if is_const else 'mut'} {inner})"
-
-    def frame_body(self, body_text: str, *, requires_unsafe: bool) -> str:
-        body_text = body_text.replace("~", "!")
-        if requires_unsafe:
-            return f"unsafe {{ {body_text} }}"
-        return body_text
 
     def render_assume_aligned(self, expr: str, alignment: str) -> str:
         del alignment

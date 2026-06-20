@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from tslc.backend import translation_common as common
 from tslc.catalog.model import Catalog, Extension
+from tslc.render.model import RenderField
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +89,9 @@ class _CppTemplates:
     def template(self, key: str) -> str | None:
         return common.template(self.catalog, self.backend_id, key)
 
-    def render_template(self, key: str, fallback: str | None = None, /, **fields: str) -> str:
+    def render_template(
+        self, key: str, fallback: str | None = None, /, **fields: RenderField
+    ) -> str:
         return common.render_template(self.catalog, self.backend_id, key, fallback, **fields)
 
 
@@ -127,10 +130,6 @@ class _CppSyntax:
     def render_pointer_cast(self, inner: str, *, is_const: bool, expr: str) -> str:
         qualifier = " const" if is_const else ""
         return f"reinterpret_cast<{inner}{qualifier} *>({expr})"
-
-    def frame_body(self, body_text: str, *, requires_unsafe: bool) -> str:
-        del requires_unsafe
-        return body_text
 
     def render_assume_aligned(self, expr: str, alignment: str) -> str:
         return f"::tsl::assume_aligned<{alignment}>({expr})"
