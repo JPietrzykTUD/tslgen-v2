@@ -62,13 +62,18 @@ class _RustTypes:
         tag = _RUST_EXT_TAG.get(extension_name, extension_name.capitalize())
         return f"Simd<{base_spelling}, {tag}>"
 
-    def generic_vector_spelling(self, base_spelling: str, lanes: int) -> str:
+    def generic_vector_spelling(self, base_spelling: str, lanes: int | str) -> str:
+        # `lanes` is normally concrete; the generic-vector *target* of a representation-change
+        # uses the symbolic ``LANES`` (the impl's const generic).
         return f"Simd<{base_spelling}, Generic<{lanes}>>"
 
     def target_register_spelling(self, base_tag: str, extension_isa: str) -> str | None:
         base = self.scalar_spelling(base_tag)
         if base is None:
             return None
+        if extension_isa == "generic":
+            # The generic target's register is the lane array (its SimdVector::RegisterType).
+            return f"array_type<{base}, LANES>"
         width = common.X86_REGISTER_BITS.get(extension_isa)
         if width is None:
             return base

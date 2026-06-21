@@ -489,16 +489,38 @@ def _resolve_target_vector(
 
     if selected.primitive.result_target is None or selected.to_target is None:
         return None
-    # The generic vector is sized by `LANES`; a target vector under it needs that threaded
-    # into the second type param — deferred (the x86/scalar reinterpret slice).
-    if selected.extension.isa_name == "generic":
-        return _skip(
-            "TSL-LOWER-UNSUPPORTED-TARGET-VECTOR",
-            f"representation-change on the generic vector (LANES-sized target) is "
-            f"not supported yet: {selected.primitive.name!r}",
-            source=_implementation_source(selected),
-        )
     dim, alias = selected.primitive.result_target
+    # The generic vector is sized by the symbolic `LANES` const generic. A BASE-dim target
+    # (same generic vector, different element type) is `simd<ToBase, generic<LANES>>`; build it
+    # with the symbolic lane count. An EXTENSION-dim target (a *different* extension, e.g.
+    # extract/insert's sub-register) has no generic analogue, so it stays deferred.
+    if selected.extension.isa_name == "generic":
+        if dim != RESULT_DIM_BASE:
+            return _skip(
+                "TSL-LOWER-UNSUPPORTED-TARGET-VECTOR",
+                f"extension-dim representation-change on the generic vector is not "
+                f"supported: {selected.primitive.name!r}",
+                source=_implementation_source(selected),
+            )
+        to_base_spelling = backend.types.scalar_spelling(selected.to_target)
+        if to_base_spelling is None:
+            return _error(
+                "TSL-LOWER-NO-BASE-TYPE",
+                f"no {backend.backend_id} base-type spelling for the target "
+                f"{selected.to_target!r}",
+                source=_implementation_source(selected),
+            )
+        scope.bind_target_type_symbol(alias, selected.to_target)
+        scope.bind_target_type_symbol("ToType", selected.to_target)
+        return TargetVector(
+            vector_spelling=backend.types.generic_vector_spelling(to_base_spelling, "LANES"),
+            register_spelling=backend.types.target_register_spelling(
+                selected.to_target, "generic"
+            ),
+            extension_isa="generic",
+            base_tag=selected.to_target,
+            base_spelling=to_base_spelling,
+        )
     if dim == RESULT_DIM_BASE:
         # base dim: same extension, replace the element type with the target tag.
         to_base_spelling = backend.types.scalar_spelling(selected.to_target)

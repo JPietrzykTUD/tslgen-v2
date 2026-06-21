@@ -12,8 +12,11 @@ def _vector_spelling(value: VectorValue, context: LoweringSession) -> str | None
     base = context.env.backend.types.scalar_spelling(value.base_tag)
     if base is None:
         return None
-    if value.extension_isa == "generic" and value.lanes is not None:
-        return context.env.backend.types.generic_vector_spelling(base, value.lanes)
+    if value.extension_isa == "generic":
+        # A concrete lane count when known; otherwise the symbolic `LANES` (a target/alias of
+        # the LANES-sized generic vector itself, e.g. a representation-change's `OutVec`).
+        lanes = value.lanes if value.lanes is not None else "LANES"
+        return context.env.backend.types.generic_vector_spelling(base, lanes)
     return context.env.backend.types.vector_type_spelling(base, value.extension_isa)
 
 

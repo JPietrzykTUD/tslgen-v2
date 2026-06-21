@@ -10,7 +10,7 @@ Generated 2026-06-19 by `tslc/tools/coverage_inventory.py`. **Regenerate** with
 - **0 lower cleanly but are not build-verified** (codegen succeeds, 0 skips; compilation unconfirmed).
 - **0 partial** (emit for some extension/type slots, skip others).
 - **0 emit nothing** under the probed profiles.
-- **60102 / 64382 (profile×backend×ext×type) slots lower**; **0 errors**.
+- **61614 / 64382 (profile×backend×ext×type) slots lower**; **0 errors**.
 - **C++/Rust parity is exact**: every primitive emits the identical extension set for both backends.
 
 Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen clean, 0 skips, no build test; **partial** = some slots lower, some skip; **NONE** = nothing emitted.
@@ -52,7 +52,7 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `binary_xor` | `v:=(m,v,v)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 8 | pruned (closure) |
 | `blend` | `v:=(m,v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `blend_add` | `v:=(m,v,v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
-| `cast` | `v:=v` | VERIFIED | avx2/avx512/scalar/sse | 1500 | generic-vector repr-change (deferred) |
+| `cast` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 300 | call type-args (bare-ext/index) |
 | `compress` | `v:=(m,v)` | VERIFIED | avx2/avx512/generic/sse | 140 | no top-level emit_return |
 | `compress_store` | `void:=(m,ptr,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `conflict` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
@@ -107,7 +107,7 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `mul_imm` | `v:=(m,v,sImm)` `v:=(v,sImm)` | VERIFIED | avx2/avx512/generic/scalar/sse | 40 | pruned (closure) |
 | `nequal` | `m:=(m,v,v)` `m:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `popcnt` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 8 | pruned (closure) |
-| `reinterpret` | `v:=v` | VERIFIED | avx2/avx512/scalar/sse | 532 | generic-vector repr-change (deferred) |
+| `reinterpret` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 220 | no top-level emit_return |
 | `scatter` | `void:=(m,ptr,vidx,v,sImm)` `void:=(ptr,vidx,v,sImm)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `sequence` | `v:=()` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `set` | `v:=s...` | VERIFIED | avx2/avx512/scalar/sse | 0 | — |
@@ -133,7 +133,6 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 
 | skips | category | meaning / action |
 |--:|---|---|
-| 1512 | generic-vector repr-change (deferred) | `cast`/`reinterpret` on the `simd<T, generic<LANES>>` vector (LANES-sized target). Known deferred slice. |
 | 1064 | pruned (closure) | Dependency-closure dropped a body whose callee is unavailable in that profile. **Structural, not a defect** — expected behavior. |
 | 872 | unresolved type query | A `type<generation>(...)` query is not yet evaluated (e.g. `vector::offset_base`, `vector::mask_underlying_t`, `vector::transform(...)`). Blocks compress/expand/conflict/popcnt/lzc/hand/hor/store_mask generic paths. |
 | 398 | no top-level emit_return | Body has no top-level `emit_return(...)` (where:-clause / switch-bodied forms) — not lowerable yet (reinterpret, compress, cast). |

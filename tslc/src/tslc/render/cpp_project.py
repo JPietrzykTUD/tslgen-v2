@@ -153,9 +153,18 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
                 vec = f"tsl::simd<{spec.base_type_spelling}, tsl::generic<8>>"
             else:
                 vec = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
+            # A generic representation-change target carries the symbolic `LANES`; the smoke
+            # instantiates the source vector with a concrete lane count, so spell the target with
+            # the same concrete count (constructed from its typed base, not a string rewrite).
+            if spec.target is None:
+                target_spelling = None
+            elif spec.target.extension_isa == "generic":
+                target_spelling = f"tsl::simd<{spec.target.base_spelling}, tsl::generic<8>>"
+            else:
+                target_spelling = spec.target.vector_spelling
             targs = (
                 [vec]
-                + ([spec.target.vector_spelling] if spec.target else [])
+                + ([target_spelling] if target_spelling else [])
                 + [vec for _ in spec.type_params]
                 + [value for _, value in spec.axis]
                 + (["0"] if spec.immediate is not None else [])
