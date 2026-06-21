@@ -208,8 +208,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-               let<type>(T, type<generation>(vector::register)) 
-              T result;
+              var<init_register>(result)
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = data[i];
                 if (mask<test>(mask, i)) {

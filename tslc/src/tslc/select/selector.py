@@ -130,12 +130,6 @@ class Selector:
             for extension_name in self._emit_extensions(catalog, profile):
                 if emitted_free:
                     break
-                # The generic (`<LANES>`) vector's masked body is a per-lane `mask<test>` loop
-                # that isn't substrate-ready (`details::mask_test` is unimplemented; the C-style
-                # `if` doesn't translate to Rust). Defer masked variants on the generic vector;
-                # the SIMD (blend/mov/maskz) and scalar (if/set_zero) masked bodies are emitted.
-                if masked and catalog.extensions[extension_name].family == "generic_like":
-                    continue
                 if variadic and catalog.extensions[extension_name].family == "generic_like":
                     continue
                 for type_tag in primitive_type_tags:
