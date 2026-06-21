@@ -163,6 +163,12 @@ DEFAULT_SUPPORT_POLICY = SupportPolicy(
     variadic_scalar_kind="s...",
     index_vector_kind="vidx",
     pointer_kinds=frozenset({"ptr", "ptr+"}),
+    # Vector-bits kinds whose lane count is a runtime/symbolic parameter (`LANES`) rather than a
+    # compile-time constant. Only `"sized"` (the generic-like family) is wired into the
+    # sized-vector render/lower paths today. SVE's `"scalable"` kind is declared in the corpus
+    # (`tsldata/extensions/extension.tsl`) but deliberately omitted here: its length is bound to a
+    # hardware-runtime `vscale` rather than a single in-scope `LANES` symbol, so it needs its own
+    # substrate before it can join this set (tracked in `deferred_cases`).
     sized_vector_bits_kinds=frozenset({"sized"}),
     scalar_register_policy_kind="base_type",
     default_size_parameter_name="LANES",

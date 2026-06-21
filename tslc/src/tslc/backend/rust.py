@@ -79,9 +79,7 @@ class RustBackend:
                 continue
             seen.add(signature)
             # A sized vector's overloaded impls are parameterized by its lane parameter.
-            lane_parameter = (
-                spec.lane_parameter or DEFAULT_SUPPORT_POLICY.default_size_parameter_name
-            )
+            lane_parameter = spec.lane_parameter
             impl_generics = (
                 [f"const {lane_parameter}: usize"]
                 if spec.uses_sized_vector
@@ -173,9 +171,7 @@ class RustBackend:
         # is a further free const generic.
         impl_parts: list[str] = []
         if spec.uses_sized_vector:
-            lane_parameter = (
-                spec.lane_parameter or DEFAULT_SUPPORT_POLICY.default_size_parameter_name
-            )
+            lane_parameter = spec.lane_parameter
             impl_parts.append(f"const {lane_parameter}: usize")
         key = _vector_type(spec)
         if spec.immediate is not None:
@@ -351,7 +347,7 @@ def rust_register_type(
     base: str,
     *,
     uses_sized_vector: bool = False,
-    lane_parameter: str = "LANES",
+    lane_parameter: str | None = None,
 ) -> str:
     """Concrete register type spelling (scalar's register == its base type)."""
 
@@ -379,8 +375,7 @@ def _rust_concrete(spec: LoweredSpecialization, kind: str) -> str:
             spec.extension_name,
             base,
             uses_sized_vector=spec.uses_sized_vector,
-            lane_parameter=spec.lane_parameter
-            or DEFAULT_SUPPORT_POLICY.default_size_parameter_name,
+            lane_parameter=spec.lane_parameter,
         )
     if kind in DEFAULT_SUPPORT_POLICY.pointer_kinds:
         return f"*mut {base}"
@@ -391,16 +386,14 @@ def _rust_concrete(spec: LoweredSpecialization, kind: str) -> str:
             spec.extension_name,
             base,
             uses_sized_vector=spec.uses_sized_vector,
-            lane_parameter=spec.lane_parameter
-            or DEFAULT_SUPPORT_POLICY.default_size_parameter_name,
+            lane_parameter=spec.lane_parameter,
         )
     if kind == "im":  # not reached by current overloads (to_integral is single-param)
         return rust_register_type(
             spec.extension_name,
             base,
             uses_sized_vector=spec.uses_sized_vector,
-            lane_parameter=spec.lane_parameter
-            or DEFAULT_SUPPORT_POLICY.default_size_parameter_name,
+            lane_parameter=spec.lane_parameter,
         )
     if kind == "usize":  # a count type; not reached by current overloads
         return "usize"
@@ -413,9 +406,7 @@ def _rust_concrete_result(spec: LoweredSpecialization) -> str:
 
 def _vector_type(spec: LoweredSpecialization) -> str:
     if spec.uses_sized_vector:
-        lane_parameter = (
-            spec.lane_parameter or DEFAULT_SUPPORT_POLICY.default_size_parameter_name
-        )
+        lane_parameter = spec.lane_parameter
         return f"Simd<{spec.base_type_spelling}, Generic<{lane_parameter}>>"
     return f"Simd<{spec.base_type_spelling}, {_ext_tag(spec.extension_name)}>"
 

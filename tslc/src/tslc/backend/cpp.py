@@ -92,9 +92,7 @@ class CppBackend:
         # concrete axis values are bound literals (key only).
         free: list[str] = []
         if first.uses_sized_vector:
-            lane_parameter = (
-                first.lane_parameter or DEFAULT_SUPPORT_POLICY.default_size_parameter_name
-            )
+            lane_parameter = first.lane_parameter
             vec = _vector_type(first)
             free.append(f"std::size_t {lane_parameter}")
         else:
@@ -254,9 +252,7 @@ def _free_kind_type(kind: str, base_spelling: str) -> str:
 
 def _vector_type(spec: LoweredSpecialization) -> str:
     if spec.uses_sized_vector:
-        lane_parameter = (
-            spec.lane_parameter or DEFAULT_SUPPORT_POLICY.default_size_parameter_name
-        )
+        lane_parameter = spec.lane_parameter
         return f"tsl::simd<{spec.base_type_spelling}, tsl::generic<{lane_parameter}>>"
     return f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
 

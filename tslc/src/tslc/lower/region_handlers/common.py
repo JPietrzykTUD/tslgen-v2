@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower.context import LoweringSession, VectorValue
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
 def _vector_spelling(value: VectorValue, context: LoweringSession) -> str | None:
@@ -19,7 +18,7 @@ def _vector_spelling(value: VectorValue, context: LoweringSession) -> str | None
         lanes = (
             value.lanes
             if value.lanes is not None
-            else value.lane_parameter or DEFAULT_SUPPORT_POLICY.default_size_parameter_name
+            else value.lane_parameter
         )
         return context.env.backend.types.sized_vector_spelling(base, lanes)
     return context.env.backend.types.vector_type_spelling(base, value.extension_isa)

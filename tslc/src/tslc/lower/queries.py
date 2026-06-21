@@ -361,9 +361,7 @@ class RegisterGenericQuery:
         elif isinstance(arg, VectorValue):
             base_tag, isa = arg.base_tag, arg.extension_isa
             uses_sized_vector = arg.uses_sized_vector
-            lane_parameter = (
-                arg.lane_parameter or DEFAULT_SUPPORT_POLICY.default_size_parameter_name
-            )
+            lane_parameter = arg.lane_parameter
         else:
             return None
         spelling = context.env.backend.types.target_register_spelling(
@@ -525,7 +523,10 @@ class GenericLengthQuery:
     def apply(self, args, context):  # noqa: ANN001
         if len(args) != 1 or not isinstance(args[0], VectorValue):
             return None
-        return TextValue("LANES" if args[0].lanes is None else str(args[0].lanes))
+        value = args[0]
+        return TextValue(
+            str(value.lanes) if value.lanes is not None else value.lane_parameter
+        )
 
 
 DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (

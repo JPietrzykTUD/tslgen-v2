@@ -31,7 +31,7 @@ class _CppTypes:
         extension_isa: str,
         *,
         uses_sized_vector: bool = False,
-        lane_parameter: str = "LANES",
+        lane_parameter: str | None = None,
     ) -> str | None:
         base = self.scalar_spelling(base_tag)
         if base is None:

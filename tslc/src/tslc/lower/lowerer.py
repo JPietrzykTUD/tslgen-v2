@@ -575,7 +575,7 @@ def _resolve_target_vector(
                 selected.to_target,
                 selected.extension.isa_name,
                 uses_sized_vector=uses_sized_vector,
-                lane_parameter=lane_parameter or support.default_size_parameter_name,
+                lane_parameter=lane_parameter,
             ),
             extension_isa=selected.extension.isa_name,
             base_tag=selected.to_target,
