@@ -34,7 +34,9 @@ class VarLowerer:
     ) -> RenderField:
         variant = region.selector_text.strip()
         groups = _split_arg_groups(region.body)
-        if variant == "typed":
+        if variant in ("typed", "const_typed"):
+            # Both are `(type, name, value)` 3-group forms; `_typed` keys on the variant
+            # (`var_typed` / `var_const_typed`), so a const-qualified typed local works too.
             return self._typed(variant, groups, region, context, render)
         if variant == "init_register":
             # A zero-initialized register declaration: `var<init_register>(name)`. The type is
