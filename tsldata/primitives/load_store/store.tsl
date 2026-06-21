@@ -176,7 +176,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
-              *ptr = imask;
+              *cast<reinterpret>(type<generation>(vector::imask) *, ptr) = imask;
             } else<generation> {
               let<type>(MaskWord, type<generation>(vector::mask_underlying_t))
               if (mask) {
@@ -195,7 +195,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
           tsil """
               if<generation>(value<generation>(primitive::attribute(packed))) {
                 var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
-                *ptr = imask;
+                *cast<reinterpret>(type<generation>(vector::imask) *, ptr) = imask;
               } else<generation> {
                 let<type>(MaskWord, type<generation>(vector::mask_underlying_t))
                 const MaskWord one_bits = cast<static>(
@@ -216,14 +216,14 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
         requires:
           avx512 [avx512f]
         implementation:
-          tsil "*ptr = mask;"
+          tsil "*cast<reinterpret>(type<generation>(vector::imask) *, ptr) = mask;"
     [avx2_vl, sse_vl]:
       arith:
         requires:
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
-          tsil "*ptr = mask;"
+          tsil "*cast<reinterpret>(type<generation>(vector::imask) *, ptr) = mask;"
     [avx2, sse, neon]:
       arith:
         requires:
@@ -234,7 +234,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
-              *ptr = imask;
+              *cast<reinterpret>(type<generation>(vector::imask) *, ptr) = imask;
             } else<generation> {
               let<type>(MaskVec, type<generation>(vector::transform(type<generation>(vector::mask_underlying_t))))
               var<const_infer>(mask_vec, call<primitive=reinterpret[Vec, MaskVec]>(mask))

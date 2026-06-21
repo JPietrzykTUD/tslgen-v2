@@ -393,7 +393,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask(ptr):
       arith:
         requires []
         implementation:
-          tsil "emit_return(call<primitive=to_mask[Vec]>(*ptr));"
+          tsil "emit_return(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));"
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -402,12 +402,12 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask(ptr):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
-              emit_return(call<primitive=to_mask[Vec]>(*ptr));
+              emit_return(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
             } else<generation> {
               let<type>(MaskT, type<generation>(vector::mask))
               var<typed>(MaskT, result, mask<zero>())
               loop<range>(i, 0, value<generation>(vector::length), 1) {
-                if ((*ptr_add(ptr, i)) != 0) {
+                if ((*ptr_add(ptr, i)) != cast<static>(type<generation>(base::in), 0)) {
                   mask<set:1>(result, i);
                 }
               }
@@ -421,7 +421,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask(ptr):
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
-          tsil "emit_return(*ptr);"
+          tsil "emit_return(*cast<reinterpret>(type<generation>(vector::imask) *, ptr));"
     [avx2, sse, neon]:
       arith:
         requires:
@@ -433,7 +433,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask(ptr):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
-              emit_return(call<primitive=to_mask[Vec]>(*ptr));
+              emit_return(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
             } else<generation> {
               emit_return(
                 call<primitive=load attrs[aligned=value<generation>(primitive::attribute(aligned))]>(

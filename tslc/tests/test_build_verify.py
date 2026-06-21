@@ -1256,3 +1256,36 @@ def test_to_ostream_builds(data_root: Path, machine_profiles_path: Path, tmp_pat
     report = verify_project(tmp_path, result.rendered.verify)
     assert report.diagnostics == (), report.diagnostics
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_full_corpus_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # Compile EVERY primitive together in one project (vs the per-primitive-group tests
+    # above, which prune incomplete callees). Compiling the whole corpus as one translation
+    # unit catches latent cross-primitive type bugs the targeted tests cannot — e.g. a body
+    # that passes a base_type where a callee wants the integral-mask type, which only fails
+    # when both primitives are emitted together. avx2 covers scalar/sse/avx2/generic; skylake
+    # adds avx512 + the native-mask (`__mmaskN`) bodies.
+    from tslc.catalog.builder import CatalogBuilder
+    from tslc.sources import SourceLoader
+    from tslc.syntax.parser import TslParser
+
+    load = SourceLoader().load(tuple(sorted(data_root.rglob("*.tsl"))))
+    catalog = CatalogBuilder().build(TslParser().parse(load.documents)).catalog
+    assert catalog is not None
+    names = sorted({primitive.name for primitive in catalog.primitives})
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=names,
+        profiles=["avx2", "skylake"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(tmp_path, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
