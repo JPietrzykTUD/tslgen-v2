@@ -1211,17 +1211,29 @@ Last accepted work (committed):
 Current action:
 
 ```text
-Executor finished for the ad hoc `tslc` strict typed render rewrite. Active
+Executor finished for the ad hoc `tslc` catalog/profile validation pass. Active
 review prompt:
+docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md
+
+The previous typed-render review prompt remains useful background:
 docs/agent/runs/tslc-typed-render-values-review-prompt.md
 
-Next expected action: review verdict for the typed render rewrite (`Accept`,
-`Accept With Follow-Ups`, `Needs Revision`, or `Return To Planner`).
+Next expected action: review verdict for the catalog/profile validation pass
+(`Accept`, `Accept With Follow-Ups`, `Needs Revision`, or `Return To Planner`).
 ```
 
-Verification status (2026-06-20):
+Verification status (2026-06-21):
 
 ```text
+- Catalog/profile validation pass:
+  `python -m compileall -q tslc/src/tslc` passed;
+  `python -m pytest -q tslc/tests/test_catalog_validation.py` passed with
+  10 tests;
+  `git diff --check` passed;
+  direct `tsldata/` validation through `validate_catalog(...)` passed with zero
+  diagnostics;
+  `./verify.sh` passed all targeted validations, including 115 non-build tests
+  and 53 generated-build tests across its shards.
 - Strict typed render rewrite validation passed:
   `python -m compileall -q tslc/src/tslc`;
   `python -m pytest -q tslc/tests/test_render_model.py` passed with 15 tests;
@@ -1262,8 +1274,10 @@ Verification status (2026-06-20):
 Suggested next actions:
 
 ```text
-- Review the typed render rewrite using
-  `docs/agent/runs/tslc-typed-render-values-review-prompt.md`.
+- Review the catalog/profile validation pass using
+  `docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md`.
+- Keep `docs/agent/runs/tslc-typed-render-values-review-prompt.md` as
+  background for the current worktree's typed render changes.
 - Confirm no renderer-side semantic body rewrites or unchecked template
   substitutions were reintroduced.
 - Keep the old `tslgen` vector-query forms unsupported (ADR-074).
@@ -1274,6 +1288,19 @@ Suggested next actions:
 Current pending review:
 
 ```text
+The catalog/profile validation pass is implemented and awaiting review. The
+slice adds `tslc.catalog.validation.validate_catalog(...)`, validates promoted
+catalog data plus parsed-source-only structure, validates machine profile JSON
+through `load_machine_profiles_checked(...)`, and stops the pipeline on
+validation errors before backend dialect creation or selection. It reports
+diagnostics for duplicate keys, unknown fields, invalid enum-like strings,
+missing backend/type spellings, bad inheritance, malformed `requires`, and
+malformed profile data. It records ADR-077.
+
+Review should pay particular attention to the boundary choice: catalog/profile
+validation is an admission gate, not source repair, feature/profile selection,
+or renderer-side inference. `requires` validation is structural.
+
 The strict typed render rewrite is implemented and awaiting review. The slice
 adds `tslc.render.model`, stores lowered bodies as `LoweredBody`, keeps
 `body_text` as a compatibility property, removes Rust `_concretize_simd_assoc`,

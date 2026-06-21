@@ -78,6 +78,79 @@ python -m pytest -q tslc/tests/test_masks_and_calls.py tslc/tests/test_coverage.
 `./verify.sh` passed on 2026-06-20 with 103 non-build tests, 49 generated-build
 tests, and the final architecture guards.
 
+## Catalog/Profile Validation Follow-Up
+
+On 2026-06-21 the active `tslc` line added a real validation pass for catalog
+and machine profile data before selection, lowering, backend dialect creation,
+or rendering.
+
+Key points:
+
+- `tslc.catalog.validation.validate_catalog(...)` checks the promoted catalog
+  plus parsed source tree and returns structured diagnostics for duplicate
+  source keys, unknown fields, invalid enum-like strings, missing backend/type
+  spellings, unknown or cyclic extension inheritance, and malformed `requires`
+  shapes.
+- `tslc.catalog.validation` is a package: `__init__.py` owns the public
+  `validate_catalog(...)` facade, while `invariants.py`, `schema_validation.py`,
+  `requires_validation.py`, and `source_spans.py` keep the rule families
+  separated.
+- `requires` validation is structural only. It confirms accepted flag-list and
+  nested-map shapes without trying to perform feature selection or profile
+  matching.
+- Machine profile loading now has a diagnostic-returning boundary,
+  `load_machine_profiles_checked(...)`, which reports malformed JSON, duplicate
+  JSON keys, duplicate profile names, unknown fields, invalid profile families,
+  malformed flags, and malformed alternative spellings.
+- `pipeline.generate(...)` accumulates these diagnostics and stops on errors
+  before backend dialect creation or implementation selection.
+- The compatibility `load_machine_profiles(...)` API remains and returns only
+  the loaded profiles.
+
+Focused coverage:
+
+- `tslc/tests/test_catalog_validation.py` covers successful tiny catalogs,
+  duplicate keys, unknown fields, enum-like values, missing backend spellings,
+  unknown/cyclic inheritance, malformed `requires`, machine profile shape
+  errors, and duplicate JSON keys.
+
+Validation for this slice:
+
+```bash
+python -m compileall -q tslc/src/tslc
+python -m pytest -q tslc/tests/test_catalog_validation.py
+git diff --check
+```
+
+Result: passed.
+
+```bash
+PYTHONPATH=tslc/src python - <<'PY'
+from pathlib import Path
+from tslc.sources import SourceLoader
+from tslc.syntax.parser import TslParser
+from tslc.catalog.builder import CatalogBuilder
+from tslc.catalog.validation import validate_catalog
+
+load = SourceLoader().load_dir(Path("tsldata"))
+parsed = TslParser().parse(load.documents)
+built = CatalogBuilder().build(parsed)
+assert built.catalog is not None
+diagnostics = validate_catalog(built.catalog, parsed)
+assert diagnostics == (), diagnostics
+PY
+```
+
+Result: passed with zero validation diagnostics for the current `tsldata/`
+corpus.
+
+```bash
+./verify.sh
+```
+
+Result: passed with 115 non-build tests and 53 generated-build tests across the
+script's shards.
+
 ## Performance-Oriented Follow-Up Changes
 
 After the vector-query and primitive-call slice, the generator was profiled for

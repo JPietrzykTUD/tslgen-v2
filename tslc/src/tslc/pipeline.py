@@ -15,8 +15,9 @@ from typing import Literal
 
 from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.builder import CatalogBuilder
-from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles
+from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog, Extension, RESULT_DIM_BASE, RESULT_DIM_EXTENSION
+from tslc.catalog.validation import validate_catalog
 from tslc.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
 from tslc.lower.dependencies import (
@@ -133,12 +134,25 @@ def _load_inputs(request: GenerationRequest) -> tuple[_PipelineInputs | None, li
     if catalog_result.catalog is None or has_errors(diagnostics):
         return None, diagnostics
     catalog = catalog_result.catalog
+    diagnostics.extend(
+        validate_catalog(
+            catalog,
+            parse_result,
+            required_backends=request.backends,
+        )
+    )
+    if has_errors(diagnostics):
+        return None, diagnostics
     # Names emitted in >1 form (split to `_mask`/`_maskz`). Only these are policy-distinguished by
     # `CallLowerer`; a single-form masked name (`blend`, `[mask=pass_through]`) stays bare, so the
     # prune must treat it bare too (else a bare `blend` caller can't resolve the pass_through spec).
     split_names = policy_split_names(catalog)
     imm_split_names = immediate_split_names(catalog)
-    machine_profiles = load_machine_profiles(request.machine_profiles_path)
+    profile_result = load_machine_profiles_checked(request.machine_profiles_path)
+    diagnostics.extend(profile_result.diagnostics)
+    if has_errors(diagnostics):
+        return None, diagnostics
+    machine_profiles = profile_result.profiles
     return (
         _PipelineInputs(
             catalog=catalog,

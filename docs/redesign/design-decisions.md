@@ -3860,3 +3860,53 @@ Consequences:
 - Broader expression/statement IR is still not introduced by default; future
   body semantics should add typed render values only where they remove real
   string-side semantic decisions.
+
+## ADR-077: TSLc Catalog And Profile Validation Gates Generation
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+The active `tslc` parser and catalog builder preserve enough structure to build
+typed domain objects, but malformed source data could still reach selection,
+lowering, or backend creation. Duplicate source keys were especially dangerous
+because later promotion naturally keeps only one value, and unsupported backend
+requests could fail as plain Python exceptions instead of structured user
+diagnostics. Machine profile loading had similar risks around duplicate JSON
+keys, unknown fields, and malformed shapes.
+
+Decision:
+
+Add an explicit catalog/profile validation boundary after parsing and catalog
+promotion, before selection, lowering, or backend construction. The catalog pass
+uses typed catalog data for coherence checks such as required backend type
+spellings and extension inheritance, and uses the parsed tree where source shape
+is needed for duplicate keys, unknown fields, enum-like strings, and malformed
+`requires` maps. `requires` validation is structural; it does not try to become
+feature selection or profile matching.
+
+Keep `tslc.catalog.validation` as a package with a narrow public
+`validate_catalog(...)` facade. Split catalog invariants, parsed-source schema
+checks, structural `requires` checks, and parsed-span helpers into focused
+private implementation modules so future validation rules do not accumulate in a
+single catch-all file.
+
+Machine profile loading returns a typed load result with profiles plus
+diagnostics. It validates JSON shape, duplicate object keys, duplicate profile
+names, allowed profile families, allowed profile fields, flag string shape, and
+alternative spelling shape. The pipeline accumulates these diagnostics and stops
+on errors before creating backend dialects or selecting implementations.
+
+Consequences:
+
+- Malformed catalog/profile data fails at a deterministic admission boundary
+  with stable diagnostic codes.
+- Duplicate source and JSON keys no longer silently overwrite without a
+  diagnostic.
+- Selection, lowering, and rendering continue to consume typed catalog/profile
+  objects rather than raw parser dictionaries.
+- Exact legacy diagnostic wording is not preserved; actionable code, severity,
+  and location are the contract.
+- Profile JSON structural diagnostics currently use root file locations except
+  for JSON parse errors; finer JSON key locations remain a future diagnostic
+  enhancement.
