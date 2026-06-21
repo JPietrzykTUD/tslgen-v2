@@ -203,18 +203,31 @@ rough value order:
    `mem_free` (now real, libc), and the `set`/`to_ostream` formatting are plausible but
    unverified against the `tests:` expectations.
 
-2. **Generic (`<LANES>`) coverage — 83/89; the last 6 are hard.** Raised 64→83 this
-   line of work via: `type::size_bytes` query, `vector::imask` resolving to the concrete
-   `ui64` on scalar/generic, lifting the stale masked-on-generic selector guard, and
-   generic representation-change *target* vectors (`_resolve_target_vector` now builds
-   `simd<ToBase, generic<LANES>>` for the BASE dim — `reinterpret`/`cast`). The 6 with no
-   generic body: `convert_up`/`convert_down`/`load_convert_up` (widen/narrow — the generic
-   target has a *different* lane count, `LANES·sizeof(base)/sizeof(ToBase)`, plus no generic
-   body authored), `extract`/`insert` (extension-dim sub-register — no generic analogue),
-   `set` (variadic, out by design). Each is a genuinely harder sub-feature, not a tweak.
-   Pattern when adding a generic body: it often has the same latent raw-decl/type bugs
-   (`T x = …;` → `var<…>`; `!= 0` on floats → `!= cast<static>(base::in, 0)`); mirror a
-   sibling that already compiles (e.g. `hand` for `hor`).
+2. **Generic (`<LANES>`) coverage — 83/89; the last 6 are blocked by stable Rust, not
+   effort.** Raised 64→83 via: `type::size_bytes` query, `vector::imask` resolving to the
+   concrete `ui64` on scalar/generic, lifting the stale masked-on-generic selector guard,
+   and generic representation-change *target* vectors (`_resolve_target_vector` builds
+   `simd<ToBase, generic<LANES>>` for the BASE dim — this is why `reinterpret`/`cast` work:
+   they preserve the lane count). The remaining 6 are a **hard ceiling**, verified — do not
+   re-attempt without one of the escapes below:
+   - `convert_up`/`convert_down`/`load_convert_up` (width-changing) and `extract`/`insert`
+     (sub-register) need an **output lane count derived from `LANES`** (e.g. `LANES/4` for
+     i8→i32, same byte width). Stable Rust **forbids** a const-generic expression as a type
+     argument (`Generic<{LANES/4}>` / a register `[T; LANES/4]` → *"generic parameters may
+     not be used in const operations"*, the nightly-only `generic_const_exprs`). C++ can
+     express it; tslc requires both backends to compile, so it's blocked. Re-parameterizing
+     the tag by bits/bytes does NOT help — a *derived* array length (`[T; BITS/32]`) is
+     rejected the same way; only a *standalone*-sized buffer (`[u8; BYTES]`) compiles.
+   - `set` — variadic; its C++ form is a parameter pack, which can't be runtime-indexed for
+     a generic loop.
+   - Escapes (all rejected as disproportionate for ~5 SIMD-reshape primitives): nightly
+     `generic_const_exprs`; a byte-buffer generic substrate (`Generic<BYTES>` + `[u8; BYTES]`
+     register + reinterpret access — rewrites all 83 working generic bodies); or threading a
+     separate non-derived output-lane const generic per repr-change (render plumbing + the
+     output lane count leaks into the API).
+   When you DO add a generic body (for a same-lane-count op), expect the same latent
+   raw-decl/type bugs (`T x = …;` → `var<…>`; `!= 0` on floats → `!= cast<static>(base::in,
+   0)`); mirror a sibling that compiles (e.g. `hand` for `hor`).
 
 3. **Reduce other in-primitive skip counts** (deferred slots — skips, not failures).
    Check the inventory's "skipped slots" / "dominant gap" columns. Known:
