@@ -403,6 +403,43 @@ prim<s:=v> hor(vec):
             mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
             emit_return(out);
           """
+    [scalar, generic, oneAPIfpga, neon]:
+      ?i?:
+        requires:
+          scalar []
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+          neon [neon]
+        implementation:
+          tsil """
+            var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec))
+            var<infer>(result, data_arr[0])
+            loop<range>(i, 1, value<generation>(vector::length), 1) {
+              result |= data_arr[i];
+            }
+            emit_return(result);
+          """
+    [scalar, generic, oneAPIfpga]:
+      f?:
+        requires:
+          scalar []
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        implementation:
+          tsil """
+            let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)))
+            var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec))
+            var<infer>(result, cast<static>(UnsignedT, 0))
+            mem<copy>(cast<reinterpret>(void*, &result), cast<reinterpret>(void const*, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
+            loop<range>(i, 1, value<generation>(vector::length), 1) {
+              var<infer>(bits, cast<static>(UnsignedT, 0))
+              mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+              result |= bits;
+            }
+            var<infer>(out, cast<static>(type<generation>(base::in), 0))
+            mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            emit_return(out);
+          """
 
 prim<s:=(m,v)> hand(mask, vec):
   brief_description "Reduces the active elements to their bitwise AND."

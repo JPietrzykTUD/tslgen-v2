@@ -68,7 +68,7 @@ prim<v:=v> popcnt(data):
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data)) 
                loop<unroll>(value<generation>(vector::length))
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
-                data_arr[i] = cast<static>(type<generation>(base::in), details::popcount<type<generation>(base::in), type<generation>(vector::offset_base)>(data_arr[i]));
+                data_arr[i] = cast<static>(type<generation>(base::in), details::popcount(data_arr[i]));
               }
                emit_return(call<primitive=from_array[Vec]>(data_arr)) ;
             """
@@ -76,7 +76,7 @@ prim<v:=v> popcnt(data):
       ?i?:
         requires []
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), details::popcount<type<generation>(base::in), type<generation>(vector::offset_base)>(data)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), details::popcount(data)));"
 prim<s:=s> lzc_scalar(data):
   brief_description "Counts leading zeros (scalar)."
   operation ""
