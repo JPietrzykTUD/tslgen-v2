@@ -255,6 +255,32 @@ class IsSameQuery:
         return BoolValue(args[0].type_tag == args[1].type_tag)
 
 
+class SizeBytesQuery:
+    """``type::size_bytes(x)`` -> the byte width of a type as a generation-time integer
+    (``si32`` -> ``4``), used for bit-width math in emulated bodies (``size_bytes(base::in)*8``).
+    A type *tag* resolves by its trailing bit width / 8. NOTE: it does NOT yet resolve the
+    integral-mask type, which arrives as a *spelling* (``vector::imask`` -> ``TextValue``) with
+    no concrete width — those bodies need an imask-as-concrete-type query first."""
+
+    head = "type::size_bytes"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 1 or not isinstance(args[0], TypeValue):
+            return None
+        return TextValue(str(_type_byte_width(args[0].type_tag)))
+
+
+def _type_byte_width(type_tag: str) -> int:
+    """Byte width of a scalar type tag (``si8`` -> 1, ``f64`` -> 8)."""
+
+    digits = ""
+    for char in reversed(type_tag):
+        if not char.isdigit():
+            break
+        digits = char + digits
+    return (int(digits) if digits else 8) // 8
+
+
 class IsSignedQuery:
     """``type::is_signed(x)`` -> a generation-time boolean. A type *tag* (``base::in``,
     ``base::signed_of(...)``) resolves by prefix (``si*``/``f*`` signed, ``ui*`` not). The
@@ -481,6 +507,7 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     ValueQuery(),
     IntrinSuffixQuery(),
     IsSameQuery(),
+    SizeBytesQuery(),
     IsSignedQuery(),
     AttributeQuery(),
     RegisterQuery(),

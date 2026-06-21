@@ -74,7 +74,7 @@ prim<v:=v> conflict(data):
               var<const_infer>(values, call<primitive=to_array[Vec]>(data))
               var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
               loop<range>(idx, 1, value<generation>(vector::length), 1) {
-                ConflictT conflict = cast<static>(ConflictT, 0);
+                var<infer>(conflict, cast<static>(ConflictT, 0))
                 loop<range>(cur, 0, idx, 1) {
                   if ((cur < (value<generation>(type::size_bytes(type<generation>(base::in))) * 8)) && (values[idx] == values[cur])) {
                     conflict |= (cast<static>(ConflictT, 1) << cur);
