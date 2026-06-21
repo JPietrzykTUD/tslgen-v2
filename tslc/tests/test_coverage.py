@@ -13,7 +13,7 @@ def _result(data_root: Path, machine_profiles_path: Path):
     return generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["add", "hadd", "to_integral"],
+        primitives=["add", "hadd", "cast"],
         profiles=["scalar", "avx2"],
     )
 
@@ -36,12 +36,13 @@ def test_coverage_separates_emitted_and_skipped(
     assert by["hadd"].emitted == by["hadd"].attempted > 0
     assert by["hadd"].skipped == 0
 
-    # to_integral now lowers on scalar + the x86 ISAs (the integral-mask type `im` /
-    # `vector::imask` + the `movemask` bodies), but the generic bit-loop body still skips
-    # (it uses the unimplemented `type::size_bytes` / `details::mask_test`), so it shows
-    # both columns.
-    assert by["to_integral"].emitted > 0
-    assert by["to_integral"].skipped > 0
+    # cast lowers on scalar + the x86 ISAs, but its generic `<LANES>`-vector
+    # representation-change body is deferred (the lowerer skips it with
+    # `TSL-LOWER-UNSUPPORTED-TARGET-VECTOR`), so it shows both columns. (`to_integral` is no
+    # longer a gap example — its generic bit-loop now lowers via `type::size_bytes` +
+    # `vector::imask` resolving to the concrete u64 imask.)
+    assert by["cast"].emitted > 0
+    assert by["cast"].skipped > 0
 
     # skips carry an actionable reason, and they are NOT surfaced as errors/warnings.
     assert result.skipped
@@ -63,7 +64,7 @@ def test_strict_generation_reports_support_gaps_as_errors(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["to_integral"],
+        primitives=["cast"],
         profiles=["scalar", "avx2"],
         generation_mode="strict",
     )

@@ -96,8 +96,8 @@ prim<im:=m> to_integral(mask):
         implementation:
           tsil """
                let<type>(ImaskT, type<generation>(vector::imask)) 
-              ImaskT result = 0;
-              const  type<backend>(scalar::size)  mask_bits = value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8;
+              var<infer>(result, cast<static>(ImaskT, 0))
+              var<typed>(type<backend>(scalar::size), mask_bits, value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8)
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 if (i < mask_bits && mask<test>(mask, i)) {
                   result |= cast<static>(ImaskT, 1) << i;
@@ -122,8 +122,8 @@ prim<im:=m> to_integral(mask):
         implementation:
           tsil """
                let<type>(ImaskT, type<generation>(vector::imask)) 
-              ImaskT result = 0;
-              const  type<backend>(scalar::size)  mask_bits = value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8;
+              var<infer>(result, cast<static>(ImaskT, 0))
+              var<typed>(type<backend>(scalar::size), mask_bits, value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8)
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 if (i < mask_bits && mask<test>(mask, i)) {
                   result |= cast<static>(ImaskT, 1) << i;
@@ -481,7 +481,7 @@ prim<m:=im> to_mask(mask):
           tsil """
               let<type>(MaskT, type<generation>(vector::mask))
               var<typed>(MaskT, result, mask<zero>())
-              const type<backend>(scalar::size) mask_bits = value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8;
+              var<typed>(type<backend>(scalar::size), mask_bits, value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8)
               loop<unroll>(value<generation>(vector::length))
               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if (i < mask_bits && (((mask >> i) & cast<static>(type<generation>(vector::imask), 1)) != 0)) {

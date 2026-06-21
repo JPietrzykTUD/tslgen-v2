@@ -10,7 +10,7 @@ Generated 2026-06-19 by `tslc/tools/coverage_inventory.py`. **Regenerate** with
 - **0 lower cleanly but are not build-verified** (codegen succeeds, 0 skips; compilation unconfirmed).
 - **0 partial** (emit for some extension/type slots, skip others).
 - **0 emit nothing** under the probed profiles.
-- **52534 / 58502 (profile×backend×ext×type) slots lower**; **0 errors**.
+- **53734 / 58502 (profile×backend×ext×type) slots lower**; **0 errors**.
 - **C++/Rust parity is exact**: every primitive emits the identical extension set for both backends.
 
 Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen clean, 0 skips, no build test; **partial** = some slots lower, some skip; **NONE** = nothing emitted.
@@ -84,10 +84,10 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `less_than_or_equal` | `m:=(m,v,v)` `m:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `load` | `v:=(m,ptr)` `v:=(m,ptr,v)` `v:=ptr` | VERIFIED | avx2/avx512/generic/scalar/sse | 96 | pruned (closure) |
 | `load_convert_up` | `v:=ptr+` | VERIFIED | avx2/avx512 | 4 | pruned (closure) |
-| `load_mask` | `m:=ptr` | VERIFIED | avx2/avx512/scalar/sse | 644 | pruned (closure) |
+| `load_mask` | `m:=ptr` | VERIFIED | avx2/avx512/generic/scalar/sse | 164 | unresolved pointer-cast type |
 | `load_scalar` | `s:=ptr` | VERIFIED | avx2/avx512/generic/sse | 0 | — |
 | `lzc` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 100 | pruned (closure) |
-| `lzc_imask` | `s:=m` | VERIFIED | avx2/avx512/scalar/sse | 128 | pruned (closure) |
+| `lzc_imask` | `s:=m` | VERIFIED | avx2/avx512/generic/scalar/sse | 8 | pruned (closure) |
 | `lzc_scalar` | `s:=s` | VERIFIED | generic/scalar | 48 | unresolved type query |
 | `mask_binary_and` | `m:=(m,m)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `mask_binary_not` | `m:=m` | VERIFIED | avx2/avx512/generic/scalar/sse | 40 | pruned (closure) |
@@ -118,28 +118,28 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `shift_right` | `v:=(v,s)` `v:=(v,sImm)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 72 | pruned (closure) |
 | `shift_right_imask` | `im:=(im,s)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `store` | `void:=(m,ptr,v)` `void:=(ptr,s)` `void:=(ptr,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 8 | pruned (closure) |
-| `store_mask` | `void:=(ptr,m)` | VERIFIED | avx2/avx512/scalar/sse | 1120 | unresolved type query |
+| `store_mask` | `void:=(ptr,m)` | VERIFIED | avx2/avx512/generic/scalar/sse | 880 | unresolved type query |
 | `sub` | `v:=(m,v,v)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `test_imask` | `im:=(im,im)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `to_array` | `s[]:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
-| `to_integral` | `im:=m` | VERIFIED | avx2/avx512/scalar/sse | 120 | unresolved value query |
-| `to_mask` | `m:=im` | VERIFIED | avx2/avx512/scalar/sse | 120 | unresolved value query |
+| `to_integral` | `im:=m` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
+| `to_mask` | `m:=im` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `to_ostream` | `o:=(o,v,s)` | VERIFIED | avx2/avx512/generic/sse | 8 | pruned (closure) |
 | `to_vector` | `v:=m` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
-| `tzc` | `s:=m` | VERIFIED | avx2/avx512/scalar/sse | 128 | pruned (closure) |
+| `tzc` | `s:=m` | VERIFIED | avx2/avx512/generic/scalar/sse | 8 | pruned (closure) |
 | `unequal_zero` | `m:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 4 | pruned (closure) |
 
 ## Skip-reason taxonomy (what blocks the gaps)
 
 | skips | category | meaning / action |
 |--:|---|---|
-| 2256 | pruned (closure) | Dependency-closure dropped a body whose callee is unavailable in that profile. **Structural, not a defect** — expected behavior. |
 | 1512 | generic-vector repr-change (deferred) | `cast`/`reinterpret` on the `simd<T, generic<LANES>>` vector (LANES-sized target). Known deferred slice. |
+| 1296 | pruned (closure) | Dependency-closure dropped a body whose callee is unavailable in that profile. **Structural, not a defect** — expected behavior. |
 | 1128 | unresolved type query | A `type<generation>(...)` query is not yet evaluated (e.g. `vector::offset_base`, `vector::mask_underlying_t`, `vector::transform(...)`). Blocks compress/expand/conflict/popcnt/lzc/hand/hor/store_mask generic paths. |
 | 398 | no top-level emit_return | Body has no top-level `emit_return(...)` (where:-clause / switch-bodied forms) — not lowerable yet (reinterpret, compress, cast). |
-| 290 | unresolved value query | A `value<generation>(...)` / `value<backend>(...)` query unevaluated (e.g. `type::size_bytes(...)`, `x86::mm_fround_to_zero`). Blocks to_integral/to_mask generic + div/mod float rounding. |
 | 216 | call type-args (bare-ext/index) | `call<primitive=extract[Vec, sse, 0]>` style: a bare extension + literal index in call type-args not yet supported. |
 | 152 | unresolved pointer-cast type | `cast<reinterpret>` to a `vector::mask_underlying_t` pointer not resolved. |
+| 50 | unresolved value query | A `value<generation>(...)` / `value<backend>(...)` query unevaluated (e.g. `type::size_bytes(...)`, `x86::mm_fround_to_zero`). Blocks to_integral/to_mask generic + div/mod float rounding. |
 | 16 | unsupported mask<test> | `mask<test>` on the `native_predicate_by_lanes` (avx512 `__mmaskN`) representation. |
 
 ### NONE primitives — why nothing emits

@@ -361,13 +361,20 @@ class MaskQuery:
 
 
 class ImaskQuery:
-    """``vector::imask`` -> the backend spelling of the integral-mask type
-    (C++ ``typename Vec::imask_type`` / Rust ``Self::ImaskType``). This is the
-    integer ``to_integral`` packs a mask into (``movemask`` result / ``__mmaskN``)."""
+    """``vector::imask`` -> the integral-mask type (the integer ``to_integral`` packs a mask
+    into: a ``movemask`` result / ``__mmaskN``).
+
+    On scalar/generic (no SIMD register, ``vector_bits == 0``) the integral mask is concretely a
+    ``u64`` bitset in the static substrate, so resolve to the concrete ``ui64`` *tag* — both its
+    type-position uses (``let<type>(ImaskT, …)``) and ``type::size_bytes(vector::imask)`` then
+    work. On SIMD it is a register-derived *spelling* (``Vec::imask_type`` / ``Self::ImaskType``)
+    whose concrete width varies per lane count, so it stays a ``TextValue``."""
 
     head = "vector::imask"
 
     def apply(self, args, context):  # noqa: ANN001
+        if context.env.extension.vector_bits == 0:
+            return TypeValue("ui64")
         return TextValue(context.env.backend.types.imask_type_spelling())
 
 
