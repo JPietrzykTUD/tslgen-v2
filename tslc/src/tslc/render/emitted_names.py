@@ -5,8 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from tslc.lower.lowerer import LoweredSpecialization
-
-_MASK_SUFFIX = {"pass_through": "_mask", "zero": "_maskz"}
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
 def finalize_emitted_names(
@@ -34,7 +33,7 @@ def _split_masked(
             if policy is None:
                 out[name] = group
             else:
-                renamed = f"{name}{_MASK_SUFFIX.get(policy, '_mask_' + policy)}"
+                renamed = f"{name}{DEFAULT_SUPPORT_POLICY.mask_suffix(policy)}"
                 out[renamed] = tuple(replace(s, primitive_name=renamed) for s in group)
     return out
 
@@ -47,8 +46,12 @@ def _split_immediates(
 
     out: dict[str, tuple[LoweredSpecialization, ...]] = {}
     for name, specs in by_name.items():
-        imm = tuple(s for s in specs if "sImm" in s.param_kinds)
-        runtime = tuple(s for s in specs if "sImm" not in s.param_kinds)
+        imm = tuple(
+            s for s in specs if DEFAULT_SUPPORT_POLICY.immediate_kind in s.param_kinds
+        )
+        runtime = tuple(
+            s for s in specs if DEFAULT_SUPPORT_POLICY.immediate_kind not in s.param_kinds
+        )
         if _immediate_split_base(name) in split_names and imm and runtime:
             out[name] = runtime
             out[f"{name}_imm"] = tuple(replace(s, primitive_name=f"{name}_imm") for s in imm)
@@ -58,7 +61,4 @@ def _split_immediates(
 
 
 def _immediate_split_base(name: str) -> str:
-    for suffix in sorted(_MASK_SUFFIX.values(), key=len, reverse=True):
-        if name.endswith(suffix):
-            return name[: -len(suffix)]
-    return name
+    return DEFAULT_SUPPORT_POLICY.mask_split_base(name)

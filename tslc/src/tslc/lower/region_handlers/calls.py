@@ -11,6 +11,7 @@ from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.common import _vector_spelling
 from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.render.model import RenderField, render_text
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 class CallLowerer:
     """``call<primitive=NAME[Vec] attrs[aligned=…]>(args)`` -> a call to NAME's wrapper.
@@ -86,7 +87,7 @@ class CallLowerer:
         # render rename); single-form callees (`blend`) aren't in the set and stay bare.
         call_name = name
         if attrs.get("mask") and name in context.env.policy_split_names:
-            call_name = f"{name}_maskz" if attrs["mask"] == "zero" else f"{name}_mask"
+            call_name = f"{name}{DEFAULT_SUPPORT_POLICY.mask_suffix(attrs['mask'])}"
         # Forwarding the caller's compile-time immediate targets an `_imm` wrapper only for
         # callees whose emitted callable family actually splits runtime and `sImm` forms. Pure
         # `sImm` callees such as `insert` and `extract` keep their authored name.

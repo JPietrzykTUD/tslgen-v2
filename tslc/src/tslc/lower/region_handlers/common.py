@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower.context import LoweringSession, VectorValue
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
 def _vector_spelling(value: VectorValue, context: LoweringSession) -> str | None:
@@ -12,11 +13,15 @@ def _vector_spelling(value: VectorValue, context: LoweringSession) -> str | None
     base = context.env.backend.types.scalar_spelling(value.base_tag)
     if base is None:
         return None
-    if value.extension_isa == "generic":
-        # A concrete lane count when known; otherwise the symbolic `LANES` (a target/alias of
-        # the LANES-sized generic vector itself, e.g. a representation-change's `OutVec`).
-        lanes = value.lanes if value.lanes is not None else "LANES"
-        return context.env.backend.types.generic_vector_spelling(base, lanes)
+    if value.uses_sized_vector:
+        # A concrete lane count when known; otherwise the sized vector's lane parameter
+        # (e.g. a representation-change's `OutVec`).
+        lanes = (
+            value.lanes
+            if value.lanes is not None
+            else value.lane_parameter or DEFAULT_SUPPORT_POLICY.default_size_parameter_name
+        )
+        return context.env.backend.types.sized_vector_spelling(base, lanes)
     return context.env.backend.types.vector_type_spelling(base, value.extension_isa)
 
 

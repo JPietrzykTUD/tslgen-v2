@@ -31,12 +31,12 @@ from tslc.render.project import ProfileRender, RenderedProject, render_project
 from tslc.select.selector import (
     SelectedImplementation,
     Selector,
-    immediate_split_names,
-    policy_split_names,
 )
 from tslc.sources import SourceLoader
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
+from tslc.support_policy_views import immediate_split_names, policy_split_names
 
-_DEFAULT_BACKENDS = ("cpp", "rust")
+_DEFAULT_BACKENDS = DEFAULT_SUPPORT_POLICY.default_backend_ids
 GenerationMode = Literal["partial", "strict"]
 _TYPE_ORDER = {
     tag: index

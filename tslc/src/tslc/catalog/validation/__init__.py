@@ -18,6 +18,7 @@ from tslc.catalog.validation.invariants import (
 )
 from tslc.catalog.validation.schema_validation import validate_parsed_documents
 from tslc.diagnostics import Diagnostic, sort_diagnostics
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.syntax.ast import OuterTslParseResult
 
 __all__ = ("validate_catalog",)
@@ -27,7 +28,7 @@ def validate_catalog(
     catalog: Catalog,
     parsed: OuterTslParseResult | None = None,
     *,
-    required_backends: Iterable[str] = ("cpp", "rust"),
+    required_backends: Iterable[str] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
 ) -> tuple[Diagnostic, ...]:
     """Validate parsed/catalog data and return structured diagnostics."""
 

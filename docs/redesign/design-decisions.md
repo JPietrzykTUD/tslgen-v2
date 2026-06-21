@@ -3910,3 +3910,64 @@ Consequences:
 - Profile JSON structural diagnostics currently use root file locations except
   for JSON parse errors; finer JSON key locations remain a future diagnostic
   enhancement.
+
+## ADR-078: TSLc Support Policy Uses Catalog Capabilities, Not Extension Identities
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+The active `tslc` selector, lowering, query evaluation, render naming, and
+backend renderers had accumulated small local support decisions: supported
+backend ids, supported extension families, signature kinds, mask-policy split
+forms, immediate split forms, variadic skips, representation-change target
+rules, and sized-vector behavior. Several of those decisions were expressed by
+checking the source extension spelling `generic`, which made compiler behavior
+depend on one corpus extension identity instead of on typed extension
+capabilities.
+
+Decision:
+
+Introduce `tslc.support_policy.SupportPolicy` as the single small capability
+object for the current prototype support surface. It owns supported backend
+ids, emitted extension families, supported signature kinds, maskable signature
+forms, mask suffixes, immediate and variadic kinds, pointer/index kinds,
+target-marker values, and explicitly deferred cases.
+
+Keep catalog-derived scans outside that object. `tslc.support_policy_views`
+owns deterministic views that need catalog traversal, including selectable
+primitive variants, mask/immediate split-name discovery, and representation
+target candidate filtering. This keeps `SupportPolicy` as facts and predicates
+over typed values rather than turning it into a catalog query facade.
+
+Promote the minimal extension capability facts needed at the catalog boundary:
+`vector_bits_kind`, `size_parameter_name`, `vector_register_type_policy`, and
+`intrinsic_style`. Selection, lowering, query evaluation, and renderers ask the
+policy or its catalog views capability questions such as whether an extension
+uses a sized-vector substrate, whether a variadic signature should be skipped
+for that extension, whether a register is represented by the base type, and
+which representation-change target dimensions are currently supported for sized
+vectors.
+
+Backend renderers may still spell the generated static sized-vector substrate
+required by the current C++/Rust support assets, but they receive that need as
+lowered capability data (`uses_sized_vector`, lane parameter, target facts)
+rather than inferring it from a source extension name.
+
+Consequences:
+
+- Adding or renaming source extensions should not require new behavior checks
+  against extension identities in selection, lowering, query evaluation, or
+  backend renderers.
+- `SupportPolicy` stays small and import-light; catalog scans live in the
+  adjacent view module and can grow or split independently when catalog
+  selection rules become richer.
+- Current deferred cases remain explicit: sized-vector variadic fallback loops,
+  sized-vector extension-dimension representation changes, masked
+  gather/scatter forms, masked scalar reductions, unsupported extension
+  families, and different-width reinterpret targets.
+- The catalog still admits source names such as `generic` and `scalar`; those
+  are source data, not compiler policy branches.
+- The current generated C++/Rust substrate names remain a backend presentation
+  detail. A future runtime/support-library rename should be handled in backend
+  rendering/static assets, not by changing selection or lowering behavior.

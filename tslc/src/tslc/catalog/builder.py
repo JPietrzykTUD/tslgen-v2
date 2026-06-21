@@ -322,6 +322,7 @@ def _resolve_extension_inheritance(
         return replace(
             ext,
             family=ext.family or parent.family,
+            intrinsic_style=ext.intrinsic_style or parent.intrinsic_style,
             compose_prefix={**parent.compose_prefix, **ext.compose_prefix},
             compose_suffix_by_type={
                 **parent.compose_suffix_by_type,
@@ -329,7 +330,12 @@ def _resolve_extension_inheritance(
             },
             # mask policy / width fall back to the parent only when this block didn't
             # state its own (every `_vl` block does, so this is just gap-filling).
-            vector_bits=ext.vector_bits or parent.vector_bits,
+            vector_bits=ext.vector_bits if ext.vector_bits_kind else parent.vector_bits,
+            vector_bits_kind=ext.vector_bits_kind or parent.vector_bits_kind,
+            size_parameter_name=ext.size_parameter_name or parent.size_parameter_name,
+            vector_register_type_policy=(
+                ext.vector_register_type_policy or parent.vector_register_type_policy
+            ),
             mask_policy=ext.mask_policy if ext.mask_policy != MaskPolicy() else parent.mask_policy,
             imask_policy=(
                 ext.imask_policy if ext.imask_policy != ImaskPolicy() else parent.imask_policy
@@ -396,11 +402,17 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
         name=name,
         isa_name=_field_text(fields.get("extension_name")) or name,
         family=_field_text(fields.get("family")) or "",
+        intrinsic_style=_field_text(fields.get("intrinsic_style")) or "",
         compose_prefix=compose_prefix,
         compose_suffix_by_type=compose_suffix_by_type,
         inherits=_field_text(fields.get("inherits")),
         lscpu_flags=_list_text_set(fields.get("lscpu_flags")),
         vector_bits=_int_text(fields.get("vector_bits")),
+        vector_bits_kind=_vector_bits_kind(fields.get("vector_bits")),
+        size_parameter_name=_field_text(_child(fields.get("size_parameter"), "name")),
+        vector_register_type_policy=(
+            _field_text(_child(fields.get("vector_register_type_policy"), "kind")) or ""
+        ),
         mask_policy=_mask_policy(fields.get("mask_type_policy")),
         imask_policy=_imask_policy(fields.get("integral_mask_type_policy")),
     )
@@ -578,6 +590,15 @@ def _int_keyed_map(field: ParsedTslField | None) -> dict[int, str]:
 def _int_text(field: ParsedTslField | None) -> int:
     text = _field_text(field)
     return int(text) if text is not None and text.lstrip("-").isdigit() else 0
+
+
+def _vector_bits_kind(field: ParsedTslField | None) -> str:
+    text = _field_text(field)
+    if text is None:
+        return ""
+    if text.lstrip("-").isdigit():
+        return "fixed"
+    return text
 
 
 # --- parse-tree accessors ----------------------------------------------------

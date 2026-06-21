@@ -11,6 +11,7 @@ from tslc.lower.lowerer import (
     varying_positions,
 )
 from tslc.render.model import RenderContext
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 # Keyed by ISA name (the emitted tag); `_vl` variants are internal and never emitted.
 _EXT_TAG = {"scalar": "Scalar", "sse": "Sse", "avx2": "Avx2", "avx512": "Avx512"}
@@ -77,14 +78,18 @@ class RustBackend:
             if signature in seen:
                 continue
             seen.add(signature)
-            # The generic vector is sized: its overloaded impls are parameterized by `LANES`.
-            impl_generics = (["const LANES: usize"] if spec.extension_name == "generic" else []) + [
+            # A sized vector's overloaded impls are parameterized by its lane parameter.
+            lane_parameter = (
+                spec.lane_parameter or DEFAULT_SUPPORT_POLICY.default_size_parameter_name
+            )
+            impl_generics = (
+                [f"const {lane_parameter}: usize"]
+                if spec.uses_sized_vector
+                else []
+            ) + [
                 f"const {name}: {typ}" for name, typ, _ in spec.generic_params
             ]
-            if spec.extension_name == "generic":
-                vec = f"Simd<{spec.base_type_spelling}, Generic<LANES>>"
-            else:
-                vec = f"Simd<{spec.base_type_spelling}, {_ext_tag(spec.extension_name)}>"
+            vec = _vector_type(spec)
             impl_prefix = f"impl<{', '.join(impl_generics)}>" if impl_generics else "impl"
             self_ty = _rust_concrete(spec, spec.param_kinds[vi])
             trait_args = (
@@ -104,7 +109,10 @@ class RustBackend:
                     backend_id=self.backend_id,
                     current_vector=vec,
                     current_register=rust_register_type(
-                        spec.extension_name, spec.base_type_spelling
+                        spec.extension_name,
+                        spec.base_type_spelling,
+                        uses_sized_vector=spec.uses_sized_vector,
+                        lane_parameter=lane_parameter,
                     ),
                     current_base=spec.base_type_spelling,
                     current_mask=f"<{vec} as SimdVector>::MaskType",
@@ -161,14 +169,15 @@ class RustBackend:
         )
 
     def _impl(self, spec: LoweredSpecialization) -> str:
-        # The `generic` vector is sized: the impl is parameterized by `LANES` (a const generic
-        # on the `Generic<LANES>` tag); an `sImm` immediate is a further free const generic.
+        # A sized vector's impl is parameterized by its lane const generic; an `sImm` immediate
+        # is a further free const generic.
         impl_parts: list[str] = []
-        if spec.extension_name == "generic":
-            impl_parts.append("const LANES: usize")
-            key = f"Simd<{spec.base_type_spelling}, Generic<LANES>>"
-        else:
-            key = f"Simd<{spec.base_type_spelling}, {_ext_tag(spec.extension_name)}>"
+        if spec.uses_sized_vector:
+            lane_parameter = (
+                spec.lane_parameter or DEFAULT_SUPPORT_POLICY.default_size_parameter_name
+            )
+            impl_parts.append(f"const {lane_parameter}: usize")
+        key = _vector_type(spec)
         if spec.immediate is not None:
             impl_parts.append(f"const {spec.immediate[0]}: {spec.immediate[1]}")
         impl_parts += [f"const {name}: {typ}" for name, typ, _ in spec.generic_params]
@@ -311,7 +320,10 @@ def _index_where(shape: LoweredSpecialization, *, impl_register: str | None = No
     knowledge. Emitted on the trait/impl/wrapper so each constraint holds where the body needs it;
     empty for non-`vidx` primitives."""
 
-    if "vidx" not in shape.param_kinds or not shape.type_params:
+    if (
+        DEFAULT_SUPPORT_POLICY.index_vector_kind not in shape.param_kinds
+        or not shape.type_params
+    ):
         return ""
     index = shape.type_params[0][0]
     clauses = [f"{index}::BaseType: IndexBase"]
@@ -334,13 +346,19 @@ def _ext_tag(extension_name: str) -> str:
     return _EXT_TAG.get(extension_name, extension_name[:1].upper() + extension_name[1:])
 
 
-def rust_register_type(extension_name: str, base: str) -> str:
+def rust_register_type(
+    extension_name: str,
+    base: str,
+    *,
+    uses_sized_vector: bool = False,
+    lane_parameter: str = "LANES",
+) -> str:
     """Concrete register type spelling (scalar's register == its base type)."""
 
-    # The generic vector's register is the lane array (the `array_type` wrapper, matching its
-    # `Array`); `LANES` is in scope wherever this is used (a generic impl's const generic).
-    if extension_name == "generic":
-        return f"array_type<{base}, LANES>"
+    # A sized vector's register is the lane array; the lane parameter is in scope wherever this is
+    # used for a sized-vector impl.
+    if uses_sized_vector:
+        return f"array_type<{base}, {lane_parameter}>"
     width = X86_REGISTER_BITS.get(extension_name)
     if width is None:
         return base
@@ -357,15 +375,33 @@ def _rust_concrete(spec: LoweredSpecialization, kind: str) -> str:
 
     base = spec.base_type_spelling
     if kind == "v":
-        return rust_register_type(spec.extension_name, base)
-    if kind == "ptr":
+        return rust_register_type(
+            spec.extension_name,
+            base,
+            uses_sized_vector=spec.uses_sized_vector,
+            lane_parameter=spec.lane_parameter
+            or DEFAULT_SUPPORT_POLICY.default_size_parameter_name,
+        )
+    if kind in DEFAULT_SUPPORT_POLICY.pointer_kinds:
         return f"*mut {base}"
     if kind == "void":
         return "()"
     if kind == "m":  # not reached by current overloads (store/shift vary in v/s)
-        return rust_register_type(spec.extension_name, base)
+        return rust_register_type(
+            spec.extension_name,
+            base,
+            uses_sized_vector=spec.uses_sized_vector,
+            lane_parameter=spec.lane_parameter
+            or DEFAULT_SUPPORT_POLICY.default_size_parameter_name,
+        )
     if kind == "im":  # not reached by current overloads (to_integral is single-param)
-        return rust_register_type(spec.extension_name, base)
+        return rust_register_type(
+            spec.extension_name,
+            base,
+            uses_sized_vector=spec.uses_sized_vector,
+            lane_parameter=spec.lane_parameter
+            or DEFAULT_SUPPORT_POLICY.default_size_parameter_name,
+        )
     if kind == "usize":  # a count type; not reached by current overloads
         return "usize"
     return base  # s
@@ -375,12 +411,21 @@ def _rust_concrete_result(spec: LoweredSpecialization) -> str:
     return _rust_concrete(spec, spec.result_kind)
 
 
+def _vector_type(spec: LoweredSpecialization) -> str:
+    if spec.uses_sized_vector:
+        lane_parameter = (
+            spec.lane_parameter or DEFAULT_SUPPORT_POLICY.default_size_parameter_name
+        )
+        return f"Simd<{spec.base_type_spelling}, Generic<{lane_parameter}>>"
+    return f"Simd<{spec.base_type_spelling}, {_ext_tag(spec.extension_name)}>"
+
+
 def _kind_type(kind: str, owner: str) -> str:
-    if kind in ("ptr", "ptr+"):  # `ptr+`: a widening-load source pointer (load_convert_up)
+    if kind in DEFAULT_SUPPORT_POLICY.pointer_kinds:
         return f"*mut {owner}::BaseType"
     if kind == "void":
         return "()"
-    if kind in ("s[]", "s..."):  # `s...` (set's variadic pack) renders as the lane-count array
+    if kind in ("s[]", DEFAULT_SUPPORT_POLICY.variadic_scalar_kind):
         return f"{owner}::Array"
     if kind == "usize":  # a fixed count type, not a vector projection
         return "usize"
@@ -412,11 +457,11 @@ def _params(
     # (`IndicesType::RegisterType` — the generic name is the same in every context).
     parts: list[str] = []
     for name, kind in zip(shape.param_names, shape.param_kinds):
-        if kind == "sImm":  # the immediate is a const generic, not a runtime arg
+        if kind == DEFAULT_SUPPORT_POLICY.immediate_kind:
             continue
         if kind == "vt":
             typ = vt_type
-        elif kind == "vidx":
+        elif kind == DEFAULT_SUPPORT_POLICY.index_vector_kind:
             typ = vidx_type
         else:
             typ = _kind_type(kind, owner)
@@ -430,7 +475,7 @@ def _runtime_names(shape: LoweredSpecialization) -> str:
     return ", ".join(
         name
         for name, kind in zip(shape.param_names, shape.param_kinds)
-        if kind != "sImm"
+        if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
     )
 
 

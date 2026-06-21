@@ -20,18 +20,25 @@ class _CppTypes:
     def vector_type_spelling(self, base_spelling: str, extension_name: str) -> str:
         return f"tsl::simd<{base_spelling}, tsl::{extension_name}>"
 
-    def generic_vector_spelling(self, base_spelling: str, lanes: int | str) -> str:
-        # `lanes` is normally a concrete count, but the generic-vector *target* of a
-        # representation-change uses the symbolic ``LANES`` (the impl's const generic).
+    def sized_vector_spelling(self, base_spelling: str, lanes: int | str) -> str:
+        # `lanes` is normally a concrete count, but a sized-vector target of a
+        # representation-change uses the impl's lane template parameter.
         return f"tsl::simd<{base_spelling}, tsl::generic<{lanes}>>"
 
-    def target_register_spelling(self, base_tag: str, extension_isa: str) -> str | None:
+    def target_register_spelling(
+        self,
+        base_tag: str,
+        extension_isa: str,
+        *,
+        uses_sized_vector: bool = False,
+        lane_parameter: str = "LANES",
+    ) -> str | None:
         base = self.scalar_spelling(base_tag)
         if base is None:
             return None
-        if extension_isa == "generic":
-            # The generic target is `simd<ToBase, generic<LANES>>`; project its register type.
-            return f"typename {self.generic_vector_spelling(base, 'LANES')}::register_type"
+        if uses_sized_vector:
+            # A sized-vector target is projected through the generated sized-vector substrate.
+            return f"typename {self.sized_vector_spelling(base, lane_parameter)}::register_type"
         return f"typename {self.vector_type_spelling(base, extension_isa)}::register_type"
 
     def register_type_spelling(self) -> str:

@@ -809,6 +809,80 @@ git diff --check
 
 Result: passed.
 
+```bash
+./verify.sh
+```
+
+Result: passed all targeted validations, including 123 non-build tests and 53
+generated-build tests across its shards.
+
+### Support Policy Capability Boundary Slice
+
+The support-policy follow-up centralizes current prototype support decisions in
+`tslc.support_policy.SupportPolicy` and removes behavior branches that inferred
+compiler capability from the source extension identity `generic`.
+
+Implemented pieces:
+
+1. `Extension` now preserves minimal capability metadata promoted from source:
+   `intrinsic_style`, `vector_bits_kind`, `size_parameter_name`, and
+   `vector_register_type_policy`, with inheritance through parent extensions.
+2. `SupportPolicy` owns supported backend ids, emitted extension families,
+   signature kinds, maskable signature forms/suffixes, immediate and variadic
+   kinds, pointer/index kinds, target-marker values, and deferred cases.
+3. `tslc.support_policy_views` owns deterministic catalog-derived scans:
+   selectable primitive variants, mask/immediate split-name discovery, and
+   representation target candidate filtering. `SupportPolicy` no longer imports
+   `Catalog` or `Primitive`.
+4. Selection skips variadic sized-vector forms through
+   `SupportPolicy.skips_variadic_on_extension(...)`, not by extension family or
+   source extension name.
+5. Lowering records `uses_sized_vector` and lane-parameter facts on lowered
+   specializations and representation-change targets; register/base collapse is
+   derived from the extension register policy.
+6. Query evaluation resolves named extensions from the catalog and treats
+   sized-vector targets by capability. `vector::as_extension(generic)` remains
+   accepted source data because `generic` is a catalog extension name, but the
+   behavior is driven by `vector_bits_kind == "sized"`.
+7. Backend renderers receive lowered sized-vector facts instead of checking the
+   source extension name. Backend substrate spellings remain local to the C++ and
+   Rust presentation layer.
+
+Focused coverage:
+
+- `tslc/tests/test_support_policy.py` covers backend/signature support, pure
+  mask-form facts, sized-vector capability derivation, variadic deferral, type
+  width, and target-dimension facts.
+- `tslc/tests/test_support_policy_views.py` covers catalog-derived maskability,
+  selectable variants, split-name discovery, and representation-change target
+  filtering.
+
+Validation for this slice:
+
+```bash
+python -m compileall -q tslc/src/tslc
+```
+
+Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_support_policy.py tslc/tests/test_support_policy_views.py tslc/tests/test_select_and_lower.py tslc/tests/test_masks_and_calls.py tslc/tests/test_generation_conditionals.py
+```
+
+Result: `45 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_support_policy.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_build_verify.py tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py
+```
+
+Result: `108 passed`.
+
+```bash
+git diff --check
+```
+
+Result: passed.
+
 The full suite was also probed with:
 
 ```bash

@@ -8,6 +8,7 @@ from tslc.lower.lowerer import (
     effective_param_types,
     varying_positions,
 )
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
 class CppBackend:
@@ -84,18 +85,20 @@ class CppBackend:
 
     def _specialization(self, group: list[LoweredSpecialization]) -> str:
         first = group[0]
-        # The `generic` vector is sized: its specialization is parameterized by `LANES` (the
-        # tag carries it), so it emits as `template <std::size_t LANES> struct …_impl<simd<T,
-        # generic<LANES>>>` rather than a full specialization.
-        # Free template params of the (partial) specialization: the generic vector's `LANES`
+        # A sized vector is parameterized by its lane parameter, so it emits as a partial
+        # specialization rather than a full specialization.
+        # Free template params of the (partial) specialization: the sized vector's lane parameter
         # and an `sImm` immediate (both unbound, so they appear in the head AND the key);
         # concrete axis values are bound literals (key only).
         free: list[str] = []
-        if first.extension_name == "generic":
-            vec = f"tsl::simd<{first.base_type_spelling}, tsl::generic<LANES>>"
-            free.append("std::size_t LANES")
+        if first.uses_sized_vector:
+            lane_parameter = (
+                first.lane_parameter or DEFAULT_SUPPORT_POLICY.default_size_parameter_name
+            )
+            vec = _vector_type(first)
+            free.append(f"std::size_t {lane_parameter}")
         else:
-            vec = f"tsl::simd<{first.base_type_spelling}, tsl::{first.extension_name}>"
+            vec = _vector_type(first)
         if first.immediate is not None:
             free.append(f"{first.immediate[1]} {first.immediate[0]}")
         # Free SIMD type params are unbound in the (partial) specialization — head AND key.
@@ -114,11 +117,13 @@ class CppBackend:
             key += f", {first.immediate[0]}"
         key += "".join(f", {name}" for name, _, _ in first.generic_params)
         applies: list[str] = []
-        if "s..." in first.param_kinds:
+        if DEFAULT_SUPPORT_POLICY.variadic_scalar_kind in first.param_kinds:
             # A variadic (`s...`) primitive (`set`): the lane-count scalar args are a C++
             # function parameter pack. One template `apply` per specialization forwards the pack
             # to the intrinsic (`_mm_set_epi8(args...)`).
-            pname = first.param_names[first.param_kinds.index("s...")]
+            pname = first.param_names[
+                first.param_kinds.index(DEFAULT_SUPPORT_POLICY.variadic_scalar_kind)
+            ]
             applies.append(
                 f"    template <class... Args>\n"
                 f"    static inline {_apply_result_type(first)} apply(Args... {pname}) {{\n"
@@ -138,7 +143,7 @@ class CppBackend:
                 params = ", ".join(
                     f"{_param_type(kind, index_type)} {name}"
                     for name, kind in zip(spec.param_names, spec.param_kinds)
-                    if kind != "sImm"  # the immediate is a template param, not a runtime arg
+                    if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
                 )
                 applies.append(
                     f"    static inline {_apply_result_type(spec)} apply({params}) {{\n"
@@ -161,10 +166,12 @@ class CppBackend:
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
     ) -> str:
         shape = specializations[0]
-        if "s..." in shape.param_kinds:
+        if DEFAULT_SUPPORT_POLICY.variadic_scalar_kind in shape.param_kinds:
             # A variadic (`s...`) primitive (`set`): a C++ variadic-template wrapper forwarding the
             # parameter pack to the per-specialization `apply`.
-            pname = shape.param_names[shape.param_kinds.index("s...")]
+            pname = shape.param_names[
+                shape.param_kinds.index(DEFAULT_SUPPORT_POLICY.variadic_scalar_kind)
+            ]
             return (
                 f"template <class Vec, class... Args>\n"
                 f"inline {_result_type(shape.result_kind)} {primitive_name}(Args... {pname}) {{\n"
@@ -191,12 +198,12 @@ class CppBackend:
         params = ", ".join(
             (f"Arg{i} {name}" if i in varying else f"{_param_type(kind, index_type)} {name}")
             for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
-            if kind != "sImm"  # the immediate is a template param, not a runtime arg
+            if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
         )
         names = ", ".join(
             name
             for name, kind in zip(shape.param_names, shape.param_kinds)
-            if kind != "sImm"
+            if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
         )
         impl_args = (
             "Vec"
@@ -245,6 +252,15 @@ def _free_kind_type(kind: str, base_spelling: str) -> str:
     return base_spelling
 
 
+def _vector_type(spec: LoweredSpecialization) -> str:
+    if spec.uses_sized_vector:
+        lane_parameter = (
+            spec.lane_parameter or DEFAULT_SUPPORT_POLICY.default_size_parameter_name
+        )
+        return f"tsl::simd<{spec.base_type_spelling}, tsl::generic<{lane_parameter}>>"
+    return f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
+
+
 def _axis_name(key: str) -> str:
     """An axis attribute key as a C++ template-parameter name (`aligned` -> `Aligned`)."""
 
@@ -278,7 +294,7 @@ def _param_type(kind: str, index_type: str | None = None) -> str:
         return "typename tsl::reg_param<Vec>::type"
     if kind == "vt":  # a target-axis vector param (`insert`'s `orig`) — the ToVec register
         return "typename tsl::reg_param<ToVec>::type"
-    if kind == "vidx":  # a gather/scatter index vector — the IndicesType register
+    if kind == DEFAULT_SUPPORT_POLICY.index_vector_kind:
         return f"typename tsl::reg_param<{index_type}>::type"
     if kind == "m":
         return "typename Vec::mask_type"
@@ -288,7 +304,7 @@ def _param_type(kind: str, index_type: str | None = None) -> str:
         return "std::size_t"
     if kind == "o":  # a text-buffer stream
         return "std::string &"
-    if kind in ("ptr", "ptr+"):  # `ptr+`: a widening-load source pointer (load_convert_up)
+    if kind in DEFAULT_SUPPORT_POLICY.pointer_kinds:
         return "typename Vec::base_type *"
     if kind == "s[]":
         return "typename ::tsl::array_for<Vec>::type"

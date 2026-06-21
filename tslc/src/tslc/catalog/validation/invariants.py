@@ -17,8 +17,8 @@ from tslc.syntax.ast import (
     ParsedTslListValue,
     ParsedTslScalarValue,
 )
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
-_KNOWN_BACKENDS = frozenset({"cpp", "rust"})
 _KNOWN_TYPE_TAGS = frozenset(
     {"si8", "si16", "si32", "si64", "ui8", "ui16", "ui32", "ui64", "f32", "f64"}
 )
@@ -30,12 +30,15 @@ def validate_required_backends(
     diagnostics: list[Diagnostic],
 ) -> None:
     for backend in required_backends:
-        if backend not in _KNOWN_BACKENDS:
+        if not DEFAULT_SUPPORT_POLICY.supports_backend(backend):
             diagnostics.append(
                 Diagnostic(
                     severity="error",
                     code="TSL-CATALOG-UNKNOWN-BACKEND",
-                    message=f"backend {backend!r} is not supported (expected cpp or rust)",
+                    message=(
+                        f"backend {backend!r} is not supported "
+                        f"(expected {DEFAULT_SUPPORT_POLICY.backend_label()})"
+                    ),
                 )
             )
         elif backend not in catalog.type_spellings:
@@ -57,7 +60,10 @@ def validate_backend_type_spellings(
     type_sources = _type_member_sources(parsed) if parsed is not None else {}
     type_tags = _catalog_type_tags(catalog)
     for backend in required_backends:
-        if backend not in _KNOWN_BACKENDS or backend not in catalog.type_spellings:
+        if (
+            not DEFAULT_SUPPORT_POLICY.supports_backend(backend)
+            or backend not in catalog.type_spellings
+        ):
             continue
         spellings = catalog.type_spellings.get(backend, {})
         for type_tag in type_tags:

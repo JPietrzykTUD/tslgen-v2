@@ -205,9 +205,13 @@ class Extension:
     family: str  # "x86" | "arm" | "scalar" | … — picks the Rust core::arch module
     compose_prefix: Mapping[str, str]  # backend_id -> intrinsic prefix
     compose_suffix_by_type: Mapping[str, str]  # type tag -> suffix fragment
+    intrinsic_style: str = ""
     inherits: str | None = None  # extension this one borrows impls/metadata from
     lscpu_flags: frozenset[str] = frozenset()  # features that make this extension available
     vector_bits: int = 0  # register width (sse=128, avx2=256, avx512=512); 0 for scalar
+    vector_bits_kind: str = "fixed"  # fixed | sized | scalable | ""
+    size_parameter_name: str | None = None
+    vector_register_type_policy: str = ""
     mask_policy: MaskPolicy = field(default_factory=MaskPolicy)  # how masks are represented
     imask_policy: ImaskPolicy = field(default_factory=ImaskPolicy)  # how integral masks are represented
 

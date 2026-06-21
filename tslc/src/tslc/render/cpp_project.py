@@ -13,6 +13,7 @@ from tslc.lower.lowerer import varying_positions
 from tslc.output.artifacts import Artifact
 from tslc.output.verify import VerifyProfile
 from tslc.render._common import asset, feature_spelling, slug, text, used_exts
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 if TYPE_CHECKING:
     from tslc.render.project import ProfileRender
@@ -138,7 +139,7 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
             lines.append(f"auto* _tsl_use_{index} = &tsl::{name};")
             index += 1
             continue
-        if "s..." in first.param_kinds:
+        if DEFAULT_SUPPORT_POLICY.variadic_scalar_kind in first.param_kinds:
             # A variadic (`s...`) primitive (`set`): a C++ variadic template. Address-take each
             # specialization with the lane-count scalar args spelled out so the body compiles.
             for spec in specs:
@@ -149,16 +150,16 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
             continue
         varying = varying_positions(specs)
         for spec in specs:
-            if spec.extension_name == "generic":
+            if spec.uses_sized_vector:
                 vec = f"tsl::simd<{spec.base_type_spelling}, tsl::generic<8>>"
             else:
                 vec = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
-            # A generic representation-change target carries the symbolic `LANES`; the smoke
+            # A sized-vector representation-change target carries a symbolic lane parameter; the smoke
             # instantiates the source vector with a concrete lane count, so spell the target with
             # the same concrete count (constructed from its typed base, not a string rewrite).
             if spec.target is None:
                 target_spelling = None
-            elif spec.target.extension_isa == "generic":
+            elif spec.target.uses_sized_vector:
                 target_spelling = f"tsl::simd<{spec.target.base_spelling}, tsl::generic<8>>"
             else:
                 target_spelling = spec.target.vector_spelling
@@ -190,7 +191,7 @@ def _concrete_arg_type(vec: str, kind: str) -> str:
         return f"{vec}::register_type"
     if kind == "m":
         return f"{vec}::mask_type"
-    if kind == "ptr":
+    if kind in DEFAULT_SUPPORT_POLICY.pointer_kinds:
         return f"{vec}::base_type *"
     return f"{vec}::base_type"
 

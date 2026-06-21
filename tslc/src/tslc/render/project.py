@@ -12,6 +12,7 @@ from tslc.output.verify import VerifyBackend, VerifyProject
 from tslc.render.cpp_project import cpp_artifacts, cpp_verify_profiles
 from tslc.render.emitted_names import finalize_emitted_names
 from tslc.render.rust_project import rust_artifacts, rust_verify_profiles
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,7 +35,7 @@ class RenderedProject:
 
 def render_project(
     profiles: tuple[ProfileRender, ...],
-    backends: tuple[str, ...] = ("cpp", "rust"),
+    backends: tuple[str, ...] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
     immediate_split_names: frozenset[str] = frozenset(),
 ) -> RenderedProject:
     ordered = tuple(

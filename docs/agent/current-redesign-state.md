@@ -14,7 +14,7 @@ it has not been touched in recent history (the last 20+ commits are entirely
 The authoritative running handoff for the active `tslc` work is
 `docs/agent/tslc-vector-query-handoff.md`. Source-language and architecture
 decisions for `tslc` are recorded in `docs/redesign/design-decisions.md`
-(most recently ADR-076 lowered-body typed render values). The
+(most recently ADR-078 support-policy capability boundaries). The
 `## Current Work State` section near the end of this file has been refreshed to
 describe `tslc`; the long milestone history that follows it is retained only as
 the `tslgen` record.
@@ -1211,20 +1211,32 @@ Last accepted work (committed):
 Current action:
 
 ```text
-Executor finished for the ad hoc `tslc` catalog/profile validation pass. Active
+Executor finished for the ad hoc `tslc` support-policy capability pass. Active
 review prompt:
-docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md
+docs/agent/runs/tslc-support-policy-capability-review-prompt.md
 
-The previous typed-render review prompt remains useful background:
+The previous catalog/profile validation and typed-render review prompts remain
+useful background:
+docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md
 docs/agent/runs/tslc-typed-render-values-review-prompt.md
 
-Next expected action: review verdict for the catalog/profile validation pass
+Next expected action: review verdict for the support-policy capability pass
 (`Accept`, `Accept With Follow-Ups`, `Needs Revision`, or `Return To Planner`).
 ```
 
 Verification status (2026-06-21):
 
 ```text
+- Support-policy capability pass:
+  `python -m compileall -q tslc/src/tslc` passed;
+  `python -m pytest -q tslc/tests/test_support_policy.py tslc/tests/test_support_policy_views.py tslc/tests/test_select_and_lower.py tslc/tests/test_masks_and_calls.py tslc/tests/test_generation_conditionals.py`
+  passed with 45 tests;
+  `python -m pytest -q tslc/tests/test_support_policy.py tslc/tests/test_support_policy_views.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_build_verify.py tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py`
+  passed with 111 tests;
+  `git diff --check` passed;
+  scan for old source-extension capability checks returned no production hits;
+  `./verify.sh` passed all targeted validations, including 123 non-build tests
+  and 53 generated-build tests across its shards.
 - Catalog/profile validation pass:
   `python -m compileall -q tslc/src/tslc` passed;
   `python -m pytest -q tslc/tests/test_catalog_validation.py` passed with
@@ -1274,12 +1286,15 @@ Verification status (2026-06-21):
 Suggested next actions:
 
 ```text
-- Review the catalog/profile validation pass using
-  `docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md`.
-- Keep `docs/agent/runs/tslc-typed-render-values-review-prompt.md` as
-  background for the current worktree's typed render changes.
+- Review the support-policy capability pass using
+  `docs/agent/runs/tslc-support-policy-capability-review-prompt.md`.
+- Keep `docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md` and
+  `docs/agent/runs/tslc-typed-render-values-review-prompt.md` as background for
+  the current worktree's validation and typed render changes.
 - Confirm no renderer-side semantic body rewrites or unchecked template
   substitutions were reintroduced.
+- Confirm selection/lowering/query/backend behavior does not branch on source
+  extension identities such as `generic`.
 - Keep the old `tslgen` vector-query forms unsupported (ADR-074).
 - `pytest.ini` still sets `pythonpath = tslgen/src`; the `tslc` tests work via
   their own conftest. Run `tslc` modules directly with `PYTHONPATH=tslc/src`.
@@ -1288,6 +1303,26 @@ Suggested next actions:
 Current pending review:
 
 ```text
+The support-policy capability pass is implemented and awaiting review. The
+slice adds `tslc.support_policy.SupportPolicy`, promotes minimal extension
+capability metadata (`intrinsic_style`, `vector_bits_kind`,
+`size_parameter_name`, `vector_register_type_policy`), and refactors selection,
+lowering, query evaluation, render naming, backend dialects, backend renderers,
+and C++ smoke rendering to consume policy/capability facts instead of
+rediscovering support rules locally. It records ADR-078.
+
+The post-implementation split keeps `SupportPolicy` as facts and predicates
+only, with catalog-derived scans in `tslc.support_policy_views` for selectable
+variants, split-name discovery, and representation target candidate filtering.
+`SupportPolicy` no longer imports catalog aggregate types such as `Catalog` or
+`Primitive`.
+
+Review should pay particular attention to the boundary choice: source extension
+names may remain source data and generated substrate spellings may remain
+backend presentation, but compiler behavior should be driven by typed catalog
+capabilities, support policy facts, and explicit catalog views, not by branches
+on extension identities.
+
 The catalog/profile validation pass is implemented and awaiting review. The
 slice adds `tslc.catalog.validation.validate_catalog(...)`, validates promoted
 catalog data plus parsed-source-only structure, validates machine profile JSON
@@ -1296,10 +1331,6 @@ validation errors before backend dialect creation or selection. It reports
 diagnostics for duplicate keys, unknown fields, invalid enum-like strings,
 missing backend/type spellings, bad inheritance, malformed `requires`, and
 malformed profile data. It records ADR-077.
-
-Review should pay particular attention to the boundary choice: catalog/profile
-validation is an admission gate, not source repair, feature/profile selection,
-or renderer-side inference. `requires` validation is structural.
 
 The strict typed render rewrite is implemented and awaiting review. The slice
 adds `tslc.render.model`, stores lowered bodies as `LoweredBody`, keeps

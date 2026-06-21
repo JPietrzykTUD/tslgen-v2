@@ -35,6 +35,7 @@ from tslc.catalog.model import Extension
 from tslc.lower._text import split_head_arg, split_top_level
 from tslc.lower.context import LoweringSession, VectorValue
 from tslc.render.model import RenderField, render_text
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
 # --- query value types (extend as new queries need new result kinds) ---------
@@ -89,15 +90,18 @@ def _vector_value_for_extension(
 
 
 def _vector_value_from_extension(base_tag: str, extension: Extension) -> VectorValue:
-    extension_isa = extension.isa_name
-    bits = extension.vector_bits
-    if extension_isa == "generic":
-        lanes: int | None = None
-    elif bits == 0:
-        lanes = 1
-    else:
-        lanes = bits // _type_bits(base_tag)
-    return VectorValue(base_tag=base_tag, extension_isa=extension_isa, lanes=lanes)
+    uses_sized_vector = DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
+    return VectorValue(
+        base_tag=base_tag,
+        extension_isa=extension.isa_name,
+        lanes=DEFAULT_SUPPORT_POLICY.lane_count(extension, base_tag),
+        uses_sized_vector=uses_sized_vector,
+        lane_parameter=(
+            DEFAULT_SUPPORT_POLICY.size_parameter_name(extension)
+            if uses_sized_vector
+            else None
+        ),
+    )
 
 
 def _catalog_extension(extension_name: str, context: LoweringSession) -> Extension | None:
@@ -111,14 +115,20 @@ def _catalog_extension(extension_name: str, context: LoweringSession) -> Extensi
     return None
 
 
-def _generic_vector_value(base_tag: str, context: LoweringSession) -> VectorValue | None:
-    bits = context.env.extension.vector_bits
-    if bits == 0:
-        return None
+def _sized_vector_value(
+    base_tag: str, extension: Extension, context: LoweringSession
+) -> VectorValue | None:
+    lanes = DEFAULT_SUPPORT_POLICY.lane_count(context.env.extension, base_tag)
+    if lanes is None:
+        lane_parameter = DEFAULT_SUPPORT_POLICY.size_parameter_name(context.env.extension)
+    else:
+        lane_parameter = None
     return VectorValue(
         base_tag=base_tag,
-        extension_isa="generic",
-        lanes=bits // _type_bits(base_tag),
+        extension_isa=extension.isa_name,
+        lanes=lanes,
+        uses_sized_vector=True,
+        lane_parameter=lane_parameter,
     )
 
 
@@ -342,11 +352,26 @@ class RegisterGenericQuery:
         # widening load's input vector).
         if isinstance(arg, TypeValue):
             base_tag, isa = arg.type_tag, context.env.extension.isa_name
+            uses_sized_vector = DEFAULT_SUPPORT_POLICY.uses_sized_vector(
+                context.env.extension
+            )
+            lane_parameter = DEFAULT_SUPPORT_POLICY.size_parameter_name(
+                context.env.extension
+            )
         elif isinstance(arg, VectorValue):
             base_tag, isa = arg.base_tag, arg.extension_isa
+            uses_sized_vector = arg.uses_sized_vector
+            lane_parameter = (
+                arg.lane_parameter or DEFAULT_SUPPORT_POLICY.default_size_parameter_name
+            )
         else:
             return None
-        spelling = context.env.backend.types.target_register_spelling(base_tag, isa)
+        spelling = context.env.backend.types.target_register_spelling(
+            base_tag,
+            isa,
+            uses_sized_vector=uses_sized_vector,
+            lane_parameter=lane_parameter,
+        )
         return TextValue(spelling) if spelling is not None else None
 
 
@@ -406,12 +431,15 @@ class VectorAlignmentQuery:
 
     def apply(self, args, context):  # noqa: ANN001
         # The register's natural byte alignment — used by the *aligned* load/store variants
-        # (e.g. avx2 -> 32). The generic vector has no hardware register, so it reports its
+        # (e.g. avx2 -> 32). Sized vectors have no fixed hardware register, so they report their
         # element alignment instead.
-        if context.env.extension.isa_name == "generic":
-            digits = "".join(c for c in context.env.type_tag if c.isdigit())
-            return TextValue(str((int(digits) if digits else 8) // 8))
-        return TextValue(str(context.env.extension.vector_bits // 8))
+        return TextValue(
+            str(
+                DEFAULT_SUPPORT_POLICY.vector_alignment_bytes(
+                    context.env.extension, context.env.type_tag
+                )
+            )
+        )
 
 
 class VectorLengthQuery:
@@ -421,23 +449,18 @@ class VectorLengthQuery:
     head = "vector::length"
 
     def apply(self, args, context):  # noqa: ANN001
-        # The `generic` vector is sized: its lane count is the `LANES` template parameter,
-        # not a concrete integer — emit the symbol so the body keys off the template param.
-        if context.env.extension.isa_name == "generic":
-            return TextValue("LANES")
-        bits = context.env.extension.vector_bits
-        if bits == 0:
-            return TextValue("1")
-        digits = "".join(c for c in context.env.type_tag if c.isdigit())
-        type_bits = int(digits) if digits else 8
-        return TextValue(str(bits // type_bits))
+        return TextValue(
+            DEFAULT_SUPPORT_POLICY.lane_expression(
+                context.env.extension, context.env.type_tag
+            )
+        )
 
 
 class AsExtensionQuery:
     """``vector::as_extension(ext)`` -> the current base under a named extension.
 
-    ``as_extension(scalar)`` / ``as_extension(generic)`` re-express the current base under that
-    extension. Rendering code turns the returned :class:`VectorValue` into backend spelling."""
+    The named extension is resolved from the catalog, then rendered code turns the returned
+    :class:`VectorValue` into backend spelling."""
 
     head = "vector::as_extension"
 
@@ -445,10 +468,9 @@ class AsExtensionQuery:
         if len(args) != 1 or not isinstance(args[0], TextValue):
             return None
         ext = args[0].as_text()
-        if ext == "scalar":
-            return _vector_value_for_extension(context.env.type_tag, "scalar", context)
-        if ext == "generic":
-            return _generic_vector_value(context.env.type_tag, context)
+        extension = _catalog_extension(ext, context)
+        if extension is not None and DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
+            return _sized_vector_value(context.env.type_tag, extension, context)
         return _vector_value_for_extension(context.env.type_tag, ext, context)
 
 

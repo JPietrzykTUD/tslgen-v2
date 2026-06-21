@@ -14,6 +14,7 @@ from tslc.output.verify import (
 )
 from tslc.output.writer import ArtifactWriteReport, ArtifactWriter
 from tslc.pipeline import GenerationMode, GenerationRequest, GenerationResult, generate
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 _ARITH_TYPE_TAGS = (
     "si8",
@@ -36,7 +37,7 @@ def generate_project(
     primitives: Iterable[str],
     profiles: Iterable[str],
     type_tags: Iterable[str] = _ARITH_TYPE_TAGS,
-    backends: Iterable[str] = ("cpp", "rust"),
+    backends: Iterable[str] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
     generation_mode: GenerationMode = "partial",
 ) -> GenerationResult:
     """Run the full compiler pipeline and return in-memory artifacts.

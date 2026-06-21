@@ -14,13 +14,21 @@ from tslc.backend.translation_common import (
 )
 from tslc.catalog.model import Catalog, Extension
 from tslc.render.model import RenderField, RenderText
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
 class BackendTypeDialect(Protocol):
     def scalar_spelling(self, type_tag: str) -> str | None: ...
     def vector_type_spelling(self, base_spelling: str, extension_name: str) -> str: ...
-    def generic_vector_spelling(self, base_spelling: str, lanes: int | str) -> str: ...
-    def target_register_spelling(self, base_tag: str, extension_isa: str) -> str | None: ...
+    def sized_vector_spelling(self, base_spelling: str, lanes: int | str) -> str: ...
+    def target_register_spelling(
+        self,
+        base_tag: str,
+        extension_isa: str,
+        *,
+        uses_sized_vector: bool = False,
+        lane_parameter: str = "LANES",
+    ) -> str | None: ...
     def register_type_spelling(self) -> RenderField: ...
     def mask_type_spelling(self) -> RenderField: ...
     def imask_type_spelling(self) -> RenderField: ...
@@ -90,6 +98,8 @@ class BackendDialect(Protocol):
 
 
 def create_backend_dialect(catalog: Catalog, backend_id: str) -> BackendDialect:
+    if not DEFAULT_SUPPORT_POLICY.supports_backend(backend_id):
+        raise ValueError(f"unsupported backend {backend_id!r}")
     if backend_id == "cpp":
         from tslc.backend.cpp_translation import CppBackendDialect
 

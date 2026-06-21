@@ -21,8 +21,6 @@ from dataclasses import dataclass
 
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
-    RESULT_DIM_BASE,
-    RESULT_DIM_EXTENSION,
     Catalog,
     Extension,
     Implementation,
@@ -30,6 +28,11 @@ from tslc.catalog.model import (
 )
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, diagnostic_at
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
+from tslc.support_policy_views import (
+    concrete_target_candidates,
+    selectable_variants,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,12 +53,10 @@ class ProfileSelectionResult:
     diagnostics: tuple[Diagnostic, ...]
 
 
-_SUPPORTED_FAMILIES = frozenset(
-    {"scalar", "x86", "generic_like"}
-)  # families tslc registers `simd<>` for (generic_like = the portable `generic` vector)
-
-
 class Selector:
+    def __init__(self, support: SupportPolicy = DEFAULT_SUPPORT_POLICY) -> None:
+        self.support = support
+
     def select_profile(
         self,
         catalog: Catalog,
@@ -68,24 +69,12 @@ class Selector:
         #    shift's `(v,s)`/`(v,sImm)`/`(v,v)`) resolved by argument type. The arity filter
         #    keeps only this group's shared arity (a different-arity unmasked overload — e.g.
         #    hadd `s:=v` vs masked-arg `s:=(m,v)` — is left for later).
-        #  - the MASKED variants (`_is_maskable`): value-masking ops (result `v`), mask-producing
-        #    comparisons (result `m`), and masked `load`/`store` (`ptr`). Each is a distinct
-        #    callable, split to `<name>_mask`/`_maskz` at render (so a different arity / two
-        #    policies like `mov`'s zero+pass_through both emit). `gather`/`scatter` (`vidx`) and
-        #    masked reductions (result `s`) are deferred.
-        unmasked = catalog.primitives_named(primitive_name, unmasked=True)
-        masked = tuple(
-            p
-            for p in catalog.primitives_named(primitive_name, unmasked=False)
-            if "mask" in p.attributes and _is_maskable(p)
-        )
-        if unmasked:
-            arity = len(unmasked[0].parameters)
-            variants = tuple(p for p in unmasked if len(p.parameters) == arity) + masked
-        elif masked:
-            variants = masked  # masked-only (blend/mov/…): every policy is its own callable
-        else:
-            variants = catalog.primitives_named(primitive_name, unmasked=False)
+        #  - the MASKED variants admitted by the support-policy catalog view: value-masking ops
+        #    (result `v`), mask-producing comparisons (result `m`), and masked `load`/`store`
+        #    (`ptr`). Each is a distinct callable, split to `<name>_mask`/`_maskz` at render
+        #    (so a different arity / two policies like `mov`'s zero+pass_through both emit).
+        #    `gather`/`scatter` (`vidx`) and masked reductions (result `s`) are deferred.
+        variants = selectable_variants(catalog, primitive_name, self.support)
         if not variants:
             return ProfileSelectionResult(
                 selected=(),
@@ -109,10 +98,10 @@ class Selector:
             shape = parse_signature(primitive.signature)
             free_function = shape is not None and shape.is_free_function
             # A variadic (`s...`) primitive (`set`) renders as a C++ variadic template, which has
-            # no runtime indexing — so the generic `<LANES>` vector's per-lane fallback loop is not
-            # expressible. Skip it on every backend (keeping C++/Rust parity); scalar + concrete
-            # SIMD use the positional intrinsic / pack-first bodies.
-            variadic = shape is not None and "s..." in shape.param_kinds
+            # no runtime indexing — so a sized-vector per-lane fallback loop is not expressible.
+            # Skip it on every backend (keeping C++/Rust parity); scalar + concrete SIMD use the
+            # positional intrinsic / pack-first bodies.
+            variadic = shape is not None and self.support.is_variadic_signature(shape)
             primitive_type_tags = (
                 tuple(
                     sorted(
@@ -130,14 +119,20 @@ class Selector:
             for extension_name in self._emit_extensions(catalog, profile):
                 if emitted_free:
                     break
-                if variadic and catalog.extensions[extension_name].family == "generic_like":
+                if shape is not None and self.support.skips_variadic_on_extension(
+                    catalog.extensions[extension_name], shape
+                ):
                     continue
                 for type_tag in primitive_type_tags:
                     # A representation-change primitive has a SECOND axis (the target type /
                     # extension); it emits one slot per (type_tag, to_target). An ordinary
                     # primitive has a single target-less slot.
-                    to_targets = self._target_candidates(
-                        catalog, primitive, extension_name, type_tag
+                    to_targets = concrete_target_candidates(
+                        catalog,
+                        primitive,
+                        extension_name,
+                        type_tag,
+                        self.support,
                     )
                     for to_target in to_targets:
                         best = self._best_body(
@@ -186,10 +181,10 @@ class Selector:
 
         emit: list[str] = []
         for name, ext in catalog.extensions.items():
-            if ext.family not in _SUPPORTED_FAMILIES:
-                # tslc only registers scalar + x86 `simd<>`; bodies for `arm`/`generic_like`/
-                # `cuda`/fpga have no backend tag. (x86 exts still self-gate via `requires`,
-                # so they drop on a profile lacking the flags.) Other families are future work.
+            if not self.support.supports_extension_family(ext.family):
+                # Families without an emitted vector substrate stay source-visible but are not
+                # generated in this slice. Concrete bodies still self-gate via `requires`, so they
+                # drop on a profile lacking the flags.
                 continue
             if name in superseded:
                 continue
@@ -197,56 +192,6 @@ class Selector:
                 continue  # inactive derived extension
             emit.append(name)
         return sorted(emit)
-
-    def _target_candidates(
-        self,
-        catalog: Catalog,
-        primitive: Primitive,
-        extension_name: str,
-        type_tag: str,
-    ) -> tuple[str | None, ...]:
-        """The concrete second-axis targets to emit for this (extension, source type).
-
-        An ordinary primitive yields a single ``None`` (no second axis). A
-        representation-change primitive yields its in-scope targets, gathered from the
-        ``to_target_group`` of the impls matching this (extension, source type):
-        - **extension** dim -> target *extension* names that are registered extensions
-          (the concrete `sse`/`avx2` branches; the generic `where:`-clause level is not an
-          extension, so it drops — deferred).
-        - **base** dim, *bit-reinterpret* (`[cast=reinterpret]`) -> same-width targets, any domain
-          (signedness flips `si32↔ui32`, cross-domain `f32↔ui32`): a `bit_cast` is meaningful
-          between equal-width types (a size mismatch on scalar). Different-width reinterpret is
-          deferred.
-        - **base** dim, *value conversion* (`cast`/`convert_up`, `[cast=convert]`) -> all targets
-          (these genuinely change width/domain); their conversion-intrinsic bodies are not lowered
-          yet, so they skip at the body level — discoverably, rather than vanishing here.
-        """
-
-        if primitive.result_target is None:
-            return (None,)
-        dim = primitive.result_target[0]
-        chain = catalog.extension_chain(extension_name)
-        targets: set[str] = set()
-        for impl in primitive.implementations:
-            if impl.extension not in chain or impl.to_target_group is None:
-                continue
-            if not catalog.type_group_contains(impl.type_group, type_tag):
-                continue
-            for member in catalog.type_group_members(impl.to_target_group):
-                # `"=="` (identity, target == source) and `"*"` (unenumerable catch-all "any other
-                # base") are target-only markers, not concrete tags (they carry literal quotes in
-                # the corpus). Drop both: their bodies are no-ops/fallbacks covered by the concrete
-                # `?i?`/`f?`/… sibling targets, and they don't name a base the lowerer can spell —
-                # leaking them is the `target '"*"'`/`'"=="'` errors. A concrete sibling may still
-                # enumerate the source tag itself (an int `?i?` block includes its own type), so the
-                # genuine identity target survives where the corpus actually provides a body for it.
-                if member.strip('"') not in ("==", "*"):
-                    targets.add(member)
-        if dim == RESULT_DIM_EXTENSION:
-            return tuple(sorted(t for t in targets if t in catalog.extensions))
-        if dim == RESULT_DIM_BASE and primitive.attributes.get("cast") == "reinterpret":
-            return tuple(sorted(t for t in targets if _same_width(t, type_tag)))
-        return tuple(sorted(targets))
 
     def _best_body(
         self,
@@ -330,84 +275,6 @@ class Selector:
         # wins even if a base body is more type-specific — so avx512vl comparisons use
         # the `_vl` native-mask body, not the base's lane-bitmask `si?` body. Within a
         # single extension distance ties, so specificity still decides there.
-
-
-def _same_width(target_tag: str, source_tag: str) -> bool:
-    """Both tags have the same bit width, regardless of domain — `si32`/`ui32`/`f32` are all
-    32-bit, `si64`/`ui64`/`f64` all 64-bit. This is the scope of the delivered `base`-dim
-    `reinterpret`: a register no-op on x86, a valid same-size `bit_cast` on scalar. It admits
-    same-width *cross-domain* targets (`f32`↔`ui32` — the bit pattern of a float read as an int
-    and back, used by float shifts); different-width targets stay deferred."""
-
-    def width(tag: str) -> int | None:
-        digits = "".join(c for c in tag if c.isdigit())
-        return int(digits) if digits else None
-
-    tw, sw = width(target_tag), width(source_tag)
-    return tw is not None and tw == sw
-
-
-def _is_maskable(primitive: Primitive) -> bool:
-    """A masked variant the compiler can currently emit. Admits value-masking ops (`add`/`mul`/
-    `binary_and`/`shift_left`/`mul_imm`/`inv`, result `v`), mask-producing comparisons (`equal`/
-    `less_than`/`between_*`, result `m`/`im`), and masked `load`/`store` (result `v`/`void`, with
-    a `ptr`). Excludes `gather`/`scatter` (the `vidx` kind is unsupported — orthogonal prerequisite)
-    and masked reductions (`hadd` `s:=(m,v)`, result `s` — different arity, left for later)."""
-
-    shape = parse_signature(primitive.signature)
-    return (
-        shape is not None
-        and shape.result_kind in ("v", "m", "im", "void")
-        and "vidx" not in shape.param_kinds
-    )
-
-
-def policy_split_names(catalog: Catalog) -> frozenset[str]:
-    """Names with MORE THAN ONE emitted *form* — so a `call<…attrs[mask=…]>` to them must take
-    the `_mask`/`_maskz` suffix (matching the render rename). A form is the unmasked variant (if
-    any) plus each value-masking mask policy. Examples: `add` (unmasked + zero + merge → 3 forms)
-    and `mov` (zero + merge → 2 forms) split; `blend` (merge only → 1 form) keeps its bare name."""
-
-    names: set[str] = set()
-    for name in {primitive.name for primitive in catalog.primitives}:
-        variants = catalog.primitives_named(name, unmasked=False)
-        forms: set[str | None] = set()
-        if any("mask" not in p.attributes for p in variants):
-            forms.add(None)
-        forms.update(
-            p.attributes["mask"]
-            for p in variants
-            if "mask" in p.attributes and _is_maskable(p)
-        )
-        if len(forms) > 1:
-            names.add(name)
-    return frozenset(names)
-
-
-def immediate_split_names(catalog: Catalog) -> frozenset[str]:
-    """Names whose callable family mixes compile-time and runtime operands.
-
-    Pure `sImm` primitives keep their authored name (`insert`, `extract`, `mul_imm`). A split is
-    needed only when the same callable name has both an `sImm` form and a non-`sImm` form, because
-    the backends cannot expose one wrapper position as both a const generic/template parameter and
-    a runtime argument.
-    """
-
-    names: set[str] = set()
-    for name in {primitive.name for primitive in catalog.primitives}:
-        has_immediate = False
-        has_runtime = False
-        for primitive in catalog.primitives_named(name, unmasked=False):
-            shape = parse_signature(primitive.signature)
-            if shape is None:
-                continue
-            if "sImm" in shape.param_kinds:
-                has_immediate = True
-            else:
-                has_runtime = True
-        if has_immediate and has_runtime:
-            names.add(name)
-    return frozenset(names)
 
 
 def _applicable_flags(

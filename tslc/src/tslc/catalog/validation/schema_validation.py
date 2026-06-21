@@ -21,8 +21,8 @@ from tslc.syntax.ast import (
     ParsedTslAttribute,
     ParsedTslField,
 )
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
-_KNOWN_BACKENDS = frozenset({"cpp", "rust"})
 _KNOWN_EXTENSION_FAMILIES = frozenset(
     {"scalar", "x86", "generic_like", "arm", "cuda", ""}
 )
@@ -355,7 +355,7 @@ def _validate_immediate_params(
             )
             dispatch = child(entry, "dispatch")
             for child_field in children(dispatch):
-                if child_field.key.text not in _KNOWN_BACKENDS:
+                if not DEFAULT_SUPPORT_POLICY.supports_backend(child_field.key.text):
                     diagnostics.append(
                         diagnostic_at(
                             severity="error",
@@ -413,7 +413,7 @@ def _validate_backend_key_fields(
     owner: str,
 ) -> None:
     for field in fields:
-        if field.key.text not in _KNOWN_BACKENDS:
+        if not DEFAULT_SUPPORT_POLICY.supports_backend(field.key.text):
             diagnostics.append(
                 diagnostic_at(
                     severity="error",

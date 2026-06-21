@@ -12,7 +12,8 @@ from tslc.catalog.model import Catalog
 from tslc.diagnostics import has_errors
 from tslc.lower.calls import ParsedCallSelector, parse_call_selector
 from tslc.lower.lowerer import Lowerer, _type_param_bounds
-from tslc.select.selector import Selector, immediate_split_names
+from tslc.select.selector import Selector
+from tslc.support_policy_views import immediate_split_names
 
 
 def _scalar_spec(catalog, machine_profiles, primitive, backend, type_tag="si32"):

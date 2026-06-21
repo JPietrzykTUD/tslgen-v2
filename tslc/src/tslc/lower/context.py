@@ -39,6 +39,8 @@ class VectorValue:
     base_tag: str
     extension_isa: str
     lanes: int | None
+    uses_sized_vector: bool = False
+    lane_parameter: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

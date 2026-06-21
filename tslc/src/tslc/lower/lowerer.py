@@ -48,11 +48,9 @@ from tslc.render.model import (
     render_sequence,
     trimmed_text,
 )
-from tslc.select.selector import (
-    SelectedImplementation,
-    immediate_split_names,
-    policy_split_names,
-)
+from tslc.select.selector import SelectedImplementation
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
+from tslc.support_policy_views import immediate_split_names, policy_split_names
 
 # The single supported statement keyword for the current slice (v:=(v,v) bodies).
 _RETURN_KEYWORD = "emit_return"
@@ -70,6 +68,8 @@ class TargetVector:
     extension_isa: str  # the target's extension ISA — for `simd<base, ext>` core registration
     base_tag: str  # the target's source-data base tag — for semantic dependency matching
     base_spelling: str  # the target's base type spelling — for core registration
+    uses_sized_vector: bool = False
+    lane_parameter: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +88,8 @@ class LoweredSpecialization:
     param_names: tuple[str, ...]
     param_kinds: tuple[str, ...]
     body: LoweredBody
+    uses_sized_vector: bool = False
+    lane_parameter: str | None = None
     # Boolean-wildcard attribute axis (name, concrete value), e.g. (("aligned","false"),).
     # Each becomes a `bool` template parameter (C++) / const generic (Rust) so the
     # `[aligned=*]`-expanded variants coexist as distinct callables.
@@ -144,12 +146,16 @@ class _LowererCatalogFacts:
     immediate_split_names: frozenset[str]
 
     @classmethod
-    def build(cls, catalog: Catalog) -> "_LowererCatalogFacts":
+    def build(
+        cls,
+        catalog: Catalog,
+        support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
+    ) -> "_LowererCatalogFacts":
         return cls(
             primitive_axes=MappingProxyType(_primitive_axes(catalog)),
             primitive_arg_generics=MappingProxyType(_primitive_arg_generics(catalog)),
-            policy_split_names=policy_split_names(catalog),
-            immediate_split_names=immediate_split_names(catalog),
+            policy_split_names=policy_split_names(catalog, support),
+            immediate_split_names=immediate_split_names(catalog, support),
         )
 
 
@@ -189,9 +195,12 @@ class ExpressionRenderer:
 
 class Lowerer:
     def __init__(
-        self, region_lowerers: tuple[RegionLowerer, ...] = DEFAULT_REGION_LOWERERS
+        self,
+        region_lowerers: tuple[RegionLowerer, ...] = DEFAULT_REGION_LOWERERS,
+        support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
     ) -> None:
         self._region_lowerers = region_lowerers
+        self._support = support
         self._catalog_facts_id: int | None = None
         self._catalog_facts: _LowererCatalogFacts | None = None
 
@@ -210,15 +219,14 @@ class Lowerer:
                 f"could not parse signature {selected.primitive.signature!r}",
                 source=_primitive_signature_source(selected),
             )
-        if shape.result_kind not in _SUPPORTED_KINDS or any(
-            kind not in _SUPPORTED_KINDS for kind in shape.param_kinds
-        ):
+        unsupported_kinds = self._support.unsupported_signature_kinds(shape)
+        if unsupported_kinds:
             # A not-yet-supported signature kind (e.g. s[], ptr) is a coverage gap,
             # not a failure — skip the specialization (info), don't fail generation.
             return _skip(
                 "TSL-LOWER-UNSUPPORTED-KIND",
                 f"signature {selected.primitive.signature!r} uses an unsupported kind "
-                f"(supported: {', '.join(sorted(_SUPPORTED_KINDS))})",
+                f"(supported: {', '.join(sorted(self._support.supported_signature_kinds))})",
                 source=_primitive_signature_source(selected),
             )
         # A variadic param is authored `name...`; strip the marker for the emitted parameter
@@ -227,10 +235,12 @@ class Lowerer:
         # A variadic (`s...`) primitive takes one scalar arg per lane; the generic `<LANES>`
         # vector is excluded by selection, so the lane count is concrete here (1 for scalar).
         variadic_lanes: int | None = None
-        if "s..." in shape.param_kinds:
+        if self._support.is_variadic_signature(shape):
             ext_bits = selected.extension.vector_bits
             variadic_lanes = (
-                ext_bits // _type_bit_width(selected.type_tag) if ext_bits else 1
+                ext_bits // self._support.type_bit_width_or_default(selected.type_tag)
+                if ext_bits
+                else 1
             )
         if len(parameters) != len(shape.param_kinds):
             return _error(
@@ -251,12 +261,14 @@ class Lowerer:
         # A representation-change primitive produces a TARGET vector; resolve it (and bind
         # its declared target alias into the scope), or propagate the skip/error it returns.
         scope = LoweringScope()
-        target = _resolve_target_vector(selected, catalog, backend, base_type_spelling, scope)
+        target = _resolve_target_vector(
+            selected, catalog, backend, base_type_spelling, scope, self._support
+        )
         if isinstance(target, LoweringResult):
             return target
 
         # Resolve the `sImm` compile-time immediate, if any (operand + forwarding facts).
-        resolved_immediate = _resolve_immediate(selected, shape, backend)
+        resolved_immediate = _resolve_immediate(selected, shape, backend, self._support)
         if isinstance(resolved_immediate, LoweringResult):
             return resolved_immediate
         immediate, immediate_dispatch, immediate_range = resolved_immediate
@@ -289,7 +301,7 @@ class Lowerer:
 
         # Dereferencing a raw pointer is `unsafe` in Rust, so a `ptr`/`ptr+`-taking body needs
         # the unsafe frame even when it uses no intrinsics (e.g. scalar `*ptr = data;`).
-        if "ptr" in shape.param_kinds or "ptr+" in shape.param_kinds:
+        if self._support.requires_unsafe_frame(shape):
             context.effects.mark_unsafe()
 
         segments = (
@@ -346,6 +358,12 @@ class Lowerer:
             param_names=parameters,
             param_kinds=shape.param_kinds,
             body=body,
+            uses_sized_vector=self._support.uses_sized_vector(context.env.extension),
+            lane_parameter=(
+                self._support.size_parameter_name(context.env.extension)
+                if self._support.uses_sized_vector(context.env.extension)
+                else None
+            ),
             axis=tuple(
                 (key, selected.primitive.attributes[key])
                 for key in sorted(selected.primitive.attributes)
@@ -364,10 +382,10 @@ class Lowerer:
                 for gp in selected.primitive.generic_params
                 if gp.kind == "simd_type"
             ),
-            # True only when the register type *is* the base type (scalar). The generic
-            # vector also has vector_bits 0 but its register is the lane array, not the base,
-            # so its `v`/`s` overloads must stay distinct.
-            register_is_base=context.env.extension.isa_name == "scalar",
+            # True only when the extension declares its register type as the base type.
+            # Other zero-width/sized vectors may still use array-backed registers, so this is
+            # a source capability, not a vector_bits shortcut.
+            register_is_base=self._support.register_is_base(context.env.extension),
             target=target,
             mask_policy=selected.primitive.attributes.get("mask"),
             variadic_lanes=variadic_lanes,
@@ -380,7 +398,7 @@ class Lowerer:
     def _facts_for(self, catalog: Catalog) -> _LowererCatalogFacts:
         catalog_id = id(catalog)
         if self._catalog_facts_id != catalog_id or self._catalog_facts is None:
-            self._catalog_facts = _LowererCatalogFacts.build(catalog)
+            self._catalog_facts = _LowererCatalogFacts.build(catalog, self._support)
             self._catalog_facts_id = catalog_id
         return self._catalog_facts
 
@@ -473,6 +491,7 @@ def _resolve_target_vector(
     backend: BackendDialect,
     base_type_spelling: str,
     scope: LoweringScope,
+    support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
 ) -> "TargetVector | None | LoweringResult":
     """Resolve the target of a representation-change primitive and bind its declared target
     alias into ``scope``.
@@ -490,15 +509,14 @@ def _resolve_target_vector(
     if selected.primitive.result_target is None or selected.to_target is None:
         return None
     dim, alias = selected.primitive.result_target
-    # The generic vector is sized by the symbolic `LANES` const generic. A BASE-dim target
-    # (same generic vector, different element type) is `simd<ToBase, generic<LANES>>`; build it
-    # with the symbolic lane count. An EXTENSION-dim target (a *different* extension, e.g.
-    # extract/insert's sub-register) has no generic analogue, so it stays deferred.
-    if selected.extension.isa_name == "generic":
-        if dim != RESULT_DIM_BASE:
+    # A sized-vector source carries its lane count as a declared size parameter. A BASE-dim target
+    # can keep that same sized vector while changing the element type; an EXTENSION-dim target
+    # would require a second extension capability, so it stays deferred for this slice.
+    if support.uses_sized_vector(selected.extension):
+        if not support.supports_sized_vector_target_dimension(dim):
             return _skip(
                 "TSL-LOWER-UNSUPPORTED-TARGET-VECTOR",
-                f"extension-dim representation-change on the generic vector is not "
+                f"extension-dim representation-change on a sized vector is not "
                 f"supported: {selected.primitive.name!r}",
                 source=_implementation_source(selected),
             )
@@ -512,14 +530,22 @@ def _resolve_target_vector(
             )
         scope.bind_target_type_symbol(alias, selected.to_target)
         scope.bind_target_type_symbol("ToType", selected.to_target)
+        lane_parameter = support.size_parameter_name(selected.extension)
         return TargetVector(
-            vector_spelling=backend.types.generic_vector_spelling(to_base_spelling, "LANES"),
-            register_spelling=backend.types.target_register_spelling(
-                selected.to_target, "generic"
+            vector_spelling=backend.types.sized_vector_spelling(
+                to_base_spelling, lane_parameter
             ),
-            extension_isa="generic",
+            register_spelling=backend.types.target_register_spelling(
+                selected.to_target,
+                selected.extension.isa_name,
+                uses_sized_vector=True,
+                lane_parameter=lane_parameter,
+            ),
+            extension_isa=selected.extension.isa_name,
             base_tag=selected.to_target,
             base_spelling=to_base_spelling,
+            uses_sized_vector=True,
+            lane_parameter=lane_parameter,
         )
     if dim == RESULT_DIM_BASE:
         # base dim: same extension, replace the element type with the target tag.
@@ -533,27 +559,60 @@ def _resolve_target_vector(
             )
         scope.bind_target_type_symbol(alias, selected.to_target)
         scope.bind_target_type_symbol("ToType", selected.to_target)
+        uses_sized_vector = support.uses_sized_vector(selected.extension)
+        lane_parameter = (
+            support.size_parameter_name(selected.extension) if uses_sized_vector else None
+        )
         return TargetVector(
-            vector_spelling=backend.types.vector_type_spelling(
-                to_base_spelling, selected.extension.isa_name
+            vector_spelling=(
+                backend.types.sized_vector_spelling(to_base_spelling, lane_parameter)
+                if uses_sized_vector and lane_parameter is not None
+                else backend.types.vector_type_spelling(
+                    to_base_spelling, selected.extension.isa_name
+                )
             ),
             register_spelling=backend.types.target_register_spelling(
-                selected.to_target, selected.extension.isa_name
+                selected.to_target,
+                selected.extension.isa_name,
+                uses_sized_vector=uses_sized_vector,
+                lane_parameter=lane_parameter or support.default_size_parameter_name,
             ),
             extension_isa=selected.extension.isa_name,
             base_tag=selected.to_target,
             base_spelling=to_base_spelling,
+            uses_sized_vector=uses_sized_vector,
+            lane_parameter=lane_parameter,
         )
     # RESULT_DIM_EXTENSION: another extension, same base type.
     target_ext = catalog.extensions.get(selected.to_target)
     target_isa = target_ext.isa_name if target_ext else selected.to_target
+    target_uses_sized_vector = (
+        target_ext is not None and support.uses_sized_vector(target_ext)
+    )
+    lane_count = support.lane_count(selected.extension, selected.type_tag)
+    target_lane_parameter = (
+        str(lane_count)
+        if lane_count is not None
+        else support.size_parameter_name(selected.extension)
+    )
     scope.bind_extension_symbol(alias, target_isa)
     return TargetVector(
-        vector_spelling=backend.types.vector_type_spelling(base_type_spelling, target_isa),
-        register_spelling=backend.types.target_register_spelling(selected.type_tag, target_isa),
+        vector_spelling=(
+            backend.types.sized_vector_spelling(base_type_spelling, target_lane_parameter)
+            if target_uses_sized_vector
+            else backend.types.vector_type_spelling(base_type_spelling, target_isa)
+        ),
+        register_spelling=backend.types.target_register_spelling(
+            selected.type_tag,
+            target_isa,
+            uses_sized_vector=target_uses_sized_vector,
+            lane_parameter=target_lane_parameter,
+        ),
         extension_isa=target_isa,
         base_tag=selected.type_tag,
         base_spelling=base_type_spelling,
+        uses_sized_vector=target_uses_sized_vector,
+        lane_parameter=target_lane_parameter if target_uses_sized_vector else None,
     )
 
 
@@ -561,6 +620,7 @@ def _resolve_immediate(
     selected: SelectedImplementation,
     shape: SignatureShape,
     backend: BackendDialect,
+    support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
 ) -> tuple[tuple[str, str] | None, str | None, tuple[int, int, bool] | None] | LoweringResult:
     """Resolve an `sImm` operand into ``(operand, dispatch, value_range)``.
 
@@ -572,9 +632,11 @@ def _resolve_immediate(
     immediate type has no backend spelling.
     """
 
-    if "sImm" not in shape.param_kinds:
+    if not support.has_immediate_operand(shape):
         return (None, None, None)
-    imm_name = selected.primitive.parameters[shape.param_kinds.index("sImm")]
+    imm_name = selected.primitive.parameters[
+        shape.param_kinds.index(support.immediate_kind)
+    ]
     imm_param = selected.primitive.immediate_param(imm_name)
     imm_type = imm_param.type_tag if imm_param is not None else "ui32"
     imm_spelling = backend.types.scalar_spelling(imm_type)
@@ -596,25 +658,6 @@ def _resolve_immediate(
         imm_param.dispatch_for(backend.backend_id),
         _resolve_immediate_range(imm_param, selected.type_tag),
     )
-
-
-_SUPPORTED_KINDS = frozenset(
-    {
-        "v", "s", "m", "im", "usize", "sImm", "ptr", "ptr+", "void", "s[]", "vt",
-        "vidx", "s...", "o",
-    }
-)
-
-
-def _type_bit_width(type_tag: str) -> int:
-    """The bit width of a scalar type tag (``si8`` -> 8, ``f64`` -> 64)."""
-
-    digits = ""
-    for char in reversed(type_tag):
-        if not char.isdigit():
-            break
-        digits = char + digits
-    return int(digits) if digits else 8
 
 
 def _type_param_bounds(
@@ -712,11 +755,11 @@ def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
             return "base" if spec.register_is_base else "register"
         if kind == "vt":  # a target-axis vector param (`insert`'s `orig`) — the ToVec register
             return "target_register"
-        if kind == "vidx":  # a gather/scatter index vector — the IndicesType register
+        if kind == DEFAULT_SUPPORT_POLICY.index_vector_kind:
             return "index_register"
         if kind == "m":
             return "mask"
-        if kind in ("ptr", "ptr+"):  # a base-type pointer (`ptr+` = a widening-load source pointer)
+        if kind in DEFAULT_SUPPORT_POLICY.pointer_kinds:
             return "ptr"
         return "base"  # s
 
