@@ -113,6 +113,15 @@ def _cpp_values_runner(profile_render: ProfileRender, catalog: Catalog | None) -
                     if emitted is not None:
                         functions.append(emitted[0])
                         calls.append(emitted[1])
+            elif _is_to_array(specs[0]):
+                primitive = catalog.primitive(name, unmasked=True)
+                if primitive is None:
+                    continue
+                for index, case in enumerate(primitive.tests):
+                    emitted = _cpp_to_array_case(name, index, case, specs)
+                    if emitted is not None:
+                        functions.append(emitted[0])
+                        calls.append(emitted[1])
 
     body = "\n\n".join(functions)
     call_lines = "\n".join(f"  failures += {call}();" for call in calls)
@@ -282,6 +291,55 @@ def _cpp_masked_case(
         f'"{case.name}", result, expected, {lanes});'
     )
     lines.append("}")
+    return "\n".join(lines), fn_name
+
+
+def _is_to_array(spec: LoweredSpecialization) -> bool:
+    """`to_array(v)` (`s[]:=v`): the lane array of a vector — the harness's own readback path, so
+    value-testing it checks the tool the other cases rely on. Compared against the generic array."""
+
+    return (
+        spec.result_kind == "s[]"
+        and tuple(spec.param_kinds) == ("v",)
+        and spec.target is None
+        and spec.mask_policy is None
+        and not spec.axis
+        and spec.immediate is None
+        and not spec.generic_params
+        and not spec.type_params
+    )
+
+
+def _cpp_to_array_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> tuple[str, str] | None:
+    if case.lanes is None or case.expected_rule is not None:
+        return None
+    base_spelling = _base_spelling(specs, case.type_tag)
+    vector_inputs = [arg for arg in case.inputs if arg.kind == "vector"]
+    if base_spelling is None or len(vector_inputs) != 1 or len(case.expected) != case.lanes:
+        return None
+    lanes = case.lanes
+    if len(vector_inputs[0].values) != lanes:
+        return None
+    fn_name = f"test_{name}_{index}_{_sanitize(case.name)}"
+    literals = ", ".join(_cpp_literal(v, case.type_tag) for v in vector_inputs[0].values)
+    expected = ", ".join(_cpp_literal(v, case.type_tag) for v in case.expected)
+    lines = [
+        f"int {fn_name}() {{",
+        f"  using Vec = tsl::simd<{base_spelling}, tsl::generic<{lanes}>>;",
+        f"  static const {base_spelling} in0[{lanes}] = {{{literals}}};",
+        "  typename Vec::register_type v;",
+        f"  for (std::size_t i = 0; i < {lanes}; ++i) v[i] = in0[i];",
+        f"  auto result = tsl::{name}<Vec>(v);",
+        f"  static const {base_spelling} expected[{lanes}] = {{{expected}}};",
+        f'  return tsl::test::check_lanes<{base_spelling}>('
+        f'"{case.name}", result, expected, {lanes});',
+        "}",
+    ]
     return "\n".join(lines), fn_name
 
 

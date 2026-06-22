@@ -37,6 +37,8 @@ def _value_test_shape_handled(signature: str) -> bool:
         return True
     if result == "m" and len(params) >= 1 and all(k == "m" for k in params):  # mask logic
         return True
+    if result == "s[]" and params == ("v",):  # to_array
+        return True
     return result == "void" and params == ("ptr", "v")
 
 
