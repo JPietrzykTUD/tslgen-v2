@@ -487,7 +487,7 @@ def _test_cases(declaration: ParsedPrimitiveDeclaration) -> tuple[TestCase, ...]
                 name=_field_text(entries.get("test_name")) or "",
                 type_tag=_field_text(entries.get("type")) or "",
                 inputs=_test_inputs(_child(case_field, "inputs")),
-                expected=_list_text(_child(case_field, "expected")),
+                expected=_expected_tokens(_child(case_field, "expected")),
                 lane_set=_field_text(entries.get("lane_set")),
                 lanes=_opt_int(_field_text(entries.get("lanes"))),
                 extension=_field_text(entries.get("extension")),
@@ -744,6 +744,14 @@ def _list_text(field: ParsedTslField | None) -> tuple[str, ...]:
     return tuple(
         item.text for item in field.value.items if isinstance(item, ParsedTslScalarValue)
     )
+
+
+def _expected_tokens(field: ParsedTslField | None) -> tuple[str, ...]:
+    """A test case's ``expected`` as a token tuple: a per-lane/buffer list, or a single token
+    for a scalar-result (reduction) case (``expected 36``) wrapped into a 1-tuple."""
+    if field is not None and isinstance(field.value, ParsedTslScalarValue):
+        return (field.value.text,)
+    return _list_text(field)
 
 
 def _list_text_set(field: ParsedTslField | None) -> frozenset[str]:

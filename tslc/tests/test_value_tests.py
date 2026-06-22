@@ -31,6 +31,8 @@ def _value_test_shape_handled(signature: str) -> bool:
         return True
     if result == "v" and params.count("m") == 1 and all(k in ("m", "v") for k in params):
         return True
+    if result == "s" and params == ("v",):  # horizontal reduction
+        return True
     return result == "void" and params == ("ptr", "v")
 
 
@@ -47,7 +49,7 @@ def test_golden_value_tests_build_and_pass(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["add", "sub", "conflict", "equal", "store"],
+        primitives=["add", "sub", "conflict", "equal", "store", "hadd"],
         profiles=["avx2"],
         backends=("cpp",),
         test_harness=True,

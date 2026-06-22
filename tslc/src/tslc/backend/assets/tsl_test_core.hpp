@@ -63,6 +63,20 @@ inline int check_lanes(const char *name, const Actual &actual, const T *expected
     return failures;
 }
 
+// Scalar-result check (a reduction's single value): compare one lane value to the expectation.
+template <class T>
+inline int check_scalar(const char *name, T actual, T expected) {
+    if (lane_eq<T>(actual, expected)) {
+        return 0;
+    }
+    std::fprintf(stderr, "FAIL %s: expected ", name);
+    print_lane<T>(expected);
+    std::fprintf(stderr, ", got ");
+    print_lane<T>(actual);
+    std::fprintf(stderr, "\n");
+    return 1;
+}
+
 // Differential check: compare two computed lane containers (the hardware result vs the generic
 // software reference) for the same inputs. `T` is the lane type; both are indexable.
 template <class T, class A, class B>
