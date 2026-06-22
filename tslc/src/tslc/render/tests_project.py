@@ -104,6 +104,15 @@ def _cpp_values_runner(profile_render: ProfileRender, catalog: Catalog | None) -
                     if emitted is not None:
                         functions.append(emitted[0])
                         calls.append(emitted[1])
+            elif _is_mask_logic(specs[0]):
+                primitive = catalog.primitive(name, unmasked=True)
+                if primitive is None:
+                    continue
+                for index, case in enumerate(primitive.tests):
+                    emitted = _cpp_mask_logic_case(name, index, case, specs)
+                    if emitted is not None:
+                        functions.append(emitted[0])
+                        calls.append(emitted[1])
 
     body = "\n\n".join(functions)
     call_lines = "\n".join(f"  failures += {call}();" for call in calls)
@@ -272,6 +281,56 @@ def _cpp_masked_case(
         f'  return tsl::test::check_lanes<{base_spelling}>('
         f'"{case.name}", result, expected, {lanes});'
     )
+    lines.append("}")
+    return "\n".join(lines), fn_name
+
+
+def _is_mask_logic(spec: LoweredSpecialization) -> bool:
+    """A mask logic op (`mask_binary_and`/`_or`/`_xor`/`_not`): a mask result from one or more
+    mask operands, no other axes. Compared against the generic reference's integer bitset."""
+
+    return (
+        spec.result_kind == "m"
+        and len(spec.param_kinds) >= 1
+        and all(kind == "m" for kind in spec.param_kinds)
+        and spec.target is None
+        and spec.mask_policy is None
+        and not spec.axis
+        and spec.immediate is None
+        and not spec.generic_params
+        and not spec.type_params
+    )
+
+
+def _cpp_mask_logic_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> tuple[str, str] | None:
+    if case.lanes is None or case.expected_rule is not None or len(case.expected) != 1:
+        return None
+    base_spelling = _base_spelling(specs, case.type_tag)
+    mask_args = [arg for arg in case.inputs if arg.kind == "mask"]
+    if base_spelling is None or len(mask_args) != len(specs[0].param_kinds):
+        return None
+    if any(arg.mask_bits is None for arg in mask_args):
+        return None
+    lanes = case.lanes
+    fn_name = f"test_{name}_{index}_{_sanitize(case.name)}"
+    lines = [
+        f"int {fn_name}() {{",
+        f"  using Vec = tsl::simd<{base_spelling}, tsl::generic<{lanes}>>;",
+    ]
+    arg_names: list[str] = []
+    for position, arg in enumerate(mask_args):
+        lines.append(f"  typename Vec::mask_type m{position} = {arg.mask_bits}ull;")
+        arg_names.append(f"m{position}")
+    expected_int = int(case.expected[0])
+    bits = ", ".join("1" if (expected_int >> i) & 1 else "0" for i in range(lanes))
+    lines.append(f"  typename Vec::mask_type result = tsl::{name}<Vec>({', '.join(arg_names)});")
+    lines.append(f"  static const int expected[{lanes}] = {{{bits}}};")
+    lines.append(f'  return tsl::test::check_mask("{case.name}", result, expected, {lanes});')
     lines.append("}")
     return "\n".join(lines), fn_name
 

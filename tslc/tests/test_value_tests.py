@@ -35,6 +35,8 @@ def _value_test_shape_handled(signature: str) -> bool:
         return True
     if result == "v" and params == ("ptr",):  # load
         return True
+    if result == "m" and len(params) >= 1 and all(k == "m" for k in params):  # mask logic
+        return True
     return result == "void" and params == ("ptr", "v")
 
 
