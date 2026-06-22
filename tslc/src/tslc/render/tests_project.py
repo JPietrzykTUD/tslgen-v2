@@ -131,6 +131,15 @@ def _cpp_values_runner(profile_render: ProfileRender, catalog: Catalog | None) -
                     if emitted is not None:
                         functions.append(emitted[0])
                         calls.append(emitted[1])
+            elif _is_immediate(specs[0]):
+                primitive = _immediate_source(catalog, name)
+                if primitive is None:
+                    continue
+                for index, case in enumerate(primitive.tests):
+                    emitted = _cpp_immediate_case(name, index, case, specs)
+                    if emitted is not None:
+                        functions.append(emitted[0])
+                        calls.append(emitted[1])
 
     body = "\n\n".join(functions)
     call_lines = "\n".join(f"  failures += {call}();" for call in calls)
@@ -295,6 +304,102 @@ def _cpp_masked_case(
     expected = ", ".join(_cpp_literal(v, case.type_tag) for v in case.expected)
     lines.append(f"  static const {base_spelling} expected[{lanes}] = {{{expected}}};")
     lines.append(f"  typename Vec::register_type result = tsl::{name}<Vec>({', '.join(call_args)});")
+    lines.append(
+        f'  return tsl::test::check_lanes<{base_spelling}>('
+        f'"{case.name}", result, expected, {lanes});'
+    )
+    lines.append("}")
+    return "\n".join(lines), fn_name
+
+
+def _is_immediate(spec: LoweredSpecialization) -> bool:
+    """An immediate op (`mul_imm`/`mod_imm`/`shift_left`-imm): a vector result with vector runtime
+    params and a compile-time immediate (spelled as a const template arg). Generic params (e.g.
+    shift's `PreserveSign`) are allowed and appended as their defaults."""
+
+    return (
+        spec.result_kind == "v"
+        and spec.immediate is not None
+        and "sImm" in spec.param_kinds
+        and all(kind in ("v", "sImm") for kind in spec.param_kinds)
+        and spec.target is None
+        and spec.mask_policy is None
+        and not spec.axis
+        and not spec.type_params
+    )
+
+
+def _immediate_value(token: str, immediate: tuple[str, str] | None) -> str:
+    """The immediate template-arg token, wrapped to its declared const type's range so a corpus
+    value wider/negative for the type (e.g. factor -2 for a `uint32_t` immediate) binds as a
+    converted constant — the result is modular-identical to the intended value."""
+    if immediate is None:
+        return token
+    spelling = immediate[1]
+    digits = "".join(c for c in spelling if c.isdigit())
+    if not digits:
+        return token
+    try:
+        value = int(token)
+    except ValueError:
+        return token
+    bits = int(digits)
+    value %= 1 << bits
+    if not spelling.lstrip().startswith("u") and value >= (1 << (bits - 1)):
+        value -= 1 << bits
+    return str(value)
+
+
+def _immediate_source(catalog: Catalog, emitted_name: str) -> "Primitive | None":
+    """The source primitive (with `tests`) for an emitted immediate name — directly, or with the
+    immediate-split `_imm` suffix stripped (`shift_left_imm` -> `shift_left`)."""
+    primitive = catalog.primitive(emitted_name, unmasked=True)
+    if primitive is not None:
+        return primitive
+    if emitted_name.endswith("_imm"):
+        return catalog.primitive(emitted_name[: -len("_imm")], unmasked=True)
+    return None
+
+
+def _cpp_immediate_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> tuple[str, str] | None:
+    if case.lanes is None or case.expected_rule is not None:
+        return None
+    base_spelling = _base_spelling(specs, case.type_tag)
+    vector_inputs = [arg for arg in case.inputs if arg.kind == "vector"]
+    # The immediate parses as a bare scalar (mask-kind) arg; its token is the compile-time value.
+    imm_args = [arg for arg in case.inputs if arg.kind == "mask" and arg.mask_bits is not None]
+    if base_spelling is None or len(imm_args) != 1 or len(case.expected) != case.lanes:
+        return None
+    if len(vector_inputs) != specs[0].param_kinds.count("v"):
+        return None
+    lanes = case.lanes
+    fn_name = f"test_{name}_{index}_{_sanitize(case.name)}"
+    immediate = _immediate_value(imm_args[0].mask_bits, specs[0].immediate)
+    targs = [f"tsl::simd<{base_spelling}, tsl::generic<{lanes}>>", immediate]
+    targs.extend(default for _name, _type, default in specs[0].generic_params)
+    lines = [f"int {fn_name}() {{"]
+    arg_names: list[str] = []
+    for position, arg in enumerate(vector_inputs):
+        literals = ", ".join(_cpp_literal(v, case.type_tag) for v in arg.values)
+        lines.append(f"  static const {base_spelling} in{position}[{lanes}] = {{{literals}}};")
+        lines.append(
+            f"  typename tsl::simd<{base_spelling}, tsl::generic<{lanes}>>::register_type "
+            f"a{position};"
+        )
+        lines.append(
+            f"  for (std::size_t i = 0; i < {lanes}; ++i) a{position}[i] = in{position}[i];"
+        )
+        arg_names.append(f"a{position}")
+    expected = ", ".join(_cpp_literal(v, case.type_tag) for v in case.expected)
+    lines.append(f"  static const {base_spelling} expected[{lanes}] = {{{expected}}};")
+    lines.append(
+        f"  auto result = tsl::{name}<{', '.join(targs)}>({', '.join(arg_names)});"
+    )
     lines.append(
         f'  return tsl::test::check_lanes<{base_spelling}>('
         f'"{case.name}", result, expected, {lanes});'

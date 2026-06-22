@@ -27,13 +27,12 @@ prim<v:=(v,sImm)> shift_left(data, shift):
     - {test_name "shift_left_imm_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], 62], expected [0, -4611686018427387904]}}
   impls:
     scalar:
-      ?i?:
+      arith:
         requires []
         implementation:
-          tsil "emit_return(data << shift);"
-      f?:
-        requires []
-        implementation:
+          # Shift the bit pattern via the same-width unsigned type: a signed-negative left shift is
+          # UB in C++ (and the vector path already does this), so the scalar path must too. Covers
+          # signed, unsigned, and (bit-pattern) float alike.
           tsil """
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
               var<const_infer>(ures, ua << cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift));
@@ -287,13 +286,12 @@ prim<v:=(v,s)> shift_left(data, shift):
     - {test_name "shift_left_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], 62], expected [0, -4611686018427387904]}}
   impls:
     scalar:
-      ?i?:
+      arith:
         requires []
         implementation:
-          tsil "emit_return(data << shift);"
-      f?:
-        requires []
-        implementation:
+          # Shift the bit pattern via the same-width unsigned type: a signed-negative left shift is
+          # UB in C++ (and the vector path already does this), so the scalar path must too. Covers
+          # signed, unsigned, and (bit-pattern) float alike.
           tsil """
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
               var<const_infer>(ures, ua << cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift));
@@ -436,13 +434,12 @@ prim<v:=(v,v)> shift_left(data, shift):
     - {test_name "shift_left_vector_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 0, 1, 2, 3], [31, 30, 29, 28, 0, 1, 2, 3]], expected [2147483648, 2147483648, 1610612736, 1073741824, 0, 2, 8, 24]}}
   impls:
     scalar:
-      ?i?:
+      arith:
         requires []
         implementation:
-          tsil "emit_return(data << shift);"
-      f?:
-        requires []
-        implementation:
+          # Shift the bit pattern via the same-width unsigned type: a signed-negative left shift is
+          # UB in C++ (and the vector path already does this), so the scalar path must too. Covers
+          # signed, unsigned, and (bit-pattern) float alike.
           tsil """
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
               var<const_infer>(ures, ua << cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift));

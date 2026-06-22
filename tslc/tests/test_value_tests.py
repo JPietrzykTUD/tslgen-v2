@@ -41,6 +41,8 @@ def _value_test_shape_handled(signature: str) -> bool:
         return True
     if result == "v" and params == ("s",):  # set1 broadcast
         return True
+    if result == "v" and "sImm" in params and all(k in ("v", "sImm") for k in params):
+        return True  # immediate op (mul_imm / shift-imm)
     return result == "void" and params == ("ptr", "v")
 
 
@@ -57,7 +59,7 @@ def test_golden_value_tests_build_and_pass(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["add", "sub", "conflict", "equal", "store", "hadd"],
+        primitives=["add", "sub", "conflict", "equal", "store", "hadd", "shift_left"],
         profiles=["avx2"],
         backends=("cpp",),
         test_harness=True,
@@ -89,7 +91,9 @@ def test_value_test_coverage_gaps(catalog: Catalog) -> None:
         if not primitive.tests:
             continue
         with_tests.add(primitive.name)
-        if _value_test_shape_handled(primitive.signature):
+        # The generator handles no representation-change (`result_target`) shape yet, so a
+        # repr-change variant never counts as covered even if its signature shape matches.
+        if primitive.result_target is None and _value_test_shape_handled(primitive.signature):
             covered.add(primitive.name)  # a name is covered if any variant's shape is handled
     gaps = with_tests - covered
     print(f"\nvalue-test coverage: {len(covered)}/{len(with_tests)} primitives covered; "
