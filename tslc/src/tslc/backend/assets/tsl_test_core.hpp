@@ -63,6 +63,26 @@ inline int check_lanes(const char *name, const Actual &actual, const T *expected
     return failures;
 }
 
+// Differential check: compare two computed lane containers (the hardware result vs the generic
+// software reference) for the same inputs. `T` is the lane type; both are indexable.
+template <class T, class A, class B>
+inline int check_match(const char *name, const A &actual, const B &reference, std::size_t n) {
+    int failures = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        const T got = static_cast<T>(actual[i]);
+        const T ref = static_cast<T>(reference[i]);
+        if (!lane_eq<T>(got, ref)) {
+            std::fprintf(stderr, "FAIL %s lane %zu: reference ", name, i);
+            print_lane<T>(ref);
+            std::fprintf(stderr, ", hardware ");
+            print_lane<T>(got);
+            std::fprintf(stderr, "\n");
+            ++failures;
+        }
+    }
+    return failures;
+}
+
 // Compare a mask result against a per-lane set/clear expectation. The generic reference's mask
 // is an integer bitset (bit `i` = lane `i`); `expected_set[i]` is 1 if lane `i` should be set.
 // Representation-neutral: only which lanes are set is asserted, never the bit width/pattern.

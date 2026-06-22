@@ -46,6 +46,9 @@ def cpp_test_artifacts(
 def _cpp_values_runner(profile_render: ProfileRender, catalog: Catalog | None) -> str:
     functions: list[str] = []
     calls: list[str] = []
+    # Differential tests build a hardware register via the round-trip harness; emit them only
+    # when those primitives are present in this project (seeded by `test_harness`).
+    harness_ready = {"from_array", "to_array"} <= set(profile_render.cpp)
     if catalog is not None:
         for name in sorted(profile_render.cpp):
             specs = profile_render.cpp[name]
@@ -58,6 +61,12 @@ def _cpp_values_runner(profile_render: ProfileRender, catalog: Catalog | None) -
                     function, call = emitted
                     functions.append(function)
                     calls.append(call)
+                # Differential: only when the round-trip harness is in this project, and only for
+                # vector results today (a mask result's hardware normalization comes later).
+                if harness_ready and specs[0].result_kind == "v":
+                    for diff in _cpp_differential_cases(name, index, case, specs, catalog):
+                        functions.append(diff[0])
+                        calls.append(diff[1])
 
     body = "\n\n".join(functions)
     call_lines = "\n".join(f"  failures += {call}();" for call in calls)
@@ -150,6 +159,79 @@ def _cpp_golden_case(
         )
     lines.append("}")
     return "\n".join(lines), fn_name
+
+
+def _cpp_differential_cases(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+    catalog: Catalog,
+) -> list[tuple[str, str]]:
+    """Differential cases: run each width-matching hardware specialization on the case inputs and
+    assert lane-equality with the generic reference at the same lane count. No corpus ``expected``
+    is consulted — the reference IS the oracle; this catches hardware-intrinsic divergence."""
+
+    if case.lanes is None or case.expected_rule is not None:
+        return []
+    base_spelling = _base_spelling(specs, case.type_tag)
+    type_bits = _type_bits(case.type_tag)
+    if base_spelling is None or type_bits is None:
+        return []
+    vector_inputs = [arg for arg in case.inputs if arg.kind == "vector"]
+    if len(vector_inputs) != len(specs[0].param_kinds):
+        return []
+    lanes = case.lanes
+    is_float = case.type_tag.startswith("f")
+    emitted: list[tuple[str, str]] = []
+    for spec in specs:
+        if spec.uses_sized_vector or spec.extension_name == "scalar":
+            continue  # the generic reference and scalar are not hardware subjects
+        if spec.type_tag != case.type_tag:
+            continue
+        extension = catalog.extensions.get(spec.extension_name)
+        if extension is None or extension.vector_bits != lanes * type_bits:
+            continue  # width-pinned: only the specialization holding exactly `lanes` lanes
+        fn_name = f"test_{name}_diff_{spec.extension_name}_{index}_{_sanitize(case.name)}"
+        lines = [
+            f"int {fn_name}() {{",
+            f"  using Hw = tsl::simd<{base_spelling}, tsl::{spec.extension_name}>;",
+            f"  using Ref = tsl::simd<{base_spelling}, tsl::generic<{lanes}>>;",
+        ]
+        hw_args: list[str] = []
+        ref_args: list[str] = []
+        for position, arg in enumerate(vector_inputs):
+            literals = ", ".join(_cpp_literal(v, is_float) for v in arg.values)
+            lines.append(
+                f"  static const {base_spelling} in{position}[{lanes}] = {{{literals}}};"
+            )
+            lines.append(f"  typename tsl::array_for<Hw>::type hin{position};")
+            lines.append(f"  typename Ref::register_type r{position};")
+            lines.append(
+                f"  for (std::size_t i = 0; i < {lanes}; ++i) "
+                f"{{ hin{position}[i] = in{position}[i]; r{position}[i] = in{position}[i]; }}"
+            )
+            hw_args.append(f"tsl::from_array<Hw>(hin{position})")
+            ref_args.append(f"r{position}")
+        lines.append(
+            f"  typename tsl::array_for<Hw>::type hout = "
+            f"tsl::to_array<Hw>(tsl::{name}<Hw>({', '.join(hw_args)}));"
+        )
+        lines.append(
+            f"  typename Ref::register_type ref = tsl::{name}<Ref>({', '.join(ref_args)});"
+        )
+        lines.append(
+            f'  return tsl::test::check_match<{base_spelling}>('
+            f'"{fn_name}", hout, ref, {lanes});'
+        )
+        lines.append("}")
+        emitted.append(("\n".join(lines), fn_name))
+    return emitted
+
+
+def _type_bits(type_tag: str) -> int | None:
+    digits = "".join(c for c in type_tag if c.isdigit())
+    return int(digits) if digits else None
 
 
 def _base_spelling(

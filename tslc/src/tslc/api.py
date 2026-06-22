@@ -39,6 +39,7 @@ def generate_project(
     type_tags: Iterable[str] = _ARITH_TYPE_TAGS,
     backends: Iterable[str] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
     generation_mode: GenerationMode = "partial",
+    test_harness: bool = False,
 ) -> GenerationResult:
     """Run the full compiler pipeline and return in-memory artifacts.
 
@@ -56,6 +57,7 @@ def generate_project(
         type_tags=tuple(type_tags),
         backends=tuple(backends),
         mode=generation_mode,
+        test_harness=test_harness,
     )
     return generate(request)
 

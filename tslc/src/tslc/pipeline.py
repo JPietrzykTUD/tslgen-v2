@@ -55,6 +55,15 @@ class GenerationRequest:
     type_tags: tuple[str, ...]
     backends: tuple[str, ...] = _DEFAULT_BACKENDS
     mode: GenerationMode = "partial"
+    # Pull the value-test harness primitives (vector<->array round-trip and mask normalization)
+    # into the dependency closure so the generated differential tests can build a hardware
+    # register from a lane array and read its result back. Off for ordinary generation.
+    test_harness: bool = False
+
+
+# Primitives the differential value tests call to move data in/out of a hardware register and to
+# normalize a hardware mask. Seeded into the closure only when ``test_harness`` is set.
+TEST_HARNESS_PRIMITIVES = ("from_array", "to_array", "to_integral")
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,6 +235,8 @@ class _GenerationSession:
         # can register the right mask_type (lane-bitmask vs native __mmaskN).
         selected_extensions: dict[str, Extension] = {}
         worklist = list(self.request.primitives)
+        if self.request.test_harness:
+            worklist.extend(TEST_HARNESS_PRIMITIVES)
         processed: set[str] = set()
         while worklist:
             primitive = worklist.pop(0)

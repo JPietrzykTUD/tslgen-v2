@@ -19,11 +19,14 @@ def test_golden_value_tests_build_and_pass(
     # Golden cases run against the generic software reference: vector results (`add`/`sub`/the
     # cross-lane `conflict`) read back as arrays, a mask result (`equal`) read as the reference's
     # integer-bitset mask.
+    # `test_harness` also pulls in the vector<->array round-trip so the differential cases
+    # (hardware avx2 vs the generic reference at the same lane count) are emitted and run.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["add", "sub", "conflict", "equal"],
         profiles=["avx2"],
+        test_harness=True,
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
