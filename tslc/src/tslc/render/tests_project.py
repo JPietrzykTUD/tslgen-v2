@@ -403,6 +403,23 @@ def _base_spelling(
     return None
 
 
+def _wrapped_int(token: str, type_tag: str) -> str | None:
+    """A decimal integer token wrapped to the lane type's range (so 130 for si8 -> -126: the value
+    actually stored in the lane, and one a typed array literal accepts), or None if not an int."""
+
+    bits = _type_bits(type_tag)
+    if bits is None:
+        return None
+    try:
+        value = int(token)
+    except ValueError:
+        return None
+    value %= 1 << bits
+    if type_tag.startswith("s") and value >= (1 << (bits - 1)):
+        value -= 1 << bits
+    return str(value)
+
+
 def _cpp_literal(token: str, type_tag: str) -> str:
     if type_tag.startswith("f"):
         upper = token.upper()
@@ -413,20 +430,23 @@ def _cpp_literal(token: str, type_tag: str) -> str:
         if upper in ("NAN", "+NAN", "-NAN"):
             return "NAN"
         return token
-    # Integer: wrap to the lane type's range so a token the corpus wrote wider than the type
-    # (e.g. 130 for si8 = -126) is the value actually stored in the lane — and an in-range
-    # literal that a braced array init accepts. This is exactly what the generic oracle reads.
-    bits = _type_bits(type_tag)
-    if bits is None:
+    wrapped = _wrapped_int(token, type_tag)
+    return wrapped if wrapped is not None else token
+
+
+def _rust_literal(token: str, type_tag: str) -> str:
+    if type_tag.startswith("f"):
+        ty = "f32" if "32" in type_tag else "f64"
+        upper = token.upper()
+        if upper in ("INFINITY", "+INFINITY"):
+            return f"{ty}::INFINITY"
+        if upper == "-INFINITY":
+            return f"{ty}::NEG_INFINITY"
+        if upper in ("NAN", "+NAN", "-NAN"):
+            return f"{ty}::NAN"
         return token
-    try:
-        value = int(token)
-    except ValueError:
-        return token
-    value %= 1 << bits
-    if type_tag.startswith("s") and value >= (1 << (bits - 1)):
-        value -= 1 << bits
-    return str(value)
+    wrapped = _wrapped_int(token, type_tag)
+    return wrapped if wrapped is not None else token
 
 
 def _token_truthy(token: str) -> bool:
@@ -444,4 +464,114 @@ def _sanitize(text_value: str) -> str:
     return "".join(c if c.isalnum() else "_" for c in text_value)
 
 
-__all__ = ["cpp_test_artifacts"]
+# --- Rust value tests --------------------------------------------------------
+#
+# Mirror of the C++ golden layer. The Rust generic register (`array_type<T, LANES>`) builds via
+# `Default` + `IndexMut` (both public), so golden cases need no construction primitive — like C++.
+# Value tests are gated behind the `value_tests` cargo feature so `cargo test` only runs them when
+# asked (parity with the C++ opt-in); each profile's tests are further `cfg`-gated on that
+# profile's feature, so only the active profile's module is referenced.
+
+
+def rust_test_artifacts(
+    profiles: tuple[ProfileRender, ...],
+    catalog: Catalog | None,
+) -> list[Artifact]:
+    """The Rust value-test sources: the shared helper module plus one `tests/values.rs` whose
+    per-profile sections are `cfg`-gated (so only the active profile's module is compiled)."""
+
+    artifacts = [text("rust/src/tsl_test_core.rs", asset("tsl_test_core.rs"))]
+    artifacts.append(text("rust/tests/values.rs", _rust_values_file(profiles, catalog)))
+    return artifacts
+
+
+def _rust_values_file(profiles: tuple[ProfileRender, ...], catalog: Catalog | None) -> str:
+    sections: list[str] = ['#![cfg(feature = "value_tests")]', ""]
+    if catalog is not None:
+        for profile_render in profiles:
+            profile_slug = slug(profile_render.profile.name)
+            functions: list[str] = []
+            for name in sorted(profile_render.rust):
+                specs = profile_render.rust[name]
+                if not _is_golden_supported(specs[0]):
+                    continue
+                primitive = catalog.primitive(name, unmasked=True)
+                if primitive is None:
+                    continue
+                for index, case in enumerate(primitive.tests):
+                    emitted = _rust_golden_case(name, index, case, specs)
+                    if emitted is not None:
+                        functions.append(emitted)
+            if not functions:
+                continue
+            body = "\n\n".join(functions)
+            sections.append(
+                f'#[cfg(feature = "{profile_slug}")]\n'
+                f"mod {profile_slug}_values {{\n"
+                "    #![allow(non_snake_case)]\n"
+                "    use tsl_generated::tsl_core::*;\n"
+                f"    use tsl_generated::tsl_{profile_slug}::*;\n"
+                "    use tsl_generated::tsl_test_core::*;\n\n"
+                f"{body}\n"
+                "}"
+            )
+    return "\n\n".join(sections) + "\n"
+
+
+def _rust_golden_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> str | None:
+    if case.lanes is None or case.expected_rule is not None:
+        return None
+    base_spelling = _base_spelling(specs, case.type_tag)
+    if base_spelling is None:
+        return None
+    vector_inputs = [arg for arg in case.inputs if arg.kind == "vector"]
+    if len(vector_inputs) != len(specs[0].param_kinds):
+        return None
+    if len(case.expected) != case.lanes:
+        return None
+    lanes = case.lanes
+    fn_name = f"test_{name}_{index}_{_sanitize(case.name)}"
+    lines = [
+        "    #[test]",
+        f"    fn {fn_name}() {{",
+        f"        type Vec = Simd<{base_spelling}, Generic<{lanes}>>;",
+    ]
+    arg_names: list[str] = []
+    for position, arg in enumerate(vector_inputs):
+        literals = ", ".join(_rust_literal(v, case.type_tag) for v in arg.values)
+        lines.append(f"        let in{position}: [{base_spelling}; {lanes}] = [{literals}];")
+        lines.append(
+            f"        let mut a{position}: <Vec as SimdVector>::RegisterType = "
+            "Default::default();"
+        )
+        lines.append(
+            f"        for i in 0..{lanes} {{ a{position}[i] = in{position}[i]; }}"
+        )
+        arg_names.append(f"a{position}")
+    call = f"{name}::<Vec>({', '.join(arg_names)})"
+    if specs[0].result_kind == "m":
+        bits = ", ".join("true" if _token_truthy(v) else "false" for v in case.expected)
+        lines.append(f"        let expected: [bool; {lanes}] = [{bits}];")
+        lines.append(f"        let result = {call};")
+        lines.append(
+            f"        for i in 0..{lanes} {{ assert_eq!(mask_bit(result as u64, i), "
+            f'expected[i], "{case.name} lane {{}}", i); }}'
+        )
+    else:
+        literals = ", ".join(_rust_literal(v, case.type_tag) for v in case.expected)
+        lines.append(f"        let expected: [{base_spelling}; {lanes}] = [{literals}];")
+        lines.append(f"        let result = {call};")
+        lines.append(
+            f"        for i in 0..{lanes} {{ assert!(result[i].lane_eq(expected[i]), "
+            f'"{case.name} lane {{}}: expected {{:?}}, got {{:?}}", i, expected[i], result[i]); }}'
+        )
+    lines.append("    }")
+    return "\n".join(lines)
+
+
+__all__ = ["cpp_test_artifacts", "rust_test_artifacts"]

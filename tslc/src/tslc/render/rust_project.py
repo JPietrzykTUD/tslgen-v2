@@ -134,6 +134,7 @@ def _rust_lib(profiles: tuple[ProfileRender, ...]) -> str:
         "#![allow(non_upper_case_globals)]",
         "",
         "pub mod tsl_core;",
+        "pub mod tsl_test_core;",
         "",
     ]
     for profile_render in profiles:
@@ -148,6 +149,8 @@ def _rust_cargo(profiles: tuple[ProfileRender, ...]) -> str:
     default = slug(profiles[0].profile.name) if profiles else "scalar"
     features = [f'default = ["{default}"]']
     features.extend(f"{slug(profile_render.profile.name)} = []" for profile_render in profiles)
+    # Opt-in feature that compiles+runs the generated value tests (parity with the C++ ctest gate).
+    features.append("value_tests = []")
     return (
         "[package]\n"
         'name = "tsl_generated"\n'

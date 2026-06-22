@@ -294,6 +294,14 @@ def _rust_command_groups(
     manifest = project_root / "Cargo.toml"
     groups: list[tuple[BuildCommand, ...]] = []
     for profile in backend.profiles:
+        # Value testing adds the opt-in `value_tests` feature (so `cargo test` compiles+runs the
+        # generated value tests); without it `tests/values.rs` is cfg'd empty. A value-mode
+        # failure is reported as a warning (report-then-promote), like the C++ ctest step.
+        features = profile.profile_name
+        severity = "error"
+        if config.run_value_tests:
+            features = f"{profile.profile_name},value_tests"
+            severity = "warning"
         groups.append(
             (
                 BuildCommand(
@@ -307,10 +315,11 @@ def _rust_command_groups(
                         str(manifest),
                         "--no-default-features",
                         "--features",
-                        profile.profile_name,
+                        features,
                     ),
                     cwd=root,
                     env=_rust_environment(profile, config),
+                    severity_on_failure=severity,
                 ),
             )
         )

@@ -12,7 +12,7 @@ from tslc.output.verify import VerifyBackend, VerifyProject
 from tslc.render.cpp_project import cpp_artifacts, cpp_verify_profiles
 from tslc.render.emitted_names import finalize_emitted_names
 from tslc.render.rust_project import rust_artifacts, rust_verify_profiles
-from tslc.render.tests_project import cpp_test_artifacts
+from tslc.render.tests_project import cpp_test_artifacts, rust_test_artifacts
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
@@ -63,6 +63,7 @@ def render_project(
         )
     if "rust" in backends:
         artifacts.extend(rust_artifacts(ordered))
+        artifacts.extend(rust_test_artifacts(ordered, catalog))
         verify_backends.append(
             VerifyBackend(
                 backend_id="rust",
