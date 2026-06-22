@@ -77,6 +77,15 @@ def _cpp_values_runner(profile_render: ProfileRender, catalog: Catalog | None) -
                     if emitted is not None:
                         functions.append(emitted[0])
                         calls.append(emitted[1])
+            elif _is_store(specs[0]):
+                primitive = catalog.primitive(name, unmasked=True)
+                if primitive is None:
+                    continue
+                for index, case in enumerate(primitive.tests):
+                    emitted = _cpp_store_case(name, index, case, specs)
+                    if emitted is not None:
+                        functions.append(emitted[0])
+                        calls.append(emitted[1])
 
     body = "\n\n".join(functions)
     call_lines = "\n".join(f"  failures += {call}();" for call in calls)
@@ -246,6 +255,63 @@ def _cpp_masked_case(
         f'"{case.name}", result, expected, {lanes});'
     )
     lines.append("}")
+    return "\n".join(lines), fn_name
+
+
+def _is_store(spec: LoweredSpecialization) -> bool:
+    """A `store(ptr, v)`: void result, a pointer + a vector, only the `aligned`/`packed` axes.
+    Run against the generic reference, which writes the lane array into a plain buffer."""
+
+    return (
+        spec.result_kind == "void"
+        and tuple(spec.param_kinds) == ("ptr", "v")
+        and spec.mask_policy is None
+        and spec.immediate is None
+        and spec.target is None
+        and not spec.generic_params
+        and not spec.type_params
+        and all(axis_name in ("aligned", "packed") for axis_name, _ in spec.axis)
+    )
+
+
+def _cpp_store_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> tuple[str, str] | None:
+    if case.lanes is None or case.expected_rule is not None:
+        return None
+    base_spelling = _base_spelling(specs, case.type_tag)
+    if base_spelling is None:
+        return None
+    vector_inputs = [arg for arg in case.inputs if arg.kind == "vector"]
+    if len(vector_inputs) != 1:
+        return None
+    lanes = case.lanes
+    offset = case.offset or 0
+    buflen = len(case.expected)
+    if buflen < offset + lanes:
+        return None  # the expected buffer must hold the stored lanes at the offset
+    # Axis values come from the case attrs (the `aligned`/`packed` the case pins), in the spec's
+    # axis order; both bool instantiations are emitted, so either is callable.
+    axis = "".join(f", {case.attrs.get(axis_name, value)}" for axis_name, value in specs[0].axis)
+    fn_name = f"test_{name}_{index}_{_sanitize(case.name)}"
+    literals = ", ".join(_cpp_literal(v, case.type_tag) for v in vector_inputs[0].values)
+    expected = ", ".join(_cpp_literal(v, case.type_tag) for v in case.expected)
+    lines = [
+        f"int {fn_name}() {{",
+        f"  using Vec = tsl::simd<{base_spelling}, tsl::generic<{lanes}>>;",
+        f"  static const {base_spelling} in0[{lanes}] = {{{literals}}};",
+        "  typename Vec::register_type v;",
+        f"  for (std::size_t i = 0; i < {lanes}; ++i) v[i] = in0[i];",
+        f"  {base_spelling} buf[{buflen}] = {{0}};",
+        f"  tsl::{name}<Vec{axis}>(buf + {offset}, v);",
+        f"  static const {base_spelling} expected[{buflen}] = {{{expected}}};",
+        f'  return tsl::test::check_lanes<{base_spelling}>('
+        f'"{case.name}", buf, expected, {buflen});',
+        "}",
+    ]
     return "\n".join(lines), fn_name
 
 

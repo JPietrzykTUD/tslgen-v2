@@ -24,7 +24,7 @@ def test_golden_value_tests_build_and_pass(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["add", "sub", "conflict", "equal"],
+        primitives=["add", "sub", "conflict", "equal", "store"],
         profiles=["avx2"],
         test_harness=True,
     )
