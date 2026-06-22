@@ -128,6 +128,38 @@ pub fn bit_cast<From, To>(value: From) -> To {
     unsafe { core::mem::transmute_copy(&value) }
 }
 
+// Lane arithmetic for the `op<add|sub|mul>` operators: SIMD lane arithmetic WRAPS (modular,
+// matching the hardware and C++). Rust's `+`/`-`/`*` panic on overflow in debug builds, so the
+// integer lanes use the `wrapping_*` ops; float lanes use ordinary arithmetic. The generated
+// per-type impls are monomorphized, so these resolve on the concrete lane type with no bound.
+pub trait LaneArith: Copy {
+    fn tsl_add(self, rhs: Self) -> Self;
+    fn tsl_sub(self, rhs: Self) -> Self;
+    fn tsl_mul(self, rhs: Self) -> Self;
+}
+
+macro_rules! wrapping_lane_arith {
+    ($($t:ty),*) => {
+        $( impl LaneArith for $t {
+            #[inline] fn tsl_add(self, rhs: Self) -> Self { self.wrapping_add(rhs) }
+            #[inline] fn tsl_sub(self, rhs: Self) -> Self { self.wrapping_sub(rhs) }
+            #[inline] fn tsl_mul(self, rhs: Self) -> Self { self.wrapping_mul(rhs) }
+        } )*
+    };
+}
+wrapping_lane_arith!(i8, i16, i32, i64, u8, u16, u32, u64);
+
+macro_rules! float_lane_arith {
+    ($($t:ty),*) => {
+        $( impl LaneArith for $t {
+            #[inline] fn tsl_add(self, rhs: Self) -> Self { self + rhs }
+            #[inline] fn tsl_sub(self, rhs: Self) -> Self { self - rhs }
+            #[inline] fn tsl_mul(self, rhs: Self) -> Self { self * rhs }
+        } )*
+    };
+}
+float_lane_arith!(f32, f64);
+
 // Mask lane values (`mask::lane::all_true` / `all_false`): the all-bits-set / all-bits-clear
 // value of a lane, broadcast by `set1` to build an all-true / all-false lane-bitmask mask.
 // Counterpart to C++ `tsl::mask_lane_all_true`; int is `!0`, float the all-ones-bit NaN.

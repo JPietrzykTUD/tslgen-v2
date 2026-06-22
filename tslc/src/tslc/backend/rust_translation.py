@@ -177,9 +177,6 @@ class _RustSyntax:
     catalog: Catalog
     backend_id: str
 
-    def render_bit_negate(self, value: RenderField) -> RenderText:
-        return render_sequence((literal_text("(!"), value, literal_text(")")))
-
     def frame_return(self, value: RenderField) -> RenderText:
         return common.frame_return(self.catalog, self.backend_id, value)
 

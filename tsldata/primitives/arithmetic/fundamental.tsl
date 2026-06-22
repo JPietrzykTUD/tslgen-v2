@@ -28,7 +28,7 @@ prim<v:=(v,v)> add(left, right):
       arith:
         requires []
         implementation:
-          tsil "emit_return(left + right);"
+          tsil "emit_return(op<add>(left, right));"
     [generic, oneAPIfpga, oneAPIfpgaRTL]:
       arith:
         requires:
@@ -325,7 +325,7 @@ prim<v:=(v,v)> sub(left, right):
       arith:
         requires []
         implementation:
-          tsil "emit_return(left - right);"
+          tsil "emit_return(op<sub>(left, right));"
     [generic, oneAPIfpga, oneAPIfpgaRTL]:
       arith:
         requires:

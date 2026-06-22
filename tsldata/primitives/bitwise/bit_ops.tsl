@@ -164,14 +164,14 @@ prim<v:=(v,v)> binary_andnot(left, right):
       ?i?:
         requires []
         implementation:
-          tsil "emit_return(bit_negate(left) & right);"
+          tsil "emit_return(op<bit_negate>(left) & right);"
       f?:
         requires []
         implementation:
           tsil """
             var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left));
             var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right));
-            var<const_infer>(ures, bit_negate(ua) & ub);
+            var<const_infer>(ures, op<bit_negate>(ua) & ub);
             emit_return(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
           """
     [generic, oneAPIfpga]:

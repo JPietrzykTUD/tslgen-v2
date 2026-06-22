@@ -25,7 +25,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
       arith:
         requires []
         implementation:
-          tsil "emit_return(details::arith_mul(factor1, factor2));"
+          tsil "emit_return(op<mul>(factor1, factor2));"
     [generic, oneAPIfpga]:
       arith:
         requires:

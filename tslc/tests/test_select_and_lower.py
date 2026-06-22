@@ -99,12 +99,13 @@ def test_lower_scalar_add_has_no_unsafe(catalog: Catalog, machine_profiles) -> N
         slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert cpp.base_type_spelling == "int32_t"
-    assert cpp.body_text == "return left + right;"
+    # `op<add>` lowers per backend: C++ keeps wrapping `+`, Rust uses the wrapping lane op.
+    assert cpp.body_text == "return (left + right);"
     rust = Lowerer().lower(
         slot, catalog, create_backend_dialect(catalog, "rust")
     ).specialization
     assert rust.base_type_spelling == "i32"
-    assert rust.body_text == "return left + right;"
+    assert rust.body_text == "return left.tsl_add(right);"
 
 
 def test_hadd_reduction_lowers_for_f64(catalog: Catalog, machine_profiles) -> None:

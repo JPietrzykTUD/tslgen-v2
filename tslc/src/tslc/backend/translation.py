@@ -65,7 +65,6 @@ class BackendTemplateDialect(Protocol):
 
 
 class BackendSyntaxDialect(Protocol):
-    def render_bit_negate(self, value: RenderField) -> RenderText: ...
     def frame_return(self, value: RenderField) -> RenderText: ...
     def render_call(
         self,

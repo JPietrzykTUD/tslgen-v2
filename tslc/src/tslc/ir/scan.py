@@ -20,7 +20,7 @@ KEYWORDS: frozenset[str] = frozenset(
         "emit_return",
         "intrin_compose",
         "intrin",
-        "bit_negate",
+        "op",  # op<NAME>(args) -> a backend-divergent lane operator via an op_<NAME> template
         "call",
         "value",
         "type",

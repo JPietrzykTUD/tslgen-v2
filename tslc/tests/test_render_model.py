@@ -81,7 +81,7 @@ def test_lowered_body_from_text_keeps_source_operator_literal() -> None:
     assert body.render() == "return ~mask;"
 
 
-def test_rust_bit_negate_keyword_lowers_before_body_rendering(
+def test_rust_op_bit_negate_lowers_before_body_rendering(
     catalog: Catalog, machine_profiles
 ) -> None:
     selected = Selector().select_profile(

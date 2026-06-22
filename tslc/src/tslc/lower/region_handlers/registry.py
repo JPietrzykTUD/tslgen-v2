@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from tslc.lower.region_handlers.bitwise import BitNegateLowerer
 from tslc.lower.region_handlers.calls import CallLowerer
 from tslc.lower.region_handlers.casts import CastLowerer
 from tslc.lower.region_handlers.control import (
@@ -16,6 +15,7 @@ from tslc.lower.region_handlers.intrinsics import IntrinComposeLowerer, IntrinLo
 from tslc.lower.region_handlers.io import IoLowerer
 from tslc.lower.region_handlers.masks import MaskLowerer
 from tslc.lower.region_handlers.memory import MemLowerer
+from tslc.lower.region_handlers.operators import OpLowerer
 from tslc.lower.region_handlers.pack import PackLowerer
 from tslc.lower.region_handlers.protocol import RegionLowerer
 from tslc.lower.region_handlers.queries import QueryRegionLowerer
@@ -24,7 +24,7 @@ from tslc.lower.region_handlers.returns import EmitReturnLowerer
 DEFAULT_REGION_LOWERERS: tuple[RegionLowerer, ...] = (
     IntrinComposeLowerer(),
     IntrinLowerer(),
-    BitNegateLowerer(),
+    OpLowerer(),
     VarLowerer(),
     LetLowerer(),
     MaskLowerer(),

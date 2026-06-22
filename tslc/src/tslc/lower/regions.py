@@ -7,7 +7,6 @@ classes from ``tslc.lower.regions``.
 
 from __future__ import annotations
 
-from tslc.lower.region_handlers.bitwise import BitNegateLowerer
 from tslc.lower.region_handlers.calls import CallLowerer
 from tslc.lower.region_handlers.casts import CastLowerer
 from tslc.lower.region_handlers.common import _segment_text, _split_arg_groups, _vector_spelling
@@ -26,6 +25,7 @@ from tslc.lower.region_handlers.intrinsics import (
 from tslc.lower.region_handlers.io import IoLowerer
 from tslc.lower.region_handlers.masks import MaskLowerer
 from tslc.lower.region_handlers.memory import MemLowerer
+from tslc.lower.region_handlers.operators import OpLowerer
 from tslc.lower.region_handlers.pack import PackLowerer
 from tslc.lower.region_handlers.protocol import RegionLowerer, RenderBody
 from tslc.lower.region_handlers.queries import QueryRegionLowerer
@@ -34,7 +34,6 @@ from tslc.lower.region_handlers.returns import EmitReturnLowerer
 
 __all__ = [
     "AssumeAlignedLowerer",
-    "BitNegateLowerer",
     "CallLowerer",
     "CastLowerer",
     "ComposeModifiers",
@@ -48,6 +47,7 @@ __all__ = [
     "LoopLowerer",
     "MaskLowerer",
     "MemLowerer",
+    "OpLowerer",
     "PackLowerer",
     "QueryRegionLowerer",
     "RegionLowerer",
