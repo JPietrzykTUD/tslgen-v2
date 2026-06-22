@@ -10,7 +10,28 @@ from __future__ import annotations
 from pathlib import Path
 
 from tslc.api import generate_project, verify_project, write_artifacts
+from tslc.catalog.builder import CatalogBuilder
+from tslc.catalog.model import Catalog
+from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import has_errors
+from tslc.sources import SourceLoader
+from tslc.syntax.parser import TslParser
+
+
+def _value_test_shape_handled(signature: str) -> bool:
+    """Whether the value-test generator emits cases for a primitive of this signature today:
+    a vector/mask result with all-vector params (golden + differential), a masked value op
+    (one mask param + vectors), or a `store(ptr, v)`."""
+
+    shape = parse_signature(signature)
+    if shape is None:
+        return False
+    result, params = shape.result_kind, tuple(shape.param_kinds)
+    if result in ("v", "m") and all(kind == "v" for kind in params):
+        return True
+    if result == "v" and params.count("m") == 1 and all(k in ("m", "v") for k in params):
+        return True
+    return result == "void" and params == ("ptr", "v")
 
 
 def test_golden_value_tests_build_and_pass(
@@ -42,3 +63,54 @@ def test_golden_value_tests_build_and_pass(
     if cpp_steps:  # cpp toolchain available (else the backend was skipped)
         assert "test" in cpp_steps, cpp_steps
         assert "build-values" in cpp_steps, cpp_steps
+
+
+def test_value_test_coverage_gaps(catalog: Catalog) -> None:
+    """Coverage diagnostic: which primitives carry authored `tests` but no value test is yet
+    generated (an unhandled shape — gather/scatter, conversions, reductions, variadic, …). The
+    list is printed so gaps stay visible; the covered baseline guards against regressions."""
+
+    with_tests: set[str] = set()
+    covered: set[str] = set()
+    for primitive in catalog.primitives:
+        if not primitive.tests:
+            continue
+        with_tests.add(primitive.name)
+        if _value_test_shape_handled(primitive.signature):
+            covered.add(primitive.name)  # a name is covered if any variant's shape is handled
+    gaps = with_tests - covered
+    print(f"\nvalue-test coverage: {len(covered)}/{len(with_tests)} primitives covered; "
+          f"{len(gaps)} not yet generated (unhandled shapes): {sorted(gaps)}")
+    # Regression guard: the shapes we implemented stay covered.
+    assert {"add", "equal", "conflict", "store"} <= covered
+    assert len(covered) >= 20, sorted(covered)
+
+
+def test_value_full_corpus_avx2_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    """Promoted value gate: the WHOLE corpus' golden + differential value tests pass on avx2
+    (C++). Rust is omitted while its toolchain is host-flaky. A failure here is a real value
+    regression (a lane mismatch) — or, rarely, a transient compiler failure under host load."""
+
+    documents = SourceLoader().load(tuple(sorted(data_root.rglob("*.tsl"))))
+    catalog = CatalogBuilder().build(TslParser().parse(documents.documents)).catalog
+    assert catalog is not None
+    names = sorted({primitive.name for primitive in catalog.primitives})
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=names,
+        profiles=["avx2"],
+        backends=("cpp",),
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    report = verify_project(tmp_path, result.rendered.verify, run_value_tests=True)
+    # Fully green: no compile/configure errors and no value-test (ctest) warnings.
+    assert report.diagnostics == (), report.diagnostics
