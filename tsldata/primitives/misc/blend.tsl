@@ -249,8 +249,8 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
               emit_return(
                 call<primitive=blend attrs[mask=pass_through]>(
                   mask,
-                  src,
-                  call<primitive=set_zero[Vec]>()
+                  call<primitive=set_zero[Vec]>(),
+                  src
                 )
               );
             """
@@ -343,8 +343,8 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
               emit_return(
                 call<primitive=blend attrs[mask=pass_through]>(
                   mask,
-                  data,
-                  src
+                  src,
+                  data
                 )
               );
             """

@@ -16,10 +16,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tslc.catalog.model import Catalog, TestCase
+from tslc.catalog.model import Catalog, Primitive, TestCase
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
 from tslc.render._common import asset, slug, text
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 if TYPE_CHECKING:
     from tslc.render.project import ProfileRender
@@ -52,21 +53,30 @@ def _cpp_values_runner(profile_render: ProfileRender, catalog: Catalog | None) -
     if catalog is not None:
         for name in sorted(profile_render.cpp):
             specs = profile_render.cpp[name]
-            primitive = catalog.primitive(name, unmasked=True)
-            if primitive is None or not _is_golden_supported(specs[0]):
-                continue
-            for index, case in enumerate(primitive.tests):
-                emitted = _cpp_golden_case(name, index, case, specs)
-                if emitted is not None:
-                    function, call = emitted
-                    functions.append(function)
-                    calls.append(call)
-                # Differential: only when the round-trip harness is in this project, and only for
-                # vector results today (a mask result's hardware normalization comes later).
-                if harness_ready and specs[0].result_kind == "v":
-                    for diff in _cpp_differential_cases(name, index, case, specs, catalog):
-                        functions.append(diff[0])
-                        calls.append(diff[1])
+            if _is_golden_supported(specs[0]):
+                primitive = catalog.primitive(name, unmasked=True)
+                if primitive is None:
+                    continue
+                for index, case in enumerate(primitive.tests):
+                    emitted = _cpp_golden_case(name, index, case, specs)
+                    if emitted is not None:
+                        functions.append(emitted[0])
+                        calls.append(emitted[1])
+                    # Differential: only when the round-trip harness is in this project, and only
+                    # for vector results today (mask normalization comes later).
+                    if harness_ready and specs[0].result_kind == "v":
+                        for diff in _cpp_differential_cases(name, index, case, specs, catalog):
+                            functions.append(diff[0])
+                            calls.append(diff[1])
+            elif _is_masked_value(specs[0]):
+                primitive = _masked_source(catalog, name, specs[0])
+                if primitive is None:
+                    continue
+                for index, case in enumerate(primitive.tests):
+                    emitted = _cpp_masked_case(name, index, case, specs)
+                    if emitted is not None:
+                        functions.append(emitted[0])
+                        calls.append(emitted[1])
 
     body = "\n\n".join(functions)
     call_lines = "\n".join(f"  failures += {call}();" for call in calls)
@@ -126,7 +136,6 @@ def _cpp_golden_case(
         return None  # arity must match the all-vector signature
     if len(case.expected) != case.lanes:
         return None  # per-lane expected required (buffer-shaped store cases handled later)
-    is_float = case.type_tag.startswith("f")
     fn_name = f"test_{name}_{index}_{_sanitize(case.name)}"
     lanes = case.lanes
     lines = [
@@ -135,7 +144,7 @@ def _cpp_golden_case(
     ]
     arg_names: list[str] = []
     for position, arg in enumerate(vector_inputs):
-        literals = ", ".join(_cpp_literal(v, is_float) for v in arg.values)
+        literals = ", ".join(_cpp_literal(v, case.type_tag) for v in arg.values)
         lines.append(f"  static const {base_spelling} in{position}[{lanes}] = {{{literals}}};")
         lines.append(f"  typename Vec::register_type a{position};")
         lines.append(
@@ -150,13 +159,92 @@ def _cpp_golden_case(
         lines.append(f"  typename Vec::mask_type result = {call};")
         lines.append(f'  return tsl::test::check_mask("{case.name}", result, expected, {lanes});')
     else:
-        expected = ", ".join(_cpp_literal(v, is_float) for v in case.expected)
+        expected = ", ".join(_cpp_literal(v, case.type_tag) for v in case.expected)
         lines.append(f"  static const {base_spelling} expected[{lanes}] = {{{expected}}};")
         lines.append(f"  typename Vec::register_type result = {call};")
         lines.append(
             f'  return tsl::test::check_lanes<{base_spelling}>('
             f'"{case.name}", result, expected, {lanes});'
         )
+    lines.append("}")
+    return "\n".join(lines), fn_name
+
+
+def _is_masked_value(spec: LoweredSpecialization) -> bool:
+    """A masked value op (`add_mask`/`add_maskz`): a vector result with exactly one mask param
+    and the rest vectors, no other axes. The generic reference takes the mask as its `u64`
+    bitset directly, so no mask-materialization primitive is needed."""
+
+    return (
+        spec.result_kind == "v"
+        and spec.mask_policy in ("zero", "pass_through")
+        and spec.param_kinds.count("m") == 1
+        and all(kind in ("m", "v") for kind in spec.param_kinds)
+        and spec.target is None
+        and not spec.axis
+        and spec.immediate is None
+        and not spec.generic_params
+        and not spec.type_params
+    )
+
+
+def _masked_source(
+    catalog: Catalog, emitted_name: str, spec: LoweredSpecialization
+) -> Primitive | None:
+    """The masked source primitive (with its `tests`) for an emitted `_mask`/`_maskz` name: the
+    `<base>` primitive whose `[mask=<policy>]` matches this spec's policy."""
+
+    base = DEFAULT_SUPPORT_POLICY.mask_split_base(emitted_name)
+    for primitive in catalog.primitives_named(base, unmasked=False):
+        if primitive.attributes.get("mask") == spec.mask_policy:
+            return primitive
+    return None
+
+
+def _cpp_masked_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> tuple[str, str] | None:
+    if case.lanes is None or case.expected_rule is not None:
+        return None
+    base_spelling = _base_spelling(specs, case.type_tag)
+    if base_spelling is None or len(case.expected) != case.lanes:
+        return None
+    mask_args = [arg for arg in case.inputs if arg.kind == "mask"]
+    vector_args = [arg for arg in case.inputs if arg.kind == "vector"]
+    param_kinds = specs[0].param_kinds
+    if len(mask_args) != 1 or len(vector_args) != param_kinds.count("v"):
+        return None
+    if mask_args[0].mask_bits is None:
+        return None
+    lanes = case.lanes
+    fn_name = f"test_{name}_{index}_{_sanitize(case.name)}"
+    lines = [
+        f"int {fn_name}() {{",
+        f"  using Vec = tsl::simd<{base_spelling}, tsl::generic<{lanes}>>;",
+        f"  typename Vec::mask_type mask = {mask_args[0].mask_bits}ull;",
+    ]
+    vector_names: list[str] = []
+    for position, arg in enumerate(vector_args):
+        literals = ", ".join(_cpp_literal(v, case.type_tag) for v in arg.values)
+        lines.append(f"  static const {base_spelling} in{position}[{lanes}] = {{{literals}}};")
+        lines.append(f"  typename Vec::register_type v{position};")
+        lines.append(
+            f"  for (std::size_t i = 0; i < {lanes}; ++i) v{position}[i] = in{position}[i];"
+        )
+        vector_names.append(f"v{position}")
+    # Assemble the call in parameter order, routing the mask to its `m` slot by kind.
+    next_vector = iter(vector_names)
+    call_args = ["mask" if kind == "m" else next(next_vector) for kind in param_kinds]
+    expected = ", ".join(_cpp_literal(v, case.type_tag) for v in case.expected)
+    lines.append(f"  static const {base_spelling} expected[{lanes}] = {{{expected}}};")
+    lines.append(f"  typename Vec::register_type result = tsl::{name}<Vec>({', '.join(call_args)});")
+    lines.append(
+        f'  return tsl::test::check_lanes<{base_spelling}>('
+        f'"{case.name}", result, expected, {lanes});'
+    )
     lines.append("}")
     return "\n".join(lines), fn_name
 
@@ -182,7 +270,6 @@ def _cpp_differential_cases(
     if len(vector_inputs) != len(specs[0].param_kinds):
         return []
     lanes = case.lanes
-    is_float = case.type_tag.startswith("f")
     emitted: list[tuple[str, str]] = []
     for spec in specs:
         if spec.uses_sized_vector or spec.extension_name == "scalar":
@@ -201,7 +288,7 @@ def _cpp_differential_cases(
         hw_args: list[str] = []
         ref_args: list[str] = []
         for position, arg in enumerate(vector_inputs):
-            literals = ", ".join(_cpp_literal(v, is_float) for v in arg.values)
+            literals = ", ".join(_cpp_literal(v, case.type_tag) for v in arg.values)
             lines.append(
                 f"  static const {base_spelling} in{position}[{lanes}] = {{{literals}}};"
             )
@@ -243,15 +330,30 @@ def _base_spelling(
     return None
 
 
-def _cpp_literal(token: str, is_float: bool) -> str:
-    upper = token.upper()
-    if upper in ("INFINITY", "+INFINITY"):
-        return "INFINITY"
-    if upper == "-INFINITY":
-        return "-INFINITY"
-    if upper in ("NAN", "+NAN"):
-        return "NAN"
-    return token
+def _cpp_literal(token: str, type_tag: str) -> str:
+    if type_tag.startswith("f"):
+        upper = token.upper()
+        if upper in ("INFINITY", "+INFINITY"):
+            return "INFINITY"
+        if upper == "-INFINITY":
+            return "-INFINITY"
+        if upper in ("NAN", "+NAN", "-NAN"):
+            return "NAN"
+        return token
+    # Integer: wrap to the lane type's range so a token the corpus wrote wider than the type
+    # (e.g. 130 for si8 = -126) is the value actually stored in the lane — and an in-range
+    # literal that a braced array init accepts. This is exactly what the generic oracle reads.
+    bits = _type_bits(type_tag)
+    if bits is None:
+        return token
+    try:
+        value = int(token)
+    except ValueError:
+        return token
+    value %= 1 << bits
+    if type_tag.startswith("s") and value >= (1 << (bits - 1)):
+        value -= 1 << bits
+    return str(value)
 
 
 def _token_truthy(token: str) -> bool:
