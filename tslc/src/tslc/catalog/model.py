@@ -99,6 +99,9 @@ class Primitive:
     # or `("extension", "ToExtension")` (extract). The target is a *second type axis* — its
     # values come from each impl's `to_target_group`. None for ordinary primitives.
     result_target: tuple[str, str] | None = None
+    # Value-correctness cases authored in the `tests:` block. Consumed by the test-generation
+    # render stage (golden anchor against the generic software reference); empty when none.
+    tests: tuple["TestCase", ...] = ()
     source: SourceSpan | None = None
     header_source: SourceSpan | None = None
     signature_source: SourceSpan | None = None
@@ -150,6 +153,62 @@ class GenericParam:
     kind: str  # currently always "bool"
     default: str  # e.g. "true"
     source: SourceSpan | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TestArg:
+    """One input argument of a :class:`TestCase`.
+
+    A ``"vector"`` arg is a per-lane list of numeric literal *tokens* (kept verbatim so float
+    specials like ``INFINITY`` / ``-0.0`` and exact-width integers survive to emit time); it is
+    materialized into a vector via ``from_array``. A ``"mask"`` arg is a single integer bitmask
+    token (bit ``j`` = lane ``j`` active); it is materialized into the target's mask
+    representation via ``to_mask``.
+    """
+
+    kind: str  # "vector" | "mask"
+    values: tuple[str, ...] = ()  # vector: per-lane literal tokens
+    mask_bits: str | None = None  # mask: the bitmask literal token
+
+
+@dataclass(frozen=True, slots=True)
+class TestCase:
+    """One value-correctness case authored in a primitive's `tests:` block.
+
+    When present, ``lanes`` is authoritative: ``inputs``/``expected`` are used verbatim, the
+    generic reference is instantiated at ``generic<lanes>``, and a hardware specialization is
+    exercised only when its width matches. ``expected`` holds per-lane literal tokens (a store
+    case's ``expected`` instead models the destination buffer and may exceed ``lanes``);
+    ``expected_rule`` (e.g. ``"popcnt"``) names a computed oracle in place of literal expected.
+
+    Optional axes pin a case to one specialization or carry operand metadata: ``extension`` (a
+    specific subject extension), ``to_type``/``to_extension`` (representation-change targets),
+    ``index`` (compile-time lane index), ``scale``/``alignment`` and ``offset``/``src_offset``/
+    ``dst_offset`` (gather/scatter and load/store buffer placement), ``attrs`` (the
+    ``aligned``/``packed`` axes).
+    """
+
+    name: str
+    type_tag: str
+    inputs: tuple[TestArg, ...]
+    expected: tuple[str, ...]
+    lane_set: str | None = None
+    lanes: int | None = None
+    extension: str | None = None
+    expected_rule: str | None = None
+    to_type: str | None = None
+    to_extension: str | None = None
+    index: int | None = None
+    offset: int | None = None
+    src_offset: int | None = None
+    dst_offset: int | None = None
+    scale: int | None = None
+    alignment: int | None = None
+    attrs: Mapping[str, str] = field(default_factory=dict)
+    source: SourceSpan | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "attrs", _freeze_mapping(self.attrs))
 
 
 @dataclass(frozen=True, slots=True)
@@ -214,6 +273,13 @@ class Extension:
     vector_register_type_policy: str = ""
     mask_policy: MaskPolicy = field(default_factory=MaskPolicy)  # how masks are represented
     imask_policy: ImaskPolicy = field(default_factory=ImaskPolicy)  # how integral masks are represented
+    # Test-generation config (corpus-declared). ``default_test_target`` gates whether this
+    # extension is exercised as a subject-under-test; ``test_filter_exclude_templates`` drops
+    # named primitive templates (e.g. "scatter"); ``test_sizes_bits`` caps the instantiation
+    # width(s) when a sized extension is itself the subject (modeled now, not yet wired).
+    default_test_target: bool = False
+    test_filter_exclude_templates: frozenset[str] = frozenset()
+    test_sizes_bits: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "compose_prefix", _freeze_mapping(self.compose_prefix))

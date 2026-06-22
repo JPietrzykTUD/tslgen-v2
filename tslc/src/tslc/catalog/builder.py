@@ -19,6 +19,8 @@ from tslc.catalog.model import (
     MaskPolicy,
     Primitive,
     RequirementClause,
+    TestArg,
+    TestCase,
 )
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
@@ -29,6 +31,7 @@ from tslc.syntax.ast import (
     ParsedPrimitiveDeclaration,
     ParsedRequiresValue,
     ParsedTslSourceSpan,
+    ParsedTslAttributeListValue,
     ParsedTslField,
     ParsedTslListValue,
     ParsedTslMapValue,
@@ -134,6 +137,7 @@ def _build_primitives(
     # per-backend dispatch strategy), keyed by the signature parameter name.
     immediate_params = _immediate_params(declaration, diagnostics)
     generic_params = _generic_params(declaration)
+    tests = _test_cases(declaration)
 
     def make(attributes: dict[str, str]) -> Primitive:
         return Primitive(
@@ -146,6 +150,7 @@ def _build_primitives(
             immediate_params=immediate_params,
             generic_params=generic_params,
             result_target=result_target,
+            tests=tests,
             source=_source_span(declaration.source),
             header_source=_source_span(declaration.header_source),
             signature_source=_source_span(declaration.signature_source),
@@ -415,6 +420,15 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
         ),
         mask_policy=_mask_policy(fields.get("mask_type_policy")),
         imask_policy=_imask_policy(fields.get("integral_mask_type_policy")),
+        default_test_target=(_field_text(fields.get("default_test_target")) or "").lower()
+        == "true",
+        test_filter_exclude_templates=_list_text_set(
+            _child(fields.get("test_filter"), "exclude_templates")
+        ),
+        test_sizes_bits=tuple(
+            n for n in (_opt_int(t) for t in _list_text(fields.get("test_sizes_bits")))
+            if n is not None
+        ),
     )
 
 
@@ -447,6 +461,91 @@ def _generic_params(declaration: ParsedPrimitiveDeclaration) -> tuple[GenericPar
         )
         for entry in _children(fields[0].field)
     )
+
+
+def _test_cases(declaration: ParsedPrimitiveDeclaration) -> tuple[TestCase, ...]:
+    """The value-correctness cases from a `tests:` block.
+
+    Each list item is an inline ``{...}`` map. Numeric literals are kept as raw tokens so float
+    specials (``INFINITY``/``-0.0``) and exact-width integers survive to emit time. An ``inputs``
+    item that is itself a list is a per-lane vector arg; a bare scalar is a mask bitmask arg."""
+
+    fields = declaration.fields_by_name("tests")
+    if not fields:
+        return ()
+    value = fields[0].field.value
+    if not isinstance(value, ParsedTslListValue):
+        return ()
+    cases: list[TestCase] = []
+    for item in value.items:
+        if not isinstance(item, ParsedTslMapValue):
+            continue
+        entries = {entry.key.text: entry for entry in item.entries}
+        case_field = entries.get("case")
+        cases.append(
+            TestCase(
+                name=_field_text(entries.get("test_name")) or "",
+                type_tag=_field_text(entries.get("type")) or "",
+                inputs=_test_inputs(_child(case_field, "inputs")),
+                expected=_list_text(_child(case_field, "expected")),
+                lane_set=_field_text(entries.get("lane_set")),
+                lanes=_opt_int(_field_text(entries.get("lanes"))),
+                extension=_field_text(entries.get("extension")),
+                expected_rule=_field_text(entries.get("expected_rule")),
+                to_type=_field_text(entries.get("to_type")),
+                to_extension=_field_text(entries.get("to_extension")),
+                index=_opt_int(_field_text(entries.get("index"))),
+                offset=_opt_int(_field_text(entries.get("offset"))),
+                src_offset=_opt_int(_field_text(entries.get("src_offset"))),
+                dst_offset=_opt_int(_field_text(entries.get("dst_offset"))),
+                scale=_opt_int(_field_text(entries.get("scale"))),
+                alignment=_opt_int(_field_text(entries.get("alignment"))),
+                attrs=_attr_map(entries.get("attrs")),
+                source=_source_span(item.source),
+            )
+        )
+    return tuple(cases)
+
+
+def _test_inputs(field: ParsedTslField | None) -> tuple[TestArg, ...]:
+    if field is None or not isinstance(field.value, ParsedTslListValue):
+        return ()
+    args: list[TestArg] = []
+    for item in field.value.items:
+        if isinstance(item, ParsedTslListValue):
+            args.append(
+                TestArg(
+                    kind="vector",
+                    values=tuple(
+                        x.text for x in item.items if isinstance(x, ParsedTslScalarValue)
+                    ),
+                )
+            )
+        elif isinstance(item, ParsedTslScalarValue):
+            args.append(TestArg(kind="mask", mask_bits=item.text))
+    return tuple(args)
+
+
+def _attr_map(field: ParsedTslField | None) -> dict[str, str]:
+    if field is None or not isinstance(field.value, ParsedTslAttributeListValue):
+        return {}
+    return {
+        attribute.key.text: (
+            attribute.value.text
+            if isinstance(attribute.value, ParsedTslScalarValue)
+            else ""
+        )
+        for attribute in field.value.attributes
+    }
+
+
+def _opt_int(text: str | None) -> int | None:
+    if text is None:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return None
 
 
 def _result_target(

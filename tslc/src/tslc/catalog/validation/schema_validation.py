@@ -20,6 +20,8 @@ from tslc.syntax.ast import (
     ParsedPrimitiveDeclaration,
     ParsedTslAttribute,
     ParsedTslField,
+    ParsedTslListValue,
+    ParsedTslMapValue,
 )
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
@@ -274,6 +276,7 @@ def _validate_primitive(
     _validate_generic_params(declaration, diagnostics)
     _validate_immediate_params(declaration, diagnostics)
     _validate_return_type(declaration, diagnostics)
+    _validate_tests(declaration, diagnostics)
     validate_requires(declaration, diagnostics)
 
 
@@ -339,6 +342,140 @@ def _validate_generic_params(
                     f"generic parameter kind {kind!r}",
                     sorted(_KNOWN_GENERIC_PARAM_KINDS),
                 )
+
+
+_KNOWN_TEST_FIELDS = frozenset(
+    {
+        "test_name",
+        "type",
+        "lane_set",
+        "lanes",
+        "extension",
+        "expected_rule",
+        "to_type",
+        "to_extension",
+        "index",
+        "offset",
+        "src_offset",
+        "dst_offset",
+        "scale",
+        "alignment",
+        "attrs",
+        "case",
+    }
+)
+# `lanes`/`lane_set` are optional (some cases derive width from the extension or a size suffix),
+# so only these three are universally required.
+_REQUIRED_TEST_FIELDS = ("test_name", "type", "case")
+
+
+def _validate_tests(
+    declaration: ParsedPrimitiveDeclaration,
+    diagnostics: list[Diagnostic],
+) -> None:
+    """Validate the internal structure of a `tests:` block.
+
+    Structural problems (wrong shape, unknown/missing keys, non-positive ``lanes``) are errors; a
+    vector input whose lane count disagrees with ``lanes`` is a warning (``expected`` length is
+    result-kind dependent — a reduction returns a scalar — so it is not length-checked here)."""
+
+    for field in declaration.fields_by_name("tests"):
+        value = field.field.value
+        if not isinstance(value, ParsedTslListValue):
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-TESTS-NOT-LIST",
+                    message=f"primitive {declaration.name!r}: `tests` must be a list of cases",
+                    source=source_span(field.field.source),
+                )
+            )
+            continue
+        for item in value.items:
+            if not isinstance(item, ParsedTslMapValue):
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-TEST-NOT-MAP",
+                        message=f"primitive {declaration.name!r}: each test case must be a `{{...}}` map",
+                        source=source_span(item.source),
+                    )
+                )
+                continue
+            _validate_test_case(declaration.name, item, diagnostics)
+
+
+def _validate_test_case(
+    primitive_name: str,
+    item: ParsedTslMapValue,
+    diagnostics: list[Diagnostic],
+) -> None:
+    entries = {entry.key.text: entry for entry in item.entries}
+    test_name = field_text(entries.get("test_name"))
+    owner = (
+        f"primitive {primitive_name!r} test {test_name!r}"
+        if test_name is not None
+        else f"primitive {primitive_name!r} test"
+    )
+    for key, entry in entries.items():
+        if key not in _KNOWN_TEST_FIELDS:
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-UNKNOWN-TEST-FIELD",
+                    message=f"{owner}: unknown field {key!r}",
+                    source=source_span(entry.source),
+                )
+            )
+    for required in _REQUIRED_TEST_FIELDS:
+        if required not in entries:
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-TEST-MISSING-FIELD",
+                    message=f"{owner}: missing required field {required!r}",
+                    source=source_span(item.source),
+                )
+            )
+    lanes = _test_lane_count(entries.get("lanes"))
+    if "lanes" in entries and lanes is None:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-TEST-BAD-LANES",
+                message=f"{owner}: `lanes` must be a positive integer",
+                source=source_span(entries["lanes"].source),
+            )
+        )
+    case = entries.get("case")
+    if case is not None:
+        _validate_known_fields(
+            children(case),
+            frozenset({"inputs", "expected"}),
+            diagnostics,
+            owner=f"{owner} case",
+        )
+        for required in ("inputs", "expected"):
+            if child(case, required) is None:
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-TEST-MISSING-FIELD",
+                        message=f"{owner}: case is missing {required!r}",
+                        source=source_span(case.source),
+                    )
+                )
+
+
+def _test_lane_count(field: ParsedTslField | None) -> int | None:
+    text = field_text(field)
+    if text is None:
+        return None
+    try:
+        lanes = int(text)
+    except ValueError:
+        return None
+    return lanes if lanes > 0 else None
 
 
 def _validate_immediate_params(
