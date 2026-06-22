@@ -213,12 +213,15 @@ class Selector:
                 continue
             if not catalog.type_group_contains(implementation.type_group, type_tag):
                 continue
-            # Second-axis match: the body's `to_target_group` must contain the target slot. The
-            # `==`/`*` markers never contain a concrete tag (their members are the literal marker),
-            # so those bodies stay unselected — the concrete sibling blocks cover every emitted slot.
-            if to_target is not None and not (
-                implementation.to_target_group is not None
-                and catalog.type_group_contains(implementation.to_target_group, to_target)
+            # Second-axis match: a body with a `to_target_group` is kept only if that group contains
+            # the target (the `==`/`*` markers contain no concrete tag, so they stay unselected). A
+            # body with NO `to_target_group` is a target-generic catch-all (it spells the target
+            # symbolically via `as_base`/`window_base`) and matches ANY target — a fallback behind
+            # the more type-specific dedicated bodies.
+            if (
+                to_target is not None
+                and implementation.to_target_group is not None
+                and not catalog.type_group_contains(implementation.to_target_group, to_target)
             ):
                 continue
             flags = _applicable_flags(catalog, implementation, type_tag)

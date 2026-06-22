@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.catalog.model import Catalog, Primitive, TestCase
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
@@ -999,7 +1000,9 @@ def _rust_golden_case(
             f"        for i in 0..{lanes} {{ a{position}[i] = in{position}[i]; }}"
         )
         arg_names.append(f"a{position}")
-    call = f"{name}::<Vec>({', '.join(arg_names)})"
+    # A primitive whose name is a Rust keyword (`mod`) is called via the same raw identifier the
+    # wrapper is defined with (`r#mod`), not the bare keyword.
+    call = f"{rust_raw_identifier(name)}::<Vec>({', '.join(arg_names)})"
     if specs[0].result_kind == "m":
         bits = ", ".join("true" if _token_truthy(v) else "false" for v in case.expected)
         lines.append(f"        let expected: [bool; {lanes}] = [{bits}];")

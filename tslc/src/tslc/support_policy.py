@@ -71,6 +71,32 @@ class SupportPolicy:
     def size_parameter_name(self, extension: Extension) -> str:
         return extension.size_parameter_name or self.default_size_parameter_name
 
+    def windowed_lane_parameter(
+        self, extension: Extension, from_type: str, to_type: str
+    ) -> str:
+        """The sized vector's lane-count term for a *windowing* base change (`convert_up`/`down`):
+        the output keeps the total width, so the lane count scales by the byte ratio —
+        ``(LANES * from_bits / to_bits)`` (e.g. i8->i16 -> ``(LANES * 8 / 16)``). Same-width gives
+        plain ``LANES``. C++ accepts this const expression in lane-count position; stable Rust does
+        not (the window query skips there). Lane-PRESERVING base changes (`cast`/`reinterpret`)
+        keep plain ``LANES`` and must NOT use this."""
+        base = self.size_parameter_name(extension)
+        from_bits = self.type_bit_width_or_default(from_type)
+        to_bits = self.type_bit_width_or_default(to_type)
+        if from_bits == to_bits:
+            return base
+        return f"({base} * {from_bits} / {to_bits})"
+
+    def windowed_lane_count(self, from_type: str, to_type: str, lanes: int) -> int:
+        """The concrete windowed lane count for a width-changing convert at a fixed source
+        ``lanes`` — the integer value of :meth:`windowed_lane_parameter` with ``LANES`` bound to
+        ``lanes`` (e.g. i8->i16 at 8 lanes -> ``8 * 8 / 16`` = 4). Used by the smoke to instantiate
+        the windowed target at a concrete count, computed from the type widths rather than rewriting
+        the symbolic parameter string."""
+        from_bits = self.type_bit_width_or_default(from_type)
+        to_bits = self.type_bit_width_or_default(to_type)
+        return lanes * from_bits // to_bits
+
     def register_is_base(self, extension: Extension) -> bool:
         return extension.vector_register_type_policy == self.scalar_register_policy_kind
 

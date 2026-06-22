@@ -106,9 +106,28 @@ def concrete_target_candidates(
         return (None,)
     dim = primitive.result_target[0]
     chain = catalog.extension_chain(extension_name)
+    # If this extension has no target-bearing body of its own for the source type — only a
+    # target-generic catch-all (a body with no `ToBase`/`ToExtension` level, which spells the
+    # target symbolically and works for ANY target, e.g. the generic vector's software
+    # `convert_*` loop) — it draws the primitive's GLOBAL target set (the targets declared by the
+    # other bodies). Extensions that declare their own targets keep exactly their chain's set.
+    has_own_target = any(
+        impl.extension in chain
+        and impl.to_target_group is not None
+        and catalog.type_group_contains(impl.type_group, type_tag)
+        for impl in primitive.implementations
+    )
+    has_catch_all = not has_own_target and any(
+        impl.extension in chain
+        and impl.to_target_group is None
+        and catalog.type_group_contains(impl.type_group, type_tag)
+        for impl in primitive.implementations
+    )
     targets: set[str] = set()
     for implementation in primitive.implementations:
-        if implementation.extension not in chain or implementation.to_target_group is None:
+        if implementation.to_target_group is None:
+            continue
+        if not (has_catch_all or implementation.extension in chain):
             continue
         if not catalog.type_group_contains(implementation.type_group, type_tag):
             continue

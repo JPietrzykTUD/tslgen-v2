@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <type_traits>
 
@@ -28,6 +29,25 @@ inline To bit_cast(const From &src) {
     To dst;
     std::memcpy(&dst, &src, sizeof(To));
     return dst;
+}
+
+// Saturating narrowing cast (`cast<saturating>`, used by `convert_down`): clamp the value to the
+// target type's representable range, then convert. Used only where the source is wider than the
+// target (a narrowing convert), so the bounds convert exactly into `From` for the comparison.
+// Counterpart to the Rust `details::saturating_cast_value`. `lowest()` is the most-negative finite
+// value (int min / float -max); an unsigned target's lower bound is 0 and is never exceeded.
+template <class To, class From>
+inline To saturating_cast(From value) {
+    using ToLim = std::numeric_limits<To>;
+    if constexpr (std::is_signed_v<From> || std::is_floating_point_v<From>) {
+        if (value < static_cast<From>(ToLim::lowest())) {
+            return ToLim::lowest();
+        }
+    }
+    if (value > static_cast<From>(ToLim::max())) {
+        return ToLim::max();
+    }
+    return static_cast<To>(value);
 }
 
 // Mask lane values (`mask::lane::all_true` / `all_false`): the all-bits-set / all-bits-clear

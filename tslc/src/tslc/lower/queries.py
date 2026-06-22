@@ -487,6 +487,47 @@ class AsBaseQuery:
         return _vector_value(args[0].type_tag, context)
 
 
+class WindowBaseQuery:
+    """``vector::window_base(base)`` -> the current vector re-based to ``base`` at constant total
+    WIDTH — a *windowing* convert's output (``convert_up``/``convert_down``). For a fixed-width
+    register this equals ``as_base`` (the lane count already follows the register width). For the
+    SIZED generic vector the lane count scales by the byte ratio: i8->i16 turns ``generic<LANES>``
+    into ``generic<(LANES * 8 / 16)>`` (half as many, twice as wide, same bits). This is the ONE
+    place that scales a sized lane count; lane-PRESERVING base changes (``cast``/``reinterpret``,
+    same element count) use ``vector::as_base`` instead. Stable Rust can't spell a const-generic
+    expression in lane-count position, so a width-changing window is skipped there (the
+    ``unroll_variants`` monomorphization over a finite size set covers Rust later)."""
+
+    head = "vector::window_base"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 1 or not isinstance(args[0], TypeValue):
+            return None
+        to_base = args[0].type_tag
+        extension = context.env.extension
+        if not DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
+            return _vector_value(to_base, context)  # fixed/scalar: lane count derived from bits
+        lane_parameter = DEFAULT_SUPPORT_POLICY.windowed_lane_parameter(
+            extension, context.env.type_tag, to_base
+        )
+        if lane_parameter == DEFAULT_SUPPORT_POLICY.size_parameter_name(extension):
+            return _vector_value(to_base, context)  # same width: lane count unchanged
+        if context.env.backend.backend_id == "rust":
+            context.effects.skip(
+                "TSL-LOWER-SIZED-WIDTH-CHANGE",
+                f"sized-vector windowing convert ({context.env.type_tag} -> {to_base}) needs a "
+                "const-generic expression unsupported on stable Rust; skipped pending unroll",
+            )
+            return _vector_value(to_base, context)  # benign placeholder; the spec is dropped
+        return VectorValue(
+            base_tag=to_base,
+            extension_isa=extension.isa_name,
+            lanes=None,
+            uses_sized_vector=True,
+            lane_parameter=lane_parameter,
+        )
+
+
 class VectorAsQuery:
     """``vector::as(ext, base)`` -> the given base under the named extension."""
 
@@ -550,6 +591,7 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     VectorLengthQuery(),
     AsExtensionQuery(),
     AsBaseQuery(),
+    WindowBaseQuery(),
     VectorAsQuery(),
     BaseGenericQuery(),
     GenericLengthQuery(),

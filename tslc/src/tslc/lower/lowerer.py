@@ -70,6 +70,10 @@ class TargetVector:
     base_spelling: str  # the target's base type spelling — for core registration
     uses_sized_vector: bool = False
     lane_parameter: str | None = None
+    # True when the sized lane count was windowed (scaled by the byte ratio) for a width-changing
+    # convert — so a concrete instantiation (the smoke) computes the scaled count from type widths
+    # rather than reusing the source lane count.
+    windowed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -530,7 +534,19 @@ def _resolve_target_vector(
             )
         scope.bind_target_type_symbol(alias, selected.to_target)
         scope.bind_target_type_symbol("ToType", selected.to_target)
-        lane_parameter = support.size_parameter_name(selected.extension)
+        # A WINDOWING convert (`direction` attribute) keeps the total width constant, so its target
+        # lane count scales by the byte ratio — matching the body's `window_base(ToBase)` output so
+        # the declared target type equals the body's result. Lane-preserving repr-changes
+        # (cast/reinterpret, load_convert_up) keep plain `LANES`. (On Rust the body's window_base
+        # skips the spec, so the scaled const expression is only ever emitted for C++.)
+        windowing = "direction" in selected.primitive.attributes
+        lane_parameter = (
+            support.windowed_lane_parameter(
+                selected.extension, selected.type_tag, selected.to_target
+            )
+            if windowing
+            else support.size_parameter_name(selected.extension)
+        )
         return TargetVector(
             vector_spelling=backend.types.sized_vector_spelling(
                 to_base_spelling, lane_parameter
@@ -546,6 +562,7 @@ def _resolve_target_vector(
             base_spelling=to_base_spelling,
             uses_sized_vector=True,
             lane_parameter=lane_parameter,
+            windowed=windowing,
         )
     if dim == RESULT_DIM_BASE:
         # base dim: same extension, replace the element type with the target tag.

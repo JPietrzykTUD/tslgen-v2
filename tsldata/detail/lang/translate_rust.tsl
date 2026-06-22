@@ -752,7 +752,6 @@ translation rust:
   loop_unroll "// unroll {count}"
   loop_range "for {var} in ({start}..{end}).step_by({step})"
   cast_static "({expr} as {type})"
-  cast_saturating "crate::tsl::saturating_cast_value::<_, {type}>({expr})"
   cast_reinterpret "crate::tsl_core::bit_cast::<_, {type}>({expr})"
   cast_bitcast "crate::tsl_core::bit_cast::<_, {type}>({expr})"
   cast_const "({expr} as {type})"

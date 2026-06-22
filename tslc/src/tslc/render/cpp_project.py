@@ -154,13 +154,24 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
                 vec = f"tsl::simd<{spec.base_type_spelling}, tsl::generic<8>>"
             else:
                 vec = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
-            # A sized-vector representation-change target carries a symbolic lane parameter; the smoke
-            # instantiates the source vector with a concrete lane count, so spell the target with
-            # the same concrete count (constructed from its typed base, not a string rewrite).
+            # A sized-vector representation-change target is instantiated at a concrete lane count
+            # matching the source's. A lane-PRESERVING target (cast/reinterpret, load_convert_up)
+            # keeps the same count; a WINDOWING convert's count scales by the byte ratio — computed
+            # from the source/target type widths (e.g. i8->i16 at 8 lanes -> 4), matching the impl
+            # that deduces LANES from the source. Computed from typed widths, not a string rewrite.
             if spec.target is None:
                 target_spelling = None
             elif spec.target.uses_sized_vector:
-                target_spelling = f"tsl::simd<{spec.target.base_spelling}, tsl::generic<8>>"
+                target_lanes = (
+                    DEFAULT_SUPPORT_POLICY.windowed_lane_count(
+                        spec.type_tag, spec.target.base_tag, 8
+                    )
+                    if spec.target.windowed
+                    else 8
+                )
+                target_spelling = (
+                    f"tsl::simd<{spec.target.base_spelling}, tsl::generic<{target_lanes}>>"
+                )
             else:
                 target_spelling = spec.target.vector_spelling
             targs = (
