@@ -62,9 +62,9 @@ def _cpp_values_runner(profile_render: ProfileRender, catalog: Catalog | None) -
                     if emitted is not None:
                         functions.append(emitted[0])
                         calls.append(emitted[1])
-                    # Differential: only when the round-trip harness is in this project, and only
-                    # for vector results today (mask normalization comes later).
-                    if harness_ready and specs[0].result_kind == "v":
+                    # Differential: only when the round-trip harness is in this project. Vector
+                    # results compare lane arrays; mask results compare via `to_integral`.
+                    if harness_ready:
                         for diff in _cpp_differential_cases(name, index, case, specs, catalog):
                             functions.append(diff[0])
                             calls.append(diff[1])
@@ -366,17 +366,24 @@ def _cpp_differential_cases(
             )
             hw_args.append(f"tsl::from_array<Hw>(hin{position})")
             ref_args.append(f"r{position}")
-        lines.append(
-            f"  typename tsl::array_for<Hw>::type hout = "
-            f"tsl::to_array<Hw>(tsl::{name}<Hw>({', '.join(hw_args)}));"
-        )
-        lines.append(
-            f"  typename Ref::register_type ref = tsl::{name}<Ref>({', '.join(ref_args)});"
-        )
-        lines.append(
-            f'  return tsl::test::check_match<{base_spelling}>('
-            f'"{fn_name}", hout, ref, {lanes});'
-        )
+        hw_call = f"tsl::{name}<Hw>({', '.join(hw_args)})"
+        ref_call = f"tsl::{name}<Ref>({', '.join(ref_args)})"
+        if specs[0].result_kind == "m":
+            # Normalize the hardware mask to its integer bitset; the generic mask already is one.
+            lines.append(f"  auto hw = tsl::to_integral<Hw>({hw_call});")
+            lines.append(f"  typename Ref::mask_type ref = {ref_call};")
+            lines.append(
+                f'  return tsl::test::check_mask_match("{fn_name}", hw, ref, {lanes});'
+            )
+        else:
+            lines.append(
+                f"  typename tsl::array_for<Hw>::type hout = tsl::to_array<Hw>({hw_call});"
+            )
+            lines.append(f"  typename Ref::register_type ref = {ref_call};")
+            lines.append(
+                f'  return tsl::test::check_match<{base_spelling}>('
+                f'"{fn_name}", hout, ref, {lanes});'
+            )
         lines.append("}")
         emitted.append(("\n".join(lines), fn_name))
     return emitted

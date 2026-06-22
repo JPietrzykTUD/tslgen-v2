@@ -83,6 +83,23 @@ inline int check_match(const char *name, const A &actual, const B &reference, st
     return failures;
 }
 
+// Differential mask check: compare two integer-bitset masks (the hardware mask normalized via
+// `to_integral` vs the generic reference's bitset) lane by lane. Representation-neutral.
+template <class A, class B>
+inline int check_mask_match(const char *name, A hw, B reference, std::size_t n) {
+    int failures = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        const bool got = ((static_cast<std::uint64_t>(hw) >> i) & 1u) != 0;
+        const bool ref = ((static_cast<std::uint64_t>(reference) >> i) & 1u) != 0;
+        if (got != ref) {
+            std::fprintf(stderr, "FAIL %s lane %zu: reference %s, hardware %s\n", name, i,
+                         ref ? "set" : "clear", got ? "set" : "clear");
+            ++failures;
+        }
+    }
+    return failures;
+}
+
 // Compare a mask result against a per-lane set/clear expectation. The generic reference's mask
 // is an integer bitset (bit `i` = lane `i`); `expected_set[i]` is 1 if lane `i` should be set.
 // Representation-neutral: only which lanes are set is asserted, never the bit width/pattern.
