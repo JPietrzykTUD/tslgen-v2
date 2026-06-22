@@ -63,5 +63,23 @@ inline int check_lanes(const char *name, const Actual &actual, const T *expected
     return failures;
 }
 
+// Compare a mask result against a per-lane set/clear expectation. The generic reference's mask
+// is an integer bitset (bit `i` = lane `i`); `expected_set[i]` is 1 if lane `i` should be set.
+// Representation-neutral: only which lanes are set is asserted, never the bit width/pattern.
+template <class Mask>
+inline int check_mask(const char *name, Mask mask, const int *expected_set, std::size_t n) {
+    int failures = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        const bool got = ((static_cast<std::uint64_t>(mask) >> i) & 1u) != 0;
+        const bool want = expected_set[i] != 0;
+        if (got != want) {
+            std::fprintf(stderr, "FAIL %s lane %zu: expected %s, got %s\n", name, i,
+                         want ? "set" : "clear", got ? "set" : "clear");
+            ++failures;
+        }
+    }
+    return failures;
+}
+
 }  // namespace test
 }  // namespace tsl

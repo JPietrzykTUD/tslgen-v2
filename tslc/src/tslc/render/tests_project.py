@@ -50,7 +50,7 @@ def _cpp_values_runner(profile_render: ProfileRender, catalog: Catalog | None) -
         for name in sorted(profile_render.cpp):
             specs = profile_render.cpp[name]
             primitive = catalog.primitive(name, unmasked=True)
-            if primitive is None or not _is_golden_elementwise(specs[0]):
+            if primitive is None or not _is_golden_supported(specs[0]):
                 continue
             for index, case in enumerate(primitive.tests):
                 emitted = _cpp_golden_case(name, index, case, specs)
@@ -83,12 +83,14 @@ def _cpp_values_runner(profile_render: ProfileRender, catalog: Catalog | None) -
     )
 
 
-def _is_golden_elementwise(spec: LoweredSpecialization) -> bool:
-    """A lane-local primitive the golden generator handles today: vector result, all-vector
-    params, and none of the extra axes (mask/immediate/axis/generic-params/repr-change)."""
+def _is_golden_supported(spec: LoweredSpecialization) -> bool:
+    """A primitive the golden generator handles today: a vector OR mask result with all-vector
+    params and none of the extra axes (masked variant/immediate/axis/generic-params/repr-change).
+    Both run against the generic reference — a vector result is read back as an array, a mask
+    result as the reference's integer-bitset mask."""
 
     return (
-        spec.result_kind == "v"
+        spec.result_kind in ("v", "m")
         and all(kind == "v" for kind in spec.param_kinds)
         and spec.target is None
         and spec.mask_policy is None
@@ -113,6 +115,8 @@ def _cpp_golden_case(
     vector_inputs = [arg for arg in case.inputs if arg.kind == "vector"]
     if len(vector_inputs) != len(specs[0].param_kinds):
         return None  # arity must match the all-vector signature
+    if len(case.expected) != case.lanes:
+        return None  # per-lane expected required (buffer-shaped store cases handled later)
     is_float = case.type_tag.startswith("f")
     fn_name = f"test_{name}_{index}_{_sanitize(case.name)}"
     lanes = case.lanes
@@ -129,13 +133,21 @@ def _cpp_golden_case(
             f"  for (std::size_t i = 0; i < {lanes}; ++i) a{position}[i] = in{position}[i];"
         )
         arg_names.append(f"a{position}")
-    expected = ", ".join(_cpp_literal(v, is_float) for v in case.expected)
-    lines.append(f"  static const {base_spelling} expected[{lanes}] = {{{expected}}};")
-    lines.append(f"  typename Vec::register_type result = tsl::{name}<Vec>({', '.join(arg_names)});")
-    lines.append(
-        f'  return tsl::test::check_lanes<{base_spelling}>('
-        f'"{case.name}", result, expected, {lanes});'
-    )
+    call = f"tsl::{name}<Vec>({', '.join(arg_names)})"
+    if specs[0].result_kind == "m":
+        # A mask result: the reference's mask is an integer bitset; assert which lanes are set.
+        expected_set = ", ".join("1" if _token_truthy(v) else "0" for v in case.expected)
+        lines.append(f"  static const int expected[{lanes}] = {{{expected_set}}};")
+        lines.append(f"  typename Vec::mask_type result = {call};")
+        lines.append(f'  return tsl::test::check_mask("{case.name}", result, expected, {lanes});')
+    else:
+        expected = ", ".join(_cpp_literal(v, is_float) for v in case.expected)
+        lines.append(f"  static const {base_spelling} expected[{lanes}] = {{{expected}}};")
+        lines.append(f"  typename Vec::register_type result = {call};")
+        lines.append(
+            f'  return tsl::test::check_lanes<{base_spelling}>('
+            f'"{case.name}", result, expected, {lanes});'
+        )
     lines.append("}")
     return "\n".join(lines), fn_name
 
@@ -158,6 +170,17 @@ def _cpp_literal(token: str, is_float: bool) -> str:
     if upper in ("NAN", "+NAN"):
         return "NAN"
     return token
+
+
+def _token_truthy(token: str) -> bool:
+    """Whether a mask-expected lane token denotes a set lane (any nonzero all-ones encoding)."""
+    try:
+        return int(token) != 0
+    except ValueError:
+        try:
+            return float(token) != 0.0
+        except ValueError:
+            return True
 
 
 def _sanitize(text_value: str) -> str:

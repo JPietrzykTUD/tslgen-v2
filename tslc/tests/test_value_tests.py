@@ -16,11 +16,13 @@ from tslc.diagnostics import has_errors
 def test_golden_value_tests_build_and_pass(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
-    # Elementwise primitives whose golden cases run against the generic software reference.
+    # Golden cases run against the generic software reference: vector results (`add`/`sub`/the
+    # cross-lane `conflict`) read back as arrays, a mask result (`equal`) read as the reference's
+    # integer-bitset mask.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["add", "sub", "conflict"],
+        primitives=["add", "sub", "conflict", "equal"],
         profiles=["avx2"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
