@@ -39,6 +39,8 @@ def _value_test_shape_handled(signature: str) -> bool:
         return True
     if result == "s[]" and params == ("v",):  # to_array
         return True
+    if result == "v" and params == ("s",):  # set1 broadcast
+        return True
     return result == "void" and params == ("ptr", "v")
 
 
