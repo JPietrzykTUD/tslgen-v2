@@ -33,6 +33,8 @@ def _value_test_shape_handled(signature: str) -> bool:
         return True
     if result == "s" and params == ("v",):  # horizontal reduction
         return True
+    if result == "v" and params == ("ptr",):  # load
+        return True
     return result == "void" and params == ("ptr", "v")
 
 
