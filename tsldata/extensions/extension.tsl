@@ -492,6 +492,11 @@ extension generic:
   size_parameter:
     kind "lanes"
     name "LANES"
+  # The total-bit widths the generic vector is instantiated/unrolled at (multiples of 128).
+  # Bounds the monomorphized variant matrix for size-changing primitives that opt into
+  # `unroll_variants`; lane-local primitives stay parametric over LANES regardless.
+  size_bits [128, 256, 512]
+  unroll_variants false
   vector_register_type_policy:
     kind "fixed_array"
     element "base_type"

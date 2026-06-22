@@ -341,6 +341,10 @@ def _resolve_extension_inheritance(
             vector_register_type_policy=(
                 ext.vector_register_type_policy or parent.vector_register_type_policy
             ),
+            # A sized extension inheriting another (oneAPIfpga inherits generic) shares its size
+            # ladder / unroll default unless it states its own.
+            size_bits=ext.size_bits or parent.size_bits,
+            unroll_variants=ext.unroll_variants or parent.unroll_variants,
             mask_policy=ext.mask_policy if ext.mask_policy != MaskPolicy() else parent.mask_policy,
             imask_policy=(
                 ext.imask_policy if ext.imask_policy != ImaskPolicy() else parent.imask_policy
@@ -429,6 +433,11 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
             n for n in (_opt_int(t) for t in _list_text(fields.get("test_sizes_bits")))
             if n is not None
         ),
+        size_bits=tuple(
+            n for n in (_opt_int(t) for t in _list_text(fields.get("size_bits")))
+            if n is not None
+        ),
+        unroll_variants=(_field_text(fields.get("unroll_variants")) or "").lower() == "true",
     )
 
 

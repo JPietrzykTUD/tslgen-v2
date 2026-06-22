@@ -280,6 +280,14 @@ class Extension:
     default_test_target: bool = False
     test_filter_exclude_templates: frozenset[str] = frozenset()
     test_sizes_bits: tuple[int, ...] = ()
+    # For a sized extension (the generic vector): the concrete total-bit widths it is
+    # instantiated/unrolled at, e.g. ``(128, 256, 512)``. Empty means unconstrained. Lets a
+    # size-changing primitive (e.g. ``convert_up``) be monomorphized over a finite set instead of
+    # a ``LANES`` template — sidestepping const-generic-expression types that stable Rust forbids.
+    size_bits: tuple[int, ...] = ()
+    # Default for whether a sized extension's impls are unrolled over ``size_bits`` (monomorphized)
+    # rather than emitted once as a ``LANES`` template. Off by default; a single impl opts in.
+    unroll_variants: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "compose_prefix", _freeze_mapping(self.compose_prefix))
