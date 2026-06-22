@@ -5,13 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import Extension
+from tslc.catalog.model import Catalog, Extension
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact, ArtifactSet
 from tslc.output.verify import VerifyBackend, VerifyProject
 from tslc.render.cpp_project import cpp_artifacts, cpp_verify_profiles
 from tslc.render.emitted_names import finalize_emitted_names
 from tslc.render.rust_project import rust_artifacts, rust_verify_profiles
+from tslc.render.tests_project import cpp_test_artifacts
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
@@ -37,6 +38,7 @@ def render_project(
     profiles: tuple[ProfileRender, ...],
     backends: tuple[str, ...] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
     immediate_split_names: frozenset[str] = frozenset(),
+    catalog: Catalog | None = None,
 ) -> RenderedProject:
     ordered = tuple(
         replace(
@@ -51,6 +53,7 @@ def render_project(
 
     if "cpp" in backends:
         artifacts.extend(cpp_artifacts(ordered))
+        artifacts.extend(cpp_test_artifacts(ordered, catalog))
         verify_backends.append(
             VerifyBackend(
                 backend_id="cpp",

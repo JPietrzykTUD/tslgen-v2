@@ -201,6 +201,7 @@ class _GenerationSession:
                 tuple(self.profile_renders),
                 self.request.backends,
                 self.inputs.imm_split_names,
+                catalog=self.inputs.catalog,
             )
             if self.profile_renders
             else None

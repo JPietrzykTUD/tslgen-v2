@@ -49,6 +49,11 @@ class BuildVerifierConfig:
     # None means: use the ambient RUSTC setting when present, otherwise try `rustc`.
     # Cargo expects RUSTC to name the compiler executable; use RUSTFLAGS for flags.
     rust_compiler: str | None = None
+    # Build + run the generated value-correctness tests (the `tsl_values` binary under ctest).
+    # OFF by default: the ordinary build-verify only compiles the library substrate
+    # (`tsl_smoke`), so adding value testing to the standard gate does not double every
+    # project's build cost. The dedicated value-test gate opts in.
+    run_value_tests: bool = False
 
     @classmethod
     def create(
@@ -56,10 +61,12 @@ class BuildVerifierConfig:
         *,
         cpp_compiler: str | Sequence[str] | None = None,
         rust_compiler: str | None = None,
+        run_value_tests: bool = False,
     ) -> "BuildVerifierConfig":
         return cls(
             cpp_compiler=_normalize_compiler_command(cpp_compiler),
             rust_compiler=_normalize_compiler_executable(rust_compiler),
+            run_value_tests=run_value_tests,
         )
 
 
@@ -77,6 +84,10 @@ class BuildCommand:
     argv: tuple[str, ...]
     cwd: Path
     env: tuple[BuildCommandEnvironment, ...] = ()
+    # Diagnostic severity if this command fails. Configure/build failures are hard errors;
+    # value-test failures are reported as warnings (report-then-promote) so a not-yet-correct
+    # path surfaces without failing the build gate during scale-up.
+    severity_on_failure: str = "error"
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,33 +230,58 @@ def _cpp_command_groups(
     groups: list[tuple[BuildCommand, ...]] = []
     for profile in backend.profiles:
         build_dir = project_root / "build" / profile.file_stem
-        groups.append(
-            (
+        commands = [
+            BuildCommand(
+                backend_id="cpp",
+                profile_name=profile.profile_name,
+                step="configure",
+                argv=(
+                    "cmake",
+                    "-S",
+                    str(project_root),
+                    "-B",
+                    str(build_dir),
+                    f"-DTSL_PROFILE={profile.profile_name}",
+                ),
+                cwd=root,
+                env=env,
+            ),
+            # Build only the substrate-compile target by default; the heavy value-test binary
+            # is built (and run) only when value testing is requested, so the standard gate
+            # keeps its single-target cost.
+            BuildCommand(
+                backend_id="cpp",
+                profile_name=profile.profile_name,
+                step="build",
+                argv=("cmake", "--build", str(build_dir), "--target", "tsl_smoke"),
+                cwd=root,
+                env=env,
+            ),
+        ]
+        if config.run_value_tests:
+            commands.append(
                 BuildCommand(
                     backend_id="cpp",
                     profile_name=profile.profile_name,
-                    step="configure",
-                    argv=(
-                        "cmake",
-                        "-S",
-                        str(project_root),
-                        "-B",
-                        str(build_dir),
-                        f"-DTSL_PROFILE={profile.profile_name}",
-                    ),
+                    step="build-values",
+                    argv=("cmake", "--build", str(build_dir), "--target", "tsl_values"),
                     cwd=root,
                     env=env,
-                ),
-                BuildCommand(
-                    backend_id="cpp",
-                    profile_name=profile.profile_name,
-                    step="build",
-                    argv=("cmake", "--build", str(build_dir)),
-                    cwd=root,
-                    env=env,
-                ),
+                    severity_on_failure="warning",
+                )
             )
-        )
+            commands.append(
+                BuildCommand(
+                    backend_id="cpp",
+                    profile_name=profile.profile_name,
+                    step="test",
+                    argv=("ctest", "--test-dir", str(build_dir), "--output-on-failure"),
+                    cwd=root,
+                    env=env,
+                    severity_on_failure="warning",
+                )
+            )
+        groups.append(tuple(commands))
     return tuple(groups)
 
 
@@ -437,7 +473,7 @@ def _command_diagnostic(result: BuildCommandResult) -> Diagnostic:
     detail = result.stderr.strip() or result.stdout.strip()
     suffix = f": {detail}" if detail else ""
     return Diagnostic(
-        severity="error",
+        severity=command.severity_on_failure,
         code="TSL-BUILD-VERIFY-COMMAND-FAILED",
         message=(
             f"{command.backend_id} profile {command.profile_name} {command.step} "

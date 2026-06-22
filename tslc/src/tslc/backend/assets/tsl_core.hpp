@@ -211,7 +211,12 @@ inline T arith_rem(T a, T b) {
 // keeps this C++17 (no `<bit>`/`std::popcount`).
 template <class T>
 inline std::uint32_t popcount(T v) {
-    return static_cast<std::uint32_t>(__builtin_popcountll(static_cast<unsigned long long>(v)));
+    // Reinterpret through the same-width *unsigned* type before widening: a signed lane (e.g.
+    // int8_t -1) must count its own 8 bits, not the 64 bits of a sign-extended widening — which
+    // would also disagree with Rust's `count_ones`. (Rust counts the two's-complement bits.)
+    using U = std::make_unsigned_t<T>;
+    return static_cast<std::uint32_t>(
+        __builtin_popcountll(static_cast<unsigned long long>(static_cast<U>(v))));
 }
 // Trailing-zero count of an integer mask (used by `tzc`): the index of the lowest set bit,
 // or the full bit-width when the mask is zero. `__builtin_ctzll(0)` is undefined, hence the

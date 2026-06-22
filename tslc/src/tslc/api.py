@@ -93,6 +93,7 @@ def verify_project(
     *,
     cpp_compiler: str | Sequence[str] | None = None,
     rust_compiler: str | None = None,
+    run_value_tests: bool = False,
 ) -> BuildVerificationReport:
     return verify_generated_project(
         Path(output_root),
@@ -100,5 +101,6 @@ def verify_project(
         config=BuildVerifierConfig.create(
             cpp_compiler=cpp_compiler,
             rust_compiler=rust_compiler,
+            run_value_tests=run_value_tests,
         ),
     )

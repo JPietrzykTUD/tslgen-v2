@@ -206,15 +206,27 @@ def _cpp_cmakelists(profiles: tuple[ProfileRender, ...]) -> str:
         "  set(TSL_PROFILE scalar)",
         "endif()",
         'string(TOUPPER "${TSL_PROFILE}" TSL_PROFILE_UPPER)',
+        "enable_testing()",
+        # The smoke binary forces every wrapper specialization to compile; the values binary
+        # runs the generated value-correctness checks (returns non-zero on a lane mismatch).
         "add_executable(tsl_smoke tests/smoke_${TSL_PROFILE}.cpp)",
-        "target_include_directories(tsl_smoke PRIVATE include)",
-        "target_compile_definitions(tsl_smoke PRIVATE TSL_PROFILE_${TSL_PROFILE_UPPER})",
+        "add_executable(tsl_values tests/values_${TSL_PROFILE}.cpp)",
+        "foreach(target tsl_smoke tsl_values)",
+        "  target_include_directories(${target} PRIVATE include)",
+        "  target_compile_definitions(${target} PRIVATE TSL_PROFILE_${TSL_PROFILE_UPPER})",
+        "endforeach()",
+        "add_test(NAME values COMMAND tsl_values)",
     ]
     for profile_render in profiles:
         flags = cpp_flags(profile_render.profile)
         if not flags:
             continue
         lines.append(f'if(TSL_PROFILE STREQUAL "{slug(profile_render.profile.name)}")')
-        lines.append(f"  target_compile_options(tsl_smoke PRIVATE {' '.join(flags)})")
+        lines.append(
+            f"  target_compile_options(tsl_smoke PRIVATE {' '.join(flags)})"
+        )
+        lines.append(
+            f"  target_compile_options(tsl_values PRIVATE {' '.join(flags)})"
+        )
         lines.append("endif()")
     return "\n".join(lines) + "\n"
