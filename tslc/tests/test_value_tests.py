@@ -43,6 +43,8 @@ def _value_test_shape_handled(signature: str) -> bool:
         return True
     if result == "v" and "sImm" in params and all(k in ("v", "sImm") for k in params):
         return True  # immediate op (mul_imm / shift-imm)
+    if result == "v" and params == ("m",):  # to_vector (mask -> vector)
+        return True
     return result == "void" and params == ("ptr", "v")
 
 

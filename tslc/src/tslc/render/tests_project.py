@@ -140,6 +140,15 @@ def _cpp_values_runner(profile_render: ProfileRender, catalog: Catalog | None) -
                     if emitted is not None:
                         functions.append(emitted[0])
                         calls.append(emitted[1])
+            elif _is_to_vector(specs[0]):
+                primitive = catalog.primitive(name, unmasked=True)
+                if primitive is None:
+                    continue
+                for index, case in enumerate(primitive.tests):
+                    emitted = _cpp_to_vector_case(name, index, case, specs)
+                    if emitted is not None:
+                        functions.append(emitted[0])
+                        calls.append(emitted[1])
 
     body = "\n\n".join(functions)
     call_lines = "\n".join(f"  failures += {call}();" for call in calls)
@@ -309,6 +318,50 @@ def _cpp_masked_case(
         f'"{case.name}", result, expected, {lanes});'
     )
     lines.append("}")
+    return "\n".join(lines), fn_name
+
+
+def _is_to_vector(spec: LoweredSpecialization) -> bool:
+    """`to_vector(mask)` (`v:=m`): expand a mask to a vector (all-ones / 0 per lane). Compared
+    against the generic reference, which fills each lane from the bitset."""
+
+    return (
+        spec.result_kind == "v"
+        and tuple(spec.param_kinds) == ("m",)
+        and spec.target is None
+        and spec.mask_policy is None
+        and not spec.axis
+        and spec.immediate is None
+        and not spec.generic_params
+        and not spec.type_params
+    )
+
+
+def _cpp_to_vector_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> tuple[str, str] | None:
+    if case.lanes is None or case.expected_rule is not None:
+        return None
+    base_spelling = _base_spelling(specs, case.type_tag)
+    mask_args = [arg for arg in case.inputs if arg.kind == "mask" and arg.mask_bits is not None]
+    if base_spelling is None or len(mask_args) != 1 or len(case.expected) != case.lanes:
+        return None
+    lanes = case.lanes
+    fn_name = f"test_{name}_{index}_{_sanitize(case.name)}"
+    expected = ", ".join(_cpp_literal(v, case.type_tag) for v in case.expected)
+    lines = [
+        f"int {fn_name}() {{",
+        f"  using Vec = tsl::simd<{base_spelling}, tsl::generic<{lanes}>>;",
+        f"  typename Vec::mask_type mask = {mask_args[0].mask_bits}ull;",
+        f"  typename Vec::register_type result = tsl::{name}<Vec>(mask);",
+        f"  static const {base_spelling} expected[{lanes}] = {{{expected}}};",
+        f'  return tsl::test::check_lanes<{base_spelling}>('
+        f'"{case.name}", result, expected, {lanes});',
+        "}",
+    ]
     return "\n".join(lines), fn_name
 
 
