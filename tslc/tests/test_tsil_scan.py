@@ -44,15 +44,15 @@ def test_expression_statement_consumes_source_terminator() -> None:
 def test_nested_modifier_selector_kept_verbatim() -> None:
     body = (
         "emit_return(intrin<add, build["
-        "suffix=value<backend>(intrin::suffix(type<generation>(base::in)))]>(left, right));"
+        "suffix=base::signed_of(base::in)]>(left, right));"
     )
     intrinsic = scan(body)[0].body[0]
     assert isinstance(intrinsic, Region)
-    # The whole selector (including nested value<...>/type<...>) is preserved as text;
+    # The whole selector (including nested generation-time queries) is preserved as text;
     # the lowerer parses modifiers, the scanner does not.
     assert intrinsic.keyword == "intrin"
-    assert intrinsic.selector_text.startswith("add, build[suffix=value<backend>(")
-    assert "type<generation>(base::in)" in intrinsic.selector_text
+    assert intrinsic.selector_text.startswith("add, build[suffix=base::signed_of(")
+    assert "base::in" in intrinsic.selector_text
 
 
 def test_keyword_inside_identifier_is_not_matched() -> None:

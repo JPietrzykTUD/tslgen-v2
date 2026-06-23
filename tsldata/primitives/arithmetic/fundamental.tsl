@@ -52,7 +52,7 @@ prim<v:=(v,v)> add(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<add, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(left, right)
+              intrin<add, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f?:
@@ -65,7 +65,7 @@ prim<v:=(v,v)> add(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<add, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(left, right)
+              intrin<add, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f?:
@@ -78,7 +78,7 @@ prim<v:=(v,v)> add(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<add, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(left, right)
+              intrin<add, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f32:
@@ -150,7 +150,7 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<maskz_add, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(mask, left, right)
+              intrin<maskz_add, build[suffix=base::signed_of(base::in)]>(mask, left, right)
             );
           """
       f?:
@@ -241,7 +241,7 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<mask_add, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(left, mask, left, right)
+              intrin<mask_add, build[suffix=base::signed_of(base::in)]>(left, mask, left, right)
             );
           """
       f?:
@@ -334,7 +334,7 @@ prim<v:=(v,v)> sub(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<sub, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(left, right)
+              intrin<sub, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f?:
@@ -347,7 +347,7 @@ prim<v:=(v,v)> sub(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<sub, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(left, right)
+              intrin<sub, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f?:
@@ -360,7 +360,7 @@ prim<v:=(v,v)> sub(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<sub, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(left, right)
+              intrin<sub, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f32:
@@ -432,7 +432,7 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<maskz_sub, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(mask, left, right)
+              intrin<maskz_sub, build[suffix=base::signed_of(base::in)]>(mask, left, right)
             );
           """
       f?:
@@ -519,7 +519,7 @@ prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<mask_sub, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(left, mask, left, right)
+              intrin<mask_sub, build[suffix=base::signed_of(base::in)]>(left, mask, left, right)
             );
           """
       f?:

@@ -883,7 +883,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vmovl_high, build[suffix=value<backend>(intrin::suffix)]>(data)));
+                      emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vmovl_high, build[suffix=base::in]>(data)));
                     }
                     _ => {
                       let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -906,13 +906,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=4]>(data, data, 4)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=base::in, immediate(2)=4]>(data, data, 4)));
                     }
                     2 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=8]>(data, data, 8)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=base::in, immediate(2)=8]>(data, data, 8)));
                     }
                     3 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=12]>(data, data, 12)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=base::in, immediate(2)=12]>(data, data, 12)));
                     }
                     _ => {
                       let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -935,25 +935,25 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=2]>(data, data, 2)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=base::in, immediate(2)=2]>(data, data, 2)));
                     }
                     2 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=4]>(data, data, 4)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=base::in, immediate(2)=4]>(data, data, 4)));
                     }
                     3 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=6]>(data, data, 6)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=base::in, immediate(2)=6]>(data, data, 6)));
                     }
                     4 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=8]>(data, data, 8)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=base::in, immediate(2)=8]>(data, data, 8)));
                     }
                     5 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=10]>(data, data, 10)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=base::in, immediate(2)=10]>(data, data, 10)));
                     }
                     6 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=12]>(data, data, 12)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=base::in, immediate(2)=12]>(data, data, 12)));
                     }
                     7 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=14]>(data, data, 14)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=base::in, immediate(2)=14]>(data, data, 14)));
                     }
                     _ => {
                       let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -979,7 +979,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vmovl_high, build[suffix=value<backend>(intrin::suffix)]>(data)));
+                      emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vmovl_high, build[suffix=base::in]>(data)));
                     }
                     _ => {
                       let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1002,13 +1002,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=2]>(data, data, 2)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=base::in, immediate(2)=2]>(data, data, 2)));
                     }
                     2 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=4]>(data, data, 4)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=base::in, immediate(2)=4]>(data, data, 4)));
                     }
                     3 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=6]>(data, data, 6)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=base::in, immediate(2)=6]>(data, data, 6)));
                     }
                     _ => {
                       let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1034,7 +1034,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vmovl_high, build[suffix=value<backend>(intrin::suffix)]>(data)));
+                      emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vmovl_high, build[suffix=base::in]>(data)));
                     }
                     _ => {
                       let<type>(OutVec, type<generation>(vector::window_base(ToBase)));

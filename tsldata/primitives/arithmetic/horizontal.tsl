@@ -25,7 +25,7 @@ prim<s:=v> hadd(vec):
       [si32, ui32, si64, ui64]:
         requires [avx512f]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<reduce_add, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<reduce_add, build[suffix=base::signed_of(base::in)]>(vec)));"
       f?:
         requires [avx512f]
         implementation:
@@ -34,7 +34,7 @@ prim<s:=v> hadd(vec):
       [si16, ui16]:
         requires [avx512bw, avx512vl]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<reduce_add, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<reduce_add, build[suffix=base::signed_of(base::in)]>(vec)));"
     avx2:
       [si32, ui32]:
         requires [avx2]
@@ -412,7 +412,7 @@ prim<s:=(m,v)> hadd(mask, vec):
       [si32, ui32, si64, ui64]:
         requires [avx512f]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<mask_reduce_add, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(mask, vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<mask_reduce_add, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
       f?:
         requires [avx512f]
         implementation:
@@ -421,7 +421,7 @@ prim<s:=(m,v)> hadd(mask, vec):
       [si16, ui16]:
         requires [avx512bw, avx512vl]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<mask_reduce_add, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(mask, vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<mask_reduce_add, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
     [avx2, sse]:
       [si32, ui32, f32, f64]:
         requires:

@@ -25,7 +25,7 @@ prim<v:=v> conflict(data):
         implementation:
           tsil """
               emit_return(
-                intrin<conflict, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+                intrin<conflict, build[suffix=base::signed_of(base::in)]>(
                   data
                 )
               );
@@ -38,7 +38,7 @@ prim<v:=v> conflict(data):
         implementation:
           tsil """
               emit_return(
-                intrin<conflict, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+                intrin<conflict, build[suffix=base::signed_of(base::in)]>(
                   data
                 )
               );
@@ -51,7 +51,7 @@ prim<v:=v> conflict(data):
         implementation:
           tsil """
               emit_return(
-                intrin<conflict, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+                intrin<conflict, build[suffix=base::signed_of(base::in)]>(
                   data
                 )
               );

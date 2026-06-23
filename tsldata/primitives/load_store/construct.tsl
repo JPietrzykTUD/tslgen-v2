@@ -27,7 +27,7 @@ prim<v:=s> set1(value):
         implementation:
           tsil """
             emit_return(
-              intrin<set1, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+              intrin<set1, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), value)
               )
             );
@@ -54,7 +54,7 @@ prim<v:=s> set1(value):
               );
             } else<generation> {
               emit_return(
-                intrin<set1, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+                intrin<set1, build[suffix=base::signed_of(base::in)]>(
                   cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), value)
                 )
               );
@@ -275,7 +275,7 @@ prim<v:=()>[value=zero] set_zero():
         implementation:
           tsil """
               emit_return(
-                intrin<setzero, build[suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)]>()
+                intrin<setzero, build[suffix=intrin::suffix("stream")]>()
               );
             """
       f?:
@@ -288,7 +288,7 @@ prim<v:=()>[value=zero] set_zero():
         implementation:
           tsil """
               emit_return(
-                intrin<setzero, build[suffix=value<backend>(intrin::suffix), prefix=value<backend>(intrin::prefix)]>()
+                intrin<setzero, build[suffix=base::in]>()
               );
             """
     sve:
@@ -344,7 +344,7 @@ prim<v:=()>[value=undef] set_undef():
         implementation:
           tsil """
             emit_return(
-              intrin<undefined, build[suffix=value<backend>(intrin::suffix), prefix=value<backend>(intrin::prefix)]>()
+              intrin<undefined, build[suffix=base::in]>()
             );
           """
     [avx2, sse]:
@@ -355,7 +355,7 @@ prim<v:=()>[value=undef] set_undef():
         implementation:
           tsil """
             emit_return(
-              intrin<undefined, build[suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)]>()
+              intrin<undefined, build[suffix=intrin::suffix("stream")]>()
             );
           """
       f?:
@@ -367,7 +367,7 @@ prim<v:=()>[value=undef] set_undef():
         implementation:
           tsil """
             emit_return(
-              intrin<undefined, build[suffix=value<backend>(intrin::suffix), prefix=value<backend>(intrin::prefix)]>()
+              intrin<undefined, build[suffix=base::in]>()
             );
           """
     neon:
@@ -385,7 +385,7 @@ prim<v:=()>[value=undef] set_undef():
         implementation:
           tsil """
             emit_return(
-              intrin<svundef, build[suffix=value<backend>(intrin::suffix)]>()
+              intrin<svundef, build[suffix=base::in]>()
             );
           """
 
@@ -428,7 +428,7 @@ prim<v:=(lanes<s>)> set(values):
               );
             } else<generation> {
               emit_return(
-                intrin<set, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+                intrin<set, build[suffix=base::signed_of(base::in)]>(
                   cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
                   loop<generation>(i, 1, value<generation>(vector::length), 1) {
                     , cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, i))
@@ -468,7 +468,7 @@ prim<v:=(lanes<s>)> set(values):
               );
             } else<generation> {
               emit_return(
-                intrin<set, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+                intrin<set, build[suffix=base::signed_of(base::in)]>(
                   cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
                   loop<generation>(i, 1, value<generation>(vector::length), 1) {
                     , cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, i))

@@ -164,7 +164,7 @@ def test_intrin_build_unresolved_suffix_has_region_source_location() -> None:
         "      si32:\n"
         "        implementation:\n"
         '          tsil "emit_return(intrin<add, build['
-        'suffix=value<backend>(intrin::suffix(si?))]>(data));"\n'
+        'suffix=base::signed_of(si?)]>(data));"\n'
     )
     assert result.catalog is not None
     selection = Selector().select_profile(
@@ -186,5 +186,5 @@ def test_intrin_build_unresolved_suffix_has_region_source_location() -> None:
     diagnostic = lowered.diagnostics[0]
     assert diagnostic.code == "TSL-LOWER-UNRESOLVED-SUFFIX"
     assert diagnostic.severity == "info"
-    assert "intrin::suffix(si?)" in diagnostic.message
+    assert "base::signed_of(si?)" in diagnostic.message
     assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 19, 29)

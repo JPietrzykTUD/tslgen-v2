@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from tslc.ir.segments import Region
 from tslc.lower._text import skip_string
 from tslc.lower.context import LoweringSession
-from tslc.lower.queries import QueryEvaluator, TextValue
+from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.common import _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.render.model import RenderField, literal_text, render_sequence, render_text
@@ -268,7 +268,7 @@ class IntrinLowerer:
         """Fold an ``infix``/``infix_sep`` modifier into the intrinsic base: ``base + infix_sep +
         infix`` (both resolved as query values — ``infix`` is typically a type's intrinsic suffix,
         ``infix_sep`` a literal like ``""``). Returns ``base`` unchanged when there is no ``infix``,
-        or None when a part doesn't resolve to text."""
+        or None when a part doesn't resolve to a text or type-backed suffix."""
 
         infix_expr = selector.get("infix")
         if infix_expr is None:
@@ -280,9 +280,12 @@ class IntrinLowerer:
             if sep_expr is not None
             else TextValue("")
         )
-        if not isinstance(infix, TextValue) or not isinstance(separator, TextValue):
+        if not isinstance(separator, TextValue):
             return None
-        return f"{base}{separator.as_text()}{infix.as_text()}"
+        infix_text = self._text_or_type_suffix(infix, context)
+        if infix_text is None:
+            return None
+        return f"{base}{separator.as_text()}{infix_text}"
 
     def _prefix(
         self,
@@ -298,7 +301,7 @@ class IntrinLowerer:
             return value.as_text()
         context.effects.skip(
             "TSL-LOWER-UNRESOLVED-PREFIX",
-            f"could not resolve intrinsic prefix from {explicit!r}",
+            f"could not resolve intrinsic prefix from {explicit!r}; expected text",
             source=region.source,
         )
         return None
@@ -316,11 +319,24 @@ class IntrinLowerer:
                 context.env.extension, context.env.type_tag
             )
         value = self._evaluator.evaluate(explicit, context)
-        if isinstance(value, TextValue):
-            return value.as_text()
+        suffix = self._text_or_type_suffix(value, context)
+        if suffix is not None:
+            return suffix
         context.effects.skip(
             "TSL-LOWER-UNRESOLVED-SUFFIX",
-            f"could not resolve intrinsic suffix from {explicit!r}",
+            f"could not resolve intrinsic suffix from {explicit!r}; "
+            "expected text or type",
             source=region.source,
         )
+        return None
+
+    def _text_or_type_suffix(
+        self, value: object, context: LoweringSession
+    ) -> str | None:
+        if isinstance(value, TextValue):
+            return value.as_text()
+        if isinstance(value, TypeValue):
+            return context.env.backend.intrinsics.default_suffix(
+                context.env.extension, value.type_tag
+            )
         return None

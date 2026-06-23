@@ -160,23 +160,23 @@ prim<v:=m> to_vector(mask):
       [ ?i32, ?i64 ]:
         requires [avx512f]
         implementation:
-          tsil "emit_return(intrin<maskz_set1, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(mask, -1));"
+          tsil "emit_return(intrin<maskz_set1, build[suffix=base::signed_of(base::in)]>(mask, -1));"
       [ ?i8, ?i16 ]:
         requires [avx512bw, avx512f]
         implementation:
-          tsil "emit_return(intrin<maskz_set1, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(mask, -1));"
+          tsil "emit_return(intrin<maskz_set1, build[suffix=base::signed_of(base::in)]>(mask, -1));"
       f32:
         requires [avx512f]
         implementation:
           tsil """
-              var<const_infer>(bits, intrin<maskz_set1, build[suffix=value<backend>(intrin::suffix(si32))]>(mask, -1));
+              var<const_infer>(bits, intrin<maskz_set1, build[suffix=si32]>(mask, -1));
               emit_return(cast<bitcast>(type<generation>(vector::register), bits));
             """
       f64:
         requires [avx512f]
         implementation:
           tsil """
-              var<const_infer>(bits, intrin<maskz_set1, build[suffix=value<backend>(intrin::suffix(si64))]>(mask, -1));
+              var<const_infer>(bits, intrin<maskz_set1, build[suffix=si64]>(mask, -1));
               emit_return(cast<bitcast>(type<generation>(vector::register), bits));
             """
     [avx2_vl, sse_vl]:
@@ -276,8 +276,8 @@ prim<m:=im> to_mask(mask):
                 tmp[i] = cast<static>(UnsignedT, (mask >> bit_idx) & 1);
               }
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
-              var<const_infer>(vec, intrin<svld1, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))]>(pg, tmp.data()));
-              emit_return(intrin<svcmpne_n, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))]>(pg, vec, cast<static>(UnsignedT, 0)));
+              var<const_infer>(vec, intrin<svld1, build[suffix=base::unsigned_of(base::in)]>(pg, tmp.data()));
+              emit_return(intrin<svcmpne_n, build[suffix=base::unsigned_of(base::in)]>(pg, vec, cast<static>(UnsignedT, 0)));
             """
     avx2:
       ?i8:

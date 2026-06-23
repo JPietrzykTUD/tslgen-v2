@@ -52,12 +52,12 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
-              intrin<store, build[suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)]>(
+              intrin<store, build[suffix=intrin::suffix("stream")]>(
                 cast<reinterpret>(type<generation>(vector::register) *, assume_aligned<value<generation>(vector::alignment)>(ptr)),
                 data
               );
             } else<generation> {
-              intrin<storeu, build[suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)]>(
+              intrin<storeu, build[suffix=intrin::suffix("stream")]>(
                 cast<reinterpret>(type<generation>(vector::register) *, ptr),
                 data
               );
@@ -391,7 +391,7 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
-            intrin<mask_storeu, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+            intrin<mask_storeu, build[suffix=base::signed_of(base::in)]>(
               cast<reinterpret>(SignedBase *, ptr),
               mask,
               data

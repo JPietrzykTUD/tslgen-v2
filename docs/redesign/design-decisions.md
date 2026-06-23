@@ -4211,7 +4211,10 @@ new intrinsic name.
 With `build`, lowering composes an intrinsic name from the selected backend and
 extension. Omitted build fields use backend/extension defaults. Explicit fields
 override those defaults; an explicit empty text value suppresses the field.
-Existing build metadata such as `post=mask`, `infix`/`infix_sep`, and
+`suffix=` and `infix=` accept either backend text or a typed generation value;
+typed values are mapped through the selected extension's intrinsic suffix
+metadata. `prefix=` remains text-only because a type value has no prefix
+meaning. Existing build metadata such as `post=mask`, `infix_sep`, and
 `immediate(N)=...` remains part of the same intrinsic invocation builder.
 
 Consequences:
@@ -4222,8 +4225,13 @@ Consequences:
 - The primitive corpus now spells built intrinsic calls as
   `intrin<..., build...>(...)`; a corpus guard rejects `intrin_compose<` in
   primitive TSIL bodies.
-- `intrin::prefix` is a first-class query function so explicit
-  `prefix=value<backend>(intrin::prefix)` resolves through typed backend and
-  extension facts.
+- `intrin::prefix` remains a first-class query function for the cases that need
+  an explicit backend prefix value. Calls that want the selected extension's
+  default prefix should omit `prefix=`.
+- The primitive corpus uses direct typed modifier slots such as
+  `suffix=base::signed_of(base::in)`, `suffix=ToBase`, and `infix=base::in`
+  instead of wrapping type values in `value<backend>(intrin::suffix(...))`.
+  Named suffix policies still use query form, for example
+  `suffix=intrin::suffix("stream")`.
 - Historical redesign notes may still mention `intrin_compose` as prior
   evidence, but current `tslc` source data should not use it.

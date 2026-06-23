@@ -59,7 +59,7 @@ prim<v:=(v,sImm)> shift_left(data, shift):
           ?i32 [avx512f]
           ?i64 [avx512f]
         implementation:
-          tsil "emit_return(intrin<slli, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data, shift));"
+          tsil "emit_return(intrin<slli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       arith:
         requires [avx512f]
         implementation:
@@ -78,7 +78,7 @@ prim<v:=(v,sImm)> shift_left(data, shift):
       [?i16, ?i32, ?i64]:
         requires [avx, avx2]
         implementation:
-          tsil "emit_return(intrin<slli, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data, shift));"
+          tsil "emit_return(intrin<slli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       arith:
         requires [avx]
         implementation:
@@ -97,7 +97,7 @@ prim<v:=(v,sImm)> shift_left(data, shift):
       [?i16, ?i32, ?i64]:
         requires [sse, sse2]
         implementation:
-          tsil "emit_return(intrin<slli, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data, shift));"
+          tsil "emit_return(intrin<slli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       arith:
         requires [sse]
         implementation:
@@ -318,7 +318,7 @@ prim<v:=(v,s)> shift_left(data, shift):
           ?i32 [avx512f]
           ?i64 [avx512f]
         implementation:
-          tsil "emit_return(intrin<sllv, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data, call<primitive=set1>(shift)));"
+          tsil "emit_return(intrin<sllv, build[suffix=base::signed_of(base::in)]>(data, call<primitive=set1>(shift)));"
       arith:
         requires [avx512f]
         implementation:
@@ -341,7 +341,7 @@ prim<v:=(v,s)> shift_left(data, shift):
           ?i32 [avx, avx2]
           ?i64 [avx, avx2]
         implementation:
-          tsil "emit_return(intrin<sllv, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data, call<primitive=set1>(shift)));"
+          tsil "emit_return(intrin<sllv, build[suffix=base::signed_of(base::in)]>(data, call<primitive=set1>(shift)));"
       arith:
         requires [avx]
         implementation:
@@ -466,7 +466,7 @@ prim<v:=(v,v)> shift_left(data, shift):
           ?i32 [avx512f]
           ?i64 [avx512f]
         implementation:
-          tsil "emit_return(intrin<sllv, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data, shift));"
+          tsil "emit_return(intrin<sllv, build[suffix=base::signed_of(base::in)]>(data, shift));"
       arith:
         requires [avx512f]
         implementation:
@@ -490,7 +490,7 @@ prim<v:=(v,v)> shift_left(data, shift):
           ?i32 [avx, avx2]
           ?i64 [avx, avx2]
         implementation:
-          tsil "emit_return(intrin<sllv, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data, shift));"
+          tsil "emit_return(intrin<sllv, build[suffix=base::signed_of(base::in)]>(data, shift));"
       arith:
         requires [avx]
         implementation:
@@ -666,7 +666,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           ui32 [avx512f]
           ui64 [avx512f]
         implementation:
-          tsil "emit_return(intrin<srli, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data, shift));"
+          tsil "emit_return(intrin<srli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       [si16, si32, si64]:
         requires:
           si16 [avx512bw, avx512f]
@@ -677,7 +677,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
               if<compile>(!PreserveSign) {
                 let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
-                var<const_infer>(ures, intrin<srli, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(udata, shift));
+                var<const_infer>(ures, intrin<srli, build[suffix=base::signed_of(base::in)]>(udata, shift));
                 emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
                 emit_return(intrin<srai, build>(data, shift));
@@ -715,7 +715,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
       [ui16, ui32, ui64]:
         requires [avx, avx2]
         implementation:
-          tsil "emit_return(intrin<srli, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data, shift));"
+          tsil "emit_return(intrin<srli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       [si16, si32]:
         requires [avx, avx2]
         implementation:
@@ -723,7 +723,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
               if<compile>(!PreserveSign) {
                 let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
-                var<const_infer>(ures, intrin<srli, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(udata, shift));
+                var<const_infer>(ures, intrin<srli, build[suffix=base::signed_of(base::in)]>(udata, shift));
                 emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
                 emit_return(intrin<srai, build>(data, shift));
@@ -775,7 +775,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
       [ui16, ui32, ui64]:
         requires [sse, sse2]
         implementation:
-          tsil "emit_return(intrin<srli, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data, shift));"
+          tsil "emit_return(intrin<srli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       [si16, si32]:
         requires [sse, sse2]
         implementation:
@@ -783,7 +783,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
               if<compile>(!PreserveSign) {
                 let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
-                var<const_infer>(ures, intrin<srli, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(udata, shift));
+                var<const_infer>(ures, intrin<srli, build[suffix=base::signed_of(base::in)]>(udata, shift));
                 emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
                 emit_return(intrin<srai, build>(data, shift));
@@ -1352,7 +1352,7 @@ prim<v:=(v,v)> shift_right(data, shift):
                 let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(shift_u, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(shift));
-                var<const_infer>(ures, intrin<srlv, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(udata, shift_u));
+                var<const_infer>(ures, intrin<srlv, build[suffix=base::signed_of(base::in)]>(udata, shift_u));
                 emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
                 emit_return(intrin<srav, build>(data, shift));
@@ -1366,7 +1366,7 @@ prim<v:=(v,v)> shift_right(data, shift):
                 let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(shift_u, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(shift));
-                var<const_infer>(ures, intrin<srlv, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(udata, shift_u));
+                var<const_infer>(ures, intrin<srlv, build[suffix=base::signed_of(base::in)]>(udata, shift_u));
                 emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
                 emit_return(intrin<srav, build>(data, shift));
@@ -1415,7 +1415,7 @@ prim<v:=(v,v)> shift_right(data, shift):
                 let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(shift_u, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(shift));
-                var<const_infer>(ures, intrin<srlv, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(udata, shift_u));
+                var<const_infer>(ures, intrin<srlv, build[suffix=base::signed_of(base::in)]>(udata, shift_u));
                 emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
                 emit_return(intrin<srav, build>(data, shift));
@@ -1505,13 +1505,13 @@ prim<v:=(v,v)> shift_right(data, shift):
                 if<compile>(!PreserveSign) {
                   let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
-                  var<const_infer>(ures, intrin<svlsr, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=x]>(pg, udata, shift_u));
+                  var<const_infer>(ures, intrin<svlsr, build[suffix=base::unsigned_of(base::in), post=x]>(pg, udata, shift_u));
                   emit_return(call<primitive=reinterpret[UVec, Vec]>(ures));
                 } else<compile> {
                   emit_return(intrin<svasr, build[post=x]>(pg, data, shift_u));
                 }
               } else<generation> {
-                emit_return(intrin<svlsr, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=x]>(pg, data, shift_u));
+                emit_return(intrin<svlsr, build[suffix=base::unsigned_of(base::in), post=x]>(pg, data, shift_u));
               }
             """
       f?:

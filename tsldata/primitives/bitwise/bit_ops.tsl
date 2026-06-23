@@ -57,7 +57,7 @@ prim<v:=(v,v)> binary_and(left, right):
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(intrin<and, build[suffix=value<backend>(intrin::suffix("stream"))]>(left, right));
+            emit_return(intrin<and, build[suffix=intrin::suffix("stream")]>(left, right));
           """
       f?:
         requires [avx512f]
@@ -65,7 +65,7 @@ prim<v:=(v,v)> binary_and(left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<si64>, Vec]>(
-                intrin<and, build[suffix=value<backend>(intrin::suffix("stream"))]>(
+                intrin<and, build[suffix=intrin::suffix("stream")]>(
                   call<primitive=reinterpret[Vec, Vec<si64>]>(left),
                   call<primitive=reinterpret[Vec, Vec<si64>]>(right)
                 )
@@ -79,7 +79,7 @@ prim<v:=(v,v)> binary_and(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<and, build[suffix=value<backend>(intrin::suffix("stream"))]>(left, right)
+              intrin<and, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
@@ -98,7 +98,7 @@ prim<v:=(v,v)> binary_and(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<and, build[suffix=value<backend>(intrin::suffix("stream"))]>(left, right)
+              intrin<and, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
@@ -122,7 +122,7 @@ prim<v:=(v,v)> binary_and(left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<vandq, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))]>(
+                intrin<vandq, build[suffix=base::unsigned_of(base::in)]>(
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
                 )
@@ -140,7 +140,7 @@ prim<v:=(v,v)> binary_and(left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<svand, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=x]>(
+                intrin<svand, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -193,7 +193,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(intrin<andnot, build[suffix=value<backend>(intrin::suffix("stream"))]>(left, right));
+            emit_return(intrin<andnot, build[suffix=intrin::suffix("stream")]>(left, right));
           """
       f?:
         requires [avx512f]
@@ -210,7 +210,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<andnot, build[suffix=value<backend>(intrin::suffix("stream"))]>(left, right)
+              intrin<andnot, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
@@ -229,7 +229,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<andnot, build[suffix=value<backend>(intrin::suffix("stream"))]>(left, right)
+              intrin<andnot, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
@@ -253,7 +253,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<vbicq, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))]>(
+                intrin<vbicq, build[suffix=base::unsigned_of(base::in)]>(
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left)
                 )
@@ -271,7 +271,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<svbic, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=x]>(
+                intrin<svbic, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left)
@@ -338,7 +338,7 @@ prim<v:=(v,v)> binary_or(left, right):
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(intrin<or, build[suffix=value<backend>(intrin::suffix("stream"))]>(left, right));
+            emit_return(intrin<or, build[suffix=intrin::suffix("stream")]>(left, right));
           """
       f?:
         requires [avx512f]
@@ -346,7 +346,7 @@ prim<v:=(v,v)> binary_or(left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<si64>, Vec]>(
-                intrin<or, build[suffix=value<backend>(intrin::suffix("stream"))]>(
+                intrin<or, build[suffix=intrin::suffix("stream")]>(
                   call<primitive=reinterpret[Vec, Vec<si64>]>(left),
                   call<primitive=reinterpret[Vec, Vec<si64>]>(right)
                 )
@@ -360,7 +360,7 @@ prim<v:=(v,v)> binary_or(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<or, build[suffix=value<backend>(intrin::suffix("stream"))]>(left, right)
+              intrin<or, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
@@ -379,7 +379,7 @@ prim<v:=(v,v)> binary_or(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<or, build[suffix=value<backend>(intrin::suffix("stream"))]>(left, right)
+              intrin<or, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
@@ -403,7 +403,7 @@ prim<v:=(v,v)> binary_or(left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<vorrq, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))]>(
+                intrin<vorrq, build[suffix=base::unsigned_of(base::in)]>(
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
                 )
@@ -421,7 +421,7 @@ prim<v:=(v,v)> binary_or(left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<svorr, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=x]>(
+                intrin<svorr, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -488,7 +488,7 @@ prim<v:=(v,v)> binary_xor(left, right):
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(intrin<xor, build[suffix=value<backend>(intrin::suffix("stream"))]>(left, right));
+            emit_return(intrin<xor, build[suffix=intrin::suffix("stream")]>(left, right));
           """
       f?:
         requires [avx512f]
@@ -496,7 +496,7 @@ prim<v:=(v,v)> binary_xor(left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<si64>, Vec]>(
-                intrin<xor, build[suffix=value<backend>(intrin::suffix("stream"))]>(
+                intrin<xor, build[suffix=intrin::suffix("stream")]>(
                   call<primitive=reinterpret[Vec, Vec<si64>]>(left),
                   call<primitive=reinterpret[Vec, Vec<si64>]>(right)
                 )
@@ -510,7 +510,7 @@ prim<v:=(v,v)> binary_xor(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<xor, build[suffix=value<backend>(intrin::suffix("stream"))]>(left, right)
+              intrin<xor, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
@@ -529,7 +529,7 @@ prim<v:=(v,v)> binary_xor(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<xor, build[suffix=value<backend>(intrin::suffix("stream"))]>(left, right)
+              intrin<xor, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
@@ -553,7 +553,7 @@ prim<v:=(v,v)> binary_xor(left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<veorq, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))]>(
+                intrin<veorq, build[suffix=base::unsigned_of(base::in)]>(
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
                 )
@@ -571,7 +571,7 @@ prim<v:=(v,v)> binary_xor(left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<sveor, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=x]>(
+                intrin<sveor, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -662,7 +662,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<maskz_and, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+              intrin<maskz_and, build[suffix=base::signed_of(base::in)]>(
                 mask, left, right
               )
             );
@@ -727,7 +727,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<svand, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=z]>(
+                intrin<svand, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -779,7 +779,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<mask_and, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+              intrin<mask_and, build[suffix=base::signed_of(base::in)]>(
                 left, mask, left, right
               )
             );
@@ -846,7 +846,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<svand, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=m]>(
+                intrin<svand, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -898,7 +898,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<maskz_andnot, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+              intrin<maskz_andnot, build[suffix=base::signed_of(base::in)]>(
                 mask, left, right
               )
             );
@@ -963,7 +963,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<svbic, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=z]>(
+                intrin<svbic, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left)
@@ -1015,7 +1015,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<mask_andnot, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+              intrin<mask_andnot, build[suffix=base::signed_of(base::in)]>(
                 left, mask, left, right
               )
             );
@@ -1112,7 +1112,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<maskz_or, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+              intrin<maskz_or, build[suffix=base::signed_of(base::in)]>(
                 mask, left, right
               )
             );
@@ -1177,7 +1177,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<svorr, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=z]>(
+                intrin<svorr, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -1229,7 +1229,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<mask_or, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+              intrin<mask_or, build[suffix=base::signed_of(base::in)]>(
                 left, mask, left, right
               )
             );
@@ -1296,7 +1296,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<svorr, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=m]>(
+                intrin<svorr, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -1348,7 +1348,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<maskz_xor, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+              intrin<maskz_xor, build[suffix=base::signed_of(base::in)]>(
                 mask, left, right
               )
             );
@@ -1413,7 +1413,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<sveor, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=z]>(
+                intrin<sveor, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -1465,7 +1465,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<mask_xor, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+              intrin<mask_xor, build[suffix=base::signed_of(base::in)]>(
                 left, mask, left, right
               )
             );
@@ -1532,7 +1532,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<sveor, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=m]>(
+                intrin<sveor, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -1592,7 +1592,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
         implementation:
           tsil """
             emit_return(
-              intrin<maskz_xor, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+              intrin<maskz_xor, build[suffix=base::signed_of(base::in)]>(
                 mask,
                 data,
                 call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
@@ -1667,7 +1667,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<sveor, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=z]>(
+                intrin<sveor, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(
@@ -1729,7 +1729,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
         implementation:
           tsil """
             emit_return(
-              intrin<mask_xor, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+              intrin<mask_xor, build[suffix=base::signed_of(base::in)]>(
                 data,
                 mask,
                 data,
@@ -1808,7 +1808,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin<sveor, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=m]>(
+                intrin<sveor, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(

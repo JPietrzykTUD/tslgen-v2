@@ -27,14 +27,14 @@ prim<v:=v> popcnt(data):
           avx2_vl [avx512_bitalg, avx512f, avx512vl, avx]
           sse_vl  [avx512_bitalg, avx512f, avx512vl, sse]
         implementation:
-          tsil "emit_return(intrin<popcnt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data));"
+          tsil "emit_return(intrin<popcnt, build[suffix=base::signed_of(base::in)]>(data));"
       [?i32, ?i64]:
         requires:
           avx512  [avx512_vpopcntdq, avx512f]
           avx2_vl [avx512_vpopcntdq, avx512f, avx512vl, avx]
           sse_vl  [avx512_vpopcntdq, avx512f, avx512vl, sse]
         implementation:
-          tsil "emit_return(intrin<popcnt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data));"
+          tsil "emit_return(intrin<popcnt, build[suffix=base::signed_of(base::in)]>(data));"
     neon:
       ?i8:
         requires [neon]
@@ -137,7 +137,7 @@ prim<v:=v> lzc(data):
           avx2_vl [avx512cd, avx512f, avx512vl, avx]
           sse_vl [avx512cd, avx512f, avx512vl, sse]
         implementation:
-          tsil "emit_return(intrin<lzcnt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data));"
+          tsil "emit_return(intrin<lzcnt, build[suffix=base::signed_of(base::in)]>(data));"
     neon:
       [si8, si16, si32, ui8, ui16, ui32]:
         requires [neon]

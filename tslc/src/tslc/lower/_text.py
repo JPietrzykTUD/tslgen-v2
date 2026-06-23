@@ -22,7 +22,7 @@ def split_top_level(text: str, separator: str = ",") -> list[str]:
     """Split ``text`` on ``separator`` at bracket/string depth zero.
 
     Respects ``()`` and ``<>`` nesting and skips double-quoted strings, so a
-    comma inside ``value<backend>(intrin::suffix("x"))`` does not split it.
+    comma inside ``intrin::suffix("x,y")`` does not split it.
     """
 
     terms: list[str] = []

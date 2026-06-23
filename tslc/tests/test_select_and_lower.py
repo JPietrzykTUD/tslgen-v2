@@ -204,6 +204,95 @@ def test_intrin_build_supports_explicit_prefix_and_suffix() -> None:
     assert cpp.body_text == "return _custom_foo_bar(a);"
 
 
+def test_intrin_build_suffix_and_infix_accept_type_values() -> None:
+    ext = Extension(
+        name="custom",
+        isa_name="custom",
+        family="x86",
+        compose_prefix={"cpp": "_custom_"},
+        compose_suffix_by_type={"si32": "epi32"},
+    )
+    impl = Implementation(
+        ("custom", "ints"),
+        "custom",
+        "ints",
+        "emit_return("
+        "intrin<foo, build[infix=base::signed_of(base::in), "
+        'infix_sep="", suffix=base::signed_of(base::in)]>(a)'
+        ");",
+        source_order=0,
+    )
+    prim = Primitive(
+        name="typed_intrin_build",
+        signature="v:=v",
+        parameters=("a",),
+        attribute_keys=(),
+        implementations=(impl,),
+    )
+    catalog = Catalog(
+        primitives=(prim,),
+        type_groups={"ints": ("si32",)},
+        extensions={"custom": ext},
+        type_spellings={"cpp": {"s32": "int32_t"}},
+        translations={"cpp": {"emit_return": "return {value}"}},
+    )
+    slot = SelectedImplementation(
+        primitive=prim,
+        implementation=impl,
+        extension=ext,
+        type_tag="si32",
+    )
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert cpp.body_text == "return _custom_fooepi32_epi32(a);"
+
+
+def test_intrin_build_prefix_remains_text_only() -> None:
+    ext = Extension(
+        name="custom",
+        isa_name="custom",
+        family="x86",
+        compose_prefix={"cpp": "_custom_"},
+        compose_suffix_by_type={"si32": "epi32"},
+    )
+    impl = Implementation(
+        ("custom", "ints"),
+        "custom",
+        "ints",
+        "emit_return(intrin<foo, build[prefix=base::in, suffix=base::in]>(a));",
+        source_order=0,
+    )
+    prim = Primitive(
+        name="bad_prefix_intrin_build",
+        signature="v:=v",
+        parameters=("a",),
+        attribute_keys=(),
+        implementations=(impl,),
+    )
+    catalog = Catalog(
+        primitives=(prim,),
+        type_groups={"ints": ("si32",)},
+        extensions={"custom": ext},
+        type_spellings={"cpp": {"s32": "int32_t"}},
+        translations={"cpp": {"emit_return": "return {value}"}},
+    )
+    slot = SelectedImplementation(
+        primitive=prim,
+        implementation=impl,
+        extension=ext,
+        type_tag="si32",
+    )
+
+    lowered = Lowerer().lower(slot, catalog, create_backend_dialect(catalog, "cpp"))
+
+    assert lowered.specialization is None
+    assert lowered.diagnostics[0].code == "TSL-LOWER-UNRESOLVED-PREFIX"
+
+
 def test_hadd_reduction_lowers_for_f64(catalog: Catalog, machine_profiles) -> None:
     slot = _by_key(catalog, machine_profiles["avx2"], "hadd")[("f64", "avx2")]
     cpp = Lowerer().lower(

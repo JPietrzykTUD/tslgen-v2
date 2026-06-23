@@ -96,7 +96,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<cmpeq, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(left, right)
+              intrin<cmpeq, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f?:
@@ -115,7 +115,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<cmpeq, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(left, right)
+              intrin<cmpeq, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f?:
@@ -427,7 +427,7 @@ prim<m:=(v,v)> less_than(left, right):
               }
             }
             emit_return(
-              intrin<cmpgt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+              intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
                 call<primitive=binary_xor>(right, sign_bit),
                 call<primitive=binary_xor>(left, sign_bit)
               )
@@ -471,7 +471,7 @@ prim<m:=(v,v)> less_than(left, right):
               }
             }
             emit_return(
-              intrin<cmpgt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+              intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
                 call<primitive=binary_xor>(right, sign_bit),
                 call<primitive=binary_xor>(left, sign_bit)
               )
@@ -622,7 +622,7 @@ prim<m:=(v,v)> greater_than(left, right):
               }
             }
             emit_return(
-              intrin<cmpgt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+              intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
                 call<primitive=binary_xor>(left, sign_bit),
                 call<primitive=binary_xor>(right, sign_bit)
               )
@@ -666,7 +666,7 @@ prim<m:=(v,v)> greater_than(left, right):
               }
             }
             emit_return(
-              intrin<cmpgt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
+              intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
                 call<primitive=binary_xor>(left, sign_bit),
                 call<primitive=binary_xor>(right, sign_bit)
               )
@@ -1101,7 +1101,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<mask_cmpeq, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), post=mask]>(mask, left, right)
+              intrin<mask_cmpeq, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1267,7 +1267,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<mask_cmpneq, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), post=mask]>(mask, left, right)
+              intrin<mask_cmpneq, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1433,7 +1433,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<mask_cmplt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), post=mask]>(mask, left, right)
+              intrin<mask_cmplt, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1599,7 +1599,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<mask_cmpgt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), post=mask]>(mask, left, right)
+              intrin<mask_cmpgt, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1765,7 +1765,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<mask_cmple, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), post=mask]>(mask, left, right)
+              intrin<mask_cmple, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1931,7 +1931,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin<mask_cmpge, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), post=mask]>(mask, left, right)
+              intrin<mask_cmpge, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
       f?:

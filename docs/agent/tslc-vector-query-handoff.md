@@ -840,6 +840,10 @@ Intrinsic lowering now uses one TSIL keyword:
 - `intrin<BASE, build[prefix=..., infix=..., suffix=..., post=..., immediate(N)=...]>`
   applies explicit build modifiers. Omitted build fields keep their defaults;
   explicit empty text suppresses that field.
+- `suffix=` and `infix=` accept either text values or typed generation values.
+  Type values are mapped through the selected extension's intrinsic suffix
+  metadata. `prefix=` remains text-only; omit it when the selected extension's
+  default prefix is desired.
 
 Implemented pieces:
 
@@ -852,14 +856,19 @@ Implemented pieces:
    backend/extension instead of being ignored or special-cased.
 4. The primitive corpus was migrated from `intrin_compose<...>(...)` to
    `intrin<..., build...>(...)`.
-5. A corpus guard fails if `intrin_compose<` appears in primitive TSIL bodies.
+5. Redundant backend-value wrappers were removed from the primitive corpus:
+   `suffix=`/`infix=` now use direct typed expressions such as
+   `base::signed_of(base::in)`, `base::in`, `ToBase`, `si32`, and `si64`.
+   Named suffix policies remain explicit, for example
+   `intrin::suffix("stream")`.
+6. A corpus guard fails if `intrin_compose<` appears in primitive TSIL bodies.
 
 Focused coverage:
 
 - `tslc/tests/test_tsil_scan.py` asserts the scanner sees one `intrin` region
   and keeps `build[...]` selectors raw.
 - `tslc/tests/test_select_and_lower.py` asserts explicit build prefix/suffix
-  lowering.
+  lowering, typed `suffix=`/`infix=` lowering, and text-only `prefix=`.
 - `tslc/tests/test_diagnostic_provenance.py` keeps unresolved build suffix
   diagnostics anchored on the intrinsic region.
 - `tslc/tests/test_tsil_statement_terminators.py` guards the corpus migration.
@@ -873,10 +882,10 @@ python -m compileall -q tslc/src/tslc tslc/tests
 Result: passed.
 
 ```bash
-python -m pytest -q tslc/tests/test_tsil_statement_terminators.py tslc/tests/test_tsil_scan.py tslc/tests/test_parse_arithmetic.py tslc/tests/test_select_and_lower.py::test_intrin_build_supports_explicit_prefix_and_suffix tslc/tests/test_diagnostic_provenance.py::test_intrin_build_unresolved_suffix_has_region_source_location
+python -m pytest -q tslc/tests/test_select_and_lower.py::test_intrin_build_supports_explicit_prefix_and_suffix tslc/tests/test_select_and_lower.py::test_intrin_build_suffix_and_infix_accept_type_values tslc/tests/test_select_and_lower.py::test_intrin_build_prefix_remains_text_only tslc/tests/test_parse_arithmetic.py tslc/tests/test_tsil_scan.py::test_nested_modifier_selector_kept_verbatim tslc/tests/test_diagnostic_provenance.py::test_intrin_build_unresolved_suffix_has_region_source_location
 ```
 
-Result: `17 passed`.
+Result: `7 passed`.
 
 ```bash
 python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/test_parse_arithmetic.py tslc/tests/test_diagnostic_provenance.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_masks_and_calls.py
@@ -889,6 +898,19 @@ git diff --check
 ```
 
 Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_build_verify.py::test_load_store_builds tslc/tests/test_build_verify.py::test_convert_builds tslc/tests/test_build_verify.py::test_cast_reinterpret_builds tslc/tests/test_build_verify.py::test_gather_scatter_builds tslc/tests/test_build_verify.py::test_set_builds tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds
+```
+
+Result: `6 passed`.
+
+```bash
+env TSLC_VERIFY_WORKERS=1 ./verify.sh
+```
+
+Result: passed all targeted validations, including 167 non-build tests and 53
+generated-build tests.
 
 ### TSIL Statement Terminator Slice
 

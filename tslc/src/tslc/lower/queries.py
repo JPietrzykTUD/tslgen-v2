@@ -3,7 +3,8 @@
 Queries are the nested ``head(arg)`` forms that appear inside intrinsic
 modifiers, e.g.::
 
-    value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
+    suffix=base::signed_of(base::in)
+    suffix=intrin::suffix("stream")
 
 Design (so this grows by *vocabulary*, not by lengthening a function):
 
