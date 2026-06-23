@@ -197,21 +197,6 @@ class _CppSyntax:
             parts.append(literal_text(" "))
         return render_sequence(tuple(parts[:-1] if parts else parts))
 
-    def render_pack_expand(
-        self, name: RenderField, lanes: int, cast_to: str | None
-    ) -> RenderText:
-        # C++ variadic pack expansion — `args...` is valid where `args` is a function pack.
-        # `cast_to` is unused: C++ converts the scalar args to the intrinsic's type implicitly.
-        del lanes, cast_to
-        return render_sequence((name, literal_text("...")))
-
-    def render_pack_first(self, name: RenderField, lanes: int) -> RenderText:
-        # The first element of a variadic pack (`::tsl::pack_first` returns its first argument).
-        del lanes
-        return render_sequence(
-            (literal_text("::tsl::pack_first("), name, literal_text("...)"))
-        )
-
 
 @dataclass(frozen=True, slots=True)
 class CppBackendDialect:

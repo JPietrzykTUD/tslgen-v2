@@ -4173,7 +4173,16 @@ If no rule matches, emit a diagnostic containing primitive name, signature, attr
 - `value` values for zero/undef/all primitives are constrained by signature.
 - `cast` values are constrained to `convert` or `reinterpret`.
 - `direction` values are constrained to `up` or `down` when `cast=convert`.
-- `arg_count(<param>)=return_vector_length` is required for repeated scalar splat signatures such as `v:=s...`.
+- `set` uses the ADR-079 lane-list source model:
+  `v:=(lanes<s>)`, `lanes<at>(values, N)`, and
+  `loop<generation>(i, start, end, step) { ... }`. `lanes<s>` is accepted only
+  as a parameter-position signature term. `lanes<at>` indexes must evaluate to
+  generation-time integers. `loop<generation>` expands in the generator and
+  binds its loop variable as a generation-time integer; `loop<range>` remains a
+  normal emitted target-language loop.
+- The old `arg_count(<param>)=return_vector_length`, `v:=s...`,
+  `pack<expand>`, and `pack<first>` forms are not production-supported for new
+  source. `pack<...>` is intentionally quarantined as unsupported TSIL.
 - Template-specific required fields from `tsldata/detail/templates.tsl` must be present after template resolution.
 
 ## Wildcard Expansion

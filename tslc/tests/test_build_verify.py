@@ -1216,12 +1216,10 @@ def test_allocate_family_builds(data_root: Path, machine_profiles_path: Path, tm
 
 
 def test_set_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
-    # `set` (`v:=s...`) is the first per-specialization-variadic primitive: the number of scalar
-    # args equals the lane count. `s...` renders as a C++ variadic template (Args... args ->
-    # _mm_set_epiN(args...)) and a Rust lane-count array param (Self::Array -> _mm_set_epiN(
-    # args[0..N-1]) via pack<expand>). The scalar body uses pack<first> (tsl::pack_first / args[0]).
-    # The generic <LANES> vector is skipped (a C++ pack can't be runtime-indexed), keeping C++/Rust
-    # parity; scalar + concrete SIMD build in both.
+    # `set` is authored as `v:=(lanes<s>)`: one named lane-list parameter whose length is the
+    # selected vector's lane count. Fixed-width SIMD bodies expand lane accesses at generation
+    # time; the generic <LANES> fallback copies from the same named lane-list parameter in an
+    # emitted runtime loop. C++ and Rust both expose an array-like lane-list argument.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,

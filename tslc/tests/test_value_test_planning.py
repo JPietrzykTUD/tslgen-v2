@@ -81,6 +81,39 @@ def test_planner_uses_source_identity_for_emitted_mask_name() -> None:
     assert plan.cpp_profiles[0].cases[0].kind == "masked"
 
 
+def test_lane_list_value_tests_are_planned_and_rendered() -> None:
+    primitive = Primitive(
+        "set",
+        "v:=(lanes<s>)",
+        ("values",),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="basic",
+                type_tag="si32",
+                lanes=4,
+                inputs=(TslTestArg("vector", values=("1", "2", "3", "4")),),
+                expected=("4", "3", "2", "1"),
+            ),
+        ),
+    )
+    catalog = _catalog(primitive)
+    spec = _spec("set", "set", param_kinds=("lanes<s>",))
+    profile = _profile(cpp={"set": (spec,)}, rust={"set": (spec,)})
+
+    plan = ValueTestPlanner(catalog).plan((profile,))
+
+    assert [case.kind for case in plan.cpp_profiles[0].cases] == ["lane_list"]
+    assert [case.kind for case in plan.rust_profiles[0].cases] == ["lane_list"]
+    cpp_source = render_cpp_values_runner(plan.cpp_profiles[0])
+    rust_source = render_rust_values_file(plan.rust_profiles)
+    assert "typename tsl::array_for<Vec>::type values;" in cpp_source
+    assert "tsl::set<Vec>(values)" in cpp_source
+    assert "let mut values: <Vec as SimdVector>::Array = Default::default();" in rust_source
+    assert "set::<Vec>(values)" in rust_source
+
+
 def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
     cpp_case = ValueTestCasePlan(
         kind="generic_golden",

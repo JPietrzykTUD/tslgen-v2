@@ -44,6 +44,20 @@ class VectorValue:
 
 
 @dataclass(frozen=True, slots=True)
+class LaneListParameter:
+    """A named ``lanes<s>`` parameter selected for one specialization.
+
+    ``lane_count`` is concrete when the selected vector length is known; sized
+    generic vectors keep a symbolic ``lane_expression`` instead.
+    """
+
+    name: str
+    element_kind: str
+    lane_count: int | None
+    lane_expression: str
+
+
+@dataclass(frozen=True, slots=True)
 class LoweringEnv:
     catalog: Catalog
     backend: BackendDialect
@@ -81,9 +95,8 @@ class LoweringEnv:
     # render knows which condition leaves are symbolic template params (rendered raw) vs
     # generation-time queries (folded to a literal).
     generic_param_names: tuple[str, ...] = ()
-    # The lane count of a variadic (`s...`) primitive (`set`), so `pack<expand>`/`pack<first>`
-    # know how many scalar args there are. None for non-variadic primitives.
-    variadic_lanes: int | None = None
+    # Named first-class lane-list parameters (`lanes<s>`), keyed by source/emitted parameter name.
+    lane_list_params: Mapping[str, LaneListParameter] = field(default_factory=dict)
     # When this specialization is monomorphized at a concrete sized lane count (an
     # `unroll_variants` body, one per `size_bits` entry), the integer count; None for the
     # ordinary `LANES`-parametric sized vector. Drives `lane_symbol`.
@@ -110,6 +123,9 @@ class LoweringEnv:
             "primitive_arg_generics",
             _frozen_mapping(self.primitive_arg_generics),
         )
+        object.__setattr__(
+            self, "lane_list_params", _frozen_mapping(self.lane_list_params)
+        )
 
 
 @dataclass(slots=True)
@@ -133,6 +149,8 @@ class LoweringScope:
     # `base::generic(OutVec)` work. (`type_aliases` still holds the rendered spelling for
     # type-position uses like `to_array[OutVec]`.)
     vector_aliases: dict[str, VectorValue] = field(default_factory=dict)
+    # `loop<generation>` integer bindings. They are intentionally lexical and body-local.
+    generation_ints: dict[str, int] = field(default_factory=dict)
 
     def bind_type_alias(
         self,
@@ -171,6 +189,15 @@ class LoweringScope:
 
     def resolve_type_alias(self, name: str) -> RenderText | None:
         return self.type_aliases.get(name)
+
+    def bind_generation_int(self, name: str, value: int) -> None:
+        self.generation_ints[name] = value
+
+    def resolve_generation_int(self, name: str) -> int | None:
+        return self.generation_ints.get(name)
+
+    def unbind_generation_int(self, name: str) -> None:
+        self.generation_ints.pop(name, None)
 
 
 @dataclass(slots=True)

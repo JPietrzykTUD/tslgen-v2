@@ -136,6 +136,13 @@ def simple_case(
         if len(scalar_inputs) != 1 or len(case.expected) != case.lanes:
             return None
         return _plan(kind, name, index, case, specs, base_spelling, scalar_input=scalar_inputs[0])
+    if kind == "lane_list":
+        vector_inputs = _vector_inputs(case)
+        if len(vector_inputs) != 1 or len(vector_inputs[0]) != case.lanes:
+            return None
+        if len(case.expected) != case.lanes:
+            return None
+        return _plan(kind, name, index, case, specs, base_spelling, vector_inputs=vector_inputs)
     if kind == "mask_to_vector":
         mask_inputs = _mask_inputs(case)
         if len(mask_inputs) != 1 or len(case.expected) != case.lanes:

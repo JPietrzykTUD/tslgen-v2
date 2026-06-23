@@ -31,6 +31,8 @@ def render_rust_values_file(profiles: tuple[ValueTestProfilePlan, ...]) -> str:
 def _render_case(case: ValueTestCasePlan) -> str:
     if case.kind == "generic_golden":
         return _generic_golden(case)
+    if case.kind == "lane_list":
+        return _lane_list(case)
     if case.kind == "convert":
         return _convert(case)
     if case.kind == "repr_cast":
@@ -74,6 +76,27 @@ def _generic_golden(case: ValueTestCasePlan) -> str:
         )
     lines.append("    }")
     return "\n".join(lines)
+
+
+def _lane_list(case: ValueTestCasePlan) -> str:
+    literals = rust_literal_list(case.vector_inputs[0], case.type_tag)
+    expected = rust_literal_list(case.expected, case.type_tag)
+    return "\n".join(
+        [
+            "    #[test]",
+            f"    fn {case.function_name}() {{",
+            f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
+            f"        let in0: [{case.base_spelling}; {case.lanes}] = [{literals}];",
+            "        let mut values: <Vec as SimdVector>::Array = Default::default();",
+            f"        for i in 0..{case.lanes} {{ values[i] = in0[i]; }}",
+            f"        let expected: [{case.base_spelling}; {case.lanes}] = [{expected}];",
+            f"        let result = {rust_raw_identifier(case.call_name)}::<Vec>(values);",
+            f"        for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), "
+            f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
+            "i, expected[i], result[i]); }",
+            "    }",
+        ]
+    )
 
 
 def _convert(case: ValueTestCasePlan) -> str:

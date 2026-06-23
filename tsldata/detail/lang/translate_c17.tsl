@@ -101,7 +101,6 @@ static inline void tsl_io_write_f64(FILE *out, double v) { fprintf(out, "%.6f", 
   algo_max_element "TSL_MAX_ELEMENT({ptr}, {len})"
   algo_min_element "TSL_MIN_ELEMENT({ptr}, {len})"
   algo_swap "TSL_SWAP({a}, {b})"
-  pack_first "{arg}"
   seq_type "TSL_SEQ_TYPE({type}, {args})"
   seq_make "TSL_SEQ_MAKE({type}, {count})"
   var_infer "__auto_type {name} {value};"

@@ -27,7 +27,7 @@ LANE_SET: "lane_set"
 EXTENSION: "extension"
 
 NAME.1: /(?!prim\b)(?!template\b)(?!types\b)(?!flags\b)(?!language\b)(?!operation\b)(?!translation\b)(?!generic_params\b)(?!lane_set\b)(?!extension\b)(?!body\b)(?!native\b)[a-zA-Z_?][a-zA-Z0-9_?.]*(::[a-zA-Z_?][a-zA-Z0-9_?.]*)*/
-SIGNATURE.2: /[a-zA-Z_?][^<>]*:=[^<>]+/
+SIGNATURE.2: /[a-zA-Z_?][^:=]*:=(?:[^<>]|<[^<>]*(?:<[^<>]*>[^<>]*)*>)+/
 
 start: stmt_list
 

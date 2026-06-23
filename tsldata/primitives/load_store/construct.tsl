@@ -389,7 +389,7 @@ prim<v:=()>[value=undef] set_undef():
             );
           """
 
-prim<v:=s...>[arg_count(args)=return_vector_length] set(args...):
+prim<v:=(lanes<s>)> set(values):
   brief_description "[Example: sse + si8]: Set packed 8-bit integers in \"dst\" with the supplied values."
   operation "[Example: sse + si8]: dst[7:0] := e0\ndst[15:8] := e1\ndst[23:16] := e2\ndst[31:24] := e3\ndst[39:32] := e4\ndst[47:40] := e5\ndst[55:48] := e6\ndst[63:56] := e7\ndst[71:64] := e8\ndst[79:72] := e9\ndst[87:80] := e10\ndst[95:88] := e11\ndst[103:96] := e12\ndst[111:104] := e13\ndst[119:112] := e14\ndst[127:120] := e15"
   tests:
@@ -419,11 +419,21 @@ prim<v:=s...>[arg_count(args)=return_vector_length] set(args...):
           tsil """
             if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
               emit_return(
-                intrin_compose<set, suffix="epi64">(pack<expand>(args))
+                intrin_compose<set, suffix="epi64">(
+                  cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
+                  loop<generation>(i, 1, value<generation>(vector::length), 1) {
+                    , cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, i))
+                  }
+                )
               );
             } else<generation> {
               emit_return(
-                intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(pack<expand>(args))
+                intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                  cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
+                  loop<generation>(i, 1, value<generation>(vector::length), 1) {
+                    , cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, i))
+                  }
+                )
               );
             }
           """
@@ -432,7 +442,12 @@ prim<v:=s...>[arg_count(args)=return_vector_length] set(args...):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set>(pack<expand>(args))
+              intrin_compose<set>(
+                lanes<at>(values, 0)
+                loop<generation>(i, 1, value<generation>(vector::length), 1) {
+                  , lanes<at>(values, i)
+                }
+              )
             );
           """
     [avx2, sse]:
@@ -444,11 +459,21 @@ prim<v:=s...>[arg_count(args)=return_vector_length] set(args...):
           tsil """
             if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
               emit_return(
-                intrin_compose<set, suffix="epi64x">(pack<expand>(args))
+                intrin_compose<set, suffix="epi64x">(
+                  cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
+                  loop<generation>(i, 1, value<generation>(vector::length), 1) {
+                    , cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, i))
+                  }
+                )
               );
             } else<generation> {
               emit_return(
-                intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(pack<expand>(args))
+                intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                  cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
+                  loop<generation>(i, 1, value<generation>(vector::length), 1) {
+                    , cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, i))
+                  }
+                )
               );
             }
           """
@@ -459,7 +484,12 @@ prim<v:=s...>[arg_count(args)=return_vector_length] set(args...):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set>(pack<expand>(args))
+              intrin_compose<set>(
+                lanes<at>(values, 0)
+                loop<generation>(i, 1, value<generation>(vector::length), 1) {
+                  , lanes<at>(values, i)
+                }
+              )
             );
           """
     [neon, sve, generic, oneAPIfpga]:
@@ -474,7 +504,7 @@ prim<v:=s...>[arg_count(args)=return_vector_length] set(args...):
                var<const_infer>(zero, call<primitive=set_zero[Vec]>())
                var<infer>(data, call<primitive=to_array[Vec]>(zero))
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
-                data[i] = cast<static>(type<generation>(base::in), args[value<generation>(vector::length) - 1 - i]);
+                data[i] = cast<static>(type<generation>(base::in), values[value<generation>(vector::length) - 1 - i]);
               }
                emit_return(call<primitive=load[Vec] attrs[aligned=false]>(data.data())) ;
             """
@@ -482,4 +512,4 @@ prim<v:=s...>[arg_count(args)=return_vector_length] set(args...):
       arith:
         requires []
         implementation:
-          tsil "emit_return(pack<first>(args));"
+          tsil "emit_return(lanes<at>(values, 0));"

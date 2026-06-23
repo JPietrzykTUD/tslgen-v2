@@ -973,6 +973,81 @@ environmental C++ configure failure, not a Python/lowering failure:
 `CXX=zig c++`, and CMake's compiler-identification step attempted to create
 `/root/.cache/zig/tmp/...`, which failed with `ReadOnlyFileSystem`.
 
+## Lane-List `set` Planning Decision
+
+On 2026-06-23, the active `tslc` line accepted the design direction recorded in
+ADR-079: replace the variadic `set` source shape with a first-class lane-list
+parameter.
+
+Current transition source:
+
+```tsl
+prim<v:=s...>[arg_count(args)=return_vector_length] set(args...):
+```
+
+Selected target source:
+
+```tsl
+prim<v:=(lanes<s>)> set(values):
+```
+
+The accepted first-class source mechanisms are deliberately small:
+
+- `lanes<s>` is a single named parameter whose length is the selected return
+  vector lane count.
+- `lanes<at>(values, N)` accesses one scalar lane-list element, and `N` must be
+  generation-time known.
+- `loop<generation>(i, start, end, step) { ... }` expands in the generator and
+  binds `i` as a generation-time integer.
+- Existing `loop<range>` remains a normal emitted target-language loop.
+- No `lanes<expand>` or `lanes<expand_reverse>` should be added in the first
+  design.
+
+The x86-style reverse construction currently expected by `set` tests should be
+made explicit in the `set` body, for example by using
+`lanes<at>(values, value<generation>(vector::length) - 1 - i)`, rather than
+hiding reversal in the signature or renderer.
+
+Lane-list `set` migration completed in the current worktree:
+
+- `SignatureShape` now carries structured `SignatureTerm` values while keeping
+  the compatibility `result_kind`/`param_kinds` surface.
+- `lanes<s>` is a supported parameter-position signature term and is rejected in
+  result position or malformed forms such as `lanes<>`, `lanes<v>`, and nested
+  lane lists.
+- Lowering records named `LaneListParameter` facts with element kind and selected
+  lane count/expression.
+- `lanes<at>(values, N)` lowers for generation-time integer indexes, including
+  loop-bound symbols and the arithmetic needed by `set`.
+- `loop<generation>(i, start, end, step) { ... }` expands in the generator,
+  binds `i` as a generation-time integer, and diagnoses malformed arity,
+  non-integer bounds, and zero step.
+- C++ and Rust render `lanes<s>` parameters through the existing array-like lane
+  storage ABI instead of a public C++ variadic pack.
+- The real corpus `set` source is now `prim<v:=(lanes<s>)> set(values):`.
+- C++/Rust value-test planning renders a `lane_list` case kind for
+  `v:=(lanes<s>)`.
+- Production support for the old C++ variadic wrapper, variadic selection skip,
+  `variadic_lanes` handoff, backend pack syntax hooks, and `pack_first` helper
+  has been removed. `pack<...>` is quarantined as an unsupported TSIL keyword.
+
+Validation for the completed migration:
+
+```bash
+python -m compileall -q tslc/src/tslc tslc/tests
+python -m pytest -q tslc/tests/test_lane_lists.py tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py tslc/tests/test_select_and_lower.py tslc/tests/test_masks_and_calls.py tslc/tests/test_support_policy.py tslc/tests/test_catalog_validation.py tslc/tests/test_build_verify.py::test_set_builds
+git diff --check
+```
+
+Results: compile passed; the combined targeted run passed with 61 tests; diff
+check passed.
+
+Next concrete prompt:
+
+```text
+docs/agent/runs/tslc-lane-list-set-migration-review-prompt.md
+```
+
 After the backend dialect facet split, validation was rerun in the local
 workspace:
 

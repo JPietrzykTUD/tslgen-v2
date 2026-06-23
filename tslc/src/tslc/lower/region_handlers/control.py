@@ -7,6 +7,7 @@ import re
 from tslc.ir.segments import Region
 from tslc.lower._text import skip_string
 from tslc.lower.context import LoweringSession
+from tslc.lower.generation import evaluate_generation_int_segments
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue
 from tslc.lower.region_handlers.common import _segment_text, _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
@@ -241,19 +242,23 @@ class AssumeAlignedLowerer:
 
 
 class LoopLowerer:
-    """``loop<range>(var, start, end, step) { body }`` / ``loop<unroll>(count)`` -> the
-    backend's **native** loop construct (NOT a generation-time unroll): the `loop_range` /
-    `loop_unroll` translate template framing the (recursively-rendered) block. C++
-    ``for (std::size_t i = 0; i < N; i += 1) { ... }`` / Rust ``for i in (0..N).step_by(1)
-    { ... }``; the bound ``value<generation>(vector::length)`` resolves via the query region.
+    """``loop<range>`` emits a native target loop; ``loop<generation>`` expands here.
+
+    ``loop<range>(var, start, end, step) { body }`` / ``loop<unroll>(count)`` keeps the
+    existing backend-native behavior. ``loop<generation>(var, start, end, step) { body }``
+    evaluates integer bounds now, binds ``var`` as a generation-time integer, and renders
+    the block once per iteration.
     """
 
     keyword = "loop"
+    _VAR = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
         variant = region.selector_text.strip()
+        if variant == "generation":
+            return self._generation(region, context, render)
         key = f"loop_{variant}"
         if context.env.backend.templates.template(key) is None:
             context.effects.skip(
@@ -290,6 +295,62 @@ class LoopLowerer:
                 (header, literal_text(" {\n        "), block, literal_text("\n      }"))
             )
         return header
+
+    def _generation(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
+        groups = _split_arg_groups(region.body)
+        if len(groups) != 4 or region.block is None:
+            context.effects.skip(
+                "TSL-LOWER-UNSUPPORTED-GENERATION-LOOP",
+                f"loop<generation> needs (var, start, end, step) and a block: "
+                f"{region.full_text!r}",
+                source=region.source,
+            )
+            return region.full_text
+        var = _segment_text(groups[0])
+        if self._VAR.fullmatch(var) is None:
+            context.effects.skip(
+                "TSL-LOWER-GENERATION-LOOP-BAD-VAR",
+                f"loop<generation> variable must be an identifier: {region.full_text!r}",
+                source=region.source,
+            )
+            return region.full_text
+
+        values = tuple(
+            evaluate_generation_int_segments(group, context, render)
+            for group in groups[1:]
+        )
+        if any(value is None for value in values):
+            context.effects.skip(
+                "TSL-LOWER-GENERATION-LOOP-NON-INTEGER",
+                f"loop<generation> bounds must be generation-time integers: "
+                f"{region.full_text!r}",
+                source=region.source,
+            )
+            return region.full_text
+        start, end, step = (int(value) for value in values if value is not None)
+        if step == 0:
+            context.effects.error(
+                "TSL-LOWER-GENERATION-LOOP-ZERO-STEP",
+                f"loop<generation> step must not be zero: {region.full_text!r}",
+                source=region.source,
+            )
+            return region.full_text
+
+        had_previous = var in context.scope.generation_ints
+        previous = context.scope.resolve_generation_int(var)
+        parts: list[RenderField] = []
+        try:
+            for value in range(start, end, step):
+                context.scope.bind_generation_int(var, value)
+                parts.append(render(region.block))
+        finally:
+            if had_previous and previous is not None:
+                context.scope.bind_generation_int(var, previous)
+            else:
+                context.scope.unbind_generation_int(var)
+        return render_sequence(tuple(parts))
 
 class SwitchLowerer:
     """``switch<compile>(sel) { label => { body } … _ => { body } }`` -> a compile-time multi-way

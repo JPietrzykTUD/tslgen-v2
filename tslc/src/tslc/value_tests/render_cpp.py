@@ -49,6 +49,8 @@ def _render_case(case: ValueTestCasePlan) -> str:
         return _vector_to_array(case)
     if case.kind == "broadcast":
         return _broadcast(case)
+    if case.kind == "lane_list":
+        return _lane_list(case)
     if case.kind == "immediate":
         return _immediate(case)
     if case.kind == "mask_to_vector":
@@ -282,6 +284,24 @@ def _vector_to_array(case: ValueTestCasePlan) -> str:
         "  typename Vec::register_type v;",
         f"  for (std::size_t i = 0; i < {case.lanes}; ++i) v[i] = in0[i];",
         f"  typename tsl::array_for<Vec>::type result = tsl::{case.call_name}<Vec>(v);",
+        f"  static const {case.base_spelling} expected[{case.lanes}] = {{{expected}}};",
+        f'  return tsl::test::check_lanes<{case.base_spelling}>('
+        f'"{case.case_name}", result, expected, {case.lanes});',
+        "}",
+    ]
+    return "\n".join(lines)
+
+
+def _lane_list(case: ValueTestCasePlan) -> str:
+    literals = cpp_literal_list(case.vector_inputs[0], case.type_tag)
+    expected = cpp_literal_list(case.expected, case.type_tag)
+    lines = [
+        f"int {case.function_name}() {{",
+        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
+        f"  static const {case.base_spelling} in0[{case.lanes}] = {{{literals}}};",
+        "  typename tsl::array_for<Vec>::type values;",
+        f"  for (std::size_t i = 0; i < {case.lanes}; ++i) values[i] = in0[i];",
+        f"  typename Vec::register_type result = tsl::{case.call_name}<Vec>(values);",
         f"  static const {case.base_spelling} expected[{case.lanes}] = {{{expected}}};",
         f'  return tsl::test::check_lanes<{case.base_spelling}>('
         f'"{case.case_name}", result, expected, {case.lanes});',

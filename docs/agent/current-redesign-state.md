@@ -1211,21 +1211,26 @@ Last accepted work (committed):
 Current action:
 
 ```text
-Executor finished the cleanup after the ad hoc `tslc` value-test planning
-boundary pass.
-Active review prompt:
-docs/agent/runs/tslc-value-test-cleanup-review-prompt.md
+The `tslc` lane-list `set` migration is implemented. `set` is authored as
+`v:=(lanes<s>)`, `lanes<at>` accepts generation-time integer indexes including
+symbols bound by `loop<generation>`, the real corpus source no longer uses
+`s...` or `pack<...>`, C++/Rust render an array-like lane-list argument, and
+value-test planning covers `v:=(lanes<s>)`.
+Active prompt:
+docs/agent/runs/tslc-lane-list-set-migration-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
 boundary review prompt:
+docs/agent/runs/tslc-value-test-cleanup-review-prompt.md
 docs/agent/runs/tslc-value-test-plan-boundary-review-prompt.md
 docs/agent/runs/tslc-support-policy-capability-review-prompt.md
 docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md
 docs/agent/runs/tslc-typed-render-values-review-prompt.md
 
-Next expected action: review verdict for the value-test cleanup pass
-(`Accept`, `Accept With Follow-Ups`, `Needs Revision`, or `Return To Planner`).
+Next expected action: review the completed lane-list `set` migration prompt
+above. Confirm old variadic production paths are removed or quarantined and
+current reverse `set` value behavior is preserved.
 ```
 
 Verification status (2026-06-23):
@@ -1239,6 +1244,27 @@ Verification status (2026-06-23):
   passed with 145 tests;
   `python -m pytest -q tslc/tests/test_build_verify.py::test_generated_profiles_build`
   passed;
+  `git diff --check` passed.
+
+- Lane-list `set` planning pass:
+  docs-only planning completed; ADR-079 added to
+  `docs/redesign/design-decisions.md`, the transition note added to
+  `docs/redesign/behavioral-spec.md`, active handoff updated, and next prompt
+  written at `docs/agent/runs/tslc-lane-list-set-first-slice-prompt.md`.
+
+- Lane-list `set` first implementation slice:
+  `python -m compileall -q tslc/src/tslc tslc/tests` passed;
+  `python -m pytest -q tslc/tests/test_lane_lists.py tslc/tests/test_support_policy.py tslc/tests/test_catalog_validation.py tslc/tests/test_select_and_lower.py`
+  passed with 39 tests;
+  `python -m pytest -q tslc/tests/test_masks_and_calls.py tslc/tests/test_build_verify.py::test_set_builds`
+  passed with 9 tests;
+  combined rerun of the focused/adjoining tests passed with 48 tests;
+  `git diff --check` passed.
+
+- Lane-list `set` generation-loop/full migration:
+  `python -m compileall -q tslc/src/tslc tslc/tests` passed;
+  `python -m pytest -q tslc/tests/test_lane_lists.py tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py tslc/tests/test_select_and_lower.py tslc/tests/test_masks_and_calls.py tslc/tests/test_support_policy.py tslc/tests/test_catalog_validation.py tslc/tests/test_build_verify.py::test_set_builds`
+  passed with 61 tests;
   `git diff --check` passed.
 
 - Support-policy capability pass:
@@ -1552,7 +1578,7 @@ docs/agent/runs/tslc-typed-render-values-review-prompt.md
 Active prompt:
 
 ```text
-docs/agent/runs/tslc-value-test-cleanup-review-prompt.md
+docs/agent/runs/tslc-lane-list-set-migration-review-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

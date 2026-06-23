@@ -115,39 +115,25 @@ class CppBackend:
             key += f", {first.immediate[0]}"
         key += "".join(f", {name}" for name, _, _ in first.generic_params)
         applies: list[str] = []
-        if DEFAULT_SUPPORT_POLICY.variadic_scalar_kind in first.param_kinds:
-            # A variadic (`s...`) primitive (`set`): the lane-count scalar args are a C++
-            # function parameter pack. One template `apply` per specialization forwards the pack
-            # to the intrinsic (`_mm_set_epi8(args...)`).
-            pname = first.param_names[
-                first.param_kinds.index(DEFAULT_SUPPORT_POLICY.variadic_scalar_kind)
-            ]
+        seen: set[tuple[str, ...]] = set()
+        for spec in group:
+            # Dedup overloads that collapse to the same parameter types (a `v` and an
+            # `s` parameter are identical where register_type == base_type, i.e. scalar).
+            signature = effective_param_types(spec)
+            if signature in seen:
+                continue
+            seen.add(signature)
+            index_type = spec.type_params[0][0] if spec.type_params else None
+            params = ", ".join(
+                f"{_param_type(kind, index_type)} {name}"
+                for name, kind in zip(spec.param_names, spec.param_kinds)
+                if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
+            )
             applies.append(
-                f"    template <class... Args>\n"
-                f"    static inline {_apply_result_type(first)} apply(Args... {pname}) {{\n"
-                f"        {first.body_text}\n"
+                f"    static inline {_apply_result_type(spec)} apply({params}) {{\n"
+                f"        {spec.body_text}\n"
                 f"    }}"
             )
-        else:
-            seen: set[tuple[str, ...]] = set()
-            for spec in group:
-                # Dedup overloads that collapse to the same parameter types (a `v` and an
-                # `s` parameter are identical where register_type == base_type, i.e. scalar).
-                signature = effective_param_types(spec)
-                if signature in seen:
-                    continue
-                seen.add(signature)
-                index_type = spec.type_params[0][0] if spec.type_params else None
-                params = ", ".join(
-                    f"{_param_type(kind, index_type)} {name}"
-                    for name, kind in zip(spec.param_names, spec.param_kinds)
-                    if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
-                )
-                applies.append(
-                    f"    static inline {_apply_result_type(spec)} apply({params}) {{\n"
-                    f"        {spec.body_text}\n"
-                    f"    }}"
-                )
         # A representation-change spec exposes `ToVec` (the target vector) in the impl so a
         # `tv` param / the result can project through it (`typename ToVec::register_type`).
         to_vec = (
@@ -164,18 +150,6 @@ class CppBackend:
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
     ) -> str:
         shape = specializations[0]
-        if DEFAULT_SUPPORT_POLICY.variadic_scalar_kind in shape.param_kinds:
-            # A variadic (`s...`) primitive (`set`): a C++ variadic-template wrapper forwarding the
-            # parameter pack to the per-specialization `apply`.
-            pname = shape.param_names[
-                shape.param_kinds.index(DEFAULT_SUPPORT_POLICY.variadic_scalar_kind)
-            ]
-            return (
-                f"template <class Vec, class... Args>\n"
-                f"inline {_result_type(shape.result_kind)} {primitive_name}(Args... {pname}) {{\n"
-                f"    return {primitive_name}_impl<Vec>::apply({pname}...);\n"
-                f"}}"
-            )
         # Positions whose parameter kind differs across signatures are the overload's
         # dispatch points: they become generic template params so C++ resolves the call.
         varying = varying_positions(specializations)
@@ -302,6 +276,6 @@ def _param_type(kind: str, index_type: str | None = None) -> str:
         return "std::string &"
     if kind in DEFAULT_SUPPORT_POLICY.pointer_kinds:
         return "typename Vec::base_type *"
-    if kind == "s[]":
+    if kind in ("s[]", DEFAULT_SUPPORT_POLICY.lane_list_kind):
         return "typename ::tsl::array_for<Vec>::type"
     return "typename Vec::base_type"

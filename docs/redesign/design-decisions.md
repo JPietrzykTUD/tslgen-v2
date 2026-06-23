@@ -3971,3 +3971,110 @@ Consequences:
 - The current generated C++/Rust substrate names remain a backend presentation
   detail. A future runtime/support-library rename should be handled in backend
   rendering/static assets, not by changing selection or lowering behavior.
+
+## ADR-079: Lane-List Parameters Replace Variadic `set` Source Shape
+
+Status: Accepted and implemented in `tslc`/`tsldata`.
+
+Implementation status:
+
+- Completed: structured `lanes<s>` signature terms, parameter-position
+  validation, typed lowered lane-list parameter facts, literal and
+  generation-bound `lanes<at>` indexes, `loop<generation>` integer expansion,
+  C++/Rust array-like parameter rendering, full `set` source migration, value
+  tests for `v:=(lanes<s>)`, and removal/quarantine of transition-only
+  variadic/pack behavior.
+
+Context:
+
+The active `set` primitive is currently authored as:
+
+```tsl
+prim<v:=s...>[arg_count(args)=return_vector_length] set(args...):
+```
+
+This models "one scalar argument per result lane" as a variadic source
+signature. That shape is convenient for C++ and x86 `_mm_set*` intrinsics, but
+it leaks backend calling conventions into the source language. It is awkward
+for Rust, forces special handling in generated wrappers and smoke tests, skips
+sized-vector generic fallback loops, and keeps value-test planning from treating
+`set` as an ordinary typed shape.
+
+The source intent is not "a C++ parameter pack"; it is a named lane-list
+argument whose length is the selected vector lane count.
+
+Decision:
+
+Introduce a first-class lane-list parameter term and migrate `set` to it:
+
+```tsl
+prim<v:=(lanes<s>)> set(values):
+```
+
+`lanes<s>` is a single named parameter. Its element kind is scalar `s`, and its
+length is exactly the selected return vector lane count. The first accepted
+surface supports only parameter-position `lanes<s>`; result-position lane
+lists, nested lane lists, empty lane-list element kinds, and non-scalar element
+kinds are rejected until deliberately selected.
+
+Add one lane-list accessor:
+
+```tsl
+lanes<at>(values, N)
+```
+
+The selector `at` is the only accepted lane-list operation for the first slice.
+`N` must be generation-time known: a literal integer, or a symbol bound by a
+generation-time loop. Runtime/emitted loop variables are rejected. The accessor
+returns the scalar value at the logical lane-list index `N`.
+
+Add generation-time range expansion:
+
+```tsl
+loop<generation>(i, start, end, step) { ... }
+```
+
+It has the same four-argument shape as `loop<range>`, but it is executed by the
+generator. `start`, `end`, and `step` must evaluate to generation-time integer
+values. The body is expanded once for each iteration with `i` bound as a
+generation-time integer. Existing `loop<range>` keeps its current meaning: emit
+a normal target-language loop.
+
+Do not add `lanes<expand>` or `lanes<expand_reverse>` in the first design. When
+x86 set intrinsics require reversed argument order, the source body should spell
+that fact explicitly with `lanes<at>(values, value<generation>(vector::length)
+- 1 - i)` or equivalent generation-time arithmetic instead of hiding reversal in
+the signature or renderer.
+
+Consequences:
+
+- `set` stops exposing a C++ variadic/public parameter-pack API as the source
+  semantic model.
+- C++ and Rust can receive the same logical lane-list argument. Backends may
+  still render native x86 set intrinsics, array construction, scalar fallback,
+  or lane-insert workarounds from typed lowered facts.
+- Neon/ARM-style workarounds can name the lane-list parameter and access
+  generation-known lanes without manufacturing fake top-level parameters.
+- Value-test generation can add a normal `v:=(lanes<s>)` pattern: test inputs
+  become the lane-list argument, and expected values remain vector lanes.
+- `s...`, `arg_count(args)=return_vector_length`, `pack<expand>`, and
+  `pack<first>` become transition-only mechanisms. They should be removed or
+  quarantined once no source data needs them.
+
+Implementation plan:
+
+1. Document accepted/rejected `lanes<s>`, `lanes<at>`, and
+   `loop<generation>` syntax and diagnostics.
+2. Extend the signature model to represent `lanes<s>` as structured typed data
+   rather than a raw signature string convention.
+3. Validate only parameter-position `lanes<s>` for the first slice.
+4. Lower lane-list parameters as named typed facts carrying element kind and
+   selected lane count.
+5. Implement `lanes<at>` for literal generation-time indexes, then for
+   generation-loop-bound symbols.
+6. Implement `loop<generation>` by expanding the body with a generation-time
+   integer binding.
+7. Migrate `set` from `v:=s...` to `v:=(lanes<s>)`, spelling the current
+   reverse construction explicitly where preserving existing tests requires it.
+8. Add a value-test pattern for `v:=(lanes<s>)`.
+9. Remove or quarantine the old variadic and pack mechanisms after migration.

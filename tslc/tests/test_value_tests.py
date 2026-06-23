@@ -41,6 +41,8 @@ def _value_test_shape_handled(signature: str) -> bool:
         return True
     if result == "v" and params == ("s",):  # set1 broadcast
         return True
+    if result == "v" and params == ("lanes<s>",):  # set lane-list construction
+        return True
     if result == "v" and "sImm" in params and all(k in ("v", "sImm") for k in params):
         return True  # immediate op (mul_imm / shift-imm)
     if result == "v" and params == ("m",):  # to_vector (mask -> vector)
@@ -108,6 +110,7 @@ def test_value_test_coverage_gaps(catalog: Catalog) -> None:
     # Regression guard: the shapes we implemented stay covered.
     assert {
         "add", "equal", "conflict", "store",
+        "set",
         "convert_up", "convert_down", "cast", "reinterpret", "extract", "insert",
     } <= covered
     assert len(covered) >= 20, sorted(covered)

@@ -117,13 +117,6 @@ inline std::size_t idx_offset(Idx index, std::size_t scale) {
     return static_cast<std::size_t>(index) * scale;
 }
 
-// The first element of a variadic parameter pack (`set`'s scalar/1-lane body). C++ packs
-// cannot be indexed, so the first element is recovered by binding the head.
-template <class First, class... Rest>
-inline First pack_first(First first, Rest... /*rest*/) {
-    return first;
-}
-
 // A fixed-size, over-aligned array buffer (the `s[]` kind). Wraps std::array so
 // `.data()`/`operator[]`/`.fill()` are uniform with the Rust counterpart; `Align`
 // over-aligns the storage so an aligned store into it (via `assume_aligned`) is valid.

@@ -32,6 +32,7 @@ from tslc.ir.scan import scan
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower.calls import parse_call_selector
 from tslc.lower.context import (
+    LaneListParameter,
     LoweringEffects,
     LoweringEnv,
     LoweringScope,
@@ -126,11 +127,8 @@ class LoweredSpecialization:
     # unmasked spec. Survives lowering (the boolean `axis` does not carry it) so pruning can match
     # callees per-policy and the render rename can split a dual name to `<name>_mask`/`_maskz`.
     mask_policy: str | None = None
-    # The lane count of a variadic (`s...`) primitive (`set`): the number of scalar args, equal
-    # to the vector length for this specialization (16 for `simd<i8,sse>`, 1 for scalar). None
-    # for non-variadic primitives. The render uses it for the C++ variadic-template arity in the
-    # smoke test and for the Rust `args[0..N-1]` pack expansion.
-    variadic_lanes: int | None = None
+    # First-class lane-list parameters (`lanes<s>`) selected for this specialization.
+    lane_list_params: tuple[LaneListParameter, ...] = ()
 
     @property
     def body_text(self) -> str:
@@ -234,19 +232,7 @@ class Lowerer:
                 f"(supported: {', '.join(sorted(self._support.supported_signature_kinds))})",
                 source=_primitive_signature_source(selected),
             )
-        # A variadic param is authored `name...`; strip the marker for the emitted parameter
-        # name (the `...` lives in the `s...` kind, not the identifier).
-        parameters = tuple(p.removesuffix("...") for p in selected.primitive.parameters)
-        # A variadic (`s...`) primitive takes one scalar arg per lane; the generic `<LANES>`
-        # vector is excluded by selection, so the lane count is concrete here (1 for scalar).
-        variadic_lanes: int | None = None
-        if self._support.is_variadic_signature(shape):
-            ext_bits = selected.extension.vector_bits
-            variadic_lanes = (
-                ext_bits // self._support.type_bit_width_or_default(selected.type_tag)
-                if ext_bits
-                else 1
-            )
+        parameters = tuple(selected.primitive.parameters)
         if len(parameters) != len(shape.param_kinds):
             return _error(
                 "TSL-LOWER-SIGNATURE-ARITY",
@@ -298,7 +284,12 @@ class Lowerer:
                 generic_param_names=tuple(
                     gp.name for gp in selected.primitive.generic_params
                 ),
-                variadic_lanes=variadic_lanes,
+                lane_list_params=_lane_list_param_map(
+                    parameters,
+                    shape,
+                    selected,
+                    self._support,
+                ),
                 concrete_lanes=selected.concrete_lanes,
             ),
             scope=scope,
@@ -395,7 +386,7 @@ class Lowerer:
             register_is_base=self._support.register_is_base(context.env.extension),
             target=target,
             mask_policy=selected.primitive.attributes.get("mask"),
-            variadic_lanes=variadic_lanes,
+            lane_list_params=tuple(context.env.lane_list_params.values()),
         )
         return LoweringResult(
             specialization=specialization,
@@ -429,6 +420,36 @@ def _resolve_immediate_range(
     else:
         return None
     return (lo, hi, inclusive)
+
+
+def _lane_list_param_map(
+    parameters: tuple[str, ...],
+    shape: SignatureShape,
+    selected: SelectedImplementation,
+    support: SupportPolicy,
+) -> dict[str, LaneListParameter]:
+    result: dict[str, LaneListParameter] = {}
+    concrete_lanes = selected.concrete_lanes
+    lane_count = (
+        concrete_lanes
+        if concrete_lanes is not None
+        else support.lane_count(selected.extension, selected.type_tag)
+    )
+    lane_expression = (
+        str(concrete_lanes)
+        if concrete_lanes is not None
+        else support.lane_expression(selected.extension, selected.type_tag)
+    )
+    for name, term in zip(parameters, shape.param_terms):
+        if not term.is_lane_list:
+            continue
+        result[name] = LaneListParameter(
+            name=name,
+            element_kind=term.lane_element_kind or "",
+            lane_count=lane_count,
+            lane_expression=lane_expression,
+        )
+    return result
 
 
 def _render_raw_text(text: str, context: LoweringSession) -> RenderText:
@@ -793,6 +814,8 @@ def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
             return "mask"
         if kind in DEFAULT_SUPPORT_POLICY.pointer_kinds:
             return "ptr"
+        if kind == DEFAULT_SUPPORT_POLICY.lane_list_kind:
+            return "lane_list"
         return "base"  # s
 
     return tuple(token(kind) for kind in spec.param_kinds)

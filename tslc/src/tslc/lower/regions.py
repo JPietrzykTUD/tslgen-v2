@@ -23,10 +23,10 @@ from tslc.lower.region_handlers.intrinsics import (
     IntrinLowerer,
 )
 from tslc.lower.region_handlers.io import IoLowerer
+from tslc.lower.region_handlers.lanes import LanesLowerer
 from tslc.lower.region_handlers.masks import MaskLowerer
 from tslc.lower.region_handlers.memory import MemLowerer
 from tslc.lower.region_handlers.operators import OpLowerer
-from tslc.lower.region_handlers.pack import PackLowerer
 from tslc.lower.region_handlers.protocol import RegionLowerer, RenderBody
 from tslc.lower.region_handlers.queries import QueryRegionLowerer
 from tslc.lower.region_handlers.registry import DEFAULT_REGION_LOWERERS
@@ -43,12 +43,12 @@ __all__ = [
     "IntrinComposeLowerer",
     "IntrinLowerer",
     "IoLowerer",
+    "LanesLowerer",
     "LetLowerer",
     "LoopLowerer",
     "MaskLowerer",
     "MemLowerer",
     "OpLowerer",
-    "PackLowerer",
     "QueryRegionLowerer",
     "RegionLowerer",
     "RenderBody",

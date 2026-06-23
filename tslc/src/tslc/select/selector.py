@@ -102,11 +102,6 @@ class Selector:
             # emit a single slot — the free-function render emits one `tsl::name(...)`.
             shape = parse_signature(primitive.signature)
             free_function = shape is not None and shape.is_free_function
-            # A variadic (`s...`) primitive (`set`) renders as a C++ variadic template, which has
-            # no runtime indexing — so a sized-vector per-lane fallback loop is not expressible.
-            # Skip it on every backend (keeping C++/Rust parity); scalar + concrete SIMD use the
-            # positional intrinsic / pack-first bodies.
-            variadic = shape is not None and self.support.is_variadic_signature(shape)
             primitive_type_tags = (
                 tuple(
                     sorted(
@@ -124,10 +119,6 @@ class Selector:
             for extension_name in self._emit_extensions(catalog, profile):
                 if emitted_free:
                     break
-                if shape is not None and self.support.skips_variadic_on_extension(
-                    catalog.extensions[extension_name], shape
-                ):
-                    continue
                 for type_tag in primitive_type_tags:
                     # A representation-change primitive has a SECOND axis (the target type /
                     # extension); it emits one slot per (type_tag, to_target). An ordinary

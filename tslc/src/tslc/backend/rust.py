@@ -419,7 +419,10 @@ def _kind_type(kind: str, owner: str) -> str:
         return f"*mut {owner}::BaseType"
     if kind == "void":
         return "()"
-    if kind in ("s[]", DEFAULT_SUPPORT_POLICY.variadic_scalar_kind):
+    if kind in (
+        "s[]",
+        DEFAULT_SUPPORT_POLICY.lane_list_kind,
+    ):
         return f"{owner}::Array"
     if kind == "usize":  # a fixed count type, not a vector projection
         return "usize"

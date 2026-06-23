@@ -11,7 +11,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from tslc.catalog.model import RESULT_DIM_BASE, Extension
-from tslc.catalog.signatures import SignatureShape
+from tslc.catalog.signatures import LANE_LIST_KIND, SignatureShape
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,7 +23,7 @@ class SupportPolicy:
     mask_deferred_param_kinds: frozenset[str]
     mask_suffixes: tuple[tuple[str, str], ...]
     immediate_kind: str
-    variadic_scalar_kind: str
+    lane_list_kind: str
     index_vector_kind: str
     pointer_kinds: frozenset[str]
     sized_vector_bits_kinds: frozenset[str]
@@ -49,6 +49,11 @@ class SupportPolicy:
     def supports_signature(self, shape: SignatureShape) -> bool:
         return (
             shape.result_kind in self.supported_signature_kinds
+            and not shape.result_term.is_lane_list_like
+            and all(
+                not term.is_lane_list_like or term.kind == self.lane_list_kind
+                for term in shape.param_terms
+            )
             and not self.unsupported_signature_kinds(shape)
         )
 
@@ -59,11 +64,8 @@ class SupportPolicy:
     def has_immediate_operand(self, shape: SignatureShape) -> bool:
         return self.immediate_kind in shape.param_kinds
 
-    def is_variadic_signature(self, shape: SignatureShape) -> bool:
-        return self.variadic_scalar_kind in shape.param_kinds
-
-    def skips_variadic_on_extension(self, extension: Extension, shape: SignatureShape) -> bool:
-        return self.uses_sized_vector(extension) and self.is_variadic_signature(shape)
+    def has_lane_list_parameter(self, shape: SignatureShape) -> bool:
+        return self.lane_list_kind in shape.param_kinds
 
     def uses_sized_vector(self, extension: Extension) -> bool:
         return extension.vector_bits_kind in self.sized_vector_bits_kinds
@@ -176,9 +178,9 @@ DEFAULT_SUPPORT_POLICY = SupportPolicy(
             "ptr+",
             "void",
             "s[]",
+            LANE_LIST_KIND,
             "vt",
             "vidx",
-            "s...",
             "o",
         }
     ),
@@ -186,7 +188,7 @@ DEFAULT_SUPPORT_POLICY = SupportPolicy(
     mask_deferred_param_kinds=frozenset({"vidx"}),
     mask_suffixes=(("pass_through", "_mask"), ("zero", "_maskz")),
     immediate_kind="sImm",
-    variadic_scalar_kind="s...",
+    lane_list_kind=LANE_LIST_KIND,
     index_vector_kind="vidx",
     pointer_kinds=frozenset({"ptr", "ptr+"}),
     # Vector-bits kinds whose lane count is a runtime/symbolic parameter (`LANES`) rather than a
@@ -203,7 +205,6 @@ DEFAULT_SUPPORT_POLICY = SupportPolicy(
         "non-scalar/non-x86/non-generic_like extension family emission",
         "masked gather/scatter forms with vidx parameters",
         "masked reductions that return scalar values",
-        "sized-vector variadic fallback loops",
         "sized-vector extension-dimension representation changes",
         "different-width reinterpret representation targets",
     ),

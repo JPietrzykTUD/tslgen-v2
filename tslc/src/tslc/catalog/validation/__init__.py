@@ -14,6 +14,7 @@ from tslc.catalog.model import Catalog
 from tslc.catalog.validation.invariants import (
     validate_backend_type_spellings,
     validate_extension_inheritance,
+    validate_primitive_signatures,
     validate_required_backends,
 )
 from tslc.catalog.validation.schema_validation import validate_parsed_documents
@@ -35,6 +36,7 @@ def validate_catalog(
     diagnostics: list[Diagnostic] = []
     backends = tuple(dict.fromkeys(required_backends))
     validate_required_backends(catalog, backends, diagnostics)
+    validate_primitive_signatures(catalog, diagnostics)
     validate_extension_inheritance(catalog, diagnostics, parsed)
     validate_backend_type_spellings(catalog, backends, diagnostics, parsed)
     if parsed is not None:

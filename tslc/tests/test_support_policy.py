@@ -14,6 +14,16 @@ def test_policy_owns_backend_and_signature_support() -> None:
     assert policy.supports_backend("cpp")
     assert not policy.supports_backend("c17")
     assert policy.supports_signature(parse_signature("v:=(ptr,vidx,sImm)"))
+    lane_list_shape = parse_signature("v:=(lanes<s>)")
+    assert lane_list_shape is not None
+    assert lane_list_shape.param_kinds == ("lanes<s>",)
+    assert lane_list_shape.param_terms[0].is_lane_list
+    assert lane_list_shape.param_terms[0].lane_element_kind == "s"
+    assert policy.supports_signature(lane_list_shape)
+    assert policy.has_lane_list_parameter(lane_list_shape)
+    result_lane_list_shape = parse_signature("lanes<s>:=v")
+    assert result_lane_list_shape is not None
+    assert not policy.supports_signature(result_lane_list_shape)
     assert policy.unsupported_signature_kinds(parse_signature("opaque:=v")) == frozenset(
         {"opaque"}
     )
@@ -33,31 +43,26 @@ def test_policy_owns_mask_forms() -> None:
     assert not policy.is_maskable_signature(gather_shape)
 
 
-def test_policy_owns_deferred_family_and_variadic_rules() -> None:
+def test_policy_does_not_support_transition_variadic_shape() -> None:
     policy = DEFAULT_SUPPORT_POLICY
     set_shape = parse_signature("v:=s...")
     assert set_shape is not None
 
-    assert policy.supports_extension_family("generic_like")
-    assert not policy.supports_extension_family("arm")
-    assert "sized-vector variadic fallback loops" in policy.deferred_cases
+    assert not policy.supports_signature(set_shape)
+    assert policy.unsupported_signature_kinds(set_shape) == frozenset({"s..."})
 
 
 def test_policy_derives_sized_vector_capability_from_extension_metadata(
     catalog: Catalog,
 ) -> None:
     policy = DEFAULT_SUPPORT_POLICY
-    set_shape = parse_signature("v:=s...")
-    assert set_shape is not None
     sized = catalog.extensions["generic"]
     scalar = catalog.extensions["scalar"]
 
     assert sized.vector_bits_kind == "sized"
     assert sized.size_parameter_name == "LANES"
     assert policy.uses_sized_vector(sized)
-    assert policy.skips_variadic_on_extension(sized, set_shape)
     assert not policy.uses_sized_vector(scalar)
-    assert not policy.skips_variadic_on_extension(scalar, set_shape)
     assert policy.register_is_base(scalar)
     assert not policy.register_is_base(sized)
 

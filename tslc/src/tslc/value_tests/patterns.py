@@ -64,6 +64,12 @@ def default_value_test_patterns(
         _MaskLogicPattern(),
         _SimpleShapePattern("vector_to_array", "s[]", ("v",)),
         _SimpleShapePattern("broadcast", "v", ("s",)),
+        _SimpleShapePattern(
+            "lane_list",
+            "v",
+            (support.lane_list_kind,),
+            backend_ids=frozenset({"cpp", "rust"}),
+        ),
         _ImmediatePattern(support),
         _SimpleShapePattern("mask_to_vector", "v", ("m",)),
         _ConvertPattern(support),

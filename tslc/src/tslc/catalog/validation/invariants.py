@@ -5,6 +5,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from tslc.catalog.model import Catalog
+from tslc.catalog.signatures import (
+    LANE_LIST_KIND,
+    SignatureShape,
+    SignatureTerm,
+    parse_signature,
+)
 from tslc.catalog.validation.source_spans import (
     child,
     child_from_sequence,
@@ -80,6 +86,113 @@ def validate_backend_type_spellings(
                         source=type_sources.get(type_tag),
                     )
                 )
+
+
+def validate_primitive_signatures(
+    catalog: Catalog,
+    diagnostics: list[Diagnostic],
+) -> None:
+    for primitive in catalog.primitives:
+        shape = parse_signature(primitive.signature)
+        source = primitive.signature_source
+        if shape is None:
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-BAD-SIGNATURE",
+                    message=(
+                        f"primitive {primitive.name!r} has malformed signature "
+                        f"{primitive.signature!r}"
+                    ),
+                    source=source,
+                )
+            )
+            continue
+        _validate_lane_list_signature_terms(primitive.name, shape, diagnostics, source)
+
+
+def _validate_lane_list_signature_terms(
+    primitive_name: str,
+    shape: SignatureShape,
+    diagnostics: list[Diagnostic],
+    source: SourceSpan | None,
+) -> None:
+    if shape.result_term.is_lane_list_like:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-LANE-LIST-RESULT",
+                message=(
+                    f"primitive {primitive_name!r} uses lane-list result term "
+                    f"{shape.result_kind!r}; lane lists are supported only as parameters"
+                ),
+                source=source,
+            )
+        )
+    for term in shape.param_terms:
+        _validate_lane_list_param_term(primitive_name, term, diagnostics, source)
+
+
+def _validate_lane_list_param_term(
+    primitive_name: str,
+    term: SignatureTerm,
+    diagnostics: list[Diagnostic],
+    source: SourceSpan | None,
+) -> None:
+    if not term.is_lane_list_like:
+        return
+    if not term.is_lane_list:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-LANE-LIST-MALFORMED",
+                message=(
+                    f"primitive {primitive_name!r} has malformed lane-list term "
+                    f"{term.kind!r}; expected {LANE_LIST_KIND!r}"
+                ),
+                source=source,
+            )
+        )
+        return
+    element = term.lane_element_kind or ""
+    if not element:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-LANE-LIST-EMPTY",
+                message=(
+                    f"primitive {primitive_name!r} has empty lane-list term "
+                    f"{term.kind!r}; expected {LANE_LIST_KIND!r}"
+                ),
+                source=source,
+            )
+        )
+        return
+    if element.startswith("lanes"):
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-LANE-LIST-NESTED",
+                message=(
+                    f"primitive {primitive_name!r} has nested lane-list term "
+                    f"{term.kind!r}; nested lane lists are not supported"
+                ),
+                source=source,
+            )
+        )
+        return
+    if term.kind != LANE_LIST_KIND:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-LANE-LIST-ELEMENT",
+                message=(
+                    f"primitive {primitive_name!r} has lane-list term {term.kind!r}; "
+                    f"only {LANE_LIST_KIND!r} is supported"
+                ),
+                source=source,
+            )
+        )
 
 
 def validate_extension_inheritance(

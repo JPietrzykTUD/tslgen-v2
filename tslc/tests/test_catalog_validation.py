@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import load_machine_profiles_checked
 from tslc.catalog.validation import validate_catalog
@@ -182,6 +184,39 @@ def test_malformed_requires_shape_is_diagnosed() -> None:
 
     diagnostic = next(d for d in diagnostics if d.code == "TSL-CATALOG-MALFORMED-REQUIRES")
     assert "flag list" in diagnostic.message
+
+
+@pytest.mark.parametrize(
+    ("signature", "code"),
+    [
+        ("lanes<s>:=v", "TSL-CATALOG-LANE-LIST-RESULT"),
+        ("v:=(lanes<>)", "TSL-CATALOG-LANE-LIST-EMPTY"),
+        ("v:=(lanes<v>)", "TSL-CATALOG-LANE-LIST-ELEMENT"),
+        ("v:=(lanes<lanes<s>>)", "TSL-CATALOG-LANE-LIST-NESTED"),
+    ],
+)
+def test_lane_list_signature_validation_reports_rejected_shapes(
+    signature: str, code: str
+) -> None:
+    diagnostics = _diagnostics(
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "language rust:\n"
+        '  s32 {type "i32"}\n'
+        f"prim<{signature}> id(values):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "emit_return(values);"\n'
+    )
+
+    assert code in {diagnostic.code for diagnostic in diagnostics}
 
 
 def test_machine_profile_validation_reports_shape_errors(tmp_path: Path) -> None:

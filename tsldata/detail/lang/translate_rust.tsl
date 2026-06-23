@@ -724,7 +724,6 @@ translation rust:
   algo_max_element "crate::tsl::algo::max_element({ptr}, {len})"
   algo_min_element "crate::tsl::algo::min_element({ptr}, {len})"
   algo_swap "core::mem::swap({a}, {b})"
-  pack_first "{arg}"
   seq_type "tsl_seq_type!({type}, {args})"
   seq_make "tsl_seq_make!({type}, {count})"
   var_infer "let mut {name} = {value};"

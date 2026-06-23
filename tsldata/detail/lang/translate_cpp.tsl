@@ -54,7 +54,6 @@ translation cpp:
   algo_max_element "(*std::max_element({ptr}, {ptr} + {len}))"
   algo_min_element "(*std::min_element({ptr}, {ptr} + {len}))"
   algo_swap "std::swap({a}, {b})"
-  pack_first "std::get<0>(std::make_tuple({args}))"
   seq_type "std::integer_sequence<{type}, {args}>"
   seq_make "std::make_integer_sequence<{type}, {count}>()"
   var_infer "auto {name} = {value};"
