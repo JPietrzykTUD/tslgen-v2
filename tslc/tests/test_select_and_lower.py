@@ -160,6 +160,50 @@ def test_consumed_tsil_statement_terminators_render_once() -> None:
     assert ";;" not in cpp.body_text
 
 
+def test_intrin_build_supports_explicit_prefix_and_suffix() -> None:
+    ext = Extension(
+        name="custom",
+        isa_name="custom",
+        family="x86",
+        compose_prefix={},
+        compose_suffix_by_type={},
+    )
+    impl = Implementation(
+        ("custom", "ints"),
+        "custom",
+        "ints",
+        'emit_return(intrin<foo, build[prefix="_custom_", suffix="bar"]>(a));',
+        source_order=0,
+    )
+    prim = Primitive(
+        name="explicit_intrin_build",
+        signature="v:=v",
+        parameters=("a",),
+        attribute_keys=(),
+        implementations=(impl,),
+    )
+    catalog = Catalog(
+        primitives=(prim,),
+        type_groups={"ints": ("si32",)},
+        extensions={"custom": ext},
+        type_spellings={"cpp": {"s32": "int32_t"}},
+        translations={"cpp": {"emit_return": "return {value}"}},
+    )
+    slot = SelectedImplementation(
+        primitive=prim,
+        implementation=impl,
+        extension=ext,
+        type_tag="si32",
+    )
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert cpp.body_text == "return _custom_foo_bar(a);"
+
+
 def test_hadd_reduction_lowers_for_f64(catalog: Catalog, machine_profiles) -> None:
     slot = _by_key(catalog, machine_profiles["avx2"], "hadd")[("f64", "avx2")]
     cpp = Lowerer().lower(

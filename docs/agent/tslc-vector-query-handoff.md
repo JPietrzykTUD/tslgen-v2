@@ -280,7 +280,7 @@ The former monolithic `lower/regions.py` file was split into a focused package:
 
 - `protocol.py`: shared `RenderBody` and `RegionLowerer` contracts.
 - `common.py`: local helper functions shared by multiple handlers.
-- `intrinsics.py`: `intrin` and `intrin_compose` lowering.
+- `intrinsics.py`: `intrin` lowering for direct and `build[...]` intrinsic calls.
 - `declarations.py`: `var` and `let` lowering.
 - `masks.py`: `mask` lowering.
 - `casts.py`: `cast` lowering.
@@ -718,8 +718,8 @@ devcontainer.cmd exec --workspace-folder C:\Users\johan\own\work\tmp\py-bench gi
 Result: passed.
 
 Additional import-boundary checks confirmed that `lower/lowerer.py` still uses
-the stable `tslc.lower.regions` facade and that the facade exposes the same
-14 default region lowerers, from `intrin_compose` through `emit_return`.
+the stable `tslc.lower.regions` facade and that the facade exposes the default
+region lowerers, from `intrin` through `emit_return`.
 
 After the `render/project.py` split into focused render modules, validation was
 rerun through the devcontainer:
@@ -810,11 +810,85 @@ git diff --check
 Result: passed.
 
 ```bash
+python -m pytest -q tslc/tests/test_build_verify.py::test_set_builds tslc/tests/test_build_verify.py::test_convert_builds tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds
+```
+
+Result: `3 passed`.
+
+```bash
+./verify.sh
+```
+
+Result: passed all targeted validations, including 165 non-build tests, 53
+generated-build tests, and the architectural grep guards.
+
+```bash
 ./verify.sh
 ```
 
 Result: passed all targeted validations, including 163 non-build tests, 53
 generated-build tests, and the architectural grep guards.
+
+### Unified Intrinsic Build Slice
+
+Intrinsic lowering now uses one TSIL keyword:
+
+- `intrin<NAME>(...)` is a direct intrinsic call. The backend may qualify the
+  name, such as Rust's `core::arch` path.
+- `intrin<BASE, build>(...)` is a composed intrinsic call using backend and
+  extension defaults for prefix and suffix.
+- `intrin<BASE, build[prefix=..., infix=..., suffix=..., post=..., immediate(N)=...]>`
+  applies explicit build modifiers. Omitted build fields keep their defaults;
+  explicit empty text suppresses that field.
+
+Implemented pieces:
+
+1. `IntrinLowerer` owns both direct and built intrinsic calls through an
+   `IntrinsicSelector`.
+2. The old `IntrinComposeLowerer` was removed from the scanner/registry
+   surface.
+3. `intrin::prefix` is a normal query function, so explicit
+   `prefix=value<backend>(intrin::prefix)` resolves through the selected
+   backend/extension instead of being ignored or special-cased.
+4. The primitive corpus was migrated from `intrin_compose<...>(...)` to
+   `intrin<..., build...>(...)`.
+5. A corpus guard fails if `intrin_compose<` appears in primitive TSIL bodies.
+
+Focused coverage:
+
+- `tslc/tests/test_tsil_scan.py` asserts the scanner sees one `intrin` region
+  and keeps `build[...]` selectors raw.
+- `tslc/tests/test_select_and_lower.py` asserts explicit build prefix/suffix
+  lowering.
+- `tslc/tests/test_diagnostic_provenance.py` keeps unresolved build suffix
+  diagnostics anchored on the intrinsic region.
+- `tslc/tests/test_tsil_statement_terminators.py` guards the corpus migration.
+
+Validation for this slice:
+
+```bash
+python -m compileall -q tslc/src/tslc tslc/tests
+```
+
+Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_tsil_statement_terminators.py tslc/tests/test_tsil_scan.py tslc/tests/test_parse_arithmetic.py tslc/tests/test_select_and_lower.py::test_intrin_build_supports_explicit_prefix_and_suffix tslc/tests/test_diagnostic_provenance.py::test_intrin_build_unresolved_suffix_has_region_source_location
+```
+
+Result: `17 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/test_parse_arithmetic.py tslc/tests/test_diagnostic_provenance.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_masks_and_calls.py
+```
+
+Result: `60 passed`.
+
+```bash
+git diff --check
+```
+
+Result: passed.
 
 ### TSIL Statement Terminator Slice
 

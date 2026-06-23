@@ -4179,3 +4179,51 @@ Consequences:
 - This remains a lexical source-body boundary, not a full TSIL statement or
   expression parser. Raw target-like statements keep their raw semicolons, and
   expression-region punctuation inside nested payloads is not reinterpreted.
+
+## ADR-082: `intrin` Owns Direct And Built Intrinsic Calls
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+TSIL had two intrinsic-call keywords with the same broad purpose:
+`intrin<NAME>(...)` for direct backend intrinsic calls and
+`intrin_compose<BASE, ...>(...)` for backend-built intrinsic names. That split
+made the source surface larger than the semantic distinction. The real
+distinction is not two keywords; it is whether the intrinsic name is used
+directly or built from a base plus backend/extension naming policy and optional
+modifiers.
+
+Decision:
+
+Use one keyword:
+
+```tsl
+intrin<NAME>(...)
+intrin<BASE, build>(...)
+intrin<BASE, build[prefix=..., infix=..., suffix=..., post=..., immediate(N)=...]>(...)
+```
+
+Without `build`, the selector is direct. The backend may qualify the name for
+presentation, such as Rust's `core::arch` path, but lowering does not compose a
+new intrinsic name.
+
+With `build`, lowering composes an intrinsic name from the selected backend and
+extension. Omitted build fields use backend/extension defaults. Explicit fields
+override those defaults; an explicit empty text value suppresses the field.
+Existing build metadata such as `post=mask`, `infix`/`infix_sep`, and
+`immediate(N)=...` remains part of the same intrinsic invocation builder.
+
+Consequences:
+
+- The scanner and region registry no longer need an `intrin_compose` keyword.
+- `IntrinLowerer` owns both direct and built intrinsic calls through one parsed
+  selector object.
+- The primitive corpus now spells built intrinsic calls as
+  `intrin<..., build...>(...)`; a corpus guard rejects `intrin_compose<` in
+  primitive TSIL bodies.
+- `intrin::prefix` is a first-class query function so explicit
+  `prefix=value<backend>(intrin::prefix)` resolves through typed backend and
+  extension facts.
+- Historical redesign notes may still mention `intrin_compose` as prior
+  evidence, but current `tslc` source data should not use it.

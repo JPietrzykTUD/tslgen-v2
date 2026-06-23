@@ -60,7 +60,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
         implementation:
           tsil """
               emit_return(
-                intrin_compose<mask_blend>(
+                intrin<mask_blend, build>(
                   mask, left, right
                 )
               );
@@ -79,7 +79,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
         implementation:
           tsil """
               emit_return(
-                intrin_compose<mask_blend, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                intrin<mask_blend, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                   mask, left, right
                 )
               );
@@ -94,7 +94,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
         implementation:
           tsil """
               emit_return(
-                intrin_compose<blendv>(
+                intrin<blendv, build>(
                   left,
                   right,
                   call<primitive=to_vector>(mask)
@@ -108,7 +108,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
         implementation:
           tsil """
               emit_return(
-                intrin_compose<blendv, suffix=epi8>(
+                intrin<blendv, build[suffix=epi8]>(
                   left,
                   right,
                   call<primitive=to_vector>(mask)
@@ -156,7 +156,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svsel>(
+              intrin<svsel, build>(
                   mask, right, left
                 )
             );
@@ -206,7 +206,7 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
         implementation:
           tsil """
               emit_return(
-                intrin_compose<maskz_mov>(
+                intrin<maskz_mov, build>(
                   mask, src
                 )
               );
@@ -225,7 +225,7 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
         implementation:
           tsil """
               emit_return(
-                intrin_compose<maskz_mov, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                intrin<maskz_mov, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                   mask, src
                 )
               );
@@ -300,7 +300,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
         implementation:
           tsil """
               emit_return(
-                intrin_compose<mask_mov>(
+                intrin<mask_mov, build>(
                   src, mask, data
                 )
               );
@@ -319,7 +319,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
         implementation:
           tsil """
               emit_return(
-                intrin_compose<mask_mov, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                intrin<mask_mov, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                   src, mask, data
                 )
               );

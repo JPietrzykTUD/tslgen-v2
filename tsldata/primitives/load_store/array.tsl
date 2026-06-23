@@ -219,7 +219,7 @@ prim<s:=v[idx]> extract_value(a):
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin_compose<vgetq_lane suffix=value<backend>(intrin::suffix) immediate(1)=Index>(a, Index));"
+          tsil "emit_return(intrin<vgetq_lane, build[suffix=value<backend>(intrin::suffix), immediate(1)=Index]>(a, Index));"
     sve:
       arith:
         requires [sve]

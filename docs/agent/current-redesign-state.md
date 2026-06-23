@@ -14,7 +14,7 @@ it has not been touched in recent history (the last 20+ commits are entirely
 The authoritative running handoff for the active `tslc` work is
 `docs/agent/tslc-vector-query-handoff.md`. Source-language and architecture
 decisions for `tslc` are recorded in `docs/redesign/design-decisions.md`
-(most recently ADR-078 support-policy capability boundaries). The
+(most recently ADR-082 unified intrinsic build syntax). The
 `## Current Work State` section near the end of this file has been refreshed to
 describe `tslc`; the long milestone history that follows it is retained only as
 the `tslgen` record.
@@ -1234,12 +1234,20 @@ normalized: all scanner-identified `let<type>` and `var<...>` statement
 regions now carry source semicolons, with a corpus guard test covering the
 accepted statement keyword families.
 
+The TSIL intrinsic source surface is also unified: direct calls stay
+`intrin<NAME>(...)`, and composed calls now use
+`intrin<BASE, build[...]>(...)` instead of `intrin_compose<...>(...)`.
+`IntrinLowerer` owns both modes, `intrin::prefix` is a typed query, and the
+primitive corpus has been migrated with a guard against reintroducing
+`intrin_compose<`.
+
 Active prompt:
-docs/agent/runs/tslc-tsil-statement-terminator-review-prompt.md
+docs/agent/runs/tslc-unified-intrin-build-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
 boundary review prompt:
+docs/agent/runs/tslc-tsil-statement-terminator-review-prompt.md
 docs/agent/runs/tslc-value-test-backend-capability-review-prompt.md
 docs/agent/runs/tslc-lane-list-set-migration-review-prompt.md
 docs/agent/runs/tslc-value-test-cleanup-review-prompt.md
@@ -1248,13 +1256,10 @@ docs/agent/runs/tslc-support-policy-capability-review-prompt.md
 docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md
 docs/agent/runs/tslc-typed-render-values-review-prompt.md
 
-Next expected action: review the completed TSIL statement terminator cleanup
-prompt above. Confirm semicolon ownership stays lexical, nested expression
-regions are unaffected, and generated C++/Rust bodies keep exactly one required
-statement terminator. The post-cleanup refinement removed central
-keyword-exception sets from `lowerer.py`; the renderer now appends the default
-target `;`, while `VarLowerer` and `LetLowerer` own their keyword-specific
-statement finalization.
+Next expected action: review the completed unified intrinsic build prompt
+above. Confirm `intrin<NAME>` direct calls remain direct, `intrin<BASE,
+build[...]>(...)` preserves the old composed intrinsic behavior, and production
+scanner/registry/lowering no longer depends on an `intrin_compose` keyword.
 ```
 
 Verification status (2026-06-23):
@@ -1270,6 +1275,18 @@ Verification status (2026-06-23):
   passed with 163 tests;
   `git diff --check` passed;
   `./verify.sh` passed all targeted validations, including 163 non-build tests,
+  53 generated-build tests, and the architectural grep guards.
+
+- Unified intrinsic build cleanup:
+  `python -m compileall -q tslc/src/tslc tslc/tests` passed;
+  `python -m pytest -q tslc/tests/test_tsil_statement_terminators.py tslc/tests/test_tsil_scan.py tslc/tests/test_parse_arithmetic.py tslc/tests/test_select_and_lower.py::test_intrin_build_supports_explicit_prefix_and_suffix tslc/tests/test_diagnostic_provenance.py::test_intrin_build_unresolved_suffix_has_region_source_location`
+  passed with 17 tests;
+  `python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/test_parse_arithmetic.py tslc/tests/test_diagnostic_provenance.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_masks_and_calls.py`
+  passed with 60 tests;
+  `python -m pytest -q tslc/tests/test_build_verify.py::test_set_builds tslc/tests/test_build_verify.py::test_convert_builds tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds`
+  passed with 3 tests;
+  `git diff --check` passed;
+  `./verify.sh` passed all targeted validations, including 165 non-build tests,
   53 generated-build tests, and the architectural grep guards.
 
 - Value-test planning boundary pass plus cleanup:

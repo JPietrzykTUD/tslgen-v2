@@ -18,17 +18,17 @@ def test_raw_text_passes_through() -> None:
     assert len(segments) == 1
 
 
-def test_intrin_compose_selector_is_raw_and_args_recurse() -> None:
-    segments = scan("emit_return(intrin_compose<add>(left, right));")
+def test_intrin_build_selector_is_raw_and_args_recurse() -> None:
+    segments = scan("emit_return(intrin<add, build>(left, right));")
     emit = segments[0]
     assert isinstance(emit, Region)
     assert emit.has_statement_terminator
-    compose = emit.body[0]
-    assert isinstance(compose, Region)
-    assert compose.keyword == "intrin_compose"
-    assert compose.selector_text == "add"
-    assert compose.body == (RawText("left, right"),)
-    assert not compose.has_statement_terminator
+    intrinsic = emit.body[0]
+    assert isinstance(intrinsic, Region)
+    assert intrinsic.keyword == "intrin"
+    assert intrinsic.selector_text == "add, build"
+    assert intrinsic.body == (RawText("left, right"),)
+    assert not intrinsic.has_statement_terminator
 
 
 def test_expression_statement_consumes_source_terminator() -> None:
@@ -43,15 +43,16 @@ def test_expression_statement_consumes_source_terminator() -> None:
 
 def test_nested_modifier_selector_kept_verbatim() -> None:
     body = (
-        "emit_return(intrin_compose<add, "
-        "suffix=value<backend>(intrin::suffix(type<generation>(base::in)))>(left, right));"
+        "emit_return(intrin<add, build["
+        "suffix=value<backend>(intrin::suffix(type<generation>(base::in)))]>(left, right));"
     )
-    compose = scan(body)[0].body[0]
-    assert isinstance(compose, Region)
+    intrinsic = scan(body)[0].body[0]
+    assert isinstance(intrinsic, Region)
     # The whole selector (including nested value<...>/type<...>) is preserved as text;
     # the lowerer parses modifiers, the scanner does not.
-    assert compose.selector_text.startswith("add, suffix=value<backend>(")
-    assert "type<generation>(base::in)" in compose.selector_text
+    assert intrinsic.keyword == "intrin"
+    assert intrinsic.selector_text.startswith("add, build[suffix=value<backend>(")
+    assert "type<generation>(base::in)" in intrinsic.selector_text
 
 
 def test_keyword_inside_identifier_is_not_matched() -> None:
@@ -65,7 +66,7 @@ def test_keyword_inside_string_is_not_matched() -> None:
 
 
 def test_scan_carries_nested_source_spans() -> None:
-    body = "  emit_return(\n    intrin_compose<add>(left, right)\n  );"
+    body = "  emit_return(\n    intrin<add, build>(left, right)\n  );"
     source = SourceSpan(Path("body.tsl"), 10, 5, 12, 7)
 
     segments = scan(body, source=source)
@@ -78,9 +79,9 @@ def test_scan_carries_nested_source_spans() -> None:
     assert emit.source == SourceSpan(Path("body.tsl"), 10, 7, 12, 4)
     assert emit.has_statement_terminator
 
-    compose = next(segment for segment in emit.body if isinstance(segment, Region))
-    assert compose.keyword == "intrin_compose"
-    assert compose.source == SourceSpan(Path("body.tsl"), 11, 5, 11, 37)
+    intrinsic = next(segment for segment in emit.body if isinstance(segment, Region))
+    assert intrinsic.keyword == "intrin"
+    assert intrinsic.source == SourceSpan(Path("body.tsl"), 11, 5, 11, 36)
 
 
 def _joined(segments) -> str:

@@ -38,7 +38,12 @@ class BackendTypeDialect(Protocol):
 class BackendIntrinsicDialect(Protocol):
     def default_suffix(self, extension: Extension, type_tag: str) -> str | None: ...
     def compose_intrinsic_name(
-        self, extension: Extension, base: str, suffix: str | None
+        self,
+        extension: Extension,
+        base: str,
+        suffix: str | None,
+        *,
+        prefix: str | None = None,
     ) -> str | None: ...
     def qualify_intrinsic(self, extension: Extension, name: str) -> str: ...
     def render_immediate_intrinsic_call(

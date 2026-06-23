@@ -27,7 +27,7 @@ prim<v:=s> set1(value):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set1, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<set1, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), value)
               )
             );
@@ -37,7 +37,7 @@ prim<v:=s> set1(value):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set1>(value)
+              intrin<set1, build>(value)
             );
           """
     [avx2, sse]:
@@ -50,11 +50,11 @@ prim<v:=s> set1(value):
             if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
               // in 8byte path
               emit_return(
-                intrin_compose<set1, suffix="epi64x">(cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), value))
+                intrin<set1, build[suffix="epi64x"]>(cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), value))
               );
             } else<generation> {
               emit_return(
-                intrin_compose<set1, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                intrin<set1, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                   cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), value)
                 )
               );
@@ -67,7 +67,7 @@ prim<v:=s> set1(value):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set1>(value)
+              intrin<set1, build>(value)
             );
           """
     neon:
@@ -76,7 +76,7 @@ prim<v:=s> set1(value):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<vdupq_n>(value)
+              intrin<vdupq_n, build>(value)
             );
           """
     sve:
@@ -85,7 +85,7 @@ prim<v:=s> set1(value):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svdup_n>(value)
+              intrin<svdup_n, build>(value)
             );
           """
     scalar:
@@ -194,7 +194,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
         implementation:
           tsil """
                emit_return(
-                 intrin_compose<svdup_n, post=m>(
+                 intrin<svdup_n, build[post=m]>(
                    data,
                    mask,
                    scalar
@@ -275,7 +275,7 @@ prim<v:=()>[value=zero] set_zero():
         implementation:
           tsil """
               emit_return(
-                intrin_compose<setzero, suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)>()
+                intrin<setzero, build[suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)]>()
               );
             """
       f?:
@@ -288,7 +288,7 @@ prim<v:=()>[value=zero] set_zero():
         implementation:
           tsil """
               emit_return(
-                intrin_compose<setzero, suffix=value<backend>(intrin::suffix), prefix=value<backend>(intrin::prefix)>()
+                intrin<setzero, build[suffix=value<backend>(intrin::suffix), prefix=value<backend>(intrin::prefix)]>()
               );
             """
     sve:
@@ -344,7 +344,7 @@ prim<v:=()>[value=undef] set_undef():
         implementation:
           tsil """
             emit_return(
-              intrin_compose<undefined, suffix=value<backend>(intrin::suffix), prefix=value<backend>(intrin::prefix)>()
+              intrin<undefined, build[suffix=value<backend>(intrin::suffix), prefix=value<backend>(intrin::prefix)]>()
             );
           """
     [avx2, sse]:
@@ -355,7 +355,7 @@ prim<v:=()>[value=undef] set_undef():
         implementation:
           tsil """
             emit_return(
-              intrin_compose<undefined, suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)>()
+              intrin<undefined, build[suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)]>()
             );
           """
       f?:
@@ -367,7 +367,7 @@ prim<v:=()>[value=undef] set_undef():
         implementation:
           tsil """
             emit_return(
-              intrin_compose<undefined, suffix=value<backend>(intrin::suffix), prefix=value<backend>(intrin::prefix)>()
+              intrin<undefined, build[suffix=value<backend>(intrin::suffix), prefix=value<backend>(intrin::prefix)]>()
             );
           """
     neon:
@@ -385,7 +385,7 @@ prim<v:=()>[value=undef] set_undef():
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svundef, suffix=value<backend>(intrin::suffix)>()
+              intrin<svundef, build[suffix=value<backend>(intrin::suffix)]>()
             );
           """
 
@@ -419,7 +419,7 @@ prim<v:=(lanes<s>)> set(values):
           tsil """
             if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
               emit_return(
-                intrin_compose<set, suffix="epi64">(
+                intrin<set, build[suffix="epi64"]>(
                   cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
                   loop<generation>(i, 1, value<generation>(vector::length), 1) {
                     , cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, i))
@@ -428,7 +428,7 @@ prim<v:=(lanes<s>)> set(values):
               );
             } else<generation> {
               emit_return(
-                intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                intrin<set, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                   cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
                   loop<generation>(i, 1, value<generation>(vector::length), 1) {
                     , cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, i))
@@ -442,7 +442,7 @@ prim<v:=(lanes<s>)> set(values):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set>(
+              intrin<set, build>(
                 lanes<at>(values, 0)
                 loop<generation>(i, 1, value<generation>(vector::length), 1) {
                   , lanes<at>(values, i)
@@ -459,7 +459,7 @@ prim<v:=(lanes<s>)> set(values):
           tsil """
             if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
               emit_return(
-                intrin_compose<set, suffix="epi64x">(
+                intrin<set, build[suffix="epi64x"]>(
                   cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
                   loop<generation>(i, 1, value<generation>(vector::length), 1) {
                     , cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, i))
@@ -468,7 +468,7 @@ prim<v:=(lanes<s>)> set(values):
               );
             } else<generation> {
               emit_return(
-                intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                intrin<set, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                   cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
                   loop<generation>(i, 1, value<generation>(vector::length), 1) {
                     , cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, i))
@@ -484,7 +484,7 @@ prim<v:=(lanes<s>)> set(values):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set>(
+              intrin<set, build>(
                 lanes<at>(values, 0)
                 loop<generation>(i, 1, value<generation>(vector::length), 1) {
                   , lanes<at>(values, i)

@@ -11,7 +11,7 @@ from tslc.lower.region_handlers.control import (
     SwitchLowerer,
 )
 from tslc.lower.region_handlers.declarations import LetLowerer, VarLowerer
-from tslc.lower.region_handlers.intrinsics import IntrinComposeLowerer, IntrinLowerer
+from tslc.lower.region_handlers.intrinsics import IntrinLowerer
 from tslc.lower.region_handlers.io import IoLowerer
 from tslc.lower.region_handlers.lanes import LanesLowerer
 from tslc.lower.region_handlers.masks import MaskLowerer
@@ -22,7 +22,6 @@ from tslc.lower.region_handlers.queries import QueryRegionLowerer
 from tslc.lower.region_handlers.returns import EmitReturnLowerer
 
 DEFAULT_REGION_LOWERERS: tuple[RegionLowerer, ...] = (
-    IntrinComposeLowerer(),
     IntrinLowerer(),
     OpLowerer(),
     VarLowerer(),

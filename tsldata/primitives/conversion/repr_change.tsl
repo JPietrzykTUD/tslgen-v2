@@ -358,13 +358,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=4>(data, 4)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<srli, build[suffix=si128, immediate(1)=4]>(data, 4)));
                     }
                     2 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=8>(data, 8)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<srli, build[suffix=si128, immediate(1)=8]>(data, 8)));
                     }
                     3 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=12>(data, 12)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<srli, build[suffix=si128, immediate(1)=12]>(data, 12)));
                     }
                     _ => {
                       let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -387,25 +387,25 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=2>(data, 2)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<srli, build[suffix=si128, immediate(1)=2]>(data, 2)));
                     }
                     2 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=4>(data, 4)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<srli, build[suffix=si128, immediate(1)=4]>(data, 4)));
                     }
                     3 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=6>(data, 6)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<srli, build[suffix=si128, immediate(1)=6]>(data, 6)));
                     }
                     4 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=8>(data, 8)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<srli, build[suffix=si128, immediate(1)=8]>(data, 8)));
                     }
                     5 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=10>(data, 10)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<srli, build[suffix=si128, immediate(1)=10]>(data, 10)));
                     }
                     6 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=12>(data, 12)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<srli, build[suffix=si128, immediate(1)=12]>(data, 12)));
                     }
                     7 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=14>(data, 14)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<srli, build[suffix=si128, immediate(1)=14]>(data, 14)));
                     }
                     _ => {
                       let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -454,13 +454,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=4>(data, 4)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<srli, build[suffix=si128, immediate(1)=4]>(data, 4)));
                     }
                     2 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=8>(data, 8)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<srli, build[suffix=si128, immediate(1)=8]>(data, 8)));
                     }
                     3 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<srli suffix=si128 immediate(1)=12>(data, 12)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<srli, build[suffix=si128, immediate(1)=12]>(data, 12)));
                     }
                     _ => {
                       let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -535,9 +535,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi16>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi16>(intrin<extracti128, build[suffix=si256, immediate(1)=index]>(data, index))));
                   } else {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi16>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi16>(intrin<extracti128, build[suffix=si256, immediate(1)=index]>(data, index))));
                   }
                 """
           ?i32:
@@ -546,30 +546,30 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   switch<compile>(index) {
                     0 => {
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi32>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi32>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0))));
                       }
                     }
                     1 => {
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi32>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi32>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0), 8))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi32>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi32>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0), 8))));
                       }
                     }
                     2 => {
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi32>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi32>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1))));
                       }
                     }
                     3 => {
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi32>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi32>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1), 8))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi32>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi32>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1), 8))));
                       }
                     }
                     _ => {
@@ -591,58 +591,58 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   switch<compile>(index) {
                     0 => {
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0))));
                       }
                     }
                     1 => {
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 4))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0), 4))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 4))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0), 4))));
                       }
                     }
                     2 => {
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0), 8))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0), 8))));
                       }
                     }
                     3 => {
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 12))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0), 12))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 12))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0), 12))));
                       }
                     }
                     4 => {
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1))));
                       }
                     }
                     5 => {
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 4))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1), 4))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 4))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1), 4))));
                       }
                     }
                     6 => {
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1), 8))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1), 8))));
                       }
                     }
                     7 => {
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 12))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1), 12))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 12))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1), 12))));
                       }
                     }
                     _ => {
@@ -665,9 +665,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi16_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi16_epi32>(intrin<extracti128, build[suffix=si256, immediate(1)=index]>(data, index))));
                   } else {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu16_epi32>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu16_epi32>(intrin<extracti128, build[suffix=si256, immediate(1)=index]>(data, index))));
                   }
                 """
           ?i64:
@@ -676,30 +676,30 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   switch<compile>(index) {
                     0 => {
                       if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi16_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi16_epi64>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu16_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu16_epi64>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0))));
                       }
                     }
                     1 => {
                       if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi16_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi16_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0), 8))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu16_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=0>(data, 0), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu16_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=0]>(data, 0), 8))));
                       }
                     }
                     2 => {
                       if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi16_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi16_epi64>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu16_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu16_epi64>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1))));
                       }
                     }
                     3 => {
                       if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi16_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi16_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1), 8))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu16_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti128 suffix=si256 immediate(1)=1>(data, 1), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu16_epi64>(intrin<_mm_srli_si128>(intrin<extracti128, build[suffix=si256, immediate(1)=1]>(data, 1), 8))));
                       }
                     }
                     _ => {
@@ -722,9 +722,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_same(type<generation>(base::in), si32))) {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi32_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepi32_epi64>(intrin<extracti128, build[suffix=si256, immediate(1)=index]>(data, index))));
                   } else {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu32_epi64>(intrin_compose<extracti128 suffix=si256 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtepu32_epi64>(intrin<extracti128, build[suffix=si256, immediate(1)=index]>(data, index))));
                   }
                 """
       f32:
@@ -733,7 +733,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
           f64:
             implementation:
               tsil """
-                  emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtps_pd>(intrin_compose<extractf128 suffix=ps immediate(1)=index>(data, index))));
+                  emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtps_pd>(intrin<extractf128, build[suffix=ps, immediate(1)=index]>(data, index))));
                 """
     avx512:
       ?i8:
@@ -743,18 +743,18 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi16>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi16>(intrin<extracti64x4, build[suffix=epi64, immediate(1)=index]>(data, index))));
                   } else {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi16>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi16>(intrin<extracti64x4, build[suffix=epi64, immediate(1)=index]>(data, index))));
                   }
                 """
           ?i32:
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi32>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi32>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=index]>(data, index))));
                   } else {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi32>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi32>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=index]>(data, index))));
                   }
                 """
           ?i64:
@@ -763,58 +763,58 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   switch<compile>(index) {
                     0 => {
                       if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=0]>(data, 0))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=0]>(data, 0))));
                       }
                     }
                     1 => {
                       if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=0]>(data, 0), 8))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=0]>(data, 0), 8))));
                       }
                     }
                     2 => {
                       if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=1>(data, 1))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=1]>(data, 1))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=1>(data, 1))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=1]>(data, 1))));
                       }
                     }
                     3 => {
                       if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=1>(data, 1), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=1]>(data, 1), 8))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=1>(data, 1), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=1]>(data, 1), 8))));
                       }
                     }
                     4 => {
                       if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=2>(data, 2))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=2]>(data, 2))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=2>(data, 2))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=2]>(data, 2))));
                       }
                     }
                     5 => {
                       if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=2>(data, 2), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=2]>(data, 2), 8))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=2>(data, 2), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=2]>(data, 2), 8))));
                       }
                     }
                     6 => {
                       if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=3>(data, 3))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=3]>(data, 3))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=3>(data, 3))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=3]>(data, 3))));
                       }
                     }
                     7 => {
                       if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=3>(data, 3), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi8_epi64>(intrin<_mm_srli_si128>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=3]>(data, 3), 8))));
                       } else {
-                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=3>(data, 3), 8))));
+                        emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu8_epi64>(intrin<_mm_srli_si128>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=3]>(data, 3), 8))));
                       }
                     }
                     _ => {
@@ -837,18 +837,18 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi16_epi32>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi16_epi32>(intrin<extracti64x4, build[suffix=epi64, immediate(1)=index]>(data, index))));
                   } else {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu16_epi32>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu16_epi32>(intrin<extracti64x4, build[suffix=epi64, immediate(1)=index]>(data, index))));
                   }
                 """
           ?i64:
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi16_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi16_epi64>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=index]>(data, index))));
                   } else {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu16_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu16_epi64>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=index]>(data, index))));
                   }
                 """
       ?i32:
@@ -858,9 +858,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_same(type<generation>(base::in), si32))) {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi32_epi64>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepi32_epi64>(intrin<extracti64x4, build[suffix=epi64, immediate(1)=index]>(data, index))));
                   } else {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu32_epi64>(intrin_compose<extracti64x4 suffix=epi64 immediate(1)=index>(data, index))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtepu32_epi64>(intrin<extracti64x4, build[suffix=epi64, immediate(1)=index]>(data, index))));
                   }
                 """
       f32:
@@ -869,7 +869,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
           f64:
             implementation:
               tsil """
-                  emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtps_pd>(intrin_compose<extractf32x8 suffix=ps immediate(1)=index>(data, index))));
+                  emit_return(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtps_pd>(intrin<extractf32x8, build[suffix=ps, immediate(1)=index]>(data, index))));
                 """
     neon:
       ?i8:
@@ -883,7 +883,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<vmovl_high suffix=value<backend>(intrin::suffix)>(data)));
+                      emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vmovl_high, build[suffix=value<backend>(intrin::suffix)]>(data)));
                     }
                     _ => {
                       let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -906,13 +906,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=4>(data, data, 4)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=4]>(data, data, 4)));
                     }
                     2 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=8>(data, data, 8)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=8]>(data, data, 8)));
                     }
                     3 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=12>(data, data, 12)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=12]>(data, data, 12)));
                     }
                     _ => {
                       let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -935,25 +935,25 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=2>(data, data, 2)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=2]>(data, data, 2)));
                     }
                     2 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=4>(data, data, 4)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=4]>(data, data, 4)));
                     }
                     3 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=6>(data, data, 6)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=6]>(data, data, 6)));
                     }
                     4 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=8>(data, data, 8)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=8]>(data, data, 8)));
                     }
                     5 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=10>(data, data, 10)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=10]>(data, data, 10)));
                     }
                     6 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=12>(data, data, 12)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=12]>(data, data, 12)));
                     }
                     7 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=14>(data, data, 14)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=14]>(data, data, 14)));
                     }
                     _ => {
                       let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -979,7 +979,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<vmovl_high suffix=value<backend>(intrin::suffix)>(data)));
+                      emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vmovl_high, build[suffix=value<backend>(intrin::suffix)]>(data)));
                     }
                     _ => {
                       let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1002,13 +1002,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=2>(data, data, 2)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=2]>(data, data, 2)));
                     }
                     2 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=4>(data, data, 4)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=4]>(data, data, 4)));
                     }
                     3 => {
-                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin_compose<vextq suffix=value<backend>(intrin::suffix) immediate(2)=6>(data, data, 6)));
+                      emit_return(call<primitive=cast[Vec, ToBase]>(intrin<vextq, build[suffix=value<backend>(intrin::suffix), immediate(2)=6]>(data, data, 6)));
                     }
                     _ => {
                       let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1034,7 +1034,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       emit_return(call<primitive=cast[Vec, ToBase]>(data));
                     }
                     1 => {
-                      emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<vmovl_high suffix=value<backend>(intrin::suffix)>(data)));
+                      emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vmovl_high, build[suffix=value<backend>(intrin::suffix)]>(data)));
                     }
                     _ => {
                       let<type>(OutVec, type<generation>(vector::window_base(ToBase)));

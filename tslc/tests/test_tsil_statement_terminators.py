@@ -26,6 +26,20 @@ def test_primitive_tsil_statement_regions_have_source_terminators(
     assert missing == []
 
 
+def test_primitive_tsil_uses_unified_intrin_keyword(data_root: Path) -> None:
+    documents = SourceLoader().load_dir(data_root / "primitives")
+    assert documents.diagnostics == ()
+    parsed = TslParser().parse(documents.documents)
+    assert parsed.diagnostics == ()
+
+    legacy: list[str] = []
+    for text, source in _unique_body_payloads(parsed.documents):
+        if "intrin_compose<" in text:
+            legacy.append(f"{source.path}:{source.line}")
+
+    assert legacy == []
+
+
 def _unique_body_payloads(documents):
     seen: set[tuple[str, int, int, str]] = set()
     for document in documents:

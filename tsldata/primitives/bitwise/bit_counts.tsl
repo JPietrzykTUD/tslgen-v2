@@ -27,31 +27,31 @@ prim<v:=v> popcnt(data):
           avx2_vl [avx512_bitalg, avx512f, avx512vl, avx]
           sse_vl  [avx512_bitalg, avx512f, avx512vl, sse]
         implementation:
-          tsil "emit_return(intrin_compose<popcnt, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(data));"
+          tsil "emit_return(intrin<popcnt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data));"
       [?i32, ?i64]:
         requires:
           avx512  [avx512_vpopcntdq, avx512f]
           avx2_vl [avx512_vpopcntdq, avx512f, avx512vl, avx]
           sse_vl  [avx512_vpopcntdq, avx512f, avx512vl, sse]
         implementation:
-          tsil "emit_return(intrin_compose<popcnt, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(data));"
+          tsil "emit_return(intrin<popcnt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data));"
     neon:
       ?i8:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin_compose<vcntq>(data));"
+          tsil "emit_return(intrin<vcntq, build>(data));"
     sve:
       ui?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_compose<svcnt, post=x>(call<primitive=mask_true[Vec]>(), data));"
+          tsil "emit_return(intrin<svcnt, build[post=x]>(call<primitive=mask_true[Vec]>(), data));"
       si?:
         requires [sve]
         implementation:
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<svcnt, post=x>(call<primitive=mask_true[Vec]>(), data)
+                intrin<svcnt, build[post=x]>(call<primitive=mask_true[Vec]>(), data)
               )
             );
           """
@@ -137,24 +137,24 @@ prim<v:=v> lzc(data):
           avx2_vl [avx512cd, avx512f, avx512vl, avx]
           sse_vl [avx512cd, avx512f, avx512vl, sse]
         implementation:
-          tsil "emit_return(intrin_compose<lzcnt, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(data));"
+          tsil "emit_return(intrin<lzcnt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(data));"
     neon:
       [si8, si16, si32, ui8, ui16, ui32]:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin_compose<vclzq>(data));"
+          tsil "emit_return(intrin<vclzq, build>(data));"
     sve:
       ui?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_compose<svclz, post=x>(call<primitive=mask_true[Vec]>(), data));"
+          tsil "emit_return(intrin<svclz, build[post=x]>(call<primitive=mask_true[Vec]>(), data));"
       si?:
         requires [sve]
         implementation:
           tsil """
             emit_return(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<svclz, post=x>(call<primitive=mask_true[Vec]>(), data)
+                intrin<svclz, build[post=x]>(call<primitive=mask_true[Vec]>(), data)
               )
             );
           """

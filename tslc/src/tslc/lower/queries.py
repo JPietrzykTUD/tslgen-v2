@@ -233,6 +233,18 @@ class ValueQuery:
         return args[0] if len(args) == 1 else None
 
 
+class IntrinPrefixQuery:
+    """``intrin::prefix`` -> the selected extension's backend intrinsic prefix."""
+
+    head = "intrin::prefix"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if args:
+            return None
+        fragment = context.env.extension.compose_prefix.get(context.env.backend.backend_id)
+        return TextValue(fragment) if fragment is not None else None
+
+
 class IntrinSuffixQuery:
     """``intrin::suffix(x)`` -> the composed intrinsic suffix fragment.
 
@@ -599,6 +611,7 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     UnsignedOfQuery(),
     TypeQuery(),
     ValueQuery(),
+    IntrinPrefixQuery(),
     IntrinSuffixQuery(),
     IsSameQuery(),
     SizeBytesQuery(),

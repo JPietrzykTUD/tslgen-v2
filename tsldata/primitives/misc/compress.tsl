@@ -31,7 +31,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
         implementation:
           tsil """
               emit_return(
-                intrin_compose<maskz_compress, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                intrin<maskz_compress, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                   mask,
                   data
                 )
@@ -42,7 +42,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
         implementation:
           tsil """
               emit_return(
-                intrin_compose<maskz_compress>(
+                intrin<maskz_compress, build>(
                   mask,
                   data
                 )
@@ -57,7 +57,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
-                intrin_compose<maskz_compress, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                intrin<maskz_compress, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                   cast<static>(ui32, imask),
                   data
                 )
@@ -71,7 +71,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
-                intrin_compose<maskz_compress, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                intrin<maskz_compress, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                   cast<static>(ui16, imask),
                   data
                 )
@@ -85,7 +85,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
-                intrin_compose<maskz_compress, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                intrin<maskz_compress, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                   cast<static>(ui8, imask),
                   data
                 )
@@ -99,7 +99,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
-                intrin_compose<maskz_compress>(
+                intrin<maskz_compress, build>(
                   cast<static>(ui8, imask),
                   data
                 )
@@ -114,7 +114,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
-                intrin_compose<maskz_compress, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                intrin<maskz_compress, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                   cast<static>(ui16, imask),
                   data
                 )
@@ -128,7 +128,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
-                intrin_compose<maskz_compress, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                intrin<maskz_compress, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                   cast<static>(ui8, imask),
                   data
                 )
@@ -142,7 +142,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
-                intrin_compose<maskz_compress, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+                intrin<maskz_compress, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                   cast<static>(ui8, imask),
                   data
                 )
@@ -158,7 +158,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
-                intrin_compose<maskz_compress>(
+                intrin<maskz_compress, build>(
                   cast<static>(ui8, imask),
                   data
                 )
@@ -171,7 +171,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           tsil """
               let<type>(IndexBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
               let<type>(IndexVec, type<generation>(vector::as_base(IndexBase)));
-              var<const_infer>(packed, intrin_compose<svcompact>(mask, data));
+              var<const_infer>(packed, intrin<svcompact, build>(mask, data));
               var<const_infer>(active_count, call<primitive=mask_population_count[Vec]>(mask));
               var<const_infer>(indices, call<primitive=sequence[IndexVec]>());
               var<const_infer>(limit, call<primitive=set1[IndexVec]>(cast<static>(IndexBase, active_count)));

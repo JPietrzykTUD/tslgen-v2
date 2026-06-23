@@ -143,7 +143,7 @@ def test_lowerer_handler_diagnostic_has_region_source_location() -> None:
     assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 13, 29)
 
 
-def test_intrin_compose_unresolved_suffix_has_region_source_location() -> None:
+def test_intrin_build_unresolved_suffix_has_region_source_location() -> None:
     result = _build(
         "types:\n"
         "  si32 {types [si32]}\n"
@@ -163,8 +163,8 @@ def test_intrin_compose_unresolved_suffix_has_region_source_location() -> None:
         "    avx2:\n"
         "      si32:\n"
         "        implementation:\n"
-        '          tsil "emit_return(intrin_compose<add, '
-        'suffix=value<backend>(intrin::suffix(si?))>(data));"\n'
+        '          tsil "emit_return(intrin<add, build['
+        'suffix=value<backend>(intrin::suffix(si?))]>(data));"\n'
     )
     assert result.catalog is not None
     selection = Selector().select_profile(

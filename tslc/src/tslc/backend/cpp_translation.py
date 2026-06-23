@@ -64,9 +64,16 @@ class _CppIntrinsics:
         return common.default_suffix(extension, type_tag)
 
     def compose_intrinsic_name(
-        self, extension: Extension, base: str, suffix: str | None
+        self,
+        extension: Extension,
+        base: str,
+        suffix: str | None,
+        *,
+        prefix: str | None = None,
     ) -> str | None:
-        return common.compose_intrinsic_name(self.backend_id, extension, base, suffix)
+        return common.compose_intrinsic_name(
+            self.backend_id, extension, base, suffix, prefix=prefix
+        )
 
     def qualify_intrinsic(self, extension: Extension, name: str) -> str:
         del extension

@@ -71,14 +71,19 @@ def default_suffix(extension: Extension, type_tag: str) -> str | None:
 
 
 def compose_intrinsic_name(
-    backend_id: str, extension: Extension, base: str, suffix: str | None
+    backend_id: str,
+    extension: Extension,
+    base: str,
+    suffix: str | None,
+    *,
+    prefix: str | None = None,
 ) -> str | None:
-    prefix = compose_prefix(backend_id, extension)
-    if prefix is None:
+    actual_prefix = compose_prefix(backend_id, extension) if prefix is None else prefix
+    if actual_prefix is None:
         return None
     if suffix:
-        return f"{prefix}{base}_{suffix}"
-    return f"{prefix}{base}"
+        return f"{actual_prefix}{base}_{suffix}"
+    return f"{actual_prefix}{base}"
 
 
 def template(catalog: Catalog, backend_id: str, key: str) -> str | None:

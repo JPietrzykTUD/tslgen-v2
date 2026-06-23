@@ -16,25 +16,25 @@ prim<s:=v> hadd(vec):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<svaddv>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<svaddv, build>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_compose<svaddv>(call<primitive=mask_true[Vec]>(), vec));"
+          tsil "emit_return(intrin<svaddv, build>(call<primitive=mask_true[Vec]>(), vec));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<reduce_add, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<reduce_add, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(vec)));"
       f?:
         requires [avx512f]
         implementation:
-          tsil "emit_return(intrin_compose<reduce_add>(vec));"
+          tsil "emit_return(intrin<reduce_add, build>(vec));"
     [avx2_vl, sse_vl]:
       [si16, ui16]:
         requires [avx512bw, avx512vl]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<reduce_add, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<reduce_add, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(vec)));"
     avx2:
       [si32, ui32]:
         requires [avx2]
@@ -169,25 +169,25 @@ prim<s:=v> hmax(vec):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<svmaxv>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<svmaxv, build>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_compose<svmaxv>(call<primitive=mask_true[Vec]>(), vec));"
+          tsil "emit_return(intrin<svmaxv, build>(call<primitive=mask_true[Vec]>(), vec));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<reduce_max>(vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<reduce_max, build>(vec)));"
       f?:
         requires [avx512f]
         implementation:
-          tsil "emit_return(intrin_compose<reduce_max>(vec));"
+          tsil "emit_return(intrin<reduce_max, build>(vec));"
     [avx2_vl, sse_vl]:
       [si16, ui16]:
         requires [avx512bw, avx512vl]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<reduce_max>(vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<reduce_max, build>(vec)));"
     avx2:
       si32:
         requires [avx2]
@@ -287,25 +287,25 @@ prim<s:=v> hmin(vec):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<svminv>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<svminv, build>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_compose<svminv>(call<primitive=mask_true[Vec]>(), vec));"
+          tsil "emit_return(intrin<svminv, build>(call<primitive=mask_true[Vec]>(), vec));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<reduce_min>(vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<reduce_min, build>(vec)));"
       f?:
         requires [avx512f]
         implementation:
-          tsil "emit_return(intrin_compose<reduce_min>(vec));"
+          tsil "emit_return(intrin<reduce_min, build>(vec));"
     [avx2_vl, sse_vl]:
       [si16, ui16]:
         requires [avx512bw, avx512vl]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<reduce_min>(vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<reduce_min, build>(vec)));"
     avx2:
       si32:
         requires [avx2]
@@ -403,25 +403,25 @@ prim<s:=(m,v)> hadd(mask, vec):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<svaddv>(mask, vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<svaddv, build>(mask, vec)));"
       f?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_compose<svaddv>(mask, vec));"
+          tsil "emit_return(intrin<svaddv, build>(mask, vec));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<mask_reduce_add, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(mask, vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<mask_reduce_add, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(mask, vec)));"
       f?:
         requires [avx512f]
         implementation:
-          tsil "emit_return(intrin_compose<mask_reduce_add>(mask, vec));"
+          tsil "emit_return(intrin<mask_reduce_add, build>(mask, vec));"
     [avx2_vl, sse_vl]:
       [si16, ui16]:
         requires [avx512bw, avx512vl]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin_compose<mask_reduce_add, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(mask, vec)));"
+          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<mask_reduce_add, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(mask, vec)));"
     [avx2, sse]:
       [si32, ui32, f32, f64]:
         requires:
@@ -471,7 +471,7 @@ prim<s:=(m,v)> hmax(mask, vec):
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(cast<static>(type<generation>(base::in), intrin_compose<svmaxv>(mask, vec)));
+            emit_return(cast<static>(type<generation>(base::in), intrin<svmaxv, build>(mask, vec)));
           """
       f?:
         requires [sve]
@@ -481,7 +481,7 @@ prim<s:=(m,v)> hmax(mask, vec):
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(intrin_compose<svmaxv>(mask, vec));
+            emit_return(intrin<svmaxv, build>(mask, vec));
           """
     avx512:
       [si32, ui32, si64, ui64]:
@@ -492,7 +492,7 @@ prim<s:=(m,v)> hmax(mask, vec):
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(cast<static>(type<generation>(base::in), intrin_compose<mask_reduce_max>(mask, vec)));
+            emit_return(cast<static>(type<generation>(base::in), intrin<mask_reduce_max, build>(mask, vec)));
           """
       f?:
         requires [avx512f]
@@ -502,7 +502,7 @@ prim<s:=(m,v)> hmax(mask, vec):
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(intrin_compose<mask_reduce_max>(mask, vec));
+            emit_return(intrin<mask_reduce_max, build>(mask, vec));
           """
     [avx2_vl, sse_vl]:
       [si16, ui16]:
@@ -513,7 +513,7 @@ prim<s:=(m,v)> hmax(mask, vec):
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(cast<static>(type<generation>(base::in), intrin_compose<mask_reduce_max>(mask, vec)));
+            emit_return(cast<static>(type<generation>(base::in), intrin<mask_reduce_max, build>(mask, vec)));
           """
     [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
       arith:
@@ -563,7 +563,7 @@ prim<s:=(m,v)> hmin(mask, vec):
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(cast<static>(type<generation>(base::in), intrin_compose<svminv>(mask, vec)));
+            emit_return(cast<static>(type<generation>(base::in), intrin<svminv, build>(mask, vec)));
           """
       f?:
         requires [sve]
@@ -573,7 +573,7 @@ prim<s:=(m,v)> hmin(mask, vec):
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(intrin_compose<svminv>(mask, vec));
+            emit_return(intrin<svminv, build>(mask, vec));
           """
     avx512:
       [si32, ui32, si64, ui64]:
@@ -584,7 +584,7 @@ prim<s:=(m,v)> hmin(mask, vec):
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(cast<static>(type<generation>(base::in), intrin_compose<mask_reduce_min>(mask, vec)));
+            emit_return(cast<static>(type<generation>(base::in), intrin<mask_reduce_min, build>(mask, vec)));
           """
       f?:
         requires [avx512f]
@@ -594,7 +594,7 @@ prim<s:=(m,v)> hmin(mask, vec):
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(intrin_compose<mask_reduce_min>(mask, vec));
+            emit_return(intrin<mask_reduce_min, build>(mask, vec));
           """
     [avx2_vl, sse_vl]:
       [si16, ui16]:
@@ -605,7 +605,7 @@ prim<s:=(m,v)> hmin(mask, vec):
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(cast<static>(type<generation>(base::in), intrin_compose<mask_reduce_min>(mask, vec)));
+            emit_return(cast<static>(type<generation>(base::in), intrin<mask_reduce_min, build>(mask, vec)));
           """
     [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
       arith:

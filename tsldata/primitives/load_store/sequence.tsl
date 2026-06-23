@@ -24,7 +24,7 @@ prim<v:=()> sequence():
           tsil """
             let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
             emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<set, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 cast<static>(IntrinBase, 63), cast<static>(IntrinBase, 62), cast<static>(IntrinBase, 61), cast<static>(IntrinBase, 60),
                 cast<static>(IntrinBase, 59), cast<static>(IntrinBase, 58), cast<static>(IntrinBase, 57), cast<static>(IntrinBase, 56),
                 cast<static>(IntrinBase, 55), cast<static>(IntrinBase, 54), cast<static>(IntrinBase, 53), cast<static>(IntrinBase, 52),
@@ -50,7 +50,7 @@ prim<v:=()> sequence():
           tsil """
             let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
             emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<set, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 cast<static>(IntrinBase, 31), cast<static>(IntrinBase, 30), cast<static>(IntrinBase, 29), cast<static>(IntrinBase, 28),
                 cast<static>(IntrinBase, 27), cast<static>(IntrinBase, 26), cast<static>(IntrinBase, 25), cast<static>(IntrinBase, 24),
                 cast<static>(IntrinBase, 23), cast<static>(IntrinBase, 22), cast<static>(IntrinBase, 21), cast<static>(IntrinBase, 20),
@@ -68,7 +68,7 @@ prim<v:=()> sequence():
           tsil """
             let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
             emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<set, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
                 cast<static>(IntrinBase, 11), cast<static>(IntrinBase, 10), cast<static>(IntrinBase, 9), cast<static>(IntrinBase, 8),
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
@@ -82,7 +82,7 @@ prim<v:=()> sequence():
           tsil """
             let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
             emit_return(
-              intrin_compose<set, suffix="epi64">(
+              intrin<set, build[suffix="epi64"]>(
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
@@ -93,7 +93,7 @@ prim<v:=()> sequence():
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set>(
+              intrin<set, build>(
                 cast<static>(type<generation>(base::in), 15), cast<static>(type<generation>(base::in), 14), cast<static>(type<generation>(base::in), 13), cast<static>(type<generation>(base::in), 12),
                 cast<static>(type<generation>(base::in), 11), cast<static>(type<generation>(base::in), 10), cast<static>(type<generation>(base::in), 9), cast<static>(type<generation>(base::in), 8),
                 cast<static>(type<generation>(base::in), 7), cast<static>(type<generation>(base::in), 6), cast<static>(type<generation>(base::in), 5), cast<static>(type<generation>(base::in), 4),
@@ -106,7 +106,7 @@ prim<v:=()> sequence():
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set>(
+              intrin<set, build>(
                 cast<static>(type<generation>(base::in), 7), cast<static>(type<generation>(base::in), 6), cast<static>(type<generation>(base::in), 5), cast<static>(type<generation>(base::in), 4),
                 cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
@@ -121,7 +121,7 @@ prim<v:=()> sequence():
           tsil """
             let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
             emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<set, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 cast<static>(IntrinBase, 31), cast<static>(IntrinBase, 30), cast<static>(IntrinBase, 29), cast<static>(IntrinBase, 28),
                 cast<static>(IntrinBase, 27), cast<static>(IntrinBase, 26), cast<static>(IntrinBase, 25), cast<static>(IntrinBase, 24),
                 cast<static>(IntrinBase, 23), cast<static>(IntrinBase, 22), cast<static>(IntrinBase, 21), cast<static>(IntrinBase, 20),
@@ -141,7 +141,7 @@ prim<v:=()> sequence():
           tsil """
             let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
             emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<set, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
                 cast<static>(IntrinBase, 11), cast<static>(IntrinBase, 10), cast<static>(IntrinBase, 9), cast<static>(IntrinBase, 8),
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
@@ -157,7 +157,7 @@ prim<v:=()> sequence():
           tsil """
             let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
             emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<set, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
@@ -171,7 +171,7 @@ prim<v:=()> sequence():
           tsil """
             let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
             emit_return(
-              intrin_compose<set, suffix="epi64x">(
+              intrin<set, build[suffix="epi64x"]>(
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
             );
@@ -183,7 +183,7 @@ prim<v:=()> sequence():
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set>(
+              intrin<set, build>(
                 cast<static>(type<generation>(base::in), 7), cast<static>(type<generation>(base::in), 6), cast<static>(type<generation>(base::in), 5), cast<static>(type<generation>(base::in), 4),
                 cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
@@ -196,7 +196,7 @@ prim<v:=()> sequence():
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set>(
+              intrin<set, build>(
                 cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
             );
@@ -210,7 +210,7 @@ prim<v:=()> sequence():
           tsil """
             let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
             emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<set, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
                 cast<static>(IntrinBase, 11), cast<static>(IntrinBase, 10), cast<static>(IntrinBase, 9), cast<static>(IntrinBase, 8),
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
@@ -226,7 +226,7 @@ prim<v:=()> sequence():
           tsil """
             let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
             emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<set, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
@@ -240,7 +240,7 @@ prim<v:=()> sequence():
           tsil """
             let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
             emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<set, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
             );
@@ -253,7 +253,7 @@ prim<v:=()> sequence():
           tsil """
             let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
             emit_return(
-              intrin_compose<set, suffix="epi64x">(
+              intrin<set, build[suffix="epi64x"]>(
                 cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
             );
@@ -265,7 +265,7 @@ prim<v:=()> sequence():
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set>(
+              intrin<set, build>(
                 cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
             );
@@ -277,7 +277,7 @@ prim<v:=()> sequence():
         implementation:
           tsil """
             emit_return(
-              intrin_compose<set>(
+              intrin<set, build>(
                 cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
             );
@@ -288,7 +288,7 @@ prim<v:=()> sequence():
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svindex>(
+              intrin<svindex, build>(
                 cast<static>(type<generation>(base::in), 0),
                 cast<static>(type<generation>(base::in), 1)
               )
@@ -349,7 +349,7 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svindex>(start, stepwidth)
+              intrin<svindex, build>(start, stepwidth)
             );
           """
       f?:

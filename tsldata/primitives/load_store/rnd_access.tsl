@@ -32,28 +32,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1>(
+                emit_return(intrin<i32gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=2>(
+                emit_return(intrin<i32gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=2]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=4>(
+                emit_return(intrin<i32gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=4]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=8>(
+                emit_return(intrin<i32gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=8]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   8
@@ -76,28 +76,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1>(
+                emit_return(intrin<i64gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=2>(
+                emit_return(intrin<i64gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=2]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=4>(
+                emit_return(intrin<i64gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=4]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=8>(
+                emit_return(intrin<i64gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=8]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   8
@@ -119,28 +119,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_compose<i32gather, immediate(2)=1>(
+                emit_return(intrin<i32gather, build[immediate(2)=1]>(
                   index,
                   base_ptr,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_compose<i32gather, immediate(2)=2>(
+                emit_return(intrin<i32gather, build[immediate(2)=2]>(
                   index,
                   base_ptr,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_compose<i32gather, immediate(2)=4>(
+                emit_return(intrin<i32gather, build[immediate(2)=4]>(
                   index,
                   base_ptr,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_compose<i32gather, immediate(2)=8>(
+                emit_return(intrin<i32gather, build[immediate(2)=8]>(
                   index,
                   base_ptr,
                   8
@@ -162,28 +162,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_compose<i64gather, immediate(2)=1>(
+                emit_return(intrin<i64gather, build[immediate(2)=1]>(
                   index,
                   base_ptr,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_compose<i64gather, immediate(2)=2>(
+                emit_return(intrin<i64gather, build[immediate(2)=2]>(
                   index,
                   base_ptr,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_compose<i64gather, immediate(2)=4>(
+                emit_return(intrin<i64gather, build[immediate(2)=4]>(
                   index,
                   base_ptr,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_compose<i64gather, immediate(2)=8>(
+                emit_return(intrin<i64gather, build[immediate(2)=8]>(
                   index,
                   base_ptr,
                   8
@@ -209,28 +209,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1>(
+                emit_return(intrin<i32gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=2>(
+                emit_return(intrin<i32gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=2]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=4>(
+                emit_return(intrin<i32gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=4]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=8>(
+                emit_return(intrin<i32gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=8]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   8
@@ -255,28 +255,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1>(
+                emit_return(intrin<i64gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=2>(
+                emit_return(intrin<i64gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=2]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=4>(
+                emit_return(intrin<i64gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=4]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=8>(
+                emit_return(intrin<i64gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=8]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   8
@@ -300,28 +300,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_compose<i32gather, immediate(2)=1>(
+                emit_return(intrin<i32gather, build[immediate(2)=1]>(
                   base_ptr,
                   index,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_compose<i32gather, immediate(2)=2>(
+                emit_return(intrin<i32gather, build[immediate(2)=2]>(
                   base_ptr,
                   index,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_compose<i32gather, immediate(2)=4>(
+                emit_return(intrin<i32gather, build[immediate(2)=4]>(
                   base_ptr,
                   index,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_compose<i32gather, immediate(2)=8>(
+                emit_return(intrin<i32gather, build[immediate(2)=8]>(
                   base_ptr,
                   index,
                   8
@@ -345,28 +345,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_compose<i64gather, immediate(2)=1>(
+                emit_return(intrin<i64gather, build[immediate(2)=1]>(
                   base_ptr,
                   index,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin_compose<i64gather, immediate(2)=2>(
+                emit_return(intrin<i64gather, build[immediate(2)=2]>(
                   base_ptr,
                   index,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin_compose<i64gather, immediate(2)=4>(
+                emit_return(intrin<i64gather, build[immediate(2)=4]>(
                   base_ptr,
                   index,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin_compose<i64gather, immediate(2)=8>(
+                emit_return(intrin<i64gather, build[immediate(2)=8]>(
                   base_ptr,
                   index,
                   8
@@ -454,7 +454,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_compose<mask_i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1>(
+                emit_return(intrin<mask_i32gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1]>(
                   source,
                   mask,
                   index,
@@ -463,7 +463,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               2 => {
-                emit_return(intrin_compose<mask_i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=2>(
+                emit_return(intrin<mask_i32gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=2]>(
                   source,
                   mask,
                   index,
@@ -472,7 +472,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               4 => {
-                emit_return(intrin_compose<mask_i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=4>(
+                emit_return(intrin<mask_i32gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=4]>(
                   source,
                   mask,
                   index,
@@ -481,7 +481,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               8 => {
-                emit_return(intrin_compose<mask_i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=8>(
+                emit_return(intrin<mask_i32gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=8]>(
                   source,
                   mask,
                   index,
@@ -508,7 +508,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_compose<mask_i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1>(
+                emit_return(intrin<mask_i64gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1]>(
                   source,
                   mask,
                   index,
@@ -517,7 +517,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               2 => {
-                emit_return(intrin_compose<mask_i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=2>(
+                emit_return(intrin<mask_i64gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=2]>(
                   source,
                   mask,
                   index,
@@ -526,7 +526,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               4 => {
-                emit_return(intrin_compose<mask_i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=4>(
+                emit_return(intrin<mask_i64gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=4]>(
                   source,
                   mask,
                   index,
@@ -535,7 +535,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               8 => {
-                emit_return(intrin_compose<mask_i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=8>(
+                emit_return(intrin<mask_i64gather, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=8]>(
                   source,
                   mask,
                   index,
@@ -561,7 +561,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_compose<mask_i32gather, immediate(4)=1>(
+                emit_return(intrin<mask_i32gather, build[immediate(4)=1]>(
                   source,
                   mask,
                   index,
@@ -570,7 +570,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               2 => {
-                emit_return(intrin_compose<mask_i32gather, immediate(4)=2>(
+                emit_return(intrin<mask_i32gather, build[immediate(4)=2]>(
                   source,
                   mask,
                   index,
@@ -579,7 +579,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               4 => {
-                emit_return(intrin_compose<mask_i32gather, immediate(4)=4>(
+                emit_return(intrin<mask_i32gather, build[immediate(4)=4]>(
                   source,
                   mask,
                   index,
@@ -588,7 +588,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               8 => {
-                emit_return(intrin_compose<mask_i32gather, immediate(4)=8>(
+                emit_return(intrin<mask_i32gather, build[immediate(4)=8]>(
                   source,
                   mask,
                   index,
@@ -614,7 +614,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin_compose<mask_i64gather, immediate(4)=1>(
+                emit_return(intrin<mask_i64gather, build[immediate(4)=1]>(
                   source,
                   mask,
                   index,
@@ -623,7 +623,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               2 => {
-                emit_return(intrin_compose<mask_i64gather, immediate(4)=2>(
+                emit_return(intrin<mask_i64gather, build[immediate(4)=2]>(
                   source,
                   mask,
                   index,
@@ -632,7 +632,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               4 => {
-                emit_return(intrin_compose<mask_i64gather, immediate(4)=4>(
+                emit_return(intrin<mask_i64gather, build[immediate(4)=4]>(
                   source,
                   mask,
                   index,
@@ -641,7 +641,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               8 => {
-                emit_return(intrin_compose<mask_i64gather, immediate(4)=8>(
+                emit_return(intrin<mask_i64gather, build[immediate(4)=8]>(
                   source,
                   mask,
                   index,
@@ -739,7 +739,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                intrin_compose<i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=1>(
+                intrin<i32scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=1]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -748,7 +748,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               2 => {
-                intrin_compose<i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=2>(
+                intrin<i32scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=2]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -757,7 +757,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               4 => {
-                intrin_compose<i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=4>(
+                intrin<i32scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=4]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -766,7 +766,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               8 => {
-                intrin_compose<i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=8>(
+                intrin<i32scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=8]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -793,7 +793,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                intrin_compose<i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=1>(
+                intrin<i64scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=1]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -802,7 +802,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               2 => {
-                intrin_compose<i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=2>(
+                intrin<i64scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=2]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -811,7 +811,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               4 => {
-                intrin_compose<i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=4>(
+                intrin<i64scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=4]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -820,7 +820,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               8 => {
-                intrin_compose<i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=8>(
+                intrin<i64scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=8]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   index,
                   a,
@@ -846,7 +846,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                intrin_compose<i32scatter, immediate(3)=1>(
+                intrin<i32scatter, build[immediate(3)=1]>(
                   base_ptr,
                   index,
                   a,
@@ -855,7 +855,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               2 => {
-                intrin_compose<i32scatter, immediate(3)=2>(
+                intrin<i32scatter, build[immediate(3)=2]>(
                   base_ptr,
                   index,
                   a,
@@ -864,7 +864,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               4 => {
-                intrin_compose<i32scatter, immediate(3)=4>(
+                intrin<i32scatter, build[immediate(3)=4]>(
                   base_ptr,
                   index,
                   a,
@@ -873,7 +873,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               8 => {
-                intrin_compose<i32scatter, immediate(3)=8>(
+                intrin<i32scatter, build[immediate(3)=8]>(
                   base_ptr,
                   index,
                   a,
@@ -899,7 +899,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                intrin_compose<i64scatter, immediate(3)=1>(
+                intrin<i64scatter, build[immediate(3)=1]>(
                   base_ptr,
                   index,
                   a,
@@ -908,7 +908,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               2 => {
-                intrin_compose<i64scatter, immediate(3)=2>(
+                intrin<i64scatter, build[immediate(3)=2]>(
                   base_ptr,
                   index,
                   a,
@@ -917,7 +917,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               4 => {
-                intrin_compose<i64scatter, immediate(3)=4>(
+                intrin<i64scatter, build[immediate(3)=4]>(
                   base_ptr,
                   index,
                   a,
@@ -926,7 +926,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               8 => {
-                intrin_compose<i64scatter, immediate(3)=8>(
+                intrin<i64scatter, build[immediate(3)=8]>(
                   base_ptr,
                   index,
                   a,
@@ -1017,7 +1017,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                intrin_compose<mask_i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1>(
+                intrin<mask_i32scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1027,7 +1027,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               2 => {
-                intrin_compose<mask_i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=2>(
+                intrin<mask_i32scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=2]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1037,7 +1037,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               4 => {
-                intrin_compose<mask_i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=4>(
+                intrin<mask_i32scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=4]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1047,7 +1047,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               8 => {
-                intrin_compose<mask_i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=8>(
+                intrin<mask_i32scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=8]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1077,7 +1077,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                intrin_compose<mask_i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1>(
+                intrin<mask_i64scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1087,7 +1087,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               2 => {
-                intrin_compose<mask_i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=2>(
+                intrin<mask_i64scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=2]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1097,7 +1097,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               4 => {
-                intrin_compose<mask_i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=4>(
+                intrin<mask_i64scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=4]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1107,7 +1107,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               8 => {
-                intrin_compose<mask_i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=8>(
+                intrin<mask_i64scatter, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=8]>(
                   cast<reinterpret>(SignedBase *, base_ptr),
                   mask,
                   index,
@@ -1136,7 +1136,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           tsil """
             switch<compile>(scale) {
               1 => {
-                intrin_compose<mask_i32scatter, immediate(4)=1>(
+                intrin<mask_i32scatter, build[immediate(4)=1]>(
                   base_ptr,
                   mask,
                   index,
@@ -1146,7 +1146,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               2 => {
-                intrin_compose<mask_i32scatter, immediate(4)=2>(
+                intrin<mask_i32scatter, build[immediate(4)=2]>(
                   base_ptr,
                   mask,
                   index,
@@ -1156,7 +1156,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               4 => {
-                intrin_compose<mask_i32scatter, immediate(4)=4>(
+                intrin<mask_i32scatter, build[immediate(4)=4]>(
                   base_ptr,
                   mask,
                   index,
@@ -1166,7 +1166,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               8 => {
-                intrin_compose<mask_i32scatter, immediate(4)=8>(
+                intrin<mask_i32scatter, build[immediate(4)=8]>(
                   base_ptr,
                   mask,
                   index,
@@ -1195,7 +1195,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           tsil """
             switch<compile>(scale) {
               1 => {
-                intrin_compose<mask_i64scatter, immediate(4)=1>(
+                intrin<mask_i64scatter, build[immediate(4)=1]>(
                   base_ptr,
                   mask,
                   index,
@@ -1205,7 +1205,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               2 => {
-                intrin_compose<mask_i64scatter, immediate(4)=2>(
+                intrin<mask_i64scatter, build[immediate(4)=2]>(
                   base_ptr,
                   mask,
                   index,
@@ -1215,7 +1215,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               4 => {
-                intrin_compose<mask_i64scatter, immediate(4)=4>(
+                intrin<mask_i64scatter, build[immediate(4)=4]>(
                   base_ptr,
                   mask,
                   index,
@@ -1225,7 +1225,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               8 => {
-                intrin_compose<mask_i64scatter, immediate(4)=8>(
+                intrin<mask_i64scatter, build[immediate(4)=8]>(
                   base_ptr,
                   mask,
                   index,

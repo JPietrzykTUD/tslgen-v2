@@ -23,7 +23,6 @@ from tslc.ir.segments import RawText, Region, Segment
 KEYWORDS: frozenset[str] = frozenset(
     {
         "emit_return",
-        "intrin_compose",
         "intrin",
         "op",  # op<NAME>(args) -> a backend-divergent lane operator via an op_<NAME> template
         "call",

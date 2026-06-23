@@ -17,11 +17,7 @@ from tslc.lower.region_handlers.control import (
     SwitchLowerer,
 )
 from tslc.lower.region_handlers.declarations import LetLowerer, VarLowerer
-from tslc.lower.region_handlers.intrinsics import (
-    ComposeModifiers,
-    IntrinComposeLowerer,
-    IntrinLowerer,
-)
+from tslc.lower.region_handlers.intrinsics import IntrinsicSelector, IntrinLowerer
 from tslc.lower.region_handlers.io import IoLowerer
 from tslc.lower.region_handlers.lanes import LanesLowerer
 from tslc.lower.region_handlers.masks import MaskLowerer
@@ -36,11 +32,10 @@ __all__ = [
     "AssumeAlignedLowerer",
     "CallLowerer",
     "CastLowerer",
-    "ComposeModifiers",
     "DEFAULT_REGION_LOWERERS",
     "EmitReturnLowerer",
     "IfLowerer",
-    "IntrinComposeLowerer",
+    "IntrinsicSelector",
     "IntrinLowerer",
     "IoLowerer",
     "LanesLowerer",

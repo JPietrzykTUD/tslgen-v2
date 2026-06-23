@@ -84,10 +84,10 @@ class LoweringEnv:
     immediate_split_names: frozenset[str] = frozenset()
     # the `sImm` immediate operand's name (e.g. "shift"), its per-backend forwarding strategy,
     # and its resolved legal value range `(lo, hi, inclusive)`. When the strategy is
-    # `literal_match` (Rust), `intrin_compose` forwards the immediate through a literal match over
-    # that range (`match shift { 0 => …::<0>(data), … }`), which re-types each literal to the
-    # intrinsic's const param (bridging avx2 `i32` vs avx512 `u32`); otherwise the immediate is
-    # a positional const arg.
+    # `literal_match` (Rust), `intrin<..., build[immediate(N)=...]>` forwards the immediate
+    # through a literal match over that range (`match shift { 0 => …::<0>(data), … }`), which
+    # re-types each literal to the intrinsic's const param (bridging avx2 `i32` vs avx512 `u32`);
+    # otherwise the immediate is a positional const arg.
     immediate_name: str | None = None
     immediate_dispatch: str | None = None
     immediate_range: tuple[int, int, bool] | None = None

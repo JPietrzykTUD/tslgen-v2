@@ -97,7 +97,7 @@ def test_simd_comparison_family_builds(
 
 def test_blend_native_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # `blend` is the first mask-CONSUMING primitive (mask is a parameter). Its native
-    # body `intrin_compose<mask_blend>(mask, left, right)` -> `_mm512_mask_blend_*`
+    # body `intrin<mask_blend, build>(mask, left, right)` -> `_mm512_mask_blend_*`
     # build-verifies on skylake (native __mmaskN across sse/avx2/avx512) in C++ and
     # Rust. Scalar/generic blend (runtime if + raw return / loops) skip cleanly.
     result = generate_project(
@@ -302,7 +302,8 @@ def test_convert_builds(data_root: Path, machine_profiles_path: Path, tmp_path: 
     # The width-changing conversion family (`return_type: base: ToBase`): `convert_up`/
     # `convert_down` (`v:=(v,sImm)`) select+widen/narrow a chunk; `load_convert_up` (`v:=ptr+`)
     # widens straight from memory. Their native bodies compose intrinsics from SPACE-separated
-    # `intrin_compose` modifiers + `infix`/`infix_sep` (`<cvt infix=epi8 infix_sep="" suffix=epi16>`
+    # `intrin<..., build[...]>` modifiers + `infix`/`infix_sep`
+    # (`<cvt, build[infix=epi8, infix_sep="", suffix=epi16]>`
     # -> `_mm256_cvtepi8_epi16`), dispatch the chunk via `switch<compile>(index)` (the `index`
     # const typed `si32` to match the i32 intrinsic const), and build the out/intermediate vectors
     # from `vector::as_base(ToBase)` / `as(ext, ToBase)`. Builds in C++ and
@@ -330,7 +331,7 @@ def test_cast_reinterpret_builds(
     # carry a `ToBase` second type axis; the selector resolves the `"=="` identity marker to the
     # source and drops the unenumerable `"*"` catch-all (else they'd leak as bogus target bases).
     # The same-width / bitcast / sse4.1-gated native bodies build; the space-separated-modifier
-    # conversion bodies (`intrin_compose<cvt infix=… suffix=…>`) skip cleanly until Stage 2.
+    # conversion bodies (`intrin<cvt, build[infix=…, suffix=…]>`) skip cleanly until Stage 2.
     # Builds in C++ and Rust.
     result = generate_project(
         [data_root],
@@ -349,7 +350,7 @@ def test_cast_reinterpret_builds(
 
 def test_sequence_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # `sequence` is nullary (`v:=()`, an iota generator) — its native bodies are
-    # `intrin_compose<set>(N-1, …, 0)` literal lists per width. Builds in C++ and Rust.
+    # `intrin<set, build>(N-1, …, 0)` literal lists per width. Builds in C++ and Rust.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
@@ -531,7 +532,7 @@ def test_masked_comparisons_build(
 ) -> None:
     # Masked category B: mask-producing comparisons emit a `[mask=zero]` variant `m:=(m,v,v)`
     # (takes a mask, returns a mask), split to `<name>_maskz`. avx512(_vl) uses the native
-    # masked compare (`intrin_compose<…, post=mask>` -> `_mm512_cmpeq_*_mask`); avx2/sse/scalar
+    # masked compare (`intrin<…, build[post=mask]>` -> `_mm512_cmpeq_*_mask`); avx2/sse/scalar
     # fall back to `mask_binary_and(mask, <unmasked compare>)`; the generic `<LANES>` masked loop
     # is gated off. Both backends, scalar + sse2 + avx2 + skylake + icelake-rockerlake.
     result = generate_project(

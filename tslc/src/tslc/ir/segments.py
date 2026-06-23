@@ -29,7 +29,7 @@ class RawText:
 
 @dataclass(frozen=True, slots=True)
 class Region:
-    keyword: str  # e.g. "emit_return", "intrin_compose", "value", "type", "call"
+    keyword: str  # e.g. "emit_return", "intrin", "value", "type", "call"
     selector_text: str  # raw text inside <...>, "" when the keyword has no selector
     body: tuple["Segment", ...]  # recursively scanned (...) payload
     full_text: str  # original source text of the whole region (provenance)

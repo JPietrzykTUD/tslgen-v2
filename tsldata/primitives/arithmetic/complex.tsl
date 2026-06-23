@@ -44,7 +44,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
       f?:
         requires [avx512f]
         implementation:
-          tsil "emit_return(intrin_compose<mul>(factor1, factor2));"
+          tsil "emit_return(intrin<mul, build>(factor1, factor2));"
       [si16, si32, si64]:
         requires:
           si16 [avx512bw, avx512f]
@@ -53,10 +53,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, factor2)
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(factor1, factor2)
             );
           """
       arith:
@@ -76,16 +73,13 @@ prim<v:=(v,v)> mul(factor1, factor2):
       f?:
         requires [avx]
         implementation:
-          tsil "emit_return(intrin_compose<mul>(factor1, factor2));"
+          tsil "emit_return(intrin<mul, build>(factor1, factor2));"
       ?i16:
         requires [avx, avx2]
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, factor2)
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(factor1, factor2)
             );
           """
       ?i32:
@@ -93,10 +87,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, factor2)
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(factor1, factor2)
             );
           """
       ?i64:
@@ -104,10 +95,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, factor2)
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(factor1, factor2)
             );
           """
       arith:
@@ -127,20 +115,17 @@ prim<v:=(v,v)> mul(factor1, factor2):
       f32:
         requires [sse]
         implementation:
-          tsil "emit_return(intrin_compose<mul>(factor1, factor2));"
+          tsil "emit_return(intrin<mul, build>(factor1, factor2));"
       f64:
         requires [sse2]
         implementation:
-          tsil "emit_return(intrin_compose<mul>(factor1, factor2));"
+          tsil "emit_return(intrin<mul, build>(factor1, factor2));"
       ?i16:
         requires [sse2]
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, factor2)
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(factor1, factor2)
             );
           """
       ?i32:
@@ -148,10 +133,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, factor2)
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(factor1, factor2)
             );
           """
       ?i64:
@@ -159,10 +141,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, factor2)
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(factor1, factor2)
             );
           """
       arith:
@@ -182,7 +161,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
       [si8, si16, si32, ui8, ui16, ui32, f32, f64]:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin_compose<vmulq>(factor1, factor2));"
+          tsil "emit_return(intrin<vmulq, build>(factor1, factor2));"
       arith:
         requires [neon]
         implementation:
@@ -200,7 +179,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_compose<svmul, post=x>(call<primitive=mask_true[Vec]>(), factor1, factor2));"
+          tsil "emit_return(intrin<svmul, build[post=x]>(call<primitive=mask_true[Vec]>(), factor1, factor2));"
 prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
   brief_description "Multiply packed elements and zero inactive lanes."
   operation ""
@@ -242,10 +221,7 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                maskz_mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(mask, factor1, factor2)
+              intrin<maskz_mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(mask, factor1, factor2)
             );
           """
       ?i32:
@@ -256,10 +232,7 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                maskz_mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(mask, factor1, factor2)
+              intrin<maskz_mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(mask, factor1, factor2)
             );
           """
       ?i64:
@@ -270,10 +243,7 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                maskz_mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(mask, factor1, factor2)
+              intrin<maskz_mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(mask, factor1, factor2)
             );
           """
       f?:
@@ -282,7 +252,7 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
-          tsil "emit_return(intrin_compose<maskz_mul>(mask, factor1, factor2));"
+          tsil "emit_return(intrin<maskz_mul, build>(mask, factor1, factor2));"
       arith:
         requires:
           avx512  [avx512f]
@@ -318,7 +288,7 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_compose<svmul, post=z>(mask, factor1, factor2));"
+          tsil "emit_return(intrin<svmul, build[post=z]>(mask, factor1, factor2));"
 prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
   brief_description "Multiply packed elements and preserve factor1 in inactive lanes."
   operation ""
@@ -360,10 +330,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mask_mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, mask, factor1, factor2)
+              intrin<mask_mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(factor1, mask, factor1, factor2)
             );
           """
       ?i32:
@@ -374,10 +341,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mask_mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, mask, factor1, factor2)
+              intrin<mask_mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(factor1, mask, factor1, factor2)
             );
           """
       ?i64:
@@ -388,10 +352,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mask_mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, mask, factor1, factor2)
+              intrin<mask_mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(factor1, mask, factor1, factor2)
             );
           """
       f?:
@@ -400,7 +361,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
-          tsil "emit_return(intrin_compose<mask_mul>(factor1, mask, factor1, factor2));"
+          tsil "emit_return(intrin<mask_mul, build>(factor1, mask, factor1, factor2));"
       arith:
         requires:
           avx512  [avx512f]
@@ -436,7 +397,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_compose<svmul, post=m>(mask, factor1, factor2));"
+          tsil "emit_return(intrin<svmul, build[post=m]>(mask, factor1, factor2));"
 prim<v:=(v,v)> div(divident, divisor):
   brief_description "[Example: sse + f32]: Divide packed single-precision (32-bit) floating-point elements in \"a\" by packed elements in \"b\", and store the results in \"dst\"."
   operation "[Example: sse + f32]: FOR j := 0 to 3\n\ti := 32*j\n\tdst[i+31:i] := a[i+31:i] / b[i+31:i]\nENDFOR"
@@ -469,26 +430,26 @@ prim<v:=(v,v)> div(divident, divisor):
       f?:
         requires [avx512f]
         implementation:
-          tsil "emit_return(intrin_compose<div>(divident, divisor));"
+          tsil "emit_return(intrin<div, build>(divident, divisor));"
     avx2:
       f?:
         requires [avx]
         implementation:
-          tsil "emit_return(intrin_compose<div>(divident, divisor));"
+          tsil "emit_return(intrin<div, build>(divident, divisor));"
     sse:
       f32:
         requires [sse]
         implementation:
-          tsil "emit_return(intrin_compose<div>(divident, divisor));"
+          tsil "emit_return(intrin<div, build>(divident, divisor));"
       f64:
         requires [sse2]
         implementation:
-          tsil "emit_return(intrin_compose<div>(divident, divisor));"
+          tsil "emit_return(intrin<div, build>(divident, divisor));"
     neon:
       f?:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin_compose<vdivq>(divident, divisor));"
+          tsil "emit_return(intrin<vdivq, build>(divident, divisor));"
       arith:
         requires [neon]
         implementation:
@@ -506,7 +467,7 @@ prim<v:=(v,v)> div(divident, divisor):
       idqword:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_compose<svdiv, post=x>(call<primitive=mask_true[Vec]>(), divident, divisor));"
+          tsil "emit_return(intrin<svdiv, build[post=x]>(call<primitive=mask_true[Vec]>(), divident, divisor));"
 prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
   brief_description "[Example: avx512 + f32]: Divide packed elements in \"a\" by packed elements in \"b\", and store the results in \"dst\" using zeromask \"k\" (elements are zeroed when the corresponding mask bit is not set)."
   operation "[Example: avx512 + f32]: FOR j := 0 to 15\n\ti := 32*j\n\tIF k[j]\n\t\tdst[i+31:i] := a[i+31:i] / b[i+31:i]\n\tELSE\n\t\tdst[i+31:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
@@ -547,7 +508,7 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
-          tsil "emit_return(intrin_compose<maskz_div>(mask, divident, divisor));"
+          tsil "emit_return(intrin<maskz_div, build>(mask, divident, divisor));"
     [avx2, sse]:
       f?:
         requires:
@@ -583,7 +544,7 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
       idqword:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_compose<svdiv, post=z>(mask, divident, divisor));"
+          tsil "emit_return(intrin<svdiv, build[post=z]>(mask, divident, divisor));"
 prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
   brief_description "[Example: avx512 + f32]: Divide packed elements in \"a\" by packed elements in \"b\", and store the results in \"dst\" using writemask \"k\" (elements are copied from \"a\" when the corresponding mask bit is not set)."
   operation "[Example: avx512 + f32]: FOR j := 0 to 15\n\ti := 32*j\n\tIF k[j]\n\t\tdst[i+31:i] := a[i+31:i] / b[i+31:i]\n\tELSE\n\t\tdst[i+31:i] := a[i+31:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
@@ -624,7 +585,7 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
-          tsil "emit_return(intrin_compose<mask_div>(divident, mask, divident, divisor));"
+          tsil "emit_return(intrin<mask_div, build>(divident, mask, divident, divisor));"
     [avx2, sse]:
       f?:
         requires:
@@ -660,7 +621,7 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
       idqword:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin_compose<svdiv, post=m>(mask, divident, divisor));"
+          tsil "emit_return(intrin<svdiv, build[post=m]>(mask, divident, divisor));"
 prim<v:=(v,sImm)> mul_imm(data, factor):
   brief_description "[Example: sse + si16]: Multiply the packed 16-bit integers in \"a\" and \"b\", producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in \"dst\"."
   operation "[Example: sse + si16]: FOR j := 0 to 7\n\ti := j*16\n\ttmp[31:0] := SignExtend32(a[i+15:i]) * SignExtend32(b[i+15:i])\n\tdst[i+15:i] := tmp[15:0]\nENDFOR"
@@ -696,7 +657,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<mul>(
+              intrin<mul, build>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -707,10 +668,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -721,10 +679,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -735,10 +690,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -761,7 +713,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<mul>(
+              intrin<mul, build>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -772,10 +724,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -786,10 +735,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -800,10 +746,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -826,7 +769,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<mul>(
+              intrin<mul, build>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -837,7 +780,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<mul>(
+              intrin<mul, build>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -848,10 +791,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -862,10 +802,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -876,10 +813,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+              intrin<mullo, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -902,7 +836,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<vmulq>(
+              intrin<vmulq, build>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )

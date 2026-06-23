@@ -53,7 +53,7 @@ prim<v:=ptr>[aligned=*] load(ptr):
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
               emit_return(
-                intrin_compose<load, suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)>(
+                intrin<load, build[suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)]>(
                   cast<reinterpret>(
                     type<generation>(vector::register) const *,
                     assume_aligned<value<generation>(vector::alignment)>(ptr)
@@ -62,7 +62,7 @@ prim<v:=ptr>[aligned=*] load(ptr):
               );
             } else<generation> {
               emit_return(
-                intrin_compose<loadu, suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)>(
+                intrin<loadu, build[suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)]>(
                   cast<reinterpret>(type<generation>(vector::register) const *, ptr)
                 )
               );
@@ -77,13 +77,13 @@ prim<v:=ptr>[aligned=*] load(ptr):
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
               emit_return(
-                intrin_compose<load>(
+                intrin<load, build>(
                   assume_aligned<value<generation>(vector::alignment)>(ptr)
                 )
               );
             } else<generation> {
               emit_return(
-                intrin_compose<loadu>(
+                intrin<loadu, build>(
                   ptr
                 )
               );
@@ -96,13 +96,13 @@ prim<v:=ptr>[aligned=*] load(ptr):
           tsil """
               if<generation>(value<generation>(primitive::attribute(aligned))) {
                 emit_return(
-                  intrin_compose<vld1q>(
+                  intrin<vld1q, build>(
                     assume_aligned<value<generation>(vector::alignment)>(ptr)
                   )
                 );
               } else<generation> {
                 emit_return(
-                  intrin_compose<vld1q>(
+                  intrin<vld1q, build>(
                     ptr
                   )
                 );
@@ -115,14 +115,14 @@ prim<v:=ptr>[aligned=*] load(ptr):
           tsil """
               if<generation>(value<generation>(primitive::attribute(aligned))) {
                 emit_return(
-                  intrin_compose<svld1>(
+                  intrin<svld1, build>(
                     call<primitive=mask_true[Vec]>(),
                     assume_aligned<value<generation>(vector::alignment)>(ptr)
                   )
                 );
               } else<generation> {
                 emit_return(
-                  intrin_compose<svld1>(
+                  intrin<svld1, build>(
                     call<primitive=mask_true[Vec]>(),
                     ptr
                   )
@@ -187,7 +187,7 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             emit_return(
-              intrin_compose<maskz_loadu, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<maskz_loadu, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 mask, cast<reinterpret>(SignedBase const *, ptr)
               )
             );
@@ -201,13 +201,13 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
               emit_return(
-                intrin_compose<maskz_load>(
+                intrin<maskz_load, build>(
                   mask, assume_aligned<value<generation>(vector::alignment)>(ptr)
                 )
               );
             } else<generation> {
               emit_return(
-                intrin_compose<maskz_load>(
+                intrin<maskz_load, build>(
                   mask, ptr
                 )
               );
@@ -237,14 +237,14 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
               emit_return(
-                intrin_compose<svld1>(
+                intrin<svld1, build>(
                   mask,
                   assume_aligned<value<generation>(vector::alignment)>(ptr)
                 )
               );
             } else<generation> {
               emit_return(
-                intrin_compose<svld1>(
+                intrin<svld1, build>(
                   mask,
                   ptr
                 )
@@ -312,7 +312,7 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             emit_return(
-              intrin_compose<mask_loadu, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<mask_loadu, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 data,
                 mask,
                 cast<reinterpret>(SignedBase const *, ptr)
@@ -328,7 +328,7 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
               emit_return(
-                intrin_compose<mask_load>(
+                intrin<mask_load, build>(
                   data,
                   mask,
                   assume_aligned<value<generation>(vector::alignment)>(ptr)
@@ -336,7 +336,7 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
               );
             } else<generation> {
               emit_return(
-                intrin_compose<mask_loadu>(
+                intrin<mask_loadu, build>(
                   data,
                   mask,
                   ptr
@@ -459,7 +459,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask(ptr):
               loop<range>(lane, 0, lanes, 1) {
                 var<const_infer>(set, (((*ptr_add(bytes, lane >> 3)) >> (lane & 7)) & 1));
                 if (set) {
-                  var<const_infer>(one, intrin_compose<svcmpeq_n, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))>(
+                  var<const_infer>(one, intrin<svcmpeq_n, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))]>(
                     all, idx, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), lane)
                   ));
                   out = intrin<svorr_b_z>(all, out, one);
@@ -476,7 +476,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask(ptr):
               } else<generation> {
                 vec = call<primitive=load[UVec] attrs[aligned=false]>(cast<reinterpret>(UnsignedT const*, ptr));
               }
-              emit_return(intrin_compose<svcmpne_n, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))>(pg, vec, cast<static>(UnsignedT, 0)));
+              emit_return(intrin<svcmpne_n, build[suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))]>(pg, vec, cast<static>(UnsignedT, 0)));
             }
           """
 

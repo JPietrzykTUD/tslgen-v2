@@ -76,7 +76,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmpeq, post=mask>(left, right)
+              intrin<cmpeq, build[post=mask]>(left, right)
             );
           """
       f?:
@@ -87,7 +87,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmp, post=mask>(left, right, _CMP_EQ_OQ)
+              intrin<cmp, build[post=mask]>(left, right, _CMP_EQ_OQ)
             );
           """
     avx2:
@@ -96,10 +96,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                cmpeq,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(left, right)
+              intrin<cmpeq, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(left, right)
             );
           """
       f?:
@@ -107,7 +104,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmp>(left, right, _CMP_EQ_OQ)
+              intrin<cmp, build>(left, right, _CMP_EQ_OQ)
             );
           """
     sse:
@@ -118,10 +115,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                cmpeq,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(left, right)
+              intrin<cmpeq, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(left, right)
             );
           """
       f?:
@@ -131,7 +125,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmpeq>(left, right)
+              intrin<cmpeq, build>(left, right)
             );
           """
     neon:
@@ -142,7 +136,7 @@ prim<m:=(v,v)> equal(left, right):
             let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
             emit_return(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
-                intrin_compose<vceqq>(left, right)
+                intrin<vceqq, build>(left, right)
               )
             );
           """
@@ -152,7 +146,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svcmpeq>(
+              intrin<svcmpeq, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -235,7 +229,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmpneq, post=mask>(left, right)
+              intrin<cmpneq, build[post=mask]>(left, right)
             );
           """
       f?:
@@ -246,7 +240,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmp, post=mask>(left, right, _CMP_NEQ_UQ)
+              intrin<cmp, build[post=mask]>(left, right, _CMP_NEQ_UQ)
             );
           """
     avx2:
@@ -266,7 +260,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmp>(left, right, _CMP_NEQ_UQ)
+              intrin<cmp, build>(left, right, _CMP_NEQ_UQ)
             );
           """
     sse:
@@ -290,7 +284,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmp>(left, right, _CMP_NEQ_UQ)
+              intrin<cmp, build>(left, right, _CMP_NEQ_UQ)
             );
           """
     neon:
@@ -306,7 +300,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svcmpne>(
+              intrin<svcmpne, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -387,7 +381,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmplt, post=mask>(left, right)
+              intrin<cmplt, build[post=mask]>(left, right)
             );
           """
       f?:
@@ -398,20 +392,20 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmp, post=mask>(left, right, _CMP_LT_OQ)
+              intrin<cmp, build[post=mask]>(left, right, _CMP_LT_OQ)
             );
           """
     avx2:
       si?:
         requires [avx, avx2]
         implementation:
-          tsil "emit_return(intrin_compose<cmpgt>(right, left));"
+          tsil "emit_return(intrin<cmpgt, build>(right, left));"
       f?:
         requires [avx]
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmp>(left, right, _CMP_LT_OQ)
+              intrin<cmp, build>(left, right, _CMP_LT_OQ)
             );
           """
       ui?:
@@ -433,7 +427,7 @@ prim<m:=(v,v)> less_than(left, right):
               }
             }
             emit_return(
-              intrin_compose<cmpgt, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<cmpgt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 call<primitive=binary_xor>(right, sign_bit),
                 call<primitive=binary_xor>(left, sign_bit)
               )
@@ -443,19 +437,19 @@ prim<m:=(v,v)> less_than(left, right):
       [si8, si16, si32]:
         requires [sse, sse2]
         implementation:
-          tsil "emit_return(intrin_compose<cmplt>(left, right));"
+          tsil "emit_return(intrin<cmplt, build>(left, right));"
       si64:
         requires [sse4_2]
         implementation:
           tsil """
-            emit_return(intrin_compose<cmpgt>(right, left));
+            emit_return(intrin<cmpgt, build>(right, left));
           """
       f?:
         requires:
           f32 [sse]
           f64 [sse2]
         implementation:
-          tsil "emit_return(intrin_compose<cmplt>(left, right));"
+          tsil "emit_return(intrin<cmplt, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
@@ -477,7 +471,7 @@ prim<m:=(v,v)> less_than(left, right):
               }
             }
             emit_return(
-              intrin_compose<cmpgt, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<cmpgt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 call<primitive=binary_xor>(right, sign_bit),
                 call<primitive=binary_xor>(left, sign_bit)
               )
@@ -491,7 +485,7 @@ prim<m:=(v,v)> less_than(left, right):
             let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
             emit_return(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
-                intrin_compose<vcltq>(left, right)
+                intrin<vcltq, build>(left, right)
               )
             );
           """
@@ -501,7 +495,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svcmplt>(
+              intrin<svcmplt, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -582,7 +576,7 @@ prim<m:=(v,v)> greater_than(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmpgt, post=mask>(left, right)
+              intrin<cmpgt, build[post=mask]>(left, right)
             );
           """
       f?:
@@ -593,20 +587,20 @@ prim<m:=(v,v)> greater_than(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmp, post=mask>(left, right, _CMP_GT_OQ)
+              intrin<cmp, build[post=mask]>(left, right, _CMP_GT_OQ)
             );
           """
     avx2:
       si?:
         requires [avx, avx2]
         implementation:
-          tsil "emit_return(intrin_compose<cmpgt>(left, right));"
+          tsil "emit_return(intrin<cmpgt, build>(left, right));"
       f?:
         requires [avx]
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmp>(left, right, _CMP_GT_OQ)
+              intrin<cmp, build>(left, right, _CMP_GT_OQ)
             );
           """
       ui?:
@@ -628,7 +622,7 @@ prim<m:=(v,v)> greater_than(left, right):
               }
             }
             emit_return(
-              intrin_compose<cmpgt, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<cmpgt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 call<primitive=binary_xor>(left, sign_bit),
                 call<primitive=binary_xor>(right, sign_bit)
               )
@@ -638,19 +632,19 @@ prim<m:=(v,v)> greater_than(left, right):
       [si8, si16, si32]:
         requires [sse, sse2]
         implementation:
-          tsil "emit_return(intrin_compose<cmpgt>(left, right));"
+          tsil "emit_return(intrin<cmpgt, build>(left, right));"
       si64:
         requires [sse4_2]
         implementation:
           tsil """
-            emit_return(intrin_compose<cmpgt>(left, right));
+            emit_return(intrin<cmpgt, build>(left, right));
           """
       f?:
         requires:
           f32 [sse]
           f64 [sse2]
         implementation:
-          tsil "emit_return(intrin_compose<cmpgt>(left, right));"
+          tsil "emit_return(intrin<cmpgt, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
@@ -672,7 +666,7 @@ prim<m:=(v,v)> greater_than(left, right):
               }
             }
             emit_return(
-              intrin_compose<cmpgt, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+              intrin<cmpgt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))]>(
                 call<primitive=binary_xor>(left, sign_bit),
                 call<primitive=binary_xor>(right, sign_bit)
               )
@@ -686,7 +680,7 @@ prim<m:=(v,v)> greater_than(left, right):
             let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
             emit_return(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
-                intrin_compose<vcgtq>(left, right)
+                intrin<vcgtq, build>(left, right)
               )
             );
           """
@@ -696,7 +690,7 @@ prim<m:=(v,v)> greater_than(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svcmpgt>(
+              intrin<svcmpgt, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -777,7 +771,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmple, post=mask>(left, right)
+              intrin<cmple, build[post=mask]>(left, right)
             );
           """
       f?:
@@ -788,7 +782,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmp, post=mask>(left, right, _CMP_LE_OQ)
+              intrin<cmp, build[post=mask]>(left, right, _CMP_LE_OQ)
             );
           """
     avx2:
@@ -808,7 +802,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmp>(left, right, _CMP_LE_OQ)
+              intrin<cmp, build>(left, right, _CMP_LE_OQ)
             );
           """
     sse:
@@ -830,7 +824,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           f32 [sse]
           f64 [sse2]
         implementation:
-          tsil "emit_return(intrin_compose<cmple>(left, right));"
+          tsil "emit_return(intrin<cmple, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
@@ -852,7 +846,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
             let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
             emit_return(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
-                intrin_compose<vcleq>(left, right)
+                intrin<vcleq, build>(left, right)
               )
             );
           """
@@ -862,7 +856,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svcmple>(
+              intrin<svcmple, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -943,7 +937,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmpge, post=mask>(left, right)
+              intrin<cmpge, build[post=mask]>(left, right)
             );
           """
       f?:
@@ -954,7 +948,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmp, post=mask>(left, right, _CMP_GE_OQ)
+              intrin<cmp, build[post=mask]>(left, right, _CMP_GE_OQ)
             );
           """
     avx2:
@@ -974,7 +968,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<cmp>(left, right, _CMP_GE_OQ)
+              intrin<cmp, build>(left, right, _CMP_GE_OQ)
             );
           """
     sse:
@@ -996,7 +990,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           f32 [sse]
           f64 [sse2]
         implementation:
-          tsil "emit_return(intrin_compose<cmpge>(left, right));"
+          tsil "emit_return(intrin<cmpge, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
@@ -1018,7 +1012,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
             let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
             emit_return(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
-                intrin_compose<vcgeq>(left, right)
+                intrin<vcgeq, build>(left, right)
               )
             );
           """
@@ -1028,7 +1022,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svcmpge>(
+              intrin<svcmpge, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -1107,11 +1101,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mask_cmpeq,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
-                post=mask
-              >(mask, left, right)
+              intrin<mask_cmpeq, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1122,7 +1112,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<mask_cmp, post=mask>(
+              intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
                 right,
@@ -1198,7 +1188,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svcmpeq>(
+              intrin<svcmpeq, build>(
                 mask,
                 left, right
               )
@@ -1277,11 +1267,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mask_cmpneq,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
-                post=mask
-              >(mask, left, right)
+              intrin<mask_cmpneq, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1292,7 +1278,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<mask_cmp, post=mask>(
+              intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
                 right,
@@ -1368,7 +1354,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svcmpne>(
+              intrin<svcmpne, build>(
                 mask,
                 left, right
               )
@@ -1447,11 +1433,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mask_cmplt,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
-                post=mask
-              >(mask, left, right)
+              intrin<mask_cmplt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1462,7 +1444,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<mask_cmp, post=mask>(
+              intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
                 right,
@@ -1538,7 +1520,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svcmplt>(
+              intrin<svcmplt, build>(
                 mask,
                 left, right
               )
@@ -1617,11 +1599,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mask_cmpgt,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
-                post=mask
-              >(mask, left, right)
+              intrin<mask_cmpgt, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1632,7 +1610,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<mask_cmp, post=mask>(
+              intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
                 right,
@@ -1708,7 +1686,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svcmpgt>(
+              intrin<svcmpgt, build>(
                 mask,
                 left, right
               )
@@ -1787,11 +1765,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mask_cmple,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
-                post=mask
-              >(mask, left, right)
+              intrin<mask_cmple, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1802,7 +1776,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<mask_cmp, post=mask>(
+              intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
                 right,
@@ -1878,7 +1852,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svcmple>(
+              intrin<svcmple, build>(
                 mask,
                 left, right
               )
@@ -1957,11 +1931,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<
-                mask_cmpge,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
-                post=mask
-              >(mask, left, right)
+              intrin<mask_cmpge, build[suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1972,7 +1942,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<mask_cmp, post=mask>(
+              intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
                 right,
@@ -2048,7 +2018,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              intrin_compose<svcmpge>(
+              intrin<svcmpge, build>(
                 mask,
                 left, right
               )

@@ -34,10 +34,10 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
               tsil "emit_return(cast<bitcast>(type<generation>(register::generic(ToType)), data));"
           f?:
             implementation:
-              tsil "emit_return(cast<bitcast>(type<generation>(register::generic(ToType)), intrin_compose<cast infix=value<backend>(intrin::suffix) infix_sep=\"\" suffix=value<backend>(intrin::suffix(ToBase))>(data)));"
+              tsil "emit_return(cast<bitcast>(type<generation>(register::generic(ToType)), intrin<cast, build[infix=value<backend>(intrin::suffix), infix_sep=\"\", suffix=value<backend>(intrin::suffix(ToBase))]>(data)));"
           ?i?:
             implementation:
-              tsil "emit_return(cast<bitcast>(type<generation>(register::generic(ToType)), intrin_compose<cast infix=value<backend>(intrin::suffix) infix_sep=\"\" suffix=value<backend>(intrin::suffix(\"stream\"))>(data)));"
+              tsil "emit_return(cast<bitcast>(type<generation>(register::generic(ToType)), intrin<cast, build[infix=value<backend>(intrin::suffix), infix_sep=\"\", suffix=value<backend>(intrin::suffix(\"stream\"))]>(data)));"
       ?i?:
         requires:
           avx512 [avx512f]
@@ -49,7 +49,7 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
               tsil "emit_return(cast<bitcast>(type<generation>(register::generic(ToType)), data));"
           f?:
             implementation:
-              tsil "emit_return(cast<bitcast>(type<generation>(register::generic(ToType)), intrin_compose<cast infix=value<backend>(intrin::suffix(\"stream\")) infix_sep=\"\" suffix=value<backend>(intrin::suffix(ToBase))>(data)));"
+              tsil "emit_return(cast<bitcast>(type<generation>(register::generic(ToType)), intrin<cast, build[infix=value<backend>(intrin::suffix(\"stream\")), infix_sep=\"\", suffix=value<backend>(intrin::suffix(ToBase))]>(data)));"
     neon:
       ?i?:
         requires [neon]
@@ -59,7 +59,7 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
               tsil "emit_return(cast<bitcast>(type<generation>(register::generic(ToType)), data));"
           arith:
             implementation:
-              tsil "emit_return(cast<bitcast>(type<generation>(register::generic(ToType)), intrin_compose<vreinterpretq infix=to_type_suffix suffix=value<backend>(intrin::suffix)>(data)));"
+              tsil "emit_return(cast<bitcast>(type<generation>(register::generic(ToType)), intrin<vreinterpretq, build[infix=to_type_suffix, suffix=value<backend>(intrin::suffix)]>(data)));"
       f?:
         requires [neon]
         ToBase:
@@ -68,7 +68,7 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
               tsil "emit_return(cast<bitcast>(type<generation>(register::generic(ToType)), data));"
           arith:
             implementation:
-              tsil "emit_return(cast<bitcast>(type<generation>(register::generic(ToType)), intrin_compose<vreinterpretq infix=to_type_suffix suffix=value<backend>(intrin::suffix)>(data)));"
+              tsil "emit_return(cast<bitcast>(type<generation>(register::generic(ToType)), intrin<vreinterpretq, build[infix=to_type_suffix, suffix=value<backend>(intrin::suffix)]>(data)));"
     sve:
       ?i?:
         requires [sve]
@@ -78,7 +78,7 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
               tsil "emit_return(data);"
           "*":
             implementation:
-              tsil "emit_return(intrin_compose<svreinterpret infix=to_type_suffix suffix=value<backend>(intrin::suffix)>(data));"
+              tsil "emit_return(intrin<svreinterpret, build[infix=to_type_suffix, suffix=value<backend>(intrin::suffix)]>(data));"
       f?:
         requires [sve]
         ToBase:
@@ -87,7 +87,7 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
               tsil "emit_return(data);"
           "*":
             implementation:
-              tsil "emit_return(intrin_compose<svreinterpret infix=to_type_suffix suffix=value<backend>(intrin::suffix)>(data));"
+              tsil "emit_return(intrin<svreinterpret, build[infix=to_type_suffix, suffix=value<backend>(intrin::suffix)]>(data));"
     [generic, oneAPIfpga, scalar]:
       arith:
         requires:
@@ -164,18 +164,18 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm512_cvtepi8_epi32>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm512_cvtepi8_epi32>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=0]>(data, 0))));
                   } else {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm512_cvtepu8_epi32>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm512_cvtepu8_epi32>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=0]>(data, 0))));
                   }
                 """
           ?i64:
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm512_cvtepi8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm512_cvtepi8_epi64>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=0]>(data, 0))));
                   } else {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm512_cvtepu8_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm512_cvtepu8_epi64>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=0]>(data, 0))));
                   }
                 """
       ?i16:
@@ -194,9 +194,9 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm512_cvtepi16_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm512_cvtepi16_epi64>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=0]>(data, 0))));
                   } else {
-                    emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm512_cvtepu16_epi64>(intrin_compose<extracti32x4 suffix=epi32 immediate(1)=0>(data, 0))));
+                    emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm512_cvtepu16_epi64>(intrin<extracti32x4, build[suffix=epi32, immediate(1)=0]>(data, 0))));
                   }
                 """
       f32:
@@ -207,12 +207,12 @@ prim<v:=v>[cast=convert] cast(data):
               tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), data));"
           ?i32:
             implementation:
-              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<cvt infix=value<backend>(intrin::suffix) infix_sep=\"\" suffix=value<backend>(intrin::suffix(ToBase))>(intrin<_mm512_roundscale_ps>(data, value<backend>(x86::mm_fround_to_zero)))));"
+              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<cvt, build[infix=value<backend>(intrin::suffix), infix_sep=\"\", suffix=value<backend>(intrin::suffix(ToBase))]>(intrin<_mm512_roundscale_ps>(data, value<backend>(x86::mm_fround_to_zero)))));"
           ?i64:
             implementation:
               tsil """
                    var<const_infer>(tmp, intrin<_mm512_castps512_ps256>(intrin<_mm512_roundscale_ps>(data, value<backend>(x86::mm_fround_to_zero))));
-                   emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<cvt infix=value<backend>(intrin::suffix) infix_sep="" suffix=value<backend>(intrin::suffix(ToBase))>(tmp))) ;
+                   emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<cvt, build[infix=value<backend>(intrin::suffix), infix_sep="", suffix=value<backend>(intrin::suffix(ToBase))]>(tmp))) ;
                 """
       f64:
         requires [avx512f, avx512dq]
@@ -222,11 +222,11 @@ prim<v:=v>[cast=convert] cast(data):
               tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), data));"
           ?i64:
             implementation:
-              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<cvt infix=value<backend>(intrin::suffix) infix_sep=\"\" suffix=value<backend>(intrin::suffix(ToBase))>(intrin<_mm512_roundscale_pd>(data, value<backend>(x86::mm_fround_to_zero)))));"
+              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<cvt, build[infix=value<backend>(intrin::suffix), infix_sep=\"\", suffix=value<backend>(intrin::suffix(ToBase))]>(intrin<_mm512_roundscale_pd>(data, value<backend>(x86::mm_fround_to_zero)))));"
           ?i32:
             implementation:
               tsil """
-                   var<const_infer>(temp, intrin_compose<cvt infix=value<backend>(intrin::suffix) infix_sep="" suffix=value<backend>(intrin::suffix(ToBase))>(intrin<_mm512_roundscale_pd>(data, value<backend>(x86::mm_fround_to_zero))));
+                   var<const_infer>(temp, intrin<cvt, build[infix=value<backend>(intrin::suffix), infix_sep="", suffix=value<backend>(intrin::suffix(ToBase))]>(intrin<_mm512_roundscale_pd>(data, value<backend>(x86::mm_fround_to_zero))));
                    emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm512_zextsi256_si512>(temp))) ;
                 """
       ?i32:
@@ -348,7 +348,7 @@ prim<v:=v>[cast=convert] cast(data):
               tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), data));"
           ?i32:
             implementation:
-              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<cvt infix=value<backend>(intrin::suffix) infix_sep=\"\" suffix=value<backend>(intrin::suffix(ToBase))>(intrin<_mm256_round_ps>(data, value<backend>(x86::mm_fround_to_zero)))));"
+              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<cvt, build[infix=value<backend>(intrin::suffix), infix_sep=\"\", suffix=value<backend>(intrin::suffix(ToBase))]>(intrin<_mm256_round_ps>(data, value<backend>(x86::mm_fround_to_zero)))));"
           "*":
             implementation:
               tsil "emit_return(call<primitive=reinterpret[Vec, ToBase]>(data));"
@@ -367,7 +367,7 @@ prim<v:=v>[cast=convert] cast(data):
           si32:
             implementation:
               tsil """
-                   var<const_infer>(temp, intrin_compose<cvt infix=value<backend>(intrin::suffix) infix_sep="" suffix=value<backend>(intrin::suffix(ToBase))>(intrin<_mm256_round_pd>(data, value<backend>(x86::mm_fround_to_zero))));
+                   var<const_infer>(temp, intrin<cvt, build[infix=value<backend>(intrin::suffix), infix_sep="", suffix=value<backend>(intrin::suffix(ToBase))]>(intrin<_mm256_round_pd>(data, value<backend>(x86::mm_fround_to_zero))));
                    emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm256_zextsi128_si256>(temp))) ;
                 """
           "*":
@@ -462,7 +462,7 @@ prim<v:=v>[cast=convert] cast(data):
               tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm_cvtps_pd>(data)));"
           ?i32:
             implementation:
-              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<cvt infix=value<backend>(intrin::suffix) infix_sep=\"\" suffix=value<backend>(intrin::suffix(ToBase))>(intrin<_mm_round_ps>(data, value<backend>(x86::mm_fround_to_zero)))));"
+              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<cvt, build[infix=value<backend>(intrin::suffix), infix_sep=\"\", suffix=value<backend>(intrin::suffix(ToBase))]>(intrin<_mm_round_ps>(data, value<backend>(x86::mm_fround_to_zero)))));"
           "*":
             implementation:
               tsil "emit_return(call<primitive=reinterpret[Vec, ToBase]>(data));"
@@ -481,7 +481,7 @@ prim<v:=v>[cast=convert] cast(data):
                 """
           si32:
             implementation:
-              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<cvt infix=value<backend>(intrin::suffix) infix_sep=\"\" suffix=value<backend>(intrin::suffix(ToBase))>(intrin<_mm_round_pd>(data, value<backend>(x86::mm_fround_to_zero)))));"
+              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<cvt, build[infix=value<backend>(intrin::suffix), infix_sep=\"\", suffix=value<backend>(intrin::suffix(ToBase))]>(intrin<_mm_round_pd>(data, value<backend>(x86::mm_fround_to_zero)))));"
           "*":
             implementation:
               tsil "emit_return(call<primitive=reinterpret[Vec, ToBase]>(data));"
@@ -680,7 +680,7 @@ prim<v:=v>[cast=convert] cast(data):
               tsil "emit_return(call<primitive=reinterpret[Vec, ToBase]>(data));"
           ?i32:
             implementation:
-              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<vcvtq infix=value<backend>(intrin::suffix(ToBase)) suffix=value<backend>(intrin::suffix)>(data)));"
+              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vcvtq, build[infix=value<backend>(intrin::suffix(ToBase)), suffix=value<backend>(intrin::suffix)]>(data)));"
           f64:
             implementation:
               tsil """
@@ -704,7 +704,7 @@ prim<v:=v>[cast=convert] cast(data):
               tsil "emit_return(call<primitive=reinterpret[Vec, ToBase]>(data));"
           ?i64:
             implementation:
-              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<vcvtq infix=value<backend>(intrin::suffix(ToBase)) suffix=value<backend>(intrin::suffix)>(data)));"
+              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vcvtq, build[infix=value<backend>(intrin::suffix(ToBase)), suffix=value<backend>(intrin::suffix)]>(data)));"
           "*":
             implementation:
               tsil "emit_return(call<primitive=reinterpret[Vec, ToBase]>(data));"
@@ -716,7 +716,7 @@ prim<v:=v>[cast=convert] cast(data):
               tsil "emit_return(call<primitive=reinterpret[Vec, ToBase]>(data));"
           f32:
             implementation:
-              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<vcvtq infix=value<backend>(intrin::suffix(ToBase)) suffix=value<backend>(intrin::suffix)>(data)));"
+              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vcvtq, build[infix=value<backend>(intrin::suffix(ToBase)), suffix=value<backend>(intrin::suffix)]>(data)));"
           ?i64:
             implementation:
               tsil """
@@ -740,7 +740,7 @@ prim<v:=v>[cast=convert] cast(data):
               tsil "emit_return(call<primitive=reinterpret[Vec, ToBase]>(data));"
           f64:
             implementation:
-              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin_compose<vcvtq infix=value<backend>(intrin::suffix(ToBase)) suffix=value<backend>(intrin::suffix)>(data)));"
+              tsil "emit_return(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vcvtq, build[infix=value<backend>(intrin::suffix(ToBase)), suffix=value<backend>(intrin::suffix)]>(data)));"
           "*":
             implementation:
               tsil "emit_return(call<primitive=reinterpret[Vec, ToBase]>(data));"
@@ -825,13 +825,13 @@ prim<v:=v>[cast=convert] cast(data):
               tsil "emit_return(data);"
           f64:
             implementation:
-              tsil "emit_return(intrin_compose<svcvt infix=value<backend>(intrin::suffix(ToBase)) suffix=value<backend>(intrin::suffix) post=z>(call<primitive=mask_true[Vec]>(), data));"
+              tsil "emit_return(intrin<svcvt, build[infix=value<backend>(intrin::suffix(ToBase)), suffix=value<backend>(intrin::suffix), post=z]>(call<primitive=mask_true[Vec]>(), data));"
           ?i32:
             implementation:
-              tsil "emit_return(intrin_compose<svcvt infix=value<backend>(intrin::suffix(ToBase)) suffix=value<backend>(intrin::suffix) post=x>(call<primitive=mask_true[Vec]>(), data));"
+              tsil "emit_return(intrin<svcvt, build[infix=value<backend>(intrin::suffix(ToBase)), suffix=value<backend>(intrin::suffix), post=x]>(call<primitive=mask_true[Vec]>(), data));"
           ?i64:
             implementation:
-              tsil "emit_return(intrin_compose<svcvt infix=value<backend>(intrin::suffix(ToBase)) suffix=value<backend>(intrin::suffix) post=z>(call<primitive=mask_true[Vec]>(), data));"
+              tsil "emit_return(intrin<svcvt, build[infix=value<backend>(intrin::suffix(ToBase)), suffix=value<backend>(intrin::suffix), post=z]>(call<primitive=mask_true[Vec]>(), data));"
       f64:
         requires [sve]
         ToBase:
@@ -842,18 +842,18 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil """
                   svbool_t pg64 = intrin<svptrue_b64>();
-                  auto tmp = intrin_compose<svcvt infix=value<backend>(intrin::suffix(ToBase)) suffix=value<backend>(intrin::suffix) post=z>(pg64, data);
+                  auto tmp = intrin<svcvt, build[infix=value<backend>(intrin::suffix(ToBase)), suffix=value<backend>(intrin::suffix), post=z]>(pg64, data);
                   svbool_t pg32 = intrin<svptrue_b32>();
                   svuint32_t idx = intrin<svindex_u32>(0, 1);
                   svbool_t even = intrin<svcmpeq_n_u32>(pg32, intrin<svand_n_u32_x>(pg32, idx, 1), 0);
-                  auto packed = intrin_compose<svcompact suffix=value<backend>(intrin::suffix(ToBase))>(even, tmp);
+                  auto packed = intrin<svcompact, build[suffix=value<backend>(intrin::suffix(ToBase))]>(even, tmp);
                   auto out_lanes = value<generation>(generic::runtime_length(ToType));
                   svbool_t out_pg = intrin<svwhilelt_b32>(cast<static>( type<backend>(scalar::size) , 0), out_lanes);
-                   emit_return(intrin<svsel>(out_pg, packed, intrin_compose<svdup suffix=value<backend>(intrin::suffix(ToBase))>(0))) ;
+                   emit_return(intrin<svsel>(out_pg, packed, intrin<svdup, build[suffix=value<backend>(intrin::suffix(ToBase))]>(0))) ;
                 """
           ?i64:
             implementation:
-              tsil "emit_return(intrin_compose<svcvt infix=value<backend>(intrin::suffix(ToBase)) suffix=value<backend>(intrin::suffix) post=x>(call<primitive=mask_true[Vec]>(), data));"
+              tsil "emit_return(intrin<svcvt, build[infix=value<backend>(intrin::suffix(ToBase)), suffix=value<backend>(intrin::suffix), post=x]>(call<primitive=mask_true[Vec]>(), data));"
       ?i32:
         requires [sve]
         ToBase:
@@ -874,10 +874,10 @@ prim<v:=v>[cast=convert] cast(data):
                 """
           f32:
             implementation:
-              tsil "emit_return(intrin_compose<svcvt infix=value<backend>(intrin::suffix(ToBase)) suffix=value<backend>(intrin::suffix) post=x>(call<primitive=mask_true[Vec]>(), data));"
+              tsil "emit_return(intrin<svcvt, build[infix=value<backend>(intrin::suffix(ToBase)), suffix=value<backend>(intrin::suffix), post=x]>(call<primitive=mask_true[Vec]>(), data));"
           f64:
             implementation:
-              tsil "emit_return(intrin_compose<svcvt infix=value<backend>(intrin::suffix(ToBase)) suffix=value<backend>(intrin::suffix) post=z>(call<primitive=mask_true[Vec]>(), data));"
+              tsil "emit_return(intrin<svcvt, build[infix=value<backend>(intrin::suffix(ToBase)), suffix=value<backend>(intrin::suffix), post=z]>(call<primitive=mask_true[Vec]>(), data));"
       ?i64:
         requires [sve]
         ToBase:
@@ -888,18 +888,18 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil """
                   svbool_t pg64 = intrin<svptrue_b64>();
-                  auto tmp = intrin_compose<svcvt infix=value<backend>(intrin::suffix(ToBase)) suffix=value<backend>(intrin::suffix) post=z>(pg64, data);
+                  auto tmp = intrin<svcvt, build[infix=value<backend>(intrin::suffix(ToBase)), suffix=value<backend>(intrin::suffix), post=z]>(pg64, data);
                   svbool_t pg32 = intrin<svptrue_b32>();
                   svuint32_t idx = intrin<svindex_u32>(0, 1);
                   svbool_t even = intrin<svcmpeq_n_u32>(pg32, intrin<svand_n_u32_x>(pg32, idx, 1), 0);
-                  auto packed = intrin_compose<svcompact suffix=value<backend>(intrin::suffix(ToBase))>(even, tmp);
+                  auto packed = intrin<svcompact, build[suffix=value<backend>(intrin::suffix(ToBase))]>(even, tmp);
                   auto out_lanes = value<generation>(generic::runtime_length(ToType));
                   svbool_t out_pg = intrin<svwhilelt_b32>(cast<static>( type<backend>(scalar::size) , 0), out_lanes);
-                  emit_return(intrin<svsel>(out_pg, packed, intrin_compose<svdup suffix=value<backend>(intrin::suffix(ToBase))>(0))) ;
+                  emit_return(intrin<svsel>(out_pg, packed, intrin<svdup, build[suffix=value<backend>(intrin::suffix(ToBase))]>(0))) ;
                 """
           f64:
             implementation:
-              tsil "emit_return(intrin_compose<svcvt infix=value<backend>(intrin::suffix(ToBase)) suffix=value<backend>(intrin::suffix) post=x>(call<primitive=mask_true[Vec]>(), data));"
+              tsil "emit_return(intrin<svcvt, build[infix=value<backend>(intrin::suffix(ToBase)), suffix=value<backend>(intrin::suffix), post=x]>(call<primitive=mask_true[Vec]>(), data));"
     scalar:
       arith:
         requires []
