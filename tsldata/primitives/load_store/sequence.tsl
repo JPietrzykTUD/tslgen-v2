@@ -299,7 +299,7 @@ prim<v:=()> sequence():
         implementation:
           tsil """
             var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result[i] = cast<static>(type<generation>(base::in), i);
             }
             emit_return(call<primitive=from_array[Vec]>(result));
@@ -313,7 +313,7 @@ prim<v:=()> sequence():
         implementation:
           tsil """
             var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result[i] = cast<static>(type<generation>(base::in), i);
             }
             emit_return(call<primitive=from_array[Vec]>(result));
@@ -358,7 +358,7 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
           tsil """
             var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
             var<infer>(current, start);
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result[i] = current;
               current = details::arith_add(current, stepwidth);
             }
@@ -379,7 +379,7 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
           tsil """
             var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
             var<infer>(current, start);
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result[i] = current;
               current = details::arith_add(current, stepwidth);
             }

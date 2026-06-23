@@ -66,8 +66,7 @@ prim<v:=v> popcnt(data):
         implementation:
           tsil """
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
-               loop<unroll>(value<generation>(vector::length))
-               loop<range>(i, 0, value<generation>(vector::length), 1)  {
+               loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 data_arr[i] = cast<static>(type<generation>(base::in), details::popcount(data_arr[i]));
               }
                emit_return(call<primitive=from_array[Vec]>(data_arr)) ;
@@ -170,8 +169,7 @@ prim<v:=v> lzc(data):
         implementation:
           tsil """
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
-               loop<unroll>(value<generation>(vector::length))
-               loop<range>(i, 0, value<generation>(vector::length), 1)  {
+               loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 data_arr[i] = call<primitive=lzc_scalar[type<backend>(vector::as_extension(scalar))]>(data_arr[i]);
               }
                emit_return(call<primitive=from_array[Vec]>(data_arr)) ;
@@ -184,8 +182,7 @@ prim<v:=v> lzc(data):
         implementation:
           tsil """
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
-               loop<unroll>(value<generation>(vector::length))
-               loop<range>(i, 0, value<generation>(vector::length), 1)  {
+               loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 data_arr[i] = cast<static>(type<generation>(base::in), details::clz_recursive<type<generation>(base::in), type<generation>(vector::offset_base)::apply>(data_arr[i]));
               }
                emit_return(call<primitive=from_array[Vec]>(data_arr)) ;

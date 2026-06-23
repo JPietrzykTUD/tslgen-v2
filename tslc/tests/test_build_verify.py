@@ -258,7 +258,7 @@ def test_elementwise_bitwise_builds(
 
 
 def test_reductions_build(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
-    # Horizontal reductions: `hadd` (loop fallback via to_array + loop<range> +
+    # Horizontal reductions: `hadd` (loop fallback via to_array + loop<backend> +
     # details::arith_add) and `hmax`/`hmin` (intrinsic reduce_*/extracti128 bodies plus the
     # generic var<infer> + runtime-`if` loop for byte/word). Exercises native loop and
     # runtime-conditional translation end-to-end in C++ and Rust across scalar + SIMD; the

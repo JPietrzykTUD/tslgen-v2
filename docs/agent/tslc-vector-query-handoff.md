@@ -994,7 +994,7 @@ Implemented pieces:
    statement/expression regions. Statement-specific exceptions are owned by the
    keyword lowerers: `VarLowerer` keeps backend declaration templates unchanged,
    and `LetLowerer` keeps substituted aliases as no target statement.
-4. Block forms such as `if`, `loop<range>`, and `switch<compile>` do not gain a
+4. Block forms such as `if`, `loop<backend>`, and `switch<compile>` do not gain a
    target semicolon.
 5. The primitive corpus under `tsldata/primitives` was normalized so all
    scanner-identified `let<type>` and `var<...>` statement regions carry source
@@ -1253,7 +1253,10 @@ The accepted first-class source mechanisms are deliberately small:
   generation-time known.
 - `loop<generation>(i, start, end, step) { ... }` expands in the generator and
   binds `i` as a generation-time integer.
-- Existing `loop<range>` remains a normal emitted target-language loop.
+- `loop<backend>(i, start, end, step) { ... }` emits a normal target-language
+  loop.
+- `loop<backend, unroll>(i, start, end, step) { ... }` is the same emitted loop
+  with an explicit optional unroll hint.
 - No `lanes<expand>` or `lanes<expand_reverse>` should be added in the first
   design.
 
@@ -1403,6 +1406,42 @@ cheaper frozen mapping reuse. The second pass covered scanned TSIL segment
 reuse across dependency extraction and backend lowering. Build-verification
 tests were not rerun as part of the performance pass; the build caveats below
 still apply.
+
+## TSIL Backend Loop Surface Cleanup
+
+The current worktree also harmonizes emitted TSIL loops:
+
+- `loop<range>(var, start, end, step) { ... }` is now
+  `loop<backend>(var, start, end, step) { ... }`.
+- A standalone preceding `loop<unroll>(count)` directive is removed. Explicit
+  unroll intent is attached to the emitted loop as
+  `loop<backend, unroll>(var, start, end, step) { ... }`.
+- `loop<generation>(var, start, end, step) { ... }` is unchanged: it expands in
+  the generator and binds the loop variable as a generation-time integer.
+- Backend translation metadata now uses `loop_backend`; C++ and C17 also declare
+  `loop_backend_unroll`. Rust omits the unroll template and therefore renders a
+  normal loop for `loop<backend, unroll>`.
+- `LoopLowerer` emits an unroll hint only when the selected backend declares the
+  optional unroll template and the loop trip count is generation-known. Symbolic
+  counts such as sized-vector `LANES` remain valid normal backend loops.
+- The primitive corpus under `tsldata/primitives` has been migrated and guarded
+  against reintroducing `loop<range>` or standalone `loop<unroll>`.
+
+Validation for this slice so far:
+
+```bash
+python -m compileall -q tslc/src/tslc tslc/tests
+python -m pytest -q tslc/tests/test_lane_lists.py tslc/tests/test_tsil_scan.py::test_backend_loop_unroll_selector_captures_block tslc/tests/test_tsil_statement_terminators.py::test_primitive_tsil_uses_backend_loop_surface
+python -m pytest -q tslc/tests/test_tsil_statement_terminators.py tslc/tests/test_tsil_scan.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_masks_and_calls.py
+python -m pytest -q tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds
+env TSLC_VERIFY_WORKERS=1 ./verify.sh
+git diff --check
+```
+
+Results: compile passed; the focused loop run passed with 17 tests; the
+affected non-build run passed with 60 tests; the full-corpus AVX2 value gate
+passed; `verify.sh` passed all targeted validations with 178 non-build tests
+and 53 generated-build tests; final diff check passed.
 
 ## Known Caveats
 

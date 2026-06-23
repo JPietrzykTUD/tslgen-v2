@@ -4178,8 +4178,9 @@ If no rule matches, emit a diagnostic containing primitive name, signature, attr
   `loop<generation>(i, start, end, step) { ... }`. `lanes<s>` is accepted only
   as a parameter-position signature term. `lanes<at>` indexes must evaluate to
   generation-time integers. `loop<generation>` expands in the generator and
-  binds its loop variable as a generation-time integer; `loop<range>` remains a
-  normal emitted target-language loop.
+  binds its loop variable as a generation-time integer; `loop<backend>` remains
+  a normal emitted target-language loop. `loop<backend, unroll>` is the same
+  emitted loop with an explicit optional unroll hint.
 - The old `arg_count(<param>)=return_vector_length`, `v:=s...`,
   `pack<expand>`, and `pack<first>` forms are not production-supported for new
   source. `pack<...>` is intentionally quarantined as unsupported TSIL.

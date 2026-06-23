@@ -98,7 +98,7 @@ prim<im:=m> to_integral(mask):
                let<type>(ImaskT, type<generation>(vector::imask));
               var<infer>(result, cast<static>(ImaskT, 0));
               var<const_typed>(type<backend>(scalar::size), mask_bits, value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8);
-               loop<range>(i, 0, value<generation>(vector::length), 1)  {
+               loop<backend>(i, 0, value<generation>(vector::length), 1)  {
                 if (i < mask_bits && mask<test>(mask, i)) {
                   result |= cast<static>(ImaskT, 1) << i;
                 }
@@ -124,7 +124,7 @@ prim<im:=m> to_integral(mask):
                let<type>(ImaskT, type<generation>(vector::imask));
               var<infer>(result, cast<static>(ImaskT, 0));
               var<const_typed>(type<backend>(scalar::size), mask_bits, value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8);
-               loop<range>(i, 0, value<generation>(vector::length), 1)  {
+               loop<backend>(i, 0, value<generation>(vector::length), 1)  {
                 if (i < mask_bits && mask<test>(mask, i)) {
                   result |= cast<static>(ImaskT, 1) << i;
                 }
@@ -228,7 +228,7 @@ prim<v:=m> to_vector(mask):
                  var<const_infer>(bits64, cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF));
                 true_val = cast<bitcast>(type<generation>(base::in), bits64);
               }
-               loop<range>(i, 0, value<generation>(vector::length), 1)  {
+               loop<backend>(i, 0, value<generation>(vector::length), 1)  {
                 if (mask<test>(mask, i)) {
                   result[i] = true_val;
                 } else {
@@ -271,7 +271,7 @@ prim<m:=im> to_mask(mask):
               let<type>(UVec, type<generation>(vector::as_base(UnsignedT)));
               var<infer>(tmp, call<primitive=to_array[UVec]>(call<primitive=set_zero[UVec]>()));
               const type<backend>(scalar::size) mask_period = cast<static>(type<backend>(scalar::size), 16 / value<generation>(type::size_bytes(type<generation>(base::in))));
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 const type<backend>(scalar::size) bit_idx = i % mask_period;
                 tmp[i] = cast<static>(UnsignedT, (mask >> bit_idx) & 1);
               }
@@ -296,7 +296,7 @@ prim<m:=im> to_mask(mask):
         implementation:
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
@@ -329,7 +329,7 @@ prim<m:=im> to_mask(mask):
         implementation:
           tsil """
               var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 if (((mask >> i) & 1) != 0) {
                   values[i] = value<generation>(mask::lane::all_true);
                 }
@@ -341,7 +341,7 @@ prim<m:=im> to_mask(mask):
         implementation:
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
@@ -355,7 +355,7 @@ prim<m:=im> to_mask(mask):
         implementation:
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
@@ -388,7 +388,7 @@ prim<m:=im> to_mask(mask):
         implementation:
           tsil """
               var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 if (((mask >> i) & 1) != 0) {
                   values[i] = value<generation>(mask::lane::all_true);
                 }
@@ -400,7 +400,7 @@ prim<m:=im> to_mask(mask):
         implementation:
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
@@ -414,7 +414,7 @@ prim<m:=im> to_mask(mask):
         implementation:
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
@@ -428,7 +428,7 @@ prim<m:=im> to_mask(mask):
         implementation:
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
@@ -443,7 +443,7 @@ prim<m:=im> to_mask(mask):
           tsil """
               let<type>(MaskVec, type<generation>(vector::as_base(type<backend>(scalar::si32))));
               var<typed>(array_type<type<backend>(scalar::si32), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<backend>(scalar::si32), bit);
               }
@@ -459,7 +459,7 @@ prim<m:=im> to_mask(mask):
           tsil """
               let<type>(MaskVec, type<generation>(vector::as_base(type<backend>(scalar::si64))));
               var<typed>(array_type<type<backend>(scalar::si64), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<backend>(scalar::si64), bit);
               }
@@ -482,8 +482,7 @@ prim<m:=im> to_mask(mask):
               let<type>(MaskT, type<generation>(vector::mask));
               var<typed>(MaskT, result, mask<zero>());
               var<const_typed>(type<backend>(scalar::size), mask_bits, value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8);
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
                 if (i < mask_bits && (((mask >> i) & cast<static>(type<generation>(vector::imask), 1)) != 0)) {
                   mask<set:1>(result, i);
                 }

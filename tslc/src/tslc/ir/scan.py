@@ -172,8 +172,8 @@ def _try_region(
             base_offset,
         )
     if keyword == "loop":
-        # `loop<range>(…) { body }` captures its `{ ... }` block; `loop<unroll>(n)` is a bare
-        # hint with no block. Either way the lowerer translates it to a native loop construct.
+        # `loop<backend>(…) { body }` and `loop<backend, unroll>(…) { body }`
+        # capture their `{ ... }` block. The lowerer translates them to native loop constructs.
         return _try_loop_region(
             text,
             start,
@@ -270,8 +270,8 @@ def _try_loop_region(
     base_offset: int,
 ) -> tuple[Region | None, int]:
     """Capture ``loop<sel>(args) [{ block }]`` from ``after_body`` (just past the args'
-    ``)``). A trailing ``{ ... }`` (``loop<range>``'s body) goes in ``Region.block``; a bare
-    hint (``loop<unroll>(n)``) has none. The native-loop translation lives in the lowerer."""
+    ``)``). A trailing ``{ ... }`` goes in ``Region.block``. The native-loop translation
+    lives in the lowerer."""
 
     pos = _skip_ws(text, after_body)
     block: tuple[Segment, ...] | None = None

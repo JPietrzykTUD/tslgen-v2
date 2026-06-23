@@ -14,7 +14,7 @@ it has not been touched in recent history (the last 20+ commits are entirely
 The authoritative running handoff for the active `tslc` work is
 `docs/agent/tslc-vector-query-handoff.md`. Source-language and architecture
 decisions for `tslc` are recorded in `docs/redesign/design-decisions.md`
-(most recently ADR-082 unified intrinsic build syntax). The
+(most recently ADR-084 backend loop surface cleanup). The
 `## Current Work State` section near the end of this file has been refreshed to
 describe `tslc`; the long milestone history that follows it is retained only as
 the `tslgen` record.
@@ -1254,12 +1254,23 @@ are now `call<primitive=NAME, attrs[...]>(...)` and
 old whitespace-separated `call<primitive=NAME attrs[...]>(...)` form, and the
 primitive corpus has been rewritten with a corpus guard.
 
+The emitted TSIL loop surface has also been cleaned up. Source
+`loop<range>(var, start, end, step) { ... }` is now
+`loop<backend>(var, start, end, step) { ... }`, and standalone preceding
+`loop<unroll>(count)` directives have been folded into
+`loop<backend, unroll>(var, start, end, step) { ... }`. `loop<generation>`
+keeps its generation-time expansion semantics. Backend translation metadata now
+uses `loop_backend` plus optional `loop_backend_unroll`; C++ emits
+`TSL_UNROLL(count)` only when the trip count is generation-known, while symbolic
+counts such as `LANES` remain normal backend loops.
+
 Active prompt:
-docs/agent/runs/tslc-call-selector-comma-review-prompt.md
+docs/agent/runs/tslc-loop-backend-unroll-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
 boundary review prompt:
+docs/agent/runs/tslc-call-selector-comma-review-prompt.md
 docs/agent/runs/tslc-tsil-statement-terminator-review-prompt.md
 docs/agent/runs/tslc-unified-intrin-build-review-prompt.md
 docs/agent/runs/tslc-value-test-backend-capability-review-prompt.md
@@ -1270,11 +1281,11 @@ docs/agent/runs/tslc-support-policy-capability-review-prompt.md
 docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md
 docs/agent/runs/tslc-typed-render-values-review-prompt.md
 
-Next expected action: review the completed call selector comma prompt above.
-Confirm `call<primitive=..., attrs[...]>(...)` is accepted, the old
-whitespace-separated `call<primitive=... attrs[...]>(...)` form is rejected,
-dependency extraction and call lowering still use `parse_call_selector(...)`,
-and the primitive corpus no longer contains the old call attribute separator.
+Next expected action: review the completed loop backend/unroll prompt above.
+Confirm `loop<backend>` and `loop<backend, unroll>` are accepted, legacy
+`loop<range>` is rejected by lowering, the primitive corpus no longer contains
+legacy loop spellings, symbolic-count unroll hints keep valid normal backend
+loops, and generated C++/Rust projects still build.
 ```
 
 Verification status (2026-06-23):
@@ -1320,6 +1331,21 @@ Verification status (2026-06-23):
   `env TSLC_VERIFY_WORKERS=1 ./verify.sh` passed all targeted validations,
   including 171 non-build tests, 53 generated-build tests, and the
   architectural grep guards.
+
+- TSIL backend loop surface cleanup:
+  `python -m compileall -q tslc/src/tslc tslc/tests` passed;
+  `python -m pytest -q tslc/tests/test_lane_lists.py tslc/tests/test_tsil_scan.py::test_backend_loop_unroll_selector_captures_block tslc/tests/test_tsil_statement_terminators.py::test_primitive_tsil_uses_backend_loop_surface`
+  passed with 17 tests;
+  `python -m pytest -q tslc/tests/test_tsil_statement_terminators.py tslc/tests/test_tsil_scan.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_masks_and_calls.py`
+  passed with 60 tests;
+  `python -m pytest -q tslc/tests/test_build_verify.py::test_load_store_builds tslc/tests/test_build_verify.py::test_masked_value_ops_build tslc/tests/test_build_verify.py::test_masked_load_store_build tslc/tests/test_build_verify.py::test_convert_builds tslc/tests/test_build_verify.py::test_cast_reinterpret_builds tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds`
+  passed with 6 tests after relaxing symbolic-count unroll hints to normal
+  backend loops;
+  production/data scan for `loop<range>`, standalone `loop<unroll>`,
+  `loop_range`, and `loop_unroll` returned no hits outside intentional tests;
+  `env TSLC_VERIFY_WORKERS=1 ./verify.sh` passed all targeted validations,
+  including 178 non-build tests and 53 generated-build tests;
+  final `git diff --check` passed.
 
 - Value-test planning boundary pass plus cleanup:
   `python -m compileall -q tslc/src/tslc tslc/tests` passed;

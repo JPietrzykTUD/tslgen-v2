@@ -311,7 +311,7 @@ class Catalog:
     extensions: Mapping[str, Extension]
     # backend_id -> normalized scalar tag (s32/u32/f32) -> spelling
     type_spellings: Mapping[str, Mapping[str, str]]
-    # backend_id -> translation-template key (e.g. "emit_return", "loop_range") -> template
+    # backend_id -> translation-template key (e.g. "emit_return", "loop_backend") -> template
     translations: Mapping[str, Mapping[str, str]]
 
     def __post_init__(self) -> None:

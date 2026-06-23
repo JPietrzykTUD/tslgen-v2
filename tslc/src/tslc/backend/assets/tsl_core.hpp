@@ -12,8 +12,9 @@
 #include <string>
 #include <type_traits>
 
-// Loop-unroll hint for `loop<unroll>`. A no-op by default (a real unroll pragma is
-// compiler-specific and only a hint); kept as a macro so generated bodies always compile.
+// Loop-unroll hint for `loop<backend, unroll>`. A no-op by default (a real
+// unroll pragma is compiler-specific and only a hint); kept as a macro so
+// generated bodies always compile.
 #ifndef TSL_UNROLL
 #define TSL_UNROLL(n)
 #endif

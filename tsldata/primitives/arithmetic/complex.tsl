@@ -34,8 +34,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(factor1[i], factor2[i]);
             }
             emit_return(result);
@@ -420,8 +419,7 @@ prim<v:=(v,v)> div(divident, divisor):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(divident[i], divisor[i]);
             }
             emit_return(result);
@@ -645,8 +643,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = details::arith_mul(data[i], cast<static>(type<generation>(base::in), factor));
             }
             emit_return(result);
@@ -1024,8 +1021,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = details::arith_rem(dividend[i], divisor[i]);
             }
             emit_return(result);
@@ -1035,8 +1031,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = details::arith_rem(dividend[i], divisor[i]);
             }
             emit_return(result);
@@ -1145,8 +1140,7 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = details::arith_rem(dividend[i], cast<static>(type<generation>(base::in), divisor));
             }
             emit_return(result);
@@ -1156,8 +1150,7 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = details::arith_rem(dividend[i], cast<static>(type<generation>(base::in), divisor));
             }
             emit_return(result);

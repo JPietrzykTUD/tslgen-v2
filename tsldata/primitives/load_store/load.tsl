@@ -37,8 +37,7 @@ prim<v:=ptr>[aligned=*] load(ptr):
         implementation:
           tsil """
               var<init_register>(reg);
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(idx, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(idx, 0, value<generation>(vector::length), 1)  {
                 reg[idx] = *ptr_add(ptr, idx);
               }
               emit_return(reg);
@@ -161,8 +160,7 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1)  {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
               if (mask<test>(mask, i)) {
                 result[i] = *ptr_add(ptr, i);
               } else {
@@ -286,8 +284,7 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1)  {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
               if (mask<test>(mask, i)) {
                 result[i] = *ptr_add(ptr, i);
               } else {
@@ -406,7 +403,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask(ptr):
             } else<generation> {
               let<type>(MaskT, type<generation>(vector::mask));
               var<typed>(MaskT, result, mask<zero>());
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 if ((*ptr_add(ptr, i)) != cast<static>(type<generation>(base::in), 0)) {
                   mask<set:1>(result, i);
                 }
@@ -456,7 +453,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask(ptr):
               var<const_infer>(lanes, value<generation>(vector::length));
               var<const_infer>(bytes, cast<reinterpret>(type<backend>(scalar::ui8) const*, ptr));
 
-              loop<range>(lane, 0, lanes, 1) {
+              loop<backend>(lane, 0, lanes, 1) {
                 var<const_infer>(set, (((*ptr_add(bytes, lane >> 3)) >> (lane & 7)) & 1));
                 if (set) {
                   var<const_infer>(one, intrin<svcmpeq_n, build[suffix=base::unsigned_of(base::in)]>(

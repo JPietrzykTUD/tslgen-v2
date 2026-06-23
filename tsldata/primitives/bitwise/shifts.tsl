@@ -46,8 +46,7 @@ prim<v:=(v,sImm)> shift_left(data, shift):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), shift]>(data[i]);
               }
               emit_return(result);
@@ -214,8 +213,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 if (mask<test>(mask, i)) {
                   result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), shift]>(data[i]);
                 } else {
@@ -305,8 +303,7 @@ prim<v:=(v,s)> shift_left(data, shift):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(data[i], shift);
               }
               emit_return(result);
@@ -453,8 +450,7 @@ prim<v:=(v,v)> shift_left(data, shift):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(data[i], shift[i]);
               }
               emit_return(result);
@@ -653,8 +649,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), shift, PreserveSign]>(data[i]);
               }
               emit_return(result);
@@ -955,8 +950,7 @@ prim<v:=(v,s)> shift_right(data, shift):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), PreserveSign]>(data[i], shift);
               }
               emit_return(result);
@@ -1335,8 +1329,7 @@ prim<v:=(v,v)> shift_right(data, shift):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), PreserveSign]>(data[i], shift[i]);
               }
               emit_return(result);

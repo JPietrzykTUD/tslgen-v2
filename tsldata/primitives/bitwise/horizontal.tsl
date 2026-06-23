@@ -78,7 +78,7 @@ prim<s:=v> hand(vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, data_arr[0]);
-            loop<range>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value<generation>(vector::length), 1) {
               result &= data_arr[i];
             }
             emit_return(result);
@@ -127,7 +127,7 @@ prim<s:=v> hand(vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, data_arr[0]);
-            loop<range>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value<generation>(vector::length), 1) {
               result &= data_arr[i];
             }
             emit_return(result);
@@ -139,7 +139,7 @@ prim<s:=v> hand(vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, data_arr[0]);
-            loop<range>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value<generation>(vector::length), 1) {
               result &= data_arr[i];
             }
             emit_return(result);
@@ -152,7 +152,7 @@ prim<s:=v> hand(vec):
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
             mem<copy>(cast<reinterpret>(void*, &result), cast<reinterpret>(void const*, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
-            loop<range>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
               mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
               result &= bits;
@@ -168,7 +168,7 @@ prim<s:=v> hand(vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, data_arr[0]);
-            loop<range>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value<generation>(vector::length), 1) {
               result &= data_arr[i];
             }
             emit_return(result);
@@ -181,7 +181,7 @@ prim<s:=v> hand(vec):
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
             mem<copy>(cast<reinterpret>(void*, &result), cast<reinterpret>(void const*, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
-            loop<range>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
               mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
               result &= bits;
@@ -201,7 +201,7 @@ prim<s:=v> hand(vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, data_arr[0]);
-            loop<range>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value<generation>(vector::length), 1) {
               result &= data_arr[i];
             }
             emit_return(result);
@@ -222,7 +222,7 @@ prim<s:=v> hand(vec):
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
             mem<copy>(cast<reinterpret>(void*, &result), cast<reinterpret>(void const*, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
-            loop<range>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
               mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
               result &= bits;
@@ -321,7 +321,7 @@ prim<s:=v> hor(vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result |= data_arr[i];
             }
             emit_return(result);
@@ -370,7 +370,7 @@ prim<s:=v> hor(vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result |= data_arr[i];
             }
             emit_return(result);
@@ -382,7 +382,7 @@ prim<s:=v> hor(vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result |= data_arr[i];
             }
             emit_return(result);
@@ -394,7 +394,7 @@ prim<s:=v> hor(vec):
             let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             UnsignedT result = cast<static>(UnsignedT, 0);
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
               mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
               result |= bits;
@@ -414,7 +414,7 @@ prim<s:=v> hor(vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, data_arr[0]);
-            loop<range>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value<generation>(vector::length), 1) {
               result |= data_arr[i];
             }
             emit_return(result);
@@ -431,7 +431,7 @@ prim<s:=v> hor(vec):
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
             mem<copy>(cast<reinterpret>(void*, &result), cast<reinterpret>(void const*, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
-            loop<range>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
               mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
               result |= bits;
@@ -503,7 +503,7 @@ prim<s:=(m,v)> hand(mask, vec):
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
             type<backend>(scalar::size) found = 0;
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 if (found == 0) {
                   result = values[i];
@@ -534,7 +534,7 @@ prim<s:=(m,v)> hand(mask, vec):
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
             type<backend>(scalar::size) found = 0;
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 var<infer>(bits, cast<static>(UnsignedT, 0));
                 mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &values[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
@@ -596,7 +596,7 @@ prim<s:=(m,v)> hor(mask, vec):
             var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 result |= values[i];
               }
@@ -621,7 +621,7 @@ prim<s:=(m,v)> hor(mask, vec):
             var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 var<infer>(bits, cast<static>(UnsignedT, 0));
                 mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &values[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
@@ -639,7 +639,7 @@ prim<s:=(m,v)> hor(mask, vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result |= data_arr[i];
             }
             emit_return(result);
@@ -651,7 +651,7 @@ prim<s:=(m,v)> hor(mask, vec):
             let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             UnsignedT result = cast<static>(UnsignedT, 0);
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
               mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
               result |= bits;
@@ -671,7 +671,7 @@ prim<s:=(m,v)> hor(mask, vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result |= data_arr[i];
             }
             emit_return(result);
@@ -691,7 +691,7 @@ prim<s:=(m,v)> hor(mask, vec):
             let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             UnsignedT result = cast<static>(UnsignedT, 0);
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
               mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
               result |= bits;

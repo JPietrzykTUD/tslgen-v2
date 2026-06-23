@@ -89,7 +89,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
                var<const_infer>(imask, call<primitive=to_integral[Vec]>(m));
                var<const_infer>(data_array, call<primitive=to_array[Vec]>(a));
                var<infer>(offset, 0);
-               loop<range>(i, 0, value<generation>(vector::length), 1) {
+               loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 if(((imask >> i) & 1) != 0){
                   *ptr_add_mut(ptr, offset) = data_array[i];
                   offset += 1;
@@ -104,7 +104,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
         implementation:
           tsil """
                var<infer>(offset, 0);
-               loop<range>(i, 0, value<generation>(vector::length), 1) {
+               loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 if(mask<test>(m, i)){
                   *ptr_add_mut(ptr, offset) = a[i];
                   offset += 1;
@@ -201,7 +201,7 @@ prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
                var<const_infer>(imask, call<primitive=to_integral[Vec]>(m));
                var<infer>(data_array, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
                var<infer>(offset, 0);
-               loop<range>(i, 0, value<generation>(vector::length), 1)  {
+               loop<backend>(i, 0, value<generation>(vector::length), 1)  {
                 if(((imask >> i) & 1) != 0) {
                   data_array[i] = *ptr_add(ptr, offset);
                   offset += 1;
@@ -218,7 +218,7 @@ prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
           tsil """
                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
                var<infer>(offset, 0);
-               loop<range>(i, 0, value<generation>(vector::length), 1)  {
+               loop<backend>(i, 0, value<generation>(vector::length), 1)  {
                 if(mask<test>(m, i)) {
                   result[i] = *ptr_add(ptr, offset);
                   offset += 1;
@@ -389,7 +389,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
                let<type>(OutBase, type<generation>(base::generic(OutVec)));
                var<infer>(out, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-               loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1)  {
+               loop<backend>(i, 0, value<generation>(generic::length(OutVec)), 1)  {
                 out[i] = cast<static>(OutBase, *ptr_add(ptr, i));
               }
                emit_return(call<primitive=from_array[OutVec]>(out)) ;
@@ -495,7 +495,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
                let<type>(OutBase, type<generation>(base::generic(OutVec)));
                var<infer>(out, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-               loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1)  {
+               loop<backend>(i, 0, value<generation>(generic::length(OutVec)), 1)  {
                 out[i] = cast<static>(OutBase, *ptr_add(ptr, i));
               }
                emit_return(call<primitive=from_array[OutVec]>(out)) ;
@@ -606,7 +606,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
                let<type>(OutBase, type<generation>(base::generic(OutVec)));
                var<infer>(out, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-               loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1)  {
+               loop<backend>(i, 0, value<generation>(generic::length(OutVec)), 1)  {
                 out[i] = cast<static>(OutBase, *ptr_add(ptr, i));
               }
                emit_return(call<primitive=from_array[OutVec]>(out)) ;

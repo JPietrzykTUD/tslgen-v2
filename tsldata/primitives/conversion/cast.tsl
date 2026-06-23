@@ -618,8 +618,7 @@ prim<v:=v>[cast=convert] cast(data):
                   let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
                   var<infer>(in_arr, call<primitive=to_array[Vec]>(data));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  loop<unroll>(value<generation>(generic::length(OutVec)))
-                  loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
+                  loop<backend, unroll>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                     result[i] = cast<static>(type<generation>(base::generic(OutVec)), in_arr[i]);
                   }
                   emit_return(call<primitive=from_array[OutVec]>(result));
@@ -655,8 +654,7 @@ prim<v:=v>[cast=convert] cast(data):
                   let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
                   var<infer>(in_arr, call<primitive=to_array[Vec]>(data));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  loop<unroll>(value<generation>(generic::length(OutVec)))
-                  loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
+                  loop<backend, unroll>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                     result[i] = cast<static>(type<generation>(base::generic(OutVec)), in_arr[i]);
                   }
                   emit_return(call<primitive=from_array[OutVec]>(result));
@@ -687,8 +685,7 @@ prim<v:=v>[cast=convert] cast(data):
                   let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
                   var<infer>(in_arr, call<primitive=to_array[Vec]>(data));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  loop<unroll>(value<generation>(generic::length(OutVec)))
-                  loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
+                  loop<backend, unroll>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                     result[i] = cast<static>(type<generation>(base::generic(OutVec)), in_arr[i]);
                   }
                   emit_return(call<primitive=from_array[OutVec]>(result));
@@ -723,8 +720,7 @@ prim<v:=v>[cast=convert] cast(data):
                   let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
                   var<infer>(in_arr, call<primitive=to_array[Vec]>(data));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  loop<unroll>(value<generation>(generic::length(OutVec)))
-                  loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1) {
+                  loop<backend, unroll>(i, 0, value<generation>(generic::length(OutVec)), 1) {
                     result[i] = cast<static>(type<generation>(base::generic(OutVec)), in_arr[i]);
                   }
                   emit_return(call<primitive=from_array[OutVec]>(result));
@@ -923,8 +919,7 @@ prim<v:=v>[cast=convert] cast(data):
                   let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
                   var<infer>(in_arr, call<primitive=to_array[Vec]>(data));
                   var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                  loop<unroll>(value<generation>(generic::length(OutVec)))
-                  loop<range>(i, 0, value<generation>(generic::length(OutVec)), 1)  {
+                  loop<backend, unroll>(i, 0, value<generation>(generic::length(OutVec)), 1)  {
                    if (i < value<generation>(vector::length)) {
                       result[i] = cast<static>(type<generation>(base::generic(OutVec)), in_arr[i]);
                     }

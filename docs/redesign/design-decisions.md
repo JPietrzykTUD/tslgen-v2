@@ -4040,11 +4040,11 @@ Add generation-time range expansion:
 loop<generation>(i, start, end, step) { ... }
 ```
 
-It has the same four-argument shape as `loop<range>`, but it is executed by the
+It has the same four-argument shape as `loop<backend>`, but it is executed by the
 generator. `start`, `end`, and `step` must evaluate to generation-time integer
 values. The body is expanded once for each iteration with `i` bound as a
-generation-time integer. Existing `loop<range>` keeps its current meaning: emit
-a normal target-language loop.
+generation-time integer. The emitted target-language counterpart is now
+`loop<backend>`.
 
 Do not add `lanes<expand>` or `lanes<expand_reverse>` in the first design. When
 x86 set intrinsics require reversed argument order, the source body should spell
@@ -4162,7 +4162,7 @@ different target statement shape:
   returns its rendered alias binding unchanged.
 - Other terminated non-block regions append a target `;` after their lowered
   expression or statement text.
-- Block constructs such as `if`, `loop<range>`, and `switch<compile>` do not
+- Block constructs such as `if`, `loop<backend>`, and `switch<compile>` do not
   gain a target semicolon.
 
 Consequences:
@@ -4271,3 +4271,47 @@ Consequences:
 - The primitive corpus now uses `call<primitive=..., attrs[...]>(...)`.
 - This is a source-syntax cleanup only; dependency extraction, call rendering,
   attribute evaluation, and primitive selection behavior are unchanged.
+
+## ADR-084: Backend Loops Own Optional Unroll Hints
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+TSIL previously used `loop<range>(var, start, end, step) { ... }` for emitted
+target-language loops and a separate preceding `loop<unroll>(count)` directive
+for loop-unroll hints. That split made unroll intent live beside, rather than
+on, the loop it modified. It also left the source surface with a `range` name
+that described the loop shape less directly than the current backend-emission
+role.
+
+Decision:
+
+Use one emitted-loop keyword surface:
+
+```tsl
+loop<backend>(var, start, end, step) { ... }
+loop<backend, unroll>(var, start, end, step) { ... }
+```
+
+`loop<generation>(var, start, end, step) { ... }` remains the generation-time
+expansion loop.
+
+`loop<backend, unroll>` is an explicit hint attached to the emitted loop. If the
+selected backend declares a `loop_backend_unroll` translation template and the
+trip count can be evaluated from generation-time integer bounds, lowering emits
+the backend's unroll hint before the normal loop. If the backend has no unroll
+template, or the count is symbolic such as a sized-vector `LANES` parameter,
+lowering emits the normal backend loop. A known zero step remains an error.
+
+Backend translation metadata uses `loop_backend` for the emitted loop and may
+provide `loop_backend_unroll` for the optional hint. Rust currently omits the
+unroll template and therefore renders normal loops for `loop<backend, unroll>`.
+
+Consequences:
+
+- Standalone source `loop<unroll>(...)` is removed from current primitive TSIL.
+- The primitive corpus now uses `loop<backend>` and `loop<backend, unroll>`.
+- `loop<range>` is no longer a supported production loop selector.
+- Known-count C++ fallback loops still emit `TSL_UNROLL(count)` through the
+  backend template, while symbolic generic loops remain valid normal loops.

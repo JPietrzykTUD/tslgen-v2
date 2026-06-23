@@ -185,8 +185,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
               var<const_infer>(values, call<primitive=to_array[Vec]>(data));
               var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
               var<infer>(out_idx, 0);
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
                 if (mask<test>(mask, i)) {
                   result[out_idx] = values[i];
                   out_idx = out_idx + 1;
@@ -207,8 +206,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
               var<const_infer>(values, call<primitive=to_array[Vec]>(data));
               var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
               var<infer>(out_idx, 0);
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
                 if (mask<test>(mask, i)) {
                   result[out_idx] = values[i];
                   out_idx = out_idx + 1;

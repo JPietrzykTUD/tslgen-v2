@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import re
 
-from tslc.ir.segments import Region
-from tslc.lower._text import skip_string
+from tslc.ir.segments import Region, Segment
+from tslc.lower._text import skip_string, split_top_level
 from tslc.lower.context import LoweringSession
 from tslc.lower.generation import evaluate_generation_int_segments
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue
@@ -242,12 +242,13 @@ class AssumeAlignedLowerer:
 
 
 class LoopLowerer:
-    """``loop<range>`` emits a native target loop; ``loop<generation>`` expands here.
+    """``loop<backend>`` emits a native target loop; ``loop<generation>`` expands here.
 
-    ``loop<range>(var, start, end, step) { body }`` / ``loop<unroll>(count)`` keeps the
-    existing backend-native behavior. ``loop<generation>(var, start, end, step) { body }``
-    evaluates integer bounds now, binds ``var`` as a generation-time integer, and renders
-    the block once per iteration.
+    ``loop<backend>(var, start, end, step) { body }`` renders a target loop.
+    ``loop<backend, unroll>(...)`` adds an explicit unroll hint when the backend
+    declares one and the trip count is generation-known. ``loop<generation>``
+    evaluates integer bounds now, binds ``var`` as a generation-time integer,
+    and renders the block once per iteration.
     """
 
     keyword = "loop"
@@ -256,10 +257,30 @@ class LoopLowerer:
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
-        variant = region.selector_text.strip()
+        terms = split_top_level(region.selector_text.strip())
+        variant = terms[0] if terms else ""
         if variant == "generation":
+            if len(terms) != 1:
+                context.effects.skip(
+                    "TSL-LOWER-UNSUPPORTED-LOOP",
+                    f"unsupported loop selector {region.selector_text!r}: "
+                    f"{region.full_text!r}",
+                    source=region.source,
+                )
+                return region.full_text
             return self._generation(region, context, render)
-        key = f"loop_{variant}"
+
+        unroll = "unroll" in terms[1:]
+        if variant != "backend" or any(term != "unroll" for term in terms[1:]):
+            context.effects.skip(
+                "TSL-LOWER-UNSUPPORTED-LOOP",
+                f"unsupported loop selector {region.selector_text!r}: "
+                f"{region.full_text!r}",
+                source=region.source,
+            )
+            return region.full_text
+
+        key = "loop_backend"
         if context.env.backend.templates.template(key) is None:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-LOOP",
@@ -267,34 +288,62 @@ class LoopLowerer:
                 source=region.source,
             )
             return region.full_text
-        block = render(region.block) if region.block else ""
-        if variant == "range":
-            groups = _split_arg_groups(region.body)
-            if len(groups) != 4:
-                context.effects.skip(
-                    "TSL-LOWER-UNSUPPORTED-LOOP",
-                    f"loop<range> needs (var, start, end, step): {region.full_text!r}",
-                    source=region.source,
-                )
-                return region.full_text
-            var, start, end, step = (
-                render_text(render(group)).strip() for group in groups
+        groups = _split_arg_groups(region.body)
+        if len(groups) != 4 or region.block is None:
+            context.effects.skip(
+                "TSL-LOWER-UNSUPPORTED-LOOP",
+                f"loop<backend> needs (var, start, end, step) and a block: "
+                f"{region.full_text!r}",
+                source=region.source,
             )
-            header = context.env.backend.templates.render_template(
-                key, var=var, start=start, end=end, step=step
-            )
-            return render_sequence(
-                (header, literal_text(" {\n        "), block, literal_text("\n      }"))
-            )
-        # unroll: a bare hint (no block of its own; it precedes a loop).
-        header = context.env.backend.templates.render_template(
-            key, count=render_text(render(region.body)).strip()
+            return region.full_text
+
+        var, start, end, step = (
+            render_text(render(group)).strip() for group in groups
         )
-        if region.block:
-            return render_sequence(
-                (header, literal_text(" {\n        "), block, literal_text("\n      }"))
+        header = context.env.backend.templates.render_template(
+            key, var=var, start=start, end=end, step=step
+        )
+        block = render(region.block)
+        loop = render_sequence(
+            (header, literal_text(" {\n        "), block, literal_text("\n      }"))
+        )
+        if not unroll:
+            return loop
+
+        unroll_key = "loop_backend_unroll"
+        if context.env.backend.templates.template(unroll_key) is None:
+            return loop
+        count = self._backend_trip_count(groups, region, context, render)
+        if count is None:
+            return loop
+        hint = context.env.backend.templates.render_template(
+            unroll_key, count=str(count)
+        )
+        return render_sequence((hint, literal_text("\n      "), loop))
+
+    def _backend_trip_count(
+        self,
+        groups: list[tuple[Segment, ...]],
+        region: Region,
+        context: LoweringSession,
+        render: RenderBody,
+    ) -> int | None:
+        values = tuple(
+            evaluate_generation_int_segments(group, context, render)
+            for group in groups[1:]
+        )
+        if any(value is None for value in values):
+            return None
+        start, end, step = (int(value) for value in values if value is not None)
+        if step == 0:
+            context.effects.error(
+                "TSL-LOWER-BACKEND-LOOP-UNROLL-ZERO-STEP",
+                f"loop<backend, unroll> step must not be zero: {region.full_text!r}",
+                source=region.source,
             )
-        return header
+            return None
+        return len(range(start, end, step))
 
     def _generation(
         self, region: Region, context: LoweringSession, render: RenderBody

@@ -46,8 +46,7 @@ prim<v:=(v,v)> binary_and(left, right):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               }
               emit_return(result);
@@ -182,8 +181,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1)  {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
               result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
             }
             emit_return(result);
@@ -327,8 +325,7 @@ prim<v:=(v,v)> binary_or(left, right):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               }
               emit_return(result);
@@ -477,8 +474,7 @@ prim<v:=(v,v)> binary_xor(left, right):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               }
               emit_return(result);
@@ -643,8 +639,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_and[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
@@ -760,8 +755,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_and[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
@@ -879,8 +873,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_andnot[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
@@ -996,8 +989,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_andnot[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
@@ -1093,8 +1085,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_or[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
@@ -1210,8 +1201,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_or[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
@@ -1329,8 +1319,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_xor[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
@@ -1446,8 +1435,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_xor[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
@@ -1570,8 +1558,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_xor[type<backend>(vector::as_extension(scalar))]>(
                   data[i],
@@ -1707,8 +1694,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_xor[type<backend>(vector::as_extension(scalar))]>(
                   data[i],

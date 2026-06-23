@@ -36,8 +36,7 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(data));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(idx, 0, value<generation>(vector::length), 1)  {
+            loop<backend, unroll>(idx, 0, value<generation>(vector::length), 1)  {
               *ptr_add_mut(ptr, idx) = values[idx];
             }
           """
@@ -202,7 +201,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
                   MaskWord,
                   cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)
                 );
-                loop<range>(i, 0, value<generation>(vector::length), 1) {
+                loop<backend>(i, 0, value<generation>(vector::length), 1) {
                   if (mask<test>(mask, i)) {
                     *ptr_add_mut(ptr, i) = one_bits;
                   } else {
@@ -251,11 +250,11 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
               var<const_infer>(nbytes, ((lanes + 7) >> 3));
               var<const_infer>(bytes, cast<reinterpret>(type<backend>(scalar::ui8) *, ptr));
 
-              loop<range>(i, 0, nbytes, 1) {
+              loop<backend>(i, 0, nbytes, 1) {
                 *ptr_add_mut(bytes, i) = cast<static>(type<backend>(scalar::ui8), 0);
               }
 
-              loop<range>(lane, 0, lanes, 1) {
+              loop<backend>(lane, 0, lanes, 1) {
                 if (mask<test>(mask, lane)) {
                   *ptr_add_mut(bytes, lane >> 3) =
                     *ptr_add(bytes, lane >> 3) |
@@ -268,7 +267,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
                 MaskWord,
                 cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)
               );
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 if (mask<test>(mask, i)) {
                   *ptr_add_mut(ptr, i) = one_bits;
                 } else {
@@ -370,7 +369,7 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-            loop<range>(i, 0, value<generation>(vector::length), 1)  {
+            loop<backend>(i, 0, value<generation>(vector::length), 1)  {
               if (mask<test>(mask, i)) {
                 *ptr_add_mut(ptr, i) = data[i];
               }

@@ -38,8 +38,7 @@ prim<m:=(v,v)> equal(left, right):
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
             var<typed>(MaskT, result, mask<zero>());
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] == right[i]) {
                 mask<set:1>(result, i);
               }
@@ -55,8 +54,7 @@ prim<m:=(v,v)> equal(left, right):
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] == right[i]) ? true_value : false_value;
             }
             emit_return(result);
@@ -191,8 +189,7 @@ prim<m:=(v,v)> nequal(left, right):
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
             var<typed>(MaskT, result, mask<zero>());
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] != right[i]) {
                 mask<set:1>(result, i);
               }
@@ -208,8 +205,7 @@ prim<m:=(v,v)> nequal(left, right):
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] != right[i]) ? true_value : false_value;
             }
             emit_return(result);
@@ -343,8 +339,7 @@ prim<m:=(v,v)> less_than(left, right):
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
             var<typed>(MaskT, result, mask<zero>());
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] < right[i]) {
                 mask<set:1>(result, i);
               }
@@ -360,8 +355,7 @@ prim<m:=(v,v)> less_than(left, right):
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] < right[i]) ? true_value : false_value;
             }
             emit_return(result);
@@ -538,8 +532,7 @@ prim<m:=(v,v)> greater_than(left, right):
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
             var<typed>(MaskT, result, mask<zero>());
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] > right[i]) {
                 mask<set:1>(result, i);
               }
@@ -555,8 +548,7 @@ prim<m:=(v,v)> greater_than(left, right):
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] > right[i]) ? true_value : false_value;
             }
             emit_return(result);
@@ -733,8 +725,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
             var<typed>(MaskT, result, mask<zero>());
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] <= right[i]) {
                 mask<set:1>(result, i);
               }
@@ -750,8 +741,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] <= right[i]) ? true_value : false_value;
             }
             emit_return(result);
@@ -899,8 +889,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
             var<typed>(MaskT, result, mask<zero>());
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] >= right[i]) {
                 mask<set:1>(result, i);
               }
@@ -916,8 +905,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] >= right[i]) ? true_value : false_value;
             }
             emit_return(result);
@@ -1057,8 +1045,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
             var<typed>(MaskT, result, mask<zero>());
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] == right[i]) &&
                 (mask<test>(mask, i))
@@ -1077,8 +1064,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] == right[i]) &&
                 (mask<test>(mask,i))
@@ -1223,8 +1209,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
             var<typed>(MaskT, result, mask<zero>());
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] != right[i]) &&
                 (mask<test>(mask, i))
@@ -1243,8 +1228,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] != right[i]) &&
                 (mask<test>(mask, i))
@@ -1389,8 +1373,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
             var<typed>(MaskT, result, mask<zero>());
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] < right[i]) &&
                 (mask<test>(mask, i))
@@ -1409,8 +1392,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] < right[i]) &&
                 (mask<test>(mask, i))
@@ -1555,8 +1537,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
             var<typed>(MaskT, result, mask<zero>());
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] > right[i]) &&
                 (mask<test>(mask, i))
@@ -1575,8 +1556,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] > right[i]) &&
                 (mask<test>(mask, i))
@@ -1721,8 +1701,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
             var<typed>(MaskT, result, mask<zero>());
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] <= right[i]) &&
                 (mask<test>(mask, i))
@@ -1741,8 +1720,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] <= right[i]) &&
                 (mask<test>(mask, i))
@@ -1887,8 +1865,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
             var<typed>(MaskT, result, mask<zero>());
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] >= right[i]) &&
                 (mask<test>(mask, i))
@@ -1907,8 +1884,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] >= right[i]) &&
                 (mask<test>(mask, i))

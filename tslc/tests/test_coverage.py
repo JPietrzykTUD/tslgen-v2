@@ -31,7 +31,7 @@ def test_coverage_separates_emitted_and_skipped(
     assert by["add"].emitted > 0
     assert by["add"].emitted > by["add"].skipped
 
-    # hadd now lowers fully: SIMD bodies plus the loop fallback (to_array + loop<range> +
+    # hadd now lowers fully: SIMD bodies plus the loop fallback (to_array + loop<backend> +
     # details::arith_add); hmax/hmin likewise lower fully now that runtime `if` translates.
     assert by["hadd"].emitted == by["hadd"].attempted > 0
     assert by["hadd"].skipped == 0

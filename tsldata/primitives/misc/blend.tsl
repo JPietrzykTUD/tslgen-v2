@@ -43,8 +43,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           tsil """
               var<infer>(result, call<primitive=to_array[Vec]>(left));
               var<const_infer>(right_array, call<primitive=to_array[Vec]>(right));
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 if (mask<test>(mask, i)) {
                   result[i] = right_array[i];
                 }
