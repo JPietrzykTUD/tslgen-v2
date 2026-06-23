@@ -19,13 +19,15 @@ from tslc.value_tests.case_plans import (
     repr_cast_case,
     simple_case,
 )
-from tslc.value_tests.model import HarnessPrimitiveNames, ValueTestCasePlan
+from tslc.value_tests.model import (
+    HarnessPrimitiveNames,
+    ValueTestBackendSupport,
+    ValueTestCasePlan,
+)
 
 
 class ValueTestPattern(Protocol):
     """A typed test-shape planner."""
-
-    backend_ids: frozenset[str]
 
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
         ...
@@ -41,7 +43,7 @@ class ValueTestPattern(Protocol):
     def plan_case(
         self,
         *,
-        backend_id: str,
+        backend: ValueTestBackendSupport,
         emitted_name: str,
         index: int,
         case: TestCase,
@@ -64,12 +66,7 @@ def default_value_test_patterns(
         _MaskLogicPattern(),
         _SimpleShapePattern("vector_to_array", "s[]", ("v",)),
         _SimpleShapePattern("broadcast", "v", ("s",)),
-        _SimpleShapePattern(
-            "lane_list",
-            "v",
-            (support.lane_list_kind,),
-            backend_ids=frozenset({"cpp", "rust"}),
-        ),
+        _SimpleShapePattern("lane_list", "v", (support.lane_list_kind,)),
         _ImmediatePattern(support),
         _SimpleShapePattern("mask_to_vector", "v", ("m",)),
         _ConvertPattern(support),
@@ -79,8 +76,6 @@ def default_value_test_patterns(
 
 
 class _BasePattern:
-    backend_ids = frozenset({"cpp", "rust"})
-
     def source_primitive(
         self,
         catalog: Catalog,
@@ -107,7 +102,7 @@ class _GenericGoldenPattern(_BasePattern):
     def plan_case(
         self,
         *,
-        backend_id: str,
+        backend: ValueTestBackendSupport,
         emitted_name: str,
         index: int,
         case: TestCase,
@@ -115,18 +110,16 @@ class _GenericGoldenPattern(_BasePattern):
         catalog: Catalog,
         harness: HarnessPrimitiveNames,
     ) -> tuple[ValueTestCasePlan, ...]:
-        plan = generic_golden_case(backend_id, emitted_name, index, case, specs)
+        plan = generic_golden_case(emitted_name, index, case, specs)
         if plan is None:
             return ()
         plans = [plan]
-        if backend_id == "cpp" and harness.round_trip_ready:
+        if backend.supports_differential and harness.round_trip_ready:
             plans.extend(differential_cases(emitted_name, index, case, specs, catalog, harness))
         return tuple(plans)
 
 
 class _MaskedPattern(_BasePattern):
-    backend_ids = frozenset({"cpp"})
-
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
         spec = specs[0]
         return (
@@ -167,7 +160,6 @@ class _SimpleShapePattern(_BasePattern):
     kind: str
     result_kind: str
     param_kinds: tuple[str, ...]
-    backend_ids: frozenset[str] = frozenset({"cpp"})
     allow_axis: bool = False
 
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
@@ -194,8 +186,6 @@ class _SimpleShapePattern(_BasePattern):
 
 
 class _MaskLogicPattern(_BasePattern):
-    backend_ids = frozenset({"cpp"})
-
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
         spec = specs[0]
         return (
@@ -224,7 +214,6 @@ class _MaskLogicPattern(_BasePattern):
 @dataclass(frozen=True, slots=True)
 class _ImmediatePattern(_BasePattern):
     support: SupportPolicy
-    backend_ids = frozenset({"cpp"})
 
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
         spec = specs[0]
@@ -298,7 +287,6 @@ class _ReprCastPattern(_BasePattern):
 @dataclass(frozen=True, slots=True)
 class _ExtensionReprPattern(_BasePattern):
     support: SupportPolicy
-    backend_ids = frozenset({"cpp"})
 
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
         return any(

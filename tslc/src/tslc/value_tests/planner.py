@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
+from dataclasses import dataclass
 
 from tslc.catalog.model import Catalog
 from tslc.diagnostics import Diagnostic
@@ -11,14 +12,21 @@ from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
 from tslc.value_tests.harness import discover_harness_primitives
 from tslc.value_tests.model import (
     HarnessPrimitiveNames,
+    ValueTestBackendSupport,
     ValueTestCasePlan,
     ValueTestProfilePlan,
     ValueTestProjectPlan,
 )
 from tslc.value_tests.patterns import ValueTestPattern, default_value_test_patterns
 
-if TYPE_CHECKING:
-    from tslc.render.project import ProfileRender
+
+@dataclass(frozen=True, slots=True)
+class ValueTestBackendProfileInput:
+    """Finalized lowered specializations for one backend/profile pair."""
+
+    backend_id: str
+    profile_name: str
+    specializations: Mapping[str, tuple[LoweredSpecialization, ...]]
 
 
 class ValueTestPlanner:
@@ -27,44 +35,41 @@ class ValueTestPlanner:
     def __init__(
         self,
         catalog: Catalog,
+        backend_supports: tuple[ValueTestBackendSupport, ...],
         support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
         patterns: tuple[ValueTestPattern, ...] | None = None,
     ) -> None:
         self._catalog = catalog
+        self._backend_supports = {backend.backend_id: backend for backend in backend_supports}
         self._patterns = patterns if patterns is not None else default_value_test_patterns(support)
 
-    def plan(self, profiles: tuple["ProfileRender", ...]) -> ValueTestProjectPlan:
+    def plan(self, profiles: tuple[ValueTestBackendProfileInput, ...]) -> ValueTestProjectPlan:
         harness = discover_harness_primitives(self._catalog)
         diagnostics = list(harness.diagnostics)
-        cpp_profiles = [
-            self._plan_backend_profile("cpp", profile.profile.name, profile.cpp, harness, diagnostics)
+        profile_plans = [
+            self._plan_backend_profile(profile, harness, diagnostics)
             for profile in profiles
+            if profile.backend_id in self._backend_supports
         ]
-        rust_profiles = [
-            self._plan_backend_profile("rust", profile.profile.name, profile.rust, harness, diagnostics)
-            for profile in profiles
-        ]
-        diagnostics.extend(_duplicate_case_diagnostics(cpp_profiles + rust_profiles))
+        diagnostics.extend(_duplicate_case_diagnostics(profile_plans))
         return ValueTestProjectPlan(
-            cpp_profiles=tuple(cpp_profiles),
-            rust_profiles=tuple(rust_profiles),
+            profiles=tuple(profile_plans),
             diagnostics=tuple(diagnostics),
         )
 
     def _plan_backend_profile(
         self,
-        backend_id: str,
-        profile_name: str,
-        by_name: dict[str, tuple[LoweredSpecialization, ...]],
+        profile: ValueTestBackendProfileInput,
         harness: HarnessPrimitiveNames,
         diagnostics: list[Diagnostic],
     ) -> ValueTestProfilePlan:
+        backend = self._backend_supports[profile.backend_id]
         cases: list[ValueTestCasePlan] = []
-        for emitted_name in sorted(by_name):
-            specs = by_name[emitted_name]
+        for emitted_name in sorted(profile.specializations):
+            specs = profile.specializations[emitted_name]
             if not specs:
                 continue
-            pattern = self._pattern_for(backend_id, specs)
+            pattern = self._pattern_for(specs)
             source_name = specs[0].source_primitive_name
             primitive = (
                 pattern.source_primitive(self._catalog, source_name, specs[0])
@@ -77,14 +82,17 @@ class ValueTestPlanner:
             if pattern is not None:
                 for index, test_case in enumerate(primitive.tests):
                     cases.extend(
-                        pattern.plan_case(
-                            backend_id=backend_id,
-                            emitted_name=emitted_name,
-                            index=index,
-                            case=test_case,
-                            specs=specs,
-                            catalog=self._catalog,
-                            harness=harness,
+                        self._supported_cases(
+                            pattern.plan_case(
+                                backend=backend,
+                                emitted_name=emitted_name,
+                                index=index,
+                                case=test_case,
+                                specs=specs,
+                                catalog=self._catalog,
+                                harness=harness,
+                            ),
+                            backend,
                         )
                     )
             if len(cases) == before:
@@ -93,27 +101,30 @@ class ValueTestPlanner:
                         severity="warning",
                         code="TSL-VALUE-TEST-UNSUPPORTED-SHAPE",
                         message=(
-                            f"no {backend_id} value-test plan for primitive "
-                            f"{source_name!r} in profile {profile_name!r}"
+                            f"no {profile.backend_id} value-test plan for primitive "
+                            f"{source_name!r} in profile {profile.profile_name!r}"
                         ),
                         location=primitive.source.start if primitive.source is not None else None,
                     )
                 )
         return ValueTestProfilePlan(
-            backend_id=backend_id,
-            profile_name=profile_name,
+            backend_id=profile.backend_id,
+            profile_name=profile.profile_name,
             cases=tuple(cases),
         )
 
-    def _pattern_for(
-        self,
-        backend_id: str,
-        specs: tuple[LoweredSpecialization, ...],
-    ) -> ValueTestPattern | None:
+    def _pattern_for(self, specs: tuple[LoweredSpecialization, ...]) -> ValueTestPattern | None:
         for pattern in self._patterns:
-            if backend_id in pattern.backend_ids and pattern.matches(specs):
+            if pattern.matches(specs):
                 return pattern
         return None
+
+    def _supported_cases(
+        self,
+        cases: tuple[ValueTestCasePlan, ...],
+        backend: ValueTestBackendSupport,
+    ) -> tuple[ValueTestCasePlan, ...]:
+        return tuple(case for case in cases if case.kind in backend.case_kinds)
 
 
 def _duplicate_case_diagnostics(
@@ -141,4 +152,4 @@ def _duplicate_case_diagnostics(
     return tuple(diagnostics)
 
 
-__all__ = ("ValueTestPlanner",)
+__all__ = ("ValueTestBackendProfileInput", "ValueTestPlanner")

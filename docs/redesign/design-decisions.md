@@ -4078,3 +4078,40 @@ Implementation plan:
    reverse construction explicitly where preserving existing tests requires it.
 8. Add a value-test pattern for `v:=(lanes<s>)`.
 9. Remove or quarantine the old variadic and pack mechanisms after migration.
+
+## ADR-080: Value-Test Backend Capability Is Renderer-Owned
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+The value-test planner originally matched typed primitive/test shapes and also
+carried backend IDs such as `cpp` and `rust` on those semantic patterns. That
+kept behavior correct, but it coupled generic test-shape planning to the
+currently implemented renderer set. It also made future backend addition look
+like a semantic pattern edit even when the shape itself was already generic.
+
+Decision:
+
+Separate semantic value-test planning from backend renderer capability.
+
+`ValueTestPattern` objects match typed lowered facts and authored test-case
+metadata only. They do not name concrete backends. Backend renderers declare
+`ValueTestBackendSupport` values containing the `ValueTestCasePlan.kind`
+variants they can render and whether they support differential cases. The
+planner receives generic `ValueTestBackendProfileInput` values and filters
+planned cases through the supplied backend capability.
+
+Concrete C++/Rust wiring remains in project assembly, where generated project
+layout and renderer selection already live.
+
+Consequences:
+
+- Adding a backend requires a renderer plus a capability declaration, not edits
+  to semantic value-test patterns.
+- The same pattern can plan `v:=(lanes<s>)` or other typed shapes for any
+  backend that advertises support for the resulting case kind.
+- Differential tests are modeled as backend capability, not as a language-name
+  branch inside the generic golden pattern.
+- `ValueTestProjectPlan` stores backend profile plans generically and callers
+  select plans by backend ID when assembling artifacts.

@@ -15,7 +15,14 @@ from tslc.render.rust_project import rust_artifacts, rust_verify_profiles
 from tslc.render.tests_project import cpp_test_artifacts, rust_test_artifacts
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.diagnostics import Diagnostic
-from tslc.value_tests import ValueTestPlanner, ValueTestProjectPlan
+from tslc.value_tests import (
+    ValueTestBackendProfileInput,
+    ValueTestBackendSupport,
+    ValueTestPlanner,
+    ValueTestProjectPlan,
+)
+from tslc.value_tests.render_cpp import CPP_VALUE_TEST_SUPPORT
+from tslc.value_tests.render_rust import RUST_VALUE_TEST_SUPPORT
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,9 +62,11 @@ def render_project(
     artifacts: list[Artifact] = []
     verify_backends: list[VerifyBackend] = []
     test_plan = (
-        ValueTestPlanner(catalog).plan(ordered)
+        ValueTestPlanner(catalog, _value_test_supports(backends)).plan(
+            _value_test_inputs(ordered, backends)
+        )
         if catalog is not None
-        else ValueTestProjectPlan(cpp_profiles=(), rust_profiles=())
+        else ValueTestProjectPlan(profiles=())
     )
 
     if "cpp" in backends:
@@ -90,6 +99,32 @@ def render_project(
         verify=VerifyProject(backends=tuple(verify_backends)),
         diagnostics=test_diagnostics,
     )
+
+
+def _value_test_supports(backends: tuple[str, ...]) -> tuple[ValueTestBackendSupport, ...]:
+    supports = []
+    if "cpp" in backends:
+        supports.append(CPP_VALUE_TEST_SUPPORT)
+    if "rust" in backends:
+        supports.append(RUST_VALUE_TEST_SUPPORT)
+    return tuple(supports)
+
+
+def _value_test_inputs(
+    profiles: tuple[ProfileRender, ...],
+    backends: tuple[str, ...],
+) -> tuple[ValueTestBackendProfileInput, ...]:
+    inputs: list[ValueTestBackendProfileInput] = []
+    for profile in profiles:
+        if "cpp" in backends:
+            inputs.append(
+                ValueTestBackendProfileInput("cpp", profile.profile.name, profile.cpp)
+            )
+        if "rust" in backends:
+            inputs.append(
+                ValueTestBackendProfileInput("rust", profile.profile.name, profile.rust)
+            )
+    return tuple(inputs)
 
 
 __all__ = ["ProfileRender", "RenderedProject", "render_project"]

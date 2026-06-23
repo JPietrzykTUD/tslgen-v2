@@ -3,7 +3,36 @@
 from __future__ import annotations
 
 from tslc.value_tests.literals import cpp_literal, cpp_literal_list, token_truthy
-from tslc.value_tests.model import ValueTestCasePlan, ValueTestProfilePlan
+from tslc.value_tests.model import (
+    ValueTestBackendSupport,
+    ValueTestCasePlan,
+    ValueTestProfilePlan,
+)
+
+CPP_VALUE_TEST_SUPPORT = ValueTestBackendSupport(
+    backend_id="cpp",
+    case_kinds=frozenset(
+        {
+            "broadcast",
+            "convert",
+            "differential",
+            "extension_extract",
+            "extension_insert",
+            "generic_golden",
+            "immediate",
+            "lane_list",
+            "load",
+            "mask_logic",
+            "mask_to_vector",
+            "masked",
+            "reduction",
+            "repr_cast",
+            "store",
+            "vector_to_array",
+        }
+    ),
+    supports_differential=True,
+)
 
 
 def render_cpp_values_runner(profile: ValueTestProfilePlan) -> str:
@@ -450,4 +479,4 @@ def _axis_suffix(case: ValueTestCasePlan) -> str:
     return "".join(f", {value}" for value in case.axis_args)
 
 
-__all__ = ["render_cpp_values_runner"]
+__all__ = ["CPP_VALUE_TEST_SUPPORT", "render_cpp_values_runner"]

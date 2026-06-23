@@ -56,6 +56,15 @@ class ValueTestCasePlan:
 
 
 @dataclass(frozen=True, slots=True)
+class ValueTestBackendSupport:
+    """Value-test case kinds one backend renderer can consume."""
+
+    backend_id: str
+    case_kinds: frozenset[str]
+    supports_differential: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class ValueTestProfilePlan:
     backend_id: str
     profile_name: str
@@ -64,12 +73,15 @@ class ValueTestProfilePlan:
 
 @dataclass(frozen=True, slots=True)
 class ValueTestProjectPlan:
-    cpp_profiles: tuple[ValueTestProfilePlan, ...]
-    rust_profiles: tuple[ValueTestProfilePlan, ...]
+    profiles: tuple[ValueTestProfilePlan, ...]
     diagnostics: tuple[Diagnostic, ...] = ()
+
+    def profiles_for(self, backend_id: str) -> tuple[ValueTestProfilePlan, ...]:
+        return tuple(profile for profile in self.profiles if profile.backend_id == backend_id)
 
 
 __all__ = (
+    "ValueTestBackendSupport",
     "HarnessPrimitiveNames",
     "ValueTestCasePlan",
     "ValueTestProfilePlan",

@@ -8,7 +8,6 @@ from tslc.value_tests.model import HarnessPrimitiveNames, ValueTestCasePlan
 
 
 def generic_golden_case(
-    backend_id: str,
     name: str,
     index: int,
     case: TestCase,

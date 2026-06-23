@@ -1216,21 +1216,29 @@ The `tslc` lane-list `set` migration is implemented. `set` is authored as
 symbols bound by `loop<generation>`, the real corpus source no longer uses
 `s...` or `pack<...>`, C++/Rust render an array-like lane-list argument, and
 value-test planning covers `v:=(lanes<s>)`.
+
+A follow-up value-test backend capability cleanup is also implemented:
+semantic `ValueTestPattern` objects no longer carry backend IDs, C++/Rust
+renderer modules declare `ValueTestBackendSupport`, `ValueTestProjectPlan`
+stores backend profile plans generically, and `render_project(...)` is the
+current wiring point that maps C++/Rust profile render data into generic
+value-test planner inputs.
 Active prompt:
-docs/agent/runs/tslc-lane-list-set-migration-review-prompt.md
+docs/agent/runs/tslc-value-test-backend-capability-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
 boundary review prompt:
+docs/agent/runs/tslc-lane-list-set-migration-review-prompt.md
 docs/agent/runs/tslc-value-test-cleanup-review-prompt.md
 docs/agent/runs/tslc-value-test-plan-boundary-review-prompt.md
 docs/agent/runs/tslc-support-policy-capability-review-prompt.md
 docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md
 docs/agent/runs/tslc-typed-render-values-review-prompt.md
 
-Next expected action: review the completed lane-list `set` migration prompt
-above. Confirm old variadic production paths are removed or quarantined and
-current reverse `set` value behavior is preserved.
+Next expected action: review the completed value-test backend capability cleanup
+prompt above. Confirm value-test semantic patterns are backend-agnostic and
+current C++/Rust value-test coverage remains intact.
 ```
 
 Verification status (2026-06-23):
@@ -1266,6 +1274,17 @@ Verification status (2026-06-23):
   `python -m pytest -q tslc/tests/test_lane_lists.py tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py tslc/tests/test_select_and_lower.py tslc/tests/test_masks_and_calls.py tslc/tests/test_support_policy.py tslc/tests/test_catalog_validation.py tslc/tests/test_build_verify.py::test_set_builds`
   passed with 61 tests;
   `git diff --check` passed.
+
+- Value-test backend capability cleanup:
+  `python -m compileall -q tslc/src/tslc tslc/tests` passed;
+  `python -m pytest -q tslc/tests/test_value_test_planning.py` passed with
+  7 tests;
+  `python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py tslc/tests/test_lane_lists.py tslc/tests/test_support_policy.py tslc/tests/test_build_verify.py::test_set_builds`
+  passed with 26 tests;
+  `git diff --check` passed;
+  source scan for `backend_ids`, backend-name conditionals, and old
+  `cpp_profiles`/`rust_profiles` plan fields in production value-test/test
+  assembly code returned no hits.
 
 - Support-policy capability pass:
   `python -m compileall -q tslc/src/tslc` passed;
@@ -1578,7 +1597,7 @@ docs/agent/runs/tslc-typed-render-values-review-prompt.md
 Active prompt:
 
 ```text
-docs/agent/runs/tslc-lane-list-set-migration-review-prompt.md
+docs/agent/runs/tslc-value-test-backend-capability-review-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

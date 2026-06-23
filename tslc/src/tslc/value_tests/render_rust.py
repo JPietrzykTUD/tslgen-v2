@@ -5,7 +5,16 @@ from __future__ import annotations
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.render._common import slug
 from tslc.value_tests.literals import rust_literal_list, token_truthy
-from tslc.value_tests.model import ValueTestCasePlan, ValueTestProfilePlan
+from tslc.value_tests.model import (
+    ValueTestBackendSupport,
+    ValueTestCasePlan,
+    ValueTestProfilePlan,
+)
+
+RUST_VALUE_TEST_SUPPORT = ValueTestBackendSupport(
+    backend_id="rust",
+    case_kinds=frozenset({"convert", "generic_golden", "lane_list", "repr_cast"}),
+)
 
 
 def render_rust_values_file(profiles: tuple[ValueTestProfilePlan, ...]) -> str:
@@ -149,4 +158,4 @@ def _repr_cast(case: ValueTestCasePlan) -> str:
     )
 
 
-__all__ = ["render_rust_values_file"]
+__all__ = ["RUST_VALUE_TEST_SUPPORT", "render_rust_values_file"]

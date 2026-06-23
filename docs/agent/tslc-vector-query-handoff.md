@@ -882,10 +882,30 @@ git diff --check
 
 Result: passed.
 
-Follow-up risk: `tslc.value_tests.case_plans` is now the largest value-test
-module because it owns the case-construction helper family. The next value-test
-expansion should split that helper family by plan-kind cluster before adding
-new shapes.
+Follow-up cleanup: value-test planning now separates semantic pattern matching
+from backend renderer capability. `ValueTestPattern` no longer carries
+`backend_ids`, `ValueTestProjectPlan` no longer has C++/Rust-specific profile
+fields, and renderers declare `ValueTestBackendSupport` values listing the
+case kinds they can consume. `render_project(...)` is the only current wiring
+point that maps finalized C++/Rust profile data into generic
+`ValueTestBackendProfileInput` values for the planner.
+
+Focused validation for the capability cleanup:
+
+```bash
+python -m compileall -q tslc/src/tslc tslc/tests
+python -m pytest -q tslc/tests/test_value_test_planning.py
+python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py tslc/tests/test_lane_lists.py tslc/tests/test_support_policy.py tslc/tests/test_build_verify.py::test_set_builds
+git diff --check
+```
+
+Result: compile passed; value-test planning passed with 7 tests; combined
+focused shard passed with 26 tests; diff check passed.
+
+Remaining follow-up risk: `tslc.value_tests.case_plans` is still the largest
+value-test module because it owns the case-construction helper family. The next
+value-test expansion should split that helper family by plan-kind cluster
+before adding new shapes.
 
 ```bash
 ./verify.sh
