@@ -809,6 +809,84 @@ git diff --check
 
 Result: passed.
 
+## Value-Test Planning Boundary Slice
+
+On 2026-06-23 the generated value-test path was refactored so renderers no
+longer classify primitive/test shapes directly.
+
+Key points:
+
+- `tslc.value_tests` now owns value-test planning. `ValueTestPlanner` consumes
+  the finalized profile render data plus the catalog and emits typed
+  `ValueTestProjectPlan` / `ValueTestProfilePlan` / `ValueTestCasePlan` values.
+- `tslc.render.tests_project` is now a thin artifact assembler: it copies the
+  shared helper assets and delegates C++/Rust test text formatting to
+  plan-consuming renderers.
+- `LoweredSpecialization` now carries `source_primitive_name` separately from
+  `primitive_name`, so emitted wrappers such as `_mask`, `_maskz`, and `_imm`
+  keep a stable link to the source primitive whose authored `tests:` should be
+  planned.
+- Value-test harness helpers are discovered from unique catalog signatures
+  (`v:=s[]`, `s[]:=v`, and `im:=m`) instead of fixed primitive names. Pipeline
+  `test_harness=True` seeds dependency closure from those discovered names.
+- Value-test planning diagnostics are surfaced through `RenderedProject` and
+  `GenerationResult`. Warnings are only surfaced for explicit test-harness
+  generation; planning errors remain surfaced for ordinary generation.
+
+Focused coverage:
+
+- `tslc/tests/test_value_test_planning.py` covers signature-based harness
+  discovery with renamed primitives, emitted/source identity preservation,
+  source-identity lookup for split masked names, renderer operation from
+  prebuilt plans without a catalog, and an assembler guard for
+  `render/tests_project.py`.
+- The follow-up cleanup split `tslc.value_tests.planner` into focused modules:
+  `harness.py` owns signature-based helper discovery, `patterns.py` owns typed
+  matchers, `case_plans.py` owns render-ready case construction, and
+  `literals.py` owns C++/Rust literal spelling. `planner.py` is now an
+  orchestration boundary again.
+- The cleanup also removed the stray Rust literal formatter from
+  `render_cpp.py`, renamed source-looking plan kinds to `vector_to_array` and
+  `mask_to_vector`, and added an architecture guard for renderer literal
+  ownership plus planner size.
+
+Validation for this slice:
+
+```bash
+python -m compileall -q tslc/src/tslc tslc/tests
+```
+
+Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py tslc/tests/test_select_and_lower.py tslc/tests/test_masks_and_calls.py tslc/tests/test_generation_conditionals.py
+```
+
+Result: `49 passed`.
+
+```bash
+python -m pytest -q tslc/tests --ignore=tslc/tests/test_build_verify.py
+```
+
+Result: `145 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_build_verify.py::test_generated_profiles_build
+```
+
+Result: `1 passed`.
+
+```bash
+git diff --check
+```
+
+Result: passed.
+
+Follow-up risk: `tslc.value_tests.case_plans` is now the largest value-test
+module because it owns the case-construction helper family. The next value-test
+expansion should split that helper family by plan-kind cluster before adding
+new shapes.
+
 ```bash
 ./verify.sh
 ```

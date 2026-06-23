@@ -35,6 +35,7 @@ from tslc.select.selector import (
 from tslc.sources import SourceLoader
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.support_policy_views import immediate_split_names, policy_split_names
+from tslc.value_tests import HarnessPrimitiveNames, discover_harness_primitives
 
 _DEFAULT_BACKENDS = DEFAULT_SUPPORT_POLICY.default_backend_ids
 GenerationMode = Literal["partial", "strict"]
@@ -59,11 +60,6 @@ class GenerationRequest:
     # into the dependency closure so the generated differential tests can build a hardware
     # register from a lane array and read its result back. Off for ordinary generation.
     test_harness: bool = False
-
-
-# Primitives the differential value tests call to move data in/out of a hardware register and to
-# normalize a hardware mask. Seeded into the closure only when ``test_harness`` is set.
-TEST_HARNESS_PRIMITIVES = ("from_array", "to_array", "to_integral")
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +98,7 @@ class _PipelineInputs:
     machine_profiles: Mapping[str, MachineProfile]
     split_names: frozenset[str]
     imm_split_names: frozenset[str]
+    test_harness: HarnessPrimitiveNames
 
 
 def generate(request: GenerationRequest) -> GenerationResult:
@@ -157,6 +154,9 @@ def _load_inputs(request: GenerationRequest) -> tuple[_PipelineInputs | None, li
     # prune must treat it bare too (else a bare `blend` caller can't resolve the pass_through spec).
     split_names = policy_split_names(catalog)
     imm_split_names = immediate_split_names(catalog)
+    test_harness = discover_harness_primitives(catalog)
+    if request.test_harness:
+        diagnostics.extend(test_harness.diagnostics)
     profile_result = load_machine_profiles_checked(request.machine_profiles_path)
     diagnostics.extend(profile_result.diagnostics)
     if has_errors(diagnostics):
@@ -168,6 +168,7 @@ def _load_inputs(request: GenerationRequest) -> tuple[_PipelineInputs | None, li
             machine_profiles=machine_profiles,
             split_names=split_names,
             imm_split_names=imm_split_names,
+            test_harness=test_harness,
         ),
         diagnostics,
     )
@@ -211,10 +212,13 @@ class _GenerationSession:
                 self.request.backends,
                 self.inputs.imm_split_names,
                 catalog=self.inputs.catalog,
+                value_test_warnings=self.request.test_harness,
             )
             if self.profile_renders
             else None
         )
+        if rendered is not None:
+            self.diagnostics.extend(rendered.diagnostics)
         artifacts = rendered.artifacts if rendered is not None else ArtifactSet.create(())
         return _result(artifacts, rendered, self.diagnostics, self.coverage, self.skipped)
 
@@ -236,7 +240,15 @@ class _GenerationSession:
         selected_extensions: dict[str, Extension] = {}
         worklist = list(self.request.primitives)
         if self.request.test_harness:
-            worklist.extend(TEST_HARNESS_PRIMITIVES)
+            worklist.extend(
+                name
+                for name in (
+                    self.inputs.test_harness.from_array,
+                    self.inputs.test_harness.to_array,
+                    self.inputs.test_harness.to_integral,
+                )
+                if name is not None
+            )
         processed: set[str] = set()
         while worklist:
             primitive = worklist.pop(0)

@@ -85,6 +85,7 @@ class LoweredSpecialization:
 
     backend_id: str
     primitive_name: str
+    source_primitive_name: str
     extension_name: str  # the simd<> extension tag, e.g. "avx2"
     type_tag: str
     base_type_spelling: str  # the simd<> base-type arg, e.g. "int32_t" / "i32"
@@ -354,6 +355,7 @@ class Lowerer:
         specialization = LoweredSpecialization(
             backend_id=backend.backend_id,
             primitive_name=selected.primitive.name,
+            source_primitive_name=selected.primitive.name,
             # Emit the ISA name (avx2), not the internal block name (avx2_vl):
             # the `_vl` distinction only steers selection, never the generated type.
             extension_name=context.env.extension.isa_name,

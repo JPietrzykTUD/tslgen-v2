@@ -1211,22 +1211,36 @@ Last accepted work (committed):
 Current action:
 
 ```text
-Executor finished for the ad hoc `tslc` support-policy capability pass. Active
-review prompt:
-docs/agent/runs/tslc-support-policy-capability-review-prompt.md
+Executor finished the cleanup after the ad hoc `tslc` value-test planning
+boundary pass.
+Active review prompt:
+docs/agent/runs/tslc-value-test-cleanup-review-prompt.md
 
-The previous catalog/profile validation and typed-render review prompts remain
-useful background:
+The previous support-policy, catalog/profile validation, and typed-render
+review prompts remain useful background, along with the original value-test
+boundary review prompt:
+docs/agent/runs/tslc-value-test-plan-boundary-review-prompt.md
+docs/agent/runs/tslc-support-policy-capability-review-prompt.md
 docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md
 docs/agent/runs/tslc-typed-render-values-review-prompt.md
 
-Next expected action: review verdict for the support-policy capability pass
+Next expected action: review verdict for the value-test cleanup pass
 (`Accept`, `Accept With Follow-Ups`, `Needs Revision`, or `Return To Planner`).
 ```
 
-Verification status (2026-06-21):
+Verification status (2026-06-23):
 
 ```text
+- Value-test planning boundary pass plus cleanup:
+  `python -m compileall -q tslc/src/tslc tslc/tests` passed;
+  `python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py tslc/tests/test_select_and_lower.py tslc/tests/test_masks_and_calls.py tslc/tests/test_generation_conditionals.py`
+  passed with 49 tests;
+  `python -m pytest -q tslc/tests --ignore=tslc/tests/test_build_verify.py`
+  passed with 145 tests;
+  `python -m pytest -q tslc/tests/test_build_verify.py::test_generated_profiles_build`
+  passed;
+  `git diff --check` passed.
+
 - Support-policy capability pass:
   `python -m compileall -q tslc/src/tslc` passed;
   `python -m pytest -q tslc/tests/test_support_policy.py tslc/tests/test_support_policy_views.py tslc/tests/test_select_and_lower.py tslc/tests/test_masks_and_calls.py tslc/tests/test_generation_conditionals.py`
@@ -1532,13 +1546,13 @@ M255 real generic self-call selector specialization lowering execution-review.
 Completed prompt:
 
 ```text
-docs/agent/runs/tslc-backend-dialect-facet-split-review-prompt.md
+docs/agent/runs/tslc-typed-render-values-review-prompt.md
 ```
 
 Active prompt:
 
 ```text
-docs/agent/runs/tslc-typed-render-values-review-prompt.md
+docs/agent/runs/tslc-value-test-cleanup-review-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

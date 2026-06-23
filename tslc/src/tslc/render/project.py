@@ -14,6 +14,8 @@ from tslc.render.emitted_names import finalize_emitted_names
 from tslc.render.rust_project import rust_artifacts, rust_verify_profiles
 from tslc.render.tests_project import cpp_test_artifacts, rust_test_artifacts
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
+from tslc.diagnostics import Diagnostic
+from tslc.value_tests import ValueTestPlanner, ValueTestProjectPlan
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +34,7 @@ class ProfileRender:
 class RenderedProject:
     artifacts: ArtifactSet
     verify: VerifyProject
+    diagnostics: tuple[Diagnostic, ...] = ()
 
 
 def render_project(
@@ -39,6 +42,7 @@ def render_project(
     backends: tuple[str, ...] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
     immediate_split_names: frozenset[str] = frozenset(),
     catalog: Catalog | None = None,
+    value_test_warnings: bool = False,
 ) -> RenderedProject:
     ordered = tuple(
         replace(
@@ -50,10 +54,15 @@ def render_project(
     )
     artifacts: list[Artifact] = []
     verify_backends: list[VerifyBackend] = []
+    test_plan = (
+        ValueTestPlanner(catalog).plan(ordered)
+        if catalog is not None
+        else ValueTestProjectPlan(cpp_profiles=(), rust_profiles=())
+    )
 
     if "cpp" in backends:
         artifacts.extend(cpp_artifacts(ordered))
-        artifacts.extend(cpp_test_artifacts(ordered, catalog))
+        artifacts.extend(cpp_test_artifacts(test_plan))
         verify_backends.append(
             VerifyBackend(
                 backend_id="cpp",
@@ -63,7 +72,7 @@ def render_project(
         )
     if "rust" in backends:
         artifacts.extend(rust_artifacts(ordered))
-        artifacts.extend(rust_test_artifacts(ordered, catalog))
+        artifacts.extend(rust_test_artifacts(test_plan))
         verify_backends.append(
             VerifyBackend(
                 backend_id="rust",
@@ -71,9 +80,15 @@ def render_project(
                 profiles=rust_verify_profiles(ordered),
             )
         )
+    test_diagnostics = tuple(
+        diagnostic
+        for diagnostic in test_plan.diagnostics
+        if value_test_warnings or diagnostic.severity == "error"
+    )
     return RenderedProject(
         artifacts=ArtifactSet.create(tuple(artifacts)),
         verify=VerifyProject(backends=tuple(verify_backends)),
+        diagnostics=test_diagnostics,
     )
 
 
