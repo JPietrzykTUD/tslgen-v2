@@ -29,7 +29,7 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
         requires [avx512f]
         implementation:
           tsil """
-            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
                 emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1>(
@@ -60,8 +60,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 ));
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
@@ -73,7 +73,7 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
         requires [avx512f]
         implementation:
           tsil """
-            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
                 emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1>(
@@ -104,8 +104,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 ));
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
@@ -147,8 +147,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 ));
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
@@ -190,8 +190,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 ));
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
@@ -206,7 +206,7 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           avx2_vl [avx, avx2]
         implementation:
           tsil """
-            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
                 emit_return(intrin_compose<i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1>(
@@ -237,8 +237,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 ));
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
@@ -252,7 +252,7 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           avx2_vl [avx, avx2]
         implementation:
           tsil """
-            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
                 emit_return(intrin_compose<i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(2)=1>(
@@ -283,8 +283,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 ));
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
@@ -328,8 +328,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 ));
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
@@ -373,8 +373,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 ));
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
@@ -396,8 +396,8 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
             }
@@ -408,14 +408,14 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
         requires []
         implementation:
           tsil """
-            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
             var<const_infer>(
               ptr,
               cast<reinterpret>(
                 type<generation>(base::in) const *,
                 ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[0], scale))
               )
-            )
+            );
             emit_return(*ptr);
           """
 prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, source, scale):
@@ -451,7 +451,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
         requires [avx512f]
         implementation:
           tsil """
-            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
                 emit_return(intrin_compose<mask_i32gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1>(
@@ -490,8 +490,8 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<infer>(result, call<primitive=to_array[Vec]>(source))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<infer>(result, call<primitive=to_array[Vec]>(source));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (mask<test>(mask, i)) {
                     result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
@@ -505,7 +505,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
         requires [avx512f]
         implementation:
           tsil """
-            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
                 emit_return(intrin_compose<mask_i64gather, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1>(
@@ -544,8 +544,8 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<infer>(result, call<primitive=to_array[Vec]>(source))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<infer>(result, call<primitive=to_array[Vec]>(source));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (mask<test>(mask, i)) {
                     result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
@@ -597,8 +597,8 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<infer>(result, call<primitive=to_array[Vec]>(source))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<infer>(result, call<primitive=to_array[Vec]>(source));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (mask<test>(mask, i)) {
                     result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
@@ -650,8 +650,8 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<infer>(result, call<primitive=to_array[Vec]>(source))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<infer>(result, call<primitive=to_array[Vec]>(source));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (mask<test>(mask, i)) {
                     result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
@@ -675,8 +675,8 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-            var<infer>(result, call<primitive=to_array[Vec]>(source))
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<infer>(result, call<primitive=to_array[Vec]>(source));
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
@@ -689,7 +689,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
         requires []
         implementation:
           tsil """
-            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
             if (mask) {
               var<const_infer>(
                 ptr,
@@ -697,7 +697,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                   type<generation>(base::in) const *,
                   ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[0], scale))
                 )
-              )
+              );
               emit_return(*ptr);
             }
             emit_return(source);
@@ -736,7 +736,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
                 intrin_compose<i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=1>(
@@ -775,8 +775,8 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               _ => {
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
+                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
                 }
@@ -790,7 +790,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
                 intrin_compose<i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(3)=1>(
@@ -829,8 +829,8 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               _ => {
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
+                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
                 }
@@ -882,8 +882,8 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               _ => {
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
+                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
                 }
@@ -935,8 +935,8 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
                 return;
               }
               _ => {
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
+                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
                 }
@@ -957,8 +957,8 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-            var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
-            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
+            var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
             }
@@ -968,14 +968,14 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
         requires []
         implementation:
           tsil """
-            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
             var<infer>(
               ptr,
               cast<reinterpret>(
                 type<generation>(base::in) *,
                 ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[0], scale))
               )
-            )
+            );
             *ptr = a;
           """
 prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, scale):
@@ -1014,7 +1014,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
                 intrin_compose<mask_i32scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1>(
@@ -1057,8 +1057,8 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (mask<test>(mask, i)) {
                     *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
@@ -1074,7 +1074,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))))
+            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
                 intrin_compose<mask_i64scatter, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))), immediate(4)=1>(
@@ -1117,8 +1117,8 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (mask<test>(mask, i)) {
                     *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
@@ -1176,8 +1176,8 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (mask<test>(mask, i)) {
                     *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
@@ -1235,8 +1235,8 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                 return;
               }
               _ => {
-                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
+                var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
                 loop<range>(i, 0, value<generation>(vector::length), 1) {
                   if (mask<test>(mask, i)) {
                     *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
@@ -1259,8 +1259,8 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
-            var<const_infer>(val_array, call<primitive=to_array[Vec]>(a))
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 *cast<reinterpret>(type<generation>(base::in) *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale))) = val_array[i];
@@ -1272,7 +1272,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
         requires []
         implementation:
           tsil """
-            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index))
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
             if (mask) {
               var<infer>(
                 ptr,
@@ -1280,7 +1280,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
                   type<generation>(base::in) *,
                   ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[0], scale))
                 )
-              )
+              );
               *ptr = a;
             }
           """

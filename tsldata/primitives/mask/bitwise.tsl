@@ -51,8 +51,8 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              let<type>(MaskT, type<generation>(vector::mask))
-              var<typed>(MaskT, result, mask<zero>())
+              let<type>(MaskT, type<generation>(vector::mask));
+              var<typed>(MaskT, result, mask<zero>());
               loop<unroll>(value<generation>(vector::length))
               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if (mask<test>(mask_a, i) && mask<test>(mask_b, i)) {
@@ -114,8 +114,8 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              let<type>(MaskT, type<generation>(vector::mask))
-              var<typed>(MaskT, result, mask<zero>())
+              let<type>(MaskT, type<generation>(vector::mask));
+              var<typed>(MaskT, result, mask<zero>());
               loop<unroll>(value<generation>(vector::length))
               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if (mask<test>(mask_a, i) || mask<test>(mask_b, i)) {
@@ -177,8 +177,8 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              let<type>(MaskT, type<generation>(vector::mask))
-              var<typed>(MaskT, result, mask<zero>())
+              let<type>(MaskT, type<generation>(vector::mask));
+              var<typed>(MaskT, result, mask<zero>());
               loop<unroll>(value<generation>(vector::length))
               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if (mask<test>(mask_a, i) != mask<test>(mask_b, i)) {
@@ -244,8 +244,8 @@ prim<m:=m> mask_binary_not(mask):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              let<type>(MaskT, type<generation>(vector::mask))
-              var<typed>(MaskT, result, mask<zero>())
+              let<type>(MaskT, type<generation>(vector::mask));
+              var<typed>(MaskT, result, mask<zero>());
               loop<unroll>(value<generation>(vector::length))
               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if (!mask<test>(mask, i)) {
@@ -283,7 +283,7 @@ prim<usize:=m> mask_population_count(mask):
           scalar []
         implementation:
           tsil """
-            var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+            var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
             emit_return(
               cast<static>(
                 type<backend>(scalar::size),
@@ -323,8 +323,8 @@ prim<usize:=m> mask_population_count(mask):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              let<type>(CountT, type<backend>(scalar::size))
-              var<typed>(CountT, count, cast<static>(CountT, 0))
+              let<type>(CountT, type<backend>(scalar::size));
+              var<typed>(CountT, count, cast<static>(CountT, 0));
               loop<unroll>(value<generation>(vector::length))
               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if (mask<test>(mask, i)) {

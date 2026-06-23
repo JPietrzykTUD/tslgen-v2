@@ -65,7 +65,7 @@ prim<v:=v> popcnt(data):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-               var<infer>(data_arr, call<primitive=to_array[Vec]>(data)) 
+               var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
                loop<unroll>(value<generation>(vector::length))
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 data_arr[i] = cast<static>(type<generation>(base::in), details::popcount(data_arr[i]));
@@ -94,7 +94,7 @@ prim<s:=s> lzc_scalar(data):
           generic []
         implementation:
           tsil """
-               let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64))) 
+               let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
               UnsignedT bits{};
                mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data), value<generation>(type::size_bytes(type<generation>(base::in)))) ;
                emit_return(cast<static>(type<generation>(base::in), details::clz<UnsignedT, type<generation>(vector::offset_base)>(bits))) ;
@@ -169,7 +169,7 @@ prim<v:=v> lzc(data):
           generic []
         implementation:
           tsil """
-               var<infer>(data_arr, call<primitive=to_array[Vec]>(data)) 
+               var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
                loop<unroll>(value<generation>(vector::length))
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 data_arr[i] = call<primitive=lzc_scalar[type<backend>(vector::as_extension(scalar))]>(data_arr[i]);
@@ -183,7 +183,7 @@ prim<v:=v> lzc(data):
           oneAPIfpgaRTL [oneAPIfpgaDev]
         implementation:
           tsil """
-               var<infer>(data_arr, call<primitive=to_array[Vec]>(data)) 
+               var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
                loop<unroll>(value<generation>(vector::length))
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 data_arr[i] = cast<static>(type<generation>(base::in), details::clz_recursive<type<generation>(base::in), type<generation>(vector::offset_base)::apply>(data_arr[i]));

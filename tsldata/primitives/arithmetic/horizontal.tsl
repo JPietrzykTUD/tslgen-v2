@@ -40,9 +40,9 @@ prim<s:=v> hadd(vec):
         requires [avx2]
         implementation:
           tsil """
-            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0))
-            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1))
-            var<infer>(temp, intrin<_mm_add_epi32>(lo, hi))
+            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
+            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
+            var<infer>(temp, intrin<_mm_add_epi32>(lo, hi));
             temp = intrin<_mm_add_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_add_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
             emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
@@ -51,9 +51,9 @@ prim<s:=v> hadd(vec):
         requires [avx2]
         implementation:
           tsil """
-            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0))
-            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1))
-            var<infer>(temp, intrin<_mm_add_epi64>(lo, hi))
+            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
+            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
+            var<infer>(temp, intrin<_mm_add_epi64>(lo, hi));
             temp = intrin<_mm_add_epi64>(temp, intrin<_mm_unpackhi_epi64>(temp, temp));
             emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
@@ -61,9 +61,9 @@ prim<s:=v> hadd(vec):
         requires [avx2]
         implementation:
           tsil """
-            var<const_infer>(lo, intrin<_mm256_extractf128_ps>(vec, 0))
-            var<const_infer>(hi, intrin<_mm256_extractf128_ps>(vec, 1))
-            var<infer>(temp, intrin<_mm_add_ps>(lo, hi))
+            var<const_infer>(lo, intrin<_mm256_extractf128_ps>(vec, 0));
+            var<const_infer>(hi, intrin<_mm256_extractf128_ps>(vec, 1));
+            var<infer>(temp, intrin<_mm_add_ps>(lo, hi));
             temp = intrin<_mm_add_ps>(temp, intrin<_mm_movehl_ps>(temp, temp));
             temp = intrin<_mm_add_ss>(temp, intrin<_mm_shuffle_ps>(temp, temp, 0x55));
             emit_return(intrin<_mm_cvtss_f32>(temp));
@@ -72,9 +72,9 @@ prim<s:=v> hadd(vec):
         requires [avx2]
         implementation:
           tsil """
-            var<const_infer>(lo, intrin<_mm256_extractf128_pd>(vec, 0))
-            var<const_infer>(hi, intrin<_mm256_extractf128_pd>(vec, 1))
-            var<infer>(temp, intrin<_mm_add_pd>(lo, hi))
+            var<const_infer>(lo, intrin<_mm256_extractf128_pd>(vec, 0));
+            var<const_infer>(hi, intrin<_mm256_extractf128_pd>(vec, 1));
+            var<infer>(temp, intrin<_mm_add_pd>(lo, hi));
             temp = intrin<_mm_add_sd>(temp, intrin<_mm_unpackhi_pd>(temp, temp));
             emit_return(intrin<_mm_cvtsd_f64>(temp));
           """
@@ -82,8 +82,8 @@ prim<s:=v> hadd(vec):
         requires [avx2]
         implementation:
           tsil """
-            var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0))
+            var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
+            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               result = details::arith_add(result, values[i]);
             }
@@ -94,7 +94,7 @@ prim<s:=v> hadd(vec):
         requires [sse2]
         implementation:
           tsil """
-            var<infer>(temp, vec)
+            var<infer>(temp, vec);
             temp = intrin<_mm_add_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_add_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
             emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
@@ -103,14 +103,14 @@ prim<s:=v> hadd(vec):
         requires [sse2]
         implementation:
           tsil """
-            var<infer>(temp, intrin<_mm_add_epi64>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)))
+            var<infer>(temp, intrin<_mm_add_epi64>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)));
             emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       f32:
         requires [sse2]
         implementation:
           tsil """
-            var<infer>(temp, vec)
+            var<infer>(temp, vec);
             temp = intrin<_mm_add_ps>(temp, intrin<_mm_movehl_ps>(temp, temp));
             temp = intrin<_mm_add_ss>(temp, intrin<_mm_shuffle_ps>(temp, temp, 0x55));
             emit_return(intrin<_mm_cvtss_f32>(temp));
@@ -119,15 +119,15 @@ prim<s:=v> hadd(vec):
         requires [sse2]
         implementation:
           tsil """
-            var<infer>(temp, intrin<_mm_add_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)))
+            var<infer>(temp, intrin<_mm_add_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
             emit_return(intrin<_mm_cvtsd_f64>(temp));
           """
       arith:
         requires [sse2]
         implementation:
           tsil """
-            var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0))
+            var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
+            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               result = details::arith_add(result, values[i]);
             }
@@ -146,8 +146,8 @@ prim<s:=v> hadd(vec):
           sve [sve]
         implementation:
           tsil """
-            var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0))
+            var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
+            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               result = details::arith_add(result, values[i]);
             }
@@ -193,9 +193,9 @@ prim<s:=v> hmax(vec):
         requires [avx2]
         implementation:
           tsil """
-            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0))
-            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1))
-            var<infer>(temp, intrin<_mm_max_epi32>(lo, hi))
+            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
+            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
+            var<infer>(temp, intrin<_mm_max_epi32>(lo, hi));
             temp = intrin<_mm_max_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_max_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
             emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
@@ -204,9 +204,9 @@ prim<s:=v> hmax(vec):
         requires [avx2]
         implementation:
           tsil """
-            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0))
-            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1))
-            var<infer>(temp, intrin<_mm_max_epu32>(lo, hi))
+            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
+            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
+            var<infer>(temp, intrin<_mm_max_epu32>(lo, hi));
             temp = intrin<_mm_max_epu32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_max_epu32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
             emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
@@ -215,9 +215,9 @@ prim<s:=v> hmax(vec):
         requires [avx2]
         implementation:
           tsil """
-            var<const_infer>(lo, intrin<_mm256_extractf128_ps>(vec, 0))
-            var<const_infer>(hi, intrin<_mm256_extractf128_ps>(vec, 1))
-            var<infer>(temp, intrin<_mm_max_ps>(lo, hi))
+            var<const_infer>(lo, intrin<_mm256_extractf128_ps>(vec, 0));
+            var<const_infer>(hi, intrin<_mm256_extractf128_ps>(vec, 1));
+            var<infer>(temp, intrin<_mm_max_ps>(lo, hi));
             temp = intrin<_mm_max_ps>(temp, intrin<_mm_movehl_ps>(temp, temp));
             temp = intrin<_mm_max_ss>(temp, intrin<_mm_shuffle_ps>(temp, temp, 0x55));
             emit_return(intrin<_mm_cvtss_f32>(temp));
@@ -226,9 +226,9 @@ prim<s:=v> hmax(vec):
         requires [avx2]
         implementation:
           tsil """
-            var<const_infer>(lo, intrin<_mm256_extractf128_pd>(vec, 0))
-            var<const_infer>(hi, intrin<_mm256_extractf128_pd>(vec, 1))
-            var<infer>(temp, intrin<_mm_max_pd>(lo, hi))
+            var<const_infer>(lo, intrin<_mm256_extractf128_pd>(vec, 0));
+            var<const_infer>(hi, intrin<_mm256_extractf128_pd>(vec, 1));
+            var<infer>(temp, intrin<_mm_max_pd>(lo, hi));
             temp = intrin<_mm_max_sd>(temp, intrin<_mm_unpackhi_pd>(temp, temp));
             emit_return(intrin<_mm_cvtsd_f64>(temp));
           """
@@ -237,7 +237,7 @@ prim<s:=v> hmax(vec):
         requires [sse2]
         implementation:
           tsil """
-            var<infer>(temp, vec)
+            var<infer>(temp, vec);
             temp = intrin<_mm_max_ps>(temp, intrin<_mm_movehl_ps>(temp, temp));
             temp = intrin<_mm_max_ss>(temp, intrin<_mm_shuffle_ps>(temp, temp, 0x55));
             emit_return(intrin<_mm_cvtss_f32>(temp));
@@ -246,7 +246,7 @@ prim<s:=v> hmax(vec):
         requires [sse2]
         implementation:
           tsil """
-            var<infer>(temp, intrin<_mm_max_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)))
+            var<infer>(temp, intrin<_mm_max_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
             emit_return(intrin<_mm_cvtsd_f64>(temp));
           """
     [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
@@ -262,8 +262,8 @@ prim<s:=v> hmax(vec):
           sve [sve]
         implementation:
           tsil """
-            var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            var<infer>(result, values[0])
+            var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
+            var<infer>(result, values[0]);
             loop<range>(i, 1, value<generation>(vector::length), 1) {
               if (values[i] > result) {
                 result = values[i];
@@ -311,9 +311,9 @@ prim<s:=v> hmin(vec):
         requires [avx2]
         implementation:
           tsil """
-            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0))
-            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1))
-            var<infer>(temp, intrin<_mm_min_epi32>(lo, hi))
+            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
+            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
+            var<infer>(temp, intrin<_mm_min_epi32>(lo, hi));
             temp = intrin<_mm_min_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_min_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
             emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
@@ -322,9 +322,9 @@ prim<s:=v> hmin(vec):
         requires [avx2]
         implementation:
           tsil """
-            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0))
-            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1))
-            var<infer>(temp, intrin<_mm_min_epu32>(lo, hi))
+            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
+            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
+            var<infer>(temp, intrin<_mm_min_epu32>(lo, hi));
             temp = intrin<_mm_min_epu32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_min_epu32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
             emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
@@ -333,9 +333,9 @@ prim<s:=v> hmin(vec):
         requires [avx2]
         implementation:
           tsil """
-            var<const_infer>(lo, intrin<_mm256_extractf128_ps>(vec, 0))
-            var<const_infer>(hi, intrin<_mm256_extractf128_ps>(vec, 1))
-            var<infer>(temp, intrin<_mm_min_ps>(lo, hi))
+            var<const_infer>(lo, intrin<_mm256_extractf128_ps>(vec, 0));
+            var<const_infer>(hi, intrin<_mm256_extractf128_ps>(vec, 1));
+            var<infer>(temp, intrin<_mm_min_ps>(lo, hi));
             temp = intrin<_mm_min_ps>(temp, intrin<_mm_movehl_ps>(temp, temp));
             temp = intrin<_mm_min_ss>(temp, intrin<_mm_shuffle_ps>(temp, temp, 0x55));
             emit_return(intrin<_mm_cvtss_f32>(temp));
@@ -344,9 +344,9 @@ prim<s:=v> hmin(vec):
         requires [avx2]
         implementation:
           tsil """
-            var<const_infer>(lo, intrin<_mm256_extractf128_pd>(vec, 0))
-            var<const_infer>(hi, intrin<_mm256_extractf128_pd>(vec, 1))
-            var<infer>(temp, intrin<_mm_min_pd>(lo, hi))
+            var<const_infer>(lo, intrin<_mm256_extractf128_pd>(vec, 0));
+            var<const_infer>(hi, intrin<_mm256_extractf128_pd>(vec, 1));
+            var<infer>(temp, intrin<_mm_min_pd>(lo, hi));
             temp = intrin<_mm_min_sd>(temp, intrin<_mm_unpackhi_pd>(temp, temp));
             emit_return(intrin<_mm_cvtsd_f64>(temp));
           """
@@ -355,7 +355,7 @@ prim<s:=v> hmin(vec):
         requires [sse2]
         implementation:
           tsil """
-            var<infer>(temp, vec)
+            var<infer>(temp, vec);
             temp = intrin<_mm_min_ps>(temp, intrin<_mm_movehl_ps>(temp, temp));
             temp = intrin<_mm_min_ss>(temp, intrin<_mm_shuffle_ps>(temp, temp, 0x55));
             emit_return(intrin<_mm_cvtss_f32>(temp));
@@ -364,7 +364,7 @@ prim<s:=v> hmin(vec):
         requires [sse2]
         implementation:
           tsil """
-            var<infer>(temp, intrin<_mm_min_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)))
+            var<infer>(temp, intrin<_mm_min_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
             emit_return(intrin<_mm_cvtsd_f64>(temp));
           """
     [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
@@ -380,8 +380,8 @@ prim<s:=v> hmin(vec):
           sve [sve]
         implementation:
           tsil """
-            var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            var<infer>(result, values[0])
+            var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
+            var<infer>(result, values[0]);
             loop<range>(i, 1, value<generation>(vector::length), 1) {
               if (values[i] < result) {
                 result = values[i];
@@ -442,9 +442,9 @@ prim<s:=(m,v)> hadd(mask, vec):
           sve [sve]
         implementation:
           tsil """
-            var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
-            var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0))
+            var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
+            var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
+            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 result = details::arith_add(result, values[i]);
@@ -467,7 +467,7 @@ prim<s:=(m,v)> hmax(mask, vec):
         requires [sve]
         implementation:
           tsil """
-            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
+            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
@@ -477,7 +477,7 @@ prim<s:=(m,v)> hmax(mask, vec):
         requires [sve]
         implementation:
           tsil """
-            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
+            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
@@ -488,7 +488,7 @@ prim<s:=(m,v)> hmax(mask, vec):
         requires [avx512f]
         implementation:
           tsil """
-            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
+            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
@@ -498,7 +498,7 @@ prim<s:=(m,v)> hmax(mask, vec):
         requires [avx512f]
         implementation:
           tsil """
-            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
+            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
@@ -509,7 +509,7 @@ prim<s:=(m,v)> hmax(mask, vec):
         requires [avx512bw, avx512vl]
         implementation:
           tsil """
-            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
+            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
@@ -528,9 +528,9 @@ prim<s:=(m,v)> hmax(mask, vec):
           sve [sve]
         implementation:
           tsil """
-            var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
-            var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0))
+            var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
+            var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
+            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
             type<backend>(scalar::size) found = 0;
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
@@ -559,7 +559,7 @@ prim<s:=(m,v)> hmin(mask, vec):
         requires [sve]
         implementation:
           tsil """
-            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
+            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
@@ -569,7 +569,7 @@ prim<s:=(m,v)> hmin(mask, vec):
         requires [sve]
         implementation:
           tsil """
-            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
+            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
@@ -580,7 +580,7 @@ prim<s:=(m,v)> hmin(mask, vec):
         requires [avx512f]
         implementation:
           tsil """
-            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
+            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
@@ -590,7 +590,7 @@ prim<s:=(m,v)> hmin(mask, vec):
         requires [avx512f]
         implementation:
           tsil """
-            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
+            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
@@ -601,7 +601,7 @@ prim<s:=(m,v)> hmin(mask, vec):
         requires [avx512bw, avx512vl]
         implementation:
           tsil """
-            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
+            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
               emit_return(cast<static>(type<generation>(base::in), 0));
             }
@@ -620,9 +620,9 @@ prim<s:=(m,v)> hmin(mask, vec):
           sve [sve]
         implementation:
           tsil """
-            var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask))
-            var<const_infer>(values, call<primitive=to_array[Vec]>(vec))
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0))
+            var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
+            var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
+            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
             type<backend>(scalar::size) found = 0;
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {

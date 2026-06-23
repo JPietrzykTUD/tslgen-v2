@@ -38,7 +38,7 @@ from tslc.lower.context import (
     LoweringScope,
     LoweringSession,
 )
-from tslc.lower.regions import DEFAULT_REGION_LOWERERS, RegionLowerer
+from tslc.lower.regions import DEFAULT_REGION_LOWERERS, RegionLowerer, StatementFinalizer
 from tslc.render.model import (
     LoweredBody,
     RenderContext,
@@ -52,9 +52,6 @@ from tslc.render.model import (
 from tslc.select.selector import SelectedImplementation
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
 from tslc.support_policy_views import immediate_split_names, policy_split_names
-
-# The single supported statement keyword for the current slice (v:=(v,v) bodies).
-_RETURN_KEYWORD = "emit_return"
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,7 +190,8 @@ class ExpressionRenderer:
                 source=segment.source,
             )
             return literal_text(segment.full_text)
-        return as_render_text(lowerer.lower(segment, self._context, self.render))
+        rendered = as_render_text(lowerer.lower(segment, self._context, self.render))
+        return _finish_consumed_statement_terminator(segment, lowerer, rendered)
 
 
 class Lowerer:
@@ -311,7 +309,7 @@ class Lowerer:
         )
         # A `void` primitive (e.g. `store`) has no return value, so it carries no
         # top-level `emit_return`; only value-returning bodies require one.
-        if shape.result_kind != "void" and _find_region(segments, _RETURN_KEYWORD) is None:
+        if shape.result_kind != "void" and _find_region(segments, "emit_return") is None:
             # No top-level return statement to model yet — skip, don't fail.
             return LoweringResult(
                 specialization=None,
@@ -842,6 +840,20 @@ def _find_region(segments: tuple[Segment, ...], keyword: str) -> Region | None:
                     if nested is not None:
                         return nested
     return None
+
+
+def _finish_consumed_statement_terminator(
+    region: Region,
+    lowerer: RegionLowerer,
+    rendered: RenderText,
+) -> RenderText:
+    if not region.has_statement_terminator:
+        return rendered
+    if region.block or region.else_block is not None or region.arms is not None:
+        return rendered
+    if isinstance(lowerer, StatementFinalizer):
+        return as_render_text(lowerer.finish_statement(rendered, region))
+    return render_sequence((rendered, literal_text(";")))
 
 
 def _primitive_signature_source(selected: SelectedImplementation) -> SourceSpan | None:

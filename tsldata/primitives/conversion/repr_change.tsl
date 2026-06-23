@@ -1090,8 +1090,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                         emit_return(intrin<svunpkhi_s16>(data));
                       } else {
-                        let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))))
-                        let<type>(UVec, type<generation>(vector::as_base(UBase)))
+                        let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                        let<type>(UVec, type<generation>(vector::as_base(UBase)));
                         var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
                         emit_return(intrin<svunpkhi_u16>(udata));
                       }
@@ -1157,8 +1157,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                         emit_return(intrin<svunpkhi_s32>(data));
                       } else {
-                        let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))))
-                        let<type>(UVec, type<generation>(vector::as_base(UBase)))
+                        let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                        let<type>(UVec, type<generation>(vector::as_base(UBase)));
                         var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
                         emit_return(intrin<svunpkhi_u32>(udata));
                       }
@@ -1207,8 +1207,8 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                         emit_return(intrin<svunpkhi_s64>(data));
                       } else {
-                        let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))))
-                        let<type>(UVec, type<generation>(vector::as_base(UBase)))
+                        let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                        let<type>(UVec, type<generation>(vector::as_base(UBase)));
                         var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
                         emit_return(intrin<svunpkhi_u64>(udata));
                       }

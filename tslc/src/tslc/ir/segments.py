@@ -7,7 +7,9 @@ where each segment is either:
 - :class:`RawText` — target-language source, passed through verbatim; or
 - :class:`Region` — a recognized TSIL keyword island whose selector (``<...>``)
   is kept as raw text and whose argument payload (``(...)``) is itself a
-  recursively-scanned ``tuple[Segment, ...]``.
+  recursively-scanned ``tuple[Segment, ...]``. When a region appears in a
+  statement stream and is followed by a source ``;``, the scanner consumes that
+  terminator and records it on the region instead of leaking it as raw text.
 
 The lowerer translates regions and passes raw text through.
 """
@@ -32,6 +34,7 @@ class Region:
     body: tuple["Segment", ...]  # recursively scanned (...) payload
     full_text: str  # original source text of the whole region (provenance)
     source: SourceSpan | None = None
+    has_statement_terminator: bool = False
     # Brace-delimited trailing block(s), for block-bearing keywords like
     # ``if<generation>(cond) { ... } else<generation> { ... }``. Empty/None for
     # ordinary ``keyword<sel>(args)`` regions. ``else_block`` holds either the

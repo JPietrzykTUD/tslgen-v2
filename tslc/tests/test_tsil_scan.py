@@ -14,18 +14,31 @@ def test_raw_text_passes_through() -> None:
     assert isinstance(segments[0], Region)
     assert segments[0].keyword == "emit_return"
     assert segments[0].body == (RawText("left + right"),)
-    assert segments[1] == RawText(";")
+    assert segments[0].has_statement_terminator
+    assert len(segments) == 1
 
 
 def test_intrin_compose_selector_is_raw_and_args_recurse() -> None:
     segments = scan("emit_return(intrin_compose<add>(left, right));")
     emit = segments[0]
     assert isinstance(emit, Region)
+    assert emit.has_statement_terminator
     compose = emit.body[0]
     assert isinstance(compose, Region)
     assert compose.keyword == "intrin_compose"
     assert compose.selector_text == "add"
     assert compose.body == (RawText("left, right"),)
+    assert not compose.has_statement_terminator
+
+
+def test_expression_statement_consumes_source_terminator() -> None:
+    segments = scan("call<primitive=store>(ptr, value);")
+
+    assert len(segments) == 1
+    call = segments[0]
+    assert isinstance(call, Region)
+    assert call.keyword == "call"
+    assert call.has_statement_terminator
 
 
 def test_nested_modifier_selector_kept_verbatim() -> None:
@@ -63,6 +76,7 @@ def test_scan_carries_nested_source_spans() -> None:
     emit = segments[1]
     assert isinstance(emit, Region)
     assert emit.source == SourceSpan(Path("body.tsl"), 10, 7, 12, 4)
+    assert emit.has_statement_terminator
 
     compose = next(segment for segment in emit.body if isinstance(segment, Region))
     assert compose.keyword == "intrin_compose"

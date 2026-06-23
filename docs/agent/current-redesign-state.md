@@ -1223,12 +1223,24 @@ renderer modules declare `ValueTestBackendSupport`, `ValueTestProjectPlan`
 stores backend profile plans generically, and `render_project(...)` is the
 current wiring point that maps C++/Rust profile render data into generic
 value-test planner inputs.
+
+A smaller TSIL source-boundary cleanup is also implemented: recognized TSIL
+regions in statement streams consume a following source `;`, record it on the
+region, and lowering renders one target terminator where needed. Nested
+expression payloads keep their punctuation ownership, `var<...>` templates do
+not gain duplicate `;;`, and `let<type>(...)` remains an elided alias
+statement. The primitive corpus under `tsldata/primitives` has also been
+normalized: all scanner-identified `let<type>` and `var<...>` statement
+regions now carry source semicolons, with a corpus guard test covering the
+accepted statement keyword families.
+
 Active prompt:
-docs/agent/runs/tslc-value-test-backend-capability-review-prompt.md
+docs/agent/runs/tslc-tsil-statement-terminator-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
 boundary review prompt:
+docs/agent/runs/tslc-value-test-backend-capability-review-prompt.md
 docs/agent/runs/tslc-lane-list-set-migration-review-prompt.md
 docs/agent/runs/tslc-value-test-cleanup-review-prompt.md
 docs/agent/runs/tslc-value-test-plan-boundary-review-prompt.md
@@ -1236,14 +1248,30 @@ docs/agent/runs/tslc-support-policy-capability-review-prompt.md
 docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md
 docs/agent/runs/tslc-typed-render-values-review-prompt.md
 
-Next expected action: review the completed value-test backend capability cleanup
-prompt above. Confirm value-test semantic patterns are backend-agnostic and
-current C++/Rust value-test coverage remains intact.
+Next expected action: review the completed TSIL statement terminator cleanup
+prompt above. Confirm semicolon ownership stays lexical, nested expression
+regions are unaffected, and generated C++/Rust bodies keep exactly one required
+statement terminator. The post-cleanup refinement removed central
+keyword-exception sets from `lowerer.py`; the renderer now appends the default
+target `;`, while `VarLowerer` and `LetLowerer` own their keyword-specific
+statement finalization.
 ```
 
 Verification status (2026-06-23):
 
 ```text
+- TSIL statement terminator cleanup:
+  `python -m pytest -q tslc/tests/test_tsil_statement_terminators.py tslc/tests/test_tsil_scan.py tslc/tests/test_select_and_lower.py tslc/tests/test_lane_lists.py`
+  passed with 36 tests;
+  `python -m compileall -q tslc/src/tslc tslc/tests` passed;
+  `python -m pytest -q tslc/tests/test_build_verify.py::test_set_builds tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds`
+  passed with 2 tests;
+  `python -m pytest -q tslc/tests --ignore=tslc/tests/test_build_verify.py`
+  passed with 163 tests;
+  `git diff --check` passed;
+  `./verify.sh` passed all targeted validations, including 163 non-build tests,
+  53 generated-build tests, and the architectural grep guards.
+
 - Value-test planning boundary pass plus cleanup:
   `python -m compileall -q tslc/src/tslc tslc/tests` passed;
   `python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py tslc/tests/test_select_and_lower.py tslc/tests/test_masks_and_calls.py tslc/tests/test_generation_conditionals.py`

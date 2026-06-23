@@ -3954,6 +3954,10 @@ required by the current C++/Rust support assets, but they receive that need as
 lowered capability data (`uses_sized_vector`, lane parameter, target facts)
 rather than inferring it from a source extension name.
 
+Backend-specific syntax limits remain backend dialect capabilities. For example,
+lowering asks whether the backend can spell symbolic sized-vector lane
+expressions instead of branching on a backend id.
+
 Consequences:
 
 - Adding or renaming source extensions should not require new behavior checks
@@ -3962,6 +3966,8 @@ Consequences:
 - `SupportPolicy` stays small and import-light; catalog scans live in the
   adjacent view module and can grow or split independently when catalog
   selection rules become richer.
+- Lowering should not branch on backend ids for behavior; it should ask the
+  selected backend dialect for explicit capabilities.
 - Current deferred cases remain explicit: sized-vector variadic fallback loops,
   sized-vector extension-dimension representation changes, masked
   gather/scatter forms, masked scalar reductions, unsupported extension
@@ -4115,3 +4121,61 @@ Consequences:
   branch inside the generic golden pattern.
 - `ValueTestProjectPlan` stores backend profile plans generically and callers
   select plans by backend ID when assembling artifacts.
+
+## ADR-081: TSIL Source Semicolons Are Statement Terminators
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+TSIL bodies mix target-like raw text with recognized keyword regions. Before
+this decision, a source semicolon after a recognized region leaked through as
+raw text. That accidentally worked for `emit_return(...)` because the backend
+`emit_return` template does not include `;`, but it produced duplicate
+terminators for forms whose templates already own their target statement
+syntax, such as `var<infer>(...)`.
+
+Expression regions such as `call(...)`, `intrin(...)`, `cast(...)`,
+`type(...)`, `value(...)`, and `lanes<at>(...)` can also appear as complete
+statements. In that position the source `;` belongs to the surrounding TSIL
+statement, not to the expression atom itself.
+
+Decision:
+
+The shared TSIL scanner treats top-level body streams and brace-block bodies as
+statement streams. If a recognized region in a statement stream is followed by
+a source `;` (allowing whitespace), the scanner consumes that terminator and
+records it on the `Region`. Nested keyword payloads are scanned as expression
+streams, so punctuation inside argument lists remains owned by the surrounding
+expression.
+
+Lowering renders a consumed statement terminator exactly once. The expression
+renderer owns the default rule for ordinary non-block regions: append one target
+`;`. A keyword lowerer may override finalization when the keyword owns a
+different target statement shape:
+
+- `var<...>` does not get an extra terminator because current backend
+  declaration templates already include one; `VarLowerer` returns its rendered
+  declaration unchanged when the source terminator was consumed.
+- `let<type>(...)` consumes the source terminator but still renders no target
+  statement because type aliases are currently substituted; `LetLowerer`
+  returns its rendered alias binding unchanged.
+- Other terminated non-block regions append a target `;` after their lowered
+  expression or statement text.
+- Block constructs such as `if`, `loop<range>`, and `switch<compile>` do not
+  gain a target semicolon.
+
+Consequences:
+
+- Authored source semicolons no longer leak as raw text after recognized TSIL
+  regions.
+- `emit_return(expr);`, expression statements like `intrin<...>(...);`, and
+  side-effect helpers like `mem<copy>(...);` still render one target statement
+  terminator.
+- `var<...>(...);` no longer renders `;;`.
+- Primitive TSIL source under `tsldata/primitives` should spell statement
+  regions with source semicolons. A corpus guard test enforces this for the
+  accepted statement keyword families.
+- This remains a lexical source-body boundary, not a full TSIL statement or
+  expression parser. Raw target-like statements keep their raw semicolons, and
+  expression-region punctuation inside nested payloads is not reinterpreted.

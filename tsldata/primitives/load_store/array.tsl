@@ -34,7 +34,7 @@ prim<s[]:=v> to_array(a):
           ui64 [avx512f]
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
@@ -42,7 +42,7 @@ prim<s[]:=v> to_array(a):
         requires [avx512f]
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
@@ -51,7 +51,7 @@ prim<s[]:=v> to_array(a):
         requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx], ui32 [avx], si64 [avx], ui64 [avx]}
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
@@ -59,7 +59,7 @@ prim<s[]:=v> to_array(a):
         requires [avx]
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
@@ -68,7 +68,7 @@ prim<s[]:=v> to_array(a):
         requires [sse, sse2]
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
@@ -76,7 +76,7 @@ prim<s[]:=v> to_array(a):
         requires {f32 [sse], f64 [sse, sse2]}
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
@@ -85,7 +85,7 @@ prim<s[]:=v> to_array(a):
         requires [neon]
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
@@ -93,7 +93,7 @@ prim<s[]:=v> to_array(a):
         requires [neon]
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array))
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
                emit_return(tmp) ;
             """
@@ -102,7 +102,7 @@ prim<s[]:=v> to_array(a):
         requires [sve]
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, tmp, value<backend>(uninit::array)) 
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, tmp, value<backend>(uninit::array));
               svbool_t pg = intrin<svptrue_b8>();
               if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 2) { pg = intrin<svptrue_b16>(); }
               else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 4) { pg = intrin<svptrue_b32>(); }
@@ -122,7 +122,7 @@ prim<s[]:=v> to_array(a):
         requires []
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, temp, value<backend>(uninit::array)) 
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, temp, value<backend>(uninit::array));
               temp.fill(a);
                emit_return(temp) ;
             """
@@ -130,7 +130,7 @@ prim<s[]:=v> to_array(a):
         requires []
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, temp, value<backend>(uninit::array)) 
+               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, temp, value<backend>(uninit::array));
               temp.fill(a);
                emit_return(temp) ;
             """
@@ -196,7 +196,7 @@ prim<s:=v[idx]> extract_value(a):
         requires [avx512f]
         implementation:
           tsil """
-               var<const_infer>(arr, call<primitive=to_array[Vec]>(a)) 
+               var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
                emit_return(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
             """
     avx2:
@@ -204,7 +204,7 @@ prim<s:=v[idx]> extract_value(a):
         requires [avx]
         implementation:
           tsil """
-               var<const_infer>(arr, call<primitive=to_array[Vec]>(a)) 
+               var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
                emit_return(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
             """
     sse:
@@ -212,7 +212,7 @@ prim<s:=v[idx]> extract_value(a):
         requires [sse]
         implementation:
           tsil """
-               var<const_infer>(arr, call<primitive=to_array[Vec]>(a)) 
+               var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
                emit_return(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
             """
     neon:
@@ -225,7 +225,7 @@ prim<s:=v[idx]> extract_value(a):
         requires [sve]
         implementation:
           tsil """
-               var<const_infer>(arr, call<primitive=to_array[Vec]>(a))
+               var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
                emit_return(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
             """
     [generic, oneAPIfpga]:

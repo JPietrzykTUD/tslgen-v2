@@ -35,8 +35,8 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-            var<const_infer>(values, call<primitive=to_array[Vec]>(data))
-            loop<unroll>(value<generation>(vector::length)) 
+            var<const_infer>(values, call<primitive=to_array[Vec]>(data));
+            loop<unroll>(value<generation>(vector::length))
             loop<range>(idx, 0, value<generation>(vector::length), 1)  {
               *ptr_add_mut(ptr, idx) = values[idx];
             }
@@ -175,10 +175,10 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               *cast<reinterpret>(type<generation>(vector::imask) *, ptr) = imask;
             } else<generation> {
-              let<type>(MaskWord, type<generation>(vector::mask_underlying_t))
+              let<type>(MaskWord, type<generation>(vector::mask_underlying_t));
               if (mask) {
                 *ptr = cast<static>(MaskWord, cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF));
               } else {
@@ -194,10 +194,10 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
         implementation:
           tsil """
               if<generation>(value<generation>(primitive::attribute(packed))) {
-                var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+                var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
                 *cast<reinterpret>(type<generation>(vector::imask) *, ptr) = imask;
               } else<generation> {
-                let<type>(MaskWord, type<generation>(vector::mask_underlying_t))
+                let<type>(MaskWord, type<generation>(vector::mask_underlying_t));
                 const MaskWord one_bits = cast<static>(
                   MaskWord,
                   cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)
@@ -233,11 +233,11 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               *cast<reinterpret>(type<generation>(vector::imask) *, ptr) = imask;
             } else<generation> {
-              let<type>(MaskVec, type<generation>(vector::transform(type<generation>(vector::mask_underlying_t))))
-              var<const_infer>(mask_vec, call<primitive=reinterpret[Vec, MaskVec]>(mask))
+              let<type>(MaskVec, type<generation>(vector::transform(type<generation>(vector::mask_underlying_t))));
+              var<const_infer>(mask_vec, call<primitive=reinterpret[Vec, MaskVec]>(mask));
               call<primitive=store[MaskVec] attrs[aligned=value<generation>(primitive::attribute(aligned))]>(ptr, mask_vec);
             }
           """
@@ -247,9 +247,9 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
-              var<const_infer>(lanes, value<generation>(vector::length))
-              var<const_infer>(nbytes, ((lanes + 7) >> 3))
-              var<const_infer>(bytes, cast<reinterpret>(type<backend>(scalar::ui8) *, ptr))
+              var<const_infer>(lanes, value<generation>(vector::length));
+              var<const_infer>(nbytes, ((lanes + 7) >> 3));
+              var<const_infer>(bytes, cast<reinterpret>(type<backend>(scalar::ui8) *, ptr));
 
               loop<range>(i, 0, nbytes, 1) {
                 *ptr_add_mut(bytes, i) = cast<static>(type<backend>(scalar::ui8), 0);
@@ -263,7 +263,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
                 }
               }
             } else<generation> {
-              let<type>(MaskWord, type<generation>(vector::mask_underlying_t))
+              let<type>(MaskWord, type<generation>(vector::mask_underlying_t));
               const MaskWord one_bits = cast<static>(
                 MaskWord,
                 cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)
@@ -397,7 +397,7 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
               data
             );
           """
-      f?: 
+      f?:
         requires [avx512f]
         implementation:
           tsil """

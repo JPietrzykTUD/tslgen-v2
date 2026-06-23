@@ -27,7 +27,7 @@ from tslc.lower.region_handlers.lanes import LanesLowerer
 from tslc.lower.region_handlers.masks import MaskLowerer
 from tslc.lower.region_handlers.memory import MemLowerer
 from tslc.lower.region_handlers.operators import OpLowerer
-from tslc.lower.region_handlers.protocol import RegionLowerer, RenderBody
+from tslc.lower.region_handlers.protocol import RegionLowerer, RenderBody, StatementFinalizer
 from tslc.lower.region_handlers.queries import QueryRegionLowerer
 from tslc.lower.region_handlers.registry import DEFAULT_REGION_LOWERERS
 from tslc.lower.region_handlers.returns import EmitReturnLowerer
@@ -52,6 +52,7 @@ __all__ = [
     "QueryRegionLowerer",
     "RegionLowerer",
     "RenderBody",
+    "StatementFinalizer",
     "SwitchLowerer",
     "VarLowerer",
     "_segment_text",

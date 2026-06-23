@@ -29,6 +29,10 @@ class VarLowerer:
 
     keyword = "var"
 
+    def finish_statement(self, rendered: RenderText, region: Region) -> RenderField:
+        del region
+        return rendered
+
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
@@ -125,6 +129,10 @@ class LetLowerer:
 
     def __init__(self, evaluator: QueryEvaluator | None = None) -> None:
         self._evaluator = evaluator or QueryEvaluator()
+
+    def finish_statement(self, rendered: RenderText, region: Region) -> RenderField:
+        del region
+        return rendered
 
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody

@@ -248,6 +248,7 @@ class _RustSyntax:
 class RustBackendDialect:
     catalog: Catalog
     backend_id: str = field(default="rust", init=False)
+    supports_sized_vector_lane_expressions: bool = field(default=False, init=False)
     types: _RustTypes = field(init=False)
     intrinsics: _RustIntrinsics = field(init=False)
     templates: _RustTemplates = field(init=False)

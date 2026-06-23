@@ -100,8 +100,8 @@ prim<v:=s> set1(value):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, result_arr, value<backend>(uninit::array))
-              loop<unroll>(value<generation>(vector::length)) 
+              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, result_arr, value<backend>(uninit::array));
+              loop<unroll>(value<generation>(vector::length))
               loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 result_arr[i] = value;
               }
@@ -138,8 +138,8 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
         requires [avx512f]
         implementation:
           tsil """
-               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask)) 
-               var<infer>(values, call<primitive=to_array[Vec]>(data)) 
+               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
+               var<infer>(values, call<primitive=to_array[Vec]>(data));
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 if (((imask >> i) & 1) != 0) {
                   values[i] = scalar;
@@ -152,8 +152,8 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
         requires [avx2]
         implementation:
           tsil """
-               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask)) 
-               var<infer>(values, call<primitive=to_array[Vec]>(data)) 
+               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
+               var<infer>(values, call<primitive=to_array[Vec]>(data));
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 if (((imask >> i) & 1) != 0) {
                   values[i] = scalar;
@@ -166,8 +166,8 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
         requires [sse2]
         implementation:
           tsil """
-               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask)) 
-               var<infer>(values, call<primitive=to_array[Vec]>(data)) 
+               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
+               var<infer>(values, call<primitive=to_array[Vec]>(data));
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 if (((imask >> i) & 1) != 0) {
                   values[i] = scalar;
@@ -208,7 +208,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              var<init_register>(result)
+              var<init_register>(result);
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = data[i];
                 if (mask<test>(mask, i)) {
@@ -263,7 +263,7 @@ prim<v:=()>[value=zero] set_zero():
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-            var<init_register>(result_arr)
+            var<init_register>(result_arr);
             emit_return(result_arr);
           """
     [avx512, avx2, sse]:
@@ -271,7 +271,7 @@ prim<v:=()>[value=zero] set_zero():
         requires:
           avx512 [avx512f]
           avx2 [avx]
-          sse [sse, sse2]    
+          sse [sse, sse2]
         implementation:
           tsil """
               emit_return(
@@ -296,7 +296,7 @@ prim<v:=()>[value=zero] set_zero():
         requires [sve]
         implementation:
           tsil """
-            var<const_infer>(undef, call<primitive=set_undef[Vec]>())
+            var<const_infer>(undef, call<primitive=set_undef[Vec]>());
             emit_return(
               call<primitive=binary_xor>(undef, undef)
             );
@@ -306,7 +306,7 @@ prim<v:=()>[value=zero] set_zero():
         requires [neon]
         implementation:
           tsil """
-            var<const_infer>(undef, call<primitive=set_undef[Vec]>())
+            var<const_infer>(undef, call<primitive=set_undef[Vec]>());
             emit_return(
               call<primitive=binary_xor>(undef, undef)
             );
@@ -321,7 +321,7 @@ prim<v:=()>[value=undef] set_undef():
         requires []
         implementation:
           tsil """
-              var<typed>(type<generation>(base::in), result, value<backend>(uninit::scalar))
+              var<typed>(type<generation>(base::in), result, value<backend>(uninit::scalar));
               emit_return(result);
             """
     [generic, oneAPIfpga]:
@@ -331,7 +331,7 @@ prim<v:=()>[value=undef] set_undef():
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, result, value<backend>(uninit::array))
+              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, result, value<backend>(uninit::array));
               emit_return(result);
             """
     avx512:
@@ -375,7 +375,7 @@ prim<v:=()>[value=undef] set_undef():
         requires [neon]
         implementation:
           tsil """
-              let<type>(Value, type<generation>(vector::register)) 
+              let<type>(Value, type<generation>(vector::register));
               Value value;
               emit_return(value);
             """
@@ -501,8 +501,8 @@ prim<v:=(lanes<s>)> set(values):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-               var<const_infer>(zero, call<primitive=set_zero[Vec]>())
-               var<infer>(data, call<primitive=to_array[Vec]>(zero))
+               var<const_infer>(zero, call<primitive=set_zero[Vec]>());
+               var<infer>(data, call<primitive=to_array[Vec]>(zero));
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 data[i] = cast<static>(type<generation>(base::in), values[value<generation>(vector::length) - 1 - i]);
               }

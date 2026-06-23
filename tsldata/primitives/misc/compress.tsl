@@ -55,7 +55,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           avx2_vl [avx512_vbmi2, avx512f, avx512vl, avx]
         implementation:
           tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
                 intrin_compose<maskz_compress, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                   cast<static>(ui32, imask),
@@ -69,7 +69,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           avx2_vl [avx512_vbmi2, avx512f, avx512vl, avx]
         implementation:
           tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
                 intrin_compose<maskz_compress, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                   cast<static>(ui16, imask),
@@ -83,7 +83,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           avx2_vl [avx512f, avx512vl, avx]
         implementation:
           tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
                 intrin_compose<maskz_compress, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                   cast<static>(ui8, imask),
@@ -97,7 +97,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           avx2_vl [avx512f, avx512vl, avx]
         implementation:
           tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
                 intrin_compose<maskz_compress>(
                   cast<static>(ui8, imask),
@@ -112,7 +112,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           sse_vl [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
                 intrin_compose<maskz_compress, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                   cast<static>(ui16, imask),
@@ -126,7 +126,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           sse_vl [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
                 intrin_compose<maskz_compress, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                   cast<static>(ui8, imask),
@@ -140,7 +140,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
                 intrin_compose<maskz_compress, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
                   cast<static>(ui8, imask),
@@ -156,7 +156,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask))
+              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               emit_return(
                 intrin_compose<maskz_compress>(
                   cast<static>(ui8, imask),
@@ -169,22 +169,22 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
         requires [sve]
         implementation:
           tsil """
-              let<type>(IndexBase, type<generation>(base::unsigned_of(type<generation>(base::in))))
-              let<type>(IndexVec, type<generation>(vector::as_base(IndexBase)))
-              var<const_infer>(packed, intrin_compose<svcompact>(mask, data))
-              var<const_infer>(active_count, call<primitive=mask_population_count[Vec]>(mask))
-              var<const_infer>(indices, call<primitive=sequence[IndexVec]>())
-              var<const_infer>(limit, call<primitive=set1[IndexVec]>(cast<static>(IndexBase, active_count)))
-              var<const_infer>(keep_mask, call<primitive=less_than[IndexVec]>(indices, limit))
+              let<type>(IndexBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(IndexVec, type<generation>(vector::as_base(IndexBase)));
+              var<const_infer>(packed, intrin_compose<svcompact>(mask, data));
+              var<const_infer>(active_count, call<primitive=mask_population_count[Vec]>(mask));
+              var<const_infer>(indices, call<primitive=sequence[IndexVec]>());
+              var<const_infer>(limit, call<primitive=set1[IndexVec]>(cast<static>(IndexBase, active_count)));
+              var<const_infer>(keep_mask, call<primitive=less_than[IndexVec]>(indices, limit));
               emit_return(call<primitive=mov attrs[mask=zero]>(keep_mask, packed));
             """
       [?i8, ?i16]:
         requires [sve]
         implementation:
           tsil """
-              var<const_infer>(values, call<primitive=to_array[Vec]>(data))
-              var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-              var<infer>(out_idx, 0)
+              var<const_infer>(values, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+              var<infer>(out_idx, 0);
               loop<unroll>(value<generation>(vector::length))
               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if (mask<test>(mask, i)) {
@@ -204,9 +204,9 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              var<const_infer>(values, call<primitive=to_array[Vec]>(data))
-              var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-              var<infer>(out_idx, 0)
+              var<const_infer>(values, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+              var<infer>(out_idx, 0);
               loop<unroll>(value<generation>(vector::length))
               loop<range>(i, 0, value<generation>(vector::length), 1) {
                 if (mask<test>(mask, i)) {

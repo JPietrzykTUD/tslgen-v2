@@ -36,8 +36,8 @@ prim<m:=(v,v)> equal(left, right):
         requires []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            var<typed>(MaskT, result, mask<zero>())
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<unroll>(value<generation>(vector::length))
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] == right[i]) {
@@ -51,7 +51,7 @@ prim<m:=(v,v)> equal(left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
@@ -133,13 +133,13 @@ prim<m:=(v,v)> equal(left, right):
             emit_return(
               intrin_compose<cmpeq>(left, right)
             );
-          """    
+          """
     neon:
       arith:
         requires [neon]
         implementation:
           tsil """
-            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))))
+            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
             emit_return(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
                 intrin_compose<vceqq>(left, right)
@@ -195,8 +195,8 @@ prim<m:=(v,v)> nequal(left, right):
         requires []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            var<typed>(MaskT, result, mask<zero>())
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<unroll>(value<generation>(vector::length))
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] != right[i]) {
@@ -210,7 +210,7 @@ prim<m:=(v,v)> nequal(left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
@@ -347,8 +347,8 @@ prim<m:=(v,v)> less_than(left, right):
         requires []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            var<typed>(MaskT, result, mask<zero>())
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<unroll>(value<generation>(vector::length))
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] < right[i]) {
@@ -362,7 +362,7 @@ prim<m:=(v,v)> less_than(left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
@@ -418,7 +418,7 @@ prim<m:=(v,v)> less_than(left, right):
         requires [avx2]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)))
+            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
             if<generation>(type::is_same(type<generation>(base::in), ui8)) {
               sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
             } else<generation> {
@@ -462,7 +462,7 @@ prim<m:=(v,v)> less_than(left, right):
           ui64              [sse2, sse4_2]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)))
+            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
             if<generation>(type::is_same(type<generation>(base::in), ui8)) {
               sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
             } else<generation> {
@@ -488,7 +488,7 @@ prim<m:=(v,v)> less_than(left, right):
         requires [neon]
         implementation:
           tsil """
-            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))))
+            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
             emit_return(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
                 intrin_compose<vcltq>(left, right)
@@ -542,8 +542,8 @@ prim<m:=(v,v)> greater_than(left, right):
         requires []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            var<typed>(MaskT, result, mask<zero>())
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<unroll>(value<generation>(vector::length))
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] > right[i]) {
@@ -557,7 +557,7 @@ prim<m:=(v,v)> greater_than(left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
@@ -613,7 +613,7 @@ prim<m:=(v,v)> greater_than(left, right):
         requires [avx2]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)))
+            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
             if<generation>(type::is_same(type<generation>(base::in), ui8)) {
               sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
             } else<generation> {
@@ -657,7 +657,7 @@ prim<m:=(v,v)> greater_than(left, right):
           ui64              [sse2, sse4_2]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)))
+            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
             if<generation>(type::is_same(type<generation>(base::in), ui8)) {
               sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
             } else<generation> {
@@ -683,7 +683,7 @@ prim<m:=(v,v)> greater_than(left, right):
         requires [neon]
         implementation:
           tsil """
-            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))))
+            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
             emit_return(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
                 intrin_compose<vcgtq>(left, right)
@@ -737,8 +737,8 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         requires []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            var<typed>(MaskT, result, mask<zero>())
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<unroll>(value<generation>(vector::length))
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] <= right[i]) {
@@ -752,7 +752,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
@@ -849,7 +849,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         requires [neon]
         implementation:
           tsil """
-            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))))
+            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
             emit_return(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
                 intrin_compose<vcleq>(left, right)
@@ -903,8 +903,8 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         requires []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            var<typed>(MaskT, result, mask<zero>())
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<unroll>(value<generation>(vector::length))
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] >= right[i]) {
@@ -918,7 +918,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
@@ -956,7 +956,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
             emit_return(
               intrin_compose<cmp, post=mask>(left, right, _CMP_GE_OQ)
             );
-          """   
+          """
     avx2:
       ?i?:
         requires [avx2]
@@ -1015,7 +1015,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         requires [neon]
         implementation:
           tsil """
-            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))))
+            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
             emit_return(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
                 intrin_compose<vcgeq>(left, right)
@@ -1061,12 +1061,12 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         requires []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            var<typed>(MaskT, result, mask<zero>())
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<unroll>(value<generation>(vector::length))
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (
-                (left[i] == right[i]) && 
+                (left[i] == right[i]) &&
                 (mask<test>(mask, i))
               ) {
                 mask<set:1>(result, i);
@@ -1079,7 +1079,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
@@ -1137,7 +1137,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           tsil """
             emit_return(
               call<primitive=mask_binary_and>(
-                mask, 
+                mask,
                 call<primitive=equal>(left, right)
               )
             );
@@ -1148,7 +1148,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           tsil """
             emit_return(
               call<primitive=mask_binary_and>(
-                mask, 
+                mask,
                 call<primitive=equal>(left, right)
               )
             );
@@ -1162,7 +1162,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           tsil """
             emit_return(
               call<primitive=mask_binary_and>(
-                mask, 
+                mask,
                 call<primitive=equal>(left, right)
               )
             );
@@ -1175,11 +1175,11 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           tsil """
             emit_return(
               call<primitive=mask_binary_and>(
-                mask, 
+                mask,
                 call<primitive=equal>(left, right)
               )
             );
-          """    
+          """
     neon:
       arith:
         requires [neon]
@@ -1187,7 +1187,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           tsil """
             emit_return(
               call<primitive=mask_binary_and>(
-                mask, 
+                mask,
                 call<primitive=equal>(left, right)
               )
             );
@@ -1231,8 +1231,8 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         requires []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            var<typed>(MaskT, result, mask<zero>())
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<unroll>(value<generation>(vector::length))
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (
@@ -1249,7 +1249,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
@@ -1401,8 +1401,8 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         requires []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            var<typed>(MaskT, result, mask<zero>())
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<unroll>(value<generation>(vector::length))
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (
@@ -1419,7 +1419,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
@@ -1571,8 +1571,8 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         requires []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            var<typed>(MaskT, result, mask<zero>())
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<unroll>(value<generation>(vector::length))
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (
@@ -1589,7 +1589,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
@@ -1741,8 +1741,8 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         requires []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            var<typed>(MaskT, result, mask<zero>())
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<unroll>(value<generation>(vector::length))
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (
@@ -1759,7 +1759,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
@@ -1911,8 +1911,8 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         requires []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            var<typed>(MaskT, result, mask<zero>())
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<unroll>(value<generation>(vector::length))
             loop<range>(i, 0, value<generation>(vector::length), 1) {
               if (
@@ -1929,7 +1929,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));

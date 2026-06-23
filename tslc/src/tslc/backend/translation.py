@@ -86,6 +86,7 @@ class BackendSyntaxDialect(Protocol):
 
 class BackendDialect(Protocol):
     backend_id: str
+    supports_sized_vector_lane_expressions: bool
     types: BackendTypeDialect
     intrinsics: BackendIntrinsicDialect
     templates: BackendTemplateDialect

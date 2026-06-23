@@ -202,6 +202,7 @@ class _CppSyntax:
 class CppBackendDialect:
     catalog: Catalog
     backend_id: str = field(default="cpp", init=False)
+    supports_sized_vector_lane_expressions: bool = field(default=True, init=False)
     types: _CppTypes = field(init=False)
     intrinsics: _CppIntrinsics = field(init=False)
     templates: _CppTemplates = field(init=False)

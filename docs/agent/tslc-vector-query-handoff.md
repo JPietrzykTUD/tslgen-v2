@@ -809,6 +809,79 @@ git diff --check
 
 Result: passed.
 
+```bash
+./verify.sh
+```
+
+Result: passed all targeted validations, including 163 non-build tests, 53
+generated-build tests, and the architectural grep guards.
+
+### TSIL Statement Terminator Slice
+
+The scanner now owns source-level semicolons after recognized TSIL regions in
+statement streams. This keeps authored statement terminators from leaking into
+raw text and avoids duplicate `;;` when a lowerer/template already owns target
+statement syntax.
+
+Implemented pieces:
+
+1. `Region` carries `has_statement_terminator` when the scanner consumes a
+   following source `;`.
+2. Top-level body streams and brace-block bodies scan in statement context;
+   nested keyword argument payloads scan in expression context.
+3. Lowering appends one target `;` by default for consumed non-block
+   statement/expression regions. Statement-specific exceptions are owned by the
+   keyword lowerers: `VarLowerer` keeps backend declaration templates unchanged,
+   and `LetLowerer` keeps substituted aliases as no target statement.
+4. Block forms such as `if`, `loop<range>`, and `switch<compile>` do not gain a
+   target semicolon.
+5. The primitive corpus under `tsldata/primitives` was normalized so all
+   scanner-identified `let<type>` and `var<...>` statement regions carry source
+   semicolons. The migration inserted 751 semicolons across 24 primitive files.
+
+Focused coverage:
+
+- `tslc/tests/test_tsil_scan.py` asserts source semicolons are consumed for
+  top-level regions and not claimed by nested expression atoms.
+- `tslc/tests/test_select_and_lower.py` asserts `let<type>(...);`,
+  `var<infer>(...);`, `intrin<...>(...);`, and `emit_return(...);` keep the
+  intended target statement spelling without duplicate or stray terminators.
+- `tslc/tests/test_tsil_statement_terminators.py` scans
+  `tsldata/primitives` and fails if an accepted statement keyword family is
+  missing its source terminator.
+
+Validation for this slice:
+
+```bash
+python -m pytest -q tslc/tests/test_tsil_statement_terminators.py tslc/tests/test_tsil_scan.py tslc/tests/test_select_and_lower.py tslc/tests/test_lane_lists.py
+```
+
+Result: `36 passed`.
+
+```bash
+python -m compileall -q tslc/src/tslc tslc/tests
+```
+
+Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_build_verify.py::test_set_builds tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds
+```
+
+Result: `2 passed`.
+
+```bash
+python -m pytest -q tslc/tests --ignore=tslc/tests/test_build_verify.py
+```
+
+Result: `163 passed`.
+
+```bash
+git diff --check
+```
+
+Result: passed.
+
 ## Value-Test Planning Boundary Slice
 
 On 2026-06-23 the generated value-test path was refactored so renderers no

@@ -7,7 +7,7 @@ import pytest
 from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.model import Catalog, Extension, Implementation, Primitive
 from tslc.lower.lowerer import Lowerer
-from tslc.select.selector import Selector
+from tslc.select.selector import SelectedImplementation, Selector
 
 _TYPES = ("si32", "ui32", "f32", "f64")
 
@@ -105,6 +105,59 @@ def test_lower_scalar_add_has_no_unsafe(catalog: Catalog, machine_profiles) -> N
     ).specialization
     assert rust.base_type_spelling == "i32"
     assert rust.body_text == "return left.tsl_add(right);"
+
+
+def test_consumed_tsil_statement_terminators_render_once() -> None:
+    ext = Extension(
+        name="scalar",
+        isa_name="scalar",
+        family="scalar",
+        compose_prefix={},
+        compose_suffix_by_type={},
+    )
+    impl = Implementation(
+        ("scalar", "ints"),
+        "scalar",
+        "ints",
+        (
+            "let<type>(Alias, type<generation>(base::in)); "
+            "var<infer>(tmp, a); intrin<side_effect>(tmp); emit_return(tmp);"
+        ),
+        source_order=0,
+    )
+    prim = Primitive(
+        name="semicolon_once",
+        signature="v:=v",
+        parameters=("a",),
+        attribute_keys=(),
+        implementations=(impl,),
+    )
+    catalog = Catalog(
+        primitives=(prim,),
+        type_groups={"ints": ("si32",)},
+        extensions={"scalar": ext},
+        type_spellings={"cpp": {"s32": "int32_t"}},
+        translations={
+            "cpp": {
+                "emit_return": "return {value}",
+                "var_infer": "auto {name} = {value};",
+            }
+        },
+    )
+    slot = SelectedImplementation(
+        primitive=prim,
+        implementation=impl,
+        extension=ext,
+        type_tag="si32",
+    )
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert cpp.body_text == "auto tmp = a; side_effect(tmp); return tmp;"
+    assert ";;" not in cpp.body_text
 
 
 def test_hadd_reduction_lowers_for_f64(catalog: Catalog, machine_profiles) -> None:

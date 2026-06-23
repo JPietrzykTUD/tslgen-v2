@@ -6,6 +6,11 @@ text (modifiers are parsed later by the lowerer) and its ``(...)`` argument
 payload is recursively scanned. Everything else is :class:`RawText` passed
 through verbatim. String literals are skipped so keywords inside them are not
 matched.
+
+When a region is found in a statement stream and the source immediately
+terminates that statement with ``;`` (allowing whitespace), the scanner consumes
+the terminator and records it on the region. Nested argument payloads are
+expression streams, so their punctuation stays owned by the surrounding source.
 """
 
 from __future__ import annotations
@@ -51,7 +56,7 @@ _IDENT_CONT = _IDENT_START | frozenset("0123456789")
 
 
 def scan(text: str, *, source: SourceSpan | None = None) -> tuple[Segment, ...]:
-    return tuple(_scan(text, source, text, 0))
+    return tuple(_scan(text, source, text, 0, statement_context=True))
 
 
 def _scan(
@@ -59,6 +64,8 @@ def _scan(
     source: SourceSpan | None,
     root_text: str,
     base_offset: int,
+    *,
+    statement_context: bool,
 ) -> list[Segment]:
     segments: list[Segment] = []
     n = len(text)
@@ -76,6 +83,21 @@ def _scan(
                     text, i, keyword, after, source, root_text, base_offset
                 )
                 if region is not None:
+                    terminated = False
+                    if statement_context:
+                        end, terminated = _consume_statement_terminator(text, end)
+                        if terminated:
+                            region = Region(
+                                keyword=region.keyword,
+                                selector_text=region.selector_text,
+                                body=region.body,
+                                full_text=region.full_text,
+                                source=region.source,
+                                has_statement_terminator=True,
+                                block=region.block,
+                                else_block=region.else_block,
+                                arms=region.arms,
+                            )
                     if raw_start < i:
                         segments.append(
                             RawText(
@@ -129,7 +151,15 @@ def _try_region(
     if close is None:
         return None, start
     body_text = text[pos + 1 : close]
-    body = tuple(_scan(body_text, source, root_text, base_offset + pos + 1))
+    body = tuple(
+        _scan(
+            body_text,
+            source,
+            root_text,
+            base_offset + pos + 1,
+            statement_context=False,
+        )
+    )
     if keyword == "if":
         # A block-bearing region: capture the `{ ... }` body (and any `else`) too.
         return _try_if_region(
@@ -198,7 +228,15 @@ def _try_if_region(
     close = _match_bracket(text, pos, "{", "}")
     if close is None:
         return None, start
-    then_block = tuple(_scan(text[pos + 1 : close], source, root_text, base_offset + pos + 1))
+    then_block = tuple(
+        _scan(
+            text[pos + 1 : close],
+            source,
+            root_text,
+            base_offset + pos + 1,
+            statement_context=True,
+        )
+    )
     end = close + 1
 
     else_block: tuple[Segment, ...] | None = None
@@ -243,7 +281,15 @@ def _try_loop_region(
         close = _match_bracket(text, pos, "{", "}")
         if close is None:
             return None, start
-        block = tuple(_scan(text[pos + 1 : close], source, root_text, base_offset + pos + 1))
+        block = tuple(
+            _scan(
+                text[pos + 1 : close],
+                source,
+                root_text,
+                base_offset + pos + 1,
+                statement_context=True,
+            )
+        )
         end = close + 1
     region = Region(
         keyword="loop",
@@ -328,6 +374,7 @@ def _scan_switch_arms(
                         source,
                         root_text,
                         base_offset + brace + 1,
+                        statement_context=True,
                     )
                 ),
             )
@@ -361,7 +408,15 @@ def _scan_else(
         if close is None:
             return None, pos
         return (
-            tuple(_scan(text[pos + 1 : close], source, root_text, base_offset + pos + 1)),
+            tuple(
+                _scan(
+                    text[pos + 1 : close],
+                    source,
+                    root_text,
+                    base_offset + pos + 1,
+                    statement_context=True,
+                )
+            ),
             close + 1,
         )
     if _matches_keyword(text, pos, "if"):
@@ -378,6 +433,13 @@ def _matches_keyword(text: str, index: int, keyword: str) -> bool:
         return False
     word, after = _read_ident(text, index)
     return word == keyword and after > index
+
+
+def _consume_statement_terminator(text: str, index: int) -> tuple[int, bool]:
+    pos = _skip_ws(text, index)
+    if pos < len(text) and text[pos] == ";":
+        return pos + 1, True
+    return index, False
 
 
 def _match_bracket(text: str, open_index: int, open_ch: str, close_ch: str) -> int | None:

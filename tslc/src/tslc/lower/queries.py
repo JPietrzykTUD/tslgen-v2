@@ -503,9 +503,9 @@ class WindowBaseQuery:
     SIZED generic vector the lane count scales by the byte ratio: i8->i16 turns ``generic<LANES>``
     into ``generic<(LANES * 8 / 16)>`` (half as many, twice as wide, same bits). This is the ONE
     place that scales a sized lane count; lane-PRESERVING base changes (``cast``/``reinterpret``,
-    same element count) use ``vector::as_base`` instead. Stable Rust can't spell a const-generic
-    expression in lane-count position, so a width-changing window is skipped there (the
-    ``unroll_variants`` monomorphization over a finite size set covers Rust later)."""
+    same element count) use ``vector::as_base`` instead. Backends that cannot spell a symbolic
+    lane-count expression skip the width-changing window here (the ``unroll_variants``
+    monomorphization over a finite size set can cover them later)."""
 
     head = "vector::window_base"
 
@@ -535,11 +535,11 @@ class WindowBaseQuery:
         )
         if lane_parameter == DEFAULT_SUPPORT_POLICY.size_parameter_name(extension):
             return _vector_value(to_base, context)  # same width: lane count unchanged
-        if context.env.backend.backend_id == "rust":
+        if not context.env.backend.supports_sized_vector_lane_expressions:
             context.effects.skip(
                 "TSL-LOWER-SIZED-WIDTH-CHANGE",
                 f"sized-vector windowing convert ({context.env.type_tag} -> {to_base}) needs a "
-                "const-generic expression unsupported on stable Rust; skipped pending unroll",
+                "lane-count expression unsupported by this backend; skipped pending unroll",
             )
             return _vector_value(to_base, context)  # benign placeholder; the spec is dropped
         return VectorValue(

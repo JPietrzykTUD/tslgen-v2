@@ -41,8 +41,8 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              var<infer>(result, call<primitive=to_array[Vec]>(left))
-              var<const_infer>(right_array, call<primitive=to_array[Vec]>(right))
+              var<infer>(result, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_array, call<primitive=to_array[Vec]>(right));
               loop<unroll>(value<generation>(vector::length))
               loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 if (mask<test>(mask, i)) {
@@ -145,7 +145,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
         requires [neon]
         implementation:
           tsil """
-              let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+              let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
               var<const_infer>(mask_v, call<primitive=to_vector>(mask));
               var<const_infer>(mask_u, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(mask_v));
               emit_return(intrin<vbslq_{{value<backend>(intrin::suffix)}}>(mask_u, right, left));
@@ -160,7 +160,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
                   mask, right, left
                 )
             );
-          """    
+          """
 prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
   brief_description "[Example: avx512 + si8]: Move packed 8-bit integers from \"a\" into \"dst\" using zeromask \"k\" (elements are zeroed out when the corresponding mask bit is not set)."
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
@@ -254,7 +254,7 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
                 )
               );
             """
-    
+
 prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
   brief_description "[Example: avx512 + si8]: Move packed 8-bit integers from \"a\" into \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := src[i+7:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
