@@ -298,6 +298,7 @@ class Lowerer:
                     gp.name for gp in selected.primitive.generic_params
                 ),
                 variadic_lanes=variadic_lanes,
+                concrete_lanes=selected.concrete_lanes,
             ),
             scope=scope,
             effects=LoweringEffects(),
@@ -364,7 +365,7 @@ class Lowerer:
             body=body,
             uses_sized_vector=self._support.uses_sized_vector(context.env.extension),
             lane_parameter=(
-                self._support.size_parameter_name(context.env.extension)
+                context.env.lane_symbol()
                 if self._support.uses_sized_vector(context.env.extension)
                 else None
             ),
@@ -537,16 +538,28 @@ def _resolve_target_vector(
         # A WINDOWING convert (`direction` attribute) keeps the total width constant, so its target
         # lane count scales by the byte ratio — matching the body's `window_base(ToBase)` output so
         # the declared target type equals the body's result. Lane-preserving repr-changes
-        # (cast/reinterpret, load_convert_up) keep plain `LANES`. (On Rust the body's window_base
-        # skips the spec, so the scaled const expression is only ever emitted for C++.)
+        # (cast/reinterpret, load_convert_up) keep plain `LANES`. When the slot is MONOMORPHIZED at
+        # a concrete lane count (`unroll_variants`), both spell a concrete integer instead — a
+        # windowing target then gets the scaled count (e.g. i8->i16 at 16 lanes -> 8), which stable
+        # Rust can spell (no const-generic expression). Otherwise the symbolic `LANES` form is kept
+        # (and a width-changing window then skips on Rust via the body query).
         windowing = "direction" in selected.primitive.attributes
-        lane_parameter = (
-            support.windowed_lane_parameter(
-                selected.extension, selected.type_tag, selected.to_target
+        if selected.concrete_lanes is not None:
+            lane_parameter = str(
+                support.windowed_lane_count(
+                    selected.type_tag, selected.to_target, selected.concrete_lanes
+                )
+                if windowing
+                else selected.concrete_lanes
             )
-            if windowing
-            else support.size_parameter_name(selected.extension)
-        )
+        else:
+            lane_parameter = (
+                support.windowed_lane_parameter(
+                    selected.extension, selected.type_tag, selected.to_target
+                )
+                if windowing
+                else support.size_parameter_name(selected.extension)
+            )
         return TargetVector(
             vector_spelling=backend.types.sized_vector_spelling(
                 to_base_spelling, lane_parameter

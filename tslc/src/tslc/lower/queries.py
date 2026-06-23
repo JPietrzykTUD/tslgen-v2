@@ -20,7 +20,7 @@ Design (so this grows by *vocabulary*, not by lengthening a function):
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -68,9 +68,16 @@ def _type_bits(base_tag: str) -> int:
 
 
 def _vector_value(base_tag: str, context: LoweringSession) -> VectorValue:
-    """A :class:`VectorValue` for ``base_tag`` in the *current* extension."""
+    """A :class:`VectorValue` for ``base_tag`` in the *current* extension.
 
-    return _vector_value_from_extension(base_tag, context.env.extension)
+    When the current sized vector is monomorphized at a concrete lane count (`unroll_variants`),
+    its lane parameter is that concrete integer rather than the symbolic ``LANES`` — so a
+    same-width re-base (`as_base`) under the current extension spells ``Generic<16>``."""
+
+    value = _vector_value_from_extension(base_tag, context.env.extension)
+    if value.uses_sized_vector:
+        return replace(value, lane_parameter=context.env.lane_symbol())
+    return value
 
 
 def _vector_value_for_extension(
@@ -120,7 +127,7 @@ def _sized_vector_value(
 ) -> VectorValue | None:
     lanes = DEFAULT_SUPPORT_POLICY.lane_count(context.env.extension, base_tag)
     if lanes is None:
-        lane_parameter = DEFAULT_SUPPORT_POLICY.size_parameter_name(context.env.extension)
+        lane_parameter = context.env.lane_symbol()
     else:
         lane_parameter = None
     return VectorValue(
@@ -355,9 +362,7 @@ class RegisterGenericQuery:
             uses_sized_vector = DEFAULT_SUPPORT_POLICY.uses_sized_vector(
                 context.env.extension
             )
-            lane_parameter = DEFAULT_SUPPORT_POLICY.size_parameter_name(
-                context.env.extension
-            )
+            lane_parameter = context.env.lane_symbol()
         elif isinstance(arg, VectorValue):
             base_tag, isa = arg.base_tag, arg.extension_isa
             uses_sized_vector = arg.uses_sized_vector
@@ -447,6 +452,10 @@ class VectorLengthQuery:
     head = "vector::length"
 
     def apply(self, args, context):  # noqa: ANN001
+        # A monomorphized sized slot has a concrete lane count; otherwise the symbolic `LANES`
+        # for the sized vector or the fixed `vector_bits / type_bits` for a fixed extension.
+        if context.env.concrete_lanes is not None:
+            return TextValue(str(context.env.concrete_lanes))
         return TextValue(
             DEFAULT_SUPPORT_POLICY.lane_expression(
                 context.env.extension, context.env.type_tag
@@ -507,6 +516,20 @@ class WindowBaseQuery:
         extension = context.env.extension
         if not DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
             return _vector_value(to_base, context)  # fixed/scalar: lane count derived from bits
+        # MONOMORPHIZED slot: the output count is a concrete integer (e.g. i8->i16 at 16 -> 8),
+        # which stable Rust CAN spell — so no skip; emitted on every backend.
+        if context.env.concrete_lanes is not None:
+            return VectorValue(
+                base_tag=to_base,
+                extension_isa=extension.isa_name,
+                lanes=None,
+                uses_sized_vector=True,
+                lane_parameter=str(
+                    DEFAULT_SUPPORT_POLICY.windowed_lane_count(
+                        context.env.type_tag, to_base, context.env.concrete_lanes
+                    )
+                ),
+            )
         lane_parameter = DEFAULT_SUPPORT_POLICY.windowed_lane_parameter(
             extension, context.env.type_tag, to_base
         )

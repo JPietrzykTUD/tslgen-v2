@@ -151,8 +151,17 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
         varying = varying_positions(specs)
         for spec in specs:
             if spec.uses_sized_vector:
-                vec = f"tsl::simd<{spec.base_type_spelling}, tsl::generic<8>>"
+                # A MONOMORPHIZED sized slot (numeric `lane_parameter`) only has that one concrete
+                # instantiation — instantiate it there; a `LANES`-parametric slot is exercised at a
+                # representative count of 8.
+                smoke_lanes = (
+                    int(spec.lane_parameter)
+                    if spec.lane_parameter and spec.lane_parameter.isdigit()
+                    else 8
+                )
+                vec = f"tsl::simd<{spec.base_type_spelling}, tsl::generic<{smoke_lanes}>>"
             else:
+                smoke_lanes = 8
                 vec = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
             # A sized-vector representation-change target is instantiated at a concrete lane count
             # matching the source's. A lane-PRESERVING target (cast/reinterpret, load_convert_up)
@@ -164,10 +173,10 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
             elif spec.target.uses_sized_vector:
                 target_lanes = (
                     DEFAULT_SUPPORT_POLICY.windowed_lane_count(
-                        spec.type_tag, spec.target.base_tag, 8
+                        spec.type_tag, spec.target.base_tag, smoke_lanes
                     )
                     if spec.target.windowed
-                    else 8
+                    else smoke_lanes
                 )
                 target_spelling = (
                     f"tsl::simd<{spec.target.base_spelling}, tsl::generic<{target_lanes}>>"

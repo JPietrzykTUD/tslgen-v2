@@ -184,6 +184,7 @@ def _implementations_from_entries(
     extension_names: frozenset[str],
     target_name: str | None = None,
     inherited: tuple[RequirementClause, ...] = (),
+    inherited_unroll: bool | None = None,
 ) -> list[Implementation]:
     implementations: list[Implementation] = []
     for entry in entries:
@@ -191,6 +192,12 @@ def _implementations_from_entries(
         # a nested level (`avx512: ?i?: ToExtension: sse:`) inherits the `[avx512f]` declared at
         # `?i?`, so a deeper body is still gated by the outer feature requirement.
         requirements = inherited + _requirements(entry.requires, extension_names)
+        # An `unroll_variants` declared at this selector level applies to its bodies and is
+        # inherited by deeper levels (so one declaration covers a whole nested impl tree); an
+        # absent value keeps the ancestor's (ultimately None = inherit the extension default).
+        unroll = _entry_unroll_variants(entry)
+        if unroll is None:
+            unroll = inherited_unroll
         for envelope in entry.body_envelopes:
             head = envelope.selector_path[0] if envelope.selector_path else ""
             type_group, to_target_group = _split_target_selector(
@@ -210,6 +217,7 @@ def _implementations_from_entries(
                         requirements=requirements,
                         source_order=envelope.source_order,
                         to_target_group=to_target_group,
+                        unroll_variants=unroll,
                         source=_source_span(envelope.envelope_source),
                         selector_source=_source_span(entry.source),
                         body_source=_source_span(envelope.payload_source),
@@ -217,10 +225,22 @@ def _implementations_from_entries(
                 )
         implementations.extend(
             _implementations_from_entries(
-                entry.children, extension_names, target_name, requirements
+                entry.children, extension_names, target_name, requirements, unroll
             )
         )
     return implementations
+
+
+def _entry_unroll_variants(
+    entry: ParsedImplementationSelectorEntry,
+) -> bool | None:
+    """The `unroll_variants true|false` declared directly on an impl-selector entry, or None
+    when absent (inherit the ancestor/extension default)."""
+
+    for field in entry.fields:
+        if field.key.text == "unroll_variants":
+            return (_field_text(field) or "").lower() == "true"
+    return None
 
 
 def _split_target_selector(

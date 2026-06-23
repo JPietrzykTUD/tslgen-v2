@@ -91,12 +91,12 @@ class CppBackend:
         # and an `sImm` immediate (both unbound, so they appear in the head AND the key);
         # concrete axis values are bound literals (key only).
         free: list[str] = []
-        if first.uses_sized_vector:
-            lane_parameter = first.lane_parameter
-            vec = _vector_type(first)
-            free.append(f"std::size_t {lane_parameter}")
-        else:
-            vec = _vector_type(first)
+        vec = _vector_type(first)
+        # A monomorphized slot (numeric `lane_parameter`) is a full specialization over a concrete
+        # `generic<16>`, so it adds no lane template parameter; a `LANES`-parametric sized vector
+        # adds the unbound lane param to the (partial-specialization) head.
+        if first.uses_sized_vector and not first.lane_parameter.isdigit():
+            free.append(f"std::size_t {first.lane_parameter}")
         if first.immediate is not None:
             free.append(f"{first.immediate[1]} {first.immediate[0]}")
         # Free SIMD type params are unbound in the (partial) specialization — head AND key.

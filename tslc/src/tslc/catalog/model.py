@@ -67,6 +67,12 @@ class Implementation:
     # branch below it (the target type-group `?i?` / a target extension name `sse`). The
     # source type-group stays in `type_group`. None for ordinary single-axis primitives.
     to_target_group: str | None = None
+    # Per-impl override of the extension's ``unroll_variants`` default. None inherits the
+    # extension's value; True/False forces it for this body. Only meaningful on a sized
+    # extension: when effective-true, a size-changing body is monomorphized over the
+    # extension's ``size_bits`` (one concrete-lane specialization per size) instead of a single
+    # ``LANES`` template — so stable Rust can spell the width-changed output type.
+    unroll_variants: bool | None = None
     source: SourceSpan | None = None
     selector_source: SourceSpan | None = None
     body_source: SourceSpan | None = None

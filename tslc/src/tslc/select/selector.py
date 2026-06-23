@@ -45,6 +45,11 @@ class SelectedImplementation:
     # is monomorphized for: a target *type tag* (base dim, e.g. ``ui32``) or a target
     # *extension name* (extension dim, e.g. ``sse``). None for ordinary primitives.
     to_target: str | None = None
+    # For a sized-vector body with ``unroll_variants`` effective-true, the concrete lane count
+    # this slot is monomorphized at (one slot per ``size_bits`` entry; lanes = size // typebits).
+    # None = the ordinary single ``LANES``-parametric slot. Lets a size-changing body emit a
+    # concrete ``Generic<N>`` per size instead of a const-generic-expression template.
+    concrete_lanes: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,15 +145,20 @@ class Selector:
                             type_tag, to_target, warnings,
                         )
                         if best is not None:
-                            selected.append(
-                                SelectedImplementation(
-                                    primitive=primitive,
-                                    implementation=best,
-                                    extension=catalog.extensions[extension_name],
-                                    type_tag=type_tag,
-                                    to_target=to_target,
+                            extension = catalog.extensions[extension_name]
+                            for lanes in self._monomorphized_lanes(
+                                extension, best, type_tag
+                            ):
+                                selected.append(
+                                    SelectedImplementation(
+                                        primitive=primitive,
+                                        implementation=best,
+                                        extension=extension,
+                                        type_tag=type_tag,
+                                        to_target=to_target,
+                                        concrete_lanes=lanes,
+                                    )
                                 )
-                            )
                             if free_function:
                                 # One ISA-independent slot is enough; the body is identical
                                 # across extensions and the render ignores the extension.
@@ -278,6 +288,31 @@ class Selector:
         # wins even if a base body is more type-specific — so avx512vl comparisons use
         # the `_vl` native-mask body, not the base's lane-bitmask `si?` body. Within a
         # single extension distance ties, so specificity still decides there.
+
+    def _monomorphized_lanes(
+        self, extension: Extension, implementation: Implementation, type_tag: str
+    ) -> tuple[int | None, ...]:
+        """The concrete lane counts to monomorphize this body at, or ``(None,)`` for the
+        ordinary single ``LANES``-parametric slot.
+
+        A sized-vector body with ``unroll_variants`` effective-true and a non-empty
+        ``size_bits`` emits one slot per size, lanes = size // type-bit-width — so a
+        size-changing body is concrete per size (stable Rust can spell the changed-width
+        output) rather than a const-generic-expression template. Everything else (fixed-width
+        extensions, non-unrolled sized bodies) keeps the single ``None`` slot, byte-identical
+        to before."""
+
+        if not self.support.uses_sized_vector(extension) or not extension.size_bits:
+            return (None,)
+        unroll = (
+            implementation.unroll_variants
+            if implementation.unroll_variants is not None
+            else extension.unroll_variants
+        )
+        if not unroll:
+            return (None,)
+        type_bits = self.support.type_bit_width_or_default(type_tag)
+        return tuple(size // type_bits for size in extension.size_bits if size >= type_bits)
 
 
 def _applicable_flags(

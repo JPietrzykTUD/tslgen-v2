@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from tslc.backend.translation import create_backend_dialect
-from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, Extension, Implementation, Primitive
 from tslc.lower.lowerer import Lowerer
 from tslc.select.selector import Selector
@@ -180,3 +179,45 @@ def test_nested_specificity_does_not_warn(machine_profiles) -> None:
     result = Selector().select_profile(catalog, machine_profiles["scalar"], "amb2", ("si32",))
     assert result.diagnostics == ()
     assert result.selected[0].implementation.type_group == "?i32"  # more specific (2 < 4)
+
+
+def _generic_slots(catalog, machine_profiles, primitive, type_tag):
+    return [
+        s
+        for s in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], primitive, (type_tag,))
+        .selected
+        if s.extension.name == "generic"
+        and s.type_tag == type_tag
+        and s.primitive.attributes.get("mask") is None
+    ]
+
+
+def test_convert_up_monomorphizes_generic_over_size_bits(catalog, machine_profiles) -> None:
+    # The generic (sized) extension declares `size_bits [128, 256, 512]` and convert_up's software
+    # body opts into `unroll_variants`, so the generic slot fans out into one concrete-lane slot
+    # per size (si32 -> 128/256/512 bits = 4/8/16 lanes), instead of one `LANES`-parametric slot.
+    generic = _generic_slots(catalog, machine_profiles, "convert_up", "si32")
+    assert generic, "generic convert_up should be selected (c1 wildcard)"
+    assert {s.concrete_lanes for s in generic} == {4, 8, 16}
+    assert all(s.concrete_lanes is not None for s in generic)
+
+
+def test_add_not_monomorphized_on_generic(catalog, machine_profiles) -> None:
+    # A lane-local primitive (no `unroll_variants`) stays a single `LANES`-parametric slot.
+    generic = _generic_slots(catalog, machine_profiles, "add", "si32")
+    assert len(generic) == 1
+    assert generic[0].concrete_lanes is None
+
+
+def test_monomorphized_convert_lowers_to_concrete_lanes(catalog, machine_profiles) -> None:
+    # A monomorphized slot lowers to a concrete sized vector (numeric `lane_parameter`) on Rust —
+    # the whole point: stable Rust can spell `Generic<8>` where it cannot spell `Generic<{LANES/2}>`.
+    generic = _generic_slots(catalog, machine_profiles, "convert_up", "si32")
+    slot = next(s for s in generic if s.concrete_lanes == 8)
+    rust = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+    assert rust is not None
+    assert rust.uses_sized_vector
+    assert rust.lane_parameter == "8"  # concrete, not the symbolic "LANES"

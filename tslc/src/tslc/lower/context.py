@@ -84,6 +84,21 @@ class LoweringEnv:
     # The lane count of a variadic (`s...`) primitive (`set`), so `pack<expand>`/`pack<first>`
     # know how many scalar args there are. None for non-variadic primitives.
     variadic_lanes: int | None = None
+    # When this specialization is monomorphized at a concrete sized lane count (an
+    # `unroll_variants` body, one per `size_bits` entry), the integer count; None for the
+    # ordinary `LANES`-parametric sized vector. Drives `lane_symbol`.
+    concrete_lanes: int | None = None
+
+    def lane_symbol(self) -> str:
+        """The lane-count token for the sized vector: the concrete integer when this
+        specialization is monomorphized over a fixed size, else the symbolic ``LANES``.
+        Single source for every site that spells the sized lane count."""
+
+        from tslc.support_policy import DEFAULT_SUPPORT_POLICY
+
+        if self.concrete_lanes is not None:
+            return str(self.concrete_lanes)
+        return DEFAULT_SUPPORT_POLICY.size_parameter_name(self.extension)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "attributes", _frozen_mapping(self.attributes))

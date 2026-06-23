@@ -78,11 +78,13 @@ class RustBackend:
             if signature in seen:
                 continue
             seen.add(signature)
-            # A sized vector's overloaded impls are parameterized by its lane parameter.
+            # A sized vector's overloaded impls are parameterized by its lane parameter — UNLESS
+            # the slot is monomorphized at a concrete lane count (a numeric `lane_parameter` like
+            # "16"), in which case the impl is over a concrete `Generic<16>` with no lane generic.
             lane_parameter = spec.lane_parameter
             impl_generics = (
                 [f"const {lane_parameter}: usize"]
-                if spec.uses_sized_vector
+                if spec.uses_sized_vector and not lane_parameter.isdigit()
                 else []
             ) + [
                 f"const {name}: {typ}" for name, typ, _ in spec.generic_params
@@ -168,9 +170,10 @@ class RustBackend:
 
     def _impl(self, spec: LoweredSpecialization) -> str:
         # A sized vector's impl is parameterized by its lane const generic; an `sImm` immediate
-        # is a further free const generic.
+        # is a further free const generic. A monomorphized slot (numeric `lane_parameter`) is over
+        # a concrete `Generic<N>` instead, so it declares no lane generic.
         impl_parts: list[str] = []
-        if spec.uses_sized_vector:
+        if spec.uses_sized_vector and not spec.lane_parameter.isdigit():
             lane_parameter = spec.lane_parameter
             impl_parts.append(f"const {lane_parameter}: usize")
         key = _vector_type(spec)

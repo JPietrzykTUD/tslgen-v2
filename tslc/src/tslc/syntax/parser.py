@@ -208,7 +208,7 @@ class _DocumentTransformer:
         nested = tuple(
             self._parse_impl_selector(child, selector_path)
             for child in field.children
-            if child.key.text not in {"requires", "implementation"}
+            if child.key.text not in {"requires", "implementation", "unroll_variants"}
         )
         return ParsedImplementationSelectorEntry(
             selector=field.key,

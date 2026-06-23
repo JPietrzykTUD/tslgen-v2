@@ -1268,6 +1268,11 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 """
     [avx512, avx2, sse, neon, generic, oneAPIfpga, scalar]:
       arith:
+        # Monomorphize the sized (generic) software body over the extension's `size_bits`: one
+        # concrete `generic<N>` specialization per size, so the width-changed output is a concrete
+        # `generic<N/2>` rather than a const-generic expression stable Rust forbids. Fixed-width
+        # extensions (avx2/sse/…) ignore this — only the sized vector unrolls.
+        unroll_variants true
         requires:
           avx512 [avx512f]
           avx2 [avx2]
@@ -1667,6 +1672,9 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                 """
     [avx512, avx2, sse, neon, sve, generic, oneAPIfpga, scalar]:
       arith:
+        # Monomorphize the sized (generic) software body over `size_bits` (see convert_up) so the
+        # width-changed output is a concrete `generic<N>`; fixed-width extensions ignore it.
+        unroll_variants true
         requires:
           avx512 [avx512f]
           avx2 [avx2]
