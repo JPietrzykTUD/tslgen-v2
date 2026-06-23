@@ -14,7 +14,7 @@ from tslc.render.model import RenderField, render_text
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 class CallLowerer:
-    """``call<primitive=NAME[Vec] attrs[aligned=…]>(args)`` -> a call to NAME's wrapper.
+    """``call<primitive=NAME[Vec], attrs[aligned=…]>(args)`` -> a call to NAME's wrapper.
 
     Primitives are generated independently; this only renders the *call* (via
     ``backend.syntax.render_call``), it does not inline NAME's body. The selector shape is parsed by

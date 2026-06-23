@@ -4235,3 +4235,39 @@ Consequences:
   `suffix=intrin::suffix("stream")`.
 - Historical redesign notes may still mention `intrin_compose` as prior
   evidence, but current `tslc` source data should not use it.
+
+## ADR-083: `call` Selector Clauses Use Commas
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+TSIL selector surfaces should be visually consistent where they contain
+multiple clauses. After ADR-082, `intrin<BASE, build[...]>(...)` uses a comma
+between selector clauses, while `call<primitive=NAME attrs[...]>(...)` still
+used whitespace between the primitive reference and the optional attribute
+clause. That made two similar selector surfaces use different top-level
+separators.
+
+Decision:
+
+Use comma-separated top-level `call` selector clauses:
+
+```tsl
+call<primitive=NAME>(...)
+call<primitive=NAME[TypeArgs...]>(...)
+call<primitive=NAME, attrs[key=value]>(...)
+call<primitive=NAME[TypeArgs...], attrs[key=value]>(...)
+```
+
+The bracketed type-argument list remains attached to the primitive reference,
+because it specializes that reference rather than forming a separate selector
+clause. Attribute entries inside `attrs[...]` remain comma-separated.
+
+Consequences:
+
+- `parse_call_selector(...)` rejects the old whitespace-separated
+  `call<primitive=NAME attrs[...]>(...)` spelling.
+- The primitive corpus now uses `call<primitive=..., attrs[...]>(...)`.
+- This is a source-syntax cleanup only; dependency extraction, call rendering,
+  attribute evaluation, and primitive selection behavior are unchanged.

@@ -145,7 +145,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
                   values[i] = scalar;
                 }
               }
-               emit_return(call<primitive=load[Vec] attrs[aligned=false]>(values.data())) ;
+               emit_return(call<primitive=load[Vec], attrs[aligned=false]>(values.data())) ;
             """
     avx2:
       arith:
@@ -159,7 +159,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
                   values[i] = scalar;
                 }
               }
-               emit_return(call<primitive=load[Vec] attrs[aligned=false]>(values.data())) ;
+               emit_return(call<primitive=load[Vec], attrs[aligned=false]>(values.data())) ;
             """
     sse:
       arith:
@@ -173,7 +173,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
                   values[i] = scalar;
                 }
               }
-               emit_return(call<primitive=load[Vec] attrs[aligned=false]>(values.data())) ;
+               emit_return(call<primitive=load[Vec], attrs[aligned=false]>(values.data())) ;
             """
     neon:
       arith:
@@ -181,7 +181,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
         implementation:
           tsil """
                emit_return(
-                 call<primitive=blend attrs[mask=pass_through]>(
+                 call<primitive=blend, attrs[mask=pass_through]>(
                    mask,
                    data,
                    call<primitive=set1[Vec]>(scalar)
@@ -506,7 +506,7 @@ prim<v:=(lanes<s>)> set(values):
                loop<range>(i, 0, value<generation>(vector::length), 1)  {
                 data[i] = cast<static>(type<generation>(base::in), values[value<generation>(vector::length) - 1 - i]);
               }
-               emit_return(call<primitive=load[Vec] attrs[aligned=false]>(data.data())) ;
+               emit_return(call<primitive=load[Vec], attrs[aligned=false]>(data.data())) ;
             """
     scalar:
       arith:

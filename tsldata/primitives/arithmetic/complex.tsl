@@ -205,7 +205,7 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
                 call<primitive=mul>(factor1, factor2)
@@ -261,7 +261,7 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
                 call<primitive=mul>(factor1, factor2)
@@ -277,7 +277,7 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
                 call<primitive=mul>(factor1, factor2)
@@ -314,7 +314,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 factor1,
                 call<primitive=mul>(factor1, factor2)
@@ -370,7 +370,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 factor1,
                 call<primitive=mul>(factor1, factor2)
@@ -386,7 +386,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 factor1,
                 call<primitive=mul>(factor1, factor2)
@@ -494,7 +494,7 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
                 call<primitive=div>(divident, divisor)
@@ -520,7 +520,7 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
                 call<primitive=div>(divident, divisor)
@@ -533,7 +533,7 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
                 call<primitive=div>(divident, divisor)
@@ -571,7 +571,7 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 divident,
                 call<primitive=div>(divident, divisor)
@@ -597,7 +597,7 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 divident,
                 call<primitive=div>(divident, divisor)
@@ -610,7 +610,7 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 divident,
                 call<primitive=div>(divident, divisor)
@@ -895,7 +895,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mul attrs[mask=zero]>(
+              call<primitive=mul, attrs[mask=zero]>(
                 mask,
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
@@ -932,7 +932,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mul attrs[mask=pass_through]>(
+              call<primitive=mul, attrs[mask=pass_through]>(
                 mask,
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
@@ -1068,7 +1068,7 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
                 call<primitive=mod>(dividend, divisor)
@@ -1102,7 +1102,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 dividend,
                 call<primitive=mod>(dividend, divisor)
@@ -1189,7 +1189,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mod attrs[mask=zero]>(
+              call<primitive=mod, attrs[mask=zero]>(
                 mask,
                 dividend,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), divisor))
@@ -1223,7 +1223,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mod attrs[mask=pass_through]>(
+              call<primitive=mod, attrs[mask=pass_through]>(
                 mask,
                 dividend,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), divisor))

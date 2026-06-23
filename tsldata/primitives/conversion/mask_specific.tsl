@@ -187,7 +187,7 @@ prim<v:=m> to_vector(mask):
         implementation:
           tsil """
               emit_return(
-                call<primitive=mov attrs[mask=zero]>(
+                call<primitive=mov, attrs[mask=zero]>(
                   mask,
                   call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
                 )
@@ -300,7 +300,7 @@ prim<m:=im> to_mask(mask):
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
-              var<const_infer>(and_vec, call<primitive=load[Vec] attrs[aligned=false]>(and_values.data()));
+              var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.data()));
               var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec));
               emit_return(call<primitive=equal[Vec]>(anded_vec, and_vec));
@@ -345,7 +345,7 @@ prim<m:=im> to_mask(mask):
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
-              var<const_infer>(and_vec, call<primitive=load[Vec] attrs[aligned=false]>(and_values.data()));
+              var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.data()));
               var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec));
               emit_return(call<primitive=equal[Vec]>(anded_vec, and_vec));
@@ -359,7 +359,7 @@ prim<m:=im> to_mask(mask):
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
-              var<const_infer>(and_vec, call<primitive=load[Vec] attrs[aligned=false]>(and_values.data()));
+              var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.data()));
               var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec));
               emit_return(call<primitive=equal[Vec]>(anded_vec, and_vec));
@@ -404,7 +404,7 @@ prim<m:=im> to_mask(mask):
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
-              var<const_infer>(and_vec, call<primitive=load[Vec] attrs[aligned=false]>(and_values.data()));
+              var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.data()));
               var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec));
               emit_return(call<primitive=equal[Vec]>(anded_vec, and_vec));
@@ -418,7 +418,7 @@ prim<m:=im> to_mask(mask):
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
-              var<const_infer>(and_vec, call<primitive=load[Vec] attrs[aligned=false]>(and_values.data()));
+              var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.data()));
               var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec));
               emit_return(call<primitive=equal[Vec]>(anded_vec, and_vec));
@@ -432,7 +432,7 @@ prim<m:=im> to_mask(mask):
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
-              var<const_infer>(and_vec, call<primitive=load[Vec] attrs[aligned=false]>(and_values.data()));
+              var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.data()));
               var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec));
               emit_return(call<primitive=equal[Vec]>(anded_vec, and_vec));
@@ -447,7 +447,7 @@ prim<m:=im> to_mask(mask):
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<backend>(scalar::si32), bit);
               }
-              var<const_infer>(and_vec, call<primitive=load[MaskVec] attrs[aligned=false]>(and_values.data()));
+              var<const_infer>(and_vec, call<primitive=load[MaskVec], attrs[aligned=false]>(and_values.data()));
               var<const_infer>(data_vec, call<primitive=set1[MaskVec]>(cast<static>(type<backend>(scalar::si32), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[MaskVec]>(data_vec, and_vec));
               var<const_infer>(tmp, call<primitive=equal[MaskVec]>(anded_vec, and_vec));
@@ -463,7 +463,7 @@ prim<m:=im> to_mask(mask):
                 var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
                 and_values[i] = cast<static>(type<backend>(scalar::si64), bit);
               }
-              var<const_infer>(and_vec, call<primitive=load[MaskVec] attrs[aligned=false]>(and_values.data()));
+              var<const_infer>(and_vec, call<primitive=load[MaskVec], attrs[aligned=false]>(and_values.data()));
               var<const_infer>(data_vec, call<primitive=set1[MaskVec]>(cast<static>(type<backend>(scalar::si64), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[MaskVec]>(data_vec, and_vec));
               var<const_infer>(tmp, call<primitive=equal[MaskVec]>(anded_vec, and_vec));

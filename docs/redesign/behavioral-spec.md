@@ -2443,12 +2443,12 @@ The accepted selector forms are:
 ```text
 call<primitive=@self>(...)
 call<primitive=@self[...]>(...)
-call<primitive=@self attrs[...]>(...)
-call<primitive=@self[...] attrs[...]>(...)
+call<primitive=@self, attrs[...]>(...)
+call<primitive=@self[...], attrs[...]>(...)
 call<primitive=<primitive-name>>(...)
 call<primitive=<primitive-name>[...]>(...)
-call<primitive=<primitive-name> attrs[...]>(...)
-call<primitive=<primitive-name>[...] attrs[...]>(...)
+call<primitive=<primitive-name>, attrs[...]>(...)
+call<primitive=<primitive-name>[...], attrs[...]>(...)
 ```
 
 `<primitive-name>` is documentation notation for an arbitrary primitive name
@@ -2614,7 +2614,7 @@ the requested target attributes, selection emits
 `TSL-SELECT-NO-ATTRIBUTE-VARIANT` and reports the requested concrete
 attributes plus the available concrete variants. This diagnostic is a
 selection boundary only; M140 still does not resolve
-`call<primitive=... attrs[...]>(...)`, interpret selector specialization,
+`call<primitive=..., attrs[...]>(...)`, interpret selector specialization,
 select dependency implementations, lower dependency bodies, or render backend
 call syntax.
 
@@ -4291,7 +4291,7 @@ produce deterministic diagnostics until an explicit variant policy is accepted.
 TSIL bodies can call other primitives with syntax such as:
 
 ```text
-call<primitive=mov attrs[mask=zero]>(...)
+call<primitive=mov, attrs[mask=zero]>(...)
 call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(...)
 ```
 

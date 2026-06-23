@@ -238,7 +238,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
             } else<generation> {
               let<type>(MaskVec, type<generation>(vector::transform(type<generation>(vector::mask_underlying_t))));
               var<const_infer>(mask_vec, call<primitive=reinterpret[Vec, MaskVec]>(mask));
-              call<primitive=store[MaskVec] attrs[aligned=value<generation>(primitive::attribute(aligned))]>(ptr, mask_vec);
+              call<primitive=store[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(ptr, mask_vec);
             }
           """
     sve:
@@ -415,9 +415,9 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
           neon [neon]
         implementation:
           tsil """
-              var<const_infer>(mem_vec, call<primitive=load[Vec] attrs[aligned=value<generation>(primitive::attribute(aligned))]>(ptr));
+              var<const_infer>(mem_vec, call<primitive=load[Vec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(ptr));
               var<const_infer>(blend_vec, call<primitive=blend>(mask, mem_vec, data));
-              call<primitive=store attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+              call<primitive=store, attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
                 ptr,
                 blend_vec
               );

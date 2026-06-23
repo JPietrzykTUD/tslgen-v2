@@ -176,7 +176,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
               var<const_infer>(indices, call<primitive=sequence[IndexVec]>());
               var<const_infer>(limit, call<primitive=set1[IndexVec]>(cast<static>(IndexBase, active_count)));
               var<const_infer>(keep_mask, call<primitive=less_than[IndexVec]>(indices, limit));
-              emit_return(call<primitive=mov attrs[mask=zero]>(keep_mask, packed));
+              emit_return(call<primitive=mov, attrs[mask=zero]>(keep_mask, packed));
             """
       [?i8, ?i16]:
         requires [sve]

@@ -129,7 +129,7 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=add>(left, right)
               )
@@ -178,7 +178,7 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=add>(left, right)
               )
@@ -219,7 +219,7 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=add>(left, right)
@@ -269,7 +269,7 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=add>(left, right)
@@ -411,7 +411,7 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=sub>(left, right)
               )
@@ -460,7 +460,7 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=sub>(left, right)
               )
@@ -497,7 +497,7 @@ prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=sub>(left, right)
@@ -547,7 +547,7 @@ prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=sub>(left, right)
@@ -597,7 +597,7 @@ prim<v:=(m,v,v,v)>[mask=pass_through] blend_add(mask, left, right, adder):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=add>(right, adder),
                 left

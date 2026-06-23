@@ -1247,13 +1247,21 @@ Selector-term splitting has been consolidated into
 `tslc.lower._text.split_selector_terms`, leaving `IntrinLowerer` responsible
 only for intrinsic selector/modifier interpretation.
 
+`call` selector clauses have also been migrated to comma separation for
+consistency with `intrin<BASE, build[...]>(...)`: the accepted attribute forms
+are now `call<primitive=NAME, attrs[...]>(...)` and
+`call<primitive=NAME[TypeArgs...], attrs[...]>(...)`. The parser rejects the
+old whitespace-separated `call<primitive=NAME attrs[...]>(...)` form, and the
+primitive corpus has been rewritten with a corpus guard.
+
 Active prompt:
-docs/agent/runs/tslc-unified-intrin-build-review-prompt.md
+docs/agent/runs/tslc-call-selector-comma-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
 boundary review prompt:
 docs/agent/runs/tslc-tsil-statement-terminator-review-prompt.md
+docs/agent/runs/tslc-unified-intrin-build-review-prompt.md
 docs/agent/runs/tslc-value-test-backend-capability-review-prompt.md
 docs/agent/runs/tslc-lane-list-set-migration-review-prompt.md
 docs/agent/runs/tslc-value-test-cleanup-review-prompt.md
@@ -1262,12 +1270,11 @@ docs/agent/runs/tslc-support-policy-capability-review-prompt.md
 docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md
 docs/agent/runs/tslc-typed-render-values-review-prompt.md
 
-Next expected action: review the completed unified intrinsic build prompt
-above. Confirm `intrin<NAME>` direct calls remain direct, `intrin<BASE,
-build[...]>(...)` preserves the old composed intrinsic behavior, typed
-`suffix=`/`infix=` modifiers resolve through backend suffix metadata, `prefix=`
-stays text-only, and production scanner/registry/lowering no longer depends on
-an `intrin_compose` keyword.
+Next expected action: review the completed call selector comma prompt above.
+Confirm `call<primitive=..., attrs[...]>(...)` is accepted, the old
+whitespace-separated `call<primitive=... attrs[...]>(...)` form is rejected,
+dependency extraction and call lowering still use `parse_call_selector(...)`,
+and the primitive corpus no longer contains the old call attribute separator.
 ```
 
 Verification status (2026-06-23):
@@ -1298,6 +1305,20 @@ Verification status (2026-06-23):
   `git diff --check` passed;
   `env TSLC_VERIFY_WORKERS=1 ./verify.sh` passed all targeted validations,
   including 167 non-build tests, 53 generated-build tests, and the
+  architectural grep guards.
+
+- Call selector comma migration:
+  `python -m compileall -q tslc/src/tslc tslc/tests` passed;
+  `python -m pytest -q tslc/tests/test_masks_and_calls.py::test_call_selector_parser_keeps_syntax_only_shape tslc/tests/test_masks_and_calls.py::test_primitive_corpus_uses_comma_separated_call_attrs tslc/tests/test_masks_and_calls.py::test_type_param_bounds_use_call_regions_not_raw_text`
+  passed with 3 tests;
+  `python -m pytest -q tslc/tests/test_masks_and_calls.py tslc/tests/test_generation_conditionals.py tslc/tests/test_select_and_lower.py tslc/tests/test_tsil_scan.py`
+  passed with 56 tests;
+  `python -m pytest -q tslc/tests/test_build_verify.py::test_load_store_builds tslc/tests/test_build_verify.py::test_masked_value_ops_build tslc/tests/test_build_verify.py::test_masked_load_store_build tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds`
+  passed with 4 tests;
+  source-boundary scan for whitespace-separated call attrs returned no hits;
+  `git diff --check` passed;
+  `env TSLC_VERIFY_WORKERS=1 ./verify.sh` passed all targeted validations,
+  including 171 non-build tests, 53 generated-build tests, and the
   architectural grep guards.
 
 - Value-test planning boundary pass plus cleanup:

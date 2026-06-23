@@ -247,7 +247,7 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
         implementation:
           tsil """
               emit_return(
-                call<primitive=blend attrs[mask=pass_through]>(
+                call<primitive=blend, attrs[mask=pass_through]>(
                   mask,
                   call<primitive=set_zero[Vec]>(),
                   src
@@ -341,7 +341,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
         implementation:
           tsil """
               emit_return(
-                call<primitive=blend attrs[mask=pass_through]>(
+                call<primitive=blend, attrs[mask=pass_through]>(
                   mask,
                   src,
                   data

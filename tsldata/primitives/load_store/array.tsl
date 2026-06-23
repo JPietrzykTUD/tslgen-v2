@@ -149,7 +149,7 @@ prim<v:=s[]> from_array(data):
           generic []
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
-          tsil "emit_return(call<primitive=load[Vec] attrs[aligned=false]>(data.data()));"
+          tsil "emit_return(call<primitive=load[Vec], attrs[aligned=false]>(data.data()));"
     sve:
       arith:
         requires [sve]
@@ -163,7 +163,7 @@ prim<v:=s[]> from_array(data):
           avx512 [avx512f]
           neon [neon]
         implementation:
-          tsil "emit_return(call<primitive=load[Vec] attrs[aligned=false]>(data.data()));"
+          tsil "emit_return(call<primitive=load[Vec], attrs[aligned=false]>(data.data()));"
 prim<s:=v[idx]> extract_value(a):
   brief_description "Extracts a value at a given index."
   operation ""

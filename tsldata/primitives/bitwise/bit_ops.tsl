@@ -675,7 +675,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_and>(left, right)
               )
@@ -706,7 +706,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_and>(left, right)
               )
@@ -792,7 +792,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_and>(left, right)
@@ -824,7 +824,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_and>(left, right)
@@ -911,7 +911,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_andnot>(left, right)
               )
@@ -942,7 +942,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_andnot>(left, right)
               )
@@ -1028,7 +1028,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_andnot>(left, right)
@@ -1061,7 +1061,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_andnot>(left, right)
@@ -1125,7 +1125,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_or>(left, right)
               )
@@ -1156,7 +1156,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_or>(left, right)
               )
@@ -1242,7 +1242,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_or>(left, right)
@@ -1274,7 +1274,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_or>(left, right)
@@ -1361,7 +1361,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_xor>(left, right)
               )
@@ -1392,7 +1392,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_xor>(left, right)
               )
@@ -1478,7 +1478,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_xor>(left, right)
@@ -1510,7 +1510,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_xor>(left, right)
@@ -1607,7 +1607,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=inv>(data)
               )
@@ -1642,7 +1642,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=inv>(data)
               )
@@ -1745,7 +1745,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 data,
                 call<primitive=inv>(data)
@@ -1782,7 +1782,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
         implementation:
           tsil """
             emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 data,
                 call<primitive=inv>(data)

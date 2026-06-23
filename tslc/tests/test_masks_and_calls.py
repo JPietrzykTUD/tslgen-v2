@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -88,7 +89,7 @@ def test_immediate_split_names_only_mixed_immediate_families(catalog: Catalog) -
 
 def test_call_selector_parser_keeps_syntax_only_shape() -> None:
     assert parse_call_selector(
-        "primitive=@self[Vec<UnsignedT>, shift, PreserveSign] "
+        "primitive=@self[Vec<UnsignedT>, shift, PreserveSign], "
         "attrs[mask=pass_through, aligned=value<generation>(primitive::attribute(aligned))]"
     ) == ParsedCallSelector(
         primitive_ref="@self",
@@ -102,14 +103,26 @@ def test_call_selector_parser_keeps_syntax_only_shape() -> None:
         primitive_ref="set_zero",
         type_args=("OutVec",),
     )
+    assert parse_call_selector("primitive=@self[Vec] attrs[mask=zero]") is None
     assert parse_call_selector("primitive=set_zero trailing") is None
+
+
+def test_primitive_corpus_uses_comma_separated_call_attrs(data_root: Path) -> None:
+    stale: list[str] = []
+    pattern = re.compile(r"call<[^>\n]*[^,]\s+attrs\[")
+    for path in sorted((data_root / "primitives").rglob("*.tsl")):
+        for line_number, line in enumerate(path.read_text().splitlines(), start=1):
+            if pattern.search(line):
+                stale.append(f"{path}:{line_number}:{line.strip()}")
+
+    assert stale == []
 
 
 def test_type_param_bounds_use_call_regions_not_raw_text() -> None:
     body = '''
         var<infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
         if<generation>(true) {
-            var<infer>(tmp, call<primitive=mask_test[IndicesType] attrs[mask=zero]>(index));
+            var<infer>(tmp, call<primitive=mask_test[IndicesType], attrs[mask=zero]>(index));
         }
         ignored = "call<primitive=from_string[IndicesType]>(index)";
     '''

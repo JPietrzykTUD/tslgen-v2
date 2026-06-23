@@ -923,6 +923,60 @@ env TSLC_VERIFY_WORKERS=1 ./verify.sh
 Result: passed all targeted validations, including 167 non-build tests and 53
 generated-build tests.
 
+### Call Selector Comma Migration Slice
+
+`call` selector clauses now use comma separation, consistent with the current
+`intrin<BASE, build[...]>(...)` selector surface:
+
+```tsl
+call<primitive=load[Vec], attrs[aligned=false]>(ptr)
+call<primitive=mov, attrs[mask=zero]>(mask, value)
+```
+
+Implemented pieces:
+
+1. `parse_call_selector(...)` accepts `primitive=NAME[...], attrs[...]` and
+   rejects the old whitespace-separated `primitive=NAME[...] attrs[...]`
+   spelling.
+2. The primitive corpus under `tsldata/primitives` was migrated to the comma
+   form.
+3. `tslc/tests/test_masks_and_calls.py` covers positive parser behavior,
+   rejection of the old form, and a corpus guard against reintroducing
+   whitespace-separated `call` attribute clauses.
+
+Focused validation:
+
+```bash
+python -m compileall -q tslc/src/tslc tslc/tests
+```
+
+Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_masks_and_calls.py::test_call_selector_parser_keeps_syntax_only_shape tslc/tests/test_masks_and_calls.py::test_primitive_corpus_uses_comma_separated_call_attrs tslc/tests/test_masks_and_calls.py::test_type_param_bounds_use_call_regions_not_raw_text
+```
+
+Result: `3 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_masks_and_calls.py tslc/tests/test_generation_conditionals.py tslc/tests/test_select_and_lower.py tslc/tests/test_tsil_scan.py
+```
+
+Result: `56 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_build_verify.py::test_load_store_builds tslc/tests/test_build_verify.py::test_masked_value_ops_build tslc/tests/test_build_verify.py::test_masked_load_store_build tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds
+```
+
+Result: `4 passed`.
+
+```bash
+env TSLC_VERIFY_WORKERS=1 ./verify.sh
+```
+
+Result: passed all targeted validations, including 171 non-build tests and 53
+generated-build tests.
+
 ### TSIL Statement Terminator Slice
 
 The scanner now owns source-level semicolons after recognized TSIL regions in

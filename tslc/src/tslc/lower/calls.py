@@ -23,7 +23,7 @@ class ParsedCallSelector:
 
 
 def parse_call_selector(selector_text: str) -> ParsedCallSelector | None:
-    """Parse ``primitive=NAME[... ] attrs[...]`` selector metadata.
+    """Parse ``primitive=NAME[...], attrs[...]`` selector metadata.
 
     Returns ``None`` for malformed or unsupported selector tails. Attribute values stay raw so
     callers can decide whether and how to evaluate them.
@@ -49,7 +49,12 @@ def parse_call_selector(selector_text: str) -> ParsedCallSelector | None:
         rest = rest.strip()
 
     attrs: tuple[tuple[str, str], ...] = ()
-    if rest.startswith("attrs"):
+    if rest:
+        if not rest.startswith(","):
+            return None
+        rest = rest[1:].strip()
+        if not rest.startswith("attrs"):
+            return None
         bracket = _take_bracket(rest[len("attrs") :].lstrip())
         if bracket is None:
             return None
