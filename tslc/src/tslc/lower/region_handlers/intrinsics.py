@@ -37,6 +37,13 @@ class IntrinsicSelector:
         terms = split_selector_terms(selector_text)
         if not terms:
             return cls(name=None, build=False, modifiers=())
+        if _has_top_level_whitespace(terms[0]):
+            return cls(
+                name=terms[0],
+                build=False,
+                modifiers=(),
+                unsupported_terms=(terms[0],),
+            )
         modifiers: list[tuple[str, str]] = []
         unsupported_terms: list[str] = []
         build = False
@@ -73,6 +80,30 @@ class IntrinsicSelector:
             if match:
                 return int(match.group(1)), value
         return None
+
+
+def _has_top_level_whitespace(text: str) -> bool:
+    depth = 0
+    in_string = False
+    escaped = False
+    for char in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char in "(<[":
+            depth += 1
+        elif char in ")>]" and depth:
+            depth -= 1
+        elif depth == 0 and char.isspace():
+            return True
+    return False
 
 
 class IntrinLowerer:

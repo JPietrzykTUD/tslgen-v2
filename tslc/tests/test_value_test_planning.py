@@ -179,6 +179,7 @@ def test_render_tests_project_stays_an_assembler() -> None:
 def test_value_test_modules_keep_owned_boundaries() -> None:
     planner = Path("tslc/src/tslc/value_tests/planner.py").read_text(encoding="utf-8")
     patterns = Path("tslc/src/tslc/value_tests/patterns.py").read_text(encoding="utf-8")
+    case_plans = Path("tslc/src/tslc/value_tests/case_plans.py").read_text(encoding="utf-8")
     render_cpp = Path("tslc/src/tslc/value_tests/render_cpp.py").read_text(encoding="utf-8")
 
     assert len(planner.splitlines()) < 250
@@ -187,6 +188,8 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
     assert "backend_ids" not in patterns
     assert '"cpp"' not in patterns
     assert '"rust"' not in patterns
+    assert "def simple_case" not in case_plans
+    assert 'extension_name == "scalar"' not in case_plans
     assert "_rust_literal" not in render_cpp
     assert 'backend_id == "rust"' not in render_cpp
 

@@ -66,88 +66,168 @@ def masked_case(
     )
 
 
-def simple_case(
-    kind: str,
+def store_case(
     name: str,
     index: int,
     case: TestCase,
     specs: tuple[LoweredSpecialization, ...],
 ) -> ValueTestCasePlan | None:
-    if case.lanes is None or case.expected_rule is not None:
-        return None
-    base_spelling = _base_spelling(specs, case.type_tag)
+    base_spelling = _ordinary_base_spelling(case, specs)
     if base_spelling is None:
         return None
-    if kind == "store":
-        vector_inputs = _vector_inputs(case)
-        offset = case.offset or 0
-        if len(vector_inputs) != 1 or len(case.expected) < offset + case.lanes:
-            return None
-        return _plan(
-            kind,
-            name,
-            index,
-            case,
-            specs,
-            base_spelling,
-            vector_inputs=vector_inputs,
-            expected=case.expected,
-            axis_args=_axis_args(specs[0], case),
-            buffer_offset=offset,
-            buffer_length=len(case.expected),
-        )
-    if kind == "load":
-        vector_inputs = _vector_inputs(case)
-        offset = case.offset or 0
-        if len(vector_inputs) != 1 or len(vector_inputs[0]) != case.lanes:
-            return None
-        if len(case.expected) != case.lanes:
-            return None
-        return _plan(
-            kind,
-            name,
-            index,
-            case,
-            specs,
-            base_spelling,
-            vector_inputs=vector_inputs,
-            expected=case.expected,
-            axis_args=_axis_args(specs[0], case),
-            buffer_offset=offset,
-        )
-    if kind == "reduction":
-        vector_inputs = _vector_inputs(case)
-        if len(vector_inputs) != 1 or len(case.expected) != 1:
-            return None
-        return _plan(kind, name, index, case, specs, base_spelling, vector_inputs=vector_inputs)
-    if kind == "mask_logic":
-        mask_inputs = _mask_inputs(case)
-        if len(case.expected) != 1 or len(mask_inputs) != len(specs[0].param_kinds):
-            return None
-        return _plan(kind, name, index, case, specs, base_spelling, mask_inputs=mask_inputs)
-    if kind == "vector_to_array":
-        vector_inputs = _vector_inputs(case)
-        if len(vector_inputs) != 1 or len(case.expected) != case.lanes:
-            return None
-        return _plan(kind, name, index, case, specs, base_spelling, vector_inputs=vector_inputs)
-    if kind == "broadcast":
-        scalar_inputs = _mask_inputs(case)
-        if len(scalar_inputs) != 1 or len(case.expected) != case.lanes:
-            return None
-        return _plan(kind, name, index, case, specs, base_spelling, scalar_input=scalar_inputs[0])
-    if kind == "lane_list":
-        vector_inputs = _vector_inputs(case)
-        if len(vector_inputs) != 1 or len(vector_inputs[0]) != case.lanes:
-            return None
-        if len(case.expected) != case.lanes:
-            return None
-        return _plan(kind, name, index, case, specs, base_spelling, vector_inputs=vector_inputs)
-    if kind == "mask_to_vector":
-        mask_inputs = _mask_inputs(case)
-        if len(mask_inputs) != 1 or len(case.expected) != case.lanes:
-            return None
-        return _plan(kind, name, index, case, specs, base_spelling, mask_inputs=mask_inputs)
-    return None
+    vector_inputs = _vector_inputs(case)
+    offset = case.offset or 0
+    if len(vector_inputs) != 1 or len(case.expected) < offset + (case.lanes or 0):
+        return None
+    return _plan(
+        "store",
+        name,
+        index,
+        case,
+        specs,
+        base_spelling,
+        vector_inputs=vector_inputs,
+        expected=case.expected,
+        axis_args=_axis_args(specs[0], case),
+        buffer_offset=offset,
+        buffer_length=len(case.expected),
+    )
+
+
+def load_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> ValueTestCasePlan | None:
+    base_spelling = _ordinary_base_spelling(case, specs)
+    if base_spelling is None:
+        return None
+    vector_inputs = _vector_inputs(case)
+    offset = case.offset or 0
+    if len(vector_inputs) != 1 or len(vector_inputs[0]) != case.lanes:
+        return None
+    if len(case.expected) != case.lanes:
+        return None
+    return _plan(
+        "load",
+        name,
+        index,
+        case,
+        specs,
+        base_spelling,
+        vector_inputs=vector_inputs,
+        expected=case.expected,
+        axis_args=_axis_args(specs[0], case),
+        buffer_offset=offset,
+    )
+
+
+def reduction_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> ValueTestCasePlan | None:
+    base_spelling = _ordinary_base_spelling(case, specs)
+    if base_spelling is None:
+        return None
+    vector_inputs = _vector_inputs(case)
+    if len(vector_inputs) != 1 or len(case.expected) != 1:
+        return None
+    return _plan("reduction", name, index, case, specs, base_spelling, vector_inputs=vector_inputs)
+
+
+def mask_logic_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> ValueTestCasePlan | None:
+    base_spelling = _ordinary_base_spelling(case, specs)
+    if base_spelling is None:
+        return None
+    mask_inputs = _mask_inputs(case)
+    if len(case.expected) != 1 or len(mask_inputs) != len(specs[0].param_kinds):
+        return None
+    return _plan("mask_logic", name, index, case, specs, base_spelling, mask_inputs=mask_inputs)
+
+
+def vector_to_array_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> ValueTestCasePlan | None:
+    base_spelling = _ordinary_base_spelling(case, specs)
+    if base_spelling is None:
+        return None
+    vector_inputs = _vector_inputs(case)
+    if len(vector_inputs) != 1 or len(case.expected) != case.lanes:
+        return None
+    return _plan(
+        "vector_to_array", name, index, case, specs, base_spelling, vector_inputs=vector_inputs
+    )
+
+
+def broadcast_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> ValueTestCasePlan | None:
+    base_spelling = _ordinary_base_spelling(case, specs)
+    if base_spelling is None:
+        return None
+    scalar_inputs = _mask_inputs(case)
+    if len(scalar_inputs) != 1 or len(case.expected) != case.lanes:
+        return None
+    return _plan(
+        "broadcast", name, index, case, specs, base_spelling, scalar_input=scalar_inputs[0]
+    )
+
+
+def lane_list_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> ValueTestCasePlan | None:
+    base_spelling = _ordinary_base_spelling(case, specs)
+    if base_spelling is None:
+        return None
+    vector_inputs = _vector_inputs(case)
+    if len(vector_inputs) != 1 or len(vector_inputs[0]) != case.lanes:
+        return None
+    if len(case.expected) != case.lanes:
+        return None
+    return _plan("lane_list", name, index, case, specs, base_spelling, vector_inputs=vector_inputs)
+
+
+def mask_to_vector_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> ValueTestCasePlan | None:
+    base_spelling = _ordinary_base_spelling(case, specs)
+    if base_spelling is None:
+        return None
+    mask_inputs = _mask_inputs(case)
+    if len(mask_inputs) != 1 or len(case.expected) != case.lanes:
+        return None
+    return _plan(
+        "mask_to_vector", name, index, case, specs, base_spelling, mask_inputs=mask_inputs
+    )
+
+
+def _ordinary_base_spelling(
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> str | None:
+    if case.lanes is None or case.expected_rule is not None:
+        return None
+    return _base_spelling(specs, case.type_tag)
 
 
 def immediate_case(
@@ -313,12 +393,12 @@ def differential_cases(
         return []
     emitted: list[ValueTestCasePlan] = []
     for spec in specs:
-        if spec.uses_sized_vector or spec.extension_name == "scalar":
+        extension = catalog.extensions.get(spec.extension_name)
+        if extension is None or spec.uses_sized_vector or extension.vector_bits <= 0:
             continue
         if spec.type_tag != case.type_tag:
             continue
-        extension = catalog.extensions.get(spec.extension_name)
-        if extension is None or extension.vector_bits != case.lanes * type_bits:
+        if extension.vector_bits != case.lanes * type_bits:
             continue
         emitted.append(
             ValueTestCasePlan(
@@ -501,13 +581,20 @@ def _sanitize(text_value: str) -> str:
 
 
 __all__ = (
+    "broadcast_case",
     "convert_case",
     "differential_cases",
     "extension_harness_available",
     "extension_repr_case",
     "generic_golden_case",
     "immediate_case",
+    "lane_list_case",
+    "load_case",
+    "mask_logic_case",
+    "mask_to_vector_case",
     "masked_case",
+    "reduction_case",
     "repr_cast_case",
-    "simple_case",
+    "store_case",
+    "vector_to_array_case",
 )

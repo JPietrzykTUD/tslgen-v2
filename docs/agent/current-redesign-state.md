@@ -1264,12 +1264,21 @@ uses `loop_backend` plus optional `loop_backend_unroll`; C++ emits
 `TSL_UNROLL(count)` only when the trip count is generation-known, while symbolic
 counts such as `LANES` remain normal backend loops.
 
+The post-review design cleanup for the latest audit is implemented:
+`split_selector_terms` now splits only on top-level commas, `IntrinLowerer`
+rejects whitespace-separated selector clauses such as
+`intrin<foo build[...]>(...)`, value-test differential planning no longer
+branches on the source extension name `scalar`, and value-test case construction
+no longer has a `simple_case(kind=...)` string-dispatched hub. Case-plan
+construction now uses explicit per-kind builders wired by the pattern objects.
+
 Active prompt:
-docs/agent/runs/tslc-loop-backend-unroll-review-prompt.md
+docs/agent/runs/tslc-design-follow-up-cleanup-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
 boundary review prompt:
+docs/agent/runs/tslc-loop-backend-unroll-review-prompt.md
 docs/agent/runs/tslc-call-selector-comma-review-prompt.md
 docs/agent/runs/tslc-tsil-statement-terminator-review-prompt.md
 docs/agent/runs/tslc-unified-intrin-build-review-prompt.md
@@ -1281,11 +1290,11 @@ docs/agent/runs/tslc-support-policy-capability-review-prompt.md
 docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md
 docs/agent/runs/tslc-typed-render-values-review-prompt.md
 
-Next expected action: review the completed loop backend/unroll prompt above.
-Confirm `loop<backend>` and `loop<backend, unroll>` are accepted, legacy
-`loop<range>` is rejected by lowering, the primitive corpus no longer contains
-legacy loop spellings, symbolic-count unroll hints keep valid normal backend
-loops, and generated C++/Rust projects still build.
+Next expected action: review the completed design follow-up cleanup prompt
+above. Confirm intrinsic selector parsing is comma-only, value-test
+differential planning is capability-driven rather than source-name-driven, and
+case-plan construction no longer routes through a string-dispatched
+`simple_case(...)` hub.
 ```
 
 Verification status (2026-06-23):
@@ -1346,6 +1355,20 @@ Verification status (2026-06-23):
   `env TSLC_VERIFY_WORKERS=1 ./verify.sh` passed all targeted validations,
   including 178 non-build tests and 53 generated-build tests;
   final `git diff --check` passed.
+
+- Design follow-up cleanup:
+  `python -m compileall -q tslc/src/tslc tslc/tests` passed;
+  `python -m pytest -q tslc/tests/test_lower_text.py tslc/tests/test_select_and_lower.py::test_intrin_build_rejects_whitespace_separated_selector_terms tslc/tests/test_select_and_lower.py::test_intrin_build_supports_explicit_prefix_and_suffix tslc/tests/test_select_and_lower.py::test_intrin_build_suffix_and_infix_accept_type_values tslc/tests/test_select_and_lower.py::test_intrin_build_prefix_remains_text_only tslc/tests/test_value_test_planning.py`
+  passed with 14 tests;
+  `python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py tslc/tests/test_tsil_scan.py tslc/tests/test_masks_and_calls.py tslc/tests/test_generation_conditionals.py tslc/tests/test_select_and_lower.py`
+  passed with 68 tests;
+  `python -m pytest -q tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds tslc/tests/test_build_verify.py::test_load_store_builds tslc/tests/test_build_verify.py::test_convert_builds tslc/tests/test_build_verify.py::test_set_builds`
+  passed with 4 tests;
+  scan for `def simple_case`, production `extension_name == "scalar"`, and
+  whitespace-separated intrinsic-build selectors returned no production hits;
+  `env TSLC_VERIFY_WORKERS=1 ./verify.sh` passed all targeted validations,
+  including 179 non-build tests and 53 generated-build tests;
+  `git diff --check` passed.
 
 - Value-test planning boundary pass plus cleanup:
   `python -m compileall -q tslc/src/tslc tslc/tests` passed;

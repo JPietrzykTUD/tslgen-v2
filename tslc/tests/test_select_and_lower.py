@@ -293,6 +293,48 @@ def test_intrin_build_prefix_remains_text_only() -> None:
     assert lowered.diagnostics[0].code == "TSL-LOWER-UNRESOLVED-PREFIX"
 
 
+def test_intrin_build_rejects_whitespace_separated_selector_terms() -> None:
+    ext = Extension(
+        name="custom",
+        isa_name="custom",
+        family="x86",
+        compose_prefix={"cpp": "_custom_"},
+        compose_suffix_by_type={"si32": "epi32"},
+    )
+    impl = Implementation(
+        ("custom", "ints"),
+        "custom",
+        "ints",
+        "emit_return(intrin<foo build[suffix=base::in]>(a));",
+        source_order=0,
+    )
+    prim = Primitive(
+        name="bad_intrin_build_separator",
+        signature="v:=v",
+        parameters=("a",),
+        attribute_keys=(),
+        implementations=(impl,),
+    )
+    catalog = Catalog(
+        primitives=(prim,),
+        type_groups={"ints": ("si32",)},
+        extensions={"custom": ext},
+        type_spellings={"cpp": {"s32": "int32_t"}},
+        translations={"cpp": {"emit_return": "return {value}"}},
+    )
+    slot = SelectedImplementation(
+        primitive=prim,
+        implementation=impl,
+        extension=ext,
+        type_tag="si32",
+    )
+
+    lowered = Lowerer().lower(slot, catalog, create_backend_dialect(catalog, "cpp"))
+
+    assert lowered.specialization is None
+    assert lowered.diagnostics[0].code == "TSL-LOWER-UNSUPPORTED-INTRIN-SELECTOR"
+
+
 def test_hadd_reduction_lowers_for_f64(catalog: Catalog, machine_profiles) -> None:
     slot = _by_key(catalog, machine_profiles["avx2"], "hadd")[("f64", "avx2")]
     cpp = Lowerer().lower(

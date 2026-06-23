@@ -48,7 +48,7 @@ def split_top_level(text: str, separator: str = ",") -> list[str]:
 
 
 def split_selector_terms(text: str) -> list[str]:
-    """Split selector/modifier text on top-level commas or whitespace.
+    """Split selector/modifier text on top-level commas.
 
     Selector surfaces can contain nested queries and bracketed modifier lists,
     so splitting respects ``()``, ``<>``, ``[]``, and quoted strings.
@@ -82,7 +82,7 @@ def split_selector_terms(text: str) -> list[str]:
             round_depth == 0
             and angle_depth == 0
             and square_depth == 0
-            and (ch == "," or ch.isspace())
+            and ch == ","
         ):
             if start < i:
                 terms.append(text[start:i])

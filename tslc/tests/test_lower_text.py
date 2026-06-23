@@ -14,12 +14,8 @@ def test_split_selector_terms_keeps_build_modifiers_together() -> None:
     ]
 
 
-def test_split_selector_terms_accepts_top_level_whitespace() -> None:
-    assert split_selector_terms("foo build post=mask") == [
-        "foo",
-        "build",
-        "post=mask",
-    ]
+def test_split_selector_terms_does_not_split_top_level_whitespace() -> None:
+    assert split_selector_terms("foo build post=mask") == ["foo build post=mask"]
 
 
 def test_split_selector_terms_respects_strings_and_nested_selectors() -> None:

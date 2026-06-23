@@ -1443,6 +1443,39 @@ affected non-build run passed with 60 tests; the full-corpus AVX2 value gate
 passed; `verify.sh` passed all targeted validations with 178 non-build tests
 and 53 generated-build tests; final diff check passed.
 
+## Design Follow-Up Cleanup
+
+The latest post-change design audit findings have been fixed:
+
+- `tslc.lower._text.split_selector_terms` now splits only on top-level commas.
+  `IntrinLowerer` rejects whitespace-separated selector clauses such as
+  `intrin<foo build[...]>(...)`, matching the comma-separated source surface
+  chosen for `intrin<BASE, build[...]>(...)` and `call<primitive=..., attrs[...]>(...)`.
+- Value-test differential planning no longer branches on the source extension
+  name `scalar`. Differential candidates are selected from typed extension facts:
+  they must be concrete fixed-width vector extensions with a lane-compatible
+  `vector_bits` value.
+- `tslc.value_tests.case_plans` no longer exposes `simple_case(kind=...)`.
+  Case construction now uses explicit per-kind builders such as `store_case`,
+  `load_case`, `lane_list_case`, and `mask_to_vector_case`, wired by
+  `ValueTestPattern` objects.
+
+Validation for this cleanup:
+
+```bash
+python -m compileall -q tslc/src/tslc tslc/tests
+python -m pytest -q tslc/tests/test_lower_text.py tslc/tests/test_select_and_lower.py::test_intrin_build_rejects_whitespace_separated_selector_terms tslc/tests/test_select_and_lower.py::test_intrin_build_supports_explicit_prefix_and_suffix tslc/tests/test_select_and_lower.py::test_intrin_build_suffix_and_infix_accept_type_values tslc/tests/test_select_and_lower.py::test_intrin_build_prefix_remains_text_only tslc/tests/test_value_test_planning.py
+python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py tslc/tests/test_tsil_scan.py tslc/tests/test_masks_and_calls.py tslc/tests/test_generation_conditionals.py tslc/tests/test_select_and_lower.py
+python -m pytest -q tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds tslc/tests/test_build_verify.py::test_load_store_builds tslc/tests/test_build_verify.py::test_convert_builds tslc/tests/test_build_verify.py::test_set_builds
+env TSLC_VERIFY_WORKERS=1 ./verify.sh
+git diff --check
+```
+
+Results: compile passed; focused cleanup tests passed with 14 tests; the
+broader TSIL/value-test shard passed with 68 tests; generated-build/value tests
+passed with 4 tests; `verify.sh` passed with 179 non-build tests and 53
+generated-build tests; final diff check passed.
+
 ## Known Caveats
 
 Full `tslc/tests/test_build_verify.py` was attempted with fresh temp

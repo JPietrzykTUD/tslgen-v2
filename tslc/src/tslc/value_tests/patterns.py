@@ -9,21 +9,39 @@ from tslc.catalog.model import Catalog, Primitive, TestCase
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
 from tslc.value_tests.case_plans import (
+    broadcast_case,
     convert_case,
     differential_cases,
     extension_harness_available,
     extension_repr_case,
     generic_golden_case,
     immediate_case,
+    lane_list_case,
+    load_case,
+    mask_logic_case,
+    mask_to_vector_case,
     masked_case,
     repr_cast_case,
-    simple_case,
+    reduction_case,
+    store_case,
+    vector_to_array_case,
 )
 from tslc.value_tests.model import (
     HarnessPrimitiveNames,
     ValueTestBackendSupport,
     ValueTestCasePlan,
 )
+
+
+class CasePlanBuilder(Protocol):
+    def __call__(
+        self,
+        name: str,
+        index: int,
+        case: TestCase,
+        specs: tuple[LoweredSpecialization, ...],
+    ) -> ValueTestCasePlan | None:
+        ...
 
 
 class ValueTestPattern(Protocol):
@@ -60,15 +78,15 @@ def default_value_test_patterns(
     return (
         _GenericGoldenPattern(),
         _MaskedPattern(),
-        _SimpleShapePattern("store", "void", ("ptr", "v"), allow_axis=True),
-        _SimpleShapePattern("reduction", "s", ("v",)),
-        _SimpleShapePattern("load", "v", ("ptr",), allow_axis=True),
+        _SimpleShapePattern(store_case, "void", ("ptr", "v"), allow_axis=True),
+        _SimpleShapePattern(reduction_case, "s", ("v",)),
+        _SimpleShapePattern(load_case, "v", ("ptr",), allow_axis=True),
         _MaskLogicPattern(),
-        _SimpleShapePattern("vector_to_array", "s[]", ("v",)),
-        _SimpleShapePattern("broadcast", "v", ("s",)),
-        _SimpleShapePattern("lane_list", "v", (support.lane_list_kind,)),
+        _SimpleShapePattern(vector_to_array_case, "s[]", ("v",)),
+        _SimpleShapePattern(broadcast_case, "v", ("s",)),
+        _SimpleShapePattern(lane_list_case, "v", (support.lane_list_kind,)),
         _ImmediatePattern(support),
-        _SimpleShapePattern("mask_to_vector", "v", ("m",)),
+        _SimpleShapePattern(mask_to_vector_case, "v", ("m",)),
         _ConvertPattern(support),
         _ReprCastPattern(),
         _ExtensionReprPattern(support),
@@ -157,7 +175,7 @@ class _MaskedPattern(_BasePattern):
 
 @dataclass(frozen=True, slots=True)
 class _SimpleShapePattern(_BasePattern):
-    kind: str
+    build_case: CasePlanBuilder
     result_kind: str
     param_kinds: tuple[str, ...]
     allow_axis: bool = False
@@ -175,8 +193,7 @@ class _SimpleShapePattern(_BasePattern):
         return self.allow_axis or not spec.axis
 
     def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
-        plan = simple_case(
-            self.kind,
+        plan = self.build_case(
             kwargs["emitted_name"],
             kwargs["index"],
             kwargs["case"],
@@ -201,8 +218,7 @@ class _MaskLogicPattern(_BasePattern):
         )
 
     def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
-        plan = simple_case(
-            "mask_logic",
+        plan = mask_logic_case(
             kwargs["emitted_name"],
             kwargs["index"],
             kwargs["case"],
