@@ -437,4 +437,185 @@ pub mod details {
     pub fn clz<T: super::TslClz>(v: T) -> u32 {
         v.clz()
     }
+
+    // Saturating numeric cast for `convert_down` (`cast<saturating>`). Narrowing a lane that does
+    // not fit the destination range CLAMPS to the nearest bound (i16 30000 -> i8 127), matching the
+    // primitive's saturating contract and the hardware narrowing intrinsics. Rust `as` truncates
+    // int->int (30000 as i8 == 48), so it cannot express this — hence an explicit clamp. Dispatch
+    // is by runtime TypeId over the concrete monomorphized types; the guarded `transmute_copy` only
+    // runs in the matching branch (so sizes always agree). Counterpart to C++ `tsl::saturating_cast`.
+    fn type_is_same<T: 'static, U: 'static>() -> bool {
+        core::any::TypeId::of::<T>() == core::any::TypeId::of::<U>()
+    }
+    fn saturating_from_i128<U: Copy + 'static>(v: i128) -> U {
+        if type_is_same::<U, i8>() {
+            let r = v.clamp(i8::MIN as i128, i8::MAX as i128) as i8;
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, u8>() {
+            let r = v.clamp(0, u8::MAX as i128) as u8;
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, i16>() {
+            let r = v.clamp(i16::MIN as i128, i16::MAX as i128) as i16;
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, u16>() {
+            let r = v.clamp(0, u16::MAX as i128) as u16;
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, i32>() {
+            let r = v.clamp(i32::MIN as i128, i32::MAX as i128) as i32;
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, u32>() {
+            let r = v.clamp(0, u32::MAX as i128) as u32;
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, i64>() {
+            let r = v.clamp(i64::MIN as i128, i64::MAX as i128) as i64;
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, u64>() {
+            let r = v.clamp(0, u64::MAX as i128) as u64;
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, f32>() {
+            let r = v as f32;
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, f64>() {
+            let r = v as f64;
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        panic!("unsupported saturating cast")
+    }
+    fn saturating_from_u128<U: Copy + 'static>(v: u128) -> U {
+        if type_is_same::<U, i8>() {
+            let r = if v > i8::MAX as u128 { i8::MAX } else { v as i8 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, u8>() {
+            let r = if v > u8::MAX as u128 { u8::MAX } else { v as u8 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, i16>() {
+            let r = if v > i16::MAX as u128 { i16::MAX } else { v as i16 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, u16>() {
+            let r = if v > u16::MAX as u128 { u16::MAX } else { v as u16 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, i32>() {
+            let r = if v > i32::MAX as u128 { i32::MAX } else { v as i32 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, u32>() {
+            let r = if v > u32::MAX as u128 { u32::MAX } else { v as u32 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, i64>() {
+            let r = if v > i64::MAX as u128 { i64::MAX } else { v as i64 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, u64>() {
+            let r = if v > u64::MAX as u128 { u64::MAX } else { v as u64 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, f32>() {
+            let r = v as f32;
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, f64>() {
+            let r = v as f64;
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        panic!("unsupported saturating cast")
+    }
+    fn saturating_from_f64<U: Copy + 'static>(v: f64) -> U {
+        if type_is_same::<U, i8>() {
+            let r = if v.is_nan() { 0 } else if v < i8::MIN as f64 { i8::MIN } else if v > i8::MAX as f64 { i8::MAX } else { v as i8 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, u8>() {
+            let r = if v.is_nan() || v < 0.0 { 0 } else if v > u8::MAX as f64 { u8::MAX } else { v as u8 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, i16>() {
+            let r = if v.is_nan() { 0 } else if v < i16::MIN as f64 { i16::MIN } else if v > i16::MAX as f64 { i16::MAX } else { v as i16 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, u16>() {
+            let r = if v.is_nan() || v < 0.0 { 0 } else if v > u16::MAX as f64 { u16::MAX } else { v as u16 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, i32>() {
+            let r = if v.is_nan() { 0 } else if v < i32::MIN as f64 { i32::MIN } else if v > i32::MAX as f64 { i32::MAX } else { v as i32 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, u32>() {
+            let r = if v.is_nan() || v < 0.0 { 0 } else if v > u32::MAX as f64 { u32::MAX } else { v as u32 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, i64>() {
+            let r = if v.is_nan() { 0 } else if v < i64::MIN as f64 { i64::MIN } else if v > i64::MAX as f64 { i64::MAX } else { v as i64 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, u64>() {
+            let r = if v.is_nan() || v < 0.0 { 0 } else if v > u64::MAX as f64 { u64::MAX } else { v as u64 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, f32>() {
+            let r = if v.is_nan() { f32::NAN } else if v > f32::MAX as f64 { f32::MAX } else if v < -(f32::MAX as f64) { -f32::MAX } else { v as f32 };
+            return unsafe { core::mem::transmute_copy(&r) };
+        }
+        if type_is_same::<U, f64>() {
+            return unsafe { core::mem::transmute_copy(&v) };
+        }
+        panic!("unsupported saturating cast")
+    }
+    pub fn saturating_cast_value<T: Copy + 'static, U: Copy + 'static>(value: T) -> U {
+        if type_is_same::<T, i8>() {
+            let v = unsafe { core::mem::transmute_copy::<T, i8>(&value) };
+            return saturating_from_i128::<U>(v as i128);
+        }
+        if type_is_same::<T, u8>() {
+            let v = unsafe { core::mem::transmute_copy::<T, u8>(&value) };
+            return saturating_from_u128::<U>(v as u128);
+        }
+        if type_is_same::<T, i16>() {
+            let v = unsafe { core::mem::transmute_copy::<T, i16>(&value) };
+            return saturating_from_i128::<U>(v as i128);
+        }
+        if type_is_same::<T, u16>() {
+            let v = unsafe { core::mem::transmute_copy::<T, u16>(&value) };
+            return saturating_from_u128::<U>(v as u128);
+        }
+        if type_is_same::<T, i32>() {
+            let v = unsafe { core::mem::transmute_copy::<T, i32>(&value) };
+            return saturating_from_i128::<U>(v as i128);
+        }
+        if type_is_same::<T, u32>() {
+            let v = unsafe { core::mem::transmute_copy::<T, u32>(&value) };
+            return saturating_from_u128::<U>(v as u128);
+        }
+        if type_is_same::<T, i64>() {
+            let v = unsafe { core::mem::transmute_copy::<T, i64>(&value) };
+            return saturating_from_i128::<U>(v as i128);
+        }
+        if type_is_same::<T, u64>() {
+            let v = unsafe { core::mem::transmute_copy::<T, u64>(&value) };
+            return saturating_from_u128::<U>(v as u128);
+        }
+        if type_is_same::<T, f32>() {
+            let v = unsafe { core::mem::transmute_copy::<T, f32>(&value) };
+            return saturating_from_f64::<U>(v as f64);
+        }
+        if type_is_same::<T, f64>() {
+            let v = unsafe { core::mem::transmute_copy::<T, f64>(&value) };
+            return saturating_from_f64::<U>(v);
+        }
+        panic!("unsupported saturating cast")
+    }
 }
