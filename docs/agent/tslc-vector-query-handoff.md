@@ -862,6 +862,9 @@ Implemented pieces:
    Named suffix policies remain explicit, for example
    `intrin::suffix("stream")`.
 6. A corpus guard fails if `intrin_compose<` appears in primitive TSIL bodies.
+7. Selector-term splitting lives in `tslc.lower._text.split_selector_terms`;
+   `IntrinLowerer` keeps only intrinsic-specific selector/modifier
+   interpretation.
 
 Focused coverage:
 
@@ -872,6 +875,8 @@ Focused coverage:
 - `tslc/tests/test_diagnostic_provenance.py` keeps unresolved build suffix
   diagnostics anchored on the intrinsic region.
 - `tslc/tests/test_tsil_statement_terminators.py` guards the corpus migration.
+- `tslc/tests/test_lower_text.py` covers shared selector splitting for
+  `build[...]`, top-level whitespace, quoted strings, and nested selectors.
 
 Validation for this slice:
 
@@ -886,6 +891,12 @@ python -m pytest -q tslc/tests/test_select_and_lower.py::test_intrin_build_suppo
 ```
 
 Result: `7 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_lower_text.py tslc/tests/test_select_and_lower.py::test_intrin_build_supports_explicit_prefix_and_suffix tslc/tests/test_select_and_lower.py::test_intrin_build_suffix_and_infix_accept_type_values tslc/tests/test_select_and_lower.py::test_intrin_build_prefix_remains_text_only tslc/tests/test_tsil_scan.py::test_intrin_build_selector_is_raw_and_args_recurse tslc/tests/test_tsil_scan.py::test_nested_modifier_selector_kept_verbatim
+```
+
+Result: `8 passed`.
 
 ```bash
 python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/test_parse_arithmetic.py tslc/tests/test_diagnostic_provenance.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_masks_and_calls.py

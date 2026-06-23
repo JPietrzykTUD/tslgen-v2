@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 
 from tslc.ir.segments import Region
-from tslc.lower._text import skip_string
+from tslc.lower._text import split_selector_terms
 from tslc.lower.context import LoweringSession
 from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.common import _split_arg_groups
@@ -14,56 +14,9 @@ from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.render.model import RenderField, literal_text, render_sequence, render_text
 
 
-def _split_selector_terms(text: str) -> list[str]:
-    """Split a selector/modifier list on top-level commas or whitespace.
-
-    The selector surface allows nested query regions (``value<backend>(...)``) and
-    build modifiers (``build[...]``), so splitting has to respect ``()``, ``<>``,
-    ``[]``, and quoted strings.
-    """
-
-    terms: list[str] = []
-    round_depth = 0
-    angle_depth = 0
-    square_depth = 0
-    start = 0
-    i = 0
-    n = len(text)
-    while i < n:
-        ch = text[i]
-        if ch == '"':
-            i = skip_string(text, i)
-            continue
-        if ch == "(":
-            round_depth += 1
-        elif ch == ")" and round_depth:
-            round_depth -= 1
-        elif ch == "<":
-            angle_depth += 1
-        elif ch == ">" and angle_depth:
-            angle_depth -= 1
-        elif ch == "[":
-            square_depth += 1
-        elif ch == "]" and square_depth:
-            square_depth -= 1
-        elif (
-            round_depth == 0
-            and angle_depth == 0
-            and square_depth == 0
-            and (ch == "," or ch.isspace())
-        ):
-            if start < i:
-                terms.append(text[start:i])
-            start = i + 1
-        i += 1
-    if start < n:
-        terms.append(text[start:])
-    return [term.strip() for term in terms if term.strip()]
-
-
 def _parse_modifier_terms(text: str) -> tuple[tuple[str, str], ...]:
     modifiers: list[tuple[str, str]] = []
-    for term in _split_selector_terms(text):
+    for term in split_selector_terms(text):
         key, sep, value = term.partition("=")
         if sep:
             modifiers.append((key.strip(), value.strip()))
@@ -81,7 +34,7 @@ class IntrinsicSelector:
 
     @classmethod
     def parse(cls, selector_text: str) -> "IntrinsicSelector":
-        terms = _split_selector_terms(selector_text)
+        terms = split_selector_terms(selector_text)
         if not terms:
             return cls(name=None, build=False, modifiers=())
         modifiers: list[tuple[str, str]] = []

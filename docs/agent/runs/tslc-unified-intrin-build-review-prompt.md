@@ -34,6 +34,8 @@ Use `docs/agent/review-checklist.md`. Pay special attention to:
 - `build[...]` preserves existing composed intrinsic behavior, including
   default suffixes, explicit suffixes, infix/infix separator handling,
   `post=mask`, and `immediate(N)=...`;
+- selector-term splitting is shared in `tslc.lower._text.split_selector_terms`,
+  while `IntrinLowerer` keeps only intrinsic-specific modifier interpretation;
 - `suffix=` and `infix=` accept direct type values such as
   `base::signed_of(base::in)`, `base::in`, and `ToBase`, while named suffix
   policies such as `intrin::suffix("stream")` still go through the query;
@@ -49,6 +51,7 @@ Use `docs/agent/review-checklist.md`. Pay special attention to:
 
 ```bash
 python -m compileall -q tslc/src/tslc tslc/tests
+python -m pytest -q tslc/tests/test_lower_text.py tslc/tests/test_select_and_lower.py::test_intrin_build_supports_explicit_prefix_and_suffix tslc/tests/test_select_and_lower.py::test_intrin_build_suffix_and_infix_accept_type_values tslc/tests/test_select_and_lower.py::test_intrin_build_prefix_remains_text_only tslc/tests/test_tsil_scan.py::test_intrin_build_selector_is_raw_and_args_recurse tslc/tests/test_tsil_scan.py::test_nested_modifier_selector_kept_verbatim
 python -m pytest -q tslc/tests/test_tsil_statement_terminators.py tslc/tests/test_tsil_scan.py tslc/tests/test_parse_arithmetic.py tslc/tests/test_diagnostic_provenance.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_masks_and_calls.py
 python -m pytest -q tslc/tests/test_build_verify.py::test_load_store_builds tslc/tests/test_build_verify.py::test_convert_builds tslc/tests/test_build_verify.py::test_cast_reinterpret_builds tslc/tests/test_build_verify.py::test_gather_scatter_builds tslc/tests/test_build_verify.py::test_set_builds tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds
 git diff --check

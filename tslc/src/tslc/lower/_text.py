@@ -47,6 +47,52 @@ def split_top_level(text: str, separator: str = ",") -> list[str]:
     return [term.strip() for term in terms if term.strip()]
 
 
+def split_selector_terms(text: str) -> list[str]:
+    """Split selector/modifier text on top-level commas or whitespace.
+
+    Selector surfaces can contain nested queries and bracketed modifier lists,
+    so splitting respects ``()``, ``<>``, ``[]``, and quoted strings.
+    """
+
+    terms: list[str] = []
+    round_depth = 0
+    angle_depth = 0
+    square_depth = 0
+    start = 0
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if ch == '"':
+            i = skip_string(text, i)
+            continue
+        if ch == "(":
+            round_depth += 1
+        elif ch == ")" and round_depth:
+            round_depth -= 1
+        elif ch == "<":
+            angle_depth += 1
+        elif ch == ">" and angle_depth:
+            angle_depth -= 1
+        elif ch == "[":
+            square_depth += 1
+        elif ch == "]" and square_depth:
+            square_depth -= 1
+        elif (
+            round_depth == 0
+            and angle_depth == 0
+            and square_depth == 0
+            and (ch == "," or ch.isspace())
+        ):
+            if start < i:
+                terms.append(text[start:i])
+            start = i + 1
+        i += 1
+    if start < n:
+        terms.append(text[start:])
+    return [term.strip() for term in terms if term.strip()]
+
+
 def split_head_arg(text: str) -> tuple[str, str] | None:
     """Split a ``head(arg)`` form into ``(head, arg)`` with balanced parens.
 

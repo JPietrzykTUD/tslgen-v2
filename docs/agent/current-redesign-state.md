@@ -1243,6 +1243,9 @@ primitive corpus has been migrated with a guard against reintroducing
 `suffix=` and `infix=`; the primitive corpus no longer wraps type-derived
 suffixes in `value<backend>(intrin::suffix(...))`. `prefix=` remains text-only
 and should be omitted when the selected extension's default prefix is desired.
+Selector-term splitting has been consolidated into
+`tslc.lower._text.split_selector_terms`, leaving `IntrinLowerer` responsible
+only for intrinsic selector/modifier interpretation.
 
 Active prompt:
 docs/agent/runs/tslc-unified-intrin-build-review-prompt.md
@@ -1286,6 +1289,8 @@ Verification status (2026-06-23):
   `python -m compileall -q tslc/src/tslc tslc/tests` passed;
   `python -m pytest -q tslc/tests/test_select_and_lower.py::test_intrin_build_supports_explicit_prefix_and_suffix tslc/tests/test_select_and_lower.py::test_intrin_build_suffix_and_infix_accept_type_values tslc/tests/test_select_and_lower.py::test_intrin_build_prefix_remains_text_only tslc/tests/test_parse_arithmetic.py tslc/tests/test_tsil_scan.py::test_nested_modifier_selector_kept_verbatim tslc/tests/test_diagnostic_provenance.py::test_intrin_build_unresolved_suffix_has_region_source_location`
   passed with 7 tests;
+  `python -m pytest -q tslc/tests/test_lower_text.py tslc/tests/test_select_and_lower.py::test_intrin_build_supports_explicit_prefix_and_suffix tslc/tests/test_select_and_lower.py::test_intrin_build_suffix_and_infix_accept_type_values tslc/tests/test_select_and_lower.py::test_intrin_build_prefix_remains_text_only tslc/tests/test_tsil_scan.py::test_intrin_build_selector_is_raw_and_args_recurse tslc/tests/test_tsil_scan.py::test_nested_modifier_selector_kept_verbatim`
+  passed with 8 tests;
   `python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/test_parse_arithmetic.py tslc/tests/test_diagnostic_provenance.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_masks_and_calls.py`
   passed with 60 tests;
   `python -m pytest -q tslc/tests/test_build_verify.py::test_load_store_builds tslc/tests/test_build_verify.py::test_convert_builds tslc/tests/test_build_verify.py::test_cast_reinterpret_builds tslc/tests/test_build_verify.py::test_gather_scatter_builds tslc/tests/test_build_verify.py::test_set_builds tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds`
