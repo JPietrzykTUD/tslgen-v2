@@ -162,6 +162,16 @@ def _cpp_values_runner(profile_render: ProfileRender, catalog: Catalog | None) -
                     if emitted is not None:
                         functions.append(emitted[0])
                         calls.append(emitted[1])
+            elif any(_is_repr_cast(spec) for spec in specs):
+                # cast/reinterpret (heterogeneous like convert) — classify over all specs.
+                primitive = catalog.primitive(name, unmasked=True)
+                if primitive is None:
+                    continue
+                for index, case in enumerate(primitive.tests):
+                    emitted = _cpp_repr_cast_case(name, index, case, specs)
+                    if emitted is not None:
+                        functions.append(emitted[0])
+                        calls.append(emitted[1])
 
     body = "\n\n".join(functions)
     call_lines = "\n".join(f"  failures += {call}();" for call in calls)
@@ -546,6 +556,87 @@ def _cpp_convert_case(
         f"  static const {tgt} expected[{out_lanes}] = {{{expected}}};",
         f"  typename ToVec::register_type result = tsl::{name}<Vec, ToVec, {case.index}>(a0);",
         f'  return tsl::test::check_lanes<{tgt}>("{case.name}", result, expected, {out_lanes});',
+        "}",
+    ]
+    return "\n".join(lines), fn_name
+
+
+def _is_repr_cast(spec: LoweredSpecialization) -> bool:
+    """`cast`/`reinterpret`: a base-dim representation change with NO immediate — vector in, vector
+    out of a different base type. The generic body re-bases lane-for-lane (`as_base`), so it emits
+    one output per input lane; a golden case is meaningful only where that matches the authored
+    (hardware) expected, i.e. the LANE-PRESERVING cases. (Distinct from convert, which carries a
+    chunk `index` and windows the lane count.)"""
+
+    return (
+        spec.result_kind == "v"
+        and spec.uses_sized_vector
+        and spec.target is not None
+        and spec.target.uses_sized_vector
+        and spec.immediate is None
+        and tuple(spec.param_kinds) == ("v",)
+    )
+
+
+def _repr_cast_match(
+    case: TestCase, specs: tuple[LoweredSpecialization, ...]
+) -> LoweredSpecialization | None:
+    """The generic `cast`/`reinterpret` spec for this case (source ``type_tag`` -> ``to_type``).
+    It is a single ``LANES``-parametric body, so the lane count is not part of the key — the case
+    instantiates it at its own ``lanes``."""
+
+    if case.to_type is None or case.lanes is None:
+        return None
+    return next(
+        (
+            spec
+            for spec in specs
+            if spec.uses_sized_vector
+            and spec.type_tag == case.type_tag
+            and spec.target is not None
+            and spec.target.base_tag == case.to_type
+        ),
+        None,
+    )
+
+
+def _cpp_repr_cast_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> tuple[str, str] | None:
+    if case.expected_rule is not None:
+        return None
+    match = _repr_cast_match(case, specs)
+    if match is None:
+        return None
+    vector_inputs = [arg for arg in case.inputs if arg.kind == "vector"]
+    lanes = case.lanes
+    # The generic body emits `lanes` outputs (lane-preserving). A case whose expected is lane-for-
+    # lane (same length) is run against the generic reference; a width-changing cast's
+    # register-width-preserving expected (a different length) is a documented gap — the generic
+    # body converts every lane where the hardware keeps the register width, so they disagree.
+    if (
+        len(vector_inputs) != 1
+        or len(vector_inputs[0].values) != lanes
+        or len(case.expected) != lanes
+    ):
+        return None
+    src, tgt = match.base_type_spelling, match.target.base_spelling
+    fn_name = f"test_{name}_{index}_{_sanitize(case.name)}"
+    literals = ", ".join(_cpp_literal(v, case.type_tag) for v in vector_inputs[0].values)
+    expected = ", ".join(_cpp_literal(v, case.to_type) for v in case.expected)
+    lines = [
+        f"int {fn_name}() {{",
+        f"  using Vec = tsl::simd<{src}, tsl::generic<{lanes}>>;",
+        f"  using ToVec = tsl::simd<{tgt}, tsl::generic<{lanes}>>;",
+        f"  static const {src} in0[{lanes}] = {{{literals}}};",
+        "  typename Vec::register_type a0;",
+        f"  for (std::size_t i = 0; i < {lanes}; ++i) a0[i] = in0[i];",
+        f"  static const {tgt} expected[{lanes}] = {{{expected}}};",
+        f"  typename ToVec::register_type result = tsl::{name}<Vec, ToVec>(a0);",
+        f'  return tsl::test::check_lanes<{tgt}>("{case.name}", result, expected, {lanes});',
         "}",
     ]
     return "\n".join(lines), fn_name
@@ -1037,6 +1128,8 @@ def _rust_values_file(profiles: tuple[ProfileRender, ...], catalog: Catalog | No
                 elif any(_is_convert(spec) for spec in specs):
                     # Heterogeneous convert specs (fixed + generic) — classify over all, like C++.
                     emit = _rust_convert_case
+                elif any(_is_repr_cast(spec) for spec in specs):
+                    emit = _rust_repr_cast_case
                 else:
                     continue
                 for index, case in enumerate(primitive.tests):
@@ -1155,6 +1248,49 @@ def _rust_convert_case(
             f"        let expected: [{tgt}; {out_lanes}] = [{expected}];",
             f"        let result = {rust_raw_identifier(name)}::<Vec, ToVec, {case.index}>(a0);",
             f"        for i in 0..{out_lanes} {{ assert!(result[i].lane_eq(expected[i]), "
+            f'"{case.name} lane {{}}: expected {{:?}}, got {{:?}}", i, expected[i], result[i]); }}',
+            "    }",
+        ]
+    )
+
+
+def _rust_repr_cast_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> str | None:
+    """Rust golden case for `cast`/`reinterpret` (mirror of :func:`_cpp_repr_cast_case`)."""
+
+    if case.expected_rule is not None:
+        return None
+    match = _repr_cast_match(case, specs)
+    if match is None:
+        return None
+    vector_inputs = [arg for arg in case.inputs if arg.kind == "vector"]
+    lanes = case.lanes
+    if (
+        len(vector_inputs) != 1
+        or len(vector_inputs[0].values) != lanes
+        or len(case.expected) != lanes
+    ):
+        return None
+    src, tgt = match.base_type_spelling, match.target.base_spelling
+    fn_name = f"test_{name}_{index}_{_sanitize(case.name)}"
+    literals = ", ".join(_rust_literal(v, case.type_tag) for v in vector_inputs[0].values)
+    expected = ", ".join(_rust_literal(v, case.to_type) for v in case.expected)
+    return "\n".join(
+        [
+            "    #[test]",
+            f"    fn {fn_name}() {{",
+            f"        type Vec = Simd<{src}, Generic<{lanes}>>;",
+            f"        type ToVec = Simd<{tgt}, Generic<{lanes}>>;",
+            f"        let in0: [{src}; {lanes}] = [{literals}];",
+            "        let mut a0: <Vec as SimdVector>::RegisterType = Default::default();",
+            f"        for i in 0..{lanes} {{ a0[i] = in0[i]; }}",
+            f"        let expected: [{tgt}; {lanes}] = [{expected}];",
+            f"        let result = {rust_raw_identifier(name)}::<Vec, ToVec>(a0);",
+            f"        for i in 0..{lanes} {{ assert!(result[i].lane_eq(expected[i]), "
             f'"{case.name} lane {{}}: expected {{:?}}, got {{:?}}", i, expected[i], result[i]); }}',
             "    }",
         ]

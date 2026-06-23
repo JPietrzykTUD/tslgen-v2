@@ -11,7 +11,7 @@ from pathlib import Path
 
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.catalog.builder import CatalogBuilder
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import RESULT_DIM_BASE, Catalog
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import has_errors
 from tslc.sources import SourceLoader
@@ -95,17 +95,24 @@ def test_value_test_coverage_gaps(catalog: Catalog) -> None:
         with_tests.add(primitive.name)
         if primitive.result_target is None and _value_test_shape_handled(primitive.signature):
             covered.add(primitive.name)  # a name is covered if any variant's shape is handled
-        elif primitive.attributes.get("cast") == "convert":
-            # The size-changing converts (`convert_up`/`convert_down`) are the one representation-
-            # change shape now covered: golden cases run the monomorphized generic specialization
-            # at the test's lane count. Other repr-changes (cast/reinterpret/extract/insert) remain
-            # gaps.
+        elif (
+            primitive.result_target is not None
+            and primitive.result_target[0] == RESULT_DIM_BASE
+        ):
+            # BASE-dim representation changes have golden handlers against the generic reference:
+            # `convert_up`/`convert_down` (monomorphized, windowed) and `cast`/`reinterpret`
+            # (lane-preserving — the same-width / bit-reinterpret cases where the generic body
+            # agrees with the hardware-authored expected). EXTENSION-dim repr-changes
+            # (`extract`/`insert`) are still gaps.
             covered.add(primitive.name)
     gaps = with_tests - covered
     print(f"\nvalue-test coverage: {len(covered)}/{len(with_tests)} primitives covered; "
           f"{len(gaps)} not yet generated (unhandled shapes): {sorted(gaps)}")
     # Regression guard: the shapes we implemented stay covered.
-    assert {"add", "equal", "conflict", "store", "convert_up", "convert_down"} <= covered
+    assert {
+        "add", "equal", "conflict", "store",
+        "convert_up", "convert_down", "cast", "reinterpret",
+    } <= covered
     assert len(covered) >= 20, sorted(covered)
 
 
