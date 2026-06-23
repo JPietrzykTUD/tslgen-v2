@@ -59,6 +59,13 @@ impl<T> SimdVector for Simd<T, Scalar> {
 // per lane to scalar. Always available, so defined in the static core.
 pub struct Generic<const LANES: usize>;
 
+// Width invariant: a generic vector models a whole number of 128-bit registers, so
+// `LANES * size_of::<T>()` must be a multiple of 16 bytes. The C++ counterpart enforces this with
+// a `static_assert` in `simd<T, generic<LANES>>`; stable Rust cannot assert on a generic const in
+// type position without nightly `generic_const_exprs`, so it is not a hard check here. It holds by
+// CONSTRUCTION for everything tslc emits: size-changing bodies are monomorphized over the 128-bit
+// `size_bits` ladder, and the smoke/value harnesses instantiate the `LANES`-parametric bodies at a
+// 128-bit-multiple lane count. Only a hand-written `Simd<u8, Generic<3>>` would violate it, unchecked.
 impl<T, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
     type BaseType = T;
     type RegisterType = array_type<T, LANES>;

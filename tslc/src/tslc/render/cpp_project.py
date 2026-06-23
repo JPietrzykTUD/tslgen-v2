@@ -152,12 +152,15 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
         for spec in specs:
             if spec.uses_sized_vector:
                 # A MONOMORPHIZED sized slot (numeric `lane_parameter`) only has that one concrete
-                # instantiation — instantiate it there; a `LANES`-parametric slot is exercised at a
-                # representative count of 8.
+                # instantiation — exercise it there. A `LANES`-parametric slot is exercised at 16
+                # lanes: the sized substrate requires every vector's total width be a multiple of
+                # 128 bits, and 16 * 8 (the narrowest lane type) = 128 — so 16 keeps BOTH the source
+                # AND a width-changing lane-preserving target (e.g. a `cast` i16->i8) a whole number
+                # of 128-bit registers, where a per-type `128 / typebits` would not.
                 smoke_lanes = (
                     int(spec.lane_parameter)
                     if spec.lane_parameter and spec.lane_parameter.isdigit()
-                    else 8
+                    else 16
                 )
                 vec = f"tsl::simd<{spec.base_type_spelling}, tsl::generic<{smoke_lanes}>>"
             else:

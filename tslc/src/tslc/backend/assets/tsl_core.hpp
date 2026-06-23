@@ -196,6 +196,11 @@ struct generic {};
 
 template <class T, std::size_t LANES>
 struct simd<T, generic<LANES>> {
+    // The generic vector models a portable register, so its total width must be a whole number of
+    // 128-bit registers — the size ladder a size-changing primitive is monomorphized over. This
+    // rejects a stray `generic<3>` / a 64-bit `generic<8>` of `int8_t` at instantiation.
+    static_assert((LANES * sizeof(T)) % 16 == 0,
+                  "tsl::generic<LANES>: LANES * sizeof(T) must be a multiple of 16 bytes (128 bits)");
     using base_type = T;
     using register_type = array_type<T, LANES>;
     // Emulated mask: a bitset, one bit per lane (≤64 lanes covers all real widths).
