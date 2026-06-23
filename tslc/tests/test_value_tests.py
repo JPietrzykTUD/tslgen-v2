@@ -93,15 +93,19 @@ def test_value_test_coverage_gaps(catalog: Catalog) -> None:
         if not primitive.tests:
             continue
         with_tests.add(primitive.name)
-        # The generator handles no representation-change (`result_target`) shape yet, so a
-        # repr-change variant never counts as covered even if its signature shape matches.
         if primitive.result_target is None and _value_test_shape_handled(primitive.signature):
             covered.add(primitive.name)  # a name is covered if any variant's shape is handled
+        elif primitive.attributes.get("cast") == "convert":
+            # The size-changing converts (`convert_up`/`convert_down`) are the one representation-
+            # change shape now covered: golden cases run the monomorphized generic specialization
+            # at the test's lane count. Other repr-changes (cast/reinterpret/extract/insert) remain
+            # gaps.
+            covered.add(primitive.name)
     gaps = with_tests - covered
     print(f"\nvalue-test coverage: {len(covered)}/{len(with_tests)} primitives covered; "
           f"{len(gaps)} not yet generated (unhandled shapes): {sorted(gaps)}")
     # Regression guard: the shapes we implemented stay covered.
-    assert {"add", "equal", "conflict", "store"} <= covered
+    assert {"add", "equal", "conflict", "store", "convert_up", "convert_down"} <= covered
     assert len(covered) >= 20, sorted(covered)
 
 

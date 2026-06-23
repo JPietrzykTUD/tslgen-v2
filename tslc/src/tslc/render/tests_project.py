@@ -150,6 +150,18 @@ def _cpp_values_runner(profile_render: ProfileRender, catalog: Catalog | None) -
                     if emitted is not None:
                         functions.append(emitted[0])
                         calls.append(emitted[1])
+            elif any(_is_convert(spec) for spec in specs):
+                # Convert specs are HETEROGENEOUS (fixed dedicated bodies + generic monomorphized
+                # ones), so classify over all specs, not just `specs[0]`; `_convert_match` then
+                # selects the generic specialization a golden case runs against.
+                primitive = catalog.primitive(name, unmasked=True)
+                if primitive is None:
+                    continue
+                for index, case in enumerate(primitive.tests):
+                    emitted = _cpp_convert_case(name, index, case, specs)
+                    if emitted is not None:
+                        functions.append(emitted[0])
+                        calls.append(emitted[1])
 
     body = "\n\n".join(functions)
     call_lines = "\n".join(f"  failures += {call}();" for call in calls)
@@ -459,6 +471,83 @@ def _cpp_immediate_case(
         f'"{case.name}", result, expected, {lanes});'
     )
     lines.append("}")
+    return "\n".join(lines), fn_name
+
+
+def _is_convert(spec: LoweredSpecialization) -> bool:
+    """A representation-change CONVERT (`convert_up`/`convert_down`): a vector result whose target
+    is a sized vector of a different base type, selected by a compile-time chunk `index`. The
+    generic reference IS the convert body, so a golden case is the absolute-correctness anchor for
+    the monomorphized size ladder. (cast/reinterpret carry no immediate; extract/insert change the
+    extension, not a sized base type.)"""
+
+    return (
+        spec.result_kind == "v"
+        and spec.target is not None
+        and spec.target.uses_sized_vector
+        and spec.immediate is not None
+        and tuple(spec.param_kinds) == ("v", "sImm")
+    )
+
+
+def _convert_match(
+    case: TestCase, specs: tuple[LoweredSpecialization, ...]
+) -> LoweredSpecialization | None:
+    """The monomorphized convert spec for this case: source ``type_tag`` -> ``to_type`` at the
+    case's source ``lanes`` (so its concrete target lane count and target spelling are read off the
+    spec). None when the case names a size with no emitted specialization — then it is skipped."""
+
+    if case.to_type is None or case.lanes is None:
+        return None
+    return next(
+        (
+            spec
+            for spec in specs
+            if spec.type_tag == case.type_tag
+            and spec.target is not None
+            and spec.target.base_tag == case.to_type
+            and spec.lane_parameter == str(case.lanes)
+            and spec.target.lane_parameter is not None
+        ),
+        None,
+    )
+
+
+def _cpp_convert_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> tuple[str, str] | None:
+    if case.index is None or case.expected_rule is not None:
+        return None
+    match = _convert_match(case, specs)
+    if match is None:
+        return None
+    vector_inputs = [arg for arg in case.inputs if arg.kind == "vector"]
+    out_lanes = int(match.target.lane_parameter)
+    if (
+        len(vector_inputs) != 1
+        or len(vector_inputs[0].values) != case.lanes
+        or len(case.expected) != out_lanes
+    ):
+        return None
+    src, tgt = match.base_type_spelling, match.target.base_spelling
+    fn_name = f"test_{name}_{index}_{_sanitize(case.name)}"
+    literals = ", ".join(_cpp_literal(v, case.type_tag) for v in vector_inputs[0].values)
+    expected = ", ".join(_cpp_literal(v, case.to_type) for v in case.expected)
+    lines = [
+        f"int {fn_name}() {{",
+        f"  using Vec = tsl::simd<{src}, tsl::generic<{case.lanes}>>;",
+        f"  using ToVec = tsl::simd<{tgt}, tsl::generic<{out_lanes}>>;",
+        f"  static const {src} in0[{case.lanes}] = {{{literals}}};",
+        "  typename Vec::register_type a0;",
+        f"  for (std::size_t i = 0; i < {case.lanes}; ++i) a0[i] = in0[i];",
+        f"  static const {tgt} expected[{out_lanes}] = {{{expected}}};",
+        f"  typename ToVec::register_type result = tsl::{name}<Vec, ToVec, {case.index}>(a0);",
+        f'  return tsl::test::check_lanes<{tgt}>("{case.name}", result, expected, {out_lanes});',
+        "}",
+    ]
     return "\n".join(lines), fn_name
 
 
@@ -940,13 +1029,18 @@ def _rust_values_file(profiles: tuple[ProfileRender, ...], catalog: Catalog | No
             functions: list[str] = []
             for name in sorted(profile_render.rust):
                 specs = profile_render.rust[name]
-                if not _is_golden_supported(specs[0]):
-                    continue
                 primitive = catalog.primitive(name, unmasked=True)
                 if primitive is None:
                     continue
+                if _is_golden_supported(specs[0]):
+                    emit = _rust_golden_case
+                elif any(_is_convert(spec) for spec in specs):
+                    # Heterogeneous convert specs (fixed + generic) — classify over all, like C++.
+                    emit = _rust_convert_case
+                else:
+                    continue
                 for index, case in enumerate(primitive.tests):
-                    emitted = _rust_golden_case(name, index, case, specs)
+                    emitted = emit(name, index, case, specs)
                     if emitted is not None:
                         functions.append(emitted)
             if not functions:
@@ -1021,6 +1115,50 @@ def _rust_golden_case(
         )
     lines.append("    }")
     return "\n".join(lines)
+
+
+def _rust_convert_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> str | None:
+    """Rust golden case for a monomorphized convert (mirror of :func:`_cpp_convert_case`). On Rust
+    this also value-verifies the saturating-cast helper that `convert_down` lowers to."""
+
+    if case.index is None or case.expected_rule is not None:
+        return None
+    match = _convert_match(case, specs)
+    if match is None:
+        return None
+    vector_inputs = [arg for arg in case.inputs if arg.kind == "vector"]
+    out_lanes = int(match.target.lane_parameter)
+    if (
+        len(vector_inputs) != 1
+        or len(vector_inputs[0].values) != case.lanes
+        or len(case.expected) != out_lanes
+    ):
+        return None
+    src, tgt = match.base_type_spelling, match.target.base_spelling
+    fn_name = f"test_{name}_{index}_{_sanitize(case.name)}"
+    literals = ", ".join(_rust_literal(v, case.type_tag) for v in vector_inputs[0].values)
+    expected = ", ".join(_rust_literal(v, case.to_type) for v in case.expected)
+    return "\n".join(
+        [
+            "    #[test]",
+            f"    fn {fn_name}() {{",
+            f"        type Vec = Simd<{src}, Generic<{case.lanes}>>;",
+            f"        type ToVec = Simd<{tgt}, Generic<{out_lanes}>>;",
+            f"        let in0: [{src}; {case.lanes}] = [{literals}];",
+            "        let mut a0: <Vec as SimdVector>::RegisterType = Default::default();",
+            f"        for i in 0..{case.lanes} {{ a0[i] = in0[i]; }}",
+            f"        let expected: [{tgt}; {out_lanes}] = [{expected}];",
+            f"        let result = {rust_raw_identifier(name)}::<Vec, ToVec, {case.index}>(a0);",
+            f"        for i in 0..{out_lanes} {{ assert!(result[i].lane_eq(expected[i]), "
+            f'"{case.name} lane {{}}: expected {{:?}}, got {{:?}}", i, expected[i], result[i]); }}',
+            "    }",
+        ]
+    )
 
 
 __all__ = ["cpp_test_artifacts", "rust_test_artifacts"]
