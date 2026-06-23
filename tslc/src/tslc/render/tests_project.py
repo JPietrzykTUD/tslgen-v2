@@ -51,6 +51,13 @@ def _cpp_values_runner(profile_render: ProfileRender, catalog: Catalog | None) -
     # Differential tests build a hardware register via the round-trip harness; emit them only
     # when those primitives are present in this project (seeded by `test_harness`).
     harness_ready = {"from_array", "to_array"} <= set(profile_render.cpp)
+    # The (type, extension) pairs whose round-trip harness is actually emitted — an extension-dim
+    # extract/insert case is only generated when BOTH its source and target vectors round-trip
+    # (the harness is seeded per used (type, ext), so a rarely-used pair like f64@avx2 may be
+    # absent even when its extract spec exists).
+    harness_pairs = {
+        (s.type_tag, s.extension_name) for s in profile_render.cpp.get("from_array", ())
+    } & {(s.type_tag, s.extension_name) for s in profile_render.cpp.get("to_array", ())}
     if catalog is not None:
         for name in sorted(profile_render.cpp):
             specs = profile_render.cpp[name]
@@ -169,6 +176,23 @@ def _cpp_values_runner(profile_render: ProfileRender, catalog: Catalog | None) -
                     continue
                 for index, case in enumerate(primitive.tests):
                     emitted = _cpp_repr_cast_case(name, index, case, specs)
+                    if emitted is not None:
+                        functions.append(emitted[0])
+                        calls.append(emitted[1])
+            elif harness_ready and any(_is_extension_repr(spec) for spec in specs):
+                # extract/insert: extension-dim, no generic reference — golden vs the hardware spec
+                # via the round-trip harness. extract has one vector param, insert two (orig+data).
+                primitive = catalog.primitive(name, unmasked=True)
+                if primitive is None:
+                    continue
+                emit = _cpp_insert_case if "vt" in specs[0].param_kinds else _cpp_extract_case
+                for index, case in enumerate(primitive.tests):
+                    if not {
+                        (case.type_tag, case.extension),
+                        (case.type_tag, case.to_extension),
+                    } <= harness_pairs:
+                        continue  # the round-trip harness for one of the two vectors is absent
+                    emitted = emit(name, index, case, specs)
                     if emitted is not None:
                         functions.append(emitted[0])
                         calls.append(emitted[1])
@@ -637,6 +661,129 @@ def _cpp_repr_cast_case(
         f"  static const {tgt} expected[{lanes}] = {{{expected}}};",
         f"  typename ToVec::register_type result = tsl::{name}<Vec, ToVec>(a0);",
         f'  return tsl::test::check_lanes<{tgt}>("{case.name}", result, expected, {lanes});',
+        "}",
+    ]
+    return "\n".join(lines), fn_name
+
+
+def _is_extension_repr(spec: LoweredSpecialization) -> bool:
+    """`extract`/`insert`: an EXTENSION-dim representation change (same base type, different
+    extension/register width) on a fixed extension, with a compile-time `index`. There is NO
+    generic software impl (extension-dim is not modelled on the sized vector), so these are tested
+    golden-only — the hardware specialization is run via the round-trip harness and compared to the
+    authored expected (C++ only, like the differential layer). `extract` takes one vector + index;
+    `insert` takes two (orig + data) + index."""
+
+    return (
+        spec.result_kind == "v"
+        and spec.target is not None
+        and not spec.target.uses_sized_vector
+        and spec.immediate is not None
+        and spec.target.base_tag == spec.type_tag  # base unchanged -> extension dim
+        and "sImm" in spec.param_kinds
+    )
+
+
+def _extension_repr_match(
+    case: TestCase, specs: tuple[LoweredSpecialization, ...]
+) -> LoweredSpecialization | None:
+    """The hardware spec for an extension-dim case: source ``extension`` -> ``to_extension`` for
+    ``type_tag``. None when the profile lacks one (or both) extensions, so the case is skipped."""
+
+    if case.to_extension is None or case.lanes is None:
+        return None
+    return next(
+        (
+            spec
+            for spec in specs
+            if spec.type_tag == case.type_tag
+            and spec.extension_name == case.extension
+            and spec.target is not None
+            and spec.target.extension_isa == case.to_extension
+        ),
+        None,
+    )
+
+
+def _cpp_extract_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> tuple[str, str] | None:
+    if case.expected_rule is not None:
+        return None
+    match = _extension_repr_match(case, specs)
+    if match is None:
+        return None
+    vector_inputs = [arg for arg in case.inputs if arg.kind == "vector"]
+    imm = [arg for arg in case.inputs if arg.kind == "mask" and arg.mask_bits is not None]
+    if len(vector_inputs) != 1 or len(imm) != 1 or len(vector_inputs[0].values) != case.lanes:
+        return None
+    out_lanes = len(case.expected)
+    base = match.base_type_spelling
+    src_vec = f"tsl::simd<{base}, tsl::{case.extension}>"
+    dst_vec = f"tsl::simd<{base}, tsl::{case.to_extension}>"
+    idx = imm[0].mask_bits
+    fn_name = f"test_{name}_{index}_{_sanitize(case.name)}"
+    literals = ", ".join(_cpp_literal(v, case.type_tag) for v in vector_inputs[0].values)
+    expected = ", ".join(_cpp_literal(v, case.type_tag) for v in case.expected)
+    lines = [
+        f"int {fn_name}() {{",
+        f"  using Vec = {src_vec};",
+        f"  using ToVec = {dst_vec};",
+        f"  static const {base} in0[{case.lanes}] = {{{literals}}};",
+        "  typename tsl::array_for<Vec>::type hin;",
+        f"  for (std::size_t i = 0; i < {case.lanes}; ++i) hin[i] = in0[i];",
+        f"  auto result = tsl::{name}<Vec, ToVec, {idx}>(tsl::from_array<Vec>(hin));",
+        "  typename tsl::array_for<ToVec>::type hout = tsl::to_array<ToVec>(result);",
+        f"  static const {base} expected[{out_lanes}] = {{{expected}}};",
+        f'  return tsl::test::check_lanes<{base}>("{case.name}", hout, expected, {out_lanes});',
+        "}",
+    ]
+    return "\n".join(lines), fn_name
+
+
+def _cpp_insert_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> tuple[str, str] | None:
+    if case.expected_rule is not None:
+        return None
+    match = _extension_repr_match(case, specs)
+    if match is None:
+        return None
+    vector_inputs = [arg for arg in case.inputs if arg.kind == "vector"]
+    imm = [arg for arg in case.inputs if arg.kind == "mask" and arg.mask_bits is not None]
+    out_lanes = len(case.expected)
+    # orig (big, the result extension) + data (small, the source extension) + index.
+    if len(vector_inputs) != 2 or len(imm) != 1 or len(vector_inputs[1].values) != case.lanes:
+        return None
+    base = match.base_type_spelling
+    data_vec = f"tsl::simd<{base}, tsl::{case.extension}>"  # small (the `v` data param)
+    result_vec = f"tsl::simd<{base}, tsl::{case.to_extension}>"  # big (orig + result)
+    idx = imm[0].mask_bits
+    fn_name = f"test_{name}_{index}_{_sanitize(case.name)}"
+    orig_lits = ", ".join(_cpp_literal(v, case.type_tag) for v in vector_inputs[0].values)
+    data_lits = ", ".join(_cpp_literal(v, case.type_tag) for v in vector_inputs[1].values)
+    expected = ", ".join(_cpp_literal(v, case.type_tag) for v in case.expected)
+    lines = [
+        f"int {fn_name}() {{",
+        f"  using DataVec = {data_vec};",
+        f"  using ResultVec = {result_vec};",
+        f"  static const {base} orig0[{out_lanes}] = {{{orig_lits}}};",
+        f"  static const {base} data0[{case.lanes}] = {{{data_lits}}};",
+        "  typename tsl::array_for<ResultVec>::type horig;",
+        "  typename tsl::array_for<DataVec>::type hdata;",
+        f"  for (std::size_t i = 0; i < {out_lanes}; ++i) horig[i] = orig0[i];",
+        f"  for (std::size_t i = 0; i < {case.lanes}; ++i) hdata[i] = data0[i];",
+        f"  auto result = tsl::{name}<DataVec, ResultVec, {idx}>("
+        "tsl::from_array<ResultVec>(horig), tsl::from_array<DataVec>(hdata));",
+        "  typename tsl::array_for<ResultVec>::type hout = tsl::to_array<ResultVec>(result);",
+        f"  static const {base} expected[{out_lanes}] = {{{expected}}};",
+        f'  return tsl::test::check_lanes<{base}>("{case.name}", hout, expected, {out_lanes});',
         "}",
     ]
     return "\n".join(lines), fn_name
