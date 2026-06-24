@@ -1768,6 +1768,14 @@ After the design-principles residual-risk cleanup, `load_mask_repr`
 and dependency extraction no longer constructs a backend dialect for
 backend-neutral call closure.
 
+After the Rust `load_mask_repr` parity fix, the generic unpacked path indexes a
+reinterpreted unsigned lane-word pointer instead of the original vector base
+pointer, and AVX2/SSE register-mask comparisons are reinterpreted back to the
+current vector mask representation before returning. Targeted
+`test_masked_memory_build`, targeted `test_full_corpus_builds`, and the full
+`./verify.sh` gate passed; the full gate reported 185 non-build tests and 53
+generated-build tests across its shards.
+
 Known follow-ups:
 
 - Rust value-test parity is still a separate milestone.

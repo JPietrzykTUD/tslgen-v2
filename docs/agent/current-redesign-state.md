@@ -1315,7 +1315,11 @@ instead of constructing a C++ backend dialect, scalar type facts are centralized
 in `tslc.catalog.scalar_types`, dependency worklist expansion sorts discovered
 primitive names before enqueueing them, and `load_mask_repr` `packed=false`
 now mirrors `store_mask_repr` by using explicit unsigned lane-word storage
-instead of `vector::mask_underlying_t`.
+instead of `vector::mask_underlying_t`. A post-verify Rust parity fix keeps the
+generic `load_mask_repr` unpacked path reading from a reinterpreted unsigned
+lane-word pointer and reinterprets AVX2/SSE register comparison masks back to
+the current vector's mask representation before returning, preserving the same
+layout contract across C++ and Rust.
 
 Active prompt:
 docs/agent/runs/tslc-design-principles-residual-risk-review-prompt.md
@@ -1386,6 +1390,13 @@ passed with 1 test under escalated filesystem permissions because the generated
 C++ build uses `/root/.cache/zig`;
 `python -m pytest -q tslc/tests/test_masks_and_calls.py tslc/tests/test_support_policy.py tslc/tests/test_support_policy_views.py tslc/tests/test_tsil_scan.py tslc/tests/test_generation_conditionals.py tslc/tests/test_select_and_lower.py tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py`
 passed with 79 tests under the same generated-build permissions.
+After the Rust `load_mask_repr` parity fix,
+`python -m pytest -q tslc/tests/test_build_verify.py::test_masked_memory_build`
+passed with 1 test;
+`python -m pytest -q tslc/tests/test_build_verify.py::test_full_corpus_builds`
+passed with 1 test;
+`./verify.sh` passed all targeted validations, including 185 non-build tests
+and 53 generated-build tests across its shards.
 ```
 
 Store-mask packed-layout follow-up validation (2026-06-24):
@@ -1707,6 +1718,9 @@ addresses the medium findings and residual risks from the latest
 design-principles review by removing the backend dialect from dependency
 extraction, centralizing scalar source-type facts, sorting dependency worklist
 expansion, and completing the `load_mask_repr` unpacked typed layout follow-up.
+The final source revision also preserves Rust mask representation parity by
+casting the generic pointer to unsigned lane-word storage before indexing and by
+reinterpreting AVX2/SSE register-mask results back to the current vector.
 
 Next expected action: run the residual-risk cleanup review. If accepted, select
 the next concrete planning/review prompt from the active TSLc backlog; if it
@@ -1724,6 +1738,13 @@ passed with 1 test under escalated filesystem permissions because the generated
 C++ build uses `/root/.cache/zig`;
 `python -m pytest -q tslc/tests/test_masks_and_calls.py tslc/tests/test_support_policy.py tslc/tests/test_support_policy_views.py tslc/tests/test_tsil_scan.py tslc/tests/test_generation_conditionals.py tslc/tests/test_select_and_lower.py tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py`
 passed with 79 tests under the same generated-build permissions.
+After the Rust `load_mask_repr` parity fix,
+`python -m pytest -q tslc/tests/test_build_verify.py::test_masked_memory_build`
+passed with 1 test;
+`python -m pytest -q tslc/tests/test_build_verify.py::test_full_corpus_builds`
+passed with 1 test;
+`./verify.sh` passed all targeted validations, including 185 non-build tests
+and 53 generated-build tests across its shards.
 
 Known follow-ups: the low-severity value-test planner/renderer module-size
 guardrail still applies before adding more case families. Remaining digit

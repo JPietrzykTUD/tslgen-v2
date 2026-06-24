@@ -41,8 +41,11 @@ Review only this cleanup:
 - the call-closure worklist adds discovered primitive names in sorted order;
 - `load_mask_repr` `packed=false` now mirrors `store_mask_repr` by using
   unsigned lane-word layout instead of `vector::mask_underlying_t`;
+- the Rust parity follow-up keeps generic unpacked `load_mask_repr` indexing on
+  a reinterpreted unsigned lane-word pointer and reinterprets AVX2/SSE register
+  comparison masks back to the current vector mask representation;
 - focused tests cover backend-free dependency query resolution and the full
-  C++ AVX2 value gate.
+  generated C++/Rust build gate.
 
 ## Out Of Scope
 
@@ -63,8 +66,9 @@ Review only this cleanup:
   by validation, support policy, query evaluation, immediate ranges, and
   value-test scalar-tag helpers without creating new runtime globals?
 - Does the `load_mask_repr` unpacked path produce typed mask values from
-  unsigned lane words for scalar/generic/x86 families without relying on
-  undocumented mask-underlying source spelling?
+  unsigned lane words for scalar/generic/x86 families and return the current
+  vector's mask representation without relying on undocumented mask-underlying
+  source spelling?
 - Is dependency worklist ordering deterministic and free of set-order leakage?
 - Are remaining digit parses clearly presentation-specific, such as emitted
   immediate type spellings or backend Rust/C++ base spellings?
@@ -74,10 +78,14 @@ Review only this cleanup:
 ```bash
 python -B -m compileall -q tslc/src/tslc tslc/tests
 python -m pytest -q tslc/tests/test_masks_and_calls.py tslc/tests/test_support_policy.py tslc/tests/test_support_policy_views.py tslc/tests/test_tsil_scan.py tslc/tests/test_generation_conditionals.py tslc/tests/test_select_and_lower.py tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py
+python -m pytest -q tslc/tests/test_build_verify.py::test_masked_memory_build
+python -m pytest -q tslc/tests/test_build_verify.py::test_full_corpus_builds
+./verify.sh
 git diff --check
 ```
 
-The generated C++ value-test gate may need a writable `/root/.cache/zig`.
+The generated C++/Rust build gates may need writable tool caches such as
+`/root/.cache/zig`.
 
 ## Expected Verdict
 
