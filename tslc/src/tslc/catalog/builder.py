@@ -23,6 +23,7 @@ from tslc.catalog.model import (
     TestCase,
 )
 from tslc.catalog.signatures import parse_signature
+from tslc.catalog.test_cases import derive_test_case_name, infer_test_lane_count
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
 from tslc.syntax.ast import (
     OuterTslParseResult,
@@ -137,7 +138,7 @@ def _build_primitives(
     # per-backend dispatch strategy), keyed by the signature parameter name.
     immediate_params = _immediate_params(declaration, diagnostics)
     generic_params = _generic_params(declaration)
-    tests = _test_cases(declaration)
+    tests = _test_cases(declaration, diagnostics)
 
     def make(attributes: dict[str, str]) -> Primitive:
         return Primitive(
@@ -492,7 +493,10 @@ def _generic_params(declaration: ParsedPrimitiveDeclaration) -> tuple[GenericPar
     )
 
 
-def _test_cases(declaration: ParsedPrimitiveDeclaration) -> tuple[TestCase, ...]:
+def _test_cases(
+    declaration: ParsedPrimitiveDeclaration,
+    diagnostics: list[Diagnostic],
+) -> tuple[TestCase, ...]:
     """The value-correctness cases from a `tests:` block.
 
     Each list item is an inline ``{...}`` map. Numeric literals are kept as raw tokens so float
@@ -511,28 +515,57 @@ def _test_cases(declaration: ParsedPrimitiveDeclaration) -> tuple[TestCase, ...]
             continue
         entries = {entry.key.text: entry for entry in item.entries}
         case_field = entries.get("case")
+        tags = _tag_list(entries.get("tags"))
+        case_id = _field_text(entries.get("id"))
+        inputs = _test_inputs(_child(case_field, "inputs"))
+        expected = _expected_tokens(_child(case_field, "expected"))
+        attrs = _attr_map(entries.get("attrs"))
+        explicit_lane_count = _opt_int(_field_text(entries.get("lane_count")))
+        to_type = _field_text(entries.get("to_type"))
+        to_extension = _field_text(entries.get("to_extension"))
+        index = _opt_int(_field_text(entries.get("index")))
+        lanes = infer_test_lane_count(
+            shape=parse_signature(declaration.signature),
+            inputs=inputs,
+            expected=expected,
+            explicit_lane_count=explicit_lane_count,
+            has_target_axis=to_type is not None or to_extension is not None,
+        )
+        name = derive_test_case_name(
+            primitive_name=declaration.name,
+            type_tag=_field_text(entries.get("type")) or "",
+            tags=tags,
+            case_id=case_id,
+            extension=_field_text(entries.get("extension")),
+            to_type=to_type,
+            to_extension=to_extension,
+            index=index,
+            attrs=attrs,
+        )
         cases.append(
             TestCase(
-                name=_field_text(entries.get("test_name")) or "",
+                name=name,
                 type_tag=_field_text(entries.get("type")) or "",
-                inputs=_test_inputs(_child(case_field, "inputs")),
-                expected=_expected_tokens(_child(case_field, "expected")),
-                lane_set=_field_text(entries.get("lane_set")),
-                lanes=_opt_int(_field_text(entries.get("lanes"))),
+                tags=tags,
+                id=case_id,
+                inputs=inputs,
+                expected=expected,
+                lanes=lanes,
                 extension=_field_text(entries.get("extension")),
                 expected_rule=_field_text(entries.get("expected_rule")),
-                to_type=_field_text(entries.get("to_type")),
-                to_extension=_field_text(entries.get("to_extension")),
-                index=_opt_int(_field_text(entries.get("index"))),
+                to_type=to_type,
+                to_extension=to_extension,
+                index=index,
                 offset=_opt_int(_field_text(entries.get("offset"))),
                 src_offset=_opt_int(_field_text(entries.get("src_offset"))),
                 dst_offset=_opt_int(_field_text(entries.get("dst_offset"))),
                 scale=_opt_int(_field_text(entries.get("scale"))),
                 alignment=_opt_int(_field_text(entries.get("alignment"))),
-                attrs=_attr_map(entries.get("attrs")),
+                attrs=attrs,
                 source=_source_span(item.source),
             )
         )
+    _diagnose_duplicate_test_names(declaration.name, cases, diagnostics)
     return tuple(cases)
 
 
@@ -555,6 +588,12 @@ def _test_inputs(field: ParsedTslField | None) -> tuple[TestArg, ...]:
     return tuple(args)
 
 
+def _tag_list(field: ParsedTslField | None) -> tuple[str, ...]:
+    if field is None or not isinstance(field.value, ParsedTslListValue):
+        return ()
+    return tuple(item.text for item in field.value.items if isinstance(item, ParsedTslScalarValue))
+
+
 def _attr_map(field: ParsedTslField | None) -> dict[str, str]:
     if field is None or not isinstance(field.value, ParsedTslAttributeListValue):
         return {}
@@ -566,6 +605,31 @@ def _attr_map(field: ParsedTslField | None) -> dict[str, str]:
         )
         for attribute in field.value.attributes
     }
+
+
+def _diagnose_duplicate_test_names(
+    primitive_name: str,
+    cases: list[TestCase],
+    diagnostics: list[Diagnostic],
+) -> None:
+    seen: dict[str, SourceSpan | None] = {}
+    duplicates: set[str] = set()
+    for case in cases:
+        if case.name in seen:
+            duplicates.add(case.name)
+        seen[case.name] = case.source
+    for name in sorted(duplicates):
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-TEST-DUPLICATE-NAME",
+                message=(
+                    f"primitive {primitive_name!r}: duplicate derived test name {name!r}; "
+                    "add an `id` field to disambiguate"
+                ),
+                source=seen[name],
+            )
+        )
 
 
 def _opt_int(text: str | None) -> int | None:

@@ -403,9 +403,7 @@ def differential_cases(
         emitted.append(
             ValueTestCasePlan(
                 kind="differential",
-                function_name=(
-                    f"test_{name}_diff_{spec.extension_name}_{index}_{_sanitize(case.name)}"
-                ),
+                function_name=f"test_diff_{spec.extension_name}_{_sanitize(case.name)}",
                 case_name=case.name,
                 call_name=name,
                 type_tag=case.type_tag,
@@ -573,7 +571,9 @@ def _immediate_value(token: str, immediate: tuple[str, str] | None) -> str:
 
 
 def _function_name(name: str, index: int, case: TestCase) -> str:
-    return f"test_{name}_{index}_{_sanitize(case.name)}"
+    del name
+    del index
+    return f"test_{_sanitize(case.name)}"
 
 
 def _sanitize(text_value: str) -> str:

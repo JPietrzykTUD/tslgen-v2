@@ -181,11 +181,11 @@ class TestArg:
 class TestCase:
     """One value-correctness case authored in a primitive's `tests:` block.
 
-    When present, ``lanes`` is authoritative: ``inputs``/``expected`` are used verbatim, the
-    generic reference is instantiated at ``generic<lanes>``, and a hardware specialization is
-    exercised only when its width matches. ``expected`` holds per-lane literal tokens (a store
-    case's ``expected`` instead models the destination buffer and may exceed ``lanes``);
-    ``expected_rule`` (e.g. ``"popcnt"``) names a computed oracle in place of literal expected.
+    ``name`` and ``lanes`` are promoted facts: source tests author semantic ``tags`` and
+    optionally ``id``/``lane_count``; catalog promotion derives the stable case name and the lane
+    count. ``expected`` holds per-lane literal tokens (a store case's ``expected`` instead models
+    the destination buffer and may exceed ``lanes``); ``expected_rule`` (e.g. ``"popcnt"``) names a
+    computed oracle in place of literal expected.
 
     Optional axes pin a case to one specialization or carry operand metadata: ``extension`` (a
     specific subject extension), ``to_type``/``to_extension`` (representation-change targets),
@@ -196,10 +196,11 @@ class TestCase:
 
     name: str
     type_tag: str
+    tags: tuple[str, ...]
     inputs: tuple[TestArg, ...]
     expected: tuple[str, ...]
-    lane_set: str | None = None
     lanes: int | None = None
+    id: str | None = None
     extension: str | None = None
     expected_rule: str | None = None
     to_type: str | None = None

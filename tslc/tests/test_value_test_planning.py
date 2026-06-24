@@ -62,6 +62,7 @@ def test_planner_uses_source_identity_for_emitted_mask_name() -> None:
             TslTestCase(
                 name="masked",
                 type_tag="si32",
+                tags=("basic",),
                 lanes=4,
                 inputs=(
                     TslTestArg("mask", mask_bits="5"),
@@ -99,6 +100,7 @@ def test_lane_list_value_tests_are_planned_and_rendered() -> None:
             TslTestCase(
                 name="basic",
                 type_tag="si32",
+                tags=("basic",),
                 lanes=4,
                 inputs=(TslTestArg("vector", values=("1", "2", "3", "4")),),
                 expected=("4", "3", "2", "1"),

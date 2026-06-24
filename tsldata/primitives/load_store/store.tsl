@@ -2,26 +2,26 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
   brief_description "[Example: sse + si8]: Store 128-bits of integer data from \"a\" into memory."
   operation "[Example: sse + si8]: MEM[mem_addr+127:mem_addr] := a[127:0]"
   tests:
-    - {test_name "storeu_u32_basic", attrs [aligned=false], type "ui32", lane_set "lanes_i32", lanes 8, offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "storeu_u32_misaligned", attrs [aligned=false], type "ui32", lane_set "lanes_i32", lanes 8, offset 1, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17]], expected [0, 10, 11, 12, 13, 14, 15, 16, 17]}}
-    - {test_name "storeu_ui8_basic", attrs [aligned=false], type "ui8", lane_set "lanes_i8", lanes 16, offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "storeu_ui8_edge", attrs [aligned=false], type "ui8", lane_set "lanes_i8", lanes 16, offset 1, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
-    - {test_name "storeu_si8_basic", attrs [aligned=false], type "si8", lane_set "lanes_i8", lanes 16, offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "storeu_si8_edge", attrs [aligned=false], type "si8", lane_set "lanes_i8", lanes 16, offset 1, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
-    - {test_name "storeu_ui16_basic", attrs [aligned=false], type "ui16", lane_set "lanes_i16", lanes 8, offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "storeu_ui16_edge", attrs [aligned=false], type "ui16", lane_set "lanes_i16", lanes 8, offset 1, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 0, 1, 65535, 65534, 2, 3, 4, 5]}}
-    - {test_name "storeu_si16_basic", attrs [aligned=false], type "si16", lane_set "lanes_i16", lanes 8, offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "storeu_si16_edge", attrs [aligned=false], type "si16", lane_set "lanes_i16", lanes 8, offset 1, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 0, -1, -32768, 32767, 1, -2, 2, 32766]}}
-    - {test_name "storeu_si32_basic", attrs [aligned=false], type "si32", lane_set "lanes_i32", lanes 4, offset 0, case {inputs [[1, 2, 3, 4]], expected [1, 2, 3, 4]}}
-    - {test_name "storeu_si32_edge", attrs [aligned=false], type "si32", lane_set "lanes_i32", lanes 4, offset 1, case {inputs [[0, -1, -2147483648, 2147483647]], expected [0, 0, -1, -2147483648, 2147483647]}}
-    - {test_name "storeu_ui64_basic", attrs [aligned=false], type "ui64", lane_set "lanes_i64", lanes 2, offset 0, case {inputs [[1, 2]], expected [1, 2]}}
-    - {test_name "storeu_ui64_edge", attrs [aligned=false], type "ui64", lane_set "lanes_i64", lanes 2, offset 1, case {inputs [[0, 1]], expected [0, 0, 1]}}
-    - {test_name "storeu_si64_basic", attrs [aligned=false], type "si64", lane_set "lanes_i64", lanes 2, offset 0, case {inputs [[1, 2]], expected [1, 2]}}
-    - {test_name "storeu_si64_edge", attrs [aligned=false], type "si64", lane_set "lanes_i64", lanes 2, offset 1, case {inputs [[0, -1]], expected [0, 0, -1]}}
-    - {test_name "storeu_f32_basic", attrs [aligned=false], type "f32", lane_set "lanes_f32", lanes 4, offset 0, case {inputs [[1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "storeu_f32_edge", attrs [aligned=false], type "f32", lane_set "lanes_f32", lanes 4, offset 1, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected [0, 0.0, -0.0, INFINITY, "-INFINITY"]}}
-    - {test_name "storeu_f64_basic", attrs [aligned=false], type "f64", lane_set "lanes_f64", lanes 2, offset 0, case {inputs [[1.0, -2.0]], expected [1.0, -2.0]}}
-    - {test_name "storeu_f64_edge", attrs [aligned=false], type "f64", lane_set "lanes_f64", lanes 2, offset 1, case {inputs [[0.0, -0.0]], expected [0, 0.0, -0.0]}}
+    - {tags [basic], attrs [aligned=false], type "ui32", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [misaligned], attrs [aligned=false], type "ui32", offset 1, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17]], expected [0, 10, 11, 12, 13, 14, 15, 16, 17]}}
+    - {tags [basic], attrs [aligned=false], type "ui8", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], attrs [aligned=false], type "ui8", offset 1, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {tags [basic], attrs [aligned=false], type "si8", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], attrs [aligned=false], type "si8", offset 1, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
+    - {tags [basic], attrs [aligned=false], type "ui16", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], attrs [aligned=false], type "ui16", offset 1, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {tags [basic], attrs [aligned=false], type "si16", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], attrs [aligned=false], type "si16", offset 1, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 0, -1, -32768, 32767, 1, -2, 2, 32766]}}
+    - {tags [basic], attrs [aligned=false], type "si32", offset 0, case {inputs [[1, 2, 3, 4]], expected [1, 2, 3, 4]}}
+    - {tags [edge], attrs [aligned=false], type "si32", offset 1, case {inputs [[0, -1, -2147483648, 2147483647]], expected [0, 0, -1, -2147483648, 2147483647]}}
+    - {tags [basic], attrs [aligned=false], type "ui64", offset 0, case {inputs [[1, 2]], expected [1, 2]}}
+    - {tags [edge], attrs [aligned=false], type "ui64", offset 1, case {inputs [[0, 1]], expected [0, 0, 1]}}
+    - {tags [basic], attrs [aligned=false], type "si64", offset 0, case {inputs [[1, 2]], expected [1, 2]}}
+    - {tags [edge], attrs [aligned=false], type "si64", offset 1, case {inputs [[0, -1]], expected [0, 0, -1]}}
+    - {tags [basic], attrs [aligned=false], type "f32", offset 0, case {inputs [[1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [edge], attrs [aligned=false], type "f32", offset 1, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected [0, 0.0, -0.0, INFINITY, "-INFINITY"]}}
+    - {tags [basic], attrs [aligned=false], type "f64", offset 0, case {inputs [[1.0, -2.0]], expected [1.0, -2.0]}}
+    - {tags [edge], attrs [aligned=false], type "f64", offset 1, case {inputs [[0.0, -0.0]], expected [0, 0.0, -0.0]}}
   impls:
     scalar:
       arith:
@@ -127,46 +127,46 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
   brief_description "Stores a mask to aligned memory."
   operation ""
   tests:
-    - {test_name "store_mask_aligned_ui8_basic", attrs [aligned=true, packed=false], type "ui8", offset 0, case {inputs [12297829382473034410], expected [12297829382473034410, 0, 0]}}
-    - {test_name "store_mask_aligned_ui8_edge", attrs [aligned=true, packed=false], type "ui8", offset 0, case {inputs [18446744073709551615], expected [18446744073709551615, 0, 0]}}
-    - {test_name "store_mask_aligned_si8_basic", attrs [aligned=true, packed=false], type "si8", offset 0, case {inputs [12297829382473034410], expected [12297829382473034410, 0, 0]}}
-    - {test_name "store_mask_aligned_si8_edge", attrs [aligned=true, packed=false], type "si8", offset 0, case {inputs [18446744073709551615], expected [18446744073709551615, 0, 0]}}
-    - {test_name "store_mask_aligned_ui16_basic", attrs [aligned=true, packed=false], type "ui16", offset 0, case {inputs [2863311530], expected [2863311530, 0, 0]}}
-    - {test_name "store_mask_aligned_ui16_edge", attrs [aligned=true, packed=false], type "ui16", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
-    - {test_name "store_mask_aligned_si16_basic", attrs [aligned=true, packed=false], type "si16", offset 0, case {inputs [2863311530], expected [2863311530, 0, 0]}}
-    - {test_name "store_mask_aligned_si16_edge", attrs [aligned=true, packed=false], type "si16", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
-    - {test_name "store_mask_aligned_ui32_basic", attrs [aligned=true, packed=false], type "ui32", offset 0, case {inputs [43690], expected [43690, 0, 0]}}
-    - {test_name "store_mask_aligned_ui32_edge", attrs [aligned=true, packed=false], type "ui32", offset 0, case {inputs [65535], expected [65535, 0, 0]}}
-    - {test_name "store_mask_aligned_si32_basic", attrs [aligned=true, packed=false], type "si32", offset 0, case {inputs [43690], expected [43690, 0, 0]}}
-    - {test_name "store_mask_aligned_si32_edge", attrs [aligned=true, packed=false], type "si32", offset 0, case {inputs [65535], expected [65535, 0, 0]}}
-    - {test_name "store_mask_aligned_f32_basic", attrs [aligned=true, packed=false], type "f32", offset 0, case {inputs [43690], expected [43690, 0, 0]}}
-    - {test_name "store_mask_aligned_f32_edge", attrs [aligned=true, packed=false], type "f32", offset 0, case {inputs [65535], expected [65535, 0, 0]}}
-    - {test_name "store_mask_aligned_ui64_basic", attrs [aligned=true, packed=false], type "ui64", offset 0, case {inputs [170], expected [170, 0, 0]}}
-    - {test_name "store_mask_aligned_ui64_edge", attrs [aligned=true, packed=false], type "ui64", offset 0, case {inputs [255], expected [255, 0, 0]}}
-    - {test_name "store_mask_aligned_si64_basic", attrs [aligned=true, packed=false], type "si64", offset 0, case {inputs [170], expected [170, 0, 0]}}
-    - {test_name "store_mask_aligned_si64_edge", attrs [aligned=true, packed=false], type "si64", offset 0, case {inputs [255], expected [255, 0, 0]}}
-    - {test_name "store_mask_aligned_f64_basic", attrs [aligned=true, packed=false], type "f64", offset 0, case {inputs [170], expected [170, 0, 0]}}
-    - {test_name "store_mask_aligned_f64_edge", attrs [aligned=true, packed=false], type "f64", offset 0, case {inputs [255], expected [255, 0, 0]}}
-    - {test_name "store_mask_unaligned_ui8_basic", attrs [aligned=false, packed=false], type "ui8", offset 1, case {inputs [12297829382473034410], expected [0, 12297829382473034410, 0]}}
-    - {test_name "store_mask_unaligned_ui8_edge", attrs [aligned=false, packed=false], type "ui8", offset 1, case {inputs [18446744073709551615], expected [0, 18446744073709551615, 0]}}
-    - {test_name "store_mask_unaligned_si8_basic", attrs [aligned=false, packed=false], type "si8", offset 1, case {inputs [12297829382473034410], expected [0, 12297829382473034410, 0]}}
-    - {test_name "store_mask_unaligned_si8_edge", attrs [aligned=false, packed=false], type "si8", offset 1, case {inputs [18446744073709551615], expected [0, 18446744073709551615, 0]}}
-    - {test_name "store_mask_unaligned_ui16_basic", attrs [aligned=false, packed=false], type "ui16", offset 1, case {inputs [2863311530], expected [0, 2863311530, 0]}}
-    - {test_name "store_mask_unaligned_ui16_edge", attrs [aligned=false, packed=false], type "ui16", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
-    - {test_name "store_mask_unaligned_si16_basic", attrs [aligned=false, packed=false], type "si16", offset 1, case {inputs [2863311530], expected [0, 2863311530, 0]}}
-    - {test_name "store_mask_unaligned_si16_edge", attrs [aligned=false, packed=false], type "si16", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
-    - {test_name "store_mask_unaligned_ui32_basic", attrs [aligned=false, packed=false], type "ui32", offset 1, case {inputs [43690], expected [0, 43690, 0]}}
-    - {test_name "store_mask_unaligned_ui32_edge", attrs [aligned=false, packed=false], type "ui32", offset 1, case {inputs [65535], expected [0, 65535, 0]}}
-    - {test_name "store_mask_unaligned_si32_basic", attrs [aligned=false, packed=false], type "si32", offset 1, case {inputs [43690], expected [0, 43690, 0]}}
-    - {test_name "store_mask_unaligned_si32_edge", attrs [aligned=false, packed=false], type "si32", offset 1, case {inputs [65535], expected [0, 65535, 0]}}
-    - {test_name "store_mask_unaligned_f32_basic", attrs [aligned=false, packed=false], type "f32", offset 1, case {inputs [43690], expected [0, 43690, 0]}}
-    - {test_name "store_mask_unaligned_f32_edge", attrs [aligned=false, packed=false], type "f32", offset 1, case {inputs [65535], expected [0, 65535, 0]}}
-    - {test_name "store_mask_unaligned_ui64_basic", attrs [aligned=false, packed=false], type "ui64", offset 1, case {inputs [170], expected [0, 170, 0]}}
-    - {test_name "store_mask_unaligned_ui64_edge", attrs [aligned=false, packed=false], type "ui64", offset 1, case {inputs [255], expected [0, 255, 0]}}
-    - {test_name "store_mask_unaligned_si64_basic", attrs [aligned=false, packed=false], type "si64", offset 1, case {inputs [170], expected [0, 170, 0]}}
-    - {test_name "store_mask_unaligned_si64_edge", attrs [aligned=false, packed=false], type "si64", offset 1, case {inputs [255], expected [0, 255, 0]}}
-    - {test_name "store_mask_unaligned_f64_basic", attrs [aligned=false, packed=false], type "f64", offset 1, case {inputs [170], expected [0, 170, 0]}}
-    - {test_name "store_mask_unaligned_f64_edge", attrs [aligned=false, packed=false], type "f64", offset 1, case {inputs [255], expected [0, 255, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=false], type "ui8", offset 0, case {inputs [12297829382473034410], expected [12297829382473034410, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=false], type "ui8", offset 0, case {inputs [18446744073709551615], expected [18446744073709551615, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=false], type "si8", offset 0, case {inputs [12297829382473034410], expected [12297829382473034410, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=false], type "si8", offset 0, case {inputs [18446744073709551615], expected [18446744073709551615, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=false], type "ui16", offset 0, case {inputs [2863311530], expected [2863311530, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=false], type "ui16", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=false], type "si16", offset 0, case {inputs [2863311530], expected [2863311530, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=false], type "si16", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=false], type "ui32", offset 0, case {inputs [43690], expected [43690, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=false], type "ui32", offset 0, case {inputs [65535], expected [65535, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=false], type "si32", offset 0, case {inputs [43690], expected [43690, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=false], type "si32", offset 0, case {inputs [65535], expected [65535, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=false], type "f32", offset 0, case {inputs [43690], expected [43690, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=false], type "f32", offset 0, case {inputs [65535], expected [65535, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=false], type "ui64", offset 0, case {inputs [170], expected [170, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=false], type "ui64", offset 0, case {inputs [255], expected [255, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=false], type "si64", offset 0, case {inputs [170], expected [170, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=false], type "si64", offset 0, case {inputs [255], expected [255, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=false], type "f64", offset 0, case {inputs [170], expected [170, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=false], type "f64", offset 0, case {inputs [255], expected [255, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=false], type "ui8", offset 1, case {inputs [12297829382473034410], expected [0, 12297829382473034410, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=false], type "ui8", offset 1, case {inputs [18446744073709551615], expected [0, 18446744073709551615, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=false], type "si8", offset 1, case {inputs [12297829382473034410], expected [0, 12297829382473034410, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=false], type "si8", offset 1, case {inputs [18446744073709551615], expected [0, 18446744073709551615, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=false], type "ui16", offset 1, case {inputs [2863311530], expected [0, 2863311530, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=false], type "ui16", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=false], type "si16", offset 1, case {inputs [2863311530], expected [0, 2863311530, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=false], type "si16", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=false], type "ui32", offset 1, case {inputs [43690], expected [0, 43690, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=false], type "ui32", offset 1, case {inputs [65535], expected [0, 65535, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=false], type "si32", offset 1, case {inputs [43690], expected [0, 43690, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=false], type "si32", offset 1, case {inputs [65535], expected [0, 65535, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=false], type "f32", offset 1, case {inputs [43690], expected [0, 43690, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=false], type "f32", offset 1, case {inputs [65535], expected [0, 65535, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=false], type "ui64", offset 1, case {inputs [170], expected [0, 170, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=false], type "ui64", offset 1, case {inputs [255], expected [0, 255, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=false], type "si64", offset 1, case {inputs [170], expected [0, 170, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=false], type "si64", offset 1, case {inputs [255], expected [0, 255, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=false], type "f64", offset 1, case {inputs [170], expected [0, 170, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=false], type "f64", offset 1, case {inputs [255], expected [0, 255, 0]}}
   impls:
     scalar:
       arith:
@@ -280,46 +280,46 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
   brief_description "Stores a scalar mask to aligned memory."
   operation ""
   tests:
-    - {test_name "store_scalar_aligned_ui8_basic", attrs [aligned=true], type "ui8", offset 0, case {inputs [5], expected [5, 0, 0]}}
-    - {test_name "store_scalar_aligned_ui8_edge", attrs [aligned=true], type "ui8", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
-    - {test_name "store_scalar_aligned_si8_basic", attrs [aligned=true], type "si8", offset 0, case {inputs [5], expected [5, 0, 0]}}
-    - {test_name "store_scalar_aligned_si8_edge", attrs [aligned=true], type "si8", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
-    - {test_name "store_scalar_aligned_ui16_basic", attrs [aligned=true], type "ui16", offset 0, case {inputs [5], expected [5, 0, 0]}}
-    - {test_name "store_scalar_aligned_ui16_edge", attrs [aligned=true], type "ui16", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
-    - {test_name "store_scalar_aligned_si16_basic", attrs [aligned=true], type "si16", offset 0, case {inputs [5], expected [5, 0, 0]}}
-    - {test_name "store_scalar_aligned_si16_edge", attrs [aligned=true], type "si16", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
-    - {test_name "store_scalar_aligned_ui32_basic", attrs [aligned=true], type "ui32", offset 0, case {inputs [5], expected [5, 0, 0]}}
-    - {test_name "store_scalar_aligned_ui32_edge", attrs [aligned=true], type "ui32", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
-    - {test_name "store_scalar_aligned_si32_basic", attrs [aligned=true], type "si32", offset 0, case {inputs [5], expected [5, 0, 0]}}
-    - {test_name "store_scalar_aligned_si32_edge", attrs [aligned=true], type "si32", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
-    - {test_name "store_scalar_aligned_f32_basic", attrs [aligned=true], type "f32", offset 0, case {inputs [5], expected [5, 0, 0]}}
-    - {test_name "store_scalar_aligned_f32_edge", attrs [aligned=true], type "f32", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
-    - {test_name "store_scalar_aligned_ui64_basic", attrs [aligned=true], type "ui64", offset 0, case {inputs [5], expected [5, 0, 0]}}
-    - {test_name "store_scalar_aligned_ui64_edge", attrs [aligned=true], type "ui64", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
-    - {test_name "store_scalar_aligned_si64_basic", attrs [aligned=true], type "si64", offset 0, case {inputs [5], expected [5, 0, 0]}}
-    - {test_name "store_scalar_aligned_si64_edge", attrs [aligned=true], type "si64", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
-    - {test_name "store_scalar_aligned_f64_basic", attrs [aligned=true], type "f64", offset 0, case {inputs [5], expected [5, 0, 0]}}
-    - {test_name "store_scalar_aligned_f64_edge", attrs [aligned=true], type "f64", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
-    - {test_name "store_scalar_unaligned_ui8_basic", attrs [aligned=false], type "ui8", offset 1, case {inputs [5], expected [0, 5, 0]}}
-    - {test_name "store_scalar_unaligned_ui8_edge", attrs [aligned=false], type "ui8", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
-    - {test_name "store_scalar_unaligned_si8_basic", attrs [aligned=false], type "si8", offset 1, case {inputs [5], expected [0, 5, 0]}}
-    - {test_name "store_scalar_unaligned_si8_edge", attrs [aligned=false], type "si8", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
-    - {test_name "store_scalar_unaligned_ui16_basic", attrs [aligned=false], type "ui16", offset 1, case {inputs [5], expected [0, 5, 0]}}
-    - {test_name "store_scalar_unaligned_ui16_edge", attrs [aligned=false], type "ui16", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
-    - {test_name "store_scalar_unaligned_si16_basic", attrs [aligned=false], type "si16", offset 1, case {inputs [5], expected [0, 5, 0]}}
-    - {test_name "store_scalar_unaligned_si16_edge", attrs [aligned=false], type "si16", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
-    - {test_name "store_scalar_unaligned_ui32_basic", attrs [aligned=false], type "ui32", offset 1, case {inputs [5], expected [0, 5, 0]}}
-    - {test_name "store_scalar_unaligned_ui32_edge", attrs [aligned=false], type "ui32", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
-    - {test_name "store_scalar_unaligned_si32_basic", attrs [aligned=false], type "si32", offset 1, case {inputs [5], expected [0, 5, 0]}}
-    - {test_name "store_scalar_unaligned_si32_edge", attrs [aligned=false], type "si32", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
-    - {test_name "store_scalar_unaligned_f32_basic", attrs [aligned=false], type "f32", offset 1, case {inputs [5], expected [0, 5, 0]}}
-    - {test_name "store_scalar_unaligned_f32_edge", attrs [aligned=false], type "f32", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
-    - {test_name "store_scalar_unaligned_ui64_basic", attrs [aligned=false], type "ui64", offset 1, case {inputs [5], expected [0, 5, 0]}}
-    - {test_name "store_scalar_unaligned_ui64_edge", attrs [aligned=false], type "ui64", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
-    - {test_name "store_scalar_unaligned_si64_basic", attrs [aligned=false], type "si64", offset 1, case {inputs [5], expected [0, 5, 0]}}
-    - {test_name "store_scalar_unaligned_si64_edge", attrs [aligned=false], type "si64", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
-    - {test_name "store_scalar_unaligned_f64_basic", attrs [aligned=false], type "f64", offset 1, case {inputs [5], expected [0, 5, 0]}}
-    - {test_name "store_scalar_unaligned_f64_edge", attrs [aligned=false], type "f64", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
+    - {tags [scalar, basic], attrs [aligned=true], type "ui8", offset 0, case {inputs [5], expected [5, 0, 0]}}
+    - {tags [scalar, edge], attrs [aligned=true], type "ui8", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
+    - {tags [scalar, basic], attrs [aligned=true], type "si8", offset 0, case {inputs [5], expected [5, 0, 0]}}
+    - {tags [scalar, edge], attrs [aligned=true], type "si8", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
+    - {tags [scalar, basic], attrs [aligned=true], type "ui16", offset 0, case {inputs [5], expected [5, 0, 0]}}
+    - {tags [scalar, edge], attrs [aligned=true], type "ui16", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
+    - {tags [scalar, basic], attrs [aligned=true], type "si16", offset 0, case {inputs [5], expected [5, 0, 0]}}
+    - {tags [scalar, edge], attrs [aligned=true], type "si16", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
+    - {tags [scalar, basic], attrs [aligned=true], type "ui32", offset 0, case {inputs [5], expected [5, 0, 0]}}
+    - {tags [scalar, edge], attrs [aligned=true], type "ui32", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
+    - {tags [scalar, basic], attrs [aligned=true], type "si32", offset 0, case {inputs [5], expected [5, 0, 0]}}
+    - {tags [scalar, edge], attrs [aligned=true], type "si32", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
+    - {tags [scalar, basic], attrs [aligned=true], type "f32", offset 0, case {inputs [5], expected [5, 0, 0]}}
+    - {tags [scalar, edge], attrs [aligned=true], type "f32", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
+    - {tags [scalar, basic], attrs [aligned=true], type "ui64", offset 0, case {inputs [5], expected [5, 0, 0]}}
+    - {tags [scalar, edge], attrs [aligned=true], type "ui64", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
+    - {tags [scalar, basic], attrs [aligned=true], type "si64", offset 0, case {inputs [5], expected [5, 0, 0]}}
+    - {tags [scalar, edge], attrs [aligned=true], type "si64", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
+    - {tags [scalar, basic], attrs [aligned=true], type "f64", offset 0, case {inputs [5], expected [5, 0, 0]}}
+    - {tags [scalar, edge], attrs [aligned=true], type "f64", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
+    - {tags [scalar, basic], attrs [aligned=false], type "ui8", offset 1, case {inputs [5], expected [0, 5, 0]}}
+    - {tags [scalar, edge], attrs [aligned=false], type "ui8", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
+    - {tags [scalar, basic], attrs [aligned=false], type "si8", offset 1, case {inputs [5], expected [0, 5, 0]}}
+    - {tags [scalar, edge], attrs [aligned=false], type "si8", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
+    - {tags [scalar, basic], attrs [aligned=false], type "ui16", offset 1, case {inputs [5], expected [0, 5, 0]}}
+    - {tags [scalar, edge], attrs [aligned=false], type "ui16", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
+    - {tags [scalar, basic], attrs [aligned=false], type "si16", offset 1, case {inputs [5], expected [0, 5, 0]}}
+    - {tags [scalar, edge], attrs [aligned=false], type "si16", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
+    - {tags [scalar, basic], attrs [aligned=false], type "ui32", offset 1, case {inputs [5], expected [0, 5, 0]}}
+    - {tags [scalar, edge], attrs [aligned=false], type "ui32", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
+    - {tags [scalar, basic], attrs [aligned=false], type "si32", offset 1, case {inputs [5], expected [0, 5, 0]}}
+    - {tags [scalar, edge], attrs [aligned=false], type "si32", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
+    - {tags [scalar, basic], attrs [aligned=false], type "f32", offset 1, case {inputs [5], expected [0, 5, 0]}}
+    - {tags [scalar, edge], attrs [aligned=false], type "f32", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
+    - {tags [scalar, basic], attrs [aligned=false], type "ui64", offset 1, case {inputs [5], expected [0, 5, 0]}}
+    - {tags [scalar, edge], attrs [aligned=false], type "ui64", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
+    - {tags [scalar, basic], attrs [aligned=false], type "si64", offset 1, case {inputs [5], expected [0, 5, 0]}}
+    - {tags [scalar, edge], attrs [aligned=false], type "si64", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
+    - {tags [scalar, basic], attrs [aligned=false], type "f64", offset 1, case {inputs [5], expected [0, 5, 0]}}
+    - {tags [scalar, edge], attrs [aligned=false], type "f64", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
   # avx512 omits this to avoid duplicates when scalar equals mask.
   impls:
     [avx2,sse,neon,scalar,generic,oneAPIfpga,sve]:
@@ -332,26 +332,26 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
   brief_description "[Example: avx512 + si8]: Store packed 8-bit integers from \"a\" into memory using writemask \"k\".\n\t\"mem_addr\" does not need to be aligned on any particular boundary."
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tMEM[mem_addr+i+7:mem_addr+i] := a[i+7:i]\n\tFI\nENDFOR"
   tests:
-    - {test_name "masked_store_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 43690], expected [0, 1, 0, 3, 0, 5, 0, 7, 0, 9, 0, 11, 0, 13, 0, 15]}}
-    - {test_name "masked_store_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 65535], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
-    - {test_name "masked_store_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 43690], expected [0, 1, 0, 3, 0, 5, 0, 7, 0, 9, 0, 11, 0, 13, 0, 15]}}
-    - {test_name "masked_store_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 65535], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
-    - {test_name "masked_store_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 170], expected [0, 1, 0, 3, 0, 5, 0, 7]}}
-    - {test_name "masked_store_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 255], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "masked_store_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 170], expected [0, 1, 0, 3, 0, 5, 0, 7]}}
-    - {test_name "masked_store_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 255], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "masked_store_ui32_basic", type "ui32", lane_set "lanes_i32", lanes 4, case {inputs [[0, 1, 2, 3], 10], expected [0, 1, 0, 3]}}
-    - {test_name "masked_store_ui32_edge", type "ui32", lane_set "lanes_i32", lanes 4, case {inputs [[0, 1, 2, 3], 15], expected [0, 1, 2, 3]}}
-    - {test_name "masked_store_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, 1, 2, 3], 10], expected [0, 1, 0, 3]}}
-    - {test_name "masked_store_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, 1, 2, 3], 15], expected [0, 1, 2, 3]}}
-    - {test_name "masked_store_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], 10], expected [0.0, -2.0, 0.0, -4.5]}}
-    - {test_name "masked_store_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], 15], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "masked_store_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 2], expected [0, 2]}}
-    - {test_name "masked_store_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 3], expected [1, 2]}}
-    - {test_name "masked_store_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, -2], 2], expected [0, -2]}}
-    - {test_name "masked_store_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, -2], 3], expected [1, -2]}}
-    - {test_name "masked_store_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], 2], expected [0.0, -2.0]}}
-    - {test_name "masked_store_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], 3], expected [1.0, -2.0]}}
+    - {tags [store, basic], type "ui8", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 43690], expected [0, 1, 0, 3, 0, 5, 0, 7, 0, 9, 0, 11, 0, 13, 0, 15]}}
+    - {tags [store, edge], type "ui8", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 65535], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+    - {tags [store, basic], type "si8", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 43690], expected [0, 1, 0, 3, 0, 5, 0, 7, 0, 9, 0, 11, 0, 13, 0, 15]}}
+    - {tags [store, edge], type "si8", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 65535], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+    - {tags [store, basic], type "ui16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 170], expected [0, 1, 0, 3, 0, 5, 0, 7]}}
+    - {tags [store, edge], type "ui16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 255], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [store, basic], type "si16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 170], expected [0, 1, 0, 3, 0, 5, 0, 7]}}
+    - {tags [store, edge], type "si16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 255], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [store, basic], type "ui32", case {inputs [[0, 1, 2, 3], 10], expected [0, 1, 0, 3]}}
+    - {tags [store, edge], type "ui32", case {inputs [[0, 1, 2, 3], 15], expected [0, 1, 2, 3]}}
+    - {tags [store, basic], type "si32", case {inputs [[0, 1, 2, 3], 10], expected [0, 1, 0, 3]}}
+    - {tags [store, edge], type "si32", case {inputs [[0, 1, 2, 3], 15], expected [0, 1, 2, 3]}}
+    - {tags [store, basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], 10], expected [0.0, -2.0, 0.0, -4.5]}}
+    - {tags [store, edge], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], 15], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [store, basic], type "ui64", case {inputs [[1, 2], 2], expected [0, 2]}}
+    - {tags [store, edge], type "ui64", case {inputs [[1, 2], 3], expected [1, 2]}}
+    - {tags [store, basic], type "si64", case {inputs [[1, -2], 2], expected [0, -2]}}
+    - {tags [store, edge], type "si64", case {inputs [[1, -2], 3], expected [1, -2]}}
+    - {tags [store, basic], type "f64", case {inputs [[1.0, -2.0], 2], expected [0.0, -2.0]}}
+    - {tags [store, edge], type "f64", case {inputs [[1.0, -2.0], 3], expected [1.0, -2.0]}}
   impls:
     scalar:
       arith:

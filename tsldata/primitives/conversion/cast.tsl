@@ -5,22 +5,22 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
   return_type:
     base: ToBase
   tests:
-    - {test_name "reinterpret_i32_to_u32_basic", type "si32", lane_set "lanes_i32", lanes 8, to_type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "reinterpret_i32_to_f32_bits", type "si32", lane_set "lanes_i32", lanes 8, to_type "f32", case {inputs [[1065353216, -1082130432, 1056964608, -1090519040, 1073741824, 1077936128, 1082130432, 1048576000]], expected [1.0, -1.0, 0.5, -0.5, 2.0, 3.0, 4.0, 0.25]}}
-    - {test_name "reinterpret_u32_to_f32_bits", type "ui32", lane_set "lanes_i32", lanes 8, to_type "f32", case {inputs [[0, 2147483648, 1069547520, 3223322624, 1077936128, 1082130432, 1048576000, 1061158912]], expected [0.0, -0.0, 1.5, -2.5, 3.0, 4.0, 0.25, 0.75]}}
-    - {test_name "reinterpret_f32_to_u32_special", type "f32", lane_set "lanes_f32", lanes 8, to_type "ui32", case {inputs [[0.0, 1.0, -1.0, 1.40129846e-45, "INFINITY", "-INFINITY", 3.4028235e38, -3.4028235e38]], expected [0, 1065353216, 3212836864, 1, 2139095040, 4286578688, 2139095039, 4286578687]}}
-    - {test_name "reinterpret_i64_to_f64_bits", type "si64", lane_set "lanes_i64", lanes 4, to_type "f64", case {inputs [[4607182418800017408, -4611686018427387904, 4602678819172646912, 4613937818241073152]], expected [1.0, -2.0, 0.5, 3.0]}}
-    - {test_name "reinterpret_u64_to_f64_bits", type "ui64", lane_set "lanes_i64", lanes 4, to_type "f64", case {inputs [[0, 9223372036854775808, 4607182418800017408, 13835058055282163712]], expected [0.0, -0.0, 1.0, -2.0]}}
-    - {test_name "reinterpret_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, to_type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "reinterpret_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, to_type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
-    - {test_name "reinterpret_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, to_type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "reinterpret_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, to_type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
-    - {test_name "reinterpret_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, to_type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "reinterpret_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, to_type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
-    - {test_name "reinterpret_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, to_type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "reinterpret_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, to_type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
-    - {test_name "reinterpret_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, to_type "f64", case {inputs [[1.0, -2.0]], expected [1.0, -2.0]}}
-    - {test_name "reinterpret_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, to_type "f64", case {inputs [[0.0, -0.0]], expected [0.0, -0.0]}}
+    - {tags [basic], type "si32", to_type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [bits], type "si32", to_type "f32", case {inputs [[1065353216, -1082130432, 1056964608, -1090519040, 1073741824, 1077936128, 1082130432, 1048576000]], expected [1.0, -1.0, 0.5, -0.5, 2.0, 3.0, 4.0, 0.25]}}
+    - {tags [bits], type "ui32", to_type "f32", case {inputs [[0, 2147483648, 1069547520, 3223322624, 1077936128, 1082130432, 1048576000, 1061158912]], expected [0.0, -0.0, 1.5, -2.5, 3.0, 4.0, 0.25, 0.75]}}
+    - {tags [special], type "f32", to_type "ui32", case {inputs [[0.0, 1.0, -1.0, 1.40129846e-45, "INFINITY", "-INFINITY", 3.4028235e38, -3.4028235e38]], expected [0, 1065353216, 3212836864, 1, 2139095040, 4286578688, 2139095039, 4286578687]}}
+    - {tags [bits], type "si64", to_type "f64", case {inputs [[4607182418800017408, -4611686018427387904, 4602678819172646912, 4613937818241073152]], expected [1.0, -2.0, 0.5, 3.0]}}
+    - {tags [bits], type "ui64", to_type "f64", case {inputs [[0, 9223372036854775808, 4607182418800017408, 13835058055282163712]], expected [0.0, -0.0, 1.0, -2.0]}}
+    - {tags [basic], type "ui8", to_type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "ui8", to_type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {tags [basic], type "si8", to_type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "si8", to_type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
+    - {tags [basic], type "ui16", to_type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "ui16", to_type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {tags [basic], type "si16", to_type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "si16", to_type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
+    - {tags [basic], type "f64", to_type "f64", case {inputs [[1.0, -2.0]], expected [1.0, -2.0]}}
+    - {tags [edge], type "f64", to_type "f64", case {inputs [[0.0, -0.0]], expected [0.0, -0.0]}}
   impls:
     [avx512, avx2, sse]:
       f?:
@@ -110,42 +110,42 @@ prim<v:=v>[cast=convert] cast(data):
   return_type:
     base: ToBase
   tests:
-    - {test_name "cast_i32_to_f32_basic", type "si32", lane_set "lanes_i32", lanes 8, to_type "f32", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8]], expected [1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0]}}
-    - {test_name "cast_i32_to_f32_edge", type "si32", lane_set "lanes_i32", lanes 8, to_type "f32", case {inputs [[0, 2147483647, -2147483648, 123456, -123456, 42, -42, 1000]], expected [0.0, 2147483647.0, -2147483648.0, 123456.0, -123456.0, 42.0, -42.0, 1000.0]}}
-    - {test_name "cast_u32_to_f32_basic", type "ui32", lane_set "lanes_i32", lanes 8, to_type "f32", case {inputs [[0, 1, 2, 3, 1000, 123456, 2147483647, 42]], expected [0.0, 1.0, 2.0, 3.0, 1000.0, 123456.0, 2147483648.0, 42.0]}}
-    - {test_name "cast_i32_to_f64_basic_128b", extension "sse", type "si32", lane_set "lanes_i32", lanes 4, to_type "f64", case {inputs [[1, 2, 3, 4]], expected [1.0, 2.0]}}
-    - {test_name "cast_i32_to_f64_basic_256b", extension "avx2", type "si32", lane_set "lanes_i32", lanes 8, to_type "f64", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1.0, 2.0, 3.0, 4.0]}}
-    - {test_name "cast_i32_to_f64_basic_512b", extension "avx512", type "si32", lane_set "lanes_i32", lanes 16, to_type "f64", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]}}
-    - {test_name "cast_i8_to_i16_basic_256b", extension "avx2", type "si8", lane_set "lanes_i8", lanes 32, to_type "si16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31]], expected [0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15]}}
-    - {test_name "cast_u8_to_u32_basic_256b", extension "avx2", type "ui8", lane_set "lanes_i8", lanes 32, to_type "ui32", case {inputs [[0, 255, 1, 254, 2, 253, 3, 252, 4, 251, 5, 250, 6, 249, 7, 248, 8, 247, 9, 246, 10, 245, 11, 244, 12, 243, 13, 242, 14, 241, 15, 240]], expected [0, 255, 1, 254, 2, 253, 3, 252]}}
-    - {test_name "cast_u8_to_u64_basic_256b", extension "avx2", type "ui8", lane_set "lanes_i8", lanes 32, to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]], expected [0, 1, 2, 3]}}
-    - {test_name "cast_i16_to_i32_basic_256b", extension "avx2", type "si16", lane_set "lanes_i16", lanes 16, to_type "si32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "cast_u16_to_u64_basic_256b", extension "avx2", type "ui16", lane_set "lanes_i16", lanes 16, to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], expected [0, 1, 2, 3]}}
-    - {test_name "cast_u32_to_u64_basic_256b", extension "avx2", type "ui32", lane_set "lanes_i32", lanes 8, to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 1, 2, 3]}}
-    - {test_name "cast_i8_to_i16_basic_512b", extension "avx512", type "si8", lane_set "lanes_i8", lanes 64, to_type "si16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, -40, -41, -42, -43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, -56, -57, -58, -59, 60, 61, 62, 63]], expected [0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31]}}
-    - {test_name "cast_u8_to_u32_basic_512b", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, to_type "ui32", case {inputs [[0, 255, 1, 254, 2, 253, 3, 252, 4, 251, 5, 250, 6, 249, 7, 248, 8, 247, 9, 246, 10, 245, 11, 244, 12, 243, 13, 242, 14, 241, 15, 240, 16, 239, 17, 238, 18, 237, 19, 236, 20, 235, 21, 234, 22, 233, 23, 232, 24, 231, 25, 230, 26, 229, 27, 228, 28, 227, 29, 226, 30, 225, 31, 224]], expected [0, 255, 1, 254, 2, 253, 3, 252, 4, 251, 5, 250, 6, 249, 7, 248]}}
-    - {test_name "cast_u8_to_u64_basic_512b", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "cast_i16_to_i32_basic_512b", extension "avx512", type "si16", lane_set "lanes_i16", lanes 32, to_type "si32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31]], expected [0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15]}}
-    - {test_name "cast_u16_to_u64_basic_512b", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "cast_u32_to_u64_basic_512b", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "cast_i32_to_f32_rounding", type "si32", lane_set "lanes_i32", lanes 8, to_type "f32", case {inputs [[16777215, 16777216, 16777217, -16777215, -16777216, -16777217, 0, 1]], expected [16777215.0, 16777216.0, 16777216.0, -16777215.0, -16777216.0, -16777216.0, 0.0, 1.0]}}
-    - {test_name "cast_i64_to_f64_basic", type "si64", lane_set "lanes_i64", lanes 4, to_type "f64", case {inputs [[-7, -1, 0, 1]], expected [-7.0, -1.0, 0.0, 1.0]}}
-    - {test_name "cast_u64_to_f64_basic", type "ui64", lane_set "lanes_i64", lanes 4, to_type "f64", case {inputs [[0, 1, 2, 3]], expected [0.0, 1.0, 2.0, 3.0]}}
-    - {test_name "cast_f64_to_i32_basic_128b", extension "sse", type "f64", lane_set "lanes_f64", lanes 2, to_type "si32", case {inputs [[1.0, 2.0]], expected [1, 2, 0, 0]}}
-    - {test_name "cast_f64_to_i32_basic_256b", extension "avx2", type "f64", lane_set "lanes_f64", lanes 4, to_type "si32", case {inputs [[1.0, 2.0, 3.0, 4.0]], expected [1, 2, 3, 4, 0, 0, 0, 0]}}
-    - {test_name "cast_f64_to_i32_basic_512b", extension "avx512", type "f64", lane_set "lanes_f64", lanes 8, to_type "si32", case {inputs [[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]], expected [1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "cast_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, to_type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "cast_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, to_type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
-    - {test_name "cast_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, to_type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "cast_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, to_type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
-    - {test_name "cast_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, to_type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "cast_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, to_type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
-    - {test_name "cast_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, to_type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "cast_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, to_type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
-    - {test_name "cast_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, to_type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "cast_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, to_type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
-    - {test_name "cast_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, to_type "f64", case {inputs [[1.0, -2.0]], expected [1.0, -2.0]}}
-    - {test_name "cast_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, to_type "f64", case {inputs [[0.0, -0.0]], expected [0.0, -0.0]}}
+    - {tags [basic], type "si32", to_type "f32", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8]], expected [1.0, -2.0, 3.0, -4.0, 5.0, -6.0, 7.0, -8.0]}}
+    - {tags [edge], type "si32", to_type "f32", case {inputs [[0, 2147483647, -2147483648, 123456, -123456, 42, -42, 1000]], expected [0.0, 2147483647.0, -2147483648.0, 123456.0, -123456.0, 42.0, -42.0, 1000.0]}}
+    - {tags [basic], type "ui32", to_type "f32", case {inputs [[0, 1, 2, 3, 1000, 123456, 2147483647, 42]], expected [0.0, 1.0, 2.0, 3.0, 1000.0, 123456.0, 2147483648.0, 42.0]}}
+    - {tags [basic, bits128], extension "sse", type "si32", to_type "f64", case {inputs [[1, 2, 3, 4]], expected [1.0, 2.0]}}
+    - {tags [basic, bits256], extension "avx2", type "si32", to_type "f64", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1.0, 2.0, 3.0, 4.0]}}
+    - {tags [basic, bits512], extension "avx512", type "si32", to_type "f64", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]}}
+    - {tags [basic, bits256], extension "avx2", type "si8", to_type "si16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31]], expected [0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15]}}
+    - {tags [basic, bits256], extension "avx2", type "ui8", to_type "ui32", case {inputs [[0, 255, 1, 254, 2, 253, 3, 252, 4, 251, 5, 250, 6, 249, 7, 248, 8, 247, 9, 246, 10, 245, 11, 244, 12, 243, 13, 242, 14, 241, 15, 240]], expected [0, 255, 1, 254, 2, 253, 3, 252]}}
+    - {tags [basic, bits256], extension "avx2", type "ui8", to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]], expected [0, 1, 2, 3]}}
+    - {tags [basic, bits256], extension "avx2", type "si16", to_type "si32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [basic, bits256], extension "avx2", type "ui16", to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], expected [0, 1, 2, 3]}}
+    - {tags [basic, bits256], extension "avx2", type "ui32", to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 1, 2, 3]}}
+    - {tags [basic, bits512], extension "avx512", type "si8", to_type "si16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, -40, -41, -42, -43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, -56, -57, -58, -59, 60, 61, 62, 63]], expected [0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31]}}
+    - {tags [basic, bits512], extension "avx512", type "ui8", to_type "ui32", case {inputs [[0, 255, 1, 254, 2, 253, 3, 252, 4, 251, 5, 250, 6, 249, 7, 248, 8, 247, 9, 246, 10, 245, 11, 244, 12, 243, 13, 242, 14, 241, 15, 240, 16, 239, 17, 238, 18, 237, 19, 236, 20, 235, 21, 234, 22, 233, 23, 232, 24, 231, 25, 230, 26, 229, 27, 228, 28, 227, 29, 226, 30, 225, 31, 224]], expected [0, 255, 1, 254, 2, 253, 3, 252, 4, 251, 5, 250, 6, 249, 7, 248]}}
+    - {tags [basic, bits512], extension "avx512", type "ui8", to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [basic, bits512], extension "avx512", type "si16", to_type "si32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, -24, -23, -22, -21, 28, 29, 30, 31]], expected [0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, 12, 13, 14, 15]}}
+    - {tags [basic, bits512], extension "avx512", type "ui16", to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [basic, bits512], extension "avx512", type "ui32", to_type "ui64", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [rounding], type "si32", to_type "f32", case {inputs [[16777215, 16777216, 16777217, -16777215, -16777216, -16777217, 0, 1]], expected [16777215.0, 16777216.0, 16777216.0, -16777215.0, -16777216.0, -16777216.0, 0.0, 1.0]}}
+    - {tags [basic], type "si64", to_type "f64", case {inputs [[-7, -1, 0, 1]], expected [-7.0, -1.0, 0.0, 1.0]}}
+    - {tags [basic], type "ui64", to_type "f64", case {inputs [[0, 1, 2, 3]], expected [0.0, 1.0, 2.0, 3.0]}}
+    - {tags [basic, bits128], extension "sse", type "f64", to_type "si32", case {inputs [[1.0, 2.0]], expected [1, 2, 0, 0]}}
+    - {tags [basic, bits256], extension "avx2", type "f64", to_type "si32", case {inputs [[1.0, 2.0, 3.0, 4.0]], expected [1, 2, 3, 4, 0, 0, 0, 0]}}
+    - {tags [basic, bits512], extension "avx512", type "f64", to_type "si32", case {inputs [[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]], expected [1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "ui8", to_type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "ui8", to_type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {tags [basic], type "si8", to_type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "si8", to_type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
+    - {tags [basic], type "ui16", to_type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "ui16", to_type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {tags [basic], type "si16", to_type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "si16", to_type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
+    - {tags [basic], type "f32", to_type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [edge], type "f32", to_type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
+    - {tags [basic], type "f64", to_type "f64", case {inputs [[1.0, -2.0]], expected [1.0, -2.0]}}
+    - {tags [edge], type "f64", to_type "f64", case {inputs [[0.0, -0.0]], expected [0.0, -0.0]}}
   impls:
     avx512:
       ?i8:

@@ -9,22 +9,22 @@ prim<v:=(v,sImm)> shift_left(data, shift):
       dispatch:
         rust literal_match
   tests:
-    - {test_name "shift_left_imm_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_imm_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 5], expected [0, 32, 64, 96, 128, 160, 192, 224]}}
-    - {test_name "shift_left_imm_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
-    - {test_name "shift_left_imm_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 64, 192, 128, 128, 192, 0, 64, 0, 64, 192, 128, 128, 192, 0, 64]}}
-    - {test_name "shift_left_imm_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
-    - {test_name "shift_left_imm_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -64, 0, -64, 64, -128, -128, -128, 0, -64, 0, -64, 64, -128, -128, -128]}}
-    - {test_name "shift_left_imm_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_imm_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 16384, 49152, 32768, 32768, 49152, 0, 16384]}}
-    - {test_name "shift_left_imm_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_imm_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -16384, 0, -16384, 16384, -32768, -32768, -32768]}}
-    - {test_name "shift_left_imm_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], 1], expected [2, 4, 6, 8]}}
-    - {test_name "shift_left_imm_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], 30], expected [0, -1073741824, 0, -1073741824]}}
-    - {test_name "shift_left_imm_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [2, 4]}}
-    - {test_name "shift_left_imm_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], 62], expected [0, 4611686018427387904]}}
-    - {test_name "shift_left_imm_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [2, 4]}}
-    - {test_name "shift_left_imm_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], 62], expected [0, -4611686018427387904]}}
+    - {tags [imm, basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [imm, edge], type "ui32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 5], expected [0, 32, 64, 96, 128, 160, 192, 224]}}
+    - {tags [imm, basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
+    - {tags [imm, edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 64, 192, 128, 128, 192, 0, 64, 0, 64, 192, 128, 128, 192, 0, 64]}}
+    - {tags [imm, basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
+    - {tags [imm, edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -64, 0, -64, 64, -128, -128, -128, 0, -64, 0, -64, 64, -128, -128, -128]}}
+    - {tags [imm, basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [imm, edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 16384, 49152, 32768, 32768, 49152, 0, 16384]}}
+    - {tags [imm, basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [imm, edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -16384, 0, -16384, 16384, -32768, -32768, -32768]}}
+    - {tags [imm, basic], type "si32", case {inputs [[1, 2, 3, 4], 1], expected [2, 4, 6, 8]}}
+    - {tags [imm, edge], type "si32", case {inputs [[0, -1, -2147483648, 2147483647], 30], expected [0, -1073741824, 0, -1073741824]}}
+    - {tags [imm, basic], type "ui64", case {inputs [[1, 2], 1], expected [2, 4]}}
+    - {tags [imm, edge], type "ui64", case {inputs [[0, 1], 62], expected [0, 4611686018427387904]}}
+    - {tags [imm, basic], type "si64", case {inputs [[1, 2], 1], expected [2, 4]}}
+    - {tags [imm, edge], type "si64", case {inputs [[0, -1], 62], expected [0, -4611686018427387904]}}
   impls:
     scalar:
       arith:
@@ -172,30 +172,30 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
       dispatch:
         rust literal_match
   tests:
-    - {test_name "shift_left_mask_passthrough_imm_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 4, 3, 8, 5, 12, 7, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_u32_zero", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "shift_left_mask_passthrough_imm_u32_all", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 4, 3, 8, 5, 12, 7, 16, 9, 20, 11, 24, 13, 28, 15, 32]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui8_zero", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui8_all", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
-    - {test_name "shift_left_mask_passthrough_imm_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 4, 3, 8, 5, 12, 7, 16, 9, 20, 11, 24, 13, 28, 15, 32]}}
-    - {test_name "shift_left_mask_passthrough_imm_si8_zero", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_si8_all", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 4, 3, 8, 5, 12, 7, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui16_zero", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui16_all", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 4, 3, 8, 5, 12, 7, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_si16_zero", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "shift_left_mask_passthrough_imm_si16_all", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [1, 2, 3, 4], 1], expected [1, 4, 3, 8]}}
-    - {test_name "shift_left_mask_passthrough_imm_si32_zero", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [0, [1, 2, 3, 4], 1], expected [1, 2, 3, 4]}}
-    - {test_name "shift_left_mask_passthrough_imm_si32_all", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [15, [1, 2, 3, 4], 1], expected [2, 4, 6, 8]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [2, [1, 2], 1], expected [1, 4]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui64_zero", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [0, [1, 2], 1], expected [1, 2]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui64_all", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [3, [1, 2], 1], expected [2, 4]}}
-    - {test_name "shift_left_mask_passthrough_imm_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [2, [1, 2], 1], expected [1, 4]}}
-    - {test_name "shift_left_mask_passthrough_imm_si64_zero", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [0, [1, 2], 1], expected [1, 2]}}
-    - {test_name "shift_left_mask_passthrough_imm_si64_all", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [3, [1, 2], 1], expected [2, 4]}}
+    - {tags [mask, passthrough, imm, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 4, 3, 8, 5, 12, 7, 16]}}
+    - {tags [mask, passthrough, imm, zero], type "ui32", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [mask, passthrough, imm, all], type "ui32", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [mask, passthrough, imm, basic], type "ui8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 4, 3, 8, 5, 12, 7, 16, 9, 20, 11, 24, 13, 28, 15, 32]}}
+    - {tags [mask, passthrough, imm, zero], type "ui8", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [mask, passthrough, imm, all], type "ui8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
+    - {tags [mask, passthrough, imm, basic], type "si8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 4, 3, 8, 5, 12, 7, 16, 9, 20, 11, 24, 13, 28, 15, 32]}}
+    - {tags [mask, passthrough, imm, zero], type "si8", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [mask, passthrough, imm, all], type "si8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
+    - {tags [mask, passthrough, imm, basic], type "ui16", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 4, 3, 8, 5, 12, 7, 16]}}
+    - {tags [mask, passthrough, imm, zero], type "ui16", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [mask, passthrough, imm, all], type "ui16", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [mask, passthrough, imm, basic], type "si16", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 4, 3, 8, 5, 12, 7, 16]}}
+    - {tags [mask, passthrough, imm, zero], type "si16", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [mask, passthrough, imm, all], type "si16", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [mask, passthrough, imm, basic], type "si32", case {inputs [10, [1, 2, 3, 4], 1], expected [1, 4, 3, 8]}}
+    - {tags [mask, passthrough, imm, zero], type "si32", case {inputs [0, [1, 2, 3, 4], 1], expected [1, 2, 3, 4]}}
+    - {tags [mask, passthrough, imm, all], type "si32", case {inputs [15, [1, 2, 3, 4], 1], expected [2, 4, 6, 8]}}
+    - {tags [mask, passthrough, imm, basic], type "ui64", case {inputs [2, [1, 2], 1], expected [1, 4]}}
+    - {tags [mask, passthrough, imm, zero], type "ui64", case {inputs [0, [1, 2], 1], expected [1, 2]}}
+    - {tags [mask, passthrough, imm, all], type "ui64", case {inputs [3, [1, 2], 1], expected [2, 4]}}
+    - {tags [mask, passthrough, imm, basic], type "si64", case {inputs [2, [1, 2], 1], expected [1, 4]}}
+    - {tags [mask, passthrough, imm, zero], type "si64", case {inputs [0, [1, 2], 1], expected [1, 2]}}
+    - {tags [mask, passthrough, imm, all], type "si64", case {inputs [3, [1, 2], 1], expected [2, 4]}}
   impls:
     scalar:
       arith:
@@ -266,22 +266,22 @@ prim<v:=(v,s)> shift_left(data, shift):
   brief_description "[Example: avx512 + si16]: Shift packed 16-bit integers in \"a\" left by the amount specified by the corresponding element in \"count\" while shifting in zeros, and store the results in \"dst\"."
   operation "[Example: avx512 + si16]: FOR j := 0 to 31\n\ti := j*16\n\tIF count[i+15:i] < 16\n\t\tdst[i+15:i] := ZeroExtend16(a[i+15:i] << count[i+15:i])\n\tELSE\n\t\tdst[i+15:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
-    - {test_name "shift_left_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 5], expected [0, 32, 64, 96, 128, 160, 192, 224]}}
-    - {test_name "shift_left_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
-    - {test_name "shift_left_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 64, 192, 128, 128, 192, 0, 64, 0, 64, 192, 128, 128, 192, 0, 64]}}
-    - {test_name "shift_left_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
-    - {test_name "shift_left_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -64, 0, -64, 64, -128, -128, -128, 0, -64, 0, -64, 64, -128, -128, -128]}}
-    - {test_name "shift_left_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 16384, 49152, 32768, 32768, 49152, 0, 16384]}}
-    - {test_name "shift_left_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -16384, 0, -16384, 16384, -32768, -32768, -32768]}}
-    - {test_name "shift_left_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], 1], expected [2, 4, 6, 8]}}
-    - {test_name "shift_left_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], 30], expected [0, -1073741824, 0, -1073741824]}}
-    - {test_name "shift_left_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [2, 4]}}
-    - {test_name "shift_left_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], 62], expected [0, 4611686018427387904]}}
-    - {test_name "shift_left_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [2, 4]}}
-    - {test_name "shift_left_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], 62], expected [0, -4611686018427387904]}}
+    - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 5], expected [0, 32, 64, 96, 128, 160, 192, 224]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 64, 192, 128, 128, 192, 0, 64, 0, 64, 192, 128, 128, 192, 0, 64]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -64, 0, -64, 64, -128, -128, -128, 0, -64, 0, -64, 64, -128, -128, -128]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 16384, 49152, 32768, 32768, 49152, 0, 16384]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -16384, 0, -16384, 16384, -32768, -32768, -32768]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4], 1], expected [2, 4, 6, 8]}}
+    - {tags [edge], type "si32", case {inputs [[0, -1, -2147483648, 2147483647], 30], expected [0, -1073741824, 0, -1073741824]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], 1], expected [2, 4]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], 62], expected [0, 4611686018427387904]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], 1], expected [2, 4]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], 62], expected [0, -4611686018427387904]}}
   impls:
     scalar:
       arith:
@@ -427,8 +427,8 @@ prim<v:=(v,v)> shift_left(data, shift):
   brief_description "[Example: avx2 + si16]: Shift packed 16-bit integers in \"a\" left by the amount specified by the corresponding element in \"count\" while shifting in zeros, and store the results in \"dst\"."
   operation "[Example: avx2 + si16]: FOR j := 0 to 15\n\ti := j*16\n\tIF count[i+15:i] < 16\n\t\tdst[i+15:i] := ZeroExtend16(a[i+15:i] << count[i+15:i])\n\tELSE\n\t\tdst[i+15:i] := 0\n\tFI\nENDFOR\ndst[MAX:256] := 0"
   tests:
-    - {test_name "shift_left_vector_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [0, 1, 2, 3, 4, 5, 6, 7]], expected [1, 4, 12, 32, 80, 192, 448, 1024]}}
-    - {test_name "shift_left_vector_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 0, 1, 2, 3], [31, 30, 29, 28, 0, 1, 2, 3]], expected [2147483648, 2147483648, 1610612736, 1073741824, 0, 2, 8, 24]}}
+    - {tags [vector, basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [0, 1, 2, 3, 4, 5, 6, 7]], expected [1, 4, 12, 32, 80, 192, 448, 1024]}}
+    - {tags [vector, edge], type "ui32", case {inputs [[1, 2, 3, 4, 0, 1, 2, 3], [31, 30, 29, 28, 0, 1, 2, 3]], expected [2147483648, 2147483648, 1610612736, 1073741824, 0, 2, 8, 24]}}
   impls:
     scalar:
       arith:
@@ -593,22 +593,22 @@ prim<v:=(v,sImm)> shift_right(data, shift):
       dispatch:
         rust literal_match
   tests:
-    - {test_name "shift_right_imm_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4, 8, 16, 32], 1], expected [0, 0, 1, 1, 2, 4, 8, 16]}}
-    - {test_name "shift_right_imm_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 32, 64, 96, 128, 256, 512, 1024], 5], expected [0, 1, 2, 3, 4, 8, 16, 32]}}
-    - {test_name "shift_right_imm_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -4, -8, 1, 2, 3, 4], 1], expected [-1, -1, -2, -4, 0, 1, 1, 2]}}
-    - {test_name "shift_right_imm_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-2147483648, -1073741824, -1, 0, 1, 2, 4, 8], 2], expected [-536870912, -268435456, -1, 0, 0, 0, 1, 2]}}
-    - {test_name "shift_right_imm_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
-    - {test_name "shift_right_imm_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0]}}
-    - {test_name "shift_right_imm_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
-    - {test_name "shift_right_imm_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -1, -2, 1, 0, -1, 0, 1, 0, -1, -2, 1, 0, -1, 0, 1]}}
-    - {test_name "shift_right_imm_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
-    - {test_name "shift_right_imm_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 0, 3, 3, 0, 0, 0, 0]}}
-    - {test_name "shift_right_imm_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
-    - {test_name "shift_right_imm_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -1, -2, 1, 0, -1, 0, 1]}}
-    - {test_name "shift_right_imm_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [0, 1]}}
-    - {test_name "shift_right_imm_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], 62], expected [0, 0]}}
-    - {test_name "shift_right_imm_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [0, 1]}}
-    - {test_name "shift_right_imm_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], 62], expected [0, -1]}}
+    - {tags [imm, basic], type "ui32", case {inputs [[0, 1, 2, 3, 4, 8, 16, 32], 1], expected [0, 0, 1, 1, 2, 4, 8, 16]}}
+    - {tags [imm, edge], type "ui32", case {inputs [[0, 32, 64, 96, 128, 256, 512, 1024], 5], expected [0, 1, 2, 3, 4, 8, 16, 32]}}
+    - {tags [imm, basic], type "si32", case {inputs [[-1, -2, -4, -8, 1, 2, 3, 4], 1], expected [-1, -1, -2, -4, 0, 1, 1, 2]}}
+    - {tags [imm, edge], type "si32", case {inputs [[-2147483648, -1073741824, -1, 0, 1, 2, 4, 8], 2], expected [-536870912, -268435456, -1, 0, 0, 0, 1, 2]}}
+    - {tags [imm, basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
+    - {tags [imm, edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0]}}
+    - {tags [imm, basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
+    - {tags [imm, edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -1, -2, 1, 0, -1, 0, 1, 0, -1, -2, 1, 0, -1, 0, 1]}}
+    - {tags [imm, basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
+    - {tags [imm, edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 0, 3, 3, 0, 0, 0, 0]}}
+    - {tags [imm, basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
+    - {tags [imm, edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -1, -2, 1, 0, -1, 0, 1]}}
+    - {tags [imm, basic], type "ui64", case {inputs [[1, 2], 1], expected [0, 1]}}
+    - {tags [imm, edge], type "ui64", case {inputs [[0, 1], 62], expected [0, 0]}}
+    - {tags [imm, basic], type "si64", case {inputs [[1, 2], 1], expected [0, 1]}}
+    - {tags [imm, edge], type "si64", case {inputs [[0, -1], 62], expected [0, -1]}}
   impls:
     scalar:
       ?i?:
@@ -900,22 +900,22 @@ prim<v:=(v,s)> shift_right(data, shift):
       kind bool
       default true
   tests:
-    - {test_name "shift_right_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4, 8, 16, 32], 1], expected [0, 0, 1, 1, 2, 4, 8, 16]}}
-    - {test_name "shift_right_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 32, 64, 96, 128, 256, 512, 1024], 5], expected [0, 1, 2, 3, 4, 8, 16, 32]}}
-    - {test_name "shift_right_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -4, -8, 1, 2, 3, 4], 1], expected [-1, -1, -2, -4, 0, 1, 1, 2]}}
-    - {test_name "shift_right_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-2147483648, -1073741824, -1, 0, 1, 2, 4, 8], 2], expected [-536870912, -268435456, -1, 0, 0, 0, 1, 2]}}
-    - {test_name "shift_right_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
-    - {test_name "shift_right_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0]}}
-    - {test_name "shift_right_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
-    - {test_name "shift_right_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -1, -2, 1, 0, -1, 0, 1, 0, -1, -2, 1, 0, -1, 0, 1]}}
-    - {test_name "shift_right_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
-    - {test_name "shift_right_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 0, 3, 3, 0, 0, 0, 0]}}
-    - {test_name "shift_right_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
-    - {test_name "shift_right_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -1, -2, 1, 0, -1, 0, 1]}}
-    - {test_name "shift_right_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [0, 1]}}
-    - {test_name "shift_right_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], 62], expected [0, 0]}}
-    - {test_name "shift_right_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [0, 1]}}
-    - {test_name "shift_right_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], 62], expected [0, -1]}}
+    - {tags [basic], type "ui32", case {inputs [[0, 1, 2, 3, 4, 8, 16, 32], 1], expected [0, 0, 1, 1, 2, 4, 8, 16]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 32, 64, 96, 128, 256, 512, 1024], 5], expected [0, 1, 2, 3, 4, 8, 16, 32]}}
+    - {tags [basic], type "si32", case {inputs [[-1, -2, -4, -8, 1, 2, 3, 4], 1], expected [-1, -1, -2, -4, 0, 1, 1, 2]}}
+    - {tags [edge], type "si32", case {inputs [[-2147483648, -1073741824, -1, 0, 1, 2, 4, 8], 2], expected [-536870912, -268435456, -1, 0, 0, 0, 1, 2]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -1, -2, 1, 0, -1, 0, 1, 0, -1, -2, 1, 0, -1, 0, 1]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 0, 3, 3, 0, 0, 0, 0]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -1, -2, 1, 0, -1, 0, 1]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], 1], expected [0, 1]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], 62], expected [0, 0]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], 1], expected [0, 1]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], 62], expected [0, -1]}}
   impls:
     scalar:
       ?i?:
@@ -1293,8 +1293,8 @@ prim<v:=(v,v)> shift_right(data, shift):
       kind bool
       default true
   tests:
-    - {test_name "shift_right_vector_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 4, 8, 16, 32, 64, 128], [0, 1, 2, 3, 4, 5, 6, 7]], expected [1, 1, 1, 1, 1, 1, 1, 1]}}
-    - {test_name "shift_right_vector_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[2147483648, 2147483647, 1073741824, 536870912, 0, 1, 2, 3], [31, 30, 29, 28, 0, 1, 2, 3]], expected [1, 1, 2, 2, 0, 0, 0, 0]}}
+    - {tags [vector, basic], type "ui32", case {inputs [[1, 2, 4, 8, 16, 32, 64, 128], [0, 1, 2, 3, 4, 5, 6, 7]], expected [1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {tags [vector, edge], type "ui32", case {inputs [[2147483648, 2147483647, 1073741824, 536870912, 0, 1, 2, 3], [31, 30, 29, 28, 0, 1, 2, 3]], expected [1, 1, 2, 2, 0, 0, 0, 0]}}
   impls:
     scalar:
       ?i?:

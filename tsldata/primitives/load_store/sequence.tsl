@@ -2,20 +2,20 @@ prim<v:=()> sequence():
   brief_description "Creates a sequence [0..SIMD-Reg-Element-Count]."
   operation ""
   tests:
-    - {test_name "sequence_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "sequence_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "sequence_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
-    - {test_name "sequence_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
-    - {test_name "sequence_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
-    - {test_name "sequence_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
-    - {test_name "sequence_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "sequence_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "sequence_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "sequence_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "sequence_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 1]}}
-    - {test_name "sequence_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 1]}}
-    - {test_name "sequence_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 1]}}
-    - {test_name "sequence_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 1]}}
+    - {tags [basic], type "ui32", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [basic], type "si32", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [basic], type "ui8", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+    - {tags [edge], type "ui8", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+    - {tags [basic], type "si8", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+    - {tags [edge], type "si8", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+    - {tags [basic], type "ui16", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [edge], type "ui16", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [basic], type "si16", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [edge], type "si16", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [basic], type "ui64", case {inputs [], expected [0, 1]}}
+    - {tags [edge], type "ui64", case {inputs [], expected [0, 1]}}
+    - {tags [basic], type "si64", case {inputs [], expected [0, 1]}}
+    - {tags [edge], type "si64", case {inputs [], expected [0, 1]}}
   impls:
     avx512:
       ?i8:
@@ -328,20 +328,20 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
   brief_description "Creates a sequence with start and stepwidth."
   operation ""
   tests:
-    - {test_name "custom_sequence_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [5, 3], expected [5, 8, 11, 14, 17, 20, 23, 26]}}
-    - {test_name "custom_sequence_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [-5, 2], expected [-5, -3, -1, 1, 3, 5, 7, 9]}}
-    - {test_name "custom_sequence_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31]}}
-    - {test_name "custom_sequence_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [2, 3], expected [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47]}}
-    - {test_name "custom_sequence_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31]}}
-    - {test_name "custom_sequence_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [-3, -1], expected [-3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16, -17, -18]}}
-    - {test_name "custom_sequence_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15]}}
-    - {test_name "custom_sequence_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [2, 3], expected [2, 5, 8, 11, 14, 17, 20, 23]}}
-    - {test_name "custom_sequence_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15]}}
-    - {test_name "custom_sequence_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [-3, -1], expected [-3, -4, -5, -6, -7, -8, -9, -10]}}
-    - {test_name "custom_sequence_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [1, 2], expected [1, 3]}}
-    - {test_name "custom_sequence_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [2, 3], expected [2, 5]}}
-    - {test_name "custom_sequence_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [1, 2], expected [1, 3]}}
-    - {test_name "custom_sequence_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [-3, -1], expected [-3, -4]}}
+    - {tags [basic], type "ui32", case {inputs [5, 3], expected [5, 8, 11, 14, 17, 20, 23, 26]}}
+    - {tags [edge], type "si32", case {inputs [-5, 2], expected [-5, -3, -1, 1, 3, 5, 7, 9]}}
+    - {tags [basic], type "ui8", case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31]}}
+    - {tags [edge], type "ui8", case {inputs [2, 3], expected [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47]}}
+    - {tags [basic], type "si8", case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31]}}
+    - {tags [edge], type "si8", case {inputs [-3, -1], expected [-3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16, -17, -18]}}
+    - {tags [basic], type "ui16", case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15]}}
+    - {tags [edge], type "ui16", case {inputs [2, 3], expected [2, 5, 8, 11, 14, 17, 20, 23]}}
+    - {tags [basic], type "si16", case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15]}}
+    - {tags [edge], type "si16", case {inputs [-3, -1], expected [-3, -4, -5, -6, -7, -8, -9, -10]}}
+    - {tags [basic], type "ui64", case {inputs [1, 2], expected [1, 3]}}
+    - {tags [edge], type "ui64", case {inputs [2, 3], expected [2, 5]}}
+    - {tags [basic], type "si64", case {inputs [1, 2], expected [1, 3]}}
+    - {tags [edge], type "si64", case {inputs [-3, -1], expected [-3, -4]}}
   impls:
     sve:
       ?i?:

@@ -2,10 +2,10 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
   brief_description "Bitwise AND on masks."
   operation ""
   tests:
-    - {test_name "mask_and_ui8_basic", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [170, 204], expected 136}}
-    - {test_name "mask_and_ui16_basic", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [43690, 52428], expected 34952}}
-    - {test_name "mask_and_ui32_basic", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [43690, 52428], expected 34952}}
-    - {test_name "mask_and_ui64_basic", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [170, 204], expected 136}}
+    - {tags [mask, and, basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170, 204], expected 136}}
+    - {tags [mask, and, basic], extension "avx512", type "ui16", lane_count 32, case {inputs [43690, 52428], expected 34952}}
+    - {tags [mask, and, basic], extension "avx512", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 34952}}
+    - {tags [mask, and, basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 204], expected 136}}
   impls:
     [avx512, sve]:
       arith:
@@ -64,10 +64,10 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
   brief_description "Bitwise OR on masks."
   operation ""
   tests:
-    - {test_name "mask_or_ui8_basic", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [170, 204], expected 238}}
-    - {test_name "mask_or_ui16_basic", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [43690, 52428], expected 61166}}
-    - {test_name "mask_or_ui32_basic", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [43690, 52428], expected 61166}}
-    - {test_name "mask_or_ui64_basic", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [170, 204], expected 238}}
+    - {tags [mask, or, basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170, 204], expected 238}}
+    - {tags [mask, or, basic], extension "avx512", type "ui16", lane_count 32, case {inputs [43690, 52428], expected 61166}}
+    - {tags [mask, or, basic], extension "avx512", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 61166}}
+    - {tags [mask, or, basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 204], expected 238}}
   impls:
     [avx512, sve]:
       arith:
@@ -126,10 +126,10 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
   brief_description "Bitwise XOR on masks."
   operation ""
   tests:
-    - {test_name "mask_xor_ui8_basic", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [170, 204], expected 102}}
-    - {test_name "mask_xor_ui16_basic", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [43690, 52428], expected 26214}}
-    - {test_name "mask_xor_ui32_basic", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [43690, 52428], expected 26214}}
-    - {test_name "mask_xor_ui64_basic", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [170, 204], expected 102}}
+    - {tags [mask, xor, basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170, 204], expected 102}}
+    - {tags [mask, xor, basic], extension "avx512", type "ui16", lane_count 32, case {inputs [43690, 52428], expected 26214}}
+    - {tags [mask, xor, basic], extension "avx512", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 26214}}
+    - {tags [mask, xor, basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 204], expected 102}}
   impls:
     [avx512, sve]:
       arith:
@@ -188,14 +188,14 @@ prim<m:=m> mask_binary_not(mask):
   brief_description "Bitwise NOT on masks."
   operation ""
   tests:
-    - {test_name "mask_not_ui8_basic", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [170], expected 18446744073709551445}}
-    - {test_name "mask_not_ui16_basic", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [43690], expected 4294923605}}
-    - {test_name "mask_not_ui32_basic", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [43690], expected 21845}}
-    - {test_name "mask_not_ui64_basic", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [170], expected 85}}
-    - {test_name "mask_not_ui8_edge", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [0], expected 18446744073709551615}}
-    - {test_name "mask_not_ui16_edge", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [0], expected 4294967295}}
-    - {test_name "mask_not_ui32_edge", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [0], expected 65535}}
-    - {test_name "mask_not_ui64_edge", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [0], expected 255}}
+    - {tags [mask, not, basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170], expected 18446744073709551445}}
+    - {tags [mask, not, basic], extension "avx512", type "ui16", lane_count 32, case {inputs [43690], expected 4294923605}}
+    - {tags [mask, not, basic], extension "avx512", type "ui32", lane_count 16, case {inputs [43690], expected 21845}}
+    - {tags [mask, not, basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170], expected 85}}
+    - {tags [mask, not, edge], extension "avx512", type "ui8", lane_count 64, case {inputs [0], expected 18446744073709551615}}
+    - {tags [mask, not, edge], extension "avx512", type "ui16", lane_count 32, case {inputs [0], expected 4294967295}}
+    - {tags [mask, not, edge], extension "avx512", type "ui32", lane_count 16, case {inputs [0], expected 65535}}
+    - {tags [mask, not, edge], extension "avx512", type "ui64", lane_count 8, case {inputs [0], expected 255}}
   impls:
     [avx512, sve]:
       arith:
@@ -254,18 +254,18 @@ prim<usize:=m> mask_population_count(mask):
   brief_description "Counts bits set in a mask scalar."
   operation ""
   tests:
-    - {test_name "mask_popcnt_ui8_basic", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, expected_rule "popcnt", case {inputs [12297829382473034410], expected 32}}
-    - {test_name "mask_popcnt_ui8_edge", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, expected_rule "popcnt", case {inputs [18446744073709551615], expected 64}}
-    - {test_name "mask_popcnt_ui8_zero", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, expected_rule "popcnt", case {inputs [0], expected 0}}
-    - {test_name "mask_popcnt_ui16_basic", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, expected_rule "popcnt", case {inputs [2863311530], expected 16}}
-    - {test_name "mask_popcnt_ui16_edge", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, expected_rule "popcnt", case {inputs [4294967295], expected 32}}
-    - {test_name "mask_popcnt_ui16_zero", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, expected_rule "popcnt", case {inputs [0], expected 0}}
-    - {test_name "mask_popcnt_ui32_basic", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, expected_rule "popcnt", case {inputs [43690], expected 8}}
-    - {test_name "mask_popcnt_ui32_edge", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, expected_rule "popcnt", case {inputs [65535], expected 16}}
-    - {test_name "mask_popcnt_ui32_zero", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, expected_rule "popcnt", case {inputs [0], expected 0}}
-    - {test_name "mask_popcnt_ui64_basic", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, expected_rule "popcnt", case {inputs [170], expected 4}}
-    - {test_name "mask_popcnt_ui64_edge", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, expected_rule "popcnt", case {inputs [255], expected 8}}
-    - {test_name "mask_popcnt_ui64_zero", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, expected_rule "popcnt", case {inputs [0], expected 0}}
+    - {tags [mask, popcnt, basic], extension "avx512", type "ui8", expected_rule "popcnt", lane_count 64, case {inputs [12297829382473034410], expected 32}}
+    - {tags [mask, popcnt, edge], extension "avx512", type "ui8", expected_rule "popcnt", lane_count 64, case {inputs [18446744073709551615], expected 64}}
+    - {tags [mask, popcnt, zero], extension "avx512", type "ui8", expected_rule "popcnt", lane_count 64, case {inputs [0], expected 0}}
+    - {tags [mask, popcnt, basic], extension "avx512", type "ui16", expected_rule "popcnt", lane_count 32, case {inputs [2863311530], expected 16}}
+    - {tags [mask, popcnt, edge], extension "avx512", type "ui16", expected_rule "popcnt", lane_count 32, case {inputs [4294967295], expected 32}}
+    - {tags [mask, popcnt, zero], extension "avx512", type "ui16", expected_rule "popcnt", lane_count 32, case {inputs [0], expected 0}}
+    - {tags [mask, popcnt, basic], extension "avx512", type "ui32", expected_rule "popcnt", lane_count 16, case {inputs [43690], expected 8}}
+    - {tags [mask, popcnt, edge], extension "avx512", type "ui32", expected_rule "popcnt", lane_count 16, case {inputs [65535], expected 16}}
+    - {tags [mask, popcnt, zero], extension "avx512", type "ui32", expected_rule "popcnt", lane_count 16, case {inputs [0], expected 0}}
+    - {tags [mask, popcnt, basic], extension "avx512", type "ui64", expected_rule "popcnt", lane_count 8, case {inputs [170], expected 4}}
+    - {tags [mask, popcnt, edge], extension "avx512", type "ui64", expected_rule "popcnt", lane_count 8, case {inputs [255], expected 8}}
+    - {tags [mask, popcnt, zero], extension "avx512", type "ui64", expected_rule "popcnt", lane_count 8, case {inputs [0], expected 0}}
   impls:
     [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar]:
       arith:

@@ -2,26 +2,26 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
   brief_description "[Example: avx512 + si8]: Blend packed 8-bit integers from \"a\" and \"b\" using control mask \"k\", and store the results in \"dst\"."
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := b[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := a[i+7:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
-    - {test_name "blend_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]], expected [1, 102, 3, 104, 5, 106, 7, 108, 9, 110, 11, 112, 13, 114, 15, 116]}}
-    - {test_name "blend_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]], expected [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]}}
-    - {test_name "blend_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-1, 2, -3, 4, -5, 6, -7, 8, -9, 10, -11, 12, -13, 14, -15, 16]}}
-    - {test_name "blend_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "blend_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [1, 102, 3, 104, 5, 106, 7, 108]}}
-    - {test_name "blend_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
-    - {test_name "blend_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, 2, -3, 4, -5, 6, -7, 8]}}
-    - {test_name "blend_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "blend_ui32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [1, 102, 3, 104, 5, 106, 7, 108]}}
-    - {test_name "blend_ui32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
-    - {test_name "blend_si32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, 2, -3, 4, -5, 6, -7, 8]}}
-    - {test_name "blend_si32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "blend_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 4, case {inputs [10, [1, 2, 3, 4], [101, 102, 103, 104]], expected [1, 102, 3, 104]}}
-    - {test_name "blend_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 4, case {inputs [15, [1, 2, 3, 4], [101, 102, 103, 104]], expected [101, 102, 103, 104]}}
-    - {test_name "blend_si64_basic", type "si64", lane_set "lanes_i64", lanes 4, case {inputs [10, [-1, -2, -3, -4], [1, 2, 3, 4]], expected [-1, 2, -3, 4]}}
-    - {test_name "blend_si64_edge", type "si64", lane_set "lanes_i64", lanes 4, case {inputs [15, [-1, -2, -3, -4], [1, 2, 3, 4]], expected [1, 2, 3, 4]}}
-    - {test_name "blend_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, 2.0, 3.0, 4.0], [10.0, 20.0, 30.0, 40.0]], expected [1.0, 20.0, 3.0, 40.0]}}
-    - {test_name "blend_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [15, [1.0, 2.0, 3.0, 4.0], [10.0, 20.0, 30.0, 40.0]], expected [10.0, 20.0, 30.0, 40.0]}}
-    - {test_name "blend_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [2, [1.0, 2.0], [10.0, 20.0]], expected [1.0, 20.0]}}
-    - {test_name "blend_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [3, [1.0, 2.0], [10.0, 20.0]], expected [10.0, 20.0]}}
+    - {tags [basic], type "ui8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]], expected [1, 102, 3, 104, 5, 106, 7, 108, 9, 110, 11, 112, 13, 114, 15, 116]}}
+    - {tags [edge], type "ui8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]], expected [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]}}
+    - {tags [basic], type "si8", case {inputs [43690, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-1, 2, -3, 4, -5, 6, -7, 8, -9, 10, -11, 12, -13, 14, -15, 16]}}
+    - {tags [edge], type "si8", case {inputs [65535, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [basic], type "ui16", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [1, 102, 3, 104, 5, 106, 7, 108]}}
+    - {tags [edge], type "ui16", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
+    - {tags [basic], type "si16", case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, 2, -3, 4, -5, 6, -7, 8]}}
+    - {tags [edge], type "si16", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [1, 102, 3, 104, 5, 106, 7, 108]}}
+    - {tags [edge], type "ui32", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
+    - {tags [basic], type "si32", case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, 2, -3, 4, -5, 6, -7, 8]}}
+    - {tags [edge], type "si32", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [basic], type "ui64", case {inputs [10, [1, 2, 3, 4], [101, 102, 103, 104]], expected [1, 102, 3, 104]}}
+    - {tags [edge], type "ui64", case {inputs [15, [1, 2, 3, 4], [101, 102, 103, 104]], expected [101, 102, 103, 104]}}
+    - {tags [basic], type "si64", case {inputs [10, [-1, -2, -3, -4], [1, 2, 3, 4]], expected [-1, 2, -3, 4]}}
+    - {tags [edge], type "si64", case {inputs [15, [-1, -2, -3, -4], [1, 2, 3, 4]], expected [1, 2, 3, 4]}}
+    - {tags [basic], type "f32", case {inputs [10, [1.0, 2.0, 3.0, 4.0], [10.0, 20.0, 30.0, 40.0]], expected [1.0, 20.0, 3.0, 40.0]}}
+    - {tags [edge], type "f32", case {inputs [15, [1.0, 2.0, 3.0, 4.0], [10.0, 20.0, 30.0, 40.0]], expected [10.0, 20.0, 30.0, 40.0]}}
+    - {tags [basic], type "f64", case {inputs [2, [1.0, 2.0], [10.0, 20.0]], expected [1.0, 20.0]}}
+    - {tags [edge], type "f64", case {inputs [3, [1.0, 2.0], [10.0, 20.0]], expected [10.0, 20.0]}}
   impls:
     scalar:
       arith:
@@ -164,26 +164,26 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
   brief_description "[Example: avx512 + si8]: Move packed 8-bit integers from \"a\" into \"dst\" using zeromask \"k\" (elements are zeroed out when the corresponding mask bit is not set)."
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
-    - {test_name "mov_maskz_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 2, 0, 4, 0, 6, 0, 8, 0, 10, 0, 12, 0, 14, 0, 16]}}
-    - {test_name "mov_maskz_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "mov_maskz_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]], expected [0, -2, 0, -4, 0, -6, 0, -8, 0, -10, 0, -12, 0, -14, 0, -16]}}
-    - {test_name "mov_maskz_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]], expected [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]}}
-    - {test_name "mov_maskz_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 2, 0, 4, 0, 6, 0, 8]}}
-    - {test_name "mov_maskz_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "mov_maskz_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [0, -2, 0, -4, 0, -6, 0, -8]}}
-    - {test_name "mov_maskz_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
-    - {test_name "mov_maskz_ui32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 2, 0, 4, 0, 6, 0, 8]}}
-    - {test_name "mov_maskz_ui32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "mov_maskz_si32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [0, -2, 0, -4, 0, -6, 0, -8]}}
-    - {test_name "mov_maskz_si32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
-    - {test_name "mov_maskz_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 4, case {inputs [10, [1, 2, 3, 4]], expected [0, 2, 0, 4]}}
-    - {test_name "mov_maskz_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 4, case {inputs [15, [1, 2, 3, 4]], expected [1, 2, 3, 4]}}
-    - {test_name "mov_maskz_si64_basic", type "si64", lane_set "lanes_i64", lanes 4, case {inputs [10, [-1, -2, -3, -4]], expected [0, -2, 0, -4]}}
-    - {test_name "mov_maskz_si64_edge", type "si64", lane_set "lanes_i64", lanes 4, case {inputs [15, [-1, -2, -3, -4]], expected [-1, -2, -3, -4]}}
-    - {test_name "mov_maskz_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, 2.0, 3.0, 4.0]], expected [0.0, 2.0, 0.0, 4.0]}}
-    - {test_name "mov_maskz_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [15, [1.0, 2.0, 3.0, 4.0]], expected [1.0, 2.0, 3.0, 4.0]}}
-    - {test_name "mov_maskz_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [2, [1.0, 2.0]], expected [0.0, 2.0]}}
-    - {test_name "mov_maskz_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [3, [1.0, 2.0]], expected [1.0, 2.0]}}
+    - {tags [maskz, basic], type "ui8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 2, 0, 4, 0, 6, 0, 8, 0, 10, 0, 12, 0, 14, 0, 16]}}
+    - {tags [maskz, edge], type "ui8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [maskz, basic], type "si8", case {inputs [43690, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]], expected [0, -2, 0, -4, 0, -6, 0, -8, 0, -10, 0, -12, 0, -14, 0, -16]}}
+    - {tags [maskz, edge], type "si8", case {inputs [65535, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]], expected [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]}}
+    - {tags [maskz, basic], type "ui16", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 2, 0, 4, 0, 6, 0, 8]}}
+    - {tags [maskz, edge], type "ui16", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [maskz, basic], type "si16", case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [0, -2, 0, -4, 0, -6, 0, -8]}}
+    - {tags [maskz, edge], type "si16", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
+    - {tags [maskz, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 2, 0, 4, 0, 6, 0, 8]}}
+    - {tags [maskz, edge], type "ui32", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [maskz, basic], type "si32", case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [0, -2, 0, -4, 0, -6, 0, -8]}}
+    - {tags [maskz, edge], type "si32", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
+    - {tags [maskz, basic], type "ui64", case {inputs [10, [1, 2, 3, 4]], expected [0, 2, 0, 4]}}
+    - {tags [maskz, edge], type "ui64", case {inputs [15, [1, 2, 3, 4]], expected [1, 2, 3, 4]}}
+    - {tags [maskz, basic], type "si64", case {inputs [10, [-1, -2, -3, -4]], expected [0, -2, 0, -4]}}
+    - {tags [maskz, edge], type "si64", case {inputs [15, [-1, -2, -3, -4]], expected [-1, -2, -3, -4]}}
+    - {tags [maskz, basic], type "f32", case {inputs [10, [1.0, 2.0, 3.0, 4.0]], expected [0.0, 2.0, 0.0, 4.0]}}
+    - {tags [maskz, edge], type "f32", case {inputs [15, [1.0, 2.0, 3.0, 4.0]], expected [1.0, 2.0, 3.0, 4.0]}}
+    - {tags [maskz, basic], type "f64", case {inputs [2, [1.0, 2.0]], expected [0.0, 2.0]}}
+    - {tags [maskz, edge], type "f64", case {inputs [3, [1.0, 2.0]], expected [1.0, 2.0]}}
   impls:
     scalar:
       arith:
@@ -258,26 +258,26 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
   brief_description "[Example: avx512 + si8]: Move packed 8-bit integers from \"a\" into \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := src[i+7:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
-    - {test_name "mov_mask_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]], expected [1, 102, 3, 104, 5, 106, 7, 108, 9, 110, 11, 112, 13, 114, 15, 116]}}
-    - {test_name "mov_mask_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]], expected [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]}}
-    - {test_name "mov_mask_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-1, 2, -3, 4, -5, 6, -7, 8, -9, 10, -11, 12, -13, 14, -15, 16]}}
-    - {test_name "mov_mask_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "mov_mask_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [1, 102, 3, 104, 5, 106, 7, 108]}}
-    - {test_name "mov_mask_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
-    - {test_name "mov_mask_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, 2, -3, 4, -5, 6, -7, 8]}}
-    - {test_name "mov_mask_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "mov_mask_ui32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [1, 102, 3, 104, 5, 106, 7, 108]}}
-    - {test_name "mov_mask_ui32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
-    - {test_name "mov_mask_si32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, 2, -3, 4, -5, 6, -7, 8]}}
-    - {test_name "mov_mask_si32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "mov_mask_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 4, case {inputs [10, [1, 2, 3, 4], [101, 102, 103, 104]], expected [1, 102, 3, 104]}}
-    - {test_name "mov_mask_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 4, case {inputs [15, [1, 2, 3, 4], [101, 102, 103, 104]], expected [101, 102, 103, 104]}}
-    - {test_name "mov_mask_si64_basic", type "si64", lane_set "lanes_i64", lanes 4, case {inputs [10, [-1, -2, -3, -4], [1, 2, 3, 4]], expected [-1, 2, -3, 4]}}
-    - {test_name "mov_mask_si64_edge", type "si64", lane_set "lanes_i64", lanes 4, case {inputs [15, [-1, -2, -3, -4], [1, 2, 3, 4]], expected [1, 2, 3, 4]}}
-    - {test_name "mov_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, 2.0, 3.0, 4.0], [10.0, 20.0, 30.0, 40.0]], expected [1.0, 20.0, 3.0, 40.0]}}
-    - {test_name "mov_mask_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [15, [1.0, 2.0, 3.0, 4.0], [10.0, 20.0, 30.0, 40.0]], expected [10.0, 20.0, 30.0, 40.0]}}
-    - {test_name "mov_mask_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [2, [1.0, 2.0], [10.0, 20.0]], expected [1.0, 20.0]}}
-    - {test_name "mov_mask_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [3, [1.0, 2.0], [10.0, 20.0]], expected [10.0, 20.0]}}
+    - {tags [mask, basic], type "ui8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]], expected [1, 102, 3, 104, 5, 106, 7, 108, 9, 110, 11, 112, 13, 114, 15, 116]}}
+    - {tags [mask, edge], type "ui8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]], expected [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]}}
+    - {tags [mask, basic], type "si8", case {inputs [43690, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-1, 2, -3, 4, -5, 6, -7, 8, -9, 10, -11, 12, -13, 14, -15, 16]}}
+    - {tags [mask, edge], type "si8", case {inputs [65535, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [mask, basic], type "ui16", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [1, 102, 3, 104, 5, 106, 7, 108]}}
+    - {tags [mask, edge], type "ui16", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
+    - {tags [mask, basic], type "si16", case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, 2, -3, 4, -5, 6, -7, 8]}}
+    - {tags [mask, edge], type "si16", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [1, 102, 3, 104, 5, 106, 7, 108]}}
+    - {tags [mask, edge], type "ui32", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], [101, 102, 103, 104, 105, 106, 107, 108]], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
+    - {tags [mask, basic], type "si32", case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, 2, -3, 4, -5, 6, -7, 8]}}
+    - {tags [mask, edge], type "si32", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [mask, basic], type "ui64", case {inputs [10, [1, 2, 3, 4], [101, 102, 103, 104]], expected [1, 102, 3, 104]}}
+    - {tags [mask, edge], type "ui64", case {inputs [15, [1, 2, 3, 4], [101, 102, 103, 104]], expected [101, 102, 103, 104]}}
+    - {tags [mask, basic], type "si64", case {inputs [10, [-1, -2, -3, -4], [1, 2, 3, 4]], expected [-1, 2, -3, 4]}}
+    - {tags [mask, edge], type "si64", case {inputs [15, [-1, -2, -3, -4], [1, 2, 3, 4]], expected [1, 2, 3, 4]}}
+    - {tags [mask, basic], type "f32", case {inputs [10, [1.0, 2.0, 3.0, 4.0], [10.0, 20.0, 30.0, 40.0]], expected [1.0, 20.0, 3.0, 40.0]}}
+    - {tags [mask, edge], type "f32", case {inputs [15, [1.0, 2.0, 3.0, 4.0], [10.0, 20.0, 30.0, 40.0]], expected [10.0, 20.0, 30.0, 40.0]}}
+    - {tags [mask, basic], type "f64", case {inputs [2, [1.0, 2.0], [10.0, 20.0]], expected [1.0, 20.0]}}
+    - {tags [mask, edge], type "f64", case {inputs [3, [1.0, 2.0], [10.0, 20.0]], expected [10.0, 20.0]}}
   impls:
     scalar:
       arith:

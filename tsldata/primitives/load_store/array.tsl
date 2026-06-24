@@ -2,24 +2,24 @@ prim<s[]:=v> to_array(a):
   brief_description "Stores SIMD register to array."
   operation ""
   tests:
-    - {test_name "to_array_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "to_array_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, 0, 1, -2, 2, -3, 3, -4]], expected [-1, 0, 1, -2, 2, -3, 3, -4]}}
-    - {test_name "to_array_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "to_array_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
-    - {test_name "to_array_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "to_array_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
-    - {test_name "to_array_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "to_array_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
-    - {test_name "to_array_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "to_array_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
-    - {test_name "to_array_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [1, 2]}}
-    - {test_name "to_array_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1]], expected [0, 1]}}
-    - {test_name "to_array_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [1, 2]}}
-    - {test_name "to_array_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1]], expected [0, -1]}}
-    - {test_name "to_array_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "to_array_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
-    - {test_name "to_array_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0]], expected [1.0, -2.0]}}
-    - {test_name "to_array_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0]], expected [0.0, -0.0]}}
+    - {tags [basic], type "ui32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [edge], type "si32", case {inputs [[-1, 0, 1, -2, 2, -3, 3, -4]], expected [-1, 0, 1, -2, 2, -3, 3, -4]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2]], expected [1, 2]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1]], expected [0, 1]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2]], expected [1, 2]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1]], expected [0, -1]}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0]], expected [1.0, -2.0]}}
+    - {tags [edge], type "f64", case {inputs [[0.0, -0.0]], expected [0.0, -0.0]}}
   impls:
     avx512:
       ?i?:
@@ -170,26 +170,26 @@ prim<s:=v[idx]> extract_value(a):
   generic_params:
     Index {kind int, default 0}
   tests:
-    - {test_name "extract_value_u32_idx0", type "ui32", lane_set "lanes_i32", lanes 8, index 0, case {inputs [[10, 20, 30, 40, 50, 60, 70, 80]], expected 10}}
-    - {test_name "extract_value_u32_idx7", type "ui32", lane_set "lanes_i32", lanes 8, index 7, case {inputs [[10, 20, 30, 40, 50, 60, 70, 80]], expected 80}}
-    - {test_name "extract_value_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, index 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected 1}}
-    - {test_name "extract_value_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, index 15, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected 5}}
-    - {test_name "extract_value_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, index 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected 1}}
-    - {test_name "extract_value_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, index 15, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected 126}}
-    - {test_name "extract_value_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, index 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 1}}
-    - {test_name "extract_value_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, index 7, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected 5}}
-    - {test_name "extract_value_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, index 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 1}}
-    - {test_name "extract_value_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, index 7, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected 32766}}
-    - {test_name "extract_value_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, index 0, case {inputs [[1, 2, 3, 4]], expected 1}}
-    - {test_name "extract_value_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, index 3, case {inputs [[0, -1, -2147483648, 2147483647]], expected 2147483647}}
-    - {test_name "extract_value_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, index 0, case {inputs [[1, 2]], expected 1}}
-    - {test_name "extract_value_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, index 1, case {inputs [[0, 1]], expected 1}}
-    - {test_name "extract_value_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, index 0, case {inputs [[1, 2]], expected 1}}
-    - {test_name "extract_value_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, index 1, case {inputs [[0, -1]], expected -1}}
-    - {test_name "extract_value_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, index 0, case {inputs [[1.0, -2.0, 3.5, -4.5]], expected 1.0}}
-    - {test_name "extract_value_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, index 3, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected "-INFINITY"}}
-    - {test_name "extract_value_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, index 0, case {inputs [[1.0, -2.0]], expected 1.0}}
-    - {test_name "extract_value_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, index 1, case {inputs [[0.0, -0.0]], expected -0.0}}
+    - {tags [basic], type "ui32", index 0, case {inputs [[10, 20, 30, 40, 50, 60, 70, 80]], expected 10}}
+    - {tags [basic], type "ui32", index 7, case {inputs [[10, 20, 30, 40, 50, 60, 70, 80]], expected 80}}
+    - {tags [basic], type "ui8", index 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected 1}}
+    - {tags [edge], type "ui8", index 15, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected 5}}
+    - {tags [basic], type "si8", index 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected 1}}
+    - {tags [edge], type "si8", index 15, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected 126}}
+    - {tags [basic], type "ui16", index 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 1}}
+    - {tags [edge], type "ui16", index 7, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected 5}}
+    - {tags [basic], type "si16", index 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 1}}
+    - {tags [edge], type "si16", index 7, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected 32766}}
+    - {tags [basic], type "si32", index 0, case {inputs [[1, 2, 3, 4]], expected 1}}
+    - {tags [edge], type "si32", index 3, case {inputs [[0, -1, -2147483648, 2147483647]], expected 2147483647}}
+    - {tags [basic], type "ui64", index 0, case {inputs [[1, 2]], expected 1}}
+    - {tags [edge], type "ui64", index 1, case {inputs [[0, 1]], expected 1}}
+    - {tags [basic], type "si64", index 0, case {inputs [[1, 2]], expected 1}}
+    - {tags [edge], type "si64", index 1, case {inputs [[0, -1]], expected -1}}
+    - {tags [basic], type "f32", index 0, case {inputs [[1.0, -2.0, 3.5, -4.5]], expected 1.0}}
+    - {tags [edge], type "f32", index 3, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected "-INFINITY"}}
+    - {tags [basic], type "f64", index 0, case {inputs [[1.0, -2.0]], expected 1.0}}
+    - {tags [edge], type "f64", index 1, case {inputs [[0.0, -0.0]], expected -0.0}}
   impls:
     avx512:
       arith:

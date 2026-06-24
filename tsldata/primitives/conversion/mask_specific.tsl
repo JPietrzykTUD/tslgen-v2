@@ -2,26 +2,26 @@ prim<im:=m> to_integral(mask):
   brief_description "[Example: sse + si8]: Create mask from the most significant bit of each 8-bit element in \"a\", and store the result in \"dst\"."
   operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[j] := a[i+7]\nENDFOR\ndst[MAX:16] := 0"
   tests:
-    - {test_name "to_integral_ui8_basic", extension "avx512", type "ui8", case {inputs [12297829382473034410], expected 12297829382473034410}}
-    - {test_name "to_integral_ui8_edge", extension "avx512", type "ui8", case {inputs [18446744073709551615], expected 18446744073709551615}}
-    - {test_name "to_integral_si8_basic", extension "avx512", type "si8", case {inputs [12297829382473034410], expected 12297829382473034410}}
-    - {test_name "to_integral_si8_edge", extension "avx512", type "si8", case {inputs [18446744073709551615], expected 18446744073709551615}}
-    - {test_name "to_integral_ui16_basic", extension "avx512", type "ui16", case {inputs [2863311530], expected 2863311530}}
-    - {test_name "to_integral_ui16_edge", extension "avx512", type "ui16", case {inputs [4294967295], expected 4294967295}}
-    - {test_name "to_integral_si16_basic", extension "avx512", type "si16", case {inputs [2863311530], expected 2863311530}}
-    - {test_name "to_integral_si16_edge", extension "avx512", type "si16", case {inputs [4294967295], expected 4294967295}}
-    - {test_name "to_integral_ui32_basic", extension "avx512", type "ui32", case {inputs [43690], expected 43690}}
-    - {test_name "to_integral_ui32_edge", extension "avx512", type "ui32", case {inputs [65535], expected 65535}}
-    - {test_name "to_integral_si32_basic", extension "avx512", type "si32", case {inputs [43690], expected 43690}}
-    - {test_name "to_integral_si32_edge", extension "avx512", type "si32", case {inputs [65535], expected 65535}}
-    - {test_name "to_integral_f32_basic", extension "avx512", type "f32", case {inputs [43690], expected 43690}}
-    - {test_name "to_integral_f32_edge", extension "avx512", type "f32", case {inputs [65535], expected 65535}}
-    - {test_name "to_integral_ui64_basic", extension "avx512", type "ui64", case {inputs [170], expected 170}}
-    - {test_name "to_integral_ui64_edge", extension "avx512", type "ui64", case {inputs [255], expected 255}}
-    - {test_name "to_integral_si64_basic", extension "avx512", type "si64", case {inputs [170], expected 170}}
-    - {test_name "to_integral_si64_edge", extension "avx512", type "si64", case {inputs [255], expected 255}}
-    - {test_name "to_integral_f64_basic", extension "avx512", type "f64", case {inputs [170], expected 170}}
-    - {test_name "to_integral_f64_edge", extension "avx512", type "f64", case {inputs [255], expected 255}}
+    - {tags [basic], extension "avx512", type "ui8", case {inputs [12297829382473034410], expected 12297829382473034410}}
+    - {tags [edge], extension "avx512", type "ui8", case {inputs [18446744073709551615], expected 18446744073709551615}}
+    - {tags [basic], extension "avx512", type "si8", case {inputs [12297829382473034410], expected 12297829382473034410}}
+    - {tags [edge], extension "avx512", type "si8", case {inputs [18446744073709551615], expected 18446744073709551615}}
+    - {tags [basic], extension "avx512", type "ui16", case {inputs [2863311530], expected 2863311530}}
+    - {tags [edge], extension "avx512", type "ui16", case {inputs [4294967295], expected 4294967295}}
+    - {tags [basic], extension "avx512", type "si16", case {inputs [2863311530], expected 2863311530}}
+    - {tags [edge], extension "avx512", type "si16", case {inputs [4294967295], expected 4294967295}}
+    - {tags [basic], extension "avx512", type "ui32", case {inputs [43690], expected 43690}}
+    - {tags [edge], extension "avx512", type "ui32", case {inputs [65535], expected 65535}}
+    - {tags [basic], extension "avx512", type "si32", case {inputs [43690], expected 43690}}
+    - {tags [edge], extension "avx512", type "si32", case {inputs [65535], expected 65535}}
+    - {tags [basic], extension "avx512", type "f32", case {inputs [43690], expected 43690}}
+    - {tags [edge], extension "avx512", type "f32", case {inputs [65535], expected 65535}}
+    - {tags [basic], extension "avx512", type "ui64", case {inputs [170], expected 170}}
+    - {tags [edge], extension "avx512", type "ui64", case {inputs [255], expected 255}}
+    - {tags [basic], extension "avx512", type "si64", case {inputs [170], expected 170}}
+    - {tags [edge], extension "avx512", type "si64", case {inputs [255], expected 255}}
+    - {tags [basic], extension "avx512", type "f64", case {inputs [170], expected 170}}
+    - {tags [edge], extension "avx512", type "f64", case {inputs [255], expected 255}}
   impls:
     [avx512, avx2_vl, sse_vl]:
       arith:
@@ -135,26 +135,26 @@ prim<v:=m> to_vector(mask):
   brief_description "[Example: avx512 + si8]: Broadcast 8-bit integer \"a\" to all elements of \"dst\" using zeromask \"k\" (elements are zeroed out when the corresponding mask bit is not set)."
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[7:0]\n\tELSE\n\t\tdst[i+7:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
-    - {test_name "to_vector_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [43690], expected [0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255]}}
-    - {test_name "to_vector_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [65535], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
-    - {test_name "to_vector_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [43690], expected [0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1]}}
-    - {test_name "to_vector_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [65535], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
-    - {test_name "to_vector_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [170], expected [0, 65535, 0, 65535, 0, 65535, 0, 65535]}}
-    - {test_name "to_vector_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [255], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
-    - {test_name "to_vector_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [170], expected [0, -1, 0, -1, 0, -1, 0, -1]}}
-    - {test_name "to_vector_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [255], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
-    - {test_name "to_vector_ui32_basic", type "ui32", lane_set "lanes_i32", lanes 4, case {inputs [10], expected [0, 4294967295, 0, 4294967295]}}
-    - {test_name "to_vector_ui32_edge", type "ui32", lane_set "lanes_i32", lanes 4, case {inputs [15], expected [4294967295, 4294967295, 4294967295, 4294967295]}}
-    - {test_name "to_vector_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10], expected [0, -1, 0, -1]}}
-    - {test_name "to_vector_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [15], expected [-1, -1, -1, -1]}}
-    - {test_name "to_vector_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10], expected [0.0, NAN, 0.0, NAN]}}
-    - {test_name "to_vector_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [15], expected [NAN, NAN, NAN, NAN]}}
-    - {test_name "to_vector_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [2], expected [0, 18446744073709551615]}}
-    - {test_name "to_vector_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [3], expected [18446744073709551615, 18446744073709551615]}}
-    - {test_name "to_vector_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [2], expected [0, -1]}}
-    - {test_name "to_vector_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [3], expected [-1, -1]}}
-    - {test_name "to_vector_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [2], expected [0.0, NAN]}}
-    - {test_name "to_vector_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [3], expected [NAN, NAN]}}
+    - {tags [basic], type "ui8", case {inputs [43690], expected [0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255]}}
+    - {tags [edge], type "ui8", case {inputs [65535], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
+    - {tags [basic], type "si8", case {inputs [43690], expected [0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1, 0, -1]}}
+    - {tags [edge], type "si8", case {inputs [65535], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {tags [basic], type "ui16", case {inputs [170], expected [0, 65535, 0, 65535, 0, 65535, 0, 65535]}}
+    - {tags [edge], type "ui16", case {inputs [255], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
+    - {tags [basic], type "si16", case {inputs [170], expected [0, -1, 0, -1, 0, -1, 0, -1]}}
+    - {tags [edge], type "si16", case {inputs [255], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {tags [basic], type "ui32", case {inputs [10], expected [0, 4294967295, 0, 4294967295]}}
+    - {tags [edge], type "ui32", case {inputs [15], expected [4294967295, 4294967295, 4294967295, 4294967295]}}
+    - {tags [basic], type "si32", case {inputs [10], expected [0, -1, 0, -1]}}
+    - {tags [edge], type "si32", case {inputs [15], expected [-1, -1, -1, -1]}}
+    - {tags [basic], type "f32", case {inputs [10], expected [0.0, NAN, 0.0, NAN]}}
+    - {tags [edge], type "f32", case {inputs [15], expected [NAN, NAN, NAN, NAN]}}
+    - {tags [basic], type "ui64", case {inputs [2], expected [0, 18446744073709551615]}}
+    - {tags [edge], type "ui64", case {inputs [3], expected [18446744073709551615, 18446744073709551615]}}
+    - {tags [basic], type "si64", case {inputs [2], expected [0, -1]}}
+    - {tags [edge], type "si64", case {inputs [3], expected [-1, -1]}}
+    - {tags [basic], type "f64", case {inputs [2], expected [0.0, NAN]}}
+    - {tags [edge], type "f64", case {inputs [3], expected [NAN, NAN]}}
   impls:
     avx512:
       [ ?i32, ?i64 ]:
@@ -241,14 +241,14 @@ prim<m:=im> to_mask(mask):
   brief_description "Forms a mask type from an integral mask scalar."
   operation ""
   tests:
-    - {test_name "to_mask_ui8_basic", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [170], expected 170}}
-    - {test_name "to_mask_ui8_edge", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [9223372036854775809], expected 9223372036854775809}}
-    - {test_name "to_mask_ui16_basic", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [43690], expected 43690}}
-    - {test_name "to_mask_ui16_edge", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [2147483649], expected 2147483649}}
-    - {test_name "to_mask_ui32_basic", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [43690], expected 43690}}
-    - {test_name "to_mask_ui32_edge", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [32769], expected 32769}}
-    - {test_name "to_mask_ui64_basic", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [170], expected 170}}
-    - {test_name "to_mask_ui64_edge", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [129], expected 129}}
+    - {tags [basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170], expected 170}}
+    - {tags [edge], extension "avx512", type "ui8", lane_count 64, case {inputs [9223372036854775809], expected 9223372036854775809}}
+    - {tags [basic], extension "avx512", type "ui16", lane_count 32, case {inputs [43690], expected 43690}}
+    - {tags [edge], extension "avx512", type "ui16", lane_count 32, case {inputs [2147483649], expected 2147483649}}
+    - {tags [basic], extension "avx512", type "ui32", lane_count 16, case {inputs [43690], expected 43690}}
+    - {tags [edge], extension "avx512", type "ui32", lane_count 16, case {inputs [32769], expected 32769}}
+    - {tags [basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170], expected 170}}
+    - {tags [edge], extension "avx512", type "ui64", lane_count 8, case {inputs [129], expected 129}}
   impls:
     avx512:
       arith:

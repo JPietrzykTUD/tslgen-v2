@@ -3,26 +3,26 @@ prim<v:=(v,v)> binary_and(left, right):
   brief_description "[Example: sse + si8]: Compute the bitwise AND of 128 bits (representing integer data) in \"a\" and \"b\", and store the result in \"dst\"."
   operation "[Example: sse + si8]: dst[127:0] := (a[127:0] AND b[127:0])"
   tests:
-    - {test_name "binary_and_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [983055, 50529027, 286331153, 33818120, 0, 0, 1431655765, 16843009]}}
-    - {test_name "binary_and_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 2147483647, 2147483647, 1, 2], [0, 123, 2147483647, 1, 0, 2147483647, 0, 3]], expected [0, 0, 0, 0, 0, 2147483647, 0, 2]}}
-    - {test_name "binary_and_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, 0, 1, 2147483647, -2147483648, 305419896, -305419897], [-1, 1, -1, 2, 2147483647, -1, -1431655766, 1431655765]], expected [-1, 0, 0, 0, 2147483647, -2147483648, 35652136, 1161888005]}}
-    - {test_name "binary_and_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2147483648, 2147483647, 0, 1, -2, 123456789, -123456789], [0, -1, 0, -1, -1, -1, -1, -1]], expected [0, -2147483648, 0, 0, 1, -2, 123456789, -123456789]}}
-    - {test_name "binary_and_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "binary_and_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
-    - {test_name "binary_and_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "binary_and_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
-    - {test_name "binary_and_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "binary_and_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
-    - {test_name "binary_and_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "binary_and_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
-    - {test_name "binary_and_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
-    - {test_name "binary_and_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [0, 1]}}
-    - {test_name "binary_and_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
-    - {test_name "binary_and_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [0, -1]}}
-    - {test_name "binary_and_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "binary_and_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
-    - {test_name "binary_and_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, -2.0]}}
-    - {test_name "binary_and_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, -0.0]}}
+    - {tags [basic], type "ui32", case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [983055, 50529027, 286331153, 33818120, 0, 0, 1431655765, 16843009]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 0, 0, 0, 2147483647, 2147483647, 1, 2], [0, 123, 2147483647, 1, 0, 2147483647, 0, 3]], expected [0, 0, 0, 0, 0, 2147483647, 0, 2]}}
+    - {tags [basic], type "si32", case {inputs [[-1, -2, 0, 1, 2147483647, -2147483648, 305419896, -305419897], [-1, 1, -1, 2, 2147483647, -1, -1431655766, 1431655765]], expected [-1, 0, 0, 0, 2147483647, -2147483648, 35652136, 1161888005]}}
+    - {tags [edge], type "si32", case {inputs [[-1, -2147483648, 2147483647, 0, 1, -2, 123456789, -123456789], [0, -1, 0, -1, -1, -1, -1, -1]], expected [0, -2147483648, 0, 0, 1, -2, 123456789, -123456789]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], [0, 1]], expected [0, 1]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], [0, -1]], expected [0, -1]}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, -2.0]}}
+    - {tags [edge], type "f64", case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, -0.0]}}
   impls:
     scalar:
       ?i?:
@@ -152,12 +152,12 @@ prim<v:=(v,v)> binary_andnot(left, right):
   brief_description "[Example: sse + si8]: Compute the bitwise AND-NOT of 128 bits in \"left\" and \"right\", and store the result in \"dst\"."
   operation "[Example: sse + si8]: dst[127:0] := ((NOT left[127:0]) AND right[127:0])"
   tests:
-    - {test_name "binary_andnot_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "binary_andnot_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[4294967295, 4294967295, 4294967295, 4294967295, 0, 1, 2, 3], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 5, 6, 5, 8]}}
-    - {test_name "binary_andnot_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0], [1, -2, 3, -4, 5, -6, 7, -8]], expected [1, -2, 3, -4, 5, -6, 7, -8]}}
-    - {test_name "binary_andnot_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -1, -1, -1, 0, 1, -2, 3], [1, -2, 3, -4, 5, -6, 7, -8]], expected [0, 0, 0, 0, 5, -6, 1, -8]}}
-    - {test_name "binary_andnot_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, 0.0, 0.0, 0.0], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "binary_andnot_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, 0.0], [1.0, -2.0]], expected [1.0, -2.0]}}
+    - {tags [basic], type "ui32", case {inputs [[0, 0, 0, 0, 0, 0, 0, 0], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "ui32", case {inputs [[4294967295, 4294967295, 4294967295, 4294967295, 0, 1, 2, 3], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 5, 6, 5, 8]}}
+    - {tags [basic], type "si32", case {inputs [[0, 0, 0, 0, 0, 0, 0, 0], [1, -2, 3, -4, 5, -6, 7, -8]], expected [1, -2, 3, -4, 5, -6, 7, -8]}}
+    - {tags [edge], type "si32", case {inputs [[-1, -1, -1, -1, 0, 1, -2, 3], [1, -2, 3, -4, 5, -6, 7, -8]], expected [0, 0, 0, 0, 5, -6, 1, -8]}}
+    - {tags [basic], type "f32", case {inputs [[0.0, 0.0, 0.0, 0.0], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [basic], type "f64", case {inputs [[0.0, 0.0], [1.0, -2.0]], expected [1.0, -2.0]}}
   impls:
     scalar:
       ?i?:
@@ -282,26 +282,26 @@ prim<v:=(v,v)> binary_or(left, right):
   brief_description "[Example: sse + si8]: Compute the bitwise OR of 128 bits (representing integer data) in \"a\" and \"b\", and store the result in \"dst\"."
   operation "[Example: sse + si8]: dst[127:0] := (a[127:0] OR b[127:0])"
   tests:
-    - {test_name "binary_or_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [268374015, 1061109567, 1431655765, 524246911, 2147483647, 1, 2147483647, 252645135]}}
-    - {test_name "binary_or_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 2147483647, 2147483647, 1, 2], [0, 123, 2147483647, 1, 0, 2147483647, 0, 3]], expected [0, 123, 2147483647, 1, 2147483647, 2147483647, 1, 3]}}
-    - {test_name "binary_or_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "binary_or_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
-    - {test_name "binary_or_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "binary_or_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
-    - {test_name "binary_or_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "binary_or_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
-    - {test_name "binary_or_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "binary_or_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
-    - {test_name "binary_or_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [1, 2, 3, 4]}}
-    - {test_name "binary_or_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [0, -1, -2147483648, 2147483647]}}
-    - {test_name "binary_or_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
-    - {test_name "binary_or_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [0, 1]}}
-    - {test_name "binary_or_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
-    - {test_name "binary_or_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [0, -1]}}
-    - {test_name "binary_or_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "binary_or_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
-    - {test_name "binary_or_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, -2.0]}}
-    - {test_name "binary_or_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, -0.0]}}
+    - {tags [basic], type "ui32", case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [268374015, 1061109567, 1431655765, 524246911, 2147483647, 1, 2147483647, 252645135]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 0, 0, 0, 2147483647, 2147483647, 1, 2], [0, 123, 2147483647, 1, 0, 2147483647, 0, 3]], expected [0, 123, 2147483647, 1, 2147483647, 2147483647, 1, 3]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [1, 2, 3, 4]}}
+    - {tags [edge], type "si32", case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [0, -1, -2147483648, 2147483647]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], [0, 1]], expected [0, 1]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], [0, -1]], expected [0, -1]}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, -2.0]}}
+    - {tags [edge], type "f64", case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, -0.0]}}
   impls:
     scalar:
       ?i?:
@@ -431,26 +431,26 @@ prim<v:=(v,v)> binary_xor(left, right):
   brief_description "[Example: sse + si8]: Compute the bitwise XOR of 128 bits (representing integer data) in \"a\" and \"b\", and store the result in \"dst\"."
   operation "[Example: sse + si8]: dst[127:0] := (a[127:0] XOR b[127:0])"
   tests:
-    - {test_name "binary_xor_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [267390960, 1010580540, 1145324612, 490428791, 2147483647, 1, 715827882, 235802126]}}
-    - {test_name "binary_xor_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 2147483647, 2147483647, 1, 2], [0, 123, 2147483647, 1, 0, 2147483647, 0, 3]], expected [0, 123, 2147483647, 1, 2147483647, 0, 1, 1]}}
-    - {test_name "binary_xor_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [0, 0, 0, 0]}}
-    - {test_name "binary_xor_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [0, 0, 0, 0]}}
-    - {test_name "binary_xor_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
-    - {test_name "binary_xor_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [0, 0]}}
-    - {test_name "binary_xor_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
-    - {test_name "binary_xor_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [0, 0]}}
-    - {test_name "binary_xor_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 0.0, 0.0, 0.0]}}
-    - {test_name "binary_xor_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, 0.0, 0.0, 0.0]}}
-    - {test_name "binary_xor_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
-    - {test_name "binary_xor_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, 0.0]}}
+    - {tags [basic], type "ui32", case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [267390960, 1010580540, 1145324612, 490428791, 2147483647, 1, 715827882, 235802126]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 0, 0, 0, 2147483647, 2147483647, 1, 2], [0, 123, 2147483647, 1, 0, 2147483647, 0, 3]], expected [0, 123, 2147483647, 1, 2147483647, 0, 1, 1]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [0, 0, 0, 0]}}
+    - {tags [edge], type "si32", case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [0, 0, 0, 0]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], [0, 1]], expected [0, 0]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], [0, -1]], expected [0, 0]}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
+    - {tags [edge], type "f64", case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, 0.0]}}
   impls:
     scalar:
       ?i?:
@@ -580,22 +580,22 @@ prim<v:=v> inv(data):
   brief_description "Bitwise inversion of vector register."
   operation "[Example: sse + si8]: dst[127:0] := (NOT data[127:0])"
   tests:
-    - {test_name "inv_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4294967295, 2863311530, 1431655765, 2147483648]], expected [4294967295, 4294967294, 4294967293, 4294967292, 0, 1431655765, 2863311530, 2147483647]}}
-    - {test_name "inv_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[305419896, 252645135, 4042322160, 0, 1, 4294967294, 2147483647, 2147483648]], expected [3989547399, 4042322160, 252645135, 4294967295, 4294967294, 1, 2147483648, 2147483647]}}
-    - {test_name "inv_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [254, 253, 252, 251, 250, 249, 248, 247, 246, 245, 244, 243, 242, 241, 240, 239]}}
-    - {test_name "inv_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [255, 254, 0, 1, 253, 252, 251, 250, 255, 254, 0, 1, 253, 252, 251, 250]}}
-    - {test_name "inv_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16, -17]}}
-    - {test_name "inv_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [-1, 0, 127, -128, -2, 1, -3, -127, -1, 0, 127, -128, -2, 1, -3, -127]}}
-    - {test_name "inv_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [65534, 65533, 65532, 65531, 65530, 65529, 65528, 65527]}}
-    - {test_name "inv_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [65535, 65534, 0, 1, 65533, 65532, 65531, 65530]}}
-    - {test_name "inv_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [-2, -3, -4, -5, -6, -7, -8, -9]}}
-    - {test_name "inv_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [-1, 0, 32767, -32768, -2, 1, -3, -32767]}}
-    - {test_name "inv_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4]], expected [-2, -3, -4, -5]}}
-    - {test_name "inv_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647]], expected [-1, 0, 2147483647, -2147483648]}}
-    - {test_name "inv_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [18446744073709551614, 18446744073709551613]}}
-    - {test_name "inv_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1]], expected [18446744073709551615, 18446744073709551614]}}
-    - {test_name "inv_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [-2, -3]}}
-    - {test_name "inv_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1]], expected [-1, 0]}}
+    - {tags [basic], type "ui32", case {inputs [[0, 1, 2, 3, 4294967295, 2863311530, 1431655765, 2147483648]], expected [4294967295, 4294967294, 4294967293, 4294967292, 0, 1431655765, 2863311530, 2147483647]}}
+    - {tags [edge], type "ui32", case {inputs [[305419896, 252645135, 4042322160, 0, 1, 4294967294, 2147483647, 2147483648]], expected [3989547399, 4042322160, 252645135, 4294967295, 4294967294, 1, 2147483648, 2147483647]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [254, 253, 252, 251, 250, 249, 248, 247, 246, 245, 244, 243, 242, 241, 240, 239]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [255, 254, 0, 1, 253, 252, 251, 250, 255, 254, 0, 1, 253, 252, 251, 250]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16, -17]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [-1, 0, 127, -128, -2, 1, -3, -127, -1, 0, 127, -128, -2, 1, -3, -127]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [65534, 65533, 65532, 65531, 65530, 65529, 65528, 65527]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [65535, 65534, 0, 1, 65533, 65532, 65531, 65530]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [-2, -3, -4, -5, -6, -7, -8, -9]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [-1, 0, 32767, -32768, -2, 1, -3, -32767]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4]], expected [-2, -3, -4, -5]}}
+    - {tags [edge], type "si32", case {inputs [[0, -1, -2147483648, 2147483647]], expected [-1, 0, 2147483647, -2147483648]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2]], expected [18446744073709551614, 18446744073709551613]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1]], expected [18446744073709551615, 18446744073709551614]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2]], expected [-2, -3]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1]], expected [-1, 0]}}
   impls:
     scalar:
       arith:
@@ -619,7 +619,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
   brief_description "Masked bitwise AND with zeroing."
   operation "For each lane: if mask bit is set, compute left AND right; otherwise write zero."
   tests:
-    - {test_name "binary_and_maskz_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 2, 0, 4, 0, 2, 0, 0]}}
+    - {tags [binary, and, maskz, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 2, 0, 4, 0, 2, 0, 0]}}
   impls:
     scalar:
       arith:
@@ -735,7 +735,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
   brief_description "Masked bitwise AND with pass-through from left."
   operation "For each lane: if mask bit is set, compute left AND right; otherwise keep left."
   tests:
-    - {test_name "binary_and_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 2, 3, 4, 5, 2, 7, 0]}}
+    - {tags [binary, and, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 2, 3, 4, 5, 2, 7, 0]}}
   impls:
     scalar:
       arith:
@@ -853,7 +853,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
   brief_description "Masked bitwise AND-NOT with zeroing."
   operation "For each lane: if mask bit is set, compute (NOT left) AND right; otherwise write zero."
   tests:
-    - {test_name "binary_andnot_maskz_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 5, 0, 1, 0, 1, 0, 1]}}
+    - {tags [binary, andnot, maskz, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 5, 0, 1, 0, 1, 0, 1]}}
   impls:
     scalar:
       arith:
@@ -969,7 +969,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
   brief_description "Masked bitwise AND-NOT with pass-through from left."
   operation "For each lane: if mask bit is set, compute (NOT left) AND right; otherwise keep left."
   tests:
-    - {test_name "binary_andnot_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 5, 3, 1, 5, 1, 7, 1]}}
+    - {tags [binary, andnot, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 5, 3, 1, 5, 1, 7, 1]}}
   impls:
     scalar:
       arith:
@@ -1065,7 +1065,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
   brief_description "Masked bitwise OR with zeroing."
   operation "For each lane: if mask bit is set, compute left OR right; otherwise write zero."
   tests:
-    - {test_name "binary_or_maskz_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 7, 0, 5, 0, 7, 0, 9]}}
+    - {tags [binary, or, maskz, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 7, 0, 5, 0, 7, 0, 9]}}
   impls:
     scalar:
       arith:
@@ -1181,7 +1181,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
   brief_description "Masked bitwise OR with pass-through from left."
   operation "For each lane: if mask bit is set, compute left OR right; otherwise keep left."
   tests:
-    - {test_name "binary_or_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 7, 3, 5, 5, 7, 7, 9]}}
+    - {tags [binary, or, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 7, 3, 5, 5, 7, 7, 9]}}
   impls:
     scalar:
       arith:
@@ -1299,7 +1299,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
   brief_description "Masked bitwise XOR with zeroing."
   operation "For each lane: if mask bit is set, compute left XOR right; otherwise write zero."
   tests:
-    - {test_name "binary_xor_maskz_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 5, 0, 1, 0, 5, 0, 9]}}
+    - {tags [binary, xor, maskz, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 5, 0, 1, 0, 5, 0, 9]}}
   impls:
     scalar:
       arith:
@@ -1415,7 +1415,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
   brief_description "Masked bitwise XOR with pass-through from left."
   operation "For each lane: if mask bit is set, compute left XOR right; otherwise keep left."
   tests:
-    - {test_name "binary_xor_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 5, 3, 1, 5, 5, 7, 9]}}
+    - {tags [binary, xor, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 5, 3, 1, 5, 5, 7, 9]}}
   impls:
     scalar:
       arith:
@@ -1533,7 +1533,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
   brief_description "Masked bitwise inversion with zeroing."
   operation "For each lane: if mask bit is set, compute NOT data; otherwise write zero."
   tests:
-    - {test_name "inv_maskz_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 4294967294, 0, 4294967292, 0, 4294967290, 0, 4294967288]}}
+    - {tags [maskz, basic], type "ui32", case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 4294967294, 0, 4294967292, 0, 4294967290, 0, 4294967288]}}
   impls:
     scalar:
       arith:
@@ -1669,7 +1669,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
   brief_description "Masked bitwise inversion with pass-through from input."
   operation "For each lane: if mask bit is set, compute NOT data; otherwise keep data."
   tests:
-    - {test_name "inv_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 4294967294, 2, 4294967292, 4, 4294967290, 6, 4294967288]}}
+    - {tags [mask, basic], type "ui32", case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 4294967294, 2, 4294967292, 4, 4294967290, 6, 4294967288]}}
   impls:
     scalar:
       arith:

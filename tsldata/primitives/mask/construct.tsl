@@ -2,10 +2,10 @@ prim<m:=()>[value=zero] mask_false():
   brief_description "Creates a mask with all lanes inactive."
   operation ""
   tests:
-    - {test_name "mask_false_ui8", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [], expected 0}}
-    - {test_name "mask_false_ui16", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [], expected 0}}
-    - {test_name "mask_false_ui32", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [], expected 0}}
-    - {test_name "mask_false_ui64", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [], expected 0}}
+    - {tags [false], extension "avx512", type "ui8", lane_count 64, case {inputs [], expected 0}}
+    - {tags [false], extension "avx512", type "ui16", lane_count 32, case {inputs [], expected 0}}
+    - {tags [false], extension "avx512", type "ui32", lane_count 16, case {inputs [], expected 0}}
+    - {tags [false], extension "avx512", type "ui64", lane_count 8, case {inputs [], expected 0}}
   impls:
     [avx512, avx2_vl, sse_vl]:
       arith:
@@ -47,10 +47,10 @@ prim<m:=()>[value=all] mask_true():
   brief_description "Creates a mask with all lanes active."
   operation ""
   tests:
-    - {test_name "mask_true_ui8", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [], expected 18446744073709551615}}
-    - {test_name "mask_true_ui16", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [], expected 4294967295}}
-    - {test_name "mask_true_ui32", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [], expected 65535}}
-    - {test_name "mask_true_ui64", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [], expected 255}}
+    - {tags [true], extension "avx512", type "ui8", lane_count 64, case {inputs [], expected 18446744073709551615}}
+    - {tags [true], extension "avx512", type "ui16", lane_count 32, case {inputs [], expected 4294967295}}
+    - {tags [true], extension "avx512", type "ui32", lane_count 16, case {inputs [], expected 65535}}
+    - {tags [true], extension "avx512", type "ui64", lane_count 8, case {inputs [], expected 255}}
   impls:
     [avx512, avx2_vl, sse_vl]:
       arith:

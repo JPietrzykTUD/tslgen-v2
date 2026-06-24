@@ -3,23 +3,23 @@ prim<v:=(v,v)> mul(factor1, factor2):
   brief_description "[Example: sse + si16]: Multiply the packed 16-bit integers in \"a\" and \"b\", producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in \"dst\"."
   operation "[Example: sse + si16]: FOR j := 0 to 7\n\ti := j*16\n\ttmp[31:0] := SignExtend32(a[i+15:i]) * SignExtend32(b[i+15:i])\n\tdst[i+15:i] := tmp[15:0]\nENDFOR"
   tests:
-    - {test_name "mul_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [2, 0, -1, -2, 3, -3, 4, -4]], expected [2, 0, -3, -8, 15, -18, 28, -32]}}
-    - {test_name "mul_i32_zero", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, -1, 0, 2, -2, 0, 3], [5, 0, 7, -8, 0, 9, 0, -10]], expected [0, 0, -7, 0, 0, -18, 0, -30]}}
-    - {test_name "mul_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [2, 3, 4, 5, 6, 7, 8, 9]], expected [2, 6, 12, 20, 30, 42, 56, 72]}}
-    - {test_name "mul_i16_basic", type "si16", lane_set "lanes_i16", lanes 16, case {inputs [[1, -2, 3, -4, 5, -6, 7, -8, 9, -10, 11, -12, 13, -14, 15, -16], [2, 3, 4, 5, 6, 7, 8, 9, -1, -2, -3, -4, -5, -6, -7, -8]], expected [2, -6, 12, -20, 30, -42, 56, -72, -9, 20, -33, 48, -65, 84, -105, 128]}}
-    - {test_name "mul_u16_basic", type "ui16", lane_set "lanes_i16", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 3, 4, 5, 6, 7, 8]], expected [2, 6, 12, 20, 30, 42, 56, 72, 9, 20, 33, 48, 65, 84, 105, 128]}}
-    - {test_name "mul_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225, 0]}}
-    - {test_name "mul_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 1, 4, 4, 9, 16, 25, 0, 1, 1, 4, 4, 9, 16, 25]}}
-    - {test_name "mul_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, -112, -87, -60, -31, 0]}}
-    - {test_name "mul_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 1, 0, 1, 1, 4, 4, 4, 0, 1, 0, 1, 1, 4, 4, 4]}}
-    - {test_name "mul_ui64_basic", extension "avx512", type "ui64", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 4, 9, 16, 25, 36, 49, 64]}}
-    - {test_name "mul_ui64_edge", extension "avx512", type "ui64", case {inputs [[0, 1, 2, 3, 0, 1, 2, 3], [0, 1, 2, 3, 0, 1, 2, 3]], expected [0, 1, 4, 9, 0, 1, 4, 9]}}
-    - {test_name "mul_si64_basic", extension "avx512", type "si64", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], [2, 2, 2, 2, 2, 2, 2, 2]], expected [2, -4, 6, -8, 10, -12, 14, -16]}}
-    - {test_name "mul_si64_edge", extension "avx512", type "si64", case {inputs [[0, -1, 1, 0, -2, 2, 0, -3], [0, -1, 1, 0, -2, 2, 0, -3]], expected [0, 1, 1, 0, 4, 4, 0, 9]}}
-    - {test_name "mul_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, 4.0, 12.25, 20.25]}}
-    - {test_name "mul_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, 0.0, INFINITY, INFINITY]}}
-    - {test_name "mul_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, 4.0]}}
-    - {test_name "mul_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, 0.0]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [2, 0, -1, -2, 3, -3, 4, -4]], expected [2, 0, -3, -8, 15, -18, 28, -32]}}
+    - {tags [zero], type "si32", case {inputs [[0, 1, -1, 0, 2, -2, 0, 3], [5, 0, 7, -8, 0, 9, 0, -10]], expected [0, 0, -7, 0, 0, -18, 0, -30]}}
+    - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [2, 3, 4, 5, 6, 7, 8, 9]], expected [2, 6, 12, 20, 30, 42, 56, 72]}}
+    - {tags [basic], type "si16", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8, 9, -10, 11, -12, 13, -14, 15, -16], [2, 3, 4, 5, 6, 7, 8, 9, -1, -2, -3, -4, -5, -6, -7, -8]], expected [2, -6, 12, -20, 30, -42, 56, -72, -9, 20, -33, 48, -65, 84, -105, 128]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 3, 4, 5, 6, 7, 8]], expected [2, 6, 12, 20, 30, 42, 56, 72, 9, 20, 33, 48, 65, 84, 105, 128]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225, 0]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 1, 4, 4, 9, 16, 25, 0, 1, 1, 4, 4, 9, 16, 25]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, -112, -87, -60, -31, 0]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 1, 0, 1, 1, 4, 4, 4, 0, 1, 0, 1, 1, 4, 4, 4]}}
+    - {tags [basic], extension "avx512", type "ui64", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 4, 9, 16, 25, 36, 49, 64]}}
+    - {tags [edge], extension "avx512", type "ui64", case {inputs [[0, 1, 2, 3, 0, 1, 2, 3], [0, 1, 2, 3, 0, 1, 2, 3]], expected [0, 1, 4, 9, 0, 1, 4, 9]}}
+    - {tags [basic], extension "avx512", type "si64", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], [2, 2, 2, 2, 2, 2, 2, 2]], expected [2, -4, 6, -8, 10, -12, 14, -16]}}
+    - {tags [edge], extension "avx512", type "si64", case {inputs [[0, -1, 1, 0, -2, 2, 0, -3], [0, -1, 1, 0, -2, 2, 0, -3]], expected [0, 1, 1, 0, 4, 4, 0, 9]}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, 4.0, 12.25, 20.25]}}
+    - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, 0.0, INFINITY, INFINITY]}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, 4.0]}}
+    - {tags [edge], type "f64", case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, 0.0]}}
   impls:
     scalar:
       arith:
@@ -183,8 +183,8 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
   brief_description "Multiply packed elements and zero inactive lanes."
   operation ""
   tests:
-    - {test_name "mul_maskz_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 4.0, 0.0, 20.25]}}
-    - {test_name "mul_maskz_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [0, 0, 0, -8]}}
+    - {tags [maskz, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 4.0, 0.0, 20.25]}}
+    - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [0, 0, 0, -8]}}
   impls:
     scalar:
       arith:
@@ -292,8 +292,8 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
   brief_description "Multiply packed elements and preserve factor1 in inactive lanes."
   operation ""
   tests:
-    - {test_name "mul_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, 4.0, 3.5, 20.25]}}
-    - {test_name "mul_mask_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [1, 0, 3, -8]}}
+    - {tags [mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, 4.0, 3.5, 20.25]}}
+    - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [1, 0, 3, -8]}}
   impls:
     scalar:
       arith:
@@ -401,10 +401,10 @@ prim<v:=(v,v)> div(divident, divisor):
   brief_description "[Example: sse + f32]: Divide packed single-precision (32-bit) floating-point elements in \"a\" by packed elements in \"b\", and store the results in \"dst\"."
   operation "[Example: sse + f32]: FOR j := 0 to 3\n\ti := 32*j\n\tdst[i+31:i] := a[i+31:i] / b[i+31:i]\nENDFOR"
   tests:
-    - {test_name "div_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [4.0, -3.0, -5.0, -3.0]}}
-    - {test_name "div_f32_one", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.0, -4.0], [1.0, -2.0, 3.0, -4.0]], expected [1.0, 1.0, 1.0, 1.0]}}
-    - {test_name "div_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[8.0, -9.0], [2.0, 3.0]], expected [4.0, -3.0]}}
-    - {test_name "div_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[8, -9, 10, -12], [2, 3, -2, 4]], expected [4, -3, -5, -3]}}
+    - {tags [basic], type "f32", case {inputs [[8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [4.0, -3.0, -5.0, -3.0]}}
+    - {tags [one], type "f32", case {inputs [[1.0, -2.0, 3.0, -4.0], [1.0, -2.0, 3.0, -4.0]], expected [1.0, 1.0, 1.0, 1.0]}}
+    - {tags [basic], type "f64", case {inputs [[8.0, -9.0], [2.0, 3.0]], expected [4.0, -3.0]}}
+    - {tags [basic], extension "generic", type "si32", case {inputs [[8, -9, 10, -12], [2, 3, -2, 4]], expected [4, -3, -5, -3]}}
   impls:
     scalar:
       arith:
@@ -470,9 +470,9 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
   brief_description "[Example: avx512 + f32]: Divide packed elements in \"a\" by packed elements in \"b\", and store the results in \"dst\" using zeromask \"k\" (elements are zeroed when the corresponding mask bit is not set)."
   operation "[Example: avx512 + f32]: FOR j := 0 to 15\n\ti := 32*j\n\tIF k[j]\n\t\tdst[i+31:i] := a[i+31:i] / b[i+31:i]\n\tELSE\n\t\tdst[i+31:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
-    - {test_name "div_maskz_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [0.0, -3.0, 0.0, -3.0]}}
-    - {test_name "div_maskz_f32_zero", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [0, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [0.0, 0.0, 0.0, 0.0]}}
-    - {test_name "div_maskz_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [8, -9, 10, -12], [2, 3, -2, 4]], expected [0, -3, 0, -3]}}
+    - {tags [maskz, basic], type "f32", case {inputs [10, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [0.0, -3.0, 0.0, -3.0]}}
+    - {tags [maskz, zero], type "f32", case {inputs [0, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [8, -9, 10, -12], [2, 3, -2, 4]], expected [0, -3, 0, -3]}}
   impls:
     scalar:
       arith:
@@ -547,9 +547,9 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
   brief_description "[Example: avx512 + f32]: Divide packed elements in \"a\" by packed elements in \"b\", and store the results in \"dst\" using writemask \"k\" (elements are copied from \"a\" when the corresponding mask bit is not set)."
   operation "[Example: avx512 + f32]: FOR j := 0 to 15\n\ti := 32*j\n\tIF k[j]\n\t\tdst[i+31:i] := a[i+31:i] / b[i+31:i]\n\tELSE\n\t\tdst[i+31:i] := a[i+31:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
-    - {test_name "div_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [8.0, -3.0, 10.0, -3.0]}}
-    - {test_name "div_mask_f32_zero", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [0, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [8.0, -9.0, 10.0, -12.0]}}
-    - {test_name "div_mask_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [8, -9, 10, -12], [2, 3, -2, 4]], expected [8, -3, 10, -3]}}
+    - {tags [mask, basic], type "f32", case {inputs [10, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [8.0, -3.0, 10.0, -3.0]}}
+    - {tags [mask, zero], type "f32", case {inputs [0, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [8.0, -9.0, 10.0, -12.0]}}
+    - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [8, -9, 10, -12], [2, 3, -2, 4]], expected [8, -3, 10, -3]}}
   impls:
     scalar:
       arith:
@@ -624,11 +624,11 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
   brief_description "[Example: sse + si16]: Multiply the packed 16-bit integers in \"a\" and \"b\", producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in \"dst\"."
   operation "[Example: sse + si16]: FOR j := 0 to 7\n\ti := j*16\n\ttmp[31:0] := SignExtend32(a[i+15:i]) * SignExtend32(b[i+15:i])\n\tdst[i+15:i] := tmp[15:0]\nENDFOR"
   tests:
-    - {test_name "mul_imm_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 3], expected [3, 6, 9, 12, 15, 18, 21, 24]}}
-    - {test_name "mul_imm_i32_zero", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, 0, 1, -2, 2, -3, 3, -4], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "mul_imm_i32_neg", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], -2], expected [-2, 4, -6, 8, -10, 12, -14, 16]}}
-    - {test_name "mul_imm_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 5], expected [5, 10, 15, 20, 25, 30, 35, 40]}}
-    - {test_name "mul_imm_ui16_zero", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 3], expected [3, 6, 9, 12, 15, 18, 21, 24]}}
+    - {tags [zero], type "si32", case {inputs [[-1, 0, 1, -2, 2, -3, 3, -4], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [neg], type "si32", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], -2], expected [-2, 4, -6, 8, -10, 12, -14, 16]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 5], expected [5, 10, 15, 20, 25, 30, 35, 40]}}
+    - {tags [zero], type "ui16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
   impls:
     scalar:
       arith:
@@ -866,8 +866,8 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
   brief_description "Multiply packed elements by a scalar and zero inactive lanes."
   operation ""
   tests:
-    - {test_name "mul_imm_maskz_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [1, 2, 3, 4], 3], expected [0, 6, 0, 12]}}
-    - {test_name "mul_imm_maskz_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, -2.0, 3.0, -4.0], -2.0], expected [0.0, 4.0, 0.0, 8.0]}}
+    - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [0, 6, 0, 12]}}
+    - {tags [maskz, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.0, -4.0], -2.0], expected [0.0, 4.0, 0.0, 8.0]}}
   impls:
     scalar:
       arith:
@@ -903,8 +903,8 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
   brief_description "Multiply packed elements by a scalar and preserve data in inactive lanes."
   operation ""
   tests:
-    - {test_name "mul_imm_mask_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [1, 2, 3, 4], 3], expected [1, 6, 3, 12]}}
-    - {test_name "mul_imm_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, -2.0, 3.0, -4.0], -2.0], expected [1.0, 4.0, 3.0, 8.0]}}
+    - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [1, 6, 3, 12]}}
+    - {tags [mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.0, -4.0], -2.0], expected [1.0, 4.0, 3.0, 8.0]}}
   impls:
     scalar:
       arith:
@@ -940,18 +940,18 @@ prim<v:=(v,v)> mod(dividend, divisor):
   brief_description "Computes a modulo for two vectors."
   operation ""
   tests:
-    - {test_name "mod_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], [3, 4, 5, 2, 3, 2, 3, 2]], expected [1, -1, 3, -1, 0, -1, 1, -1]}}
-    - {test_name "mod_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], [3, 4, 5, 2, 3, 2, 3, 2]], expected [1, 1, 3, 1, 0, 1, 1, 1]}}
-    - {test_name "mod_i16_basic", type "si16", lane_set "lanes_i16", lanes 16, case {inputs [[10, -9, 8, -7, 6, -5, 4, -3, 12, -11, 14, -13, 16, -15, 18, -17], [3, 4, 5, 2, 3, 2, 3, 2, 5, 6, 7, 4, 5, 6, 7, 4]], expected [1, -1, 3, -1, 0, -1, 1, -1, 2, -5, 0, -1, 1, -3, 4, -1]}}
-    - {test_name "mod_u16_basic", type "ui16", lane_set "lanes_i16", lanes 16, case {inputs [[10, 9, 8, 7, 6, 5, 4, 3, 12, 11, 14, 13, 16, 15, 18, 17], [3, 4, 5, 2, 3, 2, 3, 2, 5, 6, 7, 4, 5, 6, 7, 4]], expected [1, 1, 3, 1, 0, 1, 1, 1, 2, 5, 0, 1, 1, 3, 4, 1]}}
-    - {test_name "mod_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "mod_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [1, 1, 255, 254, 2, 3, 4, 5, 1, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "mod_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "mod_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [1, -1, -128, 127, 1, -2, 2, 126, 1, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "mod_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
-    - {test_name "mod_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [1, 1]], expected [0, 0]}}
-    - {test_name "mod_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
-    - {test_name "mod_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [1, -1]], expected [0, 0]}}
+    - {tags [basic], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], [3, 4, 5, 2, 3, 2, 3, 2]], expected [1, -1, 3, -1, 0, -1, 1, -1]}}
+    - {tags [basic], type "ui32", case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], [3, 4, 5, 2, 3, 2, 3, 2]], expected [1, 1, 3, 1, 0, 1, 1, 1]}}
+    - {tags [basic], type "si16", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3, 12, -11, 14, -13, 16, -15, 18, -17], [3, 4, 5, 2, 3, 2, 3, 2, 5, 6, 7, 4, 5, 6, 7, 4]], expected [1, -1, 3, -1, 0, -1, 1, -1, 2, -5, 0, -1, 1, -3, 4, -1]}}
+    - {tags [basic], type "ui16", case {inputs [[10, 9, 8, 7, 6, 5, 4, 3, 12, 11, 14, 13, 16, 15, 18, 17], [3, 4, 5, 2, 3, 2, 3, 2, 5, 6, 7, 4, 5, 6, 7, 4]], expected [1, 1, 3, 1, 0, 1, 1, 1, 2, 5, 0, 1, 1, 3, 4, 1]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [1, 1, 255, 254, 2, 3, 4, 5, 1, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [1, -1, -128, 127, 1, -2, 2, 126, 1, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], [1, 1]], expected [0, 0]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], [1, -1]], expected [0, 0]}}
   impls:
     avx512:
       arith:
@@ -1040,7 +1040,7 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
   brief_description "Compute modulo and zero inactive lanes."
   operation ""
   tests:
-    - {test_name "mod_maskz_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [10, -9, 8, -7], [3, 4, 5, 2]], expected [0, -1, 0, -1]}}
+    - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], [3, 4, 5, 2]], expected [0, -1, 0, -1]}}
   impls:
     scalar:
       arith:
@@ -1074,7 +1074,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
   brief_description "Compute modulo and preserve dividend in inactive lanes."
   operation ""
   tests:
-    - {test_name "mod_mask_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [10, -9, 8, -7], [3, 4, 5, 2]], expected [10, -1, 8, -1]}}
+    - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], [3, 4, 5, 2]], expected [10, -1, 8, -1]}}
   impls:
     scalar:
       arith:
@@ -1108,10 +1108,10 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
   brief_description "Computes a modulo with a scalar value."
   operation ""
   tests:
-    - {test_name "mod_imm_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], 3], expected [1, 0, 2, -1, 0, -2, 1, 0]}}
-    - {test_name "mod_imm_i32_one", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], 1], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "mod_imm_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], 5], expected [0, 4, 3, 2, 1, 0, 4, 3]}}
-    - {test_name "mod_imm_ui16_one", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], 1], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], 3], expected [1, 0, 2, -1, 0, -2, 1, 0]}}
+    - {tags [one], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], 1], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "ui16", case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], 5], expected [0, 4, 3, 2, 1, 0, 4, 3]}}
+    - {tags [one], type "ui16", case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], 1], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
   impls:
     [avx512, avx2, sse, sve]:
       arith:
@@ -1159,7 +1159,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
   brief_description "Compute modulo by a scalar and zero inactive lanes."
   operation ""
   tests:
-    - {test_name "mod_imm_maskz_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [10, -9, 8, -7], 3], expected [0, 0, 0, -1]}}
+    - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [0, 0, 0, -1]}}
   impls:
     scalar:
       arith:
@@ -1193,7 +1193,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
   brief_description "Compute modulo by a scalar and preserve dividend in inactive lanes."
   operation ""
   tests:
-    - {test_name "mod_imm_mask_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [10, -9, 8, -7], 3], expected [10, 0, 8, -1]}}
+    - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [10, 0, 8, -1]}}
   impls:
     scalar:
       arith:

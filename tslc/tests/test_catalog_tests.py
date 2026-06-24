@@ -21,10 +21,10 @@ def _first(catalog: Catalog, name: str, *, masked: bool):
 def test_add_tests_are_promoted(catalog: Catalog) -> None:
     add = _first(catalog, "add", masked=False)
     assert add.tests, "add should carry value-test cases"
-    basic = next(t for t in add.tests if t.name == "add_i32_basic")
+    basic = next(t for t in add.tests if t.name == "add_si32_basic")
     assert basic.type_tag == "si32"
+    assert basic.tags == ("basic",)
     assert basic.lanes == 8
-    assert basic.lane_set == "lanes_i32"
     assert [a.kind for a in basic.inputs] == ["vector", "vector"]
     assert basic.inputs[0].values == ("1", "2", "3", "4", "5", "6", "7", "8")
     assert basic.expected == ("9", "9", "9", "9", "9", "9", "9", "9")
@@ -32,7 +32,7 @@ def test_add_tests_are_promoted(catalog: Catalog) -> None:
 
 def test_masked_add_routes_mask_arg(catalog: Catalog) -> None:
     masked = _first(catalog, "add", masked=True)
-    case = next(t for t in masked.tests if t.name.startswith("add_maskz_i32"))
+    case = next(t for t in masked.tests if t.name == "add_si32_maskz_basic")
     # The mask bitmask is captured as a distinct `mask` arg (a bare integer token), not a vector.
     kinds = [a.kind for a in case.inputs]
     assert "mask" in kinds
@@ -42,7 +42,7 @@ def test_masked_add_routes_mask_arg(catalog: Catalog) -> None:
 
 def test_equal_mask_result_expected_is_per_lane(catalog: Catalog) -> None:
     equal = _first(catalog, "equal", masked=False)
-    basic = next(t for t in equal.tests if t.name == "equal_u32_basic")
+    basic = next(t for t in equal.tests if t.name == "equal_ui32_basic")
     # A mask result is authored per-lane as the all-ones/zero lane pattern.
     assert basic.expected[0] == "4294967295"
     assert basic.expected[1] == "0"
@@ -57,7 +57,7 @@ def test_conflict_cross_lane_tests_present(catalog: Catalog) -> None:
 
 def test_store_test_carries_offset_and_attrs(catalog: Catalog) -> None:
     store = _first(catalog, "store", masked=False)
-    misaligned = next(t for t in store.tests if t.name == "storeu_u32_misaligned")
+    misaligned = next(t for t in store.tests if t.name == "store_ui32_aligned_false_misaligned")
     assert misaligned.offset == 1
     assert misaligned.attrs.get("aligned") == "false"
     # The store buffer expected models offset+lanes, so it exceeds the lane count.
@@ -95,7 +95,7 @@ def _diagnostics(test_block: str) -> set[str]:
 def test_unknown_test_field_is_diagnosed() -> None:
     codes = _diagnostics(
         "  tests:\n"
-        '    - {test_name "t", type "si32", bogus "x", '
+        '    - {tags [basic], type "si32", bogus "x", '
         "case {inputs [[1]], expected [1]}}\n"
     )
     assert "TSL-CATALOG-UNKNOWN-TEST-FIELD" in codes
@@ -103,24 +103,24 @@ def test_unknown_test_field_is_diagnosed() -> None:
 
 def test_missing_required_test_field_is_diagnosed() -> None:
     codes = _diagnostics(
-        '  tests:\n    - {test_name "t", type "si32"}\n'
+        '  tests:\n    - {type "si32", case {inputs [[1]], expected [1]}}\n'
     )
     assert "TSL-CATALOG-TEST-MISSING-FIELD" in codes
 
 
-def test_non_positive_lanes_is_diagnosed() -> None:
+def test_non_positive_lane_count_is_diagnosed() -> None:
     codes = _diagnostics(
         "  tests:\n"
-        '    - {test_name "t", type "si32", lanes 0, '
+        '    - {tags [basic], type "si32", lane_count 0, '
         "case {inputs [[1]], expected [1]}}\n"
     )
-    assert "TSL-CATALOG-TEST-BAD-LANES" in codes
+    assert "TSL-CATALOG-TEST-BAD-LANE-COUNT" in codes
 
 
 def test_well_formed_tests_have_no_diagnostics() -> None:
     codes = _diagnostics(
         "  tests:\n"
-        '    - {test_name "t", type "si32", lanes 4, '
+        '    - {tags [basic], type "si32", '
         "case {inputs [[1, 2, 3, 4]], expected [1, 2, 3, 4]}}\n"
     )
     assert not {c for c in codes if "TEST" in c}

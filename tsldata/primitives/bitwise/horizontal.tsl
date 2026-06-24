@@ -3,12 +3,12 @@ prim<s:=v> hand(vec):
   brief_description "Horizontal AND on vector register."
   operation ""
   tests:
-    - {test_name "hand_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
-    - {test_name "hand_u32_zero", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[255, 127, 0, 31, 15, 7, 3, 1]], expected 0}}
-    - {test_name "hand_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[255, 127, 63, 31, 15, 7, 3, 1, 255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
-    - {test_name "hand_ui8_zero", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 255, 255, 255, 255, 255]], expected 0}}
-    - {test_name "hand_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[-1, 2147483647, -1, 2147483647]], expected 2147483647}}
-    - {test_name "hand_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[15, 3]], expected 3}}
+    - {tags [basic], type "ui32", case {inputs [[255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
+    - {tags [zero], type "ui32", case {inputs [[255, 127, 0, 31, 15, 7, 3, 1]], expected 0}}
+    - {tags [basic], type "ui8", case {inputs [[255, 127, 63, 31, 15, 7, 3, 1, 255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
+    - {tags [zero], type "ui8", case {inputs [[255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 255, 255, 255, 255, 255]], expected 0}}
+    - {tags [basic], type "si32", case {inputs [[-1, 2147483647, -1, 2147483647]], expected 2147483647}}
+    - {tags [basic], type "ui64", case {inputs [[15, 3]], expected 3}}
   impls:
     sve:
       ?i?:
@@ -236,22 +236,22 @@ prim<s:=v> hor(vec):
   brief_description "Horizontal OR on vector register."
   operation ""
   tests:
-    - {test_name "hor_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 4, 8, 16, 32, 64, 128]], expected 255}}
-    - {test_name "hor_u32_zero", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0]], expected 0}}
-    - {test_name "hor_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected 31}}
-    - {test_name "hor_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected 255}}
-    - {test_name "hor_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected 31}}
-    - {test_name "hor_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected -1}}
-    - {test_name "hor_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 15}}
-    - {test_name "hor_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected 65535}}
-    - {test_name "hor_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 15}}
-    - {test_name "hor_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected -1}}
-    - {test_name "hor_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4]], expected 7}}
-    - {test_name "hor_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647]], expected -1}}
-    - {test_name "hor_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected 3}}
-    - {test_name "hor_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1]], expected 1}}
-    - {test_name "hor_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected 3}}
-    - {test_name "hor_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1]], expected -1}}
+    - {tags [basic], type "ui32", case {inputs [[1, 2, 4, 8, 16, 32, 64, 128]], expected 255}}
+    - {tags [zero], type "ui32", case {inputs [[0, 0, 0, 0, 0, 0, 0, 0]], expected 0}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected 31}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected 255}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected 31}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected -1}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 15}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected 65535}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 15}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected -1}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4]], expected 7}}
+    - {tags [edge], type "si32", case {inputs [[0, -1, -2147483648, 2147483647]], expected -1}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2]], expected 3}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1]], expected 1}}
+    - {tags [basic], type "si64", case {inputs [[1, 2]], expected 3}}
+    - {tags [edge], type "si64", case {inputs [[0, -1]], expected -1}}
   impls:
     sve:
       ?i?:
@@ -445,11 +445,11 @@ prim<s:=(m,v)> hand(mask, vec):
   brief_description "Reduces the active elements to their bitwise AND."
   operation ""
   tests:
-    - {test_name "hand_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [255, [255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
-    - {test_name "hand_mask_u32_sparse", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [165, [255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
-    - {test_name "hand_mask_u32_empty", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [0, [255, 127, 63, 31, 15, 7, 3, 1]], expected 0}}
-    - {test_name "hand_mask_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [255, 127, 63, 31, 15, 7, 3, 1, 255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
-    - {test_name "hand_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [1, [1.0, -2.0, 3.5, -4.5]], expected 1.0}}
+    - {tags [mask, basic], type "ui32", lane_count 8, case {inputs [255, [255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
+    - {tags [mask, sparse], type "ui32", lane_count 8, case {inputs [165, [255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
+    - {tags [mask, empty], type "ui32", lane_count 8, case {inputs [0, [255, 127, 63, 31, 15, 7, 3, 1]], expected 0}}
+    - {tags [mask, basic], type "ui8", lane_count 16, case {inputs [43690, [255, 127, 63, 31, 15, 7, 3, 1, 255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
+    - {tags [mask, basic], type "f32", lane_count 4, case {inputs [1, [1.0, -2.0, 3.5, -4.5]], expected 1.0}}
   impls:
     sve:
       ?i?:
@@ -557,11 +557,11 @@ prim<s:=(m,v)> hor(mask, vec):
   brief_description "Reduces the active elements to their bitwise OR."
   operation ""
   tests:
-    - {test_name "hor_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [255, [1, 2, 4, 8, 16, 32, 64, 128]], expected 255}}
-    - {test_name "hor_mask_u32_sparse", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [165, [1, 2, 4, 8, 16, 32, 64, 128]], expected 165}}
-    - {test_name "hor_mask_u32_empty", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [0, [1, 2, 4, 8, 16, 32, 64, 128]], expected 0}}
-    - {test_name "hor_mask_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected 30}}
-    - {test_name "hor_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [4, [1.0, -2.0, 3.5, -4.5]], expected 3.5}}
+    - {tags [mask, basic], type "ui32", lane_count 8, case {inputs [255, [1, 2, 4, 8, 16, 32, 64, 128]], expected 255}}
+    - {tags [mask, sparse], type "ui32", lane_count 8, case {inputs [165, [1, 2, 4, 8, 16, 32, 64, 128]], expected 165}}
+    - {tags [mask, empty], type "ui32", lane_count 8, case {inputs [0, [1, 2, 4, 8, 16, 32, 64, 128]], expected 0}}
+    - {tags [mask, basic], type "ui8", lane_count 16, case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected 30}}
+    - {tags [mask, basic], type "f32", lane_count 4, case {inputs [4, [1.0, -2.0, 3.5, -4.5]], expected 3.5}}
   impls:
     sve:
       ?i?:

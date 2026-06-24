@@ -1272,12 +1272,24 @@ branches on the source extension name `scalar`, and value-test case construction
 no longer has a `simple_case(kind=...)` string-dispatched hub. Case-plan
 construction now uses explicit per-kind builders wired by the pattern objects.
 
+The primitive value-test source-shape cleanup is also implemented. Authored
+primitive tests now use required semantic `tags [...]` and no longer carry
+renderer-facing `test_name`, `lane_set`, or `lanes` fields. Catalog promotion
+derives `TestCase.name` from primitive/type/axis facts plus tags or optional
+`id`, infers `TestCase.lanes` from input/expected vector shapes where possible,
+and accepts `lane_count` only as an explicit escape hatch for ambiguous cases.
+Duplicate derived test names are catalog errors, and value-test render function
+names now use the derived case name directly instead of hiding duplicates behind
+source-order indexes.
+
 Active prompt:
-docs/agent/runs/tslc-design-follow-up-cleanup-review-prompt.md
+docs/agent/runs/tslc-value-test-source-shape-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
 boundary review prompt:
+docs/agent/runs/tslc-design-principles-review-prompt.md
+docs/agent/runs/tslc-design-follow-up-cleanup-review-prompt.md
 docs/agent/runs/tslc-loop-backend-unroll-review-prompt.md
 docs/agent/runs/tslc-call-selector-comma-review-prompt.md
 docs/agent/runs/tslc-tsil-statement-terminator-review-prompt.md
@@ -1290,11 +1302,12 @@ docs/agent/runs/tslc-support-policy-capability-review-prompt.md
 docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md
 docs/agent/runs/tslc-typed-render-values-review-prompt.md
 
-Next expected action: review the completed design follow-up cleanup prompt
-above. Confirm intrinsic selector parsing is comma-only, value-test
-differential planning is capability-driven rather than source-name-driven, and
-case-plan construction no longer routes through a string-dispatched
-`simple_case(...)` hub.
+Next expected action: review the value-test source-shape cleanup prompt above.
+Confirm the authored primitive tests are now semantic and deduplicated, that
+lane-count inference is conservative, and that renderers still consume typed
+plans rather than rediscovering source semantics. The broad design-principles
+prompt remains useful background evidence after this narrower slice is
+reviewed.
 ```
 
 Verification status (2026-06-23):
@@ -1369,6 +1382,23 @@ Verification status (2026-06-23):
   `env TSLC_VERIFY_WORKERS=1 ./verify.sh` passed all targeted validations,
   including 179 non-build tests and 53 generated-build tests;
   `git diff --check` passed.
+
+- Primitive value-test source-shape cleanup:
+  `python -m compileall -q tslc/src/tslc tslc/tests` passed;
+  `python -m pytest -q tslc/tests/test_catalog_tests.py` passed with
+  10 tests;
+  `python -m pytest -q tslc/tests/test_catalog_tests.py tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py`
+  passed with 20 tests;
+  direct catalog smoke over `tsldata` passed with `load 41`, `parse 0`,
+  `build 0`, and `validate 0`;
+  `python -m pytest -q --basetemp=/tmp/tslc-pytest-value-build tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py tslc/tests/test_build_verify.py`
+  passed with 63 tests;
+  source scan for primitive-authored `test_name`, `lane_set`, and `lanes N`
+  fields returned no hits;
+  `env TSLC_VERIFY_WORKERS=1 ./verify.sh` passed all targeted validations,
+  including 179 non-build tests, 53 generated-build tests, and the
+  architectural grep guards. Earlier wrapper attempts hit stale
+  `tslctmp/pytest_build_verify` cleanup state; the clean rerun passed.
 
 - Value-test planning boundary pass plus cleanup:
   `python -m compileall -q tslc/src/tslc tslc/tests` passed;

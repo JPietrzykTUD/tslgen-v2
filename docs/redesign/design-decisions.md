@@ -4315,3 +4315,50 @@ Consequences:
 - `loop<range>` is no longer a supported production loop selector.
 - Known-count C++ fallback loops still emit `TSL_UNROLL(count)` through the
   backend template, while symbolic generic loops remain valid normal loops.
+
+## ADR-085: Primitive Value Tests Derive Names And Lane Counts
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+Primitive value tests previously carried renderer-facing `test_name` plus both
+`lane_set` and `lanes`. That duplicated facts already present in the primitive,
+type, target axes, input vectors, expected values, and test intent. It also made
+source tests easier to make internally inconsistent: `type`, `lane_set`, and
+`lanes` could disagree even though downstream planning only needs one typed lane
+count.
+
+Decision:
+
+Author value tests around semantic intent:
+
+```tsl
+tests:
+  - {tags [basic], type "si32",
+     case {inputs [[1, 2, 3, 4], [5, 6, 7, 8]], expected [6, 8, 10, 12]}}
+```
+
+`tags` is required and describes why the test exists, such as `basic`, `edge`,
+`nan`, `overflow`, `mask`, `repeat`, or `reverse`. Source tests no longer carry
+`test_name`, `lane_set`, or authored `lanes`. Catalog promotion derives the
+stable case name from the primitive name, type tag, typed axes (`extension`,
+`to_type`, `to_extension`, `index`, and `attrs`), plus either an optional `id`
+or the tag list. Duplicate derived case names are catalog errors.
+
+Lane count is inferred during catalog promotion. The common vector case uses the
+expected vector length; representation-change cases use the source vector input
+length; reductions and stores use vector input lengths. Source `lane_count` is
+an explicit escape hatch for cases where no vector-shaped list exists or the
+lane count is otherwise ambiguous, such as mask-only scalar bitset tests.
+
+Consequences:
+
+- The primitive corpus under `tsldata/primitives` has been migrated to `tags`,
+  inferred lanes, and `lane_count` only where inference is not available.
+- `TestCase.name` and `TestCase.lanes` remain typed promoted facts consumed by
+  value-test planning and renderers; inference does not leak into renderers.
+- Renderer function names use the derived case name directly instead of hiding
+  duplicates behind numeric source-order suffixes.
+- Test coverage audits can reason over semantic tags rather than parsing
+  renderer-facing names.

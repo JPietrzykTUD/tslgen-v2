@@ -3,14 +3,14 @@ prim<s:=v> hadd(vec):
   brief_description "Reduces the elements to their sum."
   operation ""
   tests:
-    - {test_name "hadd_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 36}}
-    - {test_name "hadd_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[2147483647, -2147483647, 1, -1, 0, 2, -2, 3]], expected 3}}
-    - {test_name "hadd_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected 136}}
-    - {test_name "hadd_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 36}}
-    - {test_name "hadd_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 4, case {inputs [[1, 2, 3, 4]], expected 10}}
-    - {test_name "hadd_si64_basic", type "si64", lane_set "lanes_i64", lanes 4, case {inputs [[1, -2, 3, -4]], expected -2}}
-    - {test_name "hadd_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5]], expected -2.0}}
-    - {test_name "hadd_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0]], expected -1.0}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 36}}
+    - {tags [edge], type "si32", case {inputs [[2147483647, -2147483647, 1, -1, 0, 2, -2, 3]], expected 3}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected 136}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 36}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2, 3, 4]], expected 10}}
+    - {tags [basic], type "si64", case {inputs [[1, -2, 3, -4]], expected -2}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5]], expected -2.0}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0]], expected -1.0}}
   impls:
     sve:
       ?i?:
@@ -158,12 +158,12 @@ prim<s:=v> hmax(vec):
   brief_description "Reduces the elements to their maximum."
   operation ""
   tests:
-    - {test_name "hmax_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 8}}
-    - {test_name "hmax_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -5, 0, 2147483647, -2147483648, 100, -100, 42]], expected 2147483647}}
-    - {test_name "hmax_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected 255}}
-    - {test_name "hmax_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 9, 3, 4, 5, 6, 7, 8]], expected 9}}
-    - {test_name "hmax_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected INFINITY}}
-    - {test_name "hmax_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0]], expected 1.0}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 8}}
+    - {tags [edge], type "si32", case {inputs [[-1, -5, 0, 2147483647, -2147483648, 100, -100, 42]], expected 2147483647}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected 255}}
+    - {tags [basic], type "ui16", case {inputs [[1, 9, 3, 4, 5, 6, 7, 8]], expected 9}}
+    - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected INFINITY}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0]], expected 1.0}}
   impls:
     sve:
       ?i?:
@@ -276,12 +276,12 @@ prim<s:=v> hmin(vec):
   brief_description "Reduces the elements to their minimum."
   operation ""
   tests:
-    - {test_name "hmin_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 1}}
-    - {test_name "hmin_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -5, 0, 2147483647, -2147483648, 100, -100, 42]], expected -2147483648}}
-    - {test_name "hmin_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected 0}}
-    - {test_name "hmin_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[4, 9, 3, 7, 5, 6, 8, 10]], expected 3}}
-    - {test_name "hmin_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected "-INFINITY"}}
-    - {test_name "hmin_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0]], expected -2.0}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 1}}
+    - {tags [edge], type "si32", case {inputs [[-1, -5, 0, 2147483647, -2147483648, 100, -100, 42]], expected -2147483648}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected 0}}
+    - {tags [basic], type "ui16", case {inputs [[4, 9, 3, 7, 5, 6, 8, 10]], expected 3}}
+    - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected "-INFINITY"}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0]], expected -2.0}}
   impls:
     sve:
       ?i?:
@@ -394,10 +394,10 @@ prim<s:=(m,v)> hadd(mask, vec):
   brief_description "Reduces the active elements to their sum."
   operation ""
   tests:
-    - {test_name "hadd_mask_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected 36}}
-    - {test_name "hadd_mask_i32_sparse", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [165, [1, 2, 3, 4, 5, 6, 7, 8]], expected 18}}
-    - {test_name "hadd_mask_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [173, [1, 2, 3, 4, 5, 6, 7, 8]], expected 21}}
-    - {test_name "hadd_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [13, [1.0, -2.0, 3.5, -4.5]], expected 0.0}}
+    - {tags [mask, basic], type "si32", lane_count 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected 36}}
+    - {tags [mask, sparse], type "si32", lane_count 8, case {inputs [165, [1, 2, 3, 4, 5, 6, 7, 8]], expected 18}}
+    - {tags [mask, basic], type "ui16", lane_count 8, case {inputs [173, [1, 2, 3, 4, 5, 6, 7, 8]], expected 21}}
+    - {tags [mask, basic], type "f32", lane_count 4, case {inputs [13, [1.0, -2.0, 3.5, -4.5]], expected 0.0}}
   impls:
     sve:
       ?i?:
@@ -457,10 +457,10 @@ prim<s:=(m,v)> hmax(mask, vec):
   brief_description "Reduces the active elements to their maximum."
   operation ""
   tests:
-    - {test_name "hmax_mask_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected 8}}
-    - {test_name "hmax_mask_i32_sparse", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [45, [1, 2, 3, 4, 5, 6, 7, 8]], expected 6}}
-    - {test_name "hmax_mask_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [141, [1, 9, 3, 4, 5, 6, 7, 8]], expected 8}}
-    - {test_name "hmax_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [13, [1.0, -2.0, 3.5, -4.5]], expected 3.5}}
+    - {tags [mask, basic], type "si32", lane_count 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected 8}}
+    - {tags [mask, sparse], type "si32", lane_count 8, case {inputs [45, [1, 2, 3, 4, 5, 6, 7, 8]], expected 6}}
+    - {tags [mask, basic], type "ui16", lane_count 8, case {inputs [141, [1, 9, 3, 4, 5, 6, 7, 8]], expected 8}}
+    - {tags [mask, basic], type "f32", lane_count 4, case {inputs [13, [1.0, -2.0, 3.5, -4.5]], expected 3.5}}
   impls:
     sve:
       ?i?:
@@ -549,10 +549,10 @@ prim<s:=(m,v)> hmin(mask, vec):
   brief_description "Reduces the active elements to their minimum."
   operation ""
   tests:
-    - {test_name "hmin_mask_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected 1}}
-    - {test_name "hmin_mask_i32_sparse", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [180, [1, 2, 3, 4, 5, 6, 7, 8]], expected 3}}
-    - {test_name "hmin_mask_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [45, [4, 9, 3, 7, 5, 6, 8, 10]], expected 1}}
-    - {test_name "hmin_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [13, [1.0, -2.0, 3.5, -4.5]], expected -4.5}}
+    - {tags [mask, basic], type "si32", lane_count 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected 1}}
+    - {tags [mask, sparse], type "si32", lane_count 8, case {inputs [180, [1, 2, 3, 4, 5, 6, 7, 8]], expected 3}}
+    - {tags [mask, basic], type "ui16", lane_count 8, case {inputs [45, [4, 9, 3, 7, 5, 6, 8, 10]], expected 1}}
+    - {tags [mask, basic], type "f32", lane_count 4, case {inputs [13, [1.0, -2.0, 3.5, -4.5]], expected -4.5}}
   impls:
     sve:
       ?i?:

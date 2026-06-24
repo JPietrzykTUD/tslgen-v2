@@ -22,6 +22,7 @@ from tslc.syntax.ast import (
     ParsedTslField,
     ParsedTslListValue,
     ParsedTslMapValue,
+    ParsedTslScalarValue,
 )
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
@@ -348,10 +349,10 @@ def _validate_generic_params(
 
 _KNOWN_TEST_FIELDS = frozenset(
     {
-        "test_name",
+        "id",
+        "tags",
         "type",
-        "lane_set",
-        "lanes",
+        "lane_count",
         "extension",
         "expected_rule",
         "to_type",
@@ -366,9 +367,7 @@ _KNOWN_TEST_FIELDS = frozenset(
         "case",
     }
 )
-# `lanes`/`lane_set` are optional (some cases derive width from the extension or a size suffix),
-# so only these three are universally required.
-_REQUIRED_TEST_FIELDS = ("test_name", "type", "case")
+_REQUIRED_TEST_FIELDS = ("tags", "type", "case")
 
 
 def _validate_tests(
@@ -377,9 +376,9 @@ def _validate_tests(
 ) -> None:
     """Validate the internal structure of a `tests:` block.
 
-    Structural problems (wrong shape, unknown/missing keys, non-positive ``lanes``) are errors; a
-    vector input whose lane count disagrees with ``lanes`` is a warning (``expected`` length is
-    result-kind dependent — a reduction returns a scalar — so it is not length-checked here)."""
+    Structural problems (wrong shape, unknown/missing keys, non-positive ``lane_count``) are
+    errors. Lane-count inference happens during catalog promotion, where test facts have typed
+    inputs and expected values."""
 
     for field in declaration.fields_by_name("tests"):
         value = field.field.value
@@ -413,10 +412,10 @@ def _validate_test_case(
     diagnostics: list[Diagnostic],
 ) -> None:
     entries = {entry.key.text: entry for entry in item.entries}
-    test_name = field_text(entries.get("test_name"))
+    case_id = field_text(entries.get("id"))
     owner = (
-        f"primitive {primitive_name!r} test {test_name!r}"
-        if test_name is not None
+        f"primitive {primitive_name!r} test {case_id!r}"
+        if case_id is not None
         else f"primitive {primitive_name!r} test"
     )
     for key, entry in entries.items():
@@ -439,14 +438,24 @@ def _validate_test_case(
                     source=source_span(item.source),
                 )
             )
-    lanes = _test_lane_count(entries.get("lanes"))
-    if "lanes" in entries and lanes is None:
+    tags = entries.get("tags")
+    if tags is not None and not _is_non_empty_scalar_list(tags):
         diagnostics.append(
             diagnostic_at(
                 severity="error",
-                code="TSL-CATALOG-TEST-BAD-LANES",
-                message=f"{owner}: `lanes` must be a positive integer",
-                source=source_span(entries["lanes"].source),
+                code="TSL-CATALOG-TEST-BAD-TAGS",
+                message=f"{owner}: `tags` must be a non-empty list",
+                source=source_span(tags.source),
+            )
+        )
+    lanes = _test_lane_count(entries.get("lane_count"))
+    if "lane_count" in entries and lanes is None:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-TEST-BAD-LANE-COUNT",
+                message=f"{owner}: `lane_count` must be a positive integer",
+                source=source_span(entries["lane_count"].source),
             )
         )
     case = entries.get("case")
@@ -478,6 +487,13 @@ def _test_lane_count(field: ParsedTslField | None) -> int | None:
     except ValueError:
         return None
     return lanes if lanes > 0 else None
+
+
+def _is_non_empty_scalar_list(field: ParsedTslField) -> bool:
+    value = field.value
+    return isinstance(value, ParsedTslListValue) and any(
+        isinstance(item, ParsedTslScalarValue) for item in value.items
+    )
 
 
 def _validate_immediate_params(

@@ -3,26 +3,26 @@ prim<v:=ptr>[aligned=*] load(ptr):
   brief_description "[Example: sse + si8]: Load 128-bits of integer data from memory into \"dst\". \n\t\"mem_addr\" must be aligned on a 16-byte boundary or a general-protection exception may be generated."
   operation "[Example: sse + si8]: dst[127:0] := MEM[mem_addr+127:mem_addr]"
   tests:
-    - {test_name "loadu_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "loadu_u32_misaligned", attrs [aligned=false], type "ui32", lane_set "lanes_i32", lanes 8, offset 1, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17]], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
-    - {test_name "loadu_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "loadu_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, offset 0, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
-    - {test_name "loadu_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "loadu_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, offset 0, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
-    - {test_name "loadu_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "loadu_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, offset 0, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
-    - {test_name "loadu_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "loadu_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, offset 0, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
-    - {test_name "loadu_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, offset 0, case {inputs [[1, 2, 3, 4]], expected [1, 2, 3, 4]}}
-    - {test_name "loadu_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, offset 0, case {inputs [[0, -1, -2147483648, 2147483647]], expected [0, -1, -2147483648, 2147483647]}}
-    - {test_name "loadu_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, offset 0, case {inputs [[1, 2]], expected [1, 2]}}
-    - {test_name "loadu_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, offset 0, case {inputs [[0, 1]], expected [0, 1]}}
-    - {test_name "loadu_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, offset 0, case {inputs [[1, 2]], expected [1, 2]}}
-    - {test_name "loadu_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, offset 0, case {inputs [[0, -1]], expected [0, -1]}}
-    - {test_name "loadu_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, offset 0, case {inputs [[1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "loadu_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, offset 0, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
-    - {test_name "loadu_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, offset 0, case {inputs [[1.0, -2.0]], expected [1.0, -2.0]}}
-    - {test_name "loadu_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, offset 0, case {inputs [[0.0, -0.0]], expected [0.0, -0.0]}}
+    - {tags [basic], type "ui32", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [misaligned], attrs [aligned=false], type "ui32", offset 1, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17]], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
+    - {tags [basic], type "ui8", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "ui8", offset 0, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {tags [basic], type "si8", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "si8", offset 0, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
+    - {tags [basic], type "ui16", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "ui16", offset 0, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {tags [basic], type "si16", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "si16", offset 0, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
+    - {tags [basic], type "si32", offset 0, case {inputs [[1, 2, 3, 4]], expected [1, 2, 3, 4]}}
+    - {tags [edge], type "si32", offset 0, case {inputs [[0, -1, -2147483648, 2147483647]], expected [0, -1, -2147483648, 2147483647]}}
+    - {tags [basic], type "ui64", offset 0, case {inputs [[1, 2]], expected [1, 2]}}
+    - {tags [edge], type "ui64", offset 0, case {inputs [[0, 1]], expected [0, 1]}}
+    - {tags [basic], type "si64", offset 0, case {inputs [[1, 2]], expected [1, 2]}}
+    - {tags [edge], type "si64", offset 0, case {inputs [[0, -1]], expected [0, -1]}}
+    - {tags [basic], type "f32", offset 0, case {inputs [[1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [edge], type "f32", offset 0, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
+    - {tags [basic], type "f64", offset 0, case {inputs [[1.0, -2.0]], expected [1.0, -2.0]}}
+    - {tags [edge], type "f64", offset 0, case {inputs [[0.0, -0.0]], expected [0.0, -0.0]}}
   impls:
     scalar:
       arith:
@@ -133,17 +133,17 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
   brief_description "TODO"
   operation "TODO"
   tests:
-    - {test_name "load_mask_zero_ui32_all", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
-    - {test_name "load_mask_zero_ui32_none", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "load_mask_zero_ui32_alternating", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 170], expected [0, 11, 0, 13, 0, 15, 0, 17]}}
-    - {test_name "load_mask_zero_ui8_all", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 65535], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "load_mask_zero_ui8_none", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 0], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "load_mask_zero_si16_all", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], 255], expected [1, -2, 3, -4, 5, -6, 7, -8]}}
-    - {test_name "load_mask_zero_si16_none", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "load_mask_zero_f32_all", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], 15], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "load_mask_zero_f32_none", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], 0], expected [0.0, 0.0, 0.0, 0.0]}}
-    - {test_name "load_mask_zero_f64_all", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], 3], expected [1.0, -2.0]}}
-    - {test_name "load_mask_zero_f64_none", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], 0], expected [0.0, 0.0]}}
+    - {tags [mask, zero, all], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
+    - {tags [mask, zero, none], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [mask, zero, alternating], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 170], expected [0, 11, 0, 13, 0, 15, 0, 17]}}
+    - {tags [mask, zero, all], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 65535], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [mask, zero, none], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 0], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [mask, zero, all], type "si16", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], 255], expected [1, -2, 3, -4, 5, -6, 7, -8]}}
+    - {tags [mask, zero, none], type "si16", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [mask, zero, all], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], 15], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [mask, zero, none], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], 0], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [mask, zero, all], type "f64", case {inputs [[1.0, -2.0], 3], expected [1.0, -2.0]}}
+    - {tags [mask, zero, none], type "f64", case {inputs [[1.0, -2.0], 0], expected [0.0, 0.0]}}
   impls:
     scalar:
       arith:
@@ -253,17 +253,17 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
   brief_description "Masked load with pass-through semantics: lanes enabled by the mask are loaded from memory, and disabled lanes are taken from data."
   operation "TODO"
   tests:
-    - {test_name "load_mask_merge_ui32_all", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [100, 101, 102, 103, 104, 105, 106, 107], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
-    - {test_name "load_mask_merge_ui32_none", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [100, 101, 102, 103, 104, 105, 106, 107], 0], expected [100, 101, 102, 103, 104, 105, 106, 107]}}
-    - {test_name "load_mask_merge_ui32_alternating", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [100, 101, 102, 103, 104, 105, 106, 107], 170], expected [100, 11, 102, 13, 104, 15, 106, 17]}}
-    - {test_name "load_mask_merge_ui8_all", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116], 65535], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "load_mask_merge_ui8_none", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116], 0], expected [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]}}
-    - {test_name "load_mask_merge_si16_all", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], [101, 102, 103, 104, 105, 106, 107, 108], 255], expected [1, -2, 3, -4, 5, -6, 7, -8]}}
-    - {test_name "load_mask_merge_si16_none", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], [101, 102, 103, 104, 105, 106, 107, 108], 0], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
-    - {test_name "load_mask_merge_f32_all", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [10.0, 20.0, 30.0, 40.0], 15], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "load_mask_merge_f32_none", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [10.0, 20.0, 30.0, 40.0], 0], expected [10.0, 20.0, 30.0, 40.0]}}
-    - {test_name "load_mask_merge_f64_all", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [10.0, 20.0], 3], expected [1.0, -2.0]}}
-    - {test_name "load_mask_merge_f64_none", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [10.0, 20.0], 0], expected [10.0, 20.0]}}
+    - {tags [mask, merge, all], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [100, 101, 102, 103, 104, 105, 106, 107], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
+    - {tags [mask, merge, none], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [100, 101, 102, 103, 104, 105, 106, 107], 0], expected [100, 101, 102, 103, 104, 105, 106, 107]}}
+    - {tags [mask, merge, alternating], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [100, 101, 102, 103, 104, 105, 106, 107], 170], expected [100, 11, 102, 13, 104, 15, 106, 17]}}
+    - {tags [mask, merge, all], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116], 65535], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [mask, merge, none], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116], 0], expected [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]}}
+    - {tags [mask, merge, all], type "si16", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], [101, 102, 103, 104, 105, 106, 107, 108], 255], expected [1, -2, 3, -4, 5, -6, 7, -8]}}
+    - {tags [mask, merge, none], type "si16", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], [101, 102, 103, 104, 105, 106, 107, 108], 0], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
+    - {tags [mask, merge, all], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [10.0, 20.0, 30.0, 40.0], 15], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [mask, merge, none], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [10.0, 20.0, 30.0, 40.0], 0], expected [10.0, 20.0, 30.0, 40.0]}}
+    - {tags [mask, merge, all], type "f64", case {inputs [[1.0, -2.0], [10.0, 20.0], 3], expected [1.0, -2.0]}}
+    - {tags [mask, merge, none], type "f64", case {inputs [[1.0, -2.0], [10.0, 20.0], 0], expected [10.0, 20.0]}}
   impls:
     scalar:
       arith:
@@ -383,8 +383,8 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask(ptr):
   brief_description "Loads data from memory to a mask."
   operation ""
   tests:
-    - {test_name "load_mask_packed_true_none", attrs [aligned=false, packed=true], type "ui32", lane_set "lanes_i32", lanes 4, offset 1, case {inputs [[0, 0, 0]], expected 0}}
-    - {test_name "load_mask_packed_false_none", attrs [aligned=false, packed=false], type "ui32", lane_set "lanes_i32", lanes 4, offset 0, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected 0}}
+    - {tags [mask, none], attrs [aligned=false, packed=true], type "ui32", offset 1, case {inputs [[0, 0, 0]], expected 0}}
+    - {tags [mask, none], attrs [aligned=false, packed=false], type "ui32", offset 0, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected 0}}
   impls:
     scalar:
       arith:
@@ -481,26 +481,26 @@ prim<s:=ptr>[aligned=false] load_scalar(ptr):
   brief_description "Loads a scalar mask from memory."
   operation ""
   tests:
-    - {test_name "load_scalar_ui8_basic", type "ui8", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_ui8_edge", type "ui8", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_si8_basic", type "si8", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_si8_edge", type "si8", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_ui16_basic", type "ui16", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_ui16_edge", type "ui16", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_si16_basic", type "si16", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_si16_edge", type "si16", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_ui32_basic", type "ui32", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_ui32_edge", type "ui32", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_si32_basic", type "si32", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_si32_edge", type "si32", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_f32_basic", type "f32", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_f32_edge", type "f32", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_ui64_basic", type "ui64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_ui64_edge", type "ui64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_si64_basic", type "si64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_si64_edge", type "si64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_f64_basic", type "f64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_f64_edge", type "f64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "ui8", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "ui8", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "si8", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "si8", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "ui16", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "ui16", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "si16", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "si16", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "ui32", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "ui32", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "si32", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "si32", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "f32", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "f32", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "ui64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "ui64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "si64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "si64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "f64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "f64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
   impls:
     [scalar, generic, avx512, avx2, sse, neon, sve, oneAPIfpga]:
       arith:

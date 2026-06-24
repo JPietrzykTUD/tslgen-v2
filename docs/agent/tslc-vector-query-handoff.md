@@ -124,6 +124,61 @@ git diff --check
 
 Result: passed.
 
+### Primitive Value-Test Source Shape Cleanup
+
+The primitive value-test source contract has been simplified after the coverage
+discussion:
+
+1. Authored primitive tests now use required semantic `tags [...]`.
+2. Source tests no longer carry `test_name`, `lane_set`, or `lanes`.
+3. `CatalogBuilder` derives `TestCase.name` from primitive name, type tag,
+   typed axes (`extension`, `to_type`, `to_extension`, `index`, `attrs`), and
+   either optional `id` or the tag list.
+4. `CatalogBuilder` infers promoted `TestCase.lanes` from typed test shape.
+   `lane_count` remains only as an explicit escape hatch for mask-only or
+   otherwise ambiguous cases.
+5. Duplicate derived case names are catalog errors.
+6. Value-test render plans no longer add source-order indexes to generated test
+   function names; duplicate semantic ids must be fixed in source data.
+
+New/changed implementation files:
+
+- `tslc/src/tslc/catalog/test_cases.py`
+- `tslc/src/tslc/catalog/model.py`
+- `tslc/src/tslc/catalog/builder.py`
+- `tslc/src/tslc/catalog/validation/schema_validation.py`
+- `tslc/src/tslc/value_tests/case_plans.py`
+- `tsldata/primitives/**/*.tsl`
+
+Focused validation so far:
+
+```bash
+python -m compileall -q tslc/src/tslc tslc/tests
+```
+
+Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_catalog_tests.py tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py
+```
+
+Result: `20 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py tslc/tests/test_catalog_tests.py tslc/tests/test_determinism.py tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py
+```
+
+Result: `46 passed`.
+
+```bash
+python -m pytest -q --basetemp=/tmp/tslc-pytest-value-build \
+  tslc/tests/test_value_test_planning.py \
+  tslc/tests/test_value_tests.py \
+  tslc/tests/test_build_verify.py
+```
+
+Result: `63 passed`.
+
 ```bash
 PYTHONPATH=tslc/src python - <<'PY'
 from pathlib import Path
@@ -141,15 +196,16 @@ assert diagnostics == (), diagnostics
 PY
 ```
 
-Result: passed with zero validation diagnostics for the current `tsldata/`
-corpus.
+Result: passed with `load 41`, `parse 0`, `build 0`, and `validate 0`.
 
 ```bash
-./verify.sh
+env TSLC_VERIFY_WORKERS=1 ./verify.sh
 ```
 
-Result: passed with 115 non-build tests and 53 generated-build tests across the
-script's shards.
+Result: passed with 179 non-build tests, 53 generated-build tests, and the
+script's architectural grep guards. An earlier wrapper attempt hit stale
+`tslctmp/pytest_build_verify` cleanup state; after that base disappeared, the
+clean wrapper rerun passed.
 
 ## Performance-Oriented Follow-Up Changes
 
