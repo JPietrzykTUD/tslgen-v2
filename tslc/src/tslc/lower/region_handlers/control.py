@@ -409,7 +409,7 @@ class SwitchLowerer:
     - C++: a cascading ``if constexpr (sel == label) { … } else if constexpr (…) … else { … }``.
     - Rust: a ``match sel { label => { … }, _ => { … } }`` (LLVM folds the const match).
 
-    Each arm body renders like any block — ``emit_return`` inside it becomes the backend's return,
+    Each arm body renders like any block — ``complete`` inside it becomes the backend's return,
     and every arm returns, so the construct is the function's diverging tail (as with ``if<compile>``).
     The ``_`` arm is the default (the portable fallback loop)."""
 

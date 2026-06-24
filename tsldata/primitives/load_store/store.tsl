@@ -448,9 +448,9 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
-              emit_return(intrin<mask_store, build>(ptr, mask, data));
+              complete(intrin<mask_store, build>(ptr, mask, data));
             } else<generation> {
-              emit_return(intrin<mask_storeu, build>(ptr, mask, data));
+              complete(intrin<mask_storeu, build>(ptr, mask, data));
             }
           """
     [avx2, sse, neon]:

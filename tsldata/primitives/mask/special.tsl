@@ -25,7 +25,7 @@ prim<im:=(im,im)> test_imask(mask, position):
           generic []
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(vector::imask), (mask >> position) & cast<static>(type<generation>(vector::imask), 1)));"
+          tsil "complete(cast<static>(type<generation>(vector::imask), (mask >> position) & cast<static>(type<generation>(vector::imask), 1)));"
 prim<im:=(im,im,im)> insert_imask(mask_a, mask_b, position):
   brief_description "Merges two masks at a runtime position."
   operation ""
@@ -53,7 +53,7 @@ prim<im:=(im,im,im)> insert_imask(mask_a, mask_b, position):
           generic []
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
-          tsil "emit_return(mask_a | (mask_b << position));"
+          tsil "complete(mask_a | (mask_b << position));"
 prim<im:=(im,im)> extract_imask(mask, position):
   brief_description "Extracts a sub-mask by shifting at a runtime position."
   operation ""
@@ -81,4 +81,4 @@ prim<im:=(im,im)> extract_imask(mask, position):
           generic []
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
-          tsil "emit_return(mask >> position);"
+          tsil "complete(mask >> position);"

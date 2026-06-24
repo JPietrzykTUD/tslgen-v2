@@ -8,7 +8,7 @@ Survey commands:
 
 ```bash
 rg --files tsldata -g "*.tsl"
-rg -n "tsil|emit_return|call<primitive=|intrin|intrin_compose|details::|if<generation>|else<generation>|if<compile>|else<compile>|if<runtime>|else<runtime>|loop<|var<|let<|type<generation>|type<backend>|value<generation>|value<backend>" tsldata -g "*.tsl"
+rg -n "tsil|complete|call<primitive=|intrin|intrin_compose|details::|if<generation>|else<generation>|if<compile>|else<compile>|if<runtime>|else<runtime>|loop<|var<|let<|type<generation>|type<backend>|value<generation>|value<backend>" tsldata -g "*.tsl"
 ```
 
 The survey found 41 current `.tsl` files. Simple token counts found 1328
@@ -40,8 +40,8 @@ syntax. For example, `prim<v:=(v,v)> sub(left, right):` is a declaration in
 
 | Bucket | Corpus evidence | Classification | Treatment |
 | --- | --- | --- | --- |
-| TSIL payload envelope | Inline `tsil "emit_return(left + right);"` in `tsldata/primitives/arithmetic/fundamental.tsl`; multiline `tsil """ ... """` in the same file; `tsil:` block entries in `tsldata/primitives/bitwise/shifts.tsl` | source-body envelope | Model first as source-owned `ImplementationBody` lines. Raw text is preserved by default; lowerable islands are introduced only by later milestones. |
-| Return directive | `emit_return(left + right);`, multiline `emit_return(result);`, and nested `emit_return(call<primitive=...>(...));` across primitive files | lowerable directive | Candidate for a narrow directive milestone, but the returned expression must remain raw or separately segmented unless the exact expression family is selected. |
+| TSIL payload envelope | Inline `tsil "complete(left + right);"` in `tsldata/primitives/arithmetic/fundamental.tsl`; multiline `tsil """ ... """` in the same file; `tsil:` block entries in `tsldata/primitives/bitwise/shifts.tsl` | source-body envelope | Model first as source-owned `ImplementationBody` lines. Raw text is preserved by default; lowerable islands are introduced only by later milestones. |
+| Return directive | `complete(left + right);`, multiline `complete(result);`, and nested `complete(call<primitive=...>(...));` across primitive files | lowerable directive | Candidate for a narrow directive milestone, but the returned expression must remain raw or separately segmented unless the exact expression family is selected. |
 | Primitive calls | `call<primitive=set_zero[Vec]>()`, `call<primitive=sub>(left, right)`, `call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i])` | lowerable semantic operation / dependency edge | Parse as explicit primitive-call islands when selected. Do not infer from bare primitive-looking function names. |
 | Generation control | `if<generation>(...)`, `else if<generation>(...)`, `else<generation>`, `loop<unroll>(...)`, `loop<range>(...)`, `let<type>(...)`, and `var<...>(...)` | lowerable directive over generation context | Semantic lowering requires typed generation context and selected-branch behavior. M160 accepts exact classified `if<generation>` / `else if<generation>` branch chains with optional final `else<generation>` fallback. M186 closes the post-M185 bare-condition gap as a small typed TSIL generation boolean condition grammar over accepted boolean/integer-comparison leaves, `!`, `&&`, `||`, and parentheses, not as arbitrary target-language expression parsing. M161 accepts exact `loop<range>(...)` region facts with optional adjacent `loop<unroll>(...)` metadata. M162 discovers every exact top-level M161 loop region inside arbitrary body token streams while preserving non-loop tokens as opaque spans, without executing loops or parsing loop bodies as a general language. M163 accepts exact top-level classified `var<init_register>`, `var<infer>`, `var<const_infer>`, and `var<typed>` declaration facts as unresolved backend-facing requests with opaque type/initializer payload text. |
 | Backend control | `if<compile>(...)`, `else<compile>`, and `switch<compile>(...)` occur in `tsldata/primitives/bitwise/shifts.tsl`, `tsldata/primitives/conversion/repr_change.tsl`, `tsldata/primitives/conversion/cast.tsl`, `tsldata/primitives/conversion/mask_specific.tsl`, `tsldata/primitives/mask/bitwise.tsl`, and `tsldata/primitives/load_store/rnd_access.tsl`. `if<runtime>` and `else<runtime>` were explicitly searched and are absent from the current corpus. | backend-control directive | Backend-owned lowering/rendering directive. M165 records exact classified compile-control tokens as unresolved backend-control requests while preserving payloads and surrounding tokens opaque; it does not select branches, match raw blocks, or render flow. The C++ translation map has `flow_if_static`, `flow_else_if_static`, `flow_if_runtime`, and `flow_else_if_runtime`, but the current source corpus uses compile-time control, not runtime control. |
@@ -54,22 +54,22 @@ syntax. For example, `prim<v:=(v,v)> sub(left, right):` is a declaration in
 | Arithmetic helper calls | `details::arith_add`, `details::arith_mul`, and `details::arith_rem` appear inside return expressions, assignments, and loops | backend/support helper | Preserve as source-authored calls to predefined backend/language support helpers. They are not semantic operation-lowering islands and should not be rewritten to `+`, `*`, or `%` by lowering. |
 | Support helper calls | `details::popcount`, `details::clz`, `details::clz_recursive`, `details::ctz`, and `details::mask_test` | backend/support helper | Preserve as source-authored or backend-support helper calls unless a future milestone explicitly selects helper modeling. They should not be swept into arithmetic operator lowering. |
 | Raw target-language-like text | Assignments such as `result[i] = ...`, declarations such as `svbool_t pg = ...`, pointer dereferences, `return;`, array indexing, casts, braces, and operators around TSIL islands | raw by default | Preserve as raw line text or raw string tokens around selected islands. Recognition of an island must not imply a full statement, scope, precedence, or type system parser. |
-| Backend translation maps | `tsldata/detail/lang/translate_cpp.tsl` defines text templates such as `emit_return "return {value}"`, `loop_range`, `flow_if_static`, and `flow_if_runtime`; Rust has support helpers such as `arith_add`, `arith_sub`, `arith_mul`, and `arith_rem` | backend metadata, not primitive-body corpus | Translation declarations are source data for future typed backend rules. They are not runtime shortcuts for lowering and must not be consumed as raw dictionaries past catalog boundaries. |
+| Backend translation maps | `tsldata/detail/lang/translate_cpp.tsl` defines text templates such as `complete "return {value}"`, `loop_range`, `flow_if_static`, and `flow_if_runtime`; Rust has support helpers such as `arith_add`, `arith_sub`, `arith_mul`, and `arith_rem` | backend metadata, not primitive-body corpus | Translation declarations are source data for future typed backend rules. They are not runtime shortcuts for lowering and must not be consumed as raw dictionaries past catalog boundaries. |
 
 ## Representative Evidence
 
 - `tsldata/primitives/arithmetic/fundamental.tsl:31` has inline
-  `emit_return(left + right);`.
+  `complete(left + right);`.
 - `tsldata/primitives/arithmetic/fundamental.tsl:39` starts a multiline TSIL
   body with `var<init_register>`, `loop<unroll>`, `loop<range>`, indexed
-  assignment, `call<primitive=@self[...]>(...)`, and `emit_return(result);`.
+  assignment, `call<primitive=@self[...]>(...)`, and `complete(result);`.
 - `tsldata/primitives/comparison/fundamental.tsl:33`,
   `tsldata/primitives/comparison/fundamental.tsl:192`,
   `tsldata/primitives/comparison/fundamental.tsl:344`,
   `tsldata/primitives/comparison/fundamental.tsl:539`,
   `tsldata/primitives/comparison/fundamental.tsl:734`, and
   `tsldata/primitives/comparison/fundamental.tsl:900` show comparison
-  operators inside `emit_return(...)`.
+  operators inside `complete(...)`.
 - `tsldata/primitives/bitwise/shifts.tsl:625` shows nested
   `if<generation>` and `if<compile>` directives.
 - `tsldata/primitives/load_store/array.tsl:108` and

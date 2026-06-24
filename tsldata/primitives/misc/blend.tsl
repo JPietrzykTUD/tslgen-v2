@@ -29,9 +29,9 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
         implementation:
           tsil """
               if (mask) {
-                emit_return(right);
+                complete(right);
               } else {
-                emit_return(left);
+                complete(left);
               }
             """
     [generic, oneAPIfpga]:
@@ -48,7 +48,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
                   result[i] = right_array[i];
                 }
               }
-              emit_return(call<primitive=from_array[Vec]>(result));
+              complete(call<primitive=from_array[Vec]>(result));
             """
     [avx512, avx2_vl, sse_vl]:
       f?:
@@ -58,7 +58,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 intrin<mask_blend, build>(
                   mask, left, right
                 )
@@ -77,7 +77,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
             [si32, ui32, si64, ui64] [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 intrin<mask_blend, build[suffix=base::signed_of(base::in)]>(
                   mask, left, right
                 )
@@ -92,7 +92,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
             f64 [sse2, sse4_1]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 intrin<blendv, build>(
                   left,
                   right,
@@ -106,7 +106,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           sse [sse2, sse4_1]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 intrin<blendv, build[suffix=epi8]>(
                   left,
                   right,
@@ -126,7 +126,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
             f64 [sse, sse2]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 call<primitive=binary_or>(
                   call<primitive=binary_andnot>(
                     call<primitive=to_vector>(mask),
@@ -147,14 +147,14 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
               let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
               var<const_infer>(mask_v, call<primitive=to_vector>(mask));
               var<const_infer>(mask_u, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(mask_v));
-              emit_return(intrin<vbslq_{{base::in}}>(mask_u, right, left));
+              complete(intrin<vbslq_{{base::in}}>(mask_u, right, left));
             """
     sve:
       arith:
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svsel, build>(
                   mask, right, left
                 )
@@ -191,9 +191,9 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
         implementation:
           tsil """
               if (mask) {
-                emit_return(src);
+                complete(src);
               } else {
-                emit_return(cast<static>(type<generation>(base::in), 0));
+                complete(cast<static>(type<generation>(base::in), 0));
               }
             """
     [avx512, avx2_vl, sse_vl]:
@@ -204,7 +204,7 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 intrin<maskz_mov, build>(
                   mask, src
                 )
@@ -223,7 +223,7 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
             [si32, ui32, si64, ui64] [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 intrin<maskz_mov, build[suffix=base::signed_of(base::in)]>(
                   mask, src
                 )
@@ -245,7 +245,7 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 call<primitive=blend, attrs[mask=pass_through]>(
                   mask,
                   call<primitive=set_zero[Vec]>(),
@@ -285,9 +285,9 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
         implementation:
           tsil """
               if (mask) {
-                emit_return(data);
+                complete(data);
               } else {
-                emit_return(src);
+                complete(src);
               }
             """
     [avx512, avx2_vl, sse_vl]:
@@ -298,7 +298,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 intrin<mask_mov, build>(
                   src, mask, data
                 )
@@ -317,7 +317,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
             [si32, ui32, si64, ui64] [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 intrin<mask_mov, build[suffix=base::signed_of(base::in)]>(
                   src, mask, data
                 )
@@ -339,7 +339,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 call<primitive=blend, attrs[mask=pass_through]>(
                   mask,
                   src,

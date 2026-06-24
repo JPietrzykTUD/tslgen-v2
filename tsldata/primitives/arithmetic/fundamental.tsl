@@ -28,7 +28,7 @@ prim<v:=(v,v)> add(left, right):
       arith:
         requires []
         implementation:
-          tsil "emit_return(op<add>(left, right));"
+          tsil "complete(op<add>(left, right));"
     [generic, oneAPIfpga, oneAPIfpgaRTL]:
       arith:
         requires:
@@ -41,7 +41,7 @@ prim<v:=(v,v)> add(left, right):
             loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
             }
-            emit_return(result);
+            complete(result);
           """
     avx512:
       ?i?:
@@ -50,54 +50,54 @@ prim<v:=(v,v)> add(left, right):
           bword   [avx512f, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<add, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f?:
         requires [avx512f]
         implementation:
-          tsil "emit_return(intrin<add, build>(left, right));"
+          tsil "complete(intrin<add, build>(left, right));"
     avx2:
       ?i?:
         requires [avx, avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<add, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f?:
         requires [avx]
         implementation:
-          tsil "emit_return(intrin<add, build>(left, right));"
+          tsil "complete(intrin<add, build>(left, right));"
     sse:
       ?i?:
         requires [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<add, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f32:
         requires [sse]
         implementation:
-          tsil "emit_return(intrin<add, build>(left, right));"
+          tsil "complete(intrin<add, build>(left, right));"
       f64:
         requires [sse2]
         implementation:
-          tsil "emit_return(intrin<add, build>(left, right));"
+          tsil "complete(intrin<add, build>(left, right));"
     neon:
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin<vaddq, build>(left, right));"
+          tsil "complete(intrin<vaddq, build>(left, right));"
     sve:
       arith:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin<svadd, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
+          tsil "complete(intrin<svadd, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
 prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
   brief_description "[Example: avx512 + si8]: Add packed 8-bit integers in \"a\" and \"b\", and store the results in \"dst\" using zeromask \"k\" (elements are zeroed when the corresponding mask bit is not set)."
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i] + b[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
@@ -115,9 +115,9 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=add>(left, right));
+              complete(call<primitive=add>(left, right));
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [generic, oneAPIfpga, oneAPIfpgaRTL]:
       arith:
@@ -127,7 +127,7 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
           oneAPIfpgaRTL [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=add>(left, right)
@@ -148,7 +148,7 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<maskz_add, build[suffix=base::signed_of(base::in)]>(mask, left, right)
             );
           """
@@ -159,7 +159,7 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<maskz_add, build>(mask, left, right)
             );
           """
@@ -176,7 +176,7 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
           neon [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=add>(left, right)
@@ -187,7 +187,7 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
       arith:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin<svadd, build[post=z]>(mask, left, right));"
+          tsil "complete(intrin<svadd, build[post=z]>(mask, left, right));"
 prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
   brief_description "[Example: avx512 + si8]: Add packed 8-bit integers in \"a\" and \"b\", and store the results in \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i] + b[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := src[i+7:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
@@ -205,9 +205,9 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=add>(left, right));
+              complete(call<primitive=add>(left, right));
             }
-            emit_return(left);
+            complete(left);
           """
     [generic, oneAPIfpga, oneAPIfpgaRTL]:
       arith:
@@ -217,7 +217,7 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
           oneAPIfpgaRTL [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
@@ -239,7 +239,7 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_add, build[suffix=base::signed_of(base::in)]>(left, mask, left, right)
             );
           """
@@ -250,7 +250,7 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_add, build>(left, mask, left, right)
             );
           """
@@ -267,7 +267,7 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
           neon [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
@@ -279,7 +279,7 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
       arith:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin<svadd, build[post=m]>(mask, left, right));"
+          tsil "complete(intrin<svadd, build[post=m]>(mask, left, right));"
 prim<v:=(v,v)> sub(left, right):
   brief_description "[Example: sse + si8]: Subtract packed 8-bit integers in \"b\" from packed 8-bit integers in \"a\", and store the results in \"dst\"."
   operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[i+7:i] := a[i+7:i] - b[i+7:i]\nENDFOR"
@@ -309,7 +309,7 @@ prim<v:=(v,v)> sub(left, right):
       arith:
         requires []
         implementation:
-          tsil "emit_return(op<sub>(left, right));"
+          tsil "complete(op<sub>(left, right));"
     [generic, oneAPIfpga, oneAPIfpgaRTL]:
       arith:
         requires:
@@ -322,7 +322,7 @@ prim<v:=(v,v)> sub(left, right):
             loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
             }
-            emit_return(result);
+            complete(result);
           """
     avx512:
       ?i?:
@@ -331,54 +331,54 @@ prim<v:=(v,v)> sub(left, right):
           bword   [avx512f, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<sub, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f?:
         requires [avx512f]
         implementation:
-          tsil "emit_return(intrin<sub, build>(left, right));"
+          tsil "complete(intrin<sub, build>(left, right));"
     avx2:
       ?i?:
         requires [avx, avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<sub, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f?:
         requires [avx]
         implementation:
-          tsil "emit_return(intrin<sub, build>(left, right));"
+          tsil "complete(intrin<sub, build>(left, right));"
     sse:
       ?i?:
         requires [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<sub, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f32:
         requires [sse]
         implementation:
-          tsil "emit_return(intrin<sub, build>(left, right));"
+          tsil "complete(intrin<sub, build>(left, right));"
       f64:
         requires [sse2]
         implementation:
-          tsil "emit_return(intrin<sub, build>(left, right));"
+          tsil "complete(intrin<sub, build>(left, right));"
     neon:
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin<vsubq, build>(left, right));"
+          tsil "complete(intrin<vsubq, build>(left, right));"
     sve:
       arith:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin<svsub, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
+          tsil "complete(intrin<svsub, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
 prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
   brief_description "[Example: avx512 + si8]: Subtract packed 8-bit integers in \"b\" from packed 8-bit integers in \"a\", and store the results in \"dst\" using zeromask \"k\" (elements are zeroed when the corresponding mask bit is not set)."
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i] - b[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := 0\n\tFI\t\nENDFOR\ndst[MAX:512] := 0"
@@ -396,9 +396,9 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=sub>(left, right));
+              complete(call<primitive=sub>(left, right));
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [generic, oneAPIfpga, oneAPIfpgaRTL]:
       arith:
@@ -408,7 +408,7 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
           oneAPIfpgaRTL [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=sub>(left, right)
@@ -429,7 +429,7 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<maskz_sub, build[suffix=base::signed_of(base::in)]>(mask, left, right)
             );
           """
@@ -440,7 +440,7 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<maskz_sub, build>(mask, left, right)
             );
           """
@@ -457,7 +457,7 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
           neon [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=sub>(left, right)
@@ -468,7 +468,7 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
       arith:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin<svsub, build[post=z]>(mask, left, right));"
+          tsil "complete(intrin<svsub, build[post=z]>(mask, left, right));"
 prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
   brief_description "[Example: avx512 + si8]: Subtract packed 8-bit integers in \"b\" from packed 8-bit integers in \"a\", and store the results in \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i] - b[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := src[i+7:i]\n\tFI\t\nENDFOR\ndst[MAX:512] := 0"
@@ -482,9 +482,9 @@ prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=sub>(left, right));
+              complete(call<primitive=sub>(left, right));
             }
-            emit_return(left);
+            complete(left);
           """
     [generic, oneAPIfpga, oneAPIfpgaRTL]:
       arith:
@@ -494,7 +494,7 @@ prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
           oneAPIfpgaRTL [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
@@ -516,7 +516,7 @@ prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_sub, build[suffix=base::signed_of(base::in)]>(left, mask, left, right)
             );
           """
@@ -527,7 +527,7 @@ prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_sub, build>(left, mask, left, right)
             );
           """
@@ -544,7 +544,7 @@ prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
           neon [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
@@ -556,7 +556,7 @@ prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
       arith:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin<svsub, build[post=m]>(mask, left, right));"
+          tsil "complete(intrin<svsub, build[post=m]>(mask, left, right));"
 prim<v:=(m,v,v,v)>[mask=pass_through] blend_add(mask, left, right, adder):
   brief_description "Blends two registers or adds right and adder depending on mask."
   operation ""
@@ -594,7 +594,7 @@ prim<v:=(m,v,v,v)>[mask=pass_through] blend_add(mask, left, right, adder):
           sve [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=add>(right, adder),

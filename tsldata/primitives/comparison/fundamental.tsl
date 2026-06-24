@@ -30,7 +30,7 @@ prim<m:=(v,v)> equal(left, right):
       arith:
         requires []
         implementation:
-          tsil "emit_return(left == right);"
+          tsil "complete(left == right);"
     generic:
       arith:
         requires []
@@ -43,7 +43,7 @@ prim<m:=(v,v)> equal(left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
@@ -57,7 +57,7 @@ prim<m:=(v,v)> equal(left, right):
             loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] == right[i]) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -73,7 +73,7 @@ prim<m:=(v,v)> equal(left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmpeq, build[post=mask]>(left, right)
             );
           """
@@ -84,7 +84,7 @@ prim<m:=(v,v)> equal(left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmp, build[post=mask]>(left, right, _CMP_EQ_OQ)
             );
           """
@@ -93,7 +93,7 @@ prim<m:=(v,v)> equal(left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmpeq, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
@@ -101,7 +101,7 @@ prim<m:=(v,v)> equal(left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmp, build>(left, right, _CMP_EQ_OQ)
             );
           """
@@ -112,7 +112,7 @@ prim<m:=(v,v)> equal(left, right):
           ?i64 [sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmpeq, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
@@ -122,7 +122,7 @@ prim<m:=(v,v)> equal(left, right):
           f64 [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmpeq, build>(left, right)
             );
           """
@@ -132,7 +132,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
-            emit_return(
+            complete(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
                 intrin<vceqq, build>(left, right)
               )
@@ -143,7 +143,7 @@ prim<m:=(v,v)> equal(left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svcmpeq, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
@@ -181,7 +181,7 @@ prim<m:=(v,v)> nequal(left, right):
       arith:
         requires []
         implementation:
-          tsil "emit_return(left != right);"
+          tsil "complete(left != right);"
     generic:
       arith:
         requires []
@@ -194,7 +194,7 @@ prim<m:=(v,v)> nequal(left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
@@ -208,7 +208,7 @@ prim<m:=(v,v)> nequal(left, right):
             loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] != right[i]) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -224,7 +224,7 @@ prim<m:=(v,v)> nequal(left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmpneq, build[post=mask]>(left, right)
             );
           """
@@ -235,7 +235,7 @@ prim<m:=(v,v)> nequal(left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmp, build[post=mask]>(left, right, _CMP_NEQ_UQ)
             );
           """
@@ -244,7 +244,7 @@ prim<m:=(v,v)> nequal(left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=binary_andnot>(
                 call<primitive=equal>(left, right),
                 call<primitive=equal>(left, left)
@@ -255,7 +255,7 @@ prim<m:=(v,v)> nequal(left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmp, build>(left, right, _CMP_NEQ_UQ)
             );
           """
@@ -266,7 +266,7 @@ prim<m:=(v,v)> nequal(left, right):
           ?i64 [sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=binary_andnot>(
                 call<primitive=equal>(left, right),
                 call<primitive=equal>(left, left)
@@ -279,7 +279,7 @@ prim<m:=(v,v)> nequal(left, right):
           f64 [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmp, build>(left, right, _CMP_NEQ_UQ)
             );
           """
@@ -288,14 +288,14 @@ prim<m:=(v,v)> nequal(left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(call<primitive=inv>(call<primitive=equal>(left, right)));
+            complete(call<primitive=inv>(call<primitive=equal>(left, right)));
           """
     sve:
       arith:
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svcmpne, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
@@ -331,7 +331,7 @@ prim<m:=(v,v)> less_than(left, right):
       arith:
         requires []
         implementation:
-          tsil "emit_return(left < right);"
+          tsil "complete(left < right);"
     generic:
       arith:
         requires []
@@ -344,7 +344,7 @@ prim<m:=(v,v)> less_than(left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
@@ -358,7 +358,7 @@ prim<m:=(v,v)> less_than(left, right):
             loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] < right[i]) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -374,7 +374,7 @@ prim<m:=(v,v)> less_than(left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmplt, build[post=mask]>(left, right)
             );
           """
@@ -385,7 +385,7 @@ prim<m:=(v,v)> less_than(left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmp, build[post=mask]>(left, right, _CMP_LT_OQ)
             );
           """
@@ -393,12 +393,12 @@ prim<m:=(v,v)> less_than(left, right):
       si?:
         requires [avx, avx2]
         implementation:
-          tsil "emit_return(intrin<cmpgt, build>(right, left));"
+          tsil "complete(intrin<cmpgt, build>(right, left));"
       f?:
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmp, build>(left, right, _CMP_LT_OQ)
             );
           """
@@ -420,7 +420,7 @@ prim<m:=(v,v)> less_than(left, right):
                 }
               }
             }
-            emit_return(
+            complete(
               intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
                 call<primitive=binary_xor>(right, sign_bit),
                 call<primitive=binary_xor>(left, sign_bit)
@@ -431,19 +431,19 @@ prim<m:=(v,v)> less_than(left, right):
       [si8, si16, si32]:
         requires [sse, sse2]
         implementation:
-          tsil "emit_return(intrin<cmplt, build>(left, right));"
+          tsil "complete(intrin<cmplt, build>(left, right));"
       si64:
         requires [sse4_2]
         implementation:
           tsil """
-            emit_return(intrin<cmpgt, build>(right, left));
+            complete(intrin<cmpgt, build>(right, left));
           """
       f?:
         requires:
           f32 [sse]
           f64 [sse2]
         implementation:
-          tsil "emit_return(intrin<cmplt, build>(left, right));"
+          tsil "complete(intrin<cmplt, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
@@ -464,7 +464,7 @@ prim<m:=(v,v)> less_than(left, right):
                 }
               }
             }
-            emit_return(
+            complete(
               intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
                 call<primitive=binary_xor>(right, sign_bit),
                 call<primitive=binary_xor>(left, sign_bit)
@@ -477,7 +477,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
-            emit_return(
+            complete(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
                 intrin<vcltq, build>(left, right)
               )
@@ -488,7 +488,7 @@ prim<m:=(v,v)> less_than(left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svcmplt, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
@@ -524,7 +524,7 @@ prim<m:=(v,v)> greater_than(left, right):
       arith:
         requires []
         implementation:
-          tsil "emit_return(left > right);"
+          tsil "complete(left > right);"
     generic:
       arith:
         requires []
@@ -537,7 +537,7 @@ prim<m:=(v,v)> greater_than(left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
@@ -551,7 +551,7 @@ prim<m:=(v,v)> greater_than(left, right):
             loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] > right[i]) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -567,7 +567,7 @@ prim<m:=(v,v)> greater_than(left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmpgt, build[post=mask]>(left, right)
             );
           """
@@ -578,7 +578,7 @@ prim<m:=(v,v)> greater_than(left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmp, build[post=mask]>(left, right, _CMP_GT_OQ)
             );
           """
@@ -586,12 +586,12 @@ prim<m:=(v,v)> greater_than(left, right):
       si?:
         requires [avx, avx2]
         implementation:
-          tsil "emit_return(intrin<cmpgt, build>(left, right));"
+          tsil "complete(intrin<cmpgt, build>(left, right));"
       f?:
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmp, build>(left, right, _CMP_GT_OQ)
             );
           """
@@ -613,7 +613,7 @@ prim<m:=(v,v)> greater_than(left, right):
                 }
               }
             }
-            emit_return(
+            complete(
               intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
                 call<primitive=binary_xor>(left, sign_bit),
                 call<primitive=binary_xor>(right, sign_bit)
@@ -624,19 +624,19 @@ prim<m:=(v,v)> greater_than(left, right):
       [si8, si16, si32]:
         requires [sse, sse2]
         implementation:
-          tsil "emit_return(intrin<cmpgt, build>(left, right));"
+          tsil "complete(intrin<cmpgt, build>(left, right));"
       si64:
         requires [sse4_2]
         implementation:
           tsil """
-            emit_return(intrin<cmpgt, build>(left, right));
+            complete(intrin<cmpgt, build>(left, right));
           """
       f?:
         requires:
           f32 [sse]
           f64 [sse2]
         implementation:
-          tsil "emit_return(intrin<cmpgt, build>(left, right));"
+          tsil "complete(intrin<cmpgt, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
@@ -657,7 +657,7 @@ prim<m:=(v,v)> greater_than(left, right):
                 }
               }
             }
-            emit_return(
+            complete(
               intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
                 call<primitive=binary_xor>(left, sign_bit),
                 call<primitive=binary_xor>(right, sign_bit)
@@ -670,7 +670,7 @@ prim<m:=(v,v)> greater_than(left, right):
         implementation:
           tsil """
             let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
-            emit_return(
+            complete(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
                 intrin<vcgtq, build>(left, right)
               )
@@ -681,7 +681,7 @@ prim<m:=(v,v)> greater_than(left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svcmpgt, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
@@ -717,7 +717,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
       arith:
         requires []
         implementation:
-          tsil "emit_return(left <= right);"
+          tsil "complete(left <= right);"
     generic:
       arith:
         requires []
@@ -730,7 +730,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
@@ -744,7 +744,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
             loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] <= right[i]) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -760,7 +760,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmple, build[post=mask]>(left, right)
             );
           """
@@ -771,7 +771,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmp, build[post=mask]>(left, right, _CMP_LE_OQ)
             );
           """
@@ -780,7 +780,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_or>(
                 call<primitive=equal>(left, right),
                 call<primitive=less_than>(left, right)
@@ -791,7 +791,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmp, build>(left, right, _CMP_LE_OQ)
             );
           """
@@ -802,7 +802,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           si64              [sse4_2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_or>(
                 call<primitive=equal>(left, right),
                 call<primitive=less_than>(left, right)
@@ -814,14 +814,14 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           f32 [sse]
           f64 [sse2]
         implementation:
-          tsil "emit_return(intrin<cmple, build>(left, right));"
+          tsil "complete(intrin<cmple, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
           ui64              [sse2, sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_or>(
                 call<primitive=equal>(left, right),
                 call<primitive=less_than>(left, right)
@@ -834,7 +834,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
-            emit_return(
+            complete(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
                 intrin<vcleq, build>(left, right)
               )
@@ -845,7 +845,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svcmple, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
@@ -881,7 +881,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
       arith:
         requires []
         implementation:
-          tsil "emit_return(left >= right);"
+          tsil "complete(left >= right);"
     generic:
       arith:
         requires []
@@ -894,7 +894,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
@@ -908,7 +908,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
             loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] >= right[i]) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -924,7 +924,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmpge, build[post=mask]>(left, right)
             );
           """
@@ -935,7 +935,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmp, build[post=mask]>(left, right, _CMP_GE_OQ)
             );
           """
@@ -944,7 +944,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_or>(
                 call<primitive=equal>(left, right),
                 call<primitive=greater_than>(left, right)
@@ -955,7 +955,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<cmp, build>(left, right, _CMP_GE_OQ)
             );
           """
@@ -966,7 +966,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           si64              [sse4_2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_or>(
                 call<primitive=equal>(left, right),
                 call<primitive=greater_than>(left, right)
@@ -978,14 +978,14 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           f32 [sse]
           f64 [sse2]
         implementation:
-          tsil "emit_return(intrin<cmpge, build>(left, right));"
+          tsil "complete(intrin<cmpge, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
           ui64              [sse2, sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_or>(
                 call<primitive=equal>(left, right),
                 call<primitive=greater_than>(left, right)
@@ -998,7 +998,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         implementation:
           tsil """
             let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
-            emit_return(
+            complete(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
                 intrin<vcgeq, build>(left, right)
               )
@@ -1009,7 +1009,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svcmpge, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
@@ -1031,7 +1031,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=equal[Vec]>(left, right)
@@ -1053,7 +1053,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
@@ -1070,7 +1070,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
                 (mask<test>(mask,i))
               ) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -1086,7 +1086,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_cmpeq, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
@@ -1097,7 +1097,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
@@ -1111,7 +1111,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=equal>(left, right)
@@ -1122,7 +1122,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=equal>(left, right)
@@ -1136,7 +1136,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           ?i64 [sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=equal>(left, right)
@@ -1149,7 +1149,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           f64 [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=equal>(left, right)
@@ -1161,7 +1161,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=equal>(left, right)
@@ -1173,7 +1173,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svcmpeq, build>(
                 mask,
                 left, right
@@ -1195,7 +1195,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=nequal[Vec]>(left, right)
@@ -1217,7 +1217,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
@@ -1234,7 +1234,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
                 (mask<test>(mask, i))
               ) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -1250,7 +1250,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_cmpneq, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
@@ -1261,7 +1261,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
@@ -1275,7 +1275,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=nequal>(left, right)
@@ -1286,7 +1286,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=nequal>(left, right)
@@ -1300,7 +1300,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
           ?i64 [sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=nequal>(left, right)
@@ -1313,7 +1313,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
           f64 [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=nequal>(left, right)
@@ -1325,7 +1325,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=nequal>(left, right)
@@ -1337,7 +1337,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svcmpne, build>(
                 mask,
                 left, right
@@ -1359,7 +1359,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=less_than[Vec]>(left, right)
@@ -1381,7 +1381,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
@@ -1398,7 +1398,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
                 (mask<test>(mask, i))
               ) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -1414,7 +1414,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_cmplt, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
@@ -1425,7 +1425,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
@@ -1439,7 +1439,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than>(left, right)
@@ -1450,7 +1450,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than>(left, right)
@@ -1464,7 +1464,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
           ?i64 [sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than>(left, right)
@@ -1477,7 +1477,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
           f64 [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than>(left, right)
@@ -1489,7 +1489,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than>(left, right)
@@ -1501,7 +1501,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svcmplt, build>(
                 mask,
                 left, right
@@ -1523,7 +1523,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=greater_than[Vec]>(left, right)
@@ -1545,7 +1545,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
@@ -1562,7 +1562,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
                 (mask<test>(mask, i))
               ) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -1578,7 +1578,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_cmpgt, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
@@ -1589,7 +1589,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
@@ -1603,7 +1603,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than>(left, right)
@@ -1614,7 +1614,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than>(left, right)
@@ -1628,7 +1628,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
           ?i64 [sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than>(left, right)
@@ -1641,7 +1641,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
           f64 [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than>(left, right)
@@ -1653,7 +1653,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than>(left, right)
@@ -1665,7 +1665,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svcmpgt, build>(
                 mask,
                 left, right
@@ -1687,7 +1687,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=less_than_or_equal[Vec]>(left, right)
@@ -1709,7 +1709,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
@@ -1726,7 +1726,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
                 (mask<test>(mask, i))
               ) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -1742,7 +1742,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_cmple, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
@@ -1753,7 +1753,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
@@ -1767,7 +1767,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than_or_equal>(left, right)
@@ -1778,7 +1778,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than_or_equal>(left, right)
@@ -1792,7 +1792,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
           ?i64 [sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than_or_equal>(left, right)
@@ -1805,7 +1805,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
           f64 [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than_or_equal>(left, right)
@@ -1817,7 +1817,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than_or_equal>(left, right)
@@ -1829,7 +1829,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svcmple, build>(
                 mask,
                 left, right
@@ -1851,7 +1851,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=greater_than_or_equal[Vec]>(left, right)
@@ -1873,7 +1873,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
@@ -1890,7 +1890,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
                 (mask<test>(mask, i))
               ) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -1906,7 +1906,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_cmpge, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
@@ -1917,7 +1917,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
@@ -1931,7 +1931,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than_or_equal>(left, right)
@@ -1942,7 +1942,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than_or_equal>(left, right)
@@ -1956,7 +1956,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
           ?i64 [sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than_or_equal>(left, right)
@@ -1969,7 +1969,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
           f64 [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than_or_equal>(left, right)
@@ -1981,7 +1981,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than_or_equal>(left, right)
@@ -1993,7 +1993,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svcmpge, build>(
                 mask,
                 left, right

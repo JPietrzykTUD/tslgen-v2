@@ -53,7 +53,7 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `blend` | `v:=(m,v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `blend_add` | `v:=(m,v,v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `cast` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 300 | call type-args (bare-ext/index) |
-| `compress` | `v:=(m,v)` | VERIFIED | avx2/avx512/generic/sse | 140 | no top-level emit_return |
+| `compress` | `v:=(m,v)` | VERIFIED | avx2/avx512/generic/sse | 140 | no top-level complete |
 | `compress_store` | `void:=(m,ptr,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `conflict` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `conflict_free` | `m:=(m,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 4 | pruned (closure) |
@@ -107,7 +107,7 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `mul_imm` | `v:=(m,v,sImm)` `v:=(v,sImm)` | VERIFIED | avx2/avx512/generic/scalar/sse | 40 | pruned (closure) |
 | `nequal` | `m:=(m,v,v)` `m:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `popcnt` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 8 | pruned (closure) |
-| `reinterpret` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 220 | no top-level emit_return |
+| `reinterpret` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 220 | no top-level complete |
 | `scatter` | `void:=(m,ptr,vidx,v,sImm)` `void:=(ptr,vidx,v,sImm)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `sequence` | `v:=()` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `set` | `v:=s...` | VERIFIED | avx2/avx512/scalar/sse | 0 | — |
@@ -135,7 +135,7 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 |--:|---|---|
 | 1064 | pruned (closure) | Dependency-closure dropped a body whose callee is unavailable in that profile. **Structural, not a defect** — expected behavior. |
 | 872 | unresolved type query | A `type<generation>(...)` query is not yet evaluated (e.g. `vector::offset_base`, `vector::mask_underlying_t`, `vector::transform(...)`). Blocks compress/expand/conflict/popcnt/lzc/hand/hor/store_mask_repr generic paths. |
-| 398 | no top-level emit_return | Body has no top-level `emit_return(...)` (where:-clause / switch-bodied forms) — not lowerable yet (reinterpret, compress, cast). |
+| 398 | no top-level complete | Body has no top-level `complete(...)` (where:-clause / switch-bodied forms) — not lowerable yet (reinterpret, compress, cast). |
 | 216 | call type-args (bare-ext/index) | `call<primitive=extract[Vec, sse, 0]>` style: a bare extension + literal index in call type-args not yet supported. |
 | 152 | unresolved pointer-cast type | `cast<reinterpret>` to a `vector::mask_underlying_t` pointer not resolved. |
 | 50 | unresolved value query | A `value<generation>(...)` / `value<backend>(...)` query unevaluated (e.g. `type::size_bytes(...)`, `x86::mm_fround_to_zero`). Blocks to_integral/to_mask generic + div/mod float rounding. |

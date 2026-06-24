@@ -778,7 +778,7 @@ Considered alternatives:
 
 Decision:
 
-Support only TSIL shaped as `emit_return(<parameter> + <parameter>);`, where both
+Support only TSIL shaped as `complete(<parameter> + <parameter>);`, where both
 operands name parameters declared by the selected primitive. Lowering produces
 backend-neutral parameter-reference, binary-expression, and return-statement
 values. Nearby return forms, unknown operands, generation-time branches, calls,
@@ -1589,13 +1589,13 @@ Consequences:
   return-emission frontier.
 - M87 is accepted as exact return-emission structural/request IR. This is the
   first semantic step after the M77-M86 cleanup, but it is deliberately still
-  structural/request-only: recognize the exact trailing `emit_return(tmp);`
+  structural/request-only: recognize the exact trailing `complete(tmp);`
   slot from the accepted array-body path, link the returned token to accepted
   declaration-shell provenance, and emit diagnostics for nearby or malformed
   forms. The implementation keeps source intake narrow in
   `tslgen.lowering._return_emission`, and the focused revision removed the M87
   output from the shared runtime lowered-implementation source protocol. The
-  decision explicitly rejects source-body repair, broad `emit_return(...)`
+  decision explicitly rejects source-body repair, broad `complete(...)`
   support, return-value semantics, variable lifetime/scope semantics,
   renderer-ready IR, backend translation, generated output, and generic TSIL
   statement dispatch.
@@ -1898,7 +1898,7 @@ Consequences:
   or guessed.
 - Nested lowerable islands must be handled by recursive token-stream
   composition, not by adding pairwise context-combination handlers. For
-  example, `intrin_compose` inside `emit_return`, `call`, or a control body is
+  example, `intrin_compose` inside `complete`, `call`, or a control body is
   still just an `intrin_compose` island found inside another source-owned span.
   Future keyword semantics should consume matching keyword tokens wherever they
   appear in the recursive stream.
@@ -2017,7 +2017,7 @@ semantic operation lowering.
 
 Consequences:
 
-- `emit_return(details::arith_*(...));` remains an opaque unsupported return
+- `complete(details::arith_*(...));` remains an opaque unsupported return
   payload until a future milestone selects a backend support-helper rendering
   boundary.
 - Helper calls inside assignments, loops, declarations, or mixed expressions
@@ -3189,7 +3189,7 @@ a separate body/token boundary to identify exact lowerable islands needed by
 the selected fixture. Because multiple TSIL keywords may carry single-line or
 multiline balanced payloads and body regions, that boundary should reuse or
 extend the accepted lexical-only helper pattern from M162.5 instead of making
-an `emit_return(...)`-only extractor. Keyword-specific lowerers still own the
+a `complete(...)`-only extractor. Keyword-specific lowerers still own the
 meaning, diagnostics, and accepted source forms for each recognized region.
 
 Consequences:
@@ -3203,7 +3203,7 @@ Consequences:
   rendering the fixture.
 - New support for multiline TSIL keyword islands belongs in a focused
   source-body/token lexical boundary that can be shared by keyword lowerers,
-  not as a general raw-string repair path or an `emit_return(...)` special
+  not as a general raw-string repair path or a `complete(...)` special
   case hidden inside `Lowerer`.
 - Existing TSIL lowerable token semantics, backend translation, templates, and
   generated-project rendering remain separate boundaries.
@@ -3296,7 +3296,7 @@ if useful, but raw dictionaries must not be the public parsed field model.
 
 The outer parser ends at the implementation body envelope. It may parse the
 `tsil` envelope, quote form, source location, and raw payload span, but it must
-not parse or interpret `emit_return`, `intrin_compose`, TSIL control keywords,
+not parse or interpret `complete`, `intrin_compose`, TSIL control keywords,
 expressions, operators, backend intrinsic semantics, or source-operation
 semantics. Those belong to a later shared lexical body-region layer and
 keyword-specific lowerers.
@@ -4130,8 +4130,8 @@ Context:
 
 TSIL bodies mix target-like raw text with recognized keyword regions. Before
 this decision, a source semicolon after a recognized region leaked through as
-raw text. That accidentally worked for `emit_return(...)` because the backend
-`emit_return` template does not include `;`, but it produced duplicate
+raw text. That accidentally worked for `complete(...)` because the backend
+`complete` template does not include `;`, but it produced duplicate
 terminators for forms whose templates already own their target statement
 syntax, such as `var<infer>(...)`.
 
@@ -4169,7 +4169,7 @@ Consequences:
 
 - Authored source semicolons no longer leak as raw text after recognized TSIL
   regions.
-- `emit_return(expr);`, expression statements like `intrin<...>(...);`, and
+- `complete(expr);`, expression statements like `intrin<...>(...);`, and
   side-effect helpers like `mem<copy>(...);` still render one target statement
   terminator.
 - `var<...>(...);` no longer renders `;;`.
@@ -4470,3 +4470,31 @@ Consequences:
 - `vector::mask_underlying_t` remains a supported backend/member query where
   documented, but it is no longer the unpacked mask representation source
   contract for `load_mask_repr` / `store_mask_repr`.
+
+## ADR-088: TSIL Completion Uses `complete(...)`
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+The TSIL directive for value-returning implementation bodies is semantic: it
+marks the implementation result and lets the selected backend frame that value
+as target-language return syntax. The source spelling must therefore describe
+source intent rather than backend emission mechanics.
+
+Decision:
+
+`complete(expr)` is the canonical TSIL directive for completing a
+value-returning implementation with `expr`. The directive lowers to the
+backend's typed return framing through the backend translation key `complete`.
+There is no compatibility alias for the former spelling in `tslc`, and source
+bodies that use another directive name are unsupported.
+
+Consequences:
+
+- TSL source data describes semantic completion instead of target-language
+  return emission.
+- Backend translation metadata still owns the C++/Rust/C17 return spelling via
+  the `complete` template.
+- Lowering diagnostics use `TSL-LOWER-NO-COMPLETE` when a value-returning body
+  has no supported completion directive.

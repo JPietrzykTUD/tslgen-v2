@@ -44,8 +44,11 @@ Review only this cleanup:
 - the Rust parity follow-up keeps generic unpacked `load_mask_repr` indexing on
   a reinterpreted unsigned lane-word pointer and reinterprets AVX2/SSE register
   comparison masks back to the current vector mask representation;
-- focused tests cover backend-free dependency query resolution and the full
-  generated C++/Rust build gate.
+- TSIL value-returning bodies now use `complete(expr)` as the only supported
+  completion directive; the lowerer, scan keyword list, backend translation
+  metadata, active source data, and tests have no compatibility alias;
+- focused tests cover backend-free dependency query resolution, TSIL scanning
+  and lowering with `complete(...)`, and the full generated C++/Rust build gate.
 
 ## Out Of Scope
 
@@ -70,6 +73,8 @@ Review only this cleanup:
   vector's mask representation without relying on undocumented mask-underlying
   source spelling?
 - Is dependency worklist ordering deterministic and free of set-order leakage?
+- Does the `complete(...)` rename remain a clean source-language change with
+  no accepted compatibility path for the old directive spelling?
 - Are remaining digit parses clearly presentation-specific, such as emitted
   immediate type spellings or backend Rust/C++ base spellings?
 

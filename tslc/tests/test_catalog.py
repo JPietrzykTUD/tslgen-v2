@@ -114,7 +114,7 @@ def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:
     with pytest.raises(TypeError):
         catalog.type_spellings["cpp"]["s32"] = "bad"  # type: ignore[index]
     with pytest.raises(TypeError):
-        catalog.translations["cpp"]["emit_return"] = "bad"  # type: ignore[index]
+        catalog.translations["cpp"]["complete"] = "bad"  # type: ignore[index]
     with pytest.raises(TypeError):
         add.attributes["mask"] = "zero"  # type: ignore[index]
     with pytest.raises(TypeError):

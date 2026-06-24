@@ -2006,7 +2006,7 @@ Staged lowering/translation contract:
 
 | Observed helper/form | Evidence path | Apparent semantics | Required context | Lowered IR concept | Backend/data dependency | Parity priority | Proposed milestone | Validation |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Direct scalar return `emit_return(left + right);` | `tsldata/primitives/arithmetic/fundamental.tsl` | Return a binary expression over declared primitive parameters. | Primitive parameter names and selected candidate. | `TsilReturnStatement(TsilBinaryExpression("+", ...))` | None beyond backend expression rendering. | `required-now`, already accepted for scalar parity | M27/M28/M37 retained | Lowering unit tests and C++ scalar golden output. |
+| Direct scalar return `complete(left + right);` | `tsldata/primitives/arithmetic/fundamental.tsl` | Return a binary expression over declared primitive parameters. | Primitive parameter names and selected candidate. | `TsilReturnStatement(TsilBinaryExpression("+", ...))` | None beyond backend expression rendering. | `required-now`, already accepted for scalar parity | M27/M28/M37 retained | Lowering unit tests and C++ scalar golden output. |
 | Simple `intrin_compose<add>(left, right)` | `tsldata/primitives/arithmetic/fundamental.tsl` | Compose a target intrinsic from operation name plus default backend prefix/suffix for selected extension and type. | Backend ID, extension, type tag, language type map, intrinsic style, primitive parameters. | `TsilIntrinsicComposeExpression` plus backend-call IR after translation. | `tsldata/detail/lang/types/types_cpp.tsl`, `tsldata/detail/lang/translate_cpp.tsl`, `tsldata/extensions/extension.tsl` | `required-for-selected-parity-slice` | M38/M39 transitional, M40 correction | Data-driven `add + avx2 + f32 -> _mm256_add_ps` fixture with no renderer-owned lookup table after M40. |
 | `intrin_compose` modifiers: `prefix=...`, `suffix=...`, `infix=...`, `post=...`, `immediate(n)=...` | `tsldata/primitives/arithmetic/fundamental.tsl`, `tsldata/primitives/bitwise/shifts.tsl`, `tsldata/primitives/conversion/repr_change.tsl`, `tsldata/primitives/load_store/rnd_access.tsl`, `frozen/tsl-gen/tsl_gen/resolver/render_support.py` | Compose backend intrinsic names and immediate metadata from explicit and default modifier fields. | Modifier parser, already-resolved generation-time type/value inputs, backend intrinsic naming policy. | `IntrinsicComposeModifier`, `BackendIntrinsicName`, optional immediate metadata. | Translation/type maps, extension intrinsic style, type suffix rules. | `required-later`; default prefix/suffix is `required-for-selected-parity-slice` | M40 for selected generation-free default form; later helper slices after generation-time semantic lowering for full modifier semantics | Unit tests for modifier parsing, deterministic composition, unsupported modifier diagnostics, and proof that generation-time expressions are resolved before backend translation. |
 | `if<generation>(...)` / `else<generation>` | `tsldata/primitives/load_store/load.tsl`, `tsldata/primitives/load_store/store.tsl`, `tsldata/primitives/bitwise/shifts.tsl`, `frozen/tsl-gen/tsl_gen/tsil_engine/passes/generation_ifs.py` | Select a TSIL branch at generation time based on attributes, type predicates, or vector metadata. | Generation context: selected type, extension, primitive attributes, vector metadata, type predicates. | `TsilGenerationIf` or already-pruned statement list with branch provenance. | Translation values such as type predicates and primitive attributes. | `required-later`, `required-for-selected-parity-slice` only when a selected output uses a generation branch | M41 selection or later numbered helper slice | Branch selection fixtures, unsupported condition diagnostics, renderer non-evaluation tests. |
@@ -2252,7 +2252,7 @@ Scope:
   recommended `si32` and `ui32`.
 - Render the minimal public wrapper relationship selected in Milestone 35, such
   as a `tsl::add<Vec>(...)` wrapper delegating to `tsl::detail::add_binary`.
-- Consume the accepted `LoweringPlan` for `emit_return(left + right);`; do not
+- Consume the accepted `LoweringPlan` for `complete(left + right);`; do not
   inspect raw TSIL inside the renderer.
 
 Out of scope:
@@ -2339,7 +2339,7 @@ Retained as the accepted predecessor for the native C++ parity slice.
 Goal:
 
 Lower exactly the selected TSIL form
-`emit_return(intrin_compose<add>(left, right));` into typed helper IR without
+`complete(intrin_compose<add>(left, right));` into typed helper IR without
 rendering backend text.
 
 Scope:
@@ -5185,7 +5185,7 @@ Out of scope:
 - Reversed comparisons such as `2 == value<generation>(...)`.
 - Nested, chained, parenthesized, bit-width, arithmetic, or mixed comparisons.
 - Lowering the SVE array body, assignments, variables, arrays, calls, casts,
-  loops, `emit_return`, `intrin<svptrue_b*>`, `intrin<svst1>`, direct
+  loops, `complete`, `intrin<svptrue_b*>`, `intrin<svst1>`, direct
   `intrin<...>`, `value<generation>(vector::length)`,
   `value<generation>(vector::alignment)`, backend uninit values, or vector
   predicate semantics.
@@ -5649,7 +5649,7 @@ Scope:
 Out of scope:
 
 - Direct `intrin<...>` lowering.
-- Assignment, variable, array, loop, call, cast, `emit_return`, SVE predicate,
+- Assignment, variable, array, loop, call, cast, `complete`, SVE predicate,
   `value<generation>(vector::length)`, `value<generation>(vector::alignment)`,
   vector/register metadata, backend uninit, backend translation, rendering,
   output, generated tests, CLI/reporting, writer behavior, Rust, compiler
@@ -5752,7 +5752,7 @@ Candidate comparison:
 | Selected branch body assignment form recognition | M60 now hands forward only the selected branch body as typed opaque data. Recognizing the exact selected assignment-form shape turns that inert text into a typed, reviewable input for later body-specific lowering. | Medium if it stays form recognition; high if it validates direct intrinsics, SVE predicate meaning, assignment semantics, or feeds backend/rendering. | Select as M61. |
 | First direct `intrin<...>` / SVE body lowering | The selected M60 bodies contain `pg = intrin<svptrue_b16/b32/b64>();`. | High because it combines assignment semantics, direct intrinsic semantics, SVE predicate meaning, backend translation pressure, and likely renderer/output questions. | Defer until after typed form recognition. |
 | Vector length/alignment generation values | Surrounding SVE array evidence contains vector length/alignment helpers. | Medium to high because it jumps away from the selected-body handoff path and pulls in metadata needed by surrounding non-branch statements. | Defer. |
-| Broad SVE array body lowering | The same corpus block includes array construction, backend uninit, predicate initialization, stores, and `emit_return`. | Very high because it combines multiple TSIL body forms and backend/output concerns. | Defer. |
+| Broad SVE array body lowering | The same corpus block includes array construction, backend uninit, predicate initialization, stores, and `complete`. | Very high because it combines multiple TSIL body forms and backend/output concerns. | Defer. |
 | M49-M60 follow-up cleanup | Several accepted follow-ups remain. | Low individually, but cleanup does not form the next lowering architecture milestone. | Keep recorded unless selected separately. |
 
 ### Milestone 61: Selected Branch Body Assignment Form Recognition Slice
@@ -5808,7 +5808,7 @@ Out of scope:
   execution.
 - Surrounding SVE body forms such as `svbool_t pg = intrin<svptrue_b8>()`,
   `intrin<svst1>(...)`, array construction, backend uninit,
-  `emit_return`, vector length/alignment, declarations, variables, arrays,
+  `complete`, vector length/alignment, declarations, variables, arrays,
   calls, casts, loops, multi-statement bodies, or broad TSIL parsing.
 - Inspecting or diagnosing unselected branch bodies.
 - Lowering-time file reads, raw TSL parsing, catalog queries during
@@ -5903,7 +5903,7 @@ Review risks:
   multi-statement TSIL evaluator.
 - Inspecting or diagnosing unselected branch bodies.
 - Pulling in surrounding vector length/alignment, backend uninit, stores,
-  arrays, declarations, calls, casts, loops, `emit_return`, generated tests,
+  arrays, declarations, calls, casts, loops, `complete`, generated tests,
   CLI/reporting, Rust, compiler execution, or runtime `frozen/` use.
 - Making lowering evaluation read files, parse raw TSL, query the catalog, or
   construct catalog-derived rule data during evaluation.
@@ -5988,7 +5988,7 @@ Out of scope:
   backend translation input, backend metadata lookup, or translation-map
   evaluation.
 - General `intrin<...>` lowering, non-zero-argument direct intrinsics,
-  primitive calls, casts, arrays, loops, declarations, stores, `emit_return`,
+  primitive calls, casts, arrays, loops, declarations, stores, `complete`,
   multi-statement body lowering, surrounding `svbool_t pg =
   intrin<svptrue_b8>()`, `intrin<svst1>(...)`, backend uninit values,
   `value<generation>(vector::length)`, or
@@ -6036,7 +6036,7 @@ Evidence paths:
   `pg = intrin<svptrue_b16/b32/b64>();` branch bodies.
 - `tsldata/primitives/load_store/array.tsl:105-106` and `:110-111` as
   surrounding out-of-scope evidence for declarations, vector metadata, backend
-  uninit, stores, and `emit_return`.
+  uninit, stores, and `complete`.
 - Accepted M57 size-byte equality predicate lowering.
 - Accepted M58 staged lowering contract.
 - Accepted M59 exact branch-chain pruning.
@@ -6089,7 +6089,7 @@ Review risks:
 - Adding assignment binding, declaration/scope checks, broad call lowering,
   or a central raw-string body dispatcher.
 - Pulling in surrounding vector length/alignment, backend uninit, stores,
-  arrays, declarations, calls, casts, loops, `emit_return`, generated tests,
+  arrays, declarations, calls, casts, loops, `complete`, generated tests,
   CLI/reporting, Rust, compiler execution, or runtime `frozen/` use.
 - Making lowering evaluation read files, parse raw TSL, query the catalog, or
   construct catalog-derived rule data during evaluation.
@@ -6156,7 +6156,7 @@ Scope:
 M63 treats the SVE-looking tokens and surrounding array body in
 `tsldata/primitives/load_store/array.tsl:105-111` as corpus evidence for a
 needed body boundary only. `svptrue_b16/b32/b64`, `pg`, `svbool_t`, `svst1`,
-vector metadata, backend uninit values, and `emit_return` must not become
+vector metadata, backend uninit values, and `complete` must not become
 architectural concepts or semantic lowering rules in M63.
 
 Out of scope:
@@ -6170,7 +6170,7 @@ Out of scope:
   expression/body IR, rendering, generated C++/Rust output, generated tests,
   CLI/reporting/writer behavior, compiler execution, or Rust.
 - Assignment binding, declaration handling, variable scope, array
-  construction, stores, calls, casts, loops, returns, `emit_return`, backend
+  construction, stores, calls, casts, loops, returns, `complete`, backend
   uninit values, `value<generation>(vector::length)`,
   `value<generation>(vector::alignment)`, non-zero-argument direct intrinsics,
   or broad multi-statement TSIL body lowering.
@@ -6288,7 +6288,7 @@ Candidate comparison:
 | Exact array body envelope slot assembly | M63 now supplies a typed selected-body envelope, but the accepted corpus evidence places that branch inside a larger ordered array body. A structural slot envelope gives future body-lowering slices named attachment points without interpreting those slots yet. | Medium if framed as exact opaque slot assembly over M63; very high if it becomes broad TSIL parsing, SVE array lowering, store/return semantics, or backend/rendering input. | Accepted as M64. |
 | Direct-intrinsic/SVE semantics | The selected branch and surrounding body contain `svptrue_b*`, `svptrue_b8`, and `svst1` tokens. | High because it would add SVE predicate/vector meaning, direct-intrinsic validation, byte-size-to-token inference, backend intrinsic pressure, and rendering pressure. | Defer. |
 | Vector length/alignment value semantics | The declaration slot contains `value<generation>(vector::length)` and `value<generation>(vector::alignment)`. | Medium to high because it pulls in vector/register metadata and array declaration semantics before the full body has a typed structural envelope. | Defer. |
-| Declaration/store/return lowering | The exact body includes array construction, a store call, and `emit_return`. | High because it would mix variable binding, array type/value semantics, call semantics, store semantics, return semantics, and eventual renderer concerns. | Defer. |
+| Declaration/store/return lowering | The exact body includes array construction, a store call, and `complete`. | High because it would mix variable binding, array type/value semantics, call semantics, store semantics, return semantics, and eventual renderer concerns. | Defer. |
 | M62 diagnostic follow-up cleanup | A non-blocking M62 diagnostic-location/message assertion follow-up remains recorded. | Low, but it does not move lowering architecture forward. | Keep recorded unless selected separately. |
 
 ### Milestone 64: Exact Array Body Envelope Slot Assembly Slice
@@ -6453,7 +6453,7 @@ Review risks:
   dispatching semantics from raw strings.
 - Inferring byte-size-to-`svptrue_b*` mappings, validating direct intrinsics,
   or interpreting `svbool_t`, `svst1`, vector length/alignment, backend
-  uninit, `tmp.data()`, or `emit_return`.
+  uninit, `tmp.data()`, or `complete`.
 - Adding backend translation, rendering, generated output, generated tests,
   file/catalog reads, runtime `frozen/` use, dictionaries/raw string keys as
   semantic models, or backend-specific branches.
@@ -6524,7 +6524,7 @@ Out of scope:
 - Broad TSIL parsing or exact skeleton recognition from `array.tsl` text.
 - Slot-specific lowering or semantic interpretation of M64 slot labels.
 - Declaration semantics, assignment binding, variables, arrays, stores,
-  returns, primitive calls, casts, loops, `tmp.data()`, or `emit_return`.
+  returns, primitive calls, casts, loops, `tmp.data()`, or `complete`.
 - SVE predicate/vector/register semantics, including meaning of `svbool_t`,
   `pg`, `svptrue_b8`, `svptrue_b16/b32/b64`, or `svst1`.
 - Byte-size-to-intrinsic-token validation or inference.
@@ -6703,7 +6703,7 @@ Out of scope:
   variable binding/scope, array type/value semantics, or statement IR.
 - Predicate initialization slot lowering, selected-body slot changes, store
   slot lowering, return slot lowering, `tmp.data()` semantics, or
-  `emit_return` semantics.
+  `complete` semantics.
 - SVE predicate/vector/register semantics, direct-intrinsic semantics,
   byte-size-to-`svptrue_b*` token inference, backend intrinsic IR, backend
   translation requests, translation-map evaluation, renderer-ready IR,
@@ -6823,7 +6823,7 @@ Candidate comparison:
 | Vector length/alignment semantic values | The M66 form includes `value<generation>(vector::length)` and `value<generation>(vector::alignment)`. | High now because evaluating them requires vector metadata rules, extension/type metadata policy, missing-metadata diagnostics, and could become broad vector semantics. | Defer until a request IR boundary exists and a value-resolution slice is selected. |
 | Backend uninit semantics | The M66 form includes `value<backend>(uninit::array)`. | High because it invites backend value semantics, backend translation requests, renderer-ready values, and generated output pressure. | Defer. |
 | Generic array/declaration IR | The M66 form is syntactically a `var<typed>(array_type<...>, tmp, ...)` declaration-like shape. | High because it combines generic `var`, `array_type`, allocation/lifetime, variable binding, and statement semantics. | Defer. |
-| Next slot-specific form IR | The accepted M64/M65 envelope also has predicate, selected-body, store, and return slots. | Medium to high because the nearby slots pull in SVE predicates, direct intrinsics, store semantics, `tmp.data()`, `emit_return`, and backend/rendering pressure. | Defer until helper-request/provenance boundaries are stable. |
+| Next slot-specific form IR | The accepted M64/M65 envelope also has predicate, selected-body, store, and return slots. | Medium to high because the nearby slots pull in SVE predicates, direct intrinsics, store semantics, `tmp.data()`, `complete`, and backend/rendering pressure. | Defer until helper-request/provenance boundaries are stable. |
 | Determinism-only hardening | M65 recorded a useful explicit skeleton-input-ordering test follow-up. | Low risk, but lower architectural value than the next typed lowering boundary. | Keep recorded; include only if it naturally fits a nearby implementation. |
 
 ### Milestone 67: Exact Array Initialization Helper Request IR Slice
@@ -6887,7 +6887,7 @@ Out of scope:
   `type<backend>(...)`, or `value<backend>(...)` parsing or dispatch.
 - Generic `var` parsing, generic `array_type` parsing, declaration semantics,
   array allocation/lifetime semantics, variable binding/scope, store/return
-  lowering, `tmp.data()`, `emit_return`, direct-intrinsic/SVE semantics,
+  lowering, `tmp.data()`, `complete`, direct-intrinsic/SVE semantics,
   vector/register metadata lookup, backend semantics, backend translation,
   rendering, generated tests, CLI/reporting/writer behavior, Rust, compiler
   execution, broad TSIL parsing, lowering-time file/catalog reads, raw TSL
@@ -6997,7 +6997,7 @@ Candidate comparison:
 | Vector length/alignment request resolution | M67 also records `value<generation>(vector::length)` and `value<generation>(vector::alignment)` requests. | High because these require vector/extension/lane metadata policy and missing-metadata diagnostics. | Defer until a vector metadata policy slice is selected. |
 | Backend uninit request resolution | M67 records `value<backend>(uninit::array)` as a backend-value request. | High because it crosses into backend value semantics, backend translation requests, renderer-ready IR, and generated-output pressure. | Defer. |
 | Generic helper request dispatcher | A shared resolver might seem useful after M67. | High because it would become a central helper evaluator and invite raw-string dispatch. | Reject for now; future helpers should add typed, family-specific slices. |
-| Next exact slot-specific form IR | The M64/M65 envelope still has predicate, selected-body, store, and return slots. | Medium to high because nearby slots pull in SVE predicates, direct intrinsics, store semantics, `tmp.data()`, `emit_return`, and backend/rendering pressure. | Defer until first-slot helper-resolution staging is proven. |
+| Next exact slot-specific form IR | The M64/M65 envelope still has predicate, selected-body, store, and return slots. | Medium to high because nearby slots pull in SVE predicates, direct intrinsics, store semantics, `tmp.data()`, `complete`, and backend/rendering pressure. | Defer until first-slot helper-resolution staging is proven. |
 | Determinism or diagnostic hardening | M67 and M65 recorded useful non-blocking hardening follow-ups. | Low risk, but lower architectural value than turning M67 request IR into a typed resolution pass. | Keep recorded; include only if it naturally fits M68. |
 
 ### Milestone 68: Exact Array Initialization Base-Type Helper Request Resolution Slice
@@ -7072,7 +7072,7 @@ Out of scope:
   `type<backend>(...)`, or `value<backend>(...)` parsing or dispatch.
 - Generic `var` parsing, generic `array_type` parsing, declaration semantics,
   array allocation/lifetime semantics, variable binding/scope, store/return
-  lowering, `tmp.data()`, `emit_return`, direct-intrinsic/SVE semantics,
+  lowering, `tmp.data()`, `complete`, direct-intrinsic/SVE semantics,
   vector/register metadata lookup, backend semantics, backend translation,
   rendering, generated tests, CLI/reporting/writer behavior, Rust, compiler
   execution, broad TSIL parsing, lowering-time file/catalog reads, raw TSL
@@ -7191,7 +7191,7 @@ Candidate comparison:
 | Vector alignment request resolution | M67 records `value<generation>(vector::alignment)` as a typed request, and aligned load/store bodies need this later. | High now because it requires alignment metadata policy and aligned branch context; it should use the extracted stage point rather than expand `_lower_input` further. | Defer until after M69 extraction and metadata policy selection. |
 | Backend uninit request boundary | M67 records `value<backend>(uninit::array)` as a backend-value request. | High because it crosses into backend value semantics, backend translation requests, renderer-ready IR, and generated-output pressure. | Defer. |
 | Generic helper resolver family | A shared resolver abstraction could prepare future helper families. | High because it could become a central raw-string dispatcher or stage registry before multiple typed resolver families justify it. | Reject for now. |
-| Next exact slot-specific form IR | The M64/M65 envelope still has predicate, selected-body, store, and return slots. | Medium to high because nearby slots pull in SVE predicates, direct intrinsics, store semantics, `tmp.data()`, `emit_return`, and backend/rendering pressure. | Defer. |
+| Next exact slot-specific form IR | The M64/M65 envelope still has predicate, selected-body, store, and return slots. | Medium to high because nearby slots pull in SVE predicates, direct intrinsics, store semantics, `tmp.data()`, `complete`, and backend/rendering pressure. | Defer. |
 | Stage-contract table cleanup | `GenerationLoweringStage.__post_init__` is a growing stage-name-to-output-type table. | Medium if mixed with extraction; it is type validation rather than semantic dispatch, but broadening it could distract from the immediate array-initialization tail. | Keep as follow-up. |
 
 ### Milestone 69: Exact Array Initialization Stage Pipeline Extraction Slice
@@ -7425,7 +7425,7 @@ Out of scope:
 - Backend translation or backend rendering of vector length, including C++
   spellings such as `Vec::vector_element_count()`.
 - Broad `var`, `array_type`, declaration, array allocation/lifetime, variable
-  scope, store, return, `tmp.data()`, `emit_return`, direct-intrinsic
+  scope, store, return, `tmp.data()`, `complete`, direct-intrinsic
   semantics, loops, calls, casts, or broad TSIL parsing.
 - Generic `value<generation>(...)` evaluator families, broad stage registries,
   raw helper-string dispatch, or semantic tables keyed by raw helper text,
@@ -7611,7 +7611,7 @@ Out of scope:
 - Backend translation or backend rendering of vector alignment, including C++
   spellings such as `Vec::vector_alignment()`.
 - Broad `var`, `array_type`, declaration, array allocation/lifetime, variable
-  scope, store, return, `tmp.data()`, `emit_return`, direct-intrinsic
+  scope, store, return, `tmp.data()`, `complete`, direct-intrinsic
   semantics, loops, calls, casts, or broad TSIL parsing.
 - Generic `value<generation>(...)` or `value<backend>(...)` evaluator
   families, broad stage registries, raw helper-string dispatch, or semantic
@@ -7801,7 +7801,7 @@ Out of scope:
   behavior, Rust behavior, compiler execution, or generated-test execution.
 - Broad `var`, `array_type`, declaration, array allocation/lifetime,
   variable binding/scope, initializer semantics, store, return, `tmp.data()`,
-  `emit_return`, `assume_aligned`, direct-intrinsic/SVE semantics, loops,
+  `complete`, `assume_aligned`, direct-intrinsic/SVE semantics, loops,
   calls, casts, or multi-statement lowering.
 - Generic `value<backend>(...)`, `type<backend>(...)`,
   `value<generation>(...)`, or `type<generation>(...)` evaluator families;
@@ -7902,7 +7902,7 @@ Review risks:
   emitted text or a fake backend-neutral initializer.
 - Letting the aggregate IR become declaration/array IR for `var`, `array_type`,
   allocation/lifetime, initializer, store, return, `tmp.data()`, or
-  `emit_return`.
+  `complete`.
 - Creating a broad helper-set registry, generic backend-value evaluator,
   central stage dispatcher, or raw-helper parser instead of one exact typed
   continuation after M71.
@@ -7939,7 +7939,7 @@ Candidate comparison:
 | Narrow helper-set-to-envelope handoff | Low. Mostly rewraps M72 without exposing the first-slot statement structure. | Low, but too little functional movement. | Defer. |
 | Backend-uninit handling | Medium later. Eventually needed for output, but M72 intentionally keeps it deferred. | High now because translation/rendering would cross the lowering boundary. | Defer until backend translation/rendering slices are selected. |
 | Generic `var` / `array_type` parsing | Broadly useful later. | Too broad now; would add generic declaration/array semantics and broad TSIL parsing. | Reject for M73. |
-| Store/return/`tmp.data()`/`emit_return` lowering | High later. | Too early; pulls in allocation/lifetime, store, return, and SVE semantics. | Defer. |
+| Store/return/`tmp.data()`/`complete` lowering | High later. | Too early; pulls in allocation/lifetime, store, return, and SVE semantics. | Defer. |
 | Private resolver cleanup | Useful maintainability work. | Lower value than a structural IR step unless driven by implementation pressure. | Keep as non-blocking follow-up. |
 
 ### Milestone 73: Exact First-Slot Declaration-Shell Structural IR Slice
@@ -8005,7 +8005,7 @@ Out of scope:
   behavior, compiler execution, or generated-test execution.
 - Generic `var`, generic `array_type`, generic declaration semantics, generic
   array semantics, array allocation/lifetime, variable binding/scope,
-  initializer semantics, store, return, `tmp.data()`, `emit_return`,
+  initializer semantics, store, return, `tmp.data()`, `complete`,
   `assume_aligned`, aligned-store semantics, direct-intrinsic/SVE semantics,
   loops, calls, casts, multi-statement lowering, or broad TSIL parsing.
 - Broad helper registries, raw helper-string dispatch, broad stage registries,
@@ -8104,7 +8104,7 @@ Review risks:
 - Treating backend uninit as backend translation/rendering under a structural
   lowering label.
 - Expanding scope to non-`tmp` corpus forms, generic `var`/`array_type`, store
-  or return slots, `tmp.data()`, `emit_return`, `assume_aligned`,
+  or return slots, `tmp.data()`, `complete`, `assume_aligned`,
   direct-intrinsic/SVE semantics, loops, calls, casts, or broad TSIL parsing.
 - Adding a broad `VarIr`, `ArrayTypeIr`, declaration registry, helper-set
   registry, central stage dispatcher, or public IR family instead of one exact
@@ -8142,7 +8142,7 @@ Candidate comparison:
 | Exact array-body structural sequence and slot-role classification | High. Rejoins the accepted M64/M65 exact body envelope with the accepted M73 declaration-shell IR, giving future lowering slices one source-ordered typed body structure instead of isolated slot fragments. | Medium-high if role names become store/return/predicate/body semantics. | Select as M74 with strict wording that roles are structural/provenance labels only. |
 | Narrow M73-to-envelope handoff | Medium. Links M73 back to the envelope but mostly rewraps existing facts without making all body roles explicit. | Low, but less forward movement than a five-role structural sequence. | Defer. |
 | Predicate-init slot lowering | Useful later for SVE body parity. | High now because it pulls in `svbool_t`, `pg`, `svptrue_b8`, direct-intrinsic, and SVE predicate semantics. | Defer. |
-| Store-call or return-emission lowering | High later. | Too early; would interpret `tmp.data()`, `svst1`, `emit_return`, store/return semantics, variable scope, and backend/rendering pressure. | Defer. |
+| Store-call or return-emission lowering | High later. | Too early; would interpret `tmp.data()`, `svst1`, `complete`, store/return semantics, variable scope, and backend/rendering pressure. | Defer. |
 | Private resolver/stage-table cleanup | Useful maintainability work. | Lower value than making the exact body sequence explicit, unless implementation pressure forces it. | Keep as non-blocking follow-up. |
 
 ### Milestone 74: Exact Array Body Structural Sequence And Slot-Role Classification Slice
@@ -8207,7 +8207,7 @@ Out of scope:
 
 - Interpreting `svbool_t`, `pg`, `intrin<svptrue_b8>`, selected
   `svptrue_b16/b32/b64`, `intrin<svst1>`, `tmp.data()`, `a`,
-  `emit_return(tmp)`, `assume_aligned`, stores, returns, direct intrinsics,
+  `complete(tmp)`, `assume_aligned`, stores, returns, direct intrinsics,
   SVE predicate/vector/register semantics, byte-size-to-token inference, or
   branch-body semantics beyond accepted M57-M63.
 - Generic body IR, broad TSIL parsing, generic declaration semantics, generic
@@ -8243,7 +8243,7 @@ Expected outputs:
   invariants, and unsupported non-exact body shapes.
 - No backend translation request, renderer-ready value, generated artifact,
   golden output, CLI/report/writer, Rust, compiler, generic body/declaration/
-  array semantics, store, return, `tmp.data()`, `emit_return`, or SVE/direct-
+  array semantics, store, return, `tmp.data()`, `complete`, or SVE/direct-
   intrinsic behavior change.
 
 Parity criterion:
@@ -8356,7 +8356,7 @@ Candidate comparison:
 | Exact predicate path structural request IR | High. Broadens beyond only slot 1 by connecting the accepted M74 predicate-init slot, accepted selected-body predicate update evidence, and post-branch store-call predicate-token use into one typed path needed before any store lowering. | Medium-high if it starts interpreting SVE predicate semantics, `svptrue_b*`, `svst1`, or variable scope. | Select as M75 with strict structural/request-only wording. |
 | Predicate-init slot only | Medium. Refines the next opaque slot but leaves the selected update and store-call predicate token disconnected. | Lower risk, but less forward movement after M74 made the whole sequence available. | Defer in favor of the broader exact predicate path. |
 | Store-call slot lowering | High later. | Too broad now because it would pull in `tmp.data()`, `a`, store semantics, backend maps, alignment behavior, renderer pressure, and generated output. | Defer. |
-| Return-emission slot lowering | High later. | Too broad now because it pulls in return semantics, `emit_return`, variable lifetime, renderer pressure, and output behavior. | Defer. |
+| Return-emission slot lowering | High later. | Too broad now because it pulls in return semantics, `complete`, variable lifetime, renderer pressure, and output behavior. | Defer. |
 | Private resolver/stage-table cleanup | Useful maintainability work. | Lower forward movement than consuming M74 for the next semantic-bearing path. | Keep as non-blocking follow-up. |
 
 ### Milestone 75: Exact Predicate Path Structural Request IR Slice
@@ -8419,7 +8419,7 @@ Scope:
 Out of scope:
 
 - Interpreting `svbool_t`, `pg`, `intrin<svptrue_b8>`, selected
-  `svptrue_b16/b32/b64`, `intrin<svst1>`, `tmp.data()`, `a`, `emit_return`,
+  `svptrue_b16/b32/b64`, `intrin<svst1>`, `tmp.data()`, `a`, `complete`,
   `assume_aligned`, stores, returns, direct intrinsics, SVE predicate/vector/
   register semantics, byte-size-to-token inference, lane masks, backend uninit,
   backend maps, rendering, generated output, generic body/declaration/array
@@ -8456,7 +8456,7 @@ Expected outputs:
   unsupported non-exact predicate-path shapes.
 - No backend translation request, renderer-ready value, generated artifact,
   golden output, CLI/report/writer, Rust, compiler, generic predicate/store/
-  return semantics, `tmp.data()`, `emit_return`, SVE semantics, or direct-
+  return semantics, `tmp.data()`, `complete`, SVE semantics, or direct-
   intrinsic behavior change.
 
 Parity criterion:
@@ -8633,7 +8633,7 @@ Out of scope:
 
 - Store semantics, memory writes, alignment behavior, pointer semantics,
   operand semantics, variable scope/use-def/lifetime, declaration/array
-  semantics, initializer behavior, return semantics, `emit_return`, or
+  semantics, initializer behavior, return semantics, `complete`, or
   `assume_aligned`.
 - Interpreting `svst1`, `pg`, `tmp.data()`, `a`, `svbool_t`, `svptrue_b*`, or
   any ARM/SVE predicate/vector/register/intrinsic behavior.
@@ -8842,7 +8842,7 @@ Out of scope:
 - New lowering semantics or new generated behavior.
 - Store semantics, return semantics, memory behavior, pointer semantics,
   variable scope/use-def/lifetime, declaration/array semantics, initializer
-  behavior, `tmp.data()` semantics, `emit_return`, `assume_aligned`, ARM/SVE
+  behavior, `tmp.data()` semantics, `complete`, `assume_aligned`, ARM/SVE
   predicate/vector/register/intrinsic semantics, or byte-size-to-token
   inference.
 - Generic call IR, generic store IR, generic return IR, broad body IR, broad
@@ -9081,7 +9081,7 @@ Out of scope:
 - Store semantics, return semantics, memory behavior, pointer semantics,
   variable scope/use-def/lifetime, declaration/array semantics beyond accepted
   exact structural IR, initializer behavior, `tmp.data()` semantics,
-  `emit_return`, `assume_aligned`, ARM/SVE predicate/vector/register/intrinsic
+  `complete`, `assume_aligned`, ARM/SVE predicate/vector/register/intrinsic
   semantics, byte-size-to-token inference, or source-operand semantics.
 - Generic call IR, generic store IR, generic return IR, broad body IR, broad
   declaration/array/body/call/store/return parsing, raw helper-string
@@ -9298,7 +9298,7 @@ Out of scope:
 - Store semantics, return semantics, memory behavior, pointer semantics,
   variable scope/use-def/lifetime, declaration/array semantics beyond accepted
   exact structural IR, initializer behavior, `tmp.data()` semantics,
-  `emit_return`, `assume_aligned`, ARM/SVE predicate/vector/register/intrinsic
+  `complete`, `assume_aligned`, ARM/SVE predicate/vector/register/intrinsic
   semantics, byte-size-to-token inference, source-operand semantics, generic
   call/store/return/body/declaration/array parsing, broad TSIL parsing, or raw
   helper-string dispatch.
@@ -9498,7 +9498,7 @@ Out of scope:
   return semantics, memory behavior, pointer semantics, variable
   scope/use-def/lifetime, declaration/array semantics beyond accepted exact
   structural IR, initializer behavior, `tmp.data()` semantics,
-  `emit_return`, `assume_aligned`, ARM/SVE predicate/vector/register/intrinsic
+  `complete`, `assume_aligned`, ARM/SVE predicate/vector/register/intrinsic
   semantics, byte-size-to-token inference, source-operand semantics, or
   generated output.
 - Moving source adapters that consume `GenerationLoweringStage` or
@@ -9623,7 +9623,7 @@ Review risks:
 - Changing accepted diagnostic text, code, severity, path, line, or column
   while moving validators.
 - Broadening structural protocols to hide missing ownership boundaries.
-- Treating exact tokens such as `svst1`, `tmp.data()`, `emit_return(tmp)`,
+- Treating exact tokens such as `svst1`, `tmp.data()`, `complete(tmp)`,
   `pg`, `svptrue_b*`, or `a` as semantics rather than structural provenance.
 - Reducing line count by moving unrelated shared lowering/generation code,
   duplicating moved helpers, or leaving compatibility wrappers around poor
@@ -9718,7 +9718,7 @@ Out of scope:
   `value<backend>` evaluation, exact return-emission IR, store semantics,
   return semantics, memory behavior, pointer semantics, variable
   scope/use-def/lifetime, declaration/array semantics, initializer behavior,
-  `tmp.data()` semantics, `emit_return`, `assume_aligned`, ARM/SVE predicate/
+  `tmp.data()` semantics, `complete`, `assume_aligned`, ARM/SVE predicate/
   vector/register/intrinsic semantics, byte-size-to-token inference,
   source-operand semantics, or generated output.
 - Moving `LoweredImplementation`, `GenerationLoweringStage`,
@@ -9941,7 +9941,7 @@ Out of scope:
   parsing, exact return-emission IR, store semantics, return semantics,
   memory behavior, pointer semantics, variable scope/use-def/lifetime,
   declaration/array semantics, initializer behavior, `tmp.data()` semantics,
-  `emit_return`, `assume_aligned`, ARM/SVE predicate/vector/register/
+  `complete`, `assume_aligned`, ARM/SVE predicate/vector/register/
   intrinsic semantics, byte-size-to-token inference, source-operand semantics,
   or generated output.
 - Moving `GenerationLoweringStage`, `GenerationContext`,
@@ -10171,7 +10171,7 @@ Out of scope:
 - Moving `LoweredImplementation`, `LoweringInput`, `LoweringRequest`,
   `lower_candidates`, source adapters, exact array-body pipeline
   coordination, or backend/rendering/output-facing behavior.
-- Interpreting `emit_return`, `tmp`, `tmp.data()`, `svst1`, `pg`, SVE-looking
+- Interpreting `complete`, `tmp`, `tmp.data()`, `svst1`, `pg`, SVE-looking
   tokens, selected type tags, backend ids, renderer names, or corpus line
   numbers as semantic dispatch keys.
 - Backend translation, rendering, generated output, golden files, generated
@@ -10392,7 +10392,7 @@ Scope:
 Out of scope:
 
 - New semantic lowering behavior, new stage names, new stage outputs, exact
-  return-emission IR, `emit_return(tmp)` interpretation, `tmp.data()`
+  return-emission IR, `complete(tmp)` interpretation, `tmp.data()`
   semantics, store/call/body/return/declaration/array semantics beyond the
   accepted exact structural/request records, broad TSIL parsing, broad source
   skeleton recognition, broad source-adapter support, or helper-family
@@ -10621,7 +10621,7 @@ Scope:
 Out of scope:
 
 - New lowering semantics, new selected-body semantics, new stage names, new
-  stage outputs, exact return-emission IR, `emit_return(tmp)` interpretation,
+  stage outputs, exact return-emission IR, `complete(tmp)` interpretation,
   `tmp.data()` semantics, store/call/body/return/declaration/array semantics
   beyond accepted exact structural/request records, broad TSIL parsing, broad
   selected-body parsing, broad source-adapter support, or helper-family
@@ -10867,8 +10867,8 @@ Scope:
   argument splitting, declared-parameter validation, and the accepted
   mini-TSIL diagnostics.
 - Preserve accepted mini-TSIL behavior exactly:
-  `emit_return(<parameter> + <parameter>);` and
-  `emit_return(intrin_compose<add>(<parameter>, <parameter>));` remain the only
+  `complete(<parameter> + <parameter>);` and
+  `complete(intrin_compose<add>(<parameter>, <parameter>));` remain the only
   semantically lowered mini-TSIL statement shapes.
 - Keep private-module imports one-way. The new private modules must not import
   `boundary.py` or the `tslgen.lowering` package facade.
@@ -10895,7 +10895,7 @@ Out of scope:
   surface policy beyond stable facade aliases.
 - New lowering semantics, new mini-TSIL syntax, broad TSIL parsing, broad
   statement/body/call/store/return/declaration/array semantics,
-  exact return-emission IR, `emit_return(tmp)` interpretation, `tmp.data()`
+  exact return-emission IR, `complete(tmp)` interpretation, `tmp.data()`
   semantics, variable scope/lifetime semantics, renderer-ready IR, broad
   direct-intrinsic semantics, helper-family expansion, or stage output changes.
 - Creating registries, generic dispatchers, plugin systems, callback maps,
@@ -10983,7 +10983,7 @@ Tests required:
   renderers.
 - Focused M86 tests preserving diagnostics for non-text TSIL payloads,
   typed-opaque TSIL payloads, unsupported payload kinds, unsupported
-  `emit_return` shapes, malformed `intrin_compose`, unsupported intrinsic
+  `complete` shapes, malformed `intrin_compose`, unsupported intrinsic
   names, invalid intrinsic arguments, invalid intrinsic arity, and unknown
   parameter names.
 - Pipeline snapshot/stage identity regression tests proving stage ordering,
@@ -11089,7 +11089,7 @@ Goal:
 Add the next lowering semantic frontier after the M77-M86 facade/module cleanup:
 record the exact trailing return-emission-shaped slot from the accepted exact
 array-body path as typed structural/request IR. M87 recognizes only the exact
-source form shaped as `emit_return(tmp);` with insignificant whitespace, links
+source form shaped as `complete(tmp);` with insignificant whitespace, links
 the returned token to the accepted M73 declaration-shell variable token, and
 keeps the result structural/request-only.
 
@@ -11108,7 +11108,7 @@ Scope:
   post-branch call-site path without interpreting store semantics.
 - Recognize only the M74 role ordinal `4` /
   `opaque_return_emission_shaped_slot` source text with the exact
-  `emit_return(<token>);` shape, allowing insignificant whitespace.
+  `complete(<token>);` shape, allowing insignificant whitespace.
 - Require the returned token text to match the accepted M73 declaration-shell
   variable token carried by the M74 sequence. This is provenance linkage only,
   not variable lifetime, allocation, or return-value semantics.
@@ -11126,7 +11126,7 @@ Out of scope:
 
 - Correcting, normalizing, rewriting, completing, reordering, or guessing the
   intended meaning of malformed `.tsl` implementation bodies.
-- Supporting broad `emit_return(...)`, expressions inside `emit_return`,
+- Supporting broad `complete(...)`, expressions inside `complete`,
   multiple return statements, missing semicolons, alternate variables,
   `tmp.data()`, stores, calls, direct `intrin<...>` semantics, variable
   lifetime/scope, allocation semantics, array value semantics, or return-value
@@ -11155,13 +11155,13 @@ Required input:
   M86 public facade behavior.
 - Corpus evidence:
   `tsldata/primitives/load_store/array.tsl:104-112`, especially the trailing
-  `emit_return(tmp) ;` shape at line 111.
+  `complete(tmp) ;` shape at line 111.
 
 Expected outputs:
 
 - A typed exact return-emission structural/request IR value carrying:
   source sequence identity, post-branch call-site identity, return role label,
-  slot ordinal `4`, source location, original source text, `emit_return` token,
+  slot ordinal `4`, source location, original source text, `complete` token,
   returned token text, declaration-shell variable-token link, candidate id,
   target extension, source extension, selected type tag, and branch-chain id.
 - Deterministic key/provenance behavior matching accepted M74-M86 conventions.
@@ -11202,12 +11202,12 @@ Evidence paths:
 
 Tests required:
 
-- Focused M87 positive tests for the exact `emit_return(tmp);` shape with
+- Focused M87 positive tests for the exact `complete(tmp);` shape with
   whitespace matching the selected corpus style.
 - Tests proving the returned token links to the accepted declaration-shell
   variable token and does not infer a different variable or repair source
   text.
-- Negative tests for malformed `emit_return`, wrong returned token, missing
+- Negative tests for malformed `complete`, wrong returned token, missing
   semicolon, extra arguments/expression forms, missing return slot, wrong slot
   ordinal/source role, context mismatch, and provenance mismatch.
 - Pipeline tests proving the new stage appears after the M76 post-branch
@@ -11239,7 +11239,7 @@ Review risks:
   `tmp.data()`, store-call semantics, backend translation, or renderer-ready
   return IR instead of structural/request IR.
 - Treating malformed source as something to correct rather than diagnose.
-- Generalizing to broad `emit_return(...)` parsing or a TSIL statement
+- Generalizing to broad `complete(...)` parsing or a TSIL statement
   dispatcher.
 - Using raw helper text, extension names, SVE tokens, corpus line numbers,
   backend ids, renderer names, or request ordinals as direct semantic dispatch
@@ -11263,10 +11263,10 @@ Execution result:
   output, or a private M76-only source protocol; the focused revision removed
   M87 output from the shared runtime `ExactArrayBodyLoweredImplementationSource`
   protocol so the central source adapter does not grow with downstream stages.
-- The exact recognizer accepts only `emit_return(<token>);` with insignificant
+- The exact recognizer accepts only `complete(<token>);` with insignificant
   whitespace, and M87 requires that token to match the accepted M73
   declaration-shell variable token. The selected corpus shape
-  `emit_return(tmp) ;` is accepted through this structural rule.
+  `complete(tmp) ;` is accepted through this structural rule.
 - The exact array-body pipeline now appends
   `return_emission_structural_request_lowering` after the accepted M76
   post-branch call-site stage. Pipeline snapshots record the produced
@@ -11284,7 +11284,7 @@ Execution result:
   diagnostics, malformed nearby forms, wrong token, missing slot, provenance
   mismatch, selected-candidate-only behavior, pipeline stage ordering,
   snapshot identity, and import boundaries.
-- M87 did not repair source bodies, broaden `emit_return(...)`, implement
+- M87 did not repair source bodies, broaden `complete(...)`, implement
   return-value semantics, variable lifetime/scope, `tmp.data()`, store/call
   semantics, backend translation, renderer-ready IR, rendering, generated
   output, generated tests, CLI/report/writer behavior, Rust, compiler
@@ -11368,7 +11368,7 @@ Out of scope:
   dispatch tables keyed by raw text, or fixpoint/backfeed machinery.
 - Declaration semantics, array semantics, variable lifetime/scope, allocation
   semantics, initializer behavior, store semantics, return-value semantics,
-  `tmp.data()` pointer semantics, `emit_return` semantics, `assume_aligned`
+  `tmp.data()` pointer semantics, `complete` semantics, `assume_aligned`
   semantics, `intrin<svst1>` semantics, SVE predicate/vector/register
   semantics, memory behavior, or broad direct-intrinsic semantics.
 - Backend uninit translation, backend map reads, backend translation, renderer-
@@ -11575,7 +11575,7 @@ Out of scope:
   pointer semantics, SVE predicate/vector/register semantics, memory behavior,
   direct-intrinsic semantics, or broad body semantics.
 - Inventorying generic backend-ish unresolved tokens such as `svst1`,
-  `tmp.data()`, `svptrue_b*`, `emit_return`, or unrelated selected-body facts.
+  `tmp.data()`, `svptrue_b*`, `complete`, or unrelated selected-body facts.
 - Correcting, normalizing, rewriting, completing, reordering, reparsing, or
   guessing intended meaning for malformed `.tsl` implementation bodies.
 - Broad TSIL parsing, raw helper dispatch, registries, callback maps, plugin
@@ -11787,7 +11787,7 @@ Out of scope:
   behavior, variable scope, store semantics, return semantics, `tmp.data()`
   pointer semantics, SVE predicate/vector/register semantics, memory behavior,
   direct-intrinsic semantics, or broad body semantics.
-- Re-interpreting `svst1`, `tmp.data()`, `svptrue_b*`, `emit_return(tmp)`, or
+- Re-interpreting `svst1`, `tmp.data()`, `svptrue_b*`, `complete(tmp)`, or
   the accepted structural slots as semantic body facts.
 - Correcting, normalizing, rewriting, completing, reordering, reparsing, or
   guessing intended meaning for malformed `.tsl` implementation bodies.
@@ -11998,7 +11998,7 @@ Out of scope:
   Stage 9 backend planning, renderer-ready IR, rendering, generated output,
   CLI/report/writer behavior, Rust, or compiler execution.
 - Broad TSIL parsing, broad body/declaration/array/store/return/call/SVE
-  semantics, `tmp.data()` semantics, `emit_return` semantics, or
+  semantics, `tmp.data()` semantics, `complete` semantics, or
   source-body repair.
 - Broad protocols, registries, raw-helper dispatch, callback maps, plugin
   systems, hidden backfeeds, fixpoint machinery, or extension-specific
@@ -12314,7 +12314,7 @@ Out of scope:
   extension names, backend ids, helper text, SVE tokens, corpus line numbers,
   or request ordinals.
 - Generic TSIL parsing, broad expression/body/return/call/store/declaration/
-  array/variable/cast/loop/SVE semantics, broad `emit_return(...)`, broad
+  array/variable/cast/loop/SVE semantics, broad `complete(...)`, broad
   direct-intrinsic semantics, generic `value<backend>(...)` or
   `type<backend>(...)` evaluation, or source-body repair.
 - Placeholder operation package kinds for unimplemented primitive families.
@@ -15014,7 +15014,7 @@ and does not broaden parser/catalog body forms. C++ and Rust emitters render
 from the explicit return statement while keeping language syntax and operator
 spelling backend-owned. Existing artifact bytes, logical paths, ordering,
 descriptor tables, operation/type diagnostics, and digests remain stable. M112
-did not add source syntax, `emit_return(...)` recognition, broad TSIL parsing,
+did not add source syntax, `complete(...)` recognition, broad TSIL parsing,
 multiple statements, locals, assignments, loops, control flow, source repair,
 old body-lowering migration, CLI work, writer changes, generated test
 execution, CMake/Cargo scaffolding, vector/SIMD semantics, backend manifests,
@@ -15050,7 +15050,7 @@ Scope:
 
 Out of scope:
 
-- New `.tsl` source syntax, `emit_return(...)` source recognition, broad TSIL
+- New `.tsl` source syntax, `complete(...)` source recognition, broad TSIL
   parsing, parser/catalog body-form changes, source-body repair, or accepting
   additional body shapes.
 - Multiple statements, local variables, assignments, loops, control flow,
@@ -15090,7 +15090,7 @@ clean product slice.
 Review notes:
 
 - Reviewers should reject parser/source syntax broadening in M112.
-- Reviewers should reject old `emit_return(...)` compatibility, source repair,
+- Reviewers should reject old `complete(...)` compatibility, source repair,
   or hidden semantic inference.
 - Reviewers should reject broad statement/expression frameworks, registries, or
   dispatchers.
@@ -15111,7 +15111,7 @@ keeping language syntax, type spelling, operator spelling, logical paths, and
 metadata backend-owned. Existing artifact bytes, logical paths, ordering,
 descriptor tables, body values, lowering diagnostics, and digests remain
 stable. M113 did not add parser/source syntax changes, source repair,
-`emit_return(...)` recognition, extra arities/parameter names, function
+`complete(...)` recognition, extra arities/parameter names, function
 overloading policy, namespaces/modules/packages, include planning, artifact
 layout changes, CLI work, writer changes, generated test execution,
 CMake/Cargo scaffolding, vector/SIMD semantics, backend manifests, old
@@ -15149,7 +15149,7 @@ Scope:
 Out of scope:
 
 - New `.tsl` source syntax, parser/catalog source-form changes, source-body
-  repair, broad TSIL parsing, `emit_return(...)` recognition, additional body
+  repair, broad TSIL parsing, `complete(...)` recognition, additional body
   shapes, or additional arities/parameter names.
 - Function overloading policy, namespaces/modules/packages, include planning,
   artifact layout changes, language-specific type names in lowering, or broad
@@ -15215,7 +15215,7 @@ previous per-selected behavior for mixed valid/invalid lowering results.
 Existing artifact bytes, logical paths, metadata, ordering, M110 scalar
 descriptors, M111 operation descriptors, M112 body values, M113 signature
 values, lowering diagnostics, and digests remain stable. M114 did not add
-parser/source syntax changes, source repair, `emit_return(...)` recognition,
+parser/source syntax changes, source repair, `complete(...)` recognition,
 new scalar types, new operations, vector/SIMD semantics, hardware feature
 selection, branch pruning, generation-time helper evaluation, backend
 manifests, dependency closure, module/package planning, include planning,
@@ -15256,7 +15256,7 @@ Scope:
 Out of scope:
 
 - New `.tsl` source syntax, parser/catalog source-form changes, source-body
-  repair, broad TSIL parsing, `emit_return(...)` recognition, additional body
+  repair, broad TSIL parsing, `complete(...)` recognition, additional body
   shapes, or additional arities/parameter names.
 - New scalar types, new operations, vector/SIMD shapes, hardware feature
   selection, branch pruning, generation-time helper evaluation, backend
@@ -16438,7 +16438,7 @@ rendering boundary. The context carries selected backend, selected extension,
 selected type tag, and the extension catalog as typed data. The existing
 `intrinsic_body_token_bridge` now uses that context to resolve M246 default
 compose policy for composed intrinsic request segments; no sibling fixture
-pipeline or pairwise `emit_return + intrin_compose` path was added.
+pipeline or pairwise `complete + intrin_compose` path was added.
 
 Default compose-policy resolution is part-specific at the bridge boundary. The
 bridge requests only the missing default parts: explicit prefix and suffix
@@ -16530,7 +16530,7 @@ Scope:
   spellings through the accepted M245 `CurrentVector(extension, type_tag)`
   backend type-spelling path. Preserve scalar behavior for scalar selections.
 - For selected implementation bodies whose exact accepted shape is
-  `emit_return(PAYLOAD);`, lower/render payload body tokens through the
+  `complete(PAYLOAD);`, lower/render payload body tokens through the
   existing intrinsic discovery/lowering/handoff path and M247 bridge when the
   payload contains backend intrinsic request islands. Do not add pairwise
   parent/child keyword combinations; this is recursive token/handoff
@@ -16578,7 +16578,7 @@ using the extension catalog; scalar entries continue to use the accepted scalar
 type identity path. The generated project render model receives the flag
 catalog needed for non-scalar profile build metadata.
 
-Exact `emit_return(PAYLOAD);` bodies now preserve ordered payload fragments
+Exact `complete(PAYLOAD);` bodies now preserve ordered payload fragments
 when the payload contains nested TSIL keyword regions. Payloads with backend
 intrinsic islands are discovered/lowered through the existing backend intrinsic
 handoff path and rendered through the M247 bridge with selected backend,
@@ -16586,7 +16586,7 @@ extension, type tag, and extension catalog context. Raw scalar payloads remain
 raw and continue to render through the existing shape templates.
 
 M248 deliberately does not add new lowering semantics, broad TSIL parsing,
-primitive-call expansion, dependency closure, pairwise `emit_return +
+primitive-call expansion, dependency closure, pairwise `complete +
 intrin_compose` handlers, template-side type/intrinsic decisions, Python-owned
 C++/Rust primitive bodies, fixture sibling pipelines, or runtime dependencies
 on `frozen`/`tslgenold`.
@@ -16775,7 +16775,7 @@ Scope:
   `ui8`, `ui16`, `ui32`, and `ui64`.
 - Preserve selected concrete `TypeTag` context; do not render wildcard text.
 - Use the existing lowering/discovery/handoff path for the multiline
-  `emit_return(...)` body and the source-provided `suffix=value<backend>(...)`
+  `complete(...)` body and the source-provided `suffix=value<backend>(...)`
   modifier. If implementation work is needed, it should only connect already
   lowered typed modifier facts to the accepted backend modifier translation
   boundary before invoking the M247/M249 body-token bridge.
@@ -16885,7 +16885,7 @@ Goal:
 
 Use the generic selected primitive project pipeline to render and build-verify
 a broader real AVX2 unmasked binary arithmetic subset for both C++ and Rust,
-covering `add` and `sub` over the accepted exact `emit_return(...)` +
+covering `add` and `sub` over the accepted exact `complete(...)` +
 `intrin_compose` body shapes.
 
 Scope:
@@ -17275,14 +17275,14 @@ Scope:
 - Load the real unmasked `add` and `sub` generic implementation bodies from
   `fundamental.tsl`.
 - Use the accepted recursive TSIL lexical/token lowering boundary, not a
-  parent-child special case such as `loop + call` or `emit_return + call`.
+  parent-child special case such as `loop + call` or `complete + call`.
 - Recognize/lower lowerable islands in the real generic body shape:
   `var<init_register>(result)`,
   `loop<unroll>(value<generation>(vector::length))`,
   `loop<range>(i, 0, value<generation>(vector::length), 1) { ... }`,
   nested `call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(...)`,
   nested `type<backend>(vector::as_extension(scalar))`, and
-  `emit_return(result);`.
+  `complete(result);`.
 - Preserve non-lowerable assignment/indexing punctuation such as
   `result[i] = `, `left[i]`, and `right[i]` as source-owned raw tokens unless
   an accepted existing lowerer already owns an exact typed fragment for them.
@@ -17314,12 +17314,12 @@ exact additional TSIL keyword heads needed by the real generic unmasked
 `add`/`sub` body shape from
 `tsldata/primitives/arithmetic/fundamental.tsl`: `var<init_register>`,
 `loop<unroll>`, `value<generation>`, and `type<backend>`. Existing heads for
-`loop<range>`, `call<primitive>`, and `emit_return` remain on the same
+`loop<range>`, `call<primitive>`, and `complete` remain on the same
 recursive path.
 
 The real generic `add` and `sub` bodies now lower into a deterministic
 recursive fragment tree with root regions `var`, `loop<unroll>`,
-`loop<range>`, and `emit_return`. The `loop<unroll>` and `loop<range>`
+`loop<range>`, and `complete`. The `loop<unroll>` and `loop<range>`
 payloads expose nested `value<generation>(vector::length)` regions. The loop
 body preserves `result[i] = ` and the trailing semicolon/newline text as raw
 source fragments while exposing the nested `call<primitive=...>` region. The
@@ -17398,7 +17398,7 @@ Scope:
   without importing semantic lowering helpers.
 - Make full `tsil` implementation bodies enter production lowering as
   recursive `SourceBodyFragmentSequence` values or an equivalent pure
-  source-body successor. Do not limit recursion to `emit_return(...)` payloads.
+  source-body successor. Do not limit recursion to `complete(...)` payloads.
 - Quarantine or remove direct `ImplementationBody.tokens` source scanners.
   Any temporary adapter must be named as compatibility/deprecation machinery
   and must be fed from the fragment tree.
@@ -17450,7 +17450,7 @@ transitional replacement path for `ImplementationBody`. Catalog promotion scans
 full `tsil` raw implementation bodies into that fragment sequence using the
 shared recursive source-body scanner. The old `ImplementationBody` token stream
 is still built for compatibility consumers, but the full source-body structure
-is no longer limited to rescanning `emit_return(...)` payloads.
+is no longer limited to rescanning `complete(...)` payloads.
 
 Backend type-query discovery is the first migrated production category. When a
 selected implementation carries `source_body_fragments`,
@@ -17837,11 +17837,11 @@ Scope:
 - Add or reuse one narrow selected-body compatibility token view that returns
   body tokens plus source from `source_body_fragments` when present and from
   `ImplementationBody.tokens` only as token-only fallback.
-- Route direct operation-fragment detection, `emit_return(...)` detection,
+- Route direct operation-fragment detection, `complete(...)` detection,
   primitive-call return-payload expression lowering, and unsupported body /
   primitive-call diagnostics through that selected-body token view.
 - Preserve accepted binary/unary/comparison scalar lowerer behavior, exact
-  `emit_return(call<primitive=...>(...))` behavior, unsupported body
+  `complete(call<primitive=...>(...))` behavior, unsupported body
   diagnostics, primitive-call diagnostics, and deterministic results.
 - Do not add new operation semantics, new primitive-call selector resolution,
   dependency closure, backend rendering, assignment/index parsing, source
@@ -17880,7 +17880,7 @@ lowering. The view derives temporary compatibility tokens from
 `Implementation.source_body_fragments` when available and falls back to
 `ImplementationBody.tokens` only when the existing compatibility body tokens
 are the accepted diagnostic boundary. Direct operation-fragment detection,
-exact `emit_return(...)` detection, primitive-call return-payload expression
+exact `complete(...)` detection, primitive-call return-payload expression
 lowering, unsupported return-expression diagnostics, and primitive-call
 diagnostics now flow through that token view.
 
@@ -17897,7 +17897,7 @@ still surface through the accepted payload adapter path.
 Tests added:
 
 - `tslgen/tests/test_m254_5_fragment_first_direct_lowerer_body_consumption.py`
-  covers fragment-backed direct `emit_return(call<primitive=add>(left, right));`
+  covers fragment-backed direct `complete(call<primitive=add>(left, right));`
   lowering with empty compatibility body tokens, fragment-backed unsupported
   return-expression and primitive-call diagnostics, fragment-backed unsupported
   plain body diagnostics, token-only unary/comparison operation fallback,
@@ -17992,7 +17992,7 @@ primitive-call directive adapter, with the old `ImplementationBody.tokens`
 traversal retained only for selected implementations without fragments.
 
 The accepted M147/M148 primitive-call behavior is preserved: standalone calls,
-`emit_return(...)` payload calls, source ordering, selector lowering, target
+`complete(...)` payload calls, source ordering, selector lowering, target
 matching, argument binding, unsupported-selector diagnostics, unknown-target
 diagnostics, missing-implementation diagnostics, arity diagnostics, continued
 collection after failed calls, and dependency closure traversal all remain
@@ -18003,7 +18003,7 @@ resolved as a dependency.
 Tests added:
 
 - `tslgen/tests/test_m254_6_fragment_first_primitive_call_inventory.py` covers
-  fragment-backed standalone and `emit_return(...)` primitive-call inventory
+  fragment-backed standalone and `complete(...)` primitive-call inventory
   with empty `ImplementationBody.tokens`, source-order preservation with
   continued collection after failure, opaque primitive-call argument payloads,
   unsupported selector, unknown target, missing implementation, arity mismatch,
@@ -18341,11 +18341,11 @@ fallback remains only for fragment-absent selections.
 M254.9 added
 `tslgen/tests/test_m254_9_fragment_present_token_fallback_retirement.py`,
 which proves stale compatibility operation tokens cannot override a
-fragment-backed `emit_return(...)` body. Existing `test_m107` diagnostic
+fragment-backed `complete(...)` body. Existing `test_m107` diagnostic
 expectations were updated only where stale-token fallback removal exposed the
 already accepted fragment-first diagnostics: malformed primitive-call fragments
 now report `TSL-LOWER-PRIMITIVE-CALL-FRAGMENT-MALFORMED`, and an
-`emit_return(...)` region without a trailing semicolon still reports the
+`complete(...)` region without a trailing semicolon still reports the
 unsupported opaque return payload.
 
 Validation result:
@@ -18725,7 +18725,7 @@ Scope:
 
 Out of scope:
 
-- Parsing or accepting TSIL strings, `emit_return(...)`, helper calls,
+- Parsing or accepting TSIL strings, `complete(...)`, helper calls,
   primitive calls, intrinsics, casts, variables, immediates, multiple
   statements, multiline bodies, raw body passthrough, helper evaluation, branch
   pruning, source repair, or TSIL compiler behavior.
@@ -18776,7 +18776,7 @@ Review notes:
 - Reviewers should require M126 to remain a body-model consolidation slice,
   not a broad TSIL parser, compiler milestone, raw passthrough renderer, or
   exact new TSIL source-form milestone.
-- Reviewers should reject `emit_return(...)` parsing, helper parsing,
+- Reviewers should reject `complete(...)` parsing, helper parsing,
   primitive-call lowering, intrinsics, casts, generation-time helpers, branch
   pruning, backend manifest loading, renderer-side semantic inference, target
   discovery, or source repair.
@@ -18848,8 +18848,8 @@ such as `sub(...)` are not a real accepted TSIL surface form unless they occur
 through documented TSIL constructs such as:
 
 ```text
-emit_return(left + right);
-emit_return(call<primitive=sub>(left, right));
+complete(left + right);
+complete(call<primitive=sub>(left, right));
 result[i] = details::arith_mul(data[i], factor);
 if<generation>(...) { ... } else<generation> { ... }
 if<compile>(...) { ... } else<compile> { ... }
@@ -18870,7 +18870,7 @@ Scope:
   construct families with representative current `tsldata/` file references.
 - Classify at least these buckets:
   - TSIL payload envelope forms: inline and multiline `tsil` payloads.
-  - Return/directive forms such as `emit_return(...)`.
+  - Return/directive forms such as `complete(...)`.
   - Primitive-call forms such as `call<primitive=...>(...)` and
     `call<primitive=@self[...]>(...)`.
   - Generation-time control forms such as `if<generation>`,
@@ -18905,7 +18905,7 @@ Out of scope:
 - Implementing production parser, catalog, selection, lowering, backend, CLI,
   writer, or generated-output code.
 - Accepting new source syntax in the clean generator.
-- Lowering `emit_return(...)`, `call<primitive=...>`, helpers, intrinsics,
+- Lowering `complete(...)`, `call<primitive=...>`, helpers, intrinsics,
   assignments, array access, loops, declarations, backend-control forms, or
   raw target-language text in this milestone.
 - Loading operation semantics, compatibility rules, or backend spellings from
@@ -18936,7 +18936,7 @@ Validation:
 ```bash
 git diff --check
 rg --files tsldata | rg "\\.tsl$" | sort
-rg -n "tsil|emit_return|call<primitive=|intrin|intrin_compose|details::|if<generation>|else<generation>|if<compile>|else<compile>|if<runtime>|else<runtime>|loop<|var<|let<|type<generation>|type<backend>|value<generation>|value<backend>" tsldata -g "*.tsl"
+rg -n "tsil|complete|call<primitive=|intrin|intrin_compose|details::|if<generation>|else<generation>|if<compile>|else<compile>|if<runtime>|else<runtime>|loop<|var<|let<|type<generation>|type<backend>|value<generation>|value<backend>" tsldata -g "*.tsl"
 find tslgen -type d -name __pycache__ -print
 ```
 
@@ -18961,7 +18961,7 @@ Review result:
 
 - Created `docs/redesign/tsil-surface-inventory.md` as the M127 inventory
   document grounded in all 41 current `tsldata/**/*.tsl` files.
-- The inventory records `tsil` payload envelopes, `emit_return(...)`,
+- The inventory records `tsil` payload envelopes, `complete(...)`,
   primitive-call forms, generation-control forms, backend-control forms,
   backend/generation queries, intrinsic forms, helper calls, raw surrounding
   target-language-like text, and backend translation metadata.
@@ -18992,7 +18992,7 @@ Validation result:
 ```bash
 git diff --check
 rg --files tsldata | rg "\\.tsl$" | sort
-rg -n "tsil|emit_return|call<primitive=|intrin|intrin_compose|details::|if<generation>|else<generation>|if<compile>|else<compile>|if<runtime>|else<runtime>|loop<|var<|let<|type<generation>|type<backend>|value<generation>|value<backend>" tsldata -g "*.tsl"
+rg -n "tsil|complete|call<primitive=|intrin|intrin_compose|details::|if<generation>|else<generation>|if<compile>|else<compile>|if<runtime>|else<runtime>|loop<|var<|let<|type<generation>|type<backend>|value<generation>|value<backend>" tsldata -g "*.tsl"
 find tslgen -type d -name __pycache__ -print
 ```
 
@@ -19021,7 +19021,7 @@ the existing synthetic `body <operation>(...)` fixture behavior, but allow a
 selected implementation body to carry raw TSIL payload lines such as:
 
 ```text
-tsil "emit_return(left + right);"
+tsil "complete(left + right);"
 ```
 
 and multiline quoted TSIL payloads such as:
@@ -19029,13 +19029,13 @@ and multiline quoted TSIL payloads such as:
 ```text
 tsil """
   var<init_register>(result)
-  emit_return(result);
+  complete(result);
 """
 ```
 
 The payload content originally became ordered raw body-line values inside
 `ImplementationBody`; after M131, the canonical domain form is ordered
-`RawStringToken` values. It is not parsed into `emit_return`, primitive-call,
+`RawStringToken` values. It is not parsed into `complete`, primitive-call,
 helper, intrinsic, assignment, loop, generation-control, backend-control, or
 operator semantics in this slice.
 
@@ -19064,7 +19064,7 @@ Out of scope:
 - Parsing full current `tsldata/` primitive nesting under `impls:`.
 - Supporting `tsil:` block entries; record as a follow-up unless selected by a
   later milestone.
-- Lowering or parsing `emit_return(...)`, `call<primitive=...>`,
+- Lowering or parsing `complete(...)`, `call<primitive=...>`,
   `call<primitive=@self[...]>(...)`, helpers, intrinsics, assignments, array
   access, declarations, operators, loops, `if<generation>`,
   `else if<generation>`, `else<generation>`, `if<compile>`,
@@ -19105,7 +19105,7 @@ Review notes:
 - Reviewers should require M128 to remain payload-envelope intake only. It is
   useful because future lowering must see real `tsil` payloads in the body
   model, but it must not overclaim semantic lowering.
-- Reviewers should reject raw TSIL backend rendering, `emit_return(...)`
+- Reviewers should reject raw TSIL backend rendering, `complete(...)`
   parsing, helper substitution, primitive-call dependency lowering, or
   generation/backend-control lowering in this slice.
 - Reviewers should require the M127 follow-ups about `else if<generation>` and
@@ -19153,7 +19153,7 @@ Status:
 
 Accepted after the M129 execution-review loop. This is the first keyword-level
 lowering slice over real quoted TSIL payload content. It recognizes the
-`emit_return` TSIL directive envelope and preserves its argument as opaque
+`complete` TSIL directive envelope and preserves its argument as opaque
 source text. It does not interpret the return expression, operators, operands,
 helper calls, primitive calls, casts, intrinsics, array access, assignments, or
 target-language-looking syntax.
@@ -19161,31 +19161,31 @@ target-language-looking syntax.
 Corpus grounding:
 
 - `tsldata/primitives/arithmetic/fundamental.tsl:31` uses
-  `tsil "emit_return(left + right);"`.
+  `tsil "complete(left + right);"`.
 - `tsldata/primitives/arithmetic/fundamental.tsl:328` uses
-  `tsil "emit_return(left - right);"`.
+  `tsil "complete(left - right);"`.
 - `tsldata/primitives/comparison/fundamental.tsl:33`,
   `:192`, `:344`, `:539`, `:734`, and `:900` use exact scalar comparison
   returns for `==`, `!=`, `<`, `>`, `<=`, and `>=`.
-- Many multiline payloads use indented `emit_return(...)` statements with
+- Many multiline payloads use indented `complete(...)` statements with
   nontrivial payloads such as `result`, `call<primitive=...>(...)`,
   `details::...`, `intrin_compose<...>(...)`, casts, array access, and
-  generation/backend queries. These are evidence that `emit_return` is a TSIL
+  generation/backend queries. These are evidence that `complete` is a TSIL
   directive boundary whose argument must remain opaque until separate
   expression/call/helper/query milestones are selected.
 
 Goal:
 
-When an M128 raw TSIL body line contains an exact `emit_return` statement
+When an M128 raw TSIL body line contains an exact `complete` statement
 envelope:
 
 ```text
-emit_return(<opaque-source-payload>);
-emit_return(<opaque-source-payload>) ;
+complete(<opaque-source-payload>);
+complete(<opaque-source-payload>) ;
 ```
 
 classify it as the existing typed directive concept
-`LowerableDirective(name="emit_return", arguments=(<opaque-source-payload>,))`
+`LowerableDirective(name="complete", arguments=(<opaque-source-payload>,))`
 or an equally narrow typed directive value if implementation evidence shows the
 existing domain value is insufficient. The payload text is source-owned and
 opaque. Do not split it into operands, parse operators, resolve helper calls,
@@ -19195,18 +19195,18 @@ Scope:
 
 - Preserve the accepted synthetic `body <operation>(...)` lowering path and
   existing generated artifact bytes.
-- Recognize only the `emit_return` keyword/directive envelope from M128 raw
+- Recognize only the `complete` keyword/directive envelope from M128 raw
   TSIL payload lines. Matching may ignore leading/trailing payload-line
   indentation introduced by quoted multiline TSIL, but the directive payload
   itself must remain unchanged source text.
 - Preserve the raw directive argument exactly as source text between the outer
-  `emit_return(` and its matching close parenthesis.
+  `complete(` and its matching close parenthesis.
 - Handle nested parentheses while finding the matching close parenthesis for
   the outer directive call; this is delimiter matching for the keyword
   envelope, not expression parsing.
-- Promote exact `emit_return` directive lines into typed body/directive values
+- Promote exact `complete` directive lines into typed body/directive values
   that later expression/call/helper/query milestones can consume.
-- Selected bodies containing only an `emit_return` directive with opaque
+- Selected bodies containing only a `complete` directive with opaque
   payload must still stop before backend rendering with an explicit unsupported
   return-expression diagnostic unless the existing synthetic `body ...` path is
   in use.
@@ -19239,13 +19239,13 @@ Out of scope:
 
 Accepted outputs:
 
-- Exact raw TSIL `emit_return(...)` statement envelopes become typed
-  `emit_return` directive/body values carrying opaque payload text.
-- `emit_return(left + right);`, `emit_return(result);`,
-  `emit_return(call<primitive=add>(left, right));`, and
-  `emit_return(details::arith_mul(left, right));` all classify the same outer
+- Exact raw TSIL `complete(...)` statement envelopes become typed
+  `complete` directive/body values carrying opaque payload text.
+- `complete(left + right);`, `complete(result);`,
+  `complete(call<primitive=add>(left, right));`, and
+  `complete(details::arith_mul(left, right));` all classify the same outer
   keyword/directive boundary while preserving different opaque payload text.
-- Selected `emit_return` directive bodies do not render backend code until a
+- Selected `complete` directive bodies do not render backend code until a
   later milestone lowers the opaque payload into a typed expression.
 - Existing synthetic `body <operation>(...)` fixture behavior and generated
   artifacts remain stable.
@@ -19263,7 +19263,7 @@ find tslgen -type d -name __pycache__ -print
 
 Review notes:
 
-- Reviewers should require M129 to remain exact TSIL `emit_return` directive
+- Reviewers should require M129 to remain exact TSIL `complete` directive
   boundary lowering only. It should not become expression/operator/helper/call
   lowering.
 - Reviewers should require the directive payload to remain source-owned opaque
@@ -19276,14 +19276,14 @@ Review notes:
 Accepted result:
 
 - Parser output for quoted TSIL payloads remains raw as established by M128.
-- Catalog promotion classifies exact `emit_return(...)` payload lines from
+- Catalog promotion classifies exact `complete(...)` payload lines from
   parser-recognized TSIL envelopes into `LowerableDirective` segments carrying
   opaque payload text.
 - The directive matcher performs only outer keyword-envelope delimiter
   matching and preserves nested payloads such as
   `call<primitive=add>(left, right)` without parsing them.
 - Lowering reports `TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION` for selected
-  bodies containing only an `emit_return` directive with opaque payload; no
+  bodies containing only a `complete` directive with opaque payload; no
   raw TSIL payload text is rendered.
 - Malformed directive envelopes, unsupported directive keywords, and
   non-directive raw lines remain unsupported body diagnostics.
@@ -19294,7 +19294,7 @@ Accepted result:
   blocking findings were reported. Follow-ups are to keep the TSIL envelope
   marker as an admission guard only, to consider extracting the small directive
   matcher before adding more directive recognition, and to add explicit
-  coverage for the `emit_return(payload) ;` space-before-semicolon variant.
+  coverage for the `complete(payload) ;` space-before-semicolon variant.
 
 Validation result:
 
@@ -19369,7 +19369,7 @@ else<selector>
 else<selector> {
 ```
 
-The existing M129 `emit_return(opaque-payload)` directive remains accepted.
+The existing M129 `complete(opaque-payload)` directive remains accepted.
 Classify with the existing source-body model, for example:
 
 ```text
@@ -19388,7 +19388,7 @@ map directives to backend code in this milestone.
 
 Scope:
 
-- Preserve M128 quoted-TSIL intake, M129 `emit_return` directive
+- Preserve M128 quoted-TSIL intake, M129 `complete` directive
   classification, and existing synthetic `body <operation>(...)` generated
   artifacts.
 - Recognize only the selected directive envelopes from parser-recognized TSIL
@@ -19414,7 +19414,7 @@ Scope:
   `loop<range>(...) {`, `if<generation>(...) {`, `if<compile>(...) {`,
   `switch<compile>(...) {`, `} else<compile> {`, malformed envelopes,
   unsupported nearby directives, and coexistence with an already classified
-  `emit_return` line in a multiline body.
+  `complete` line in a multiline body.
 
 Out of scope:
 
@@ -19438,7 +19438,7 @@ Accepted outputs:
 - Exact selected directive envelopes become typed directive/body values
   carrying opaque selector and payload text, with any raw prefix/suffix kept as
   raw source tokens.
-- New directive classification coexists with M129 `emit_return`
+- New directive classification coexists with M129 `complete`
   classification in ordered multiline bodies.
 - Selected bodies containing recognized directives do not render backend code,
   infer semantics, evaluate conditions, or match blocks.
@@ -19535,7 +19535,7 @@ Scope:
   generated artifact bytes.
 - Preserve M128 quoted-TSIL intake semantics: inline and multiline payloads
   become source-owned raw text in deterministic order.
-- Preserve M129 `emit_return(...)` directive classification and unsupported
+- Preserve M129 `complete(...)` directive classification and unsupported
   opaque-return diagnostics.
 - Preserve M130 directive-envelope classification, raw prefix/suffix
   preservation, and unsupported selected-body behavior.
@@ -19548,7 +19548,7 @@ Scope:
   - `body add(left, right)` becomes one `LowerableOperationFragment` token;
   - inline quoted `tsil` becomes raw token data;
   - multiline quoted `tsil` preserves order and newline/text boundaries;
-  - M129 `emit_return(...)` becomes one directive token;
+  - M129 `complete(...)` becomes one directive token;
   - M130 `} else<compile> {` becomes raw/directive/raw tokens in order;
   - selected unsupported TSIL bodies still diagnose without rendering raw text;
   - existing accepted artifact bytes remain stable.
@@ -19589,7 +19589,7 @@ Execution notes:
   `LowerableDirective` tokens plus preserved raw prefix/suffix tokens.
 - Lowering consumes only the body-token stream and still accepts only the
   current one-token operation-fragment body shape for generated artifacts, or
-  one opaque `emit_return` directive token for the existing unsupported-return
+  one opaque `complete` directive token for the existing unsupported-return
   diagnostic.
 - M131 added no primitive-call matching, expression parsing, directive-payload
   segmentation, helper/operator lowering, backend rendering, source repair,
@@ -19740,8 +19740,8 @@ Scope:
 - Preserve existing generic unsupported-body diagnostics for raw-only bodies,
   malformed nearby call-like source, direct primitive-looking names such as
   `sub(left, right)`, and non-call directives.
-- Preserve the existing `emit_return(...)` opaque return diagnostic for
-  `emit_return(call<primitive=...>(...));`; do not segment directive payloads
+- Preserve the existing `complete(...)` opaque return diagnostic for
+  `complete(call<primitive=...>(...));`; do not segment directive payloads
   in this milestone.
 - Add tests for exact `call<primitive=add>(left, right)` lowering to the same
   generated artifact bytes as the accepted synthetic `body add(left, right)`
@@ -19791,7 +19791,7 @@ Execution notes:
   payload text appear only as opaque diagnostic context.
 - Raw-only bodies, malformed nearby call-like source, direct primitive-looking
   names such as `sub(left, right)`, non-call directives, and
-  `emit_return(call<primitive=...>(...));` payloads preserve their existing
+  `complete(call<primitive=...>(...));` payloads preserve their existing
   unsupported-body or unsupported-return boundaries.
 - Review returned `Accept` from architecture, boundary, documentation, and
   validation auditors. A nonblocking follow-up notes that explicit selected
@@ -19830,56 +19830,56 @@ milestones to hardcode combined source strings.
 
 Goal:
 
-When an M129 `emit_return(...)` directive payload contains an exact M132
+When an M129 `complete(...)` directive payload contains an exact M132
 primitive-call island:
 
 ```text
-emit_return(call<primitive=add>(left, right));
+complete(call<primitive=add>(left, right));
 ```
 
-the `emit_return` directive should retain the original opaque payload text for
+the `complete` directive should retain the original opaque payload text for
 diagnostics and also expose a payload-token stream containing the already
 recognized primitive-call token. Lowering may then compose existing boundaries:
-`emit_return` supplies the return context, and the payload token lowers only if
+`complete` supplies the return context, and the payload token lowers only if
 it is already accepted by the M133 exact self-contained add-call boundary.
 
 This is not a milestone for matching the combined source string
-`emit_return(call<primitive=add>(left, right));`. It is a milestone for making
+`complete(call<primitive=add>(left, right));`. It is a milestone for making
 directive payloads capable of carrying raw text plus lowerable islands in the
 same spirit as `ImplementationBody.tokens`.
 
 Scope:
 
-- Consume the existing M129 `emit_return` directive representation and M132
+- Consume the existing M129 `complete` directive representation and M132
   primitive-call island classifier; do not change parser syntax, source
   envelope intake, or standalone M132 call-token behavior except for defects
   found by tests.
 - Introduce the smallest durable payload-token representation needed for
   lowerable directive payloads. The first accepted producer is
-  `emit_return(...)`; other directive payloads such as `var`, `let`, `loop`,
+  `complete(...)`; other directive payloads such as `var`, `let`, `loop`,
   `if`, and `switch` remain opaque unless explicitly selected later.
 - Preserve the original opaque payload text for diagnostics while exposing
   ordered payload tokens for exact lowerable islands. Raw prefix/suffix payload
   text remains raw payload-token data.
 - Classify only exact `call<primitive=...>(...)` islands inside the
-  `emit_return` payload using the M132 call-envelope rules. Selector and
+  `complete` payload using the M132 call-envelope rules. Selector and
   payload text inside the call remain opaque.
-- Lower an `emit_return` directive only when its payload-token stream contains
+- Lower a `complete` directive only when its payload-token stream contains
   exactly one payload token that can already lower through the M133 exact
   `call<primitive=add>(left, right)` boundary for the accepted scalar add
   shape.
 - Emit `TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL` at the call token source when an
-  `emit_return` payload contains a recognized primitive-call token that cannot
+  `complete` payload contains a recognized primitive-call token that cannot
   lower through the M133 boundary.
 - Preserve `TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION` for raw-only,
   raw-plus-call, malformed nearby call-like, helper/operator/identifier, and
-  other unsupported `emit_return` payloads.
+  other unsupported `complete` payloads.
 - Add tests for payload-token representation of
-  `emit_return(call<primitive=add>(left, right));`, exact artifact parity with
+  `complete(call<primitive=add>(left, right));`, exact artifact parity with
   `body add(left, right)` and M133 self-contained
   `call<primitive=add>(left, right)`, unsupported primitive-call diagnostics
-  for `emit_return(call<primitive=sub>(left, right));` and
-  `emit_return(call<primitive=@self[...]>(...));`, direct selected M133 `@self`
+  for `complete(call<primitive=sub>(left, right));` and
+  `complete(call<primitive=@self[...]>(...));`, direct selected M133 `@self`
   primitive-call diagnostic coverage, raw-plus-call payload diagnostics,
   malformed/nearby emit-return payloads preserving existing diagnostics, and
   existing M126-M133 artifact-byte stability.
@@ -19887,7 +19887,7 @@ Scope:
 Out of scope:
 
 General directive-payload segmentation; recursive payload parsing; broad
-`emit_return` expression lowering; general primitive resolution; dependency
+`complete` expression lowering; general primitive resolution; dependency
 closure; `@self` interpretation; type-argument parsing; call argument
 splitting; expression parsing; helper/operator lowering; assignment lowering;
 array access lowering; generation/backend query evaluation; new backend call
@@ -19898,9 +19898,9 @@ category/request/result/worklist families.
 
 Expected outputs:
 
-- `emit_return(...)` can retain opaque payload text and expose ordered payload
+- `complete(...)` can retain opaque payload text and expose ordered payload
   tokens for exact lowerable islands, first for M132 primitive-call islands.
-- A selected `emit_return(...)` body whose payload-token stream consists only
+- A selected `complete(...)` body whose payload-token stream consists only
   of the M133 exact `call<primitive=add>(left, right)` token lowers through the
   same typed operation path as `body add(left, right)` and M133's exact
   self-contained add call.
@@ -19914,7 +19914,7 @@ Expected outputs:
   bytes remain stable except for the deliberately added directive payload-token
   boundary, exact composed add-call return lowering, and narrowed diagnostics
   for recognized unsupported primitive-call payload tokens.
-- No general `emit_return` expression parser, recursive directive-payload
+- No general `complete` expression parser, recursive directive-payload
   parser, primitive dependency closure, or backend call rendering is
   introduced.
 
@@ -19923,11 +19923,11 @@ Execution notes:
 - `LowerableDirective` now preserves the existing opaque `arguments` tuple and
   adds `payload_tokens` for source-owned directive payload tokens.
 - Catalog promotion currently populates payload tokens only for
-  `emit_return(...)` directives from parser-recognized quoted TSIL payloads.
+  `complete(...)` directives from parser-recognized quoted TSIL payloads.
   Other directive payloads remain opaque.
 - M134 reuses the M132 primitive-call island classifier over the
-  `emit_return` payload text. Selector and call payload strings remain opaque.
-- Lowering composes with M133 only when the selected `emit_return` payload
+  `complete` payload text. Selector and call payload strings remain opaque.
+- Lowering composes with M133 only when the selected `complete` payload
   stream contains exactly one exact add-call token. It does not match the
   combined source string directly.
 - Unsupported recognized primitive-call payload tokens produce
@@ -19962,7 +19962,7 @@ Validation result:
 Status:
 
 Accepted. This superseded the previously planned raw
-`emit_return(<selected-parameter>)` idea, because resolving raw payload
+`complete(<selected-parameter>)` idea, because resolving raw payload
 identifiers would push the generator back toward target-language expression
 interpretation. M135 instead strengthens the representation of the explicit
 TSIL `call<primitive=...>` keyword.
@@ -20004,7 +20004,7 @@ Scope:
 - Preserve the existing opaque call argument payload exactly. Do not split
   arguments, parse nested calls, parse expressions, or evaluate attributes.
 - Populate the structured selector for both standalone M132 call tokens and
-  M134 `emit_return(...)` payload call tokens.
+  M134 `complete(...)` payload call tokens.
 - Preserve M133/M134 exact add-call lowering behavior. If the existing exact
   add lowering consumes the old opaque selector arguments, adapt it to use or
   coexist with the typed selector without broadening semantics.
@@ -20015,14 +20015,14 @@ Scope:
   named primitive references, named references with specialization brackets,
   named references with `attrs[...]`, named references with both
   specialization and attrs, and the same representation inside an
-  `emit_return(call<primitive=...>(...));` payload token.
+  `complete(call<primitive=...>(...));` payload token.
 - Add negative tests for malformed selector brackets or malformed
   `attrs[...]` forms proving they remain unsupported/malformed boundaries
   rather than source repair.
 
 Out of scope:
 
-Raw `emit_return(left)` or `emit_return(result)` name resolution; primitive
+Raw `complete(left)` or `complete(result)` name resolution; primitive
 dependency closure; resolving named primitive references against the catalog;
 expanding `@self`; interpreting specialization payloads; interpreting
 `attrs[...]`; splitting call arguments; recursive primitive-call trees;
@@ -20065,7 +20065,7 @@ Execution notes:
   references and preserves optional specialization and `attrs[...]` payloads
   as opaque source text. The call argument payload remains opaque.
 - Structured selector values are populated for standalone M132 call tokens and
-  for M134 `emit_return(...)` payload call tokens.
+  for M134 `complete(...)` payload call tokens.
 - M133/M134 exact `call<primitive=add>(left, right)` lowering now uses or
   coexists with the structured selector while preserving the accepted exact
   add-call boundary.
@@ -20113,7 +20113,7 @@ Scope:
   brackets so nested TSIL calls or helper forms are not split internally.
 - Represent zero-argument calls as an empty argument tuple.
 - Populate argument lists for standalone M132 call tokens and M134
-  `emit_return(...)` payload call tokens.
+  `complete(...)` payload call tokens.
 - Preserve M133/M134 exact add-call lowering and adapt its exact check to use
   or coexist with the structured argument list without broadening semantics.
 - Add focused tests for zero arguments, two raw parameter-like arguments,
@@ -20159,7 +20159,7 @@ Execution notes:
   primitive-call payloads and respects nested parentheses and square brackets.
 - Zero-argument calls produce an empty argument tuple.
 - Argument lists are populated for standalone M132 call tokens and for M134
-  `emit_return(...)` payload call tokens.
+  `complete(...)` payload call tokens.
 - M133/M134 exact `call<primitive=add>(left, right)` lowering now checks both
   the exact opaque payload and exact structured argument texts, preserving the
   strict exact boundary.
@@ -20207,11 +20207,11 @@ Scope:
 - Keep the diagnostic code `TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL` unless a
   focused test demonstrates a need for a narrower code.
 - Report structured context for standalone call tokens and for M134
-  `emit_return(...)` payload call tokens.
+  `complete(...)` payload call tokens.
 - Add focused tests for named primitive calls, `@self`, specialization,
   `attrs[...]`, zero arguments, nested raw arguments, and exact source
   locations.
-- Add tests proving raw `emit_return(left)`, malformed call selectors,
+- Add tests proving raw `complete(left)`, malformed call selectors,
   malformed call arguments, and raw-plus-call payloads preserve existing
   diagnostics.
 
@@ -20253,13 +20253,13 @@ Execution notes:
   texts, the opaque original payload, and the explicit missing capability:
   primitive-call dependency resolution is not implemented yet.
 - The same context is used for standalone primitive-call body tokens and for
-  `emit_return(...)` payload primitive-call tokens.
+  `complete(...)` payload primitive-call tokens.
 - Hand-constructed directive values that lack structured `PrimitiveCall` data
   keep the legacy opaque selector/payload fallback context, now with the same
   missing-capability statement.
 - M133/M134 exact `call<primitive=add>(left, right)` lowering and generated
   artifact bytes remain stable.
-- Raw `emit_return(left)`, raw-plus-call payloads, malformed call selectors,
+- Raw `complete(left)`, raw-plus-call payloads, malformed call selectors,
   malformed call arguments, non-call raw bodies, and non-call directives remain
   at their existing diagnostic boundaries.
 - Architecture, boundary, and validation audits returned `Accept`.
@@ -20330,9 +20330,9 @@ Scope:
   targets with `attrs[...]`, known named targets with both specialization and
   `attrs[...]`, unknown named base targets with specialization and/or attrs,
   `@self` with specialization and/or attrs, zero-argument calls, nested raw
-  argument payloads, `emit_return(...)` payload calls, source locations, and
+  argument payloads, `complete(...)` payload calls, source locations, and
   exact add-call artifact stability.
-- Preserve raw `emit_return(...)`, malformed call selectors, malformed call
+- Preserve raw `complete(...)`, malformed call selectors, malformed call
   arguments, raw-plus-call payloads, non-call raw bodies, and non-call
   directives as diagnostic boundaries.
 - Resolve the M137 documentation follow-up by updating the older
@@ -21407,7 +21407,7 @@ Scope:
   `PrimitiveCall` objects.
 - Keep inventory ordering deterministic by source/body-token order.
 - Add focused tests for one standalone primitive-call token, one
-  `emit_return(...)` payload primitive-call token, multiple calls in source
+  `complete(...)` payload primitive-call token, multiple calls in source
   order, and mixed success/diagnostic cases.
 
 Out of scope:
@@ -21613,16 +21613,16 @@ Status:
 Accepted. M150 lowered an already recognized `PrimitiveCall` token into a
 reusable typed primitive-call expression value, then proved that expression
 through the first exact selected body consumer:
-`emit_return(call<primitive=...>(...));`.
+`complete(call<primitive=...>(...));`.
 
 Goal:
 
 Produce one reusable typed primitive-call expression value and consume it only
 through the exact return form:
 
-- accept only a selected implementation body with exactly one `emit_return`
+- accept only a selected implementation body with exactly one `complete`
   directive token;
-- accept only an `emit_return` payload token stream containing exactly one
+- accept only a `complete` payload token stream containing exactly one
   recognized `PrimitiveCall` token;
 - preserve the accepted `PrimitiveCallReference`, including target match, raw
   source arguments, bindings, and source provenance;
@@ -21635,11 +21635,11 @@ Scope:
   duplicate selector parsing, target matching, argument binding, or inventory
   walking.
 - Keep primitive-call expression lowering reusable; do not implement separate
-  per-context call lowering for `emit_return`, `var`, `let`, assignments,
+  per-context call lowering for `complete`, `var`, `let`, assignments,
   loops, or conditions.
 - Preserve raw argument text as source truth; do not parse, validate,
   normalize, or repair argument expressions.
-- Keep standalone `call<...>(...)` bodies, raw `emit_return(left)`, mixed
+- Keep standalone `call<...>(...)` bodies, raw `complete(left)`, mixed
   raw-plus-call payloads, malformed calls, multi-token payloads, and primitive
   calls embedded in unselected surrounding contexts as explicit unsupported
   diagnostics.
@@ -21647,12 +21647,12 @@ Scope:
 Out of scope:
 
 Standalone primitive-call statement semantics; primitive-call consumers other
-than the exact `emit_return(...)` form selected above; dependency scheduling;
+than the exact `complete(...)` form selected above; dependency scheduling;
 topological sorting for rendering; backend call rendering; backend type
 rendering; resolving call arguments into backend expressions; recursively
 lowering nested calls inside arguments; parsing raw argument expressions;
 array/index/operator/helper/cast semantics; lowering arbitrary
-`emit_return(...)` expressions; lowering var/let/loop/if payload semantics;
+`complete(...)` expressions; lowering var/let/loop/if payload semantics;
 source repair; runtime `tsldata`, `frozen`, or `tslgenold` dependencies;
 public dependency graphs, schedulers, registries, dispatchers, fixpoint
 mechanisms, or broad worklist machinery.
@@ -21906,7 +21906,7 @@ Scope:
 
 - Update docs and tests to reflect the raw-helper boundary.
 - Add regression coverage, if not already present, proving
-  `emit_return(details::arith_mul(...));` remains an opaque/unsupported return
+  `complete(details::arith_mul(...));` remains an opaque/unsupported return
   expression at lowering rather than being lowered as a semantic operation.
 - Preserve raw source locations, raw payload text, deterministic token order,
   and existing diagnostics.
@@ -21946,7 +21946,7 @@ Validation:
 ```bash
 git diff --check
 python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py
-python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py -k "emit_return or unsupported_return or m129 or m153"
+python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py -k "complete or unsupported_return or m129 or m153"
 find tslgen -type d -name __pycache__ -print
 ```
 
@@ -21954,7 +21954,7 @@ Accepted result:
 
 - Added regression coverage proving `details::arith_add`,
   `details::arith_mul`, and `details::arith_rem` remain opaque unsupported
-  `emit_return(...)` payloads and do not produce artifacts.
+  `complete(...)` payloads and do not produce artifacts.
 - Updated behavioral, domain, design-decision, TSIL surface, missing-lowering,
   roadmap, and prompt docs to preserve `details::*` support helpers as raw
   backend/language helper calls by default.
@@ -21981,7 +21981,7 @@ Accepted validation result:
 - `git diff --check`: exit 0, no output.
 - `python -B -m compileall -q tslgen/src/tslgen tslgen/tests/test_m107_tiny_pipeline.py`:
   exit 0, no output.
-- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py -k "emit_return or unsupported_return or m129 or m153"`:
+- `python -B -m pytest -p no:cacheprovider tslgen/tests/test_m107_tiny_pipeline.py -k "complete or unsupported_return or m129 or m153"`:
   exit 0, `15 passed, 190 deselected in 1.37s`.
 - Initial post-validation `find tslgen -type d -name __pycache__ -print`
   listed validation-created cache directories; after removing them, the final
@@ -22307,7 +22307,7 @@ Scope:
   `ImplementationBody` from the selected branch tokens only.
 - Lower that selected branch body through the existing `Lowerer.lower(...)`
   body capabilities: accepted synthetic operation fragments and accepted exact
-  `emit_return(call<primitive=add>(left, right))` / primitive-call paths.
+  `complete(call<primitive=add>(left, right))` / primitive-call paths.
 - Preserve unselected branch body opacity: unsupported calls, malformed
   directives, raw helpers, or other unsupported forms in the unselected branch
   must not be diagnosed.
@@ -22777,7 +22777,7 @@ Scope:
 Out of scope:
 
 Loop execution or unrolling; loop-variable substitution; declaration
-semantics; non-type `let<...>` lowering; `var<...>` lowering; `emit_return`
+semantics; non-type `let<...>` lowering; `var<...>` lowering; `complete`
 name/reference lowering; assignment, array-access, cast, memory, I/O,
 intrinsic, primitive-call, backend-control, or backend rendering;
 target-language `for` rendering; source repair; dependency scheduling; output
@@ -22809,7 +22809,7 @@ Accepted result:
 - Added deterministic no-region, unsupported selector, propagated loop-bound,
   malformed embedded-region, and opacity/determinism coverage.
 - Added no loop execution or unrolling, loop-variable substitution,
-  declaration lowering, `emit_return(result)` lowering, assignment/array/call/
+  declaration lowering, `complete(result)` lowering, assignment/array/call/
   cast/intrinsic/backend-control parsing, backend rendering, source repair,
   runtime `tsldata`, `frozen`, or `tslgenold` dependency, registry,
   dispatcher, worklist, or fixpoint machinery.
@@ -22859,7 +22859,7 @@ Scope:
 - Inventory the currently duplicated delimiter/top-level splitting helpers in
   accepted TSIL keyword/classifier code, including directive-envelope
   classification, primitive-call island classification, primitive-call
-  selector payload boundaries, `emit_return(...)` payload-token
+  selector payload boundaries, `complete(...)` payload-token
   classification, generation-control/loop-region boundaries,
   generation-value arithmetic/function argument splitting, and
   type-syntax/type-query/value-query call boundaries where the same lexical
@@ -23167,7 +23167,7 @@ Scope:
   across all `tsldata/**/*.tsl` files before implementation.
 - Recognize exact balanced intrinsic islands in source-owned text and body
   token streams without depending on whether the island appears inside
-  `emit_return`, `var`, assignments, branches, loops, primitive-call
+  `complete`, `var`, assignments, branches, loops, primitive-call
   arguments, casts, or other surroundings.
 - Preserve intrinsic head/modifier text and argument text as opaque
   backend-owned text. Nested `value<backend>(...)`,
@@ -23258,7 +23258,7 @@ Scope:
   forms across all `tsldata/**/*.tsl` files before implementation.
 - Recognize exact balanced islands in source-owned text and contiguous raw
   body-token streams without depending on whether the island appears inside
-  `emit_return`, `var`, assignment, branch, loop, primitive-call argument,
+  `complete`, `var`, assignment, branch, loop, primitive-call argument,
   intrinsic argument, backend-control payload, or raw target-language text.
 - Preserve keyword kind, opaque angle payload text, opaque argument text,
   complete source island text, and source locations.
@@ -25356,7 +25356,7 @@ M184 created the focused audit artifact
 The audit classified the accepted-through-M183 lowering surface against the
 current `tsldata/**/*.tsl` corpus. Most high-frequency TSIL families are
 accepted enough for current lowering as discovery, handoff, or
-selected-context semantic facts: `tsil` envelopes, `emit_return(...)` for
+selected-context semantic facts: `tsil` envelopes, `complete(...)` for
 accepted exact forms, `call<primitive=...>(...)`, `let<type>(...)`,
 `var<...>(...)`, `loop<...>(...)`, generation control, `type<generation>`,
 `type<backend>`, `value<generation>`, `value<backend>`, intrinsic islands,
@@ -25539,7 +25539,7 @@ Completion matrix:
 | Family or candidate | Completion classification | Next action |
 | --- | --- | --- |
 | `tsil` envelopes, source-owned body tokens, and raw surrounding text | accepted source/body intake, with raw text preserved by default | No new lowering slice. Backend/output integration must consume accepted tokens without source repair. |
-| `emit_return(...)` and primitive calls | accepted enough for current exact lowering and dependency boundaries | Rendering and recursive token-stream use remain backend/output-owned. |
+| `complete(...)` and primitive calls | accepted enough for current exact lowering and dependency boundaries | Rendering and recursive token-stream use remain backend/output-owned. |
 | `type<generation>(...)`, `let<type>(...)`, selected aliases, extension/type facts, and vector member facts | accepted typed semantic lowering for current selected-context needs | No M186 action. |
 | `value<generation>(...)` families, integer comparisons, explicit `arith<generation>::...`, `generic::*`, and mask lane constants | accepted typed semantic values or typed backend/support-helper requests | No M186 action. |
 | `if<generation>(value<generation>(...))`, `else if<generation>`, and `else<generation>` branch-chain shapes | accepted exact branch selection over accepted condition values | Recursive branch lowering, plain `else`, and body rendering remain deferred. |
@@ -28463,7 +28463,7 @@ Scope:
 
 Out of scope:
 
-New lowering; raw TSIL rescans; parsing `return`, `emit_return(...)`,
+New lowering; raw TSIL rescans; parsing `return`, `complete(...)`,
 assignments, array access, loops, braces, semicolons, operators, or surrounding
 C++ syntax; a special return-statement renderer or assignment renderer;
 primitive body tokenization beyond consuming the accepted intrinsic handoff
@@ -28494,7 +28494,7 @@ missing, extra, duplicate, backend-mismatched, and opaque non-renderable token
 segments.
 
 M215 deliberately does not reopen lowering, rescan raw TSIL, invent
-return-statement or assignment syntax, parse `emit_return(...)`, parse
+return-statement or assignment syntax, parse `complete(...)`, parse
 surrounding C++ syntax, parse intrinsic arguments, render Rust, render C++
 non-type template signatures, render whole primitive bodies, or write
 generated projects. Matching uses the in-memory typed request object preserved
@@ -28947,7 +28947,7 @@ Scope:
 
 Out of scope:
 
-New lowering; raw TSIL rescans; parsing `return`, `emit_return(...)`,
+New lowering; raw TSIL rescans; parsing `return`, `complete(...)`,
 assignments, array access, loops, braces, semicolons, operators, or
 surrounding Rust/C++ syntax; a broad replacement registry/dispatcher/worklist;
 non-intrinsic type/value/source-operation token substitution; Rust
@@ -29049,7 +29049,7 @@ Scope:
 
 Out of scope:
 
-New lowering; raw TSIL rescans; parsing `return`, `emit_return(...)`,
+New lowering; raw TSIL rescans; parsing `return`, `complete(...)`,
 assignments, array access, loops, braces, semicolons, operators, or
 surrounding Rust/C++ syntax; source-operation substitution; control directive,
 loop, primitive-call, signature, intrinsic, or general body-token
@@ -29580,7 +29580,7 @@ Preflight result:
 The preflight found a real observed candidate but stopped before
 implementation. `tsldata/primitives/arithmetic/fundamental.tsl` contains
 `prim<v:=(v,v)> add(left, right)` and an `avx2` body with
-`emit_return(intrin_compose<add, suffix=...>(left, right));`, with `sub` as a
+`complete(intrin_compose<add, suffix=...>(left, right));`, with `sub` as a
 similar fallback candidate. This is enough evidence for a future real x86
 fixture.
 
@@ -29846,7 +29846,7 @@ Scope:
   and module ownership.
 - Keep TSIL payloads raw until a focused shared lexical body-token boundary
   extracts accepted lowerable token islands. For M228, that boundary only needs
-  enough coverage to expose the selected multiline `emit_return(PAYLOAD);`
+  enough coverage to expose the selected multiline `complete(PAYLOAD);`
   region and nested `intrin_compose<...>(...)` island, but it should be
   reusable by later keyword lowerers for balanced multiline keyword regions.
 - Add only the exact catalog/lowering/render bridge support required for the
@@ -29970,7 +29970,7 @@ it shows that the outer syntax can be represented compactly without adding
 more regular-expression ladders to the already large clean parser. The next
 implementation must produce typed parser/catalog-boundary dataclasses with
 source spans and preserve TSIL payloads as raw body envelopes. It must not
-parse `emit_return`, `intrin_compose`, expressions, control keywords, or
+parse `complete`, `intrin_compose`, expressions, control keywords, or
 backend semantics.
 
 The shared TSIL body-region layer remains the immediate follow-up after the
@@ -30031,7 +30031,7 @@ Scope:
 
 Out of scope:
 
-TSIL body-token lowering; `emit_return` or `intrin_compose` parsing; keyword
+TSIL body-token lowering; `complete` or `intrin_compose` parsing; keyword
 semantics; expression parsing; wildcard selection expansion; catalog selection;
 dependency closure; backend translation; primitive rendering; generated
 project writing; build verification; fixture resumption; source repair;
@@ -30078,7 +30078,7 @@ inside multiline metadata strings is not misclassified as real top-level TSL.
 Implementation TSIL payloads remain raw source envelopes. The parser captures
 quote form, envelope span, payload span, and raw inner `payload_text`; escaped
 inline TSIL such as `infix_sep=\"\"` is preserved as raw source text in the
-body envelope. M229 does not parse or lower `emit_return`,
+body envelope. M229 does not parse or lower `complete`,
 `intrin_compose`, calls, expressions, control keywords, source operations,
 backend semantics, implementation selection, rendering, or generated projects.
 
@@ -30137,7 +30137,7 @@ Scope:
 
 Out of scope:
 
-TSIL semantic lowering; `emit_return` semantics; intrinsic composition
+TSIL semantic lowering; `complete` semantics; intrinsic composition
 translation; primitive-call resolution; branch evaluation; loop lowering;
 expression parsing; operator semantics; backend translation; rendering;
 fixture resumption; outer TSL declaration parsing changes; growing
@@ -30164,7 +30164,7 @@ angle/selector spans, optional parenthesized payload spans, optional braced
 body spans, source order, and diagnostics.
 
 The scanner recognizes configured keyword heads only as lexical region
-shapes: `emit_return(...)`, `intrin_compose<...>(...)`, `call<...>(...)`,
+shapes: `complete(...)`, `intrin_compose<...>(...)`, `call<...>(...)`,
 `if<generation>(...) { ... }`, `else<generation> { ... }`,
 `loop<range>(...) { ... }`, and `switch<compile>(...) { ... }`. It does not
 assign TSIL semantics, evaluate conditions, resolve primitive calls, lower
@@ -30228,7 +30228,7 @@ Selected. Execution-review loop prompt:
 
 Goal:
 
-Lower only the symbolic `emit_return` keyword identity produced by the M230
+Lower only the symbolic `complete` keyword identity produced by the M230
 lexical region descriptor into a typed return directive/fact with a
 source-mapped raw payload span for later payload-specific lowerers.
 
@@ -30240,14 +30240,14 @@ Scope:
   keyword identity such as `SourceBodyKeyword.EMIT_RETURN` on the lexical
   descriptor/region. The lowerer must consume that identity instead of
   hardcoding the source spelling again.
-- Produce typed frozen slotted lowering values for accepted `emit_return`
+- Produce typed frozen slotted lowering values for accepted `complete`
   regions, preserving full span, head span, payload span, source order, and
   raw payload text exactly.
-- Preserve surrounding raw segments and non-`emit_return` lexical regions as
+- Preserve surrounding raw segments and non-`complete` lexical regions as
   opaque source-owned items.
 - If the M230 scan has diagnostics, do not lower regions from the malformed
   scan result.
-- Cover inline and multiline real `.tsl` payloads, including `emit_return`
+- Cover inline and multiline real `.tsl` payloads, including `complete`
   whose payload contains nested `intrin_compose<...>(...)`,
   `call<...>(...)`, or raw target-language-looking text.
 
@@ -30289,10 +30289,10 @@ opaque ordered items. Malformed M230 scan results propagate their diagnostics
 and lower no return directives. Unsupported return-region shapes diagnose as
 `TSL-EMIT-RETURN-UNSUPPORTED-REGION` with the return head source location.
 
-Tests cover real `.tsl` payloads for inline scalar `emit_return(left + right)`,
-multiline `emit_return(intrin_compose<...>(...))`,
-`emit_return(call<primitive=...>(...))`, and raw target-language-looking
-`emit_return(*ptr)`. Nested payload text remains raw; M231 does not lower
+Tests cover real `.tsl` payloads for inline scalar `complete(left + right)`,
+multiline `complete(intrin_compose<...>(...))`,
+`complete(call<primitive=...>(...))`, and raw target-language-looking
+`complete(*ptr)`. Nested payload text remains raw; M231 does not lower
 `intrin_compose`, primitive calls, casts, operators, assignments, backend
 semantics, rendering, or generated projects.
 
@@ -30430,9 +30430,9 @@ Scope:
   `SourceBodyKeyword.INTRIN_COMPOSE` fragments that builds existing
   `BackendIntrinsicRequest(intrinsic_kind="intrin_compose", ...)` values from
   preserved M230 selector, payload, full-span, and source spans.
-- Cover `intrin_compose` under multiple parents, including `emit_return`,
+- Cover `intrin_compose` under multiple parents, including `complete`,
   `call`, and a braced control body, to prove the helper is not an
-  `emit_return + intrin_compose` special case.
+  `complete + intrin_compose` special case.
 
 Out of scope:
 
@@ -30494,9 +30494,9 @@ fragment tree before any new keyword-specific semantic consumer milestone is
 selected. The required audit targets include
 `CatalogBuilder._classify_emit_return_payload_tokens`,
 `Lowerer._primitive_call_expression_result_from_exact_emit_return_body`, the
-`emit_return` special branch in
+`complete` special branch in
 `Lowerer._exact_add_primitive_call_fragment_from_body`, and tests that protect
-only `emit_return + call` or `emit_return + intrin_compose` instead of
+only `complete + call` or `complete + intrin_compose` instead of
 context-independent keyword traversal.
 
 ### Milestone 234: Pairwise Lowering Path Cleanup
@@ -30520,10 +30520,10 @@ Scope:
 - Audit and update `CatalogBuilder._classify_emit_return_payload_tokens`.
 - Audit and update
   `Lowerer._primitive_call_expression_result_from_exact_emit_return_body`.
-- Audit and update the `emit_return` special branch in
+- Audit and update the `complete` special branch in
   `Lowerer._exact_add_primitive_call_fragment_from_body`.
-- Audit tests whose only purpose is protecting `emit_return + call` or
-  `emit_return + intrin_compose` as special combinations.
+- Audit tests whose only purpose is protecting `complete + call` or
+  `complete + intrin_compose` as special combinations.
 - Add regression coverage proving M233 recursive fragments are the preferred
   nested-keyword path and no new pairwise parent/child handler names were
   introduced.
@@ -30547,7 +30547,7 @@ find tslgen -type d -name __pycache__ -print
 
 Result:
 
-M234 removed the named old pairwise `emit_return + call` hooks from production
+M234 removed the named old pairwise `complete + call` hooks from production
 code. `CatalogBuilder._classify_emit_return_payload_tokens` was replaced by a
 recursive TSIL payload classification path that rescans direct return payloads
 through M233 source-body fragments. Direct `call` keyword fragments can now be
@@ -30556,18 +30556,18 @@ depending on a surrounding parent keyword.
 
 M234 also removed
 `Lowerer._primitive_call_expression_result_from_exact_emit_return_body` and
-the `emit_return` branch inside
+the `complete` branch inside
 `Lowerer._exact_add_primitive_call_fragment_from_body`. After focused
 regression revision, exact add-call folding is preserved by a generic
 single-token-sequence operation adapter that can consume either selected body
 tokens or direct return-payload tokens. This keeps the accepted exact
-`emit_return(call<primitive=add>(left, right));` C++/Rust artifact path
+`complete(call<primitive=add>(left, right));` C++/Rust artifact path
 working without restoring a pairwise helper.
 
 Tests added:
 
 - recursive `call` fragment extraction under multiple parents;
-- `emit_return` payload tokens built from recursive fragments;
+- `complete` payload tokens built from recursive fragments;
 - catalog-side recursive payload token feeding;
 - exact add-call payload folding to `LoweredBinaryOperationExpression`;
 - absence of named pairwise helper functions/classes in production surfaces.
@@ -30688,7 +30688,7 @@ Follow-ups:
 - Prefer behavior-level drift tests as the primary safety net; the M235
   source-text ownership test is useful but intentionally brittle.
 - Surface malformed primitive-call fragment diagnostics from catalog-side
-  `emit_return` payload token adaptation instead of silently preserving those
+  `complete` payload token adaptation instead of silently preserving those
   malformed payload fragments as raw text.
 
 Accepted validation:
@@ -30709,7 +30709,7 @@ Accepted. Execution-review loop prompt:
 
 Goal:
 
-Propagate diagnostics produced while adapting recursive `emit_return` payload
+Propagate diagnostics produced while adapting recursive `complete` payload
 fragments into catalog construction so malformed exact TSIL keyword fragments
 do not silently degrade into raw payload text. This is a lowering closeout
 cleanup, not a new primitive-call feature.
@@ -30718,14 +30718,14 @@ Scope:
 
 - Replace or extend `payload_tokens_from_fragment_sequence(...)` with a small
   typed result that carries both payload tokens and diagnostics.
-- Update catalog-side recursive `emit_return` payload token feeding to append
+- Update catalog-side recursive `complete` payload token feeding to append
   those diagnostics to catalog diagnostics.
 - Preserve the existing no-source-repair behavior: malformed payload fragments
   should not be normalized, completed, guessed, or semantically interpreted.
 - Keep successful exact `call<primitive=...>(...)` payload feeding behavior and
   the exact add-call artifact regression intact.
 - Add focused diagnostics coverage for malformed `call` fragments inside
-  `emit_return(...)`.
+  `complete(...)`.
 
 Out of scope:
 
@@ -30758,7 +30758,7 @@ diagnostics emitted while adapting known keyword fragments. The existing
 token-only `payload_tokens_from_fragment_sequence(...)` remains as a
 compatibility convenience that delegates to the result-producing helper.
 
-Catalog-side recursive `emit_return` payload token feeding now appends both
+Catalog-side recursive `complete` payload token feeding now appends both
 M233 recursive scan diagnostics and M236 payload adaptation diagnostics to the
 catalog diagnostic accumulator. Malformed known fragments such as
 `call<target=sub>(...)` therefore become visible catalog errors instead of a
@@ -30774,7 +30774,7 @@ repair, or a new primitive-call cleanup path.
 Tests added:
 
 - payload token result values are frozen/slotted dataclasses;
-- malformed `call` fragments inside `emit_return(...)` produce the shared
+- malformed `call` fragments inside `complete(...)` produce the shared
   malformed-fragment diagnostic at helper level;
 - catalog construction surfaces malformed recursive payload diagnostics and
   returns no catalog.
@@ -31391,7 +31391,7 @@ Scope:
 - Classify unsupported islands by TSIL keyword family and exact source shape,
   with source path, line, and column provenance.
 - Prove at least one real nested body, such as
-  `emit_return(intrin_compose<...>(...));`, lowers through recursion rather
+  `complete(intrin_compose<...>(...));`, lowers through recursion rather
   than a pairwise keyword-combination special case.
 - Produce deterministic corpus characterization counts for primitive files,
   implementation bodies, observed keyword families, supported lowered
@@ -31448,7 +31448,7 @@ corpus gate now covers:
 
 The observed family characterization has no diagnostics, no unsupported
 generation-relevant families, and `validated_families` exactly matching
-`observed_families`. Recursive full-count proof covers `emit_return`,
+`observed_families`. Recursive full-count proof covers `complete`,
 `call<primitive>`, `if<generation>`, `else<generation>`, `loop<range>`,
 `switch<compile>`, and `intrin_compose`. The remaining handoff/source-island
 families are validated through their accepted representative discovery or
@@ -31495,7 +31495,7 @@ Goal:
 
 Render a backend-verified C++ and Rust generated project from a real
 `tsldata` scalar primitive implementation body whose accepted lowered body is
-an exact single `emit_return(PAYLOAD);` region, using the already accepted
+an exact single `complete(PAYLOAD);` region, using the already accepted
 template-backed function/profile/project stack rather than inventing a new
 scalar renderer or hardcoding C++/Rust function text in Python.
 
@@ -31505,7 +31505,7 @@ Scope:
   selected primitive data, not the old tiny source parser or synthetic
   `body add(left, right)` fixture as the evidence source.
 - Select a safe real scalar `v:=(v,v)` implementation subset whose body is an
-  exact single `emit_return(PAYLOAD);` and whose payload contains raw
+  exact single `complete(PAYLOAD);` and whose payload contains raw
   target-language-compatible expression text plus already accepted lowerable
   islands only if they can be rendered by existing backend token renderers.
 - Start with the real scalar `add` / `si32` slice from
@@ -31557,7 +31557,7 @@ The accepted positive path consumes real
 `OuterTslParser`, selects the unmasked `add` primitive with signature
 `v:=(v,v)`, parameters `left`/`right`, selector path `("scalar", "arith")`,
 and concrete type tag `si32`, then requires the selected body to be an exact
-single `emit_return(PAYLOAD);` envelope. The accepted payload is raw
+single `complete(PAYLOAD);` envelope. The accepted payload is raw
 `left + right` text. The bridge does not parse `+`, lower operator semantics,
 or depend on the old tiny `body add(left, right)` fixture.
 
@@ -31618,7 +31618,7 @@ Accepted. Execution-review loop prompt:
 Goal:
 
 Broaden the accepted M243 bridge from one real scalar `add` / `si32` function
-to an explicit deterministic matrix of real scalar single-`emit_return`
+to an explicit deterministic matrix of real scalar single-`complete`
 functions in one generated C++ and Rust scalar project.
 
 Scope:
@@ -31739,14 +31739,14 @@ Consolidate the M243/M244 real-corpus scalar bridge into a generically named
 real selected primitive project pipeline before further backend feature work
 uses it. The accepted behavior stays the same, but production module/API names
 must describe the durable generator boundary rather than the selected
-`scalar`/`emit_return` fixture, following ADR-068.
+`scalar`/`complete` fixture, following ADR-068.
 
 Scope:
 
 - Replace `tslgen/src/tslgen/pipeline/real_scalar_pipeline.py` with a generic
   real selected primitive project bridge module, for example
   `primitive_project_pipeline.py`.
-- Rename public models/functions so `scalar`, `emit_return`, and `matrix` are
+- Rename public models/functions so `scalar`, `complete`, and `matrix` are
   selected-entry/body-boundary facts rather than the pipeline identity.
 - Preserve M243/M244 behavior, diagnostics, deterministic artifact output,
   generated C++/Rust scalar build verification, and public regression coverage.
@@ -31794,7 +31794,7 @@ The accepted M243/M244 behavior is preserved by passing explicit selected
 entry values into the generic bridge. Source-data facts such as `scalar`,
 `add`, `sub`, concrete type tags, selected function names, selector paths, and
 parameter names live in selected-entry test data rather than module/class/API
-ownership. The existing exact single-`emit_return(PAYLOAD);` body boundary,
+ownership. The existing exact single-`complete(PAYLOAD);` body boundary,
 diagnostics, deterministic artifact output, manifest-clean writing, and C++
 and Rust build verification are unchanged.
 
@@ -32012,7 +32012,7 @@ Out of scope:
 
 Real vector/intrinsic generated-project rendering; primitive selection;
 dependency closure; new lowering semantics; pairwise
-`emit_return + intrin_compose` handling; mask/generic/SVE dependency-call
+`complete + intrin_compose` handling; mask/generic/SVE dependency-call
 rendering; target-language parsing; backend intrinsic name hardcoding; moving
 intrinsic-name decisions into templates; extending
 `generated_primitive_pipeline.py`; fixture-shaped pipelines; runtime
@@ -32089,7 +32089,7 @@ M247 is selected to propagate selected implementation render context into
 body-token rendering. M246's typed default compose policy is the acceptance
 test proving that selected backend/extension/type/catalog context reaches
 intrinsic assembly, but the milestone is not another specialized
-`intrin_compose` slice. It must not create pairwise `emit_return +
+`intrin_compose` slice. It must not create pairwise `complete +
 intrin_compose` special cases, add new lowering, extend fixture-shaped
 pipelines, or move intrinsic naming decisions into templates. After M247, the
 next milestone should move toward the generic selected primitive project
@@ -32140,7 +32140,7 @@ Full generated-project integration through `primitive_project_pipeline.py`
 beyond minimal call-site/context plumbing if an existing call-site already
 needs it; vector/register type spelling in function signatures; build
 verification of real AVX/NEON generated projects; primitive selection;
-dependency closure; new lowering; pairwise `emit_return + intrin_compose`
+dependency closure; new lowering; pairwise `complete + intrin_compose`
 handling; target-language expression parsing; moving intrinsic naming
 decisions into templates; extending `generated_primitive_pipeline.py`; runtime
 dependencies on `frozen` or `tslgenold`.

@@ -26,14 +26,14 @@ from tslc.lower.region_handlers.operators import OpLowerer
 from tslc.lower.region_handlers.protocol import RegionLowerer, RenderBody, StatementFinalizer
 from tslc.lower.region_handlers.queries import QueryRegionLowerer
 from tslc.lower.region_handlers.registry import DEFAULT_REGION_LOWERERS
-from tslc.lower.region_handlers.returns import EmitReturnLowerer
+from tslc.lower.region_handlers.returns import CompleteLowerer
 
 __all__ = [
     "AssumeAlignedLowerer",
     "CallLowerer",
     "CastLowerer",
     "DEFAULT_REGION_LOWERERS",
-    "EmitReturnLowerer",
+    "CompleteLowerer",
     "IfLowerer",
     "IntrinsicSelector",
     "IntrinLowerer",

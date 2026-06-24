@@ -36,7 +36,7 @@ prim<s[]:=v> to_array(a):
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
-               emit_return(tmp) ;
+               complete(tmp) ;
             """
       f?:
         requires [avx512f]
@@ -44,7 +44,7 @@ prim<s[]:=v> to_array(a):
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
-               emit_return(tmp) ;
+               complete(tmp) ;
             """
     avx2:
       ?i?:
@@ -53,7 +53,7 @@ prim<s[]:=v> to_array(a):
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
-               emit_return(tmp) ;
+               complete(tmp) ;
             """
       f?:
         requires [avx]
@@ -61,7 +61,7 @@ prim<s[]:=v> to_array(a):
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
-               emit_return(tmp) ;
+               complete(tmp) ;
             """
     sse:
       ?i?:
@@ -70,7 +70,7 @@ prim<s[]:=v> to_array(a):
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
-               emit_return(tmp) ;
+               complete(tmp) ;
             """
       f?:
         requires {f32 [sse], f64 [sse, sse2]}
@@ -78,7 +78,7 @@ prim<s[]:=v> to_array(a):
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
-               emit_return(tmp) ;
+               complete(tmp) ;
             """
     neon:
       ?i?:
@@ -87,7 +87,7 @@ prim<s[]:=v> to_array(a):
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
-               emit_return(tmp) ;
+               complete(tmp) ;
             """
       f?:
         requires [neon]
@@ -95,7 +95,7 @@ prim<s[]:=v> to_array(a):
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
               call<primitive=store>(tmp.data(), a);
-               emit_return(tmp) ;
+               complete(tmp) ;
             """
     sve:
       arith:
@@ -108,7 +108,7 @@ prim<s[]:=v> to_array(a):
               else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 4) { pg = intrin<svptrue_b32>(); }
               else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 8) { pg = intrin<svptrue_b64>(); }
               intrin<svst1>(pg, tmp.data(), a);
-               emit_return(tmp) ;
+               complete(tmp) ;
             """
     [generic, oneAPIfpga]:
       arith:
@@ -116,7 +116,7 @@ prim<s[]:=v> to_array(a):
           generic []
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
-          tsil "emit_return(a);"
+          tsil "complete(a);"
     scalar:
       ?i?:
         requires []
@@ -124,7 +124,7 @@ prim<s[]:=v> to_array(a):
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, temp, value<backend>(uninit::array));
               temp.fill(a);
-               emit_return(temp) ;
+               complete(temp) ;
             """
       f?:
         requires []
@@ -132,7 +132,7 @@ prim<s[]:=v> to_array(a):
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, temp, value<backend>(uninit::array));
               temp.fill(a);
-               emit_return(temp) ;
+               complete(temp) ;
             """
 prim<v:=s[]> from_array(data):
   brief_description "Loads SIMD register from array."
@@ -145,19 +145,19 @@ prim<v:=s[]> from_array(data):
       arith:
         requires []
         implementation:
-          tsil "emit_return(data[0]);"
+          tsil "complete(data[0]);"
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
-          tsil "emit_return(call<primitive=load[Vec], attrs[aligned=false]>(data.data()));"
+          tsil "complete(call<primitive=load[Vec], attrs[aligned=false]>(data.data()));"
     sve:
       arith:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin<svld1>(call<primitive=mask_true[Vec]>(), data.data()));"
+          tsil "complete(intrin<svld1>(call<primitive=mask_true[Vec]>(), data.data()));"
     [sse, avx2, avx512, neon]:
       arith:
         requires:
@@ -166,7 +166,7 @@ prim<v:=s[]> from_array(data):
           avx512 [avx512f]
           neon [neon]
         implementation:
-          tsil "emit_return(call<primitive=load[Vec], attrs[aligned=false]>(data.data()));"
+          tsil "complete(call<primitive=load[Vec], attrs[aligned=false]>(data.data()));"
 prim<s:=v[idx]> extract_value(a):
   brief_description "Extracts a value at a given index."
   operation ""
@@ -200,7 +200,7 @@ prim<s:=v[idx]> extract_value(a):
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
-               emit_return(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
+               complete(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
             """
     avx2:
       arith:
@@ -208,7 +208,7 @@ prim<s:=v[idx]> extract_value(a):
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
-               emit_return(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
+               complete(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
             """
     sse:
       arith:
@@ -216,20 +216,20 @@ prim<s:=v[idx]> extract_value(a):
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
-               emit_return(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
+               complete(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
             """
     neon:
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin<vgetq_lane, build[suffix=base::in, immediate(1)=Index]>(a, Index));"
+          tsil "complete(intrin<vgetq_lane, build[suffix=base::in, immediate(1)=Index]>(a, Index));"
     sve:
       arith:
         requires [sve]
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
-               emit_return(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
+               complete(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
             """
     [generic, oneAPIfpga]:
       arith:
@@ -237,9 +237,9 @@ prim<s:=v[idx]> extract_value(a):
           generic []
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
-          tsil "emit_return(a[cast<static>(type<backend>(scalar::size), Index)]);"
+          tsil "complete(a[cast<static>(type<backend>(scalar::size), Index)]);"
     scalar:
       arith:
         requires []
         implementation:
-          tsil "emit_return(a);"
+          tsil "complete(a);"

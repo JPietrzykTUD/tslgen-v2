@@ -59,7 +59,7 @@ def test_params_on_non_immediate_diagnoses() -> None:
         "    scalar:\n"
         "      arith:\n"
         "        implementation:\n"
-        '          tsil "emit_return(left + right);"\n'
+        '          tsil "complete(left + right);"\n'
     )
     codes = {d.code for d in result.diagnostics}
     assert "TSL-PARAMS-NOT-IMMEDIATE" in codes, result.diagnostics
@@ -76,7 +76,7 @@ def test_params_unknown_param_diagnoses() -> None:
         "    scalar:\n"
         "      arith:\n"
         "        implementation:\n"
-        '          tsil "emit_return(data << shift);"\n'
+        '          tsil "complete(data << shift);"\n'
     )
     codes = {d.code for d in result.diagnostics}
     assert "TSL-PARAMS-UNKNOWN-PARAM" in codes, result.diagnostics

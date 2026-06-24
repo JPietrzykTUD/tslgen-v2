@@ -343,7 +343,7 @@ The former monolithic `lower/regions.py` file was split into a focused package:
 - `calls.py`: primitive `call` lowering.
 - `control.py`: `if`, `assume_aligned`, `loop`, and `switch` lowering.
 - `queries.py`: `type<generation>` and `value<generation>` region lowering.
-- `returns.py`: `emit_return` lowering.
+- `returns.py`: `complete` lowering.
 - `registry.py`: the canonical `DEFAULT_REGION_LOWERERS` ordering.
 
 `tslc/src/tslc/lower/regions.py` now re-exports the same public names and
@@ -775,7 +775,7 @@ Result: passed.
 
 Additional import-boundary checks confirmed that `lower/lowerer.py` still uses
 the stable `tslc.lower.regions` facade and that the facade exposes the default
-region lowerers, from `intrin` through `emit_return`.
+region lowerers, from `intrin` through `complete`.
 
 After the `render/project.py` split into focused render modules, validation was
 rerun through the devcontainer:
@@ -1061,7 +1061,7 @@ Focused coverage:
 - `tslc/tests/test_tsil_scan.py` asserts source semicolons are consumed for
   top-level regions and not claimed by nested expression atoms.
 - `tslc/tests/test_select_and_lower.py` asserts `let<type>(...);`,
-  `var<infer>(...);`, `intrin<...>(...);`, and `emit_return(...);` keep the
+  `var<infer>(...);`, `intrin<...>(...);`, and `complete(...);` keep the
   intended target statement spelling without duplicate or stray terminators.
 - `tslc/tests/test_tsil_statement_terminators.py` scans
   `tsldata/primitives` and fails if an accepted statement keyword family is
@@ -1633,7 +1633,7 @@ Implemented pieces:
 7. Lowerer early-return diagnostics for bad signatures, unsupported signature
    kinds, signature arity mismatch, missing base/immediate type spellings,
    unsupported representation-change target vectors, and missing top-level
-   `emit_return` now attach the nearest available source-authored span.
+   `complete` now attach the nearest available source-authored span.
 
 Focused coverage lives in `tslc/tests/test_diagnostic_provenance.py` and asserts
 diagnostic `path`, `line`, and `column` for catalog, selector, and lowerer
@@ -1775,6 +1775,13 @@ current vector mask representation before returning. Targeted
 `test_masked_memory_build`, targeted `test_full_corpus_builds`, and the full
 `./verify.sh` gate passed; the full gate reported 185 non-build tests and 53
 generated-build tests across its shards.
+
+After the TSIL completion directive rename, active value-returning source
+bodies use `complete(expr)` instead of an emission-oriented directive name. The
+scanner recognizes only `complete`, backend translation metadata uses the
+`complete` template key, and the lowerer reports `TSL-LOWER-NO-COMPLETE` when a
+value-returning body has no completion directive. Focused TSIL/lowering/catalog
+tests, the full non-build suite, and `./verify.sh` passed after the rename.
 
 Known follow-ups:
 

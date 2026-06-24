@@ -310,25 +310,25 @@ class Lowerer:
             )
         )
         # A `void` primitive (e.g. `store`) has no return value, so it carries no
-        # top-level `emit_return`; only value-returning bodies require one.
-        if shape.result_kind != "void" and _find_region(segments, "emit_return") is None:
+        # top-level `complete`; only value-returning bodies require one.
+        if shape.result_kind != "void" and _find_region(segments, "complete") is None:
             # No top-level return statement to model yet — skip, don't fail.
             return LoweringResult(
                 specialization=None,
                 diagnostics=(
                     diagnostic_at(
                         severity="info",
-                        code="TSL-LOWER-NO-EMIT-RETURN",
+                        code="TSL-LOWER-NO-COMPLETE",
                         message=(
                             f"implementation for {selected.primitive.name!r} has no top-level "
-                            "emit_return(...); skipped"
+                            "complete(...); skipped"
                         ),
                         source=_implementation_body_source(selected),
                     ),
                 ),
             )
 
-        # Render the whole body as a statement stream: var/emit_return are registered
+        # Render the whole body as a statement stream: var/complete are registered
         # handlers, and raw text (assignment LHS, newlines, ";") passes through.
         renderer = ExpressionRenderer(context, self._region_lowerers)
         rendered_body = renderer.render(segments)
@@ -761,7 +761,7 @@ def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
 
 def _find_region(segments: tuple[Segment, ...], keyword: str) -> Region | None:
     """Find a region by keyword, descending into ``if`` branch blocks and ``switch`` arms so an
-    ``emit_return`` guarded by ``if<generation>`` / inside a ``switch<compile>`` arm still counts
+    ``complete`` guarded by ``if<generation>`` / inside a ``switch<compile>`` arm still counts
     as present (every arm returns, so finding it in any arm is sufficient)."""
 
     for segment in segments:

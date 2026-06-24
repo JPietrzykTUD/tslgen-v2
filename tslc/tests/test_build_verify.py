@@ -393,7 +393,7 @@ def test_max_min_builds(data_root: Path, machine_profiles_path: Path, tmp_path: 
     # masked primitive (`[mask=pass_through]`) emitted *bare*, so the prune must match a bare
     # `blend` caller against the lone `pass_through` spec (single-form names normalize their policy
     # to None; only split `_mask`/`_maskz` names stay policy-aware). The scalar `blend` body uses
-    # the `emit_return` form (not a raw `return`). Builds in C++ and Rust.
+    # the `complete` form (not a raw `return`). Builds in C++ and Rust.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
@@ -439,7 +439,7 @@ def test_to_integral_builds(data_root: Path, machine_profiles_path: Path, tmp_pa
     # `to_integral` (result kind `im` = the integral-mask type) packs a mask into an
     # integer: the scalar `if`-return (imask = u64), the avx2/sse `movemask` bodies incl.
     # the avx2 `?i16` two-half pack (imask = a lane-sized uint via `lane_bitmask_int`),
-    # and the avx512/_vl `emit_return(mask)` identity (imask = the native `__mmaskN`).
+    # and the avx512/_vl `complete(mask)` identity (imask = the native `__mmaskN`).
     # The `cast<static>(vector::imask, …)` resolves via the new `vector::imask` query.
     # Generic/neon/sve to_integral still skip (their bit-loop uses `type::size_bytes` /
     # `details::mask_test`, unimplemented), so they don't appear in the build.
@@ -483,7 +483,7 @@ def test_to_vector_builds(data_root: Path, machine_profiles_path: Path, tmp_path
     # type-conversion cluster: the generic emulated body (`var<init_register>` + `if<compile>`
     # splicing the f32/f64 NaN branch + `mask<test>` loop + `base::unsigned_of` /
     # `type<backend>(scalar::*)` / `cast<bitcast>` via `tsl_core::bit_cast`), the avx512
-    # `maskz_set1`+`bit_cast` float paths, and the avx2/sse `emit_return(mask)` identity.
+    # `maskz_set1`+`bit_cast` float paths, and the avx2/sse `complete(mask)` identity.
     # Both backends; avx2_vl/sse_vl native conversion (mov+mask::lane) skips cleanly.
     result = generate_project(
         [data_root],
@@ -1239,7 +1239,7 @@ def test_set_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path
 def test_to_ostream_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # `to_ostream` (`o:=(o,v,s)`) writes a vector's lanes into a text buffer. The `o` (ostream)
     # kind renders as a string buffer (C++ std::string& / Rust &mut String); the body collapses
-    # to_array -> io<format> -> emit_return(out), where io<format> calls the runtime
+    # to_array -> io<format> -> complete(out), where io<format> calls the runtime
     # tsl::ostream_write helper (the per-lane base formatting + a TslBits as_u64 in Rust). No
     # scalar impl in the corpus, so it emits for generic + SIMD; builds in C++ and Rust.
     result = generate_project(

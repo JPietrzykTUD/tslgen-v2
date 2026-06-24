@@ -14,17 +14,17 @@ prim<s:=v> hand(vec):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<svandv, build>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "complete(cast<static>(type<generation>(base::in), intrin<svandv, build>(call<primitive=mask_true[Vec]>(), vec)));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<reduce_and, build[suffix=base::signed_of(base::in)]>(vec)));"
+          tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_and, build[suffix=base::signed_of(base::in)]>(vec)));"
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
         requires [avx512bw, avx512vl]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<reduce_and, build[suffix=base::signed_of(base::in)]>(vec)));"
+          tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_and, build[suffix=base::signed_of(base::in)]>(vec)));"
     avx2:
       ?i8:
         requires [avx2]
@@ -37,7 +37,7 @@ prim<s:=v> hand(vec):
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 1));
-            emit_return(cast<static>(type<generation>(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type<generation>(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i16:
         requires [avx2]
@@ -49,7 +49,7 @@ prim<s:=v> hand(vec):
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            emit_return(cast<static>(type<generation>(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type<generation>(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i32:
         requires [avx2]
@@ -60,7 +60,7 @@ prim<s:=v> hand(vec):
             var<infer>(temp, intrin<_mm_and_si128>(lo, hi));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       ?i64:
         requires [avx2]
@@ -70,7 +70,7 @@ prim<s:=v> hand(vec):
             var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
             var<infer>(temp, intrin<_mm_and_si128>(lo, hi));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_unpackhi_epi64>(temp, temp));
-            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
+            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       ?i?:
         requires [avx2]
@@ -81,7 +81,7 @@ prim<s:=v> hand(vec):
             loop<backend>(i, 1, value<generation>(vector::length), 1) {
               result &= data_arr[i];
             }
-            emit_return(result);
+            complete(result);
           """
     sse:
       ?i8:
@@ -93,7 +93,7 @@ prim<s:=v> hand(vec):
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 1));
-            emit_return(cast<static>(type<generation>(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type<generation>(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i16:
         requires [sse2]
@@ -103,7 +103,7 @@ prim<s:=v> hand(vec):
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            emit_return(cast<static>(type<generation>(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type<generation>(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i32:
         requires [sse2]
@@ -112,14 +112,14 @@ prim<s:=v> hand(vec):
             var<infer>(temp, vec);
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       ?i64:
         requires [sse2]
         implementation:
           tsil """
             var<infer>(temp, intrin<_mm_and_si128>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)));
-            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
+            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       ?i?:
         requires [sse2]
@@ -130,7 +130,7 @@ prim<s:=v> hand(vec):
             loop<backend>(i, 1, value<generation>(vector::length), 1) {
               result &= data_arr[i];
             }
-            emit_return(result);
+            complete(result);
           """
     avx512:
       [si8, ui8, si16, ui16]:
@@ -142,7 +142,7 @@ prim<s:=v> hand(vec):
             loop<backend>(i, 1, value<generation>(vector::length), 1) {
               result &= data_arr[i];
             }
-            emit_return(result);
+            complete(result);
           """
       f?:
         requires [avx512f]
@@ -159,7 +159,7 @@ prim<s:=v> hand(vec):
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
             mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
-            emit_return(out);
+            complete(out);
           """
     [avx2_vl, sse_vl]:
       [si32, ui32, si64, ui64]:
@@ -171,7 +171,7 @@ prim<s:=v> hand(vec):
             loop<backend>(i, 1, value<generation>(vector::length), 1) {
               result &= data_arr[i];
             }
-            emit_return(result);
+            complete(result);
           """
       f?:
         requires [avx512bw, avx512vl]
@@ -188,7 +188,7 @@ prim<s:=v> hand(vec):
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
             mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
-            emit_return(out);
+            complete(out);
           """
     [scalar, generic, oneAPIfpga, neon]:
       ?i?:
@@ -204,7 +204,7 @@ prim<s:=v> hand(vec):
             loop<backend>(i, 1, value<generation>(vector::length), 1) {
               result &= data_arr[i];
             }
-            emit_return(result);
+            complete(result);
           """
     [scalar, generic, oneAPIfpga, avx2, sse, neon, sve]:
       f?:
@@ -229,7 +229,7 @@ prim<s:=v> hand(vec):
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
             mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
-            emit_return(out);
+            complete(out);
           """
 
 prim<s:=v> hor(vec):
@@ -257,17 +257,17 @@ prim<s:=v> hor(vec):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<svorv, build>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "complete(cast<static>(type<generation>(base::in), intrin<svorv, build>(call<primitive=mask_true[Vec]>(), vec)));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<reduce_or, build[suffix=base::signed_of(base::in)]>(vec)));"
+          tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_or, build[suffix=base::signed_of(base::in)]>(vec)));"
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
         requires [avx512bw, avx512vl]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<reduce_or, build[suffix=base::signed_of(base::in)]>(vec)));"
+          tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_or, build[suffix=base::signed_of(base::in)]>(vec)));"
     avx2:
       ?i8:
         requires [avx2]
@@ -280,7 +280,7 @@ prim<s:=v> hor(vec):
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 1));
-            emit_return(cast<static>(type<generation>(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type<generation>(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i16:
         requires [avx2]
@@ -292,7 +292,7 @@ prim<s:=v> hor(vec):
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            emit_return(cast<static>(type<generation>(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type<generation>(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i32:
         requires [avx2]
@@ -303,7 +303,7 @@ prim<s:=v> hor(vec):
             var<infer>(temp, intrin<_mm_or_si128>(lo, hi));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       ?i64:
         requires [avx2]
@@ -313,7 +313,7 @@ prim<s:=v> hor(vec):
             var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
             var<infer>(temp, intrin<_mm_or_si128>(lo, hi));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_unpackhi_epi64>(temp, temp));
-            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
+            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       ?i?:
         requires [avx2]
@@ -324,7 +324,7 @@ prim<s:=v> hor(vec):
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result |= data_arr[i];
             }
-            emit_return(result);
+            complete(result);
           """
     sse:
       ?i8:
@@ -336,7 +336,7 @@ prim<s:=v> hor(vec):
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 1));
-            emit_return(cast<static>(type<generation>(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type<generation>(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i16:
         requires [sse2]
@@ -346,7 +346,7 @@ prim<s:=v> hor(vec):
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            emit_return(cast<static>(type<generation>(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type<generation>(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i32:
         requires [sse2]
@@ -355,14 +355,14 @@ prim<s:=v> hor(vec):
             var<infer>(temp, vec);
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       ?i64:
         requires [sse2]
         implementation:
           tsil """
             var<infer>(temp, intrin<_mm_or_si128>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)));
-            emit_return(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
+            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       ?i?:
         requires [sse2]
@@ -373,7 +373,7 @@ prim<s:=v> hor(vec):
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result |= data_arr[i];
             }
-            emit_return(result);
+            complete(result);
           """
     avx512:
       [si8, ui8, si16, ui16]:
@@ -385,7 +385,7 @@ prim<s:=v> hor(vec):
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result |= data_arr[i];
             }
-            emit_return(result);
+            complete(result);
           """
       f?:
         requires [avx512f]
@@ -401,7 +401,7 @@ prim<s:=v> hor(vec):
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
             mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
-            emit_return(out);
+            complete(out);
           """
     [scalar, generic, oneAPIfpga, neon]:
       ?i?:
@@ -417,7 +417,7 @@ prim<s:=v> hor(vec):
             loop<backend>(i, 1, value<generation>(vector::length), 1) {
               result |= data_arr[i];
             }
-            emit_return(result);
+            complete(result);
           """
     [scalar, generic, oneAPIfpga]:
       f?:
@@ -438,7 +438,7 @@ prim<s:=v> hor(vec):
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
             mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
-            emit_return(out);
+            complete(out);
           """
 
 prim<s:=(m,v)> hand(mask, vec):
@@ -458,9 +458,9 @@ prim<s:=(m,v)> hand(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              emit_return(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(cast<static>(type<generation>(base::in), intrin<svandv, build>(mask, vec)));
+            complete(cast<static>(type<generation>(base::in), intrin<svandv, build>(mask, vec)));
           """
     avx512:
       [si32, ui32, si64, ui64]:
@@ -469,9 +469,9 @@ prim<s:=(m,v)> hand(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              emit_return(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(cast<static>(type<generation>(base::in), intrin<mask_reduce_and, build[suffix=base::signed_of(base::in)]>(mask, vec)));
+            complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_and, build[suffix=base::signed_of(base::in)]>(mask, vec)));
           """
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
@@ -480,9 +480,9 @@ prim<s:=(m,v)> hand(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              emit_return(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type<generation>(base::in), 0));
             }
-            emit_return(cast<static>(type<generation>(base::in), intrin<mask_reduce_and, build[suffix=base::signed_of(base::in)]>(mask, vec)));
+            complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_and, build[suffix=base::signed_of(base::in)]>(mask, vec)));
           """
     [scalar, generic, oneAPIfpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve]:
       ?i?:
@@ -513,7 +513,7 @@ prim<s:=(m,v)> hand(mask, vec):
                 }
               }
             }
-            emit_return(result);
+            complete(result);
           """
       f?:
         requires:
@@ -550,7 +550,7 @@ prim<s:=(m,v)> hand(mask, vec):
             if (found != 0) {
               mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
             }
-            emit_return(out);
+            complete(out);
           """
 
 prim<s:=(m,v)> hor(mask, vec):
@@ -567,17 +567,17 @@ prim<s:=(m,v)> hor(mask, vec):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<svorv, build>(mask, vec)));"
+          tsil "complete(cast<static>(type<generation>(base::in), intrin<svorv, build>(mask, vec)));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<mask_reduce_or, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
+          tsil "complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_or, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
         requires [avx512bw, avx512vl]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), intrin<mask_reduce_or, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
+          tsil "complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_or, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
     [scalar, generic, oneAPIfpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve]:
       ?i?:
         requires:
@@ -601,7 +601,7 @@ prim<s:=(m,v)> hor(mask, vec):
                 result |= values[i];
               }
             }
-            emit_return(result);
+            complete(result);
           """
       f?:
         requires:
@@ -630,7 +630,7 @@ prim<s:=(m,v)> hor(mask, vec):
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
             mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
-            emit_return(out);
+            complete(out);
           """
     [avx2_vl, sse_vl]:
       [si32, ui32, si64, ui64]:
@@ -642,7 +642,7 @@ prim<s:=(m,v)> hor(mask, vec):
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result |= data_arr[i];
             }
-            emit_return(result);
+            complete(result);
           """
       f?:
         requires [avx512bw, avx512vl]
@@ -658,7 +658,7 @@ prim<s:=(m,v)> hor(mask, vec):
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
             mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
-            emit_return(out);
+            complete(out);
           """
     [scalar, generic, oneAPIfpga, neon]:
       ?i?:
@@ -674,7 +674,7 @@ prim<s:=(m,v)> hor(mask, vec):
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result |= data_arr[i];
             }
-            emit_return(result);
+            complete(result);
           """
     [scalar, generic, oneAPIfpga, avx2, sse, neon, sve]:
       f?:
@@ -698,5 +698,5 @@ prim<s:=(m,v)> hor(mask, vec):
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
             mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
-            emit_return(out);
+            complete(out);
           """

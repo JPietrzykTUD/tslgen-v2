@@ -26,7 +26,7 @@ prim<v:=s> set1(value):
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<set1, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), value)
               )
@@ -36,7 +36,7 @@ prim<v:=s> set1(value):
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<set1, build>(value)
             );
           """
@@ -49,11 +49,11 @@ prim<v:=s> set1(value):
           tsil """
             if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
               // in 8byte path
-              emit_return(
+              complete(
                 intrin<set1, build[suffix="epi64x"]>(cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), value))
               );
             } else<generation> {
-              emit_return(
+              complete(
                 intrin<set1, build[suffix=base::signed_of(base::in)]>(
                   cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), value)
                 )
@@ -66,7 +66,7 @@ prim<v:=s> set1(value):
           sse [sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<set1, build>(value)
             );
           """
@@ -75,7 +75,7 @@ prim<v:=s> set1(value):
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<vdupq_n, build>(value)
             );
           """
@@ -84,7 +84,7 @@ prim<v:=s> set1(value):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svdup_n, build>(value)
             );
           """
@@ -92,7 +92,7 @@ prim<v:=s> set1(value):
       arith:
         requires []
         implementation:
-          tsil "emit_return(value);"
+          tsil "complete(value);"
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -104,7 +104,7 @@ prim<v:=s> set1(value):
               loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result_arr[i] = value;
               }
-               emit_return(result_arr) ;
+               complete(result_arr) ;
             """
 
 prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
@@ -144,7 +144,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
                   values[i] = scalar;
                 }
               }
-               emit_return(call<primitive=load[Vec], attrs[aligned=false]>(values.data())) ;
+               complete(call<primitive=load[Vec], attrs[aligned=false]>(values.data())) ;
             """
     avx2:
       arith:
@@ -158,7 +158,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
                   values[i] = scalar;
                 }
               }
-               emit_return(call<primitive=load[Vec], attrs[aligned=false]>(values.data())) ;
+               complete(call<primitive=load[Vec], attrs[aligned=false]>(values.data())) ;
             """
     sse:
       arith:
@@ -172,14 +172,14 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
                   values[i] = scalar;
                 }
               }
-               emit_return(call<primitive=load[Vec], attrs[aligned=false]>(values.data())) ;
+               complete(call<primitive=load[Vec], attrs[aligned=false]>(values.data())) ;
             """
     neon:
       arith:
         requires [neon]
         implementation:
           tsil """
-               emit_return(
+               complete(
                  call<primitive=blend, attrs[mask=pass_through]>(
                    mask,
                    data,
@@ -192,7 +192,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
         requires [sve]
         implementation:
           tsil """
-               emit_return(
+               complete(
                  intrin<svdup_n, build[post=m]>(
                    data,
                    mask,
@@ -214,7 +214,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
                   result[i] = scalar;
                 }
               }
-               emit_return(result) ;
+               complete(result) ;
             """
     scalar:
       arith:
@@ -222,9 +222,9 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
         implementation:
           tsil """
                if(mask) {
-                 emit_return(scalar);
+                 complete(scalar);
                } else {
-                 emit_return(data);
+                 complete(data);
                }
             """
 prim<v:=()>[value=zero] set_zero():
@@ -254,7 +254,7 @@ prim<v:=()>[value=zero] set_zero():
       arith:
         requires []
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), 0));"
+          tsil "complete(cast<static>(type<generation>(base::in), 0));"
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -263,7 +263,7 @@ prim<v:=()>[value=zero] set_zero():
         implementation:
           tsil """
             var<init_register>(result_arr);
-            emit_return(result_arr);
+            complete(result_arr);
           """
     [avx512, avx2, sse]:
       ?i?:
@@ -273,7 +273,7 @@ prim<v:=()>[value=zero] set_zero():
           sse [sse, sse2]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 intrin<setzero, build[suffix=intrin::suffix("stream")]>()
               );
             """
@@ -286,7 +286,7 @@ prim<v:=()>[value=zero] set_zero():
             f64 [sse, sse2]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 intrin<setzero, build[suffix=base::in]>()
               );
             """
@@ -296,7 +296,7 @@ prim<v:=()>[value=zero] set_zero():
         implementation:
           tsil """
             var<const_infer>(undef, call<primitive=set_undef[Vec]>());
-            emit_return(
+            complete(
               call<primitive=binary_xor>(undef, undef)
             );
           """
@@ -306,7 +306,7 @@ prim<v:=()>[value=zero] set_zero():
         implementation:
           tsil """
             var<const_infer>(undef, call<primitive=set_undef[Vec]>());
-            emit_return(
+            complete(
               call<primitive=binary_xor>(undef, undef)
             );
           """
@@ -323,7 +323,7 @@ prim<v:=()>[value=undef] set_undef():
         implementation:
           tsil """
               var<typed>(type<generation>(base::in), result, value<backend>(uninit::scalar));
-              emit_return(result);
+              complete(result);
             """
     [generic, oneAPIfpga]:
       arith:
@@ -333,18 +333,18 @@ prim<v:=()>[value=undef] set_undef():
         implementation:
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, result, value<backend>(uninit::array));
-              emit_return(result);
+              complete(result);
             """
     avx512:
       ?i?:
         requires [avx512f]
         implementation:
-          tsil "emit_return(intrin<_mm512_undefined_epi32>());"
+          tsil "complete(intrin<_mm512_undefined_epi32>());"
       f?:
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<undefined, build[suffix=base::in]>()
             );
           """
@@ -355,7 +355,7 @@ prim<v:=()>[value=undef] set_undef():
           sse [sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<undefined, build[suffix=intrin::suffix("stream")]>()
             );
           """
@@ -367,7 +367,7 @@ prim<v:=()>[value=undef] set_undef():
             f64 [sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<undefined, build[suffix=base::in]>()
             );
           """
@@ -378,14 +378,14 @@ prim<v:=()>[value=undef] set_undef():
           tsil """
               let<type>(Value, type<generation>(vector::register));
               Value value;
-              emit_return(value);
+              complete(value);
             """
     sve:
       arith:
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svundef, build[suffix=base::in]>()
             );
           """
@@ -419,7 +419,7 @@ prim<v:=(lanes<s>)> set(values):
         implementation:
           tsil """
             if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
-              emit_return(
+              complete(
                 intrin<set, build[suffix="epi64"]>(
                   cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
                   loop<generation>(i, 1, value<generation>(vector::length), 1) {
@@ -428,7 +428,7 @@ prim<v:=(lanes<s>)> set(values):
                 )
               );
             } else<generation> {
-              emit_return(
+              complete(
                 intrin<set, build[suffix=base::signed_of(base::in)]>(
                   cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
                   loop<generation>(i, 1, value<generation>(vector::length), 1) {
@@ -442,7 +442,7 @@ prim<v:=(lanes<s>)> set(values):
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<set, build>(
                 lanes<at>(values, 0)
                 loop<generation>(i, 1, value<generation>(vector::length), 1) {
@@ -459,7 +459,7 @@ prim<v:=(lanes<s>)> set(values):
         implementation:
           tsil """
             if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
-              emit_return(
+              complete(
                 intrin<set, build[suffix="epi64x"]>(
                   cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
                   loop<generation>(i, 1, value<generation>(vector::length), 1) {
@@ -468,7 +468,7 @@ prim<v:=(lanes<s>)> set(values):
                 )
               );
             } else<generation> {
-              emit_return(
+              complete(
                 intrin<set, build[suffix=base::signed_of(base::in)]>(
                   cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
                   loop<generation>(i, 1, value<generation>(vector::length), 1) {
@@ -484,7 +484,7 @@ prim<v:=(lanes<s>)> set(values):
           sse [sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<set, build>(
                 lanes<at>(values, 0)
                 loop<generation>(i, 1, value<generation>(vector::length), 1) {
@@ -507,10 +507,10 @@ prim<v:=(lanes<s>)> set(values):
                loop<backend>(i, 0, value<generation>(vector::length), 1)  {
                 data[i] = cast<static>(type<generation>(base::in), values[value<generation>(vector::length) - 1 - i]);
               }
-               emit_return(call<primitive=load[Vec], attrs[aligned=false]>(data.data())) ;
+               complete(call<primitive=load[Vec], attrs[aligned=false]>(data.data())) ;
             """
     scalar:
       arith:
         requires []
         implementation:
-          tsil "emit_return(lanes<at>(values, 0));"
+          tsil "complete(lanes<at>(values, 0));"

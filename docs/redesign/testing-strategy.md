@@ -269,8 +269,8 @@ generation:
   `si32`/`ui32` declaration slice and rejects invalid names rather than
   sanitizing them.
 - TSIL mini-lowering tests for the direct parameter-add return form
-  `emit_return(<parameter> + <parameter>);` and the M38 intrinsic-compose form
-  `emit_return(intrin_compose<add>(<parameter>, <parameter>));`, plus
+  `complete(<parameter> + <parameter>);` and the M38 intrinsic-compose form
+  `complete(intrin_compose<add>(<parameter>, <parameter>));`, plus
   malformed return forms, unsupported intrinsic names, wrong arity, invalid
   arguments, unknown operands, generation-time branches, and typed-opaque
   fallback.
@@ -1081,12 +1081,12 @@ Recommended first parity checks:
   `_mini_tsil_lowering.py` measures 188 physical lines.
 - M87 execution added focused exact return-emission structural/request IR
   coverage without source-body repair. Coverage includes the exact
-  `emit_return(tmp);` shape with accepted whitespace, returned-token linkage to
+  `complete(tmp);` shape with accepted whitespace, returned-token linkage to
   the M73 declaration-shell variable token, M76 source forms, a narrow
   M76-only source protocol regression, deterministic stage insertion after the
   M76 post-branch call-site stage, source-location and key preservation,
   selected-branch-only behavior, snapshot identity, import boundaries, and
-  negative diagnostics for malformed `emit_return`, wrong returned token,
+  negative diagnostics for malformed `complete`, wrong returned token,
   missing semicolon, expression/extra argument/member-access forms, missing or
   wrong return slot, context mismatch, and provenance mismatch. Validation
   returned focused M87 `6 passed, 286 deselected`, full lowering-boundary

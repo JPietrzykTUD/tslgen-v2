@@ -14,7 +14,7 @@ Representative corpus probes:
 
 ```bash
 rg -n "tsil \"" tsldata -g "*.tsl"
-rg -n "emit_return\(" tsldata -g "*.tsl"
+rg -n "complete\(" tsldata -g "*.tsl"
 rg -o --no-filename "[A-Za-z_][A-Za-z0-9_:]*<" tsldata/primitives -g "*.tsl"
 rg -o --no-filename "mask<[^>]+>" tsldata/primitives -g "*.tsl"
 rg -o --no-filename "assume_aligned<|array_type<|pack<" tsldata/primitives -g "*.tsl"
@@ -114,7 +114,7 @@ Support-helper evidence in primitive bodies:
 | Family | Evidence | Classification | Current boundary and next action |
 | --- | --- | --- | --- |
 | `tsil` payload envelopes | 1323 `tsil "` lines | accepted enough for current lowering | Existing source intake/body-token work treats implementation bodies as source-owned input. Remaining work is per-family lowering or backend rendering, not another envelope milestone. |
-| `emit_return(...)` | 1585 occurrences | accepted enough for current lowering, with deferred broad forms | Exact accepted return-call/expression forms exist where selected by prior milestones. Broad return payload rendering and arbitrary expression parsing remain deferred. |
+| `complete(...)` | 1585 occurrences | accepted enough for current lowering, with deferred broad forms | Exact accepted return-call/expression forms exist where selected by prior milestones. Broad return payload rendering and arbitrary expression parsing remain deferred. |
 | `call<primitive=...>(...)` | 1796 `call<` heads | accepted enough for current lowering | M144-M152 and M170-M173 cover selector payload lowering, matching, bindings, dependency closure, and exact selected shapes. Recursive token-stream rendering remains later output/backend work. |
 | `let<type>(...)` | 382 occurrences | accepted enough for current lowering | Type aliases feed the selected type environment. Non-type `let<...>` has no separate current evidence in the primitive-file scan. |
 | `var<...>(...)` | 831 heads | accepted enough for current lowering | M163 discovers exact top-level declaration requests with opaque type/initializer payloads. Declaration rendering and recursive payload solving remain backend/output-owned. |
@@ -330,7 +330,7 @@ The accepted corpus snapshot is:
 
 The gate validates observed family counts through accepted recursive lowering
 or accepted representative discovery/directive boundaries. Recursive full
-coverage is proven for `emit_return`, `call<primitive>`, `if<generation>`,
+coverage is proven for `complete`, `call<primitive>`, `if<generation>`,
 `else<generation>`, `loop<range>`, `switch<compile>`, and
 `intrin_compose`. Handoff/source-island families such as `intrin`,
 `type<backend>`, `value<backend>`, `cast<...>`, `mem<...>`, `io<...>`,

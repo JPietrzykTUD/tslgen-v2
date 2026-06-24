@@ -24,7 +24,7 @@ prim<v:=v> conflict(data):
         requires [avx512cd, avx512f]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 intrin<conflict, build[suffix=base::signed_of(base::in)]>(
                   data
                 )
@@ -37,7 +37,7 @@ prim<v:=v> conflict(data):
           avx2_vl [avx512cd, avx512vl, avx]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 intrin<conflict, build[suffix=base::signed_of(base::in)]>(
                   data
                 )
@@ -50,7 +50,7 @@ prim<v:=v> conflict(data):
           sse_vl [avx512cd, avx512vl, sse, sse2]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 intrin<conflict, build[suffix=base::signed_of(base::in)]>(
                   data
                 )
@@ -82,13 +82,13 @@ prim<v:=v> conflict(data):
                 }
                 result[idx] = cast<static>(type<generation>(base::in), conflict);
               }
-              emit_return(call<primitive=from_array[Vec]>(result));
+              complete(call<primitive=from_array[Vec]>(result));
             """
     scalar:
       ?i?:
         requires []
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), 0));"
+          tsil "complete(cast<static>(type<generation>(base::in), 0));"
 prim<m:=(m,v)> conflict_free(mask, data):
   brief_description "Checks whether all active elements are unique and returns the semantic mask of conflict-free lanes."
   operation ""
@@ -125,7 +125,7 @@ prim<m:=(m,v)> conflict_free(mask, data):
           sve [sve]
         implementation:
           tsil """
-              emit_return(
+              complete(
                 call<primitive=mask_binary_and[Vec]>(
                   mask,
                   call<primitive=equal[Vec]>(

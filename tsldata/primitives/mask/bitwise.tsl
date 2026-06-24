@@ -13,37 +13,37 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           avx512 [avx512f]
           sve [sve]
         implementation:
-          tsil "emit_return(mask_a & mask_b);"
+          tsil "complete(mask_a & mask_b);"
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
         implementation:
-          tsil "emit_return(mask_a & mask_b);"
+          tsil "complete(mask_a & mask_b);"
     sse_vl:
       arith:
         requires [sse2, avx512f, avx512vl]
         implementation:
-          tsil "emit_return(mask_a & mask_b);"
+          tsil "complete(mask_a & mask_b);"
     avx2:
       arith:
         requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx, avx2], ui32 [avx, avx2], si64 [avx, avx2], ui64 [avx, avx2], f32 [avx], f64 [avx]}
         implementation:
-          tsil "emit_return(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
+          tsil "complete(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
     sse:
       arith:
         requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2], ui64 [sse, sse2], f32 [sse], f64 [sse, sse2]}
         implementation:
-          tsil "emit_return(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
+          tsil "complete(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
     neon:
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
+          tsil "complete(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
     scalar:
       arith:
         requires []
         implementation:
-          tsil "emit_return(mask_a & mask_b);"
+          tsil "complete(mask_a & mask_b);"
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -58,7 +58,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
                   mask<set>(result, i, true);
                 }
               }
-              emit_return(result);
+              complete(result);
             """
 prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
   brief_description "Bitwise OR on masks."
@@ -75,37 +75,37 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
           avx512 [avx512f]
           sve [sve]
         implementation:
-          tsil "emit_return(mask_a | mask_b);"
+          tsil "complete(mask_a | mask_b);"
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
         implementation:
-          tsil "emit_return(mask_a | mask_b);"
+          tsil "complete(mask_a | mask_b);"
     sse_vl:
       arith:
         requires [sse2, avx512f, avx512vl]
         implementation:
-          tsil "emit_return(mask_a | mask_b);"
+          tsil "complete(mask_a | mask_b);"
     avx2:
       arith:
         requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx, avx2], ui32 [avx, avx2], si64 [avx, avx2], ui64 [avx, avx2], f32 [avx], f64 [avx]}
         implementation:
-          tsil "emit_return(call<primitive=binary_or[Vec]>(mask_a, mask_b));"
+          tsil "complete(call<primitive=binary_or[Vec]>(mask_a, mask_b));"
     sse:
       arith:
         requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2], ui64 [sse, sse2], f32 [sse], f64 [sse, sse2]}
         implementation:
-          tsil "emit_return(call<primitive=binary_or[Vec]>(mask_a, mask_b));"
+          tsil "complete(call<primitive=binary_or[Vec]>(mask_a, mask_b));"
     neon:
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(call<primitive=binary_or[Vec]>(mask_a, mask_b));"
+          tsil "complete(call<primitive=binary_or[Vec]>(mask_a, mask_b));"
     scalar:
       arith:
         requires []
         implementation:
-          tsil "emit_return(mask_a | mask_b);"
+          tsil "complete(mask_a | mask_b);"
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -120,7 +120,7 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
                   mask<set>(result, i, true);
                 }
               }
-              emit_return(result);
+              complete(result);
             """
 prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
   brief_description "Bitwise XOR on masks."
@@ -137,37 +137,37 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
           avx512 [avx512f]
           sve [sve]
         implementation:
-          tsil "emit_return(mask_a ^ mask_b);"
+          tsil "complete(mask_a ^ mask_b);"
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
         implementation:
-          tsil "emit_return(mask_a ^ mask_b);"
+          tsil "complete(mask_a ^ mask_b);"
     sse_vl:
       arith:
         requires [sse2, avx512f, avx512vl]
         implementation:
-          tsil "emit_return(mask_a ^ mask_b);"
+          tsil "complete(mask_a ^ mask_b);"
     avx2:
       arith:
         requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx, avx2], ui32 [avx, avx2], si64 [avx, avx2], ui64 [avx, avx2], f32 [avx], f64 [avx]}
         implementation:
-          tsil "emit_return(call<primitive=binary_xor[Vec]>(mask_a, mask_b));"
+          tsil "complete(call<primitive=binary_xor[Vec]>(mask_a, mask_b));"
     sse:
       arith:
         requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2], ui64 [sse, sse2], f32 [sse], f64 [sse, sse2]}
         implementation:
-          tsil "emit_return(call<primitive=binary_xor[Vec]>(mask_a, mask_b));"
+          tsil "complete(call<primitive=binary_xor[Vec]>(mask_a, mask_b));"
     neon:
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(call<primitive=binary_xor[Vec]>(mask_a, mask_b));"
+          tsil "complete(call<primitive=binary_xor[Vec]>(mask_a, mask_b));"
     scalar:
       arith:
         requires []
         implementation:
-          tsil "emit_return(mask_a ^ mask_b);"
+          tsil "complete(mask_a ^ mask_b);"
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -182,7 +182,7 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
                   mask<set>(result, i, true);
                 }
               }
-              emit_return(result);
+              complete(result);
             """
 prim<m:=m> mask_binary_not(mask):
   brief_description "Bitwise NOT on masks."
@@ -203,37 +203,37 @@ prim<m:=m> mask_binary_not(mask):
           avx512 [avx512f]
           sve [sve]
         implementation:
-          tsil "emit_return(op<bit_negate>(mask));"
+          tsil "complete(op<bit_negate>(mask));"
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
         implementation:
-          tsil "emit_return(op<bit_negate>(mask));"
+          tsil "complete(op<bit_negate>(mask));"
     sse_vl:
       arith:
         requires [sse2, avx512f, avx512vl]
         implementation:
-          tsil "emit_return(op<bit_negate>(mask));"
+          tsil "complete(op<bit_negate>(mask));"
     avx2:
       arith:
         requires [avx, avx2]
         implementation:
-          tsil "emit_return(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
+          tsil "complete(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
     sse:
       arith:
         requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2, sse4_1], ui64 [sse, sse2, sse4_1], f32 [sse, sse2], f64 [sse, sse2, sse4_1]}
         implementation:
-          tsil "emit_return(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
+          tsil "complete(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
     neon:
       arith:
         requires [neon]
         implementation:
-          tsil "emit_return(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
+          tsil "complete(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
     scalar:
       arith:
         requires []
         implementation:
-          tsil "emit_return(!mask);"
+          tsil "complete(!mask);"
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -248,7 +248,7 @@ prim<m:=m> mask_binary_not(mask):
                   mask<set>(result, i, true);
                 }
               }
-              emit_return(result);
+              complete(result);
             """
 prim<usize:=m> mask_population_count(mask):
   brief_description "Counts bits set in a mask scalar."
@@ -280,7 +280,7 @@ prim<usize:=m> mask_population_count(mask):
         implementation:
           tsil """
             var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
-            emit_return(
+            complete(
               cast<static>(
                 type<backend>(scalar::size),
                 details::popcount(imask)
@@ -291,27 +291,27 @@ prim<usize:=m> mask_population_count(mask):
       ?i8:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<svcntp_b8>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b8>(call<primitive=mask_true[Vec]>(), mask)));"
       ?i16:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<svcntp_b16>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b16>(call<primitive=mask_true[Vec]>(), mask)));"
       ?i32:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
       ?i64:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
       f32:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
       f64:
         requires [sve]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(vector::imask), intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -326,7 +326,7 @@ prim<usize:=m> mask_population_count(mask):
                   count = count + cast<static>(CountT, 1);
                 }
               }
-              emit_return(count);
+              complete(count);
             """
 prim<im:=(im,s)> shift_right_imask(data, shift):
   brief_description "Arithmetic shift of an imask to the right by n bits."
@@ -355,9 +355,9 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
         implementation:
           tsil """
           if<compile>(( value<generation>(type::is_signed(type<generation>(vector::imask))) ) && (!PreserveSign)) {
-             emit_return(cast<static>(type<generation>(vector::imask), cast<static>(type<generation>(base::unsigned_of(type<generation>(vector::imask))), data) >> shift));
+             complete(cast<static>(type<generation>(vector::imask), cast<static>(type<generation>(base::unsigned_of(type<generation>(vector::imask))), data) >> shift));
           } else {
-             emit_return(data >> shift) ;
+             complete(data >> shift) ;
           }
             """
       f?:
@@ -374,5 +374,5 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-           emit_return(data >> cast<static>(type<generation>(vector::imask), shift)) ;
+           complete(data >> cast<static>(type<generation>(vector::imask), shift)) ;
             """

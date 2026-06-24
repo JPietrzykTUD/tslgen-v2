@@ -316,10 +316,10 @@ The accepted M243 positive slice is the unmasked
 `tsldata/primitives/arithmetic/fundamental.tsl` `add` primitive with
 signature `v:=(v,v)`, parameters `left` and `right`, selector path
 `("scalar", "arith")`, concrete type tag `si32`, and implementation payload
-`tsil "emit_return(left + right);"`.
+`tsil "complete(left + right);"`.
 
 The bridge accepts only a selected body whose complete source-owned body text
-is one exact `emit_return(PAYLOAD);` lexical region plus the trailing
+is one exact `complete(PAYLOAD);` lexical region plus the trailing
 semicolon. The payload must contain raw text only for M243; nested TSIL
 keyword regions inside the return payload are diagnosed rather than repaired
 or rendered. Raw payload text such as `left + right` is carried into the
@@ -347,7 +347,7 @@ states, including:
 - `TSL-REAL-SCALAR-EMIT-RETURN-AMBIGUOUS-BODY` when the selected selector path
   has more than one body envelope.
 - `TSL-REAL-SCALAR-EMIT-RETURN-UNSUPPORTED-BODY` when the body is not exactly
-  one `emit_return(PAYLOAD);` region.
+  one `complete(PAYLOAD);` region.
 - `TSL-REAL-SCALAR-EMIT-RETURN-UNSUPPORTED-PAYLOAD` when the return payload
   contains nested TSIL keyword regions or no raw payload text.
 - `TSL-REAL-SCALAR-EMIT-RETURN-UNSUPPORTED-PROFILE-SET` when the requested
@@ -378,7 +378,7 @@ functions, such as `add_scalar_si32` and `sub_scalar_si32`, in both the C++
 and Rust scalar profile artifacts.
 
 Each selected body still passes the M243 exact
-`emit_return(PAYLOAD);` boundary. Payload text remains raw source-owned text;
+`complete(PAYLOAD);` boundary. Payload text remains raw source-owned text;
 `left + right` and `left - right` are not parsed as target-language operators
 or lowered as expression semantics. C++ and Rust scalar type spellings still
 come from the accepted backend metadata type-spelling boundary. Artifacts are
@@ -415,7 +415,7 @@ The public real-pipeline API uses generic selected-primitive project names:
 - `build_primitive_project_artifacts_from_selected_bodies`
 
 The scalar/add/sub/type-tag facts accepted by M243/M244 are now explicit
-selected-entry data. The exact single-`emit_return(PAYLOAD);` body boundary,
+selected-entry data. The exact single-`complete(PAYLOAD);` body boundary,
 raw payload preservation, backend metadata scalar type spelling, duplicate
 selection diagnostics, deterministic artifact output, manifest-clean writing,
 and C++/Rust build verification remain unchanged.
@@ -541,7 +541,7 @@ M247 diagnostics include:
 M247 preserves direct intrinsic requests, immediate metadata, opaque argument
 payloads, body-token substitution behavior, explicit modifier precedence, and
 M246 default-policy diagnostics. It does not add new lowering, pairwise
-`emit_return + intrin_compose` special cases, primitive selection, dependency
+`complete + intrin_compose` special cases, primitive selection, dependency
 closure, vector/register function-signature rendering in the project pipeline,
 real AVX/NEON build verification, or runtime dependencies on `frozen` or
 `tslgenold`.
@@ -562,12 +562,12 @@ tables. C++ profile includes may include extension-owned headers from the same
 catalog metadata. Scalar selected entries continue to use the accepted scalar
 type identity path.
 
-Exact `emit_return(PAYLOAD);` bodies remain the only accepted project-pipeline
+Exact `complete(PAYLOAD);` bodies remain the only accepted project-pipeline
 body envelope. The payload may be a sequence of raw fragments and nested TSIL
 keyword regions. If the payload contains backend intrinsic request islands, the
 pipeline uses the existing intrinsic discovery/lowering/handoff path and the
 M247 bridge with selected backend, extension, type tag, and extension catalog
-context. This is not a pairwise `emit_return + intrin_compose` handler; nested
+context. This is not a pairwise `complete + intrin_compose` handler; nested
 keyword regions are consumed through the accepted token/handoff boundaries.
 
 M248 does not add new lowering semantics, primitive-call expansion, dependency
@@ -751,7 +751,7 @@ source-body boundary:
 - nested `call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(...)`
   in the loop body;
 - nested `type<backend>(vector::as_extension(scalar))` in the call selector;
-- `emit_return(result)`.
+- `complete(result)`.
 
 Non-lowerable source text around those islands remains raw source-owned text.
 In particular, `result[i] = `, the loop-body semicolon/newline text, and the
@@ -779,9 +779,9 @@ compatibility/semantic adapter layer over that pure syntax model.
 
 Catalog promotion now scans full `tsil` raw implementation bodies into a
 `SourceBodyFragmentSequence` attached to the selected `Implementation`. This
-full-body scan is not limited to `emit_return(...)` payloads; it sees root and
+full-body scan is not limited to `complete(...)` payloads; it sees root and
 nested regions such as `var`, `loop`, `call`, `type<backend>`, and
-`emit_return` through the shared recursive fragment boundary.
+`complete` through the shared recursive fragment boundary.
 
 The old `ImplementationBody` token stream remains temporarily as compatibility
 payload for accepted consumers, but backend type-query discovery now prefers
@@ -913,7 +913,7 @@ Milestone 254.5 extends the fragment-first body ownership path to
 Direct selected-body lowering now builds one local selected-body token view.
 When a selected implementation carries `source_body_fragments`, the view derives
 temporary compatibility tokens from the recursive fragment sequence and uses
-those tokens for direct operation-fragment detection, exact `emit_return(...)`
+those tokens for direct operation-fragment detection, exact `complete(...)`
 detection, primitive-call return-payload expression lowering, unsupported
 return-expression diagnostics, and primitive-call diagnostics. If the selected
 implementation already carries old compatibility body tokens and fragment
@@ -921,7 +921,7 @@ adaptation would change an accepted diagnostic boundary, the view falls back to
 `ImplementationBody.tokens` as compatibility-only debt.
 
 The fragment-backed path preserves accepted
-`emit_return(call<primitive=add>(left, right));` lowering with empty
+`complete(call<primitive=add>(left, right));` lowering with empty
 compatibility body tokens. It also preserves unsupported return-expression and
 primitive-call diagnostics from fragment-derived payload tokens. Token-only
 direct operation fallback remains available for accepted binary, unary, and
@@ -959,7 +959,7 @@ primitive-call directive adapter. `ImplementationBody.tokens` traversal remains
 available only for selected implementations without fragments.
 
 The fragment-backed path preserves the accepted M147/M148 primitive-call
-semantics: standalone calls and calls in `emit_return(...)` payloads are
+semantics: standalone calls and calls in `complete(...)` payloads are
 collected in source order; selector lowering, target matching, raw positional
 argument binding, unsupported-selector diagnostics, unknown-target diagnostics,
 missing-implementation diagnostics, arity diagnostics, and continued
@@ -1620,7 +1620,7 @@ return _mm_add_epi32(left, right);
 
 The `return ` and `;` text are raw source text. M215 does not parse or invent
 return statements, assignments, array indexing, operators, loops, braces,
-semicolons, `emit_return(...)`, or surrounding C++ syntax.
+semicolons, `complete(...)`, or surrounding C++ syntax.
 
 Typed immediate metadata and call provenance are preserved on the rendered
 body-token result for later wrapper/signature/template work. Opaque non-text
@@ -1693,7 +1693,7 @@ return core::arch::x86_64::_mm_add_epi32(left, right);
 
 The `return ` and `;` text remain raw source text. M220 does not parse or
 invent return statements, assignments, array indexing, operators, loops,
-braces, semicolons, `emit_return(...)`, Rust const generics, or surrounding
+braces, semicolons, `complete(...)`, Rust const generics, or surrounding
 Rust/C++ syntax. Opaque non-text body-token segments remain diagnostics until
 those tokens are lowered/rendered by a selected future boundary.
 
@@ -1759,7 +1759,7 @@ For example, a backend type query handoff may render raw text plus
 backend value query handoff may render raw text plus
 `value<backend>(uninit::scalar)` to an already-translated backend value. The
 surrounding source text remains raw. M221 does not parse statements,
-assignments, array access, operators, `emit_return(...)`, or surrounding
+assignments, array access, operators, `complete(...)`, or surrounding
 C++/Rust syntax.
 
 M221 deliberately excludes source-operation handoffs, control directives,
@@ -2258,7 +2258,7 @@ structured diagnostics rather than raw passthrough, source repair, renderer
 inference, or TSIL parsing.
 
 M126 does not add new accepted source syntax. It does not parse TSIL strings,
-`emit_return(...)`, helper calls, primitive calls, intrinsics, casts,
+`complete(...)`, helper calls, primitive calls, intrinsics, casts,
 assignments, array access, loops, multiline bodies, raw/lowerable mixed TSIL
 lines, backend manifests, target discovery, runtime `tsldata/` semantic reads,
 or backend-owned operator spellings in lowering.
@@ -2267,7 +2267,7 @@ or backend-owned operator spellings in lowering.
 
 Milestone 128 adds source intake for exact quoted `tsil` payload envelopes in
 the current narrow clean primitive/implementation shape. Inline quoted payloads
-such as `tsil "emit_return(left + right);"` are promoted to an
+such as `tsil "complete(left + right);"` are promoted to an
 `ImplementationBody` with one `RawStringToken` containing the payload text inside
 the quotes. Multiline quoted payloads opened by `tsil """` and closed by a line
 whose stripped text is `"""` are promoted to ordered `RawStringToken` values for
@@ -2281,7 +2281,7 @@ remain malformed catalog input. Selected raw TSIL bodies still produce
 `TSL-LOWER-UNSUPPORTED-BODY`; no raw TSIL payload text may be rendered as C++ or
 Rust.
 
-M128 does not parse or lower `emit_return(...)`, primitive calls, helpers,
+M128 does not parse or lower `complete(...)`, primitive calls, helpers,
 intrinsics, assignments, array access, operators, declarations, loops,
 generation/backend/runtime control, casts, memory helpers, I/O helpers,
 `tsil:` block entries, full `tsldata/` `impls:` nesting, or any complete TSIL
@@ -2290,21 +2290,21 @@ bytes remain stable.
 
 ### M129 Exact TSIL Emit-Return Directive Boundary
 
-Milestone 129 recognizes exact `emit_return(...)` TSIL statement envelopes
+Milestone 129 recognizes exact `complete(...)` TSIL statement envelopes
 inside M128 quoted-TSIL raw payload lines. The recognized line becomes a typed
-`LowerableDirective` named `emit_return` with one argument: the opaque source
-text between the outer `emit_return(` and its matching close parenthesis.
+`LowerableDirective` named `complete` with one argument: the opaque source
+text between the outer `complete(` and its matching close parenthesis.
 Leading indentation on multiline payload lines may be ignored to find the
 directive keyword, but the directive argument is not normalized, parsed, or
 repaired.
 
 The directive recognizer performs only delimiter matching for the outer
-`emit_return` call. Nested parentheses are handled so payloads such as
+`complete` call. Nested parentheses are handled so payloads such as
 `call<primitive=add>(left, right)` remain intact. Operators, operands, helper
 calls, primitive calls, intrinsics, casts, array access, generation/backend
 queries, and other target-language-looking payload text remain opaque.
 
-Selected bodies containing only an `emit_return` directive with opaque payload
+Selected bodies containing only a `complete` directive with opaque payload
 produce `TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION` until a later milestone
 lowers that payload into a typed expression. Malformed directive envelopes,
 missing semicolons, extra statement text, unsupported directive names, and
@@ -2319,7 +2319,7 @@ quoted-TSIL raw payload lines. Call-shaped envelopes are recognized as
 `keyword<selector>(payload)` with optional semicolon for `var` and `let`, and
 optional trailing `{` for `loop`, `if`, and `switch`. Selector-only
 `else<selector>` envelopes may also have an optional trailing `{`. The M129
-`emit_return(...)` directive remains supported.
+`complete(...)` directive remains supported.
 
 The recognized directive span becomes a `LowerableDirective` with opaque
 source-text arguments: `(selector, payload)` for call-shaped directives and
@@ -2370,7 +2370,7 @@ primitive names, interpret `@self`, split call arguments, evaluate
 type/backend/generation queries, segment directive payloads, parse
 assignments, array access, expressions, helpers, or operators, compute
 dependency closure, repair source, or render backend code. Calls inside
-already classified `emit_return`, `var`, `let`, `loop`, `if`, `switch`, or
+already classified `complete`, `var`, `let`, `loop`, `if`, `switch`, or
 `else` directive payloads remain opaque.
 
 ### M133 Exact TSIL Primitive-Call Lowering Boundary
@@ -2407,24 +2407,24 @@ unsupported-return diagnostics.
 ### M134 Exact Lowerable Directive Payload Token Boundary
 
 Milestone 134 gives selected lowerable directives a narrow payload-token
-boundary, first only for `emit_return(...)`. The directive keeps its original
+boundary, first only for `complete(...)`. The directive keeps its original
 opaque payload argument for diagnostics and also exposes ordered payload tokens
 for exact lowerable islands inside that payload. Raw payload text remains raw
 payload-token data.
 
 For M134, only exact M132 `call<primitive=...>(...)` islands are classified
-inside an `emit_return(...)` payload. The primitive-call selector and payload
-text stay opaque, and non-`emit_return` directive payloads such as `var`,
+inside a `complete(...)` payload. The primitive-call selector and payload
+text stay opaque, and non-`complete` directive payloads such as `var`,
 `let`, `loop`, `if`, `switch`, and `else` remain opaque.
 
-An `emit_return(...)` directive lowers only when its payload-token stream
+A `complete(...)` directive lowers only when its payload-token stream
 contains exactly one token that already lowers through the M133 exact
 `call<primitive=add>(left, right)` boundary for the accepted scalar add shape.
 Recognized but unsupported primitive-call payload tokens produce
 `TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL` at the call source. Raw-only or mixed
 raw payloads continue to produce `TSL-LOWER-UNSUPPORTED-RETURN-EXPRESSION`.
 
-M134 does not add a general `emit_return` expression parser, recursive
+M134 does not add a general `complete` expression parser, recursive
 directive-payload parser, dependency closure, `@self` interpretation, argument
 splitting, helper/operator lowering, assignment or array-access lowering,
 backend call rendering, source repair, runtime `tsldata` lookup, or `frozen` /
@@ -2458,13 +2458,13 @@ stores optional specialization and `attrs[...]` payloads as opaque source
 text.
 
 The structured selector is populated for both standalone M132 call tokens and
-M134 `emit_return(...)` payload call tokens. The accepted M133/M134 exact
+M134 `complete(...)` payload call tokens. The accepted M133/M134 exact
 `call<primitive=add>(left, right)` lowering remains stable, but no other call
 is resolved or executed. Unsupported recognized calls still produce
 `TSL-LOWER-UNSUPPORTED-PRIMITIVE-CALL` diagnostics.
 
 Malformed selector brackets, malformed `attrs[...]` forms, raw
-`emit_return(left)` / `emit_return(result)` payloads, primitive dependency
+`complete(left)` / `complete(result)` payloads, primitive dependency
 closure, `@self` expansion, specialization interpretation, attrs
 interpretation, call argument splitting, recursive call trees, expression
 parsing, assignment or array-access lowering, backend call rendering, source
@@ -2525,7 +2525,7 @@ available:
   primitive-call dependency resolution is not implemented yet.
 
 The same diagnostic context applies to standalone M132 call tokens and to M134
-`emit_return(...)` payload call tokens. Hand-constructed call directives that
+`complete(...)` payload call tokens. Hand-constructed call directives that
 lack `PrimitiveCall` data keep the legacy opaque selector/payload fallback
 context.
 
@@ -2841,7 +2841,7 @@ arguments to formal parameters. Successful calls produce source-ordered
 
 The inventory includes standalone primitive-call directive tokens and
 primitive-call payload tokens already recognized inside directive payload token
-streams such as `emit_return(...)`. It accumulates diagnostics from selector
+streams such as `complete(...)`. It accumulates diagnostics from selector
 payload lowering, target matching, and argument binding, and continues with
 later recognized calls after a failed call.
 
@@ -2901,7 +2901,7 @@ accepted `PrimitiveCallReference`, including target match, raw source
 arguments, positional bindings, and source provenance.
 
 M150 also adds the first exact consumer for that expression: a selected
-implementation body containing exactly one `emit_return` directive whose
+implementation body containing exactly one `complete` directive whose
 payload token stream contains exactly one recognized primitive-call token. In
 that case, selected-function lowering may produce a `LoweredFunction` whose
 return expression is the primitive-call expression. The M149 package then
@@ -2918,7 +2918,7 @@ M150 does not implement separate per-context primitive-call lowering,
 standalone primitive-call statement semantics, backend call rendering,
 backend type rendering, dependency scheduling, topological sorting, recursive
 nested-call lowering, raw argument expression parsing, arbitrary
-`emit_return(...)` expression lowering, var/let/loop/if payload semantics,
+`complete(...)` expression lowering, var/let/loop/if payload semantics,
 source repair, or runtime `tsldata`, `frozen`, or `tslgenold` dependencies.
 
 ### M151 Primitive-Call Lowering Consolidation Boundary
@@ -2950,7 +2950,7 @@ the selector-payload helper, call resolution through `PrimitiveCallResolver`,
 and inventory/closure collection through `PrimitiveCallDependencyCollector`.
 
 M152 is behavior-preserving for primitive-call semantics. Selected-function
-lowering, exact `emit_return(call<primitive=...>(...));` consumption, raw
+lowering, exact `complete(call<primitive=...>(...));` consumption, raw
 argument preservation, diagnostics, source locations, deterministic reference
 and closure ordering, and closure-lowering package behavior remain stable.
 `Lowerer` still owns selected-function/type lowering and the package
@@ -2964,15 +2964,15 @@ backend call rendering, backend type rendering, source repair, or runtime
 
 ### Post-M234 Recursive Primitive-Call Payload Feeding
 
-M234 preserves the accepted exact `emit_return(call<primitive=...>(...));`
+M234 preserves the accepted exact `complete(call<primitive=...>(...));`
 consumer behavior, but changes how the direct payload token is produced. The
-catalog no longer uses a dedicated `emit_return + call` raw-text
-reclassification helper. Instead, `emit_return` payload text is lowered through
+catalog no longer uses a dedicated `complete + call` raw-text
+reclassification helper. Instead, `complete` payload text is lowered through
 the recursive M233 source-body fragment boundary, and direct `call` keyword
 fragments are adapted into the existing `PrimitiveCall` / `LowerableDirective`
 shape before M150/M151 primitive-call resolution consumes them.
 
-The accepted exact `emit_return(call<primitive=add>(left, right));` artifact
+The accepted exact `complete(call<primitive=add>(left, right));` artifact
 path still folds to the existing typed add operation so current C++ and Rust
 renderers do not need primitive-call expression rendering for that legacy exact
 case. Other primitive-call expressions remain governed by the M150/M151
@@ -2994,7 +2994,7 @@ argument lowering, or source repair.
 ### Post-M236 Recursive Payload Diagnostic Propagation
 
 M236 keeps the M235 primitive-call adapter behavior but changes catalog-side
-diagnostic visibility for recursive `emit_return(...)` payload token feeding.
+diagnostic visibility for recursive `complete(...)` payload token feeding.
 When a known payload fragment such as `call<...>(...)` is recognized by the
 recursive fragment boundary but cannot be adapted to the accepted typed fact,
 the malformed-fragment diagnostic is propagated into catalog construction.
@@ -3013,7 +3013,7 @@ predefined backend/language support helpers. Lowering preserves them as raw
 implementation-body text and does not rewrite them to typed `add`, `mul`,
 `mod`, `+`, `*`, or `%` operations.
 
-An `emit_return(details::arith_*(...));` payload remains an opaque unsupported
+A `complete(details::arith_*(...));` payload remains an opaque unsupported
 return expression unless a future milestone explicitly selects support-helper
 availability or backend rendering policy. This matches the existing treatment
 of `details::popcount`, `details::clz`, `details::clz_recursive`,
@@ -3130,7 +3130,7 @@ calls, malformed directives, raw helper text, or other unsupported body tokens
 inside the unselected branch do not produce diagnostics.
 
 M157 does not add a new branch-body parser or renderer. It reuses existing
-operation-fragment, exact primitive-call, and exact `emit_return(...)` lowering
+operation-fragment, exact primitive-call, and exact `complete(...)` lowering
 for the selected branch. Existing M156 region/condition diagnostics propagate
 unchanged, and existing selected-branch body diagnostics still surface when the
 selected branch itself is outside the accepted body-lowering surface.
@@ -3354,7 +3354,7 @@ lowers each discovered loop slice through the M161 loop-region lowerer.
 
 All non-loop tokens are preserved as opaque source-owned spans. The accepted
 shape is the loop region itself, not any surrounding corpus pattern such as
-`var<...>` followed by `loop<range>` followed by `emit_return(...)`.
+`var<...>` followed by `loop<range>` followed by `complete(...)`.
 Multiple top-level loop regions in one body are retained in source order.
 Loop-region bodies may contain raw braces or nested loop-looking tokens; those
 tokens remain part of the parent loop body rather than becoming separate M162
@@ -3368,7 +3368,7 @@ bound diagnostics, ambiguous loop-region braces, and an explicit discovery
 request with no exact loop region produce deterministic diagnostics.
 
 M162 does not execute or unroll loops, substitute loop variables, evaluate
-declarations, lower `var<...>` or `emit_return(result)`, parse assignments,
+declarations, lower `var<...>` or `complete(result)`, parse assignments,
 array access, casts, intrinsics, primitive calls, backend control, or broad
 TSIL statements, render target-language loops, repair source text, schedule
 dependencies, read `tsldata`, `frozen`, or `tslgenold` at runtime, or add
@@ -3558,7 +3558,7 @@ The accepted outer shape is only a balanced `intrin<...>(...)` or
 `intrin<...>(...)`, `intrin_compose<...>(...)`, target identifiers, target
 literals, raw operators, quoted text, and helper calls; those nested
 constructs remain opaque. Corpus neighbor patterns such as
-`emit_return(intrin<...>(...));`, `var<const_infer>(tmp, intrin<...>(...))`,
+`complete(intrin<...>(...));`, `var<const_infer>(tmp, intrin<...>(...))`,
 or assignments containing `intrin_compose<...>(...)` are evidence for
 occurrence sites, not accepted surrounding-shape templates.
 
@@ -3643,7 +3643,7 @@ The accepted outer shape is only a balanced `cast<...>(...)`,
 `intrin_compose<...>(...)`, `cast<...>(...)`, `mem<...>(...)`,
 `io<...>(...)`, target identifiers, target literals, raw operators, quoted
 text, and helper calls; those nested constructs remain opaque. Corpus
-neighbor patterns such as `emit_return(cast<...>(...));`,
+neighbor patterns such as `complete(cast<...>(...));`,
 `var<const_infer>(tmp, cast<...>(...))`, assignments containing
 `mem<copy>(...)`, or I/O loop bodies are evidence for occurrence sites, not
 accepted surrounding-shape templates.
@@ -4358,11 +4358,11 @@ of pretending opaque payload text is backend-neutral IR.
 
 Milestone 27 adds the first mini-lowered TSIL form. The supported form is exactly
 a direct parameter-add return shaped as
-`emit_return(<parameter> + <parameter>);`, where both operands are names from
+`complete(<parameter> + <parameter>);`, where both operands are names from
 the selected primitive declaration. This produces a backend-neutral lowered
 return statement containing a binary `+` expression over parameter references.
 Milestone 38 adds the next narrow TSIL helper slice by lowering exactly
-`emit_return(intrin_compose<add>(<parameter>, <parameter>));`. The lowered model
+`complete(intrin_compose<add>(<parameter>, <parameter>));`. The lowered model
 represents this as backend-neutral intrinsic-compose helper data named `add`
 with ordered parameter-reference arguments. It does not render backend text and
 does not evaluate intrinsic names.
@@ -4410,7 +4410,7 @@ language, does not evaluate arbitrary generation-time branches or
 generation-time type/value queries, does not lower primitive calls, and does
 not render backend text. Unsupported TSIL remains diagnostic-producing:
 unrecognized TSIL returns `TSL-LOWER-TSIL-UNSUPPORTED`, nearby unsupported or
-malformed direct `emit_return(...)` forms return `TSL-LOWER-TSIL-RETURN-SHAPE`,
+malformed direct `complete(...)` forms return `TSL-LOWER-TSIL-RETURN-SHAPE`,
 unsupported intrinsic names return `TSL-LOWER-TSIL-INTRIN-UNSUPPORTED`,
 malformed intrinsic-compose syntax returns `TSL-LOWER-TSIL-INTRIN-MALFORMED`,
 wrong intrinsic-compose arity returns `TSL-LOWER-TSIL-INTRIN-ARITY`,
@@ -4520,7 +4520,7 @@ slots: opaque pre-branch slots, one selected-body slot referencing the M63
 envelope, and opaque post-branch slots. These are structural/provenance slots,
 not semantic statements. M64 does not lower or validate declarations, arrays,
 `svbool_t`, `pg`, direct intrinsics, `svst1`, stores, `tmp.data()`,
-`emit_return`, vector metadata, backend uninit values, backend translation,
+`complete`, vector metadata, backend uninit values, backend translation,
 rendering, generated output, or broad TSIL body syntax.
 
 Milestone 65 is accepted as the exact array-body envelope pipeline integration
@@ -4603,7 +4603,7 @@ structural value for the exact `array.tsl:105`
 `var<typed>(array_type<...>, tmp, ...)` shell. It is not generic declaration
 or array semantics: backend uninit translation, renderer input, generated
 output, allocation/lifetime, initializer behavior, variable scope, store,
-return, `tmp.data()`, and `emit_return` remain deferred.
+return, `tmp.data()`, and `complete` remain deferred.
 
 Milestone 74 implements exact array-body structural sequence and slot-role
 classification. It consumes accepted M64/M65 exact array-body envelope state
@@ -4747,10 +4747,10 @@ behavior.
 
 M87 is accepted as the exact return-emission structural/request IR slice. It
 recognizes only the selected trailing array-body slot shaped as
-`emit_return(tmp);` with insignificant whitespace, links the returned token to
+`complete(tmp);` with insignificant whitespace, links the returned token to
 the accepted M73 declaration-shell variable token, and records typed structural
 request data after the accepted M76 post-branch call-site stage. It does not
-correct malformed `.tsl` bodies, broaden `emit_return(...)`, infer intended
+correct malformed `.tsl` bodies, broaden `complete(...)`, infer intended
 operands, implement return semantics, evaluate variable lifetime/scope, add
 backend translation, render output, or turn nearby malformed forms into
 supported syntax. Nearby forms are diagnostic cases.

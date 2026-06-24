@@ -93,7 +93,7 @@ def _loop_catalog(
         implementations=(implementation,),
     )
     templates = {
-        "emit_return": "return {value}",
+        "complete": "return {value}",
         "loop_backend": "LOOP({var},{start},{end},{step})",
     }
     if include_unroll_template:
@@ -115,7 +115,7 @@ def _loop_catalog(
 
 
 def test_lanes_at_literal_lowers_from_typed_lane_list_param() -> None:
-    catalog, selected = _lane_list_catalog("emit_return(lanes<at>(values, 0));")
+    catalog, selected = _lane_list_catalog("complete(lanes<at>(values, 0));")
 
     cpp = Lowerer().lower(selected, catalog, create_backend_dialect(catalog, "cpp"))
     assert cpp.diagnostics == ()
@@ -129,7 +129,7 @@ def test_lanes_at_literal_lowers_from_typed_lane_list_param() -> None:
 
 
 def test_lanes_at_renders_array_like_cpp_and_rust_parameters() -> None:
-    catalog, selected = _lane_list_catalog("emit_return(lanes<at>(values, 0));")
+    catalog, selected = _lane_list_catalog("complete(lanes<at>(values, 0));")
     cpp_spec = Lowerer().lower(
         selected, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
@@ -152,10 +152,10 @@ def test_lanes_at_renders_array_like_cpp_and_rust_parameters() -> None:
 @pytest.mark.parametrize(
     ("body", "code"),
     [
-        ("emit_return(lanes<first>(values, 0));", "TSL-LOWER-LANES-UNSUPPORTED"),
-        ("emit_return(lanes<at>(values));", "TSL-LOWER-LANES-ARITY"),
-        ("emit_return(lanes<at>(args, 0));", "TSL-LOWER-LANES-UNKNOWN"),
-        ("emit_return(lanes<at>(values, i));", "TSL-LOWER-LANES-NON-GENERATION-INDEX"),
+        ("complete(lanes<first>(values, 0));", "TSL-LOWER-LANES-UNSUPPORTED"),
+        ("complete(lanes<at>(values));", "TSL-LOWER-LANES-ARITY"),
+        ("complete(lanes<at>(args, 0));", "TSL-LOWER-LANES-UNKNOWN"),
+        ("complete(lanes<at>(values, i));", "TSL-LOWER-LANES-NON-GENERATION-INDEX"),
     ],
 )
 def test_lanes_at_reports_unsupported_first_slice_shapes(body: str, code: str) -> None:
@@ -168,7 +168,7 @@ def test_lanes_at_reports_unsupported_first_slice_shapes(body: str, code: str) -
 
 
 def test_lanes_at_reports_literal_index_out_of_range() -> None:
-    catalog, selected = _lane_list_catalog("emit_return(lanes<at>(values, 1));")
+    catalog, selected = _lane_list_catalog("complete(lanes<at>(values, 1));")
 
     result = Lowerer().lower(selected, catalog, create_backend_dialect(catalog, "cpp"))
 
@@ -182,7 +182,7 @@ def test_generation_loop_expands_with_bound_lane_indexes() -> None:
     catalog, selected = _lane_list_catalog(
         "loop<generation>(i, 0, value<generation>(vector::length), 1) { "
         "lanes<at>(values, i); "
-        "} emit_return(lanes<at>(values, value<generation>(vector::length) - 1));",
+        "} complete(lanes<at>(values, value<generation>(vector::length) - 1));",
         extension_name="simd128",
         family="x86",
         vector_bits=128,
@@ -200,7 +200,7 @@ def test_generation_loop_expands_with_bound_lane_indexes() -> None:
 def test_generation_loop_rejects_non_integer_bounds() -> None:
     catalog, selected = _lane_list_catalog(
         "loop<generation>(i, 0, LANES, 1) { lanes<at>(values, i); } "
-        "emit_return(lanes<at>(values, 0));"
+        "complete(lanes<at>(values, 0));"
     )
 
     result = Lowerer().lower(selected, catalog, create_backend_dialect(catalog, "cpp"))
@@ -214,7 +214,7 @@ def test_generation_loop_rejects_non_integer_bounds() -> None:
 def test_generation_loop_rejects_zero_step() -> None:
     catalog, selected = _lane_list_catalog(
         "loop<generation>(i, 0, 1, 0) { lanes<at>(values, i); } "
-        "emit_return(lanes<at>(values, 0));"
+        "complete(lanes<at>(values, 0));"
     )
 
     result = Lowerer().lower(selected, catalog, create_backend_dialect(catalog, "cpp"))
@@ -229,7 +229,7 @@ def test_backend_loop_renders_without_unroll_hint() -> None:
     catalog, selected = _loop_catalog(
         "loop<backend>(i, 0, value<generation>(vector::length), 1) { "
         "intrin<touch>(i); "
-        "} emit_return(a);"
+        "} complete(a);"
     )
 
     result = Lowerer().lower(selected, catalog, create_backend_dialect(catalog, "cpp"))
@@ -245,7 +245,7 @@ def test_backend_loop_unroll_hint_uses_generation_known_trip_count() -> None:
     catalog, selected = _loop_catalog(
         "loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) { "
         "intrin<touch>(i); "
-        "} emit_return(a);"
+        "} complete(a);"
     )
 
     result = Lowerer().lower(selected, catalog, create_backend_dialect(catalog, "cpp"))
@@ -262,7 +262,7 @@ def test_backend_loop_unroll_without_backend_support_renders_plain_loop() -> Non
     catalog, selected = _loop_catalog(
         "loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) { "
         "intrin<touch>(i); "
-        "} emit_return(a);",
+        "} complete(a);",
         extension_name="generic",
         vector_bits=0,
         vector_bits_kind="sized",
@@ -282,7 +282,7 @@ def test_backend_loop_unroll_with_symbolic_count_renders_plain_loop() -> None:
     catalog, selected = _loop_catalog(
         "loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) { "
         "intrin<touch>(i); "
-        "} emit_return(a);",
+        "} complete(a);",
         extension_name="generic",
         vector_bits=0,
         vector_bits_kind="sized",
@@ -301,7 +301,7 @@ def test_legacy_loop_range_selector_is_not_supported() -> None:
     catalog, selected = _loop_catalog(
         "loop<range>(i, 0, value<generation>(vector::length), 1) { "
         "intrin<touch>(i); "
-        "} emit_return(a);"
+        "} complete(a);"
     )
 
     result = Lowerer().lower(selected, catalog, create_backend_dialect(catalog, "cpp"))

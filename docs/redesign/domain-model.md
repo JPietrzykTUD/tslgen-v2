@@ -944,7 +944,7 @@ Invariants:
   outer fixture shape and promotes their payload content to ordered
   `RawStringToken` values. Those raw tokens are catalog data only until a later
   milestone selects exact lowerable TSIL islands.
-- M129 classifies exact `emit_return(...)` payload lines as
+- M129 classifies exact `complete(...)` payload lines as
   `LowerableDirective` tokens with opaque source-text arguments. The
   directive boundary does not imply expression, operator, helper, call, or
   backend rendering semantics.
@@ -973,9 +973,9 @@ Invariants:
   call rendering is implied.
 - M134 lets selected lowerable directives retain opaque source-text arguments
   while also exposing source-owned payload tokens for exact lowerable islands.
-  The first accepted payload-token producer is `emit_return(...)`, and the
+  The first accepted payload-token producer is `complete(...)`, and the
   first accepted payload island is the existing M132
-  `call<primitive=...>(...)` token shape. Non-`emit_return` directive payloads
+  `call<primitive=...>(...)` token shape. Non-`complete` directive payloads
   remain opaque, and the payload-token boundary does not imply general
   expression parsing, recursive directive-payload parsing, dependency closure,
   `@self` interpretation, argument splitting, or backend call rendering.
@@ -1571,7 +1571,7 @@ The M162 discovery model is a token-span provenance fact, not a statement
 model. It supports multiple exact top-level loop regions in source order,
 preserves all non-loop tokens as opaque spans, and reuses the M161 region
 fact for each loop slice. Surrounding token names such as `var<...>` or
-`emit_return(...)` do not affect discovery behavior.
+`complete(...)` do not affect discovery behavior.
 Discovery tracks raw brace depth only to avoid treating loops inside unrelated
 opaque raw-brace scopes as top-level; it does not interpret those scopes as
 statements or control flow.
@@ -2310,7 +2310,7 @@ Invariants:
 - Generation-time branch markers are represented at the lowering boundary even
   before they are evaluated.
 - Milestone 27 lowers only direct parameter-add returns shaped as
-  `emit_return(<parameter> + <parameter>);` into backend-neutral
+  `complete(<parameter> + <parameter>);` into backend-neutral
   `TsilReturnStatement` values. Other expression, call, branch, loop, intrinsic,
   and backend-specific payloads remain unsupported.
 - Future semantic dependency references are extracted from parsed TSIL, not just

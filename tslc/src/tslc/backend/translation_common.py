@@ -78,5 +78,5 @@ def template_application(
 
 def frame_return(catalog: Catalog, backend_id: str, value: RenderField) -> RenderText:
     return template_application(
-        catalog, backend_id, "emit_return", "return {value}", value=value
+        catalog, backend_id, "complete", "return {value}", value=value
     )

@@ -7,15 +7,15 @@ from tslc.lower.context import LoweringSession
 from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.render.model import RenderField
 
-class EmitReturnLowerer:
-    """``emit_return(expr)`` -> the backend's return framing around the value.
+class CompleteLowerer:
+    """``complete(expr)`` -> the backend's return framing around the value.
 
-    Backend-neutral: the ``return`` spelling comes from the backend's
-    ``emit_return`` translate template. Any required ``unsafe`` framing is carried
+    Backend-neutral: the target return spelling comes from the backend's
+    ``complete`` translate template. Any required ``unsafe`` framing is carried
     by the typed lowered body, not inferred by backend renderers.
     """
 
-    keyword = "emit_return"
+    keyword = "complete"
 
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody

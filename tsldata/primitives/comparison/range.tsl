@@ -13,13 +13,13 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
       arith:
         requires []
         implementation:
-          tsil "emit_return((left <= x) && (x <= right));"
+          tsil "complete((left <= x) && (x <= right));"
     generic:
       arith:
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -31,7 +31,7 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -43,7 +43,7 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -64,7 +64,7 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -78,7 +78,7 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -90,7 +90,7 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -101,7 +101,7 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -116,7 +116,7 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
           ui64 [sse2, sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -127,7 +127,7 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
         requires [sse]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -138,7 +138,7 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
         requires [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -150,7 +150,7 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -162,7 +162,7 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -183,13 +183,13 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
       arith:
         requires []
         implementation:
-          tsil "emit_return((left <= x) && (x < right));"
+          tsil "complete((left <= x) && (x < right));"
     generic:
       arith:
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than>(x, right)
@@ -201,7 +201,7 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than>(x, right)
@@ -213,7 +213,7 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than>(x, right)
@@ -234,7 +234,7 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than>(x, right)
@@ -248,7 +248,7 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than>(x, right)
@@ -260,7 +260,7 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than>(x, right)
@@ -271,7 +271,7 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than>(x, right)
@@ -286,7 +286,7 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
           ui64 [sse2, sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than>(x, right)
@@ -297,7 +297,7 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
         requires [sse]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than>(x, right)
@@ -308,7 +308,7 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
         requires [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than>(x, right)
@@ -320,7 +320,7 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than>(x, right)
@@ -332,7 +332,7 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than_or_equal>(left, x),
                 call<primitive=less_than>(x, right)
@@ -353,13 +353,13 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
       arith:
         requires []
         implementation:
-          tsil "emit_return((left < x) && (x <= right));"
+          tsil "complete((left < x) && (x <= right));"
     generic:
       arith:
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -371,7 +371,7 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -383,7 +383,7 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -404,7 +404,7 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -418,7 +418,7 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -430,7 +430,7 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -441,7 +441,7 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -456,7 +456,7 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
           ui64 [sse2, sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -467,7 +467,7 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
         requires [sse]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -478,7 +478,7 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
         requires [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -490,7 +490,7 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -502,7 +502,7 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than_or_equal>(x, right)
@@ -523,13 +523,13 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
       arith:
         requires []
         implementation:
-          tsil "emit_return((left < x) && (x < right));"
+          tsil "complete((left < x) && (x < right));"
     generic:
       arith:
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than>(x, right)
@@ -541,7 +541,7 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than>(x, right)
@@ -553,7 +553,7 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than>(x, right)
@@ -574,7 +574,7 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than>(x, right)
@@ -588,7 +588,7 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than>(x, right)
@@ -600,7 +600,7 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than>(x, right)
@@ -611,7 +611,7 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than>(x, right)
@@ -626,7 +626,7 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
           ui64 [sse2, sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than>(x, right)
@@ -637,7 +637,7 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
         requires [sse]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than>(x, right)
@@ -648,7 +648,7 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
         requires [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than>(x, right)
@@ -660,7 +660,7 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than>(x, right)
@@ -672,7 +672,7 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 call<primitive=less_than>(left, x),
                 call<primitive=less_than>(x, right)
@@ -694,7 +694,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=between_inclusive[Vec]>(x, left, right)
@@ -706,7 +706,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_inclusive>(x, left, right)
@@ -718,7 +718,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_inclusive>(x, left, right)
@@ -730,7 +730,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_inclusive>(x, left, right)
@@ -751,7 +751,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_inclusive>(x, left, right)
@@ -765,7 +765,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_inclusive>(x, left, right)
@@ -777,7 +777,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_inclusive>(x, left, right)
@@ -788,7 +788,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_inclusive>(x, left, right)
@@ -803,7 +803,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
           ui64 [sse2, sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_inclusive>(x, left, right)
@@ -814,7 +814,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
         requires [sse]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_inclusive>(x, left, right)
@@ -825,7 +825,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
         requires [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_inclusive>(x, left, right)
@@ -837,7 +837,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_inclusive>(x, left, right)
@@ -849,7 +849,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_inclusive>(x, left, right)
@@ -871,7 +871,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=between_left_inclusive[Vec]>(x, left, right)
@@ -883,7 +883,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_left_inclusive>(x, left, right)
@@ -895,7 +895,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_left_inclusive>(x, left, right)
@@ -907,7 +907,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_left_inclusive>(x, left, right)
@@ -928,7 +928,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_left_inclusive>(x, left, right)
@@ -942,7 +942,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_left_inclusive>(x, left, right)
@@ -954,7 +954,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_left_inclusive>(x, left, right)
@@ -965,7 +965,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_left_inclusive>(x, left, right)
@@ -980,7 +980,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
           ui64 [sse2, sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_left_inclusive>(x, left, right)
@@ -991,7 +991,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
         requires [sse]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_left_inclusive>(x, left, right)
@@ -1002,7 +1002,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
         requires [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_left_inclusive>(x, left, right)
@@ -1014,7 +1014,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_left_inclusive>(x, left, right)
@@ -1026,7 +1026,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_left_inclusive>(x, left, right)
@@ -1048,7 +1048,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=between_right_inclusive[Vec]>(x, left, right)
@@ -1060,7 +1060,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_right_inclusive>(x, left, right)
@@ -1072,7 +1072,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_right_inclusive>(x, left, right)
@@ -1084,7 +1084,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_right_inclusive>(x, left, right)
@@ -1105,7 +1105,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_right_inclusive>(x, left, right)
@@ -1119,7 +1119,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_right_inclusive>(x, left, right)
@@ -1131,7 +1131,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_right_inclusive>(x, left, right)
@@ -1142,7 +1142,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_right_inclusive>(x, left, right)
@@ -1157,7 +1157,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
           ui64 [sse2, sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_right_inclusive>(x, left, right)
@@ -1168,7 +1168,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
         requires [sse]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_right_inclusive>(x, left, right)
@@ -1179,7 +1179,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
         requires [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_right_inclusive>(x, left, right)
@@ -1191,7 +1191,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_right_inclusive>(x, left, right)
@@ -1203,7 +1203,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_right_inclusive>(x, left, right)
@@ -1225,7 +1225,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=between_exclusive[Vec]>(x, left, right)
@@ -1237,7 +1237,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
         requires []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_exclusive>(x, left, right)
@@ -1249,7 +1249,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_exclusive>(x, left, right)
@@ -1261,7 +1261,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
         requires [oneAPIfpgaDev]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_exclusive>(x, left, right)
@@ -1282,7 +1282,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
             bword   [sse2, avx512f, avx512vl, avx512bw]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_exclusive>(x, left, right)
@@ -1296,7 +1296,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
           sse_vl  [sse2, avx512f, avx512vl]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_exclusive>(x, left, right)
@@ -1308,7 +1308,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
         requires [avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_exclusive>(x, left, right)
@@ -1319,7 +1319,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
         requires [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_exclusive>(x, left, right)
@@ -1334,7 +1334,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
           ui64 [sse2, sse4_1]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_exclusive>(x, left, right)
@@ -1345,7 +1345,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
         requires [sse]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_exclusive>(x, left, right)
@@ -1356,7 +1356,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
         requires [sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_exclusive>(x, left, right)
@@ -1368,7 +1368,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_exclusive>(x, left, right)
@@ -1380,7 +1380,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=between_exclusive>(x, left, right)

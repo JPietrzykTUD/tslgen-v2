@@ -66,7 +66,7 @@ Thin fixtures and selected source slices are allowed to prove behavior, but
 their names and constraints must not become production architecture. Source
 data concepts such as primitive names (`add`, `sub`), extension/profile names
 (`scalar`, `sse`, `avx2`, `neon`), type tags (`si32`, `f32`), signatures
-(`v:=(v,v)`), and exact body forms (`emit_return(PAYLOAD);`) must flow as
+(`v:=(v,v)`), and exact body forms (`complete(PAYLOAD);`) must flow as
 typed selected data through generic boundaries. They must not define package,
 module, class, or pipeline ownership unless the concept is genuinely part of
 the generator architecture rather than one selected fixture.
@@ -279,7 +279,7 @@ Exact operator-looking `.tsl` source spellings may be recognized only when they
 are all of the following:
 
 - documented as an accepted source form;
-- scoped to a narrow body context such as an exact `tsil "emit_return(...);"`
+- scoped to a narrow body context such as an exact `tsil "complete(...);"`
   line;
 - mapped immediately to an existing typed TSL primitive semantic operation or
   explicitly selected semantic concept;

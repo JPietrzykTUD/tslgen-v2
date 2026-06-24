@@ -28,7 +28,7 @@ prim<v:=ptr>[aligned=*] load(ptr):
       arith:
         requires []
         implementation:
-          tsil "emit_return(*ptr);"
+          tsil "complete(*ptr);"
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -40,7 +40,7 @@ prim<v:=ptr>[aligned=*] load(ptr):
               loop<backend, unroll>(idx, 0, value<generation>(vector::length), 1)  {
                 reg[idx] = *ptr_add(ptr, idx);
               }
-              emit_return(reg);
+              complete(reg);
             """
     [avx512, avx2, sse]:
       ?i?:
@@ -51,7 +51,7 @@ prim<v:=ptr>[aligned=*] load(ptr):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
-              emit_return(
+              complete(
                 intrin<load, build[suffix=intrin::suffix("stream")]>(
                   cast<reinterpret>(
                     type<generation>(vector::register) const *,
@@ -60,7 +60,7 @@ prim<v:=ptr>[aligned=*] load(ptr):
                 )
               );
             } else<generation> {
-              emit_return(
+              complete(
                 intrin<loadu, build[suffix=intrin::suffix("stream")]>(
                   cast<reinterpret>(type<generation>(vector::register) const *, ptr)
                 )
@@ -75,13 +75,13 @@ prim<v:=ptr>[aligned=*] load(ptr):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
-              emit_return(
+              complete(
                 intrin<load, build>(
                   assume_aligned<value<generation>(vector::alignment)>(ptr)
                 )
               );
             } else<generation> {
-              emit_return(
+              complete(
                 intrin<loadu, build>(
                   ptr
                 )
@@ -94,13 +94,13 @@ prim<v:=ptr>[aligned=*] load(ptr):
         implementation:
           tsil """
               if<generation>(value<generation>(primitive::attribute(aligned))) {
-                emit_return(
+                complete(
                   intrin<vld1q, build>(
                     assume_aligned<value<generation>(vector::alignment)>(ptr)
                   )
                 );
               } else<generation> {
-                emit_return(
+                complete(
                   intrin<vld1q, build>(
                     ptr
                   )
@@ -113,14 +113,14 @@ prim<v:=ptr>[aligned=*] load(ptr):
         implementation:
           tsil """
               if<generation>(value<generation>(primitive::attribute(aligned))) {
-                emit_return(
+                complete(
                   intrin<svld1, build>(
                     call<primitive=mask_true[Vec]>(),
                     assume_aligned<value<generation>(vector::alignment)>(ptr)
                   )
                 );
               } else<generation> {
-                emit_return(
+                complete(
                   intrin<svld1, build>(
                     call<primitive=mask_true[Vec]>(),
                     ptr
@@ -150,7 +150,7 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
         requires []
         implementation:
           tsil """
-            emit_return(call<primitive=mov, attrs[mask=zero]>(mask, *ptr));
+            complete(call<primitive=mov, attrs[mask=zero]>(mask, *ptr));
           """
     [generic, oneAPIfpga]:
       arith:
@@ -167,7 +167,7 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
                 result[i] = cast<static>(type<generation>(base::in), 0);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -184,7 +184,7 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
-            emit_return(
+            complete(
               intrin<maskz_loadu, build[suffix=base::signed_of(base::in)]>(
                 mask, cast<reinterpret>(SignedBase const *, ptr)
               )
@@ -198,13 +198,13 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
-              emit_return(
+              complete(
                 intrin<maskz_load, build>(
                   mask, assume_aligned<value<generation>(vector::alignment)>(ptr)
                 )
               );
             } else<generation> {
-              emit_return(
+              complete(
                 intrin<maskz_load, build>(
                   mask, ptr
                 )
@@ -219,7 +219,7 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
           neon [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=load, attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
@@ -234,14 +234,14 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
-              emit_return(
+              complete(
                 intrin<svld1, build>(
                   mask,
                   assume_aligned<value<generation>(vector::alignment)>(ptr)
                 )
               );
             } else<generation> {
-              emit_return(
+              complete(
                 intrin<svld1, build>(
                   mask,
                   ptr
@@ -271,9 +271,9 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         implementation:
           tsil """
             if (mask) {
-              emit_return(*ptr);
+              complete(*ptr);
             } else {
-              emit_return(data);
+              complete(data);
             }
           """
     [generic, oneAPIfpga]:
@@ -291,7 +291,7 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
                 result[i] = data[i];
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -308,7 +308,7 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
-            emit_return(
+            complete(
               intrin<mask_loadu, build[suffix=base::signed_of(base::in)]>(
                 data,
                 mask,
@@ -324,7 +324,7 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
-              emit_return(
+              complete(
                 intrin<mask_load, build>(
                   data,
                   mask,
@@ -332,7 +332,7 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
                 )
               );
             } else<generation> {
-              emit_return(
+              complete(
                 intrin<mask_loadu, build>(
                   data,
                   mask,
@@ -349,7 +349,7 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
           neon [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=blend, attrs[mask=pass_through]>(
                 mask,
                 data,
@@ -364,7 +364,7 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=blend, attrs[mask=pass_through]>(
                 mask,
                 data,
@@ -392,10 +392,10 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
-              emit_return(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
+              complete(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
             } else<generation> {
               let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
-              emit_return(
+              complete(
                 call<primitive=to_mask[Vec]>(
                   cast<static>(type<generation>(vector::imask), *cast<reinterpret>(MaskWord const*, ptr))
                 )
@@ -410,7 +410,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
-              emit_return(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
+              complete(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
             } else<generation> {
               let<type>(MaskT, type<generation>(vector::mask));
               let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
@@ -421,7 +421,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
                   mask<set:1>(result, i);
                 }
               }
-              emit_return(result);
+              complete(result);
             }
           """
     [avx512, avx2_vl, sse_vl]:
@@ -433,11 +433,11 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
-              emit_return(*cast<reinterpret>(type<generation>(vector::imask) const*, ptr));
+              complete(*cast<reinterpret>(type<generation>(vector::imask) const*, ptr));
             } else<generation> {
               let<type>(MaskBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
               let<type>(MaskVec, type<generation>(vector::as_base(MaskBase)));
-              emit_return(
+              complete(
                 call<primitive=nequal[MaskVec]>(
                   call<primitive=load[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
                     cast<reinterpret>(MaskBase *, ptr)
@@ -458,7 +458,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
-              emit_return(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
+              complete(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
             } else<generation> {
               let<type>(MaskBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
               let<type>(MaskVec, type<generation>(vector::as_base(MaskBase)));
@@ -471,7 +471,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
                   call<primitive=set_zero[MaskVec]>()
                 )
               );
-              emit_return(
+              complete(
                 call<primitive=reinterpret[MaskVec, Vec]>(loaded_mask)
               );
             }
@@ -499,7 +499,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
                   out = intrin<svorr_b_z>(all, out, one);
                 }
               }
-              emit_return(out);
+              complete(out);
             } else<generation> {
               let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
               let<type>(UVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
@@ -510,7 +510,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
               } else<generation> {
                 vec = call<primitive=load[UVec], attrs[aligned=false]>(cast<reinterpret>(UnsignedT const*, ptr));
               }
-              emit_return(intrin<svcmpne_n, build[suffix=base::unsigned_of(base::in)]>(pg, vec, cast<static>(UnsignedT, 0)));
+              complete(intrin<svcmpne_n, build[suffix=base::unsigned_of(base::in)]>(pg, vec, cast<static>(UnsignedT, 0)));
             }
           """
 
@@ -550,4 +550,4 @@ prim<s:=ptr>[aligned=false] load_scalar(ptr):
           sve [sve]
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
-          tsil "emit_return(*ptr);"
+          tsil "complete(*ptr);"

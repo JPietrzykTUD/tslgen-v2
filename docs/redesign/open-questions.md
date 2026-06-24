@@ -699,7 +699,7 @@ milestone.
 Decision:
 
 Parse and lower only direct parameter-add returns shaped as
-`emit_return(<parameter> + <parameter>);`. Both operands must resolve to
+`complete(<parameter> + <parameter>);`. Both operands must resolve to
 declared primitive parameter names. The lowered result is a backend-neutral
 return statement with a binary `+` expression over parameter references.
 
@@ -1220,7 +1220,7 @@ Why it matters:
 
 Functional parity requires far more TSIL than the accepted direct
 parameter-add return. The previous next step selected only
-`emit_return(intrin_compose<add>(left, right));`, but repository evidence shows
+`complete(intrin_compose<add>(left, right));`, but repository evidence shows
 that `intrin_compose` belongs to a larger helper ecosystem with modifier
 fields, generation-time type/value queries, generation-time branches, primitive
 calls, loops, variables, casts, direct intrinsics, and translation-map helpers.
@@ -1232,7 +1232,7 @@ Current decision:
 Do not treat a bare `intrin_compose<add>` parser or the Milestone 39
 transitional renderer mapping as sufficient to unblock native backend
 expansion. Milestone 38 lowers exactly
-`emit_return(intrin_compose<add>(left, right));` into typed helper data.
+`complete(intrin_compose<add>(left, right));` into typed helper data.
 Milestone 39 may preserve the selected observable native C++ output, but it is
 not the architecture. Milestone 40 defines the first backend
 translation/intrinsic-composition boundary and resolves the selected native
@@ -1378,12 +1378,12 @@ first-slot declaration-shell IR for the accepted `array.tsl:105`
 `var<typed>(array_type<...>, tmp, ...)` shape. M73 narrows one structural
 question but still leaves generic declaration/array semantics, allocation/
 lifetime, initializer behavior, variable scope, store/return semantics,
-`tmp.data()`, `emit_return`, backend uninit translation, rendering, output,
+`tmp.data()`, `complete`, backend uninit translation, rendering, output,
 and broad vector/register metadata policy open.
 Milestone 74 implements the exact source-ordered array-body structural
 sequence and structural/provenance slot-role classification for the accepted
 `array.tsl:105-111` shape. M87 later records the exact trailing
-`emit_return(tmp);` slot as structural/request IR only. These milestones narrow
+`complete(tmp);` slot as structural/request IR only. These milestones narrow
 whole-body structure and one exact return-emission-shaped slot, but still leave
 predicate semantics, SVE/direct-intrinsic semantics, generic body/declaration/
 array semantics, variable scope, allocation/lifetime, initializer behavior,

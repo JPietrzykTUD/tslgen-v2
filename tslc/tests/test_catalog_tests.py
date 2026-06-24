@@ -104,7 +104,7 @@ def _diagnostics(test_block: str) -> set[str]:
         "    scalar:\n"
         "      anyint:\n"
         "        implementation:\n"
-        '          tsil "emit_return(data);"\n'
+        '          tsil "complete(data);"\n'
     )
     document = SourceDocument(Path("tests_fixture.tsl"), source, "d", "tsl")
     parsed = TslParser().parse((document,))

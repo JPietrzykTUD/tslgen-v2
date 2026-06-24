@@ -37,7 +37,7 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(data));
                io<format>(out, arr, cast<static>(si32, ostream_modifier)) ;
-               emit_return(out) ;
+               complete(out) ;
             """
     neon:
       si64:
@@ -46,5 +46,5 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(data));
                io<format>(out, arr, cast<static>(si32, ostream_modifier)) ;
-               emit_return(out) ;
+               complete(out) ;
             """

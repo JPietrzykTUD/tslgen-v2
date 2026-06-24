@@ -10,16 +10,16 @@ from tslc.ir.segments import RawText, Region
 
 
 def test_raw_text_passes_through() -> None:
-    segments = scan("emit_return(left + right);")
+    segments = scan("complete(left + right);")
     assert isinstance(segments[0], Region)
-    assert segments[0].keyword == "emit_return"
+    assert segments[0].keyword == "complete"
     assert segments[0].body == (RawText("left + right"),)
     assert segments[0].has_statement_terminator
     assert len(segments) == 1
 
 
 def test_intrin_build_selector_is_raw_and_args_recurse() -> None:
-    segments = scan("emit_return(intrin<add, build>(left, right));")
+    segments = scan("complete(intrin<add, build>(left, right));")
     emit = segments[0]
     assert isinstance(emit, Region)
     assert emit.has_statement_terminator
@@ -43,7 +43,7 @@ def test_expression_statement_consumes_source_terminator() -> None:
 
 def test_nested_modifier_selector_kept_verbatim() -> None:
     body = (
-        "emit_return(intrin<add, build["
+        "complete(intrin<add, build["
         "suffix=base::signed_of(base::in)]>(left, right));"
     )
     intrinsic = scan(body)[0].body[0]
@@ -66,7 +66,7 @@ def test_keyword_inside_string_is_not_matched() -> None:
 
 
 def test_scan_carries_nested_source_spans() -> None:
-    body = "  emit_return(\n    intrin<add, build>(left, right)\n  );"
+    body = "  complete(\n    intrin<add, build>(left, right)\n  );"
     source = SourceSpan(Path("body.tsl"), 10, 5, 12, 7)
 
     segments = scan(body, source=source)

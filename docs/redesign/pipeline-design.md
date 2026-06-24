@@ -324,15 +324,15 @@ unsupported diagnostics. Any later body renderer consumes this lowered output,
 not raw TSIL payload text.
 
 Milestone 27 selects one form: direct parameter-add returns shaped as
-`emit_return(<parameter> + <parameter>);`. Lowering produces backend-neutral
+`complete(<parameter> + <parameter>);`. Lowering produces backend-neutral
 parameter-reference, binary-expression, and return-statement values for that
 shape only. The stage still diagnoses all other TSIL, malformed nearby
-`emit_return(...)` forms, generation-time branches, and non-TSIL payloads before
+`complete(...)` forms, generation-time branches, and non-TSIL payloads before
 rendering can consume them.
 
 The post-Milestone-34 backend-drift correction keeps native intrinsic expansion
 behind this stage. Milestone 38 lowers exactly the selected
-`emit_return(intrin_compose<add>(left, right));` form into typed helper data.
+`complete(intrin_compose<add>(left, right));` form into typed helper data.
 Milestone 39 may preserve the selected native C++ `avx2/f32` observable output
 as a transitional parity slice, but it is not the pipeline model for future
 native rendering. Milestone 40 adds the translation/intrinsic-composition
@@ -714,7 +714,7 @@ pipeline snapshots.
 M87 is accepted as the next Stage 8 semantic frontier. It adds a typed
 `return_emission_structural_request_lowering` step after the accepted M76
 post-branch call-site step in the exact array-body pipeline. That step records
-only the exact trailing `emit_return(tmp);` structural request and links `tmp`
+only the exact trailing `complete(tmp);` structural request and links `tmp`
 to accepted declaration-shell provenance. It remains diagnostic-first for
 malformed nearby source and does not repair source text, become a generic
 return parser, interpret return/store/variable semantics, add backend

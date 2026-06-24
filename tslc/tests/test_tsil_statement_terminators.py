@@ -106,7 +106,7 @@ def _collect_missing_statement_terminators(
 
 def _requires_source_terminator(region: Region) -> bool:
     selector = region.selector_text.strip()
-    if region.keyword in {"var", "let", "emit_return", "io"}:
+    if region.keyword in {"var", "let", "complete", "io"}:
         return True
     if region.keyword == "mem" and selector in {"copy", "set", "free"}:
         return True

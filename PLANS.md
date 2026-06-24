@@ -193,7 +193,7 @@ Nested TSIL keyword regions must be handled compositionally, not as pairwise
 context combinations. If a known keyword appears inside another keyword's
 selector, payload, or body span, the body-token boundary should recurse over
 recognized lexical regions and keep everything else raw. Do not plan special
-milestones such as `emit_return + intrin_compose`, `call + intrin_compose`, or
+milestones such as `complete + intrin_compose`, `call + intrin_compose`, or
 deeper ancestor-specific variants. A future TSIL keyword should require one
 keyword-specific semantic consumer over the recursive token stream, not one
 consumer for every possible surrounding keyword.

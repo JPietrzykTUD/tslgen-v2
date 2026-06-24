@@ -23,7 +23,7 @@ prim<ptr:=(usize)> allocate(count_bytes):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              emit_return(cast<reinterpret>(type<generation>(base::in), mem<alloc>(count_bytes)));
+              complete(cast<reinterpret>(type<generation>(base::in), mem<alloc>(count_bytes)));
             """
 prim<ptr:=(usize,usize)> allocate_aligned(count_bytes, alignment):
   brief_description "Allocates aligned contiguous memory."
@@ -52,7 +52,7 @@ prim<ptr:=(usize,usize)> allocate_aligned(count_bytes, alignment):
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-              emit_return(cast<reinterpret>(type<generation>(base::in), mem<alloc_aligned>(count_bytes, alignment)));
+              complete(cast<reinterpret>(type<generation>(base::in), mem<alloc_aligned>(count_bytes, alignment)));
             """
 prim<void:=(ptr)> deallocate(ptr):
   brief_description "Deallocates (possibly aligned) contiguous memory."

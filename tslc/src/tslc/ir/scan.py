@@ -22,7 +22,7 @@ from tslc.ir.segments import RawText, Region, Segment
 # teaching the lowerer to translate them) — never by adding wrapper families.
 KEYWORDS: frozenset[str] = frozenset(
     {
-        "emit_return",
+        "complete",
         "intrin",
         "op",  # op<NAME>(args) -> a backend-divergent lane operator via an op_<NAME> template
         "call",

@@ -31,7 +31,7 @@ def test_catalog_params_diagnostic_has_source_location() -> None:
         "    scalar:\n"
         "      si32:\n"
         "        implementation:\n"
-        '          tsil "emit_return(data);"\n'
+        '          tsil "complete(data);"\n'
     )
 
     diagnostic = result.diagnostics[0]
@@ -52,10 +52,10 @@ def test_selector_ambiguity_warning_has_source_location() -> None:
         "    scalar:\n"
         "      si?:\n"
         "        implementation:\n"
-        '          tsil "emit_return(data);"\n'
+        '          tsil "complete(data);"\n'
         "      idqword:\n"
         "        implementation:\n"
-        '          tsil "emit_return(data);"\n'
+        '          tsil "complete(data);"\n'
     )
     assert result.catalog is not None
 
@@ -71,7 +71,7 @@ def test_selector_ambiguity_warning_has_source_location() -> None:
     assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 10, 7)
 
 
-def test_lowerer_missing_emit_return_has_body_source_location() -> None:
+def test_lowerer_missing_complete_has_body_source_location() -> None:
     result = _build(
         "types:\n"
         "  si32 {types [si32]}\n"
@@ -103,7 +103,7 @@ def test_lowerer_missing_emit_return_has_body_source_location() -> None:
     )
 
     diagnostic = lowered.diagnostics[0]
-    assert diagnostic.code == "TSL-LOWER-NO-EMIT-RETURN"
+    assert diagnostic.code == "TSL-LOWER-NO-COMPLETE"
     assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 13, 17)
 
 
@@ -121,7 +121,7 @@ def test_lowerer_handler_diagnostic_has_region_source_location() -> None:
         "    scalar:\n"
         "      si32:\n"
         "        implementation:\n"
-        '          tsil "emit_return(value<generation>(vector::unknown));"\n'
+        '          tsil "complete(value<generation>(vector::unknown));"\n'
     )
     assert result.catalog is not None
     selection = Selector().select_profile(
@@ -140,7 +140,7 @@ def test_lowerer_handler_diagnostic_has_region_source_location() -> None:
 
     diagnostic = lowered.diagnostics[0]
     assert diagnostic.code == "TSL-LOWER-UNRESOLVED-QUERY-REGION"
-    assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 13, 29)
+    assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 13, 26)
 
 
 def test_intrin_build_unresolved_suffix_has_region_source_location() -> None:
@@ -163,7 +163,7 @@ def test_intrin_build_unresolved_suffix_has_region_source_location() -> None:
         "    avx2:\n"
         "      si32:\n"
         "        implementation:\n"
-        '          tsil "emit_return(intrin<add, build['
+        '          tsil "complete(intrin<add, build['
         'suffix=base::signed_of(si?)]>(data));"\n'
     )
     assert result.catalog is not None
@@ -187,4 +187,4 @@ def test_intrin_build_unresolved_suffix_has_region_source_location() -> None:
     assert diagnostic.code == "TSL-LOWER-UNRESOLVED-SUFFIX"
     assert diagnostic.severity == "info"
     assert "base::signed_of(si?)" in diagnostic.message
-    assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 19, 29)
+    assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 19, 26)

@@ -121,7 +121,7 @@ def test_consumed_tsil_statement_terminators_render_once() -> None:
         "ints",
         (
             "let<type>(Alias, type<generation>(base::in)); "
-            "var<infer>(tmp, a); intrin<side_effect>(tmp); emit_return(tmp);"
+            "var<infer>(tmp, a); intrin<side_effect>(tmp); complete(tmp);"
         ),
         source_order=0,
     )
@@ -139,7 +139,7 @@ def test_consumed_tsil_statement_terminators_render_once() -> None:
         type_spellings={"cpp": {"s32": "int32_t"}},
         translations={
             "cpp": {
-                "emit_return": "return {value}",
+                "complete": "return {value}",
                 "var_infer": "auto {name} = {value};",
             }
         },
@@ -172,7 +172,7 @@ def test_intrin_build_supports_explicit_prefix_and_suffix() -> None:
         ("custom", "ints"),
         "custom",
         "ints",
-        'emit_return(intrin<foo, build[prefix="_custom_", suffix="bar"]>(a));',
+        'complete(intrin<foo, build[prefix="_custom_", suffix="bar"]>(a));',
         source_order=0,
     )
     prim = Primitive(
@@ -187,7 +187,7 @@ def test_intrin_build_supports_explicit_prefix_and_suffix() -> None:
         type_groups={"ints": ("si32",)},
         extensions={"custom": ext},
         type_spellings={"cpp": {"s32": "int32_t"}},
-        translations={"cpp": {"emit_return": "return {value}"}},
+        translations={"cpp": {"complete": "return {value}"}},
     )
     slot = SelectedImplementation(
         primitive=prim,
@@ -216,7 +216,7 @@ def test_intrin_build_suffix_and_infix_accept_type_values() -> None:
         ("custom", "ints"),
         "custom",
         "ints",
-        "emit_return("
+        "complete("
         "intrin<foo, build[infix=base::signed_of(base::in), "
         'infix_sep="", suffix=base::signed_of(base::in)]>(a)'
         ");",
@@ -234,7 +234,7 @@ def test_intrin_build_suffix_and_infix_accept_type_values() -> None:
         type_groups={"ints": ("si32",)},
         extensions={"custom": ext},
         type_spellings={"cpp": {"s32": "int32_t"}},
-        translations={"cpp": {"emit_return": "return {value}"}},
+        translations={"cpp": {"complete": "return {value}"}},
     )
     slot = SelectedImplementation(
         primitive=prim,
@@ -263,7 +263,7 @@ def test_intrin_build_prefix_remains_text_only() -> None:
         ("custom", "ints"),
         "custom",
         "ints",
-        "emit_return(intrin<foo, build[prefix=base::in, suffix=base::in]>(a));",
+        "complete(intrin<foo, build[prefix=base::in, suffix=base::in]>(a));",
         source_order=0,
     )
     prim = Primitive(
@@ -278,7 +278,7 @@ def test_intrin_build_prefix_remains_text_only() -> None:
         type_groups={"ints": ("si32",)},
         extensions={"custom": ext},
         type_spellings={"cpp": {"s32": "int32_t"}},
-        translations={"cpp": {"emit_return": "return {value}"}},
+        translations={"cpp": {"complete": "return {value}"}},
     )
     slot = SelectedImplementation(
         primitive=prim,
@@ -305,7 +305,7 @@ def test_intrin_build_rejects_whitespace_separated_selector_terms() -> None:
         ("custom", "ints"),
         "custom",
         "ints",
-        "emit_return(intrin<foo build[suffix=base::in]>(a));",
+        "complete(intrin<foo build[suffix=base::in]>(a));",
         source_order=0,
     )
     prim = Primitive(
@@ -320,7 +320,7 @@ def test_intrin_build_rejects_whitespace_separated_selector_terms() -> None:
         type_groups={"ints": ("si32",)},
         extensions={"custom": ext},
         type_spellings={"cpp": {"s32": "int32_t"}},
-        translations={"cpp": {"emit_return": "return {value}"}},
+        translations={"cpp": {"complete": "return {value}"}},
     )
     slot = SelectedImplementation(
         primitive=prim,
@@ -361,8 +361,8 @@ def test_ambiguous_specificity_warns(machine_profiles) -> None:
     prim = Primitive(
         name="amb", signature="v:=v", parameters=("a",), attribute_keys=(),
         implementations=(
-            Implementation(("scalar", "si?"), "scalar", "si?", "emit_return(a);", source_order=0),
-            Implementation(("scalar", "idqword"), "scalar", "idqword", "emit_return(a);", source_order=1),
+            Implementation(("scalar", "si?"), "scalar", "si?", "complete(a);", source_order=0),
+            Implementation(("scalar", "idqword"), "scalar", "idqword", "complete(a);", source_order=1),
         ),
     )
     catalog = Catalog(
@@ -393,8 +393,8 @@ def test_nested_specificity_does_not_warn(machine_profiles) -> None:
     prim = Primitive(
         name="amb2", signature="v:=v", parameters=("a",), attribute_keys=(),
         implementations=(
-            Implementation(("scalar", "si?"), "scalar", "si?", "emit_return(a);", source_order=0),
-            Implementation(("scalar", "?i32"), "scalar", "?i32", "emit_return(a);", source_order=1),
+            Implementation(("scalar", "si?"), "scalar", "si?", "complete(a);", source_order=0),
+            Implementation(("scalar", "?i32"), "scalar", "?i32", "complete(a);", source_order=1),
         ),
     )
     catalog = Catalog(

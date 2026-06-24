@@ -19,7 +19,7 @@ from tslc.lower.region_handlers.memory import MemLowerer
 from tslc.lower.region_handlers.operators import OpLowerer
 from tslc.lower.region_handlers.protocol import RegionLowerer
 from tslc.lower.region_handlers.queries import QueryRegionLowerer
-from tslc.lower.region_handlers.returns import EmitReturnLowerer
+from tslc.lower.region_handlers.returns import CompleteLowerer
 
 DEFAULT_REGION_LOWERERS: tuple[RegionLowerer, ...] = (
     IntrinLowerer(),
@@ -38,5 +38,5 @@ DEFAULT_REGION_LOWERERS: tuple[RegionLowerer, ...] = (
     SwitchLowerer(),
     QueryRegionLowerer("type"),
     QueryRegionLowerer("value"),
-    EmitReturnLowerer(),
+    CompleteLowerer(),
 )

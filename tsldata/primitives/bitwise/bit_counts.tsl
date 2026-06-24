@@ -27,29 +27,29 @@ prim<v:=v> popcnt(data):
           avx2_vl [avx512_bitalg, avx512f, avx512vl, avx]
           sse_vl  [avx512_bitalg, avx512f, avx512vl, sse]
         implementation:
-          tsil "emit_return(intrin<popcnt, build[suffix=base::signed_of(base::in)]>(data));"
+          tsil "complete(intrin<popcnt, build[suffix=base::signed_of(base::in)]>(data));"
       [?i32, ?i64]:
         requires:
           avx512  [avx512_vpopcntdq, avx512f]
           avx2_vl [avx512_vpopcntdq, avx512f, avx512vl, avx]
           sse_vl  [avx512_vpopcntdq, avx512f, avx512vl, sse]
         implementation:
-          tsil "emit_return(intrin<popcnt, build[suffix=base::signed_of(base::in)]>(data));"
+          tsil "complete(intrin<popcnt, build[suffix=base::signed_of(base::in)]>(data));"
     neon:
       ?i8:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin<vcntq, build>(data));"
+          tsil "complete(intrin<vcntq, build>(data));"
     sve:
       ui?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin<svcnt, build[post=x]>(call<primitive=mask_true[Vec]>(), data));"
+          tsil "complete(intrin<svcnt, build[post=x]>(call<primitive=mask_true[Vec]>(), data));"
       si?:
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<svcnt, build[post=x]>(call<primitive=mask_true[Vec]>(), data)
               )
@@ -69,13 +69,13 @@ prim<v:=v> popcnt(data):
                loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 data_arr[i] = cast<static>(type<generation>(base::in), details::popcount(data_arr[i]));
               }
-               emit_return(call<primitive=from_array[Vec]>(data_arr)) ;
+               complete(call<primitive=from_array[Vec]>(data_arr)) ;
             """
     scalar:
       ?i?:
         requires []
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), details::popcount(data)));"
+          tsil "complete(cast<static>(type<generation>(base::in), details::popcount(data)));"
 prim<s:=s> lzc_scalar(data):
   brief_description "Counts leading zeros (scalar)."
   operation ""
@@ -89,7 +89,7 @@ prim<s:=s> lzc_scalar(data):
           scalar []
           generic []
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), details::clz(data)));"
+          tsil "complete(cast<static>(type<generation>(base::in), details::clz(data)));"
       f?:
         requires:
           scalar []
@@ -99,18 +99,18 @@ prim<s:=s> lzc_scalar(data):
                let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
               UnsignedT bits{};
                mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data), value<generation>(type::size_bytes(type<generation>(base::in)))) ;
-               emit_return(cast<static>(type<generation>(base::in), details::clz<UnsignedT, type<generation>(vector::offset_base)>(bits))) ;
+               complete(cast<static>(type<generation>(base::in), details::clz<UnsignedT, type<generation>(vector::offset_base)>(bits))) ;
             """
     oneAPIfpga:
       ?i?:
         requires [oneAPIfpgaDev]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), details::clz_recursive<type<generation>(base::in), type<generation>(vector::offset_base)::apply>(data)));"
+          tsil "complete(cast<static>(type<generation>(base::in), details::clz_recursive<type<generation>(base::in), type<generation>(vector::offset_base)::apply>(data)));"
     oneAPIfpgaRTL:
       ?i?:
         requires [oneAPIfpgaDev]
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), details::clz_recursive<type<generation>(base::in), type<generation>(vector::offset_base)::apply>(data)));"
+          tsil "complete(cast<static>(type<generation>(base::in), details::clz_recursive<type<generation>(base::in), type<generation>(vector::offset_base)::apply>(data)));"
 prim<v:=v> lzc(data):
   brief_description "Counts leading zeros (vector)."
   operation ""
@@ -139,22 +139,22 @@ prim<v:=v> lzc(data):
           avx2_vl [avx512cd, avx512f, avx512vl, avx]
           sse_vl [avx512cd, avx512f, avx512vl, sse]
         implementation:
-          tsil "emit_return(intrin<lzcnt, build[suffix=base::signed_of(base::in)]>(data));"
+          tsil "complete(intrin<lzcnt, build[suffix=base::signed_of(base::in)]>(data));"
     neon:
       [si8, si16, si32, ui8, ui16, ui32]:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin<vclzq, build>(data));"
+          tsil "complete(intrin<vclzq, build>(data));"
     sve:
       ui?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin<svclz, build[post=x]>(call<primitive=mask_true[Vec]>(), data));"
+          tsil "complete(intrin<svclz, build[post=x]>(call<primitive=mask_true[Vec]>(), data));"
       si?:
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<svclz, build[post=x]>(call<primitive=mask_true[Vec]>(), data)
               )
@@ -175,7 +175,7 @@ prim<v:=v> lzc(data):
                loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 data_arr[i] = call<primitive=lzc_scalar[type<backend>(vector::as_extension(scalar))]>(data_arr[i]);
               }
-               emit_return(call<primitive=from_array[Vec]>(data_arr)) ;
+               complete(call<primitive=from_array[Vec]>(data_arr)) ;
             """
     [oneAPIfpga, oneAPIfpgaRTL]:
       ?i?:
@@ -188,7 +188,7 @@ prim<v:=v> lzc(data):
                loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 data_arr[i] = cast<static>(type<generation>(base::in), details::clz_recursive<type<generation>(base::in), type<generation>(vector::offset_base)::apply>(data_arr[i]));
               }
-               emit_return(call<primitive=from_array[Vec]>(data_arr)) ;
+               complete(call<primitive=from_array[Vec]>(data_arr)) ;
             """
 prim<s:=m> lzc_imask(value):
   brief_description "Counts leading zeros in an imask."
@@ -207,14 +207,14 @@ prim<s:=m> lzc_imask(value):
           scalar []
           generic []
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), details::clz(call<primitive=to_integral[Vec]>(value))));"
+          tsil "complete(cast<static>(type<generation>(base::in), details::clz(call<primitive=to_integral[Vec]>(value))));"
     [oneAPIfpga, oneAPIfpgaRTL]:
       ?i?:
         requires:
           oneAPIfpga [oneAPIfpgaDev]
           oneAPIfpgaRTL [oneAPIfpgaDev]
         implementation:
-          tsil "emit_return(details::clz_recursive<type<generation>(vector::imask), type<backend>(intrin::vector::imask)::apply>(call<primitive=to_integral[Vec]>(value)));"
+          tsil "complete(details::clz_recursive<type<generation>(vector::imask), type<backend>(intrin::vector::imask)::apply>(call<primitive=to_integral[Vec]>(value)));"
 prim<s:=m> tzc(value):
   brief_description "Counts trailing zeros in an imask."
   operation ""
@@ -232,4 +232,4 @@ prim<s:=m> tzc(value):
           scalar []
           generic []
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), details::ctz(call<primitive=to_integral[Vec]>(value))));"
+          tsil "complete(cast<static>(type<generation>(base::in), details::ctz(call<primitive=to_integral[Vec]>(value))));"

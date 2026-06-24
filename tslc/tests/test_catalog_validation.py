@@ -40,7 +40,7 @@ def _base_source(extra: str = "") -> str:
         "    scalar:\n"
         "      ints:\n"
         "        implementation:\n"
-        '          tsil "emit_return(data);"\n'
+        '          tsil "complete(data);"\n'
     )
 
 
@@ -92,7 +92,7 @@ def test_invalid_enum_like_values_are_diagnosed() -> None:
         "    scalar:\n"
         "      ints:\n"
         "        implementation:\n"
-        '          tsil "emit_return(data);"\n'
+        '          tsil "complete(data);"\n'
     )
 
     messages = [d.message for d in diagnostics if d.code == "TSL-CATALOG-INVALID-ENUM"]
@@ -114,7 +114,7 @@ def test_missing_backend_spellings_are_diagnosed() -> None:
         "    scalar:\n"
         "      ints:\n"
         "        implementation:\n"
-        '          tsil "emit_return(data);"\n',
+        '          tsil "complete(data);"\n',
         backends=("cpp",),
     )
 
@@ -154,7 +154,7 @@ def test_extension_inheritance_cycles_are_diagnosed() -> None:
         "    a:\n"
         "      ints:\n"
         "        implementation:\n"
-        '          tsil "emit_return(data);"\n'
+        '          tsil "complete(data);"\n'
     )
 
     assert "TSL-CATALOG-INHERITS-CYCLE" in {d.code for d in diagnostics}
@@ -179,7 +179,7 @@ def test_malformed_requires_shape_is_diagnosed() -> None:
         "          scalar:\n"
         "            default nope\n"
         "        implementation:\n"
-        '          tsil "emit_return(data);"\n'
+        '          tsil "complete(data);"\n'
     )
 
     diagnostic = next(d for d in diagnostics if d.code == "TSL-CATALOG-MALFORMED-REQUIRES")
@@ -213,7 +213,7 @@ def test_lane_list_signature_validation_reports_rejected_shapes(
         "    scalar:\n"
         "      ints:\n"
         "        implementation:\n"
-        '          tsil "emit_return(values);"\n'
+        '          tsil "complete(values);"\n'
     )
 
     assert code in {diagnostic.code for diagnostic in diagnostics}

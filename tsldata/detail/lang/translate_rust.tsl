@@ -769,7 +769,7 @@ translation rust:
   io_write_bin "tsl_io_write_bin!({out}, {bits}, {value})"
   io_endl "crate::tsl::io_endl({out})"
   io_format "crate::tsl_core::ostream_write({out}, &{array}, {modifier})"
-  emit_return "return {value}"
+  complete "return {value}"
   value_vector_length "Self::LANES"
   value_vector_alignment "Self::ALIGN"
   value_vector_size_B "Self::SIZE_B"

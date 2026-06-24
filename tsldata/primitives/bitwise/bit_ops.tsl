@@ -28,7 +28,7 @@ prim<v:=(v,v)> binary_and(left, right):
       ?i?:
         requires []
         implementation:
-          tsil "emit_return(left & right);"
+          tsil "complete(left & right);"
       f?:
         requires []
         implementation:
@@ -36,7 +36,7 @@ prim<v:=(v,v)> binary_and(left, right):
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left));
               var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right));
               var<const_infer>(ures, ua & ub);
-              emit_return(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
@@ -49,20 +49,20 @@ prim<v:=(v,v)> binary_and(left, right):
               loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               }
-              emit_return(result);
+              complete(result);
             """
     avx512:
       ?i?:
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(intrin<and, build[suffix=intrin::suffix("stream")]>(left, right));
+            complete(intrin<and, build[suffix=intrin::suffix("stream")]>(left, right));
           """
       f?:
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<si64>, Vec]>(
                 intrin<and, build[suffix=intrin::suffix("stream")]>(
                   call<primitive=reinterpret[Vec, Vec<si64>]>(left),
@@ -77,7 +77,7 @@ prim<v:=(v,v)> binary_and(left, right):
           avx2 [avx, avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<and, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
@@ -86,7 +86,7 @@ prim<v:=(v,v)> binary_and(left, right):
           avx2 [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<and, build>(left, right)
             );
           """
@@ -96,7 +96,7 @@ prim<v:=(v,v)> binary_and(left, right):
           sse [sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<and, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
@@ -106,7 +106,7 @@ prim<v:=(v,v)> binary_and(left, right):
           f64 [sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<and, build>(left, right)
             );
           """
@@ -114,12 +114,12 @@ prim<v:=(v,v)> binary_and(left, right):
       ?i?:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin<vandq, build>(left, right));"
+          tsil "complete(intrin<vandq, build>(left, right));"
       f?:
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<vandq, build[suffix=base::unsigned_of(base::in)]>(
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
@@ -132,12 +132,12 @@ prim<v:=(v,v)> binary_and(left, right):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin<svand, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
+          tsil "complete(intrin<svand, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
       f?:
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<svand, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
@@ -163,7 +163,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
       ?i?:
         requires []
         implementation:
-          tsil "emit_return(op<bit_negate>(left) & right);"
+          tsil "complete(op<bit_negate>(left) & right);"
       f?:
         requires []
         implementation:
@@ -171,7 +171,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
             var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left));
             var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right));
             var<const_infer>(ures, op<bit_negate>(ua) & ub);
-            emit_return(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+            complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
           """
     [generic, oneAPIfpga]:
       arith:
@@ -184,20 +184,20 @@ prim<v:=(v,v)> binary_andnot(left, right):
             loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
               result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
             }
-            emit_return(result);
+            complete(result);
           """
     avx512:
       ?i?:
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(intrin<andnot, build[suffix=intrin::suffix("stream")]>(left, right));
+            complete(intrin<andnot, build[suffix=intrin::suffix("stream")]>(left, right));
           """
       f?:
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<andnot, build>(left, right)
             );
           """
@@ -207,7 +207,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
           avx2 [avx, avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<andnot, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
@@ -216,7 +216,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
           avx2 [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<andnot, build>(left, right)
             );
           """
@@ -226,7 +226,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
           sse [sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<andnot, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
@@ -236,7 +236,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
           f64 [sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<andnot, build>(left, right)
             );
           """
@@ -244,12 +244,12 @@ prim<v:=(v,v)> binary_andnot(left, right):
       ?i?:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin<vbicq, build>(right, left));"
+          tsil "complete(intrin<vbicq, build>(right, left));"
       f?:
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<vbicq, build[suffix=base::unsigned_of(base::in)]>(
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right),
@@ -262,12 +262,12 @@ prim<v:=(v,v)> binary_andnot(left, right):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin<svbic, build[post=x]>(call<primitive=mask_true[Vec]>(), right, left));"
+          tsil "complete(intrin<svbic, build[post=x]>(call<primitive=mask_true[Vec]>(), right, left));"
       f?:
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<svbic, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
@@ -307,7 +307,7 @@ prim<v:=(v,v)> binary_or(left, right):
       ?i?:
         requires []
         implementation:
-          tsil "emit_return(left | right);"
+          tsil "complete(left | right);"
       f?:
         requires []
         implementation:
@@ -315,7 +315,7 @@ prim<v:=(v,v)> binary_or(left, right):
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left));
               var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right));
               var<const_infer>(ures, ua | ub);
-              emit_return(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
@@ -328,20 +328,20 @@ prim<v:=(v,v)> binary_or(left, right):
               loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               }
-              emit_return(result);
+              complete(result);
             """
     avx512:
       ?i?:
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(intrin<or, build[suffix=intrin::suffix("stream")]>(left, right));
+            complete(intrin<or, build[suffix=intrin::suffix("stream")]>(left, right));
           """
       f?:
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<si64>, Vec]>(
                 intrin<or, build[suffix=intrin::suffix("stream")]>(
                   call<primitive=reinterpret[Vec, Vec<si64>]>(left),
@@ -356,7 +356,7 @@ prim<v:=(v,v)> binary_or(left, right):
           avx2 [avx, avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<or, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
@@ -365,7 +365,7 @@ prim<v:=(v,v)> binary_or(left, right):
           avx2 [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<or, build>(left, right)
             );
           """
@@ -375,7 +375,7 @@ prim<v:=(v,v)> binary_or(left, right):
           sse [sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<or, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
@@ -385,7 +385,7 @@ prim<v:=(v,v)> binary_or(left, right):
           f64 [sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<or, build>(left, right)
             );
           """
@@ -393,12 +393,12 @@ prim<v:=(v,v)> binary_or(left, right):
       ?i?:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin<vorrq, build>(left, right));"
+          tsil "complete(intrin<vorrq, build>(left, right));"
       f?:
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<vorrq, build[suffix=base::unsigned_of(base::in)]>(
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
@@ -411,12 +411,12 @@ prim<v:=(v,v)> binary_or(left, right):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin<svorr, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
+          tsil "complete(intrin<svorr, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
       f?:
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<svorr, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
@@ -456,7 +456,7 @@ prim<v:=(v,v)> binary_xor(left, right):
       ?i?:
         requires []
         implementation:
-          tsil "emit_return(left ^ right);"
+          tsil "complete(left ^ right);"
       f?:
         requires []
         implementation:
@@ -464,7 +464,7 @@ prim<v:=(v,v)> binary_xor(left, right):
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left));
               var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right));
               var<const_infer>(ures, ua ^ ub);
-              emit_return(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
@@ -477,20 +477,20 @@ prim<v:=(v,v)> binary_xor(left, right):
               loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               }
-              emit_return(result);
+              complete(result);
             """
     avx512:
       ?i?:
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(intrin<xor, build[suffix=intrin::suffix("stream")]>(left, right));
+            complete(intrin<xor, build[suffix=intrin::suffix("stream")]>(left, right));
           """
       f?:
         requires [avx512f]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<si64>, Vec]>(
                 intrin<xor, build[suffix=intrin::suffix("stream")]>(
                   call<primitive=reinterpret[Vec, Vec<si64>]>(left),
@@ -505,7 +505,7 @@ prim<v:=(v,v)> binary_xor(left, right):
           avx2 [avx, avx2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<xor, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
@@ -514,7 +514,7 @@ prim<v:=(v,v)> binary_xor(left, right):
           avx2 [avx]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<xor, build>(left, right)
             );
           """
@@ -524,7 +524,7 @@ prim<v:=(v,v)> binary_xor(left, right):
           sse [sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<xor, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
@@ -534,7 +534,7 @@ prim<v:=(v,v)> binary_xor(left, right):
           f64 [sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<xor, build>(left, right)
             );
           """
@@ -542,12 +542,12 @@ prim<v:=(v,v)> binary_xor(left, right):
       ?i?:
         requires [neon]
         implementation:
-          tsil "emit_return(intrin<veorq, build>(left, right));"
+          tsil "complete(intrin<veorq, build>(left, right));"
       f?:
         requires [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<veorq, build[suffix=base::unsigned_of(base::in)]>(
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
@@ -560,12 +560,12 @@ prim<v:=(v,v)> binary_xor(left, right):
       ?i?:
         requires [sve]
         implementation:
-          tsil "emit_return(intrin<sveor, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
+          tsil "complete(intrin<sveor, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
       f?:
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<sveor, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
@@ -601,7 +601,7 @@ prim<v:=v> inv(data):
       arith:
         requires []
         implementation:
-          tsil "emit_return(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))));"
+          tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))));"
     [generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
       arith:
         requires:
@@ -613,7 +613,7 @@ prim<v:=v> inv(data):
           neon [neon]
           sve [sve]
         implementation:
-          tsil "emit_return(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))));"
+          tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))));"
 
 prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
   brief_description "Masked bitwise AND with zeroing."
@@ -627,9 +627,9 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_and>(left, right));
+              complete(call<primitive=binary_and>(left, right));
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [generic, oneAPIfpga]:
       arith:
@@ -646,7 +646,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
                 result[i] = call<primitive=set_zero[type<backend>(vector::as_extension(scalar))]>();
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -656,7 +656,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<maskz_and, build[suffix=base::signed_of(base::in)]>(
                 mask, left, right
               )
@@ -669,7 +669,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_and>(left, right)
@@ -683,7 +683,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<maskz_and, build>(mask, left, right)
             );
           """
@@ -700,7 +700,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
           neon [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_and>(left, right)
@@ -712,7 +712,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svand, build[post=z]>(mask, left, right)
             );
           """
@@ -720,7 +720,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<svand, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
@@ -743,9 +743,9 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_and>(left, right));
+              complete(call<primitive=binary_and>(left, right));
             }
-            emit_return(left);
+            complete(left);
           """
     [generic, oneAPIfpga]:
       arith:
@@ -762,7 +762,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
                 result[i] = left[i];
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -772,7 +772,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_and, build[suffix=base::signed_of(base::in)]>(
                 left, mask, left, right
               )
@@ -785,7 +785,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
@@ -800,7 +800,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_and, build>(left, mask, left, right)
             );
           """
@@ -817,7 +817,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
           neon [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
@@ -830,7 +830,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svand, build[post=m]>(mask, left, right)
             );
           """
@@ -838,7 +838,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<svand, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,
@@ -861,9 +861,9 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_andnot>(left, right));
+              complete(call<primitive=binary_andnot>(left, right));
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [generic, oneAPIfpga]:
       arith:
@@ -880,7 +880,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
                 result[i] = call<primitive=set_zero[type<backend>(vector::as_extension(scalar))]>();
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -890,7 +890,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<maskz_andnot, build[suffix=base::signed_of(base::in)]>(
                 mask, left, right
               )
@@ -903,7 +903,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_andnot>(left, right)
@@ -917,7 +917,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<maskz_andnot, build>(mask, left, right)
             );
           """
@@ -934,7 +934,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
           neon [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_andnot>(left, right)
@@ -946,7 +946,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svbic, build[post=z]>(mask, right, left)
             );
           """
@@ -954,7 +954,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<svbic, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
@@ -977,9 +977,9 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_andnot>(left, right));
+              complete(call<primitive=binary_andnot>(left, right));
             }
-            emit_return(left);
+            complete(left);
           """
     [generic, oneAPIfpga]:
       arith:
@@ -996,7 +996,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
                 result[i] = left[i];
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -1006,7 +1006,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_andnot, build[suffix=base::signed_of(base::in)]>(
                 left, mask, left, right
               )
@@ -1019,7 +1019,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
@@ -1034,7 +1034,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_andnot, build>(left, mask, left, right)
             );
           """
@@ -1052,7 +1052,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
           sve [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
@@ -1073,9 +1073,9 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_or>(left, right));
+              complete(call<primitive=binary_or>(left, right));
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [generic, oneAPIfpga]:
       arith:
@@ -1092,7 +1092,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
                 result[i] = call<primitive=set_zero[type<backend>(vector::as_extension(scalar))]>();
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -1102,7 +1102,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<maskz_or, build[suffix=base::signed_of(base::in)]>(
                 mask, left, right
               )
@@ -1115,7 +1115,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_or>(left, right)
@@ -1129,7 +1129,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<maskz_or, build>(mask, left, right)
             );
           """
@@ -1146,7 +1146,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
           neon [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_or>(left, right)
@@ -1158,7 +1158,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svorr, build[post=z]>(mask, left, right)
             );
           """
@@ -1166,7 +1166,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<svorr, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
@@ -1189,9 +1189,9 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_or>(left, right));
+              complete(call<primitive=binary_or>(left, right));
             }
-            emit_return(left);
+            complete(left);
           """
     [generic, oneAPIfpga]:
       arith:
@@ -1208,7 +1208,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
                 result[i] = left[i];
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -1218,7 +1218,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_or, build[suffix=base::signed_of(base::in)]>(
                 left, mask, left, right
               )
@@ -1231,7 +1231,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
@@ -1246,7 +1246,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_or, build>(left, mask, left, right)
             );
           """
@@ -1263,7 +1263,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
           neon [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
@@ -1276,7 +1276,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<svorr, build[post=m]>(mask, left, right)
             );
           """
@@ -1284,7 +1284,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<svorr, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,
@@ -1307,9 +1307,9 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_xor>(left, right));
+              complete(call<primitive=binary_xor>(left, right));
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [generic, oneAPIfpga]:
       arith:
@@ -1326,7 +1326,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
                 result[i] = call<primitive=set_zero[type<backend>(vector::as_extension(scalar))]>();
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -1336,7 +1336,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<maskz_xor, build[suffix=base::signed_of(base::in)]>(
                 mask, left, right
               )
@@ -1349,7 +1349,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_xor>(left, right)
@@ -1363,7 +1363,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<maskz_xor, build>(mask, left, right)
             );
           """
@@ -1380,7 +1380,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
           neon [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_xor>(left, right)
@@ -1392,7 +1392,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<sveor, build[post=z]>(mask, left, right)
             );
           """
@@ -1400,7 +1400,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<sveor, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
@@ -1423,9 +1423,9 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_xor>(left, right));
+              complete(call<primitive=binary_xor>(left, right));
             }
-            emit_return(left);
+            complete(left);
           """
     [generic, oneAPIfpga]:
       arith:
@@ -1442,7 +1442,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
                 result[i] = left[i];
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -1452,7 +1452,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_xor, build[suffix=base::signed_of(base::in)]>(
                 left, mask, left, right
               )
@@ -1465,7 +1465,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
@@ -1480,7 +1480,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_xor, build>(left, mask, left, right)
             );
           """
@@ -1497,7 +1497,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
           neon [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
@@ -1510,7 +1510,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<sveor, build[post=m]>(mask, left, right)
             );
           """
@@ -1518,7 +1518,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<sveor, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,
@@ -1541,14 +1541,14 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
         implementation:
           tsil """
             if (mask) {
-              emit_return(
+              complete(
                 call<primitive=binary_xor>(
                   data,
                   call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
                 )
               );
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [generic, oneAPIfpga]:
       arith:
@@ -1568,7 +1568,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
                 result[i] = call<primitive=set_zero[type<backend>(vector::as_extension(scalar))]>();
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -1578,7 +1578,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<maskz_xor, build[suffix=base::signed_of(base::in)]>(
                 mask,
                 data,
@@ -1593,7 +1593,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=inv>(data)
@@ -1607,7 +1607,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<maskz_xor, build>(
                 mask,
                 data,
@@ -1628,7 +1628,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
           neon [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=inv>(data)
@@ -1640,7 +1640,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<sveor, build[post=z]>(
                 mask,
                 data,
@@ -1652,7 +1652,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<sveor, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
@@ -1677,14 +1677,14 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
         implementation:
           tsil """
             if (mask) {
-              emit_return(
+              complete(
                 call<primitive=binary_xor>(
                   data,
                   call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
                 )
               );
             }
-            emit_return(data);
+            complete(data);
           """
     [generic, oneAPIfpga]:
       arith:
@@ -1704,7 +1704,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
                 result[i] = data[i];
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -1714,7 +1714,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_xor, build[suffix=base::signed_of(base::in)]>(
                 data,
                 mask,
@@ -1730,7 +1730,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 data,
@@ -1745,7 +1745,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<mask_xor, build>(
                 data,
                 mask,
@@ -1767,7 +1767,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
           neon [neon]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 data,
@@ -1780,7 +1780,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               intrin<sveor, build[post=m]>(
                 mask,
                 data,
@@ -1792,7 +1792,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
         requires [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
                 intrin<sveor, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,

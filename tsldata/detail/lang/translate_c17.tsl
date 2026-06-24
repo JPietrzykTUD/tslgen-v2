@@ -133,7 +133,7 @@ static inline void tsl_io_write_f64(FILE *out, double v) { fprintf(out, "%.6f", 
   io_write_base "TSL_IO_WRITE_BASE({out}, {base}, {width}, {value})"
   io_write_bin "TSL_IO_WRITE_BIN({out}, {bits}, {value})"
   io_endl "TSL_IO_ENDL({out})"
-  emit_return "return {value}"
+  complete "return {value}"
   value_vector_length "TSL_VECTOR_LANES"
   value_vector_alignment "TSL_VECTOR_ALIGN"
   value_vector_size_B "TSL_VECTOR_SIZE_B"

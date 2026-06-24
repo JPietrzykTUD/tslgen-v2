@@ -172,7 +172,7 @@ and still does not add compiler execution.
   - `tsldata/primitives/arithmetic/fundamental.tsl:2` for
     `prim<v:=(v,v)> add(left, right)`.
   - `tsldata/primitives/arithmetic/fundamental.tsl:27-31` for scalar
-    `emit_return(left + right);`.
+    `complete(left + right);`.
 - Fixture path selected by M37:
   `tslgen/tests/fixtures/golden/parity/cpp/add_scalar_excerpt.hpp`.
 - Fixture provenance:

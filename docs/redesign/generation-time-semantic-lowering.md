@@ -506,7 +506,7 @@ slot envelope. The M64 envelope has opaque pre-branch and post-branch slots
 plus one selected-body slot referencing the M63 selected/no-body envelope.
 Slot labels are structural/provenance labels only. M64 does not lower or
 validate declarations, arrays, `svbool_t`, `pg`, direct intrinsics, `svst1`,
-stores, `tmp.data()`, `emit_return`, vector length/alignment, backend uninit
+stores, `tmp.data()`, `complete`, vector length/alignment, backend uninit
 values, backend translation, rendering, generated output, or broad TSIL body
 syntax.
 
@@ -604,7 +604,7 @@ records only the structural declaration kind, array-type shape, `tmp`
 variable token, accepted M68/M70/M71 helper facts, and M72 deferred backend
 uninit boundary as lowering state. Generic declarations, generic arrays,
 allocation/lifetime, initializer behavior, variable scope, stores, returns,
-`tmp.data()`, `emit_return`, backend uninit translation, backend translation
+`tmp.data()`, `complete`, backend uninit translation, backend translation
 maps, rendering, and generated output remain deferred.
 
 Milestone 74 implements exact array-body structural sequence and slot-role
@@ -616,7 +616,7 @@ first-slot declaration shell, opaque predicate-init-shaped slot, selected-body
 envelope slot, opaque post-branch store-call-shaped slot, and opaque
 return-emission-shaped slot. M74 preserves non-first slots as opaque/unresolved
 structural evidence and must not interpret `svbool_t`,
-`svptrue_b8`, selected `svptrue_b*`, `svst1`, `tmp.data()`, `emit_return`,
+`svptrue_b8`, selected `svptrue_b*`, `svst1`, `tmp.data()`, `complete`,
 `assume_aligned`, store/return behavior, SVE/direct-intrinsic behavior,
 backend maps, rendering, generated output, or broad TSIL/body semantics.
 
@@ -740,7 +740,7 @@ accepted exact array-body pipeline/source-adapter and exact-array public
 lowerer ownership out of `boundary.py` into private typed lowering modules
 while preserving the same typed values, diagnostics, source locations, stage
 snapshots, and public facade behavior. It must not evaluate new helpers,
-broaden source parsing, interpret `emit_return(tmp)` or store/call semantics,
+broaden source parsing, interpret `complete(tmp)` or store/call semantics,
 introduce raw-helper dispatch, or add backend translation/rendering/output
 behavior.
 
@@ -751,7 +751,7 @@ helpers out of `boundary.py` into a focused private typed lowering module
 while preserving the same typed values, diagnostics, source locations, stage
 snapshots, and public facade behavior. It must not evaluate new helpers,
 broaden selected-body parsing, interpret SVE-looking direct-intrinsic tokens,
-interpret `emit_return(tmp)` or store/call semantics, introduce raw-helper
+interpret `complete(tmp)` or store/call semantics, introduce raw-helper
 dispatch, or add backend translation/rendering/output behavior.
 
 M85 is accepted as that move in
@@ -766,16 +766,16 @@ accepted payload classification, typed-opaque unsupported-payload diagnostics,
 direct parameter-add return lowering, and `intrin_compose<add>` return
 lowering out of `boundary.py` while preserving the same typed mini-TSIL return
 statements, diagnostics, source locations, stage snapshots, and public facade
-behavior. It does not broaden TSIL parsing, interpret `emit_return(tmp)` or
+behavior. It does not broaden TSIL parsing, interpret `complete(tmp)` or
 return/store/call semantics, introduce raw helper dispatch, or add backend
 translation/rendering/output behavior.
 
 M87 is accepted as exact return-emission structural/request IR. The accepted
 slice consumes M74 structural sequence provenance and M76 post-branch call-site
-provenance, then records only the exact trailing `emit_return(tmp);` shape with
+provenance, then records only the exact trailing `complete(tmp);` shape with
 insignificant whitespace. The returned token must match the accepted
 declaration-shell variable token as provenance. M87 does not repair wrong
-`.tsl` bodies, broaden `emit_return(...)`, infer return operands, implement
+`.tsl` bodies, broaden `complete(...)`, infer return operands, implement
 return semantics, add renderer-ready IR, or add backend/rendering/output
 behavior. Unsupported nearby forms remain diagnostics.
 

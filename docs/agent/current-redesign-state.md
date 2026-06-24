@@ -477,7 +477,7 @@ ordered rendered calls and typed immediate metadata, and diagnoses missing,
 extra, duplicate, backend-mismatched, and opaque non-renderable token
 segments. M215 keeps `return`, assignments, indexing, braces, semicolons, and
 other target-like syntax as raw source text. It does not reopen lowering,
-rescan raw TSIL, parse `emit_return(...)`, invent statement syntax, parse
+rescan raw TSIL, parse `complete(...)`, invent statement syntax, parse
 arguments, render Rust, render whole primitive bodies, write generated
 projects, or add another intrinsic-compose IR family.
 
@@ -696,7 +696,7 @@ parses source envelopes such as `prim<...>`, primitive child fields, nested
 body envelopes into typed frozen slotted parser-boundary dataclasses with
 source spans. Primitive child fields below the `prim<...> name(...):` header
 are order-insensitive. The parser stops at raw `tsil` body envelopes and does
-not parse `emit_return`, `intrin_compose`, TSIL control keywords, expressions,
+not parse `complete`, `intrin_compose`, TSIL control keywords, expressions,
 backend semantics, or fixture rendering.
 
 M229 parses all 41 current `tsldata/**/*.tsl` files with zero diagnostics and
@@ -714,7 +714,7 @@ over M229 raw `tsil` payload envelopes.
 M230 added the accepted shared lexical source-body region boundary in
 `tslgen.syntax.source_body_regions`. It consumes M229 raw `tsil` payload
 envelopes and produces typed frozen slotted raw segments plus balanced lexical
-region candidates for configured heads: `emit_return`, `intrin_compose`,
+region candidates for configured heads: `complete`, `intrin_compose`,
 `call`, `if<generation>`, `else<generation>`, `loop<range>`, and
 `switch<compile>`. M230 is lexical only: it does not assign TSIL semantics,
 lower payloads, evaluate branches, resolve primitive calls, translate
@@ -774,16 +774,16 @@ preserved M230 spans, and does not call legacy raw-text intrinsic discovery,
 backend intrinsic handoff lowering, modifier translation, argument splitting,
 rendering, or generated-project code.
 
-M234 removed the normal lowering dependency on old pairwise `emit_return +
+M234 removed the normal lowering dependency on old pairwise `complete +
 call` helpers. Catalog return-payload token feeding now rescans direct
-`emit_return` payloads through the M233 recursive source-body fragment
+`complete` payloads through the M233 recursive source-body fragment
 boundary, and direct `call` fragments adapt to the existing `PrimitiveCall` /
 `LowerableDirective` shape. The old
 `_primitive_call_expression_result_from_exact_emit_return_body` helper and the
-`emit_return` branch inside exact add-call folding were removed.
+`complete` branch inside exact add-call folding were removed.
 
 M234 preserved the accepted exact
-`emit_return(call<primitive=add>(left, right));` artifact path after focused
+`complete(call<primitive=add>(left, right));` artifact path after focused
 regression revision. Exact add-call folding now uses a generic
 single-token-sequence operation adapter over either selected body tokens or
 direct return-payload tokens, not a restored pairwise helper. M234 follow-ups:
@@ -804,11 +804,11 @@ semantics, dependency closure, recursive argument lowering, backend rendering,
 broad TSIL parsing, or source repair. M235 follow-ups: pin or document the
 selector identifier character policy; keep behavior-level drift tests primary
 over source-text ownership checks; surface malformed primitive-call fragment
-diagnostics from catalog-side `emit_return` payload token adaptation.
+diagnostics from catalog-side `complete` payload token adaptation.
 
 M236 added `PayloadTokenFragmentSequenceResult`, a small frozen slotted result
 that carries recursive payload tokens plus diagnostics emitted while adapting
-known keyword fragments. Catalog-side recursive `emit_return` payload token
+known keyword fragments. Catalog-side recursive `complete` payload token
 feeding now propagates M233 recursive scan diagnostics and M236 payload
 adaptation diagnostics into catalog construction. Malformed known fragments
 such as `call<target=sub>(...)` are no longer silent successful catalog raw
@@ -898,7 +898,7 @@ single-return generated-project bridge. It consumes real
 `OuterTslParser`, selects the unmasked scalar `add` primitive at selector path
 `("scalar", "arith")` with signature `v:=(v,v)`, parameters `left`/`right`,
 and concrete type tag `si32`, accepts only an exact single
-`emit_return(PAYLOAD);` body, and carries raw payload text `left + right`
+`complete(PAYLOAD);` body, and carries raw payload text `left + right`
 without parsing target-language operators. It translates scalar type spelling
 through backend metadata, renders `add_scalar_si32` through the existing
 function-shape/profile templates, composes the generated project skeleton,
@@ -972,7 +972,7 @@ are requested, and explicit source modifiers remain authoritative. Rust
 intrinsic call rendering now has a typed already-qualified name mode so
 extension-owned full `core::arch::*` prefixes are not double-qualified. M247
 did not add new lowering, a sibling fixture pipeline, pairwise
-`emit_return + intrin_compose` handling, template-side intrinsic naming, or a
+`complete + intrin_compose` handling, template-side intrinsic naming, or a
 runtime dependency on `frozen`/`tslgenold`.
 
 M248 connected the M247 context-aware intrinsic body-token bridge to the
@@ -983,11 +983,11 @@ renders through the generic project pipeline for C++ and Rust with M245
 headers, extension-owned default `intrin_compose` policy, and deterministic
 artifact composition. The pipeline accepts explicit `ExtensionCatalog` and
 flag normalization catalog inputs for this non-scalar slice. Exact
-`emit_return(PAYLOAD);` bodies may preserve nested payload keyword islands and
+`complete(PAYLOAD);` bodies may preserve nested payload keyword islands and
 route backend intrinsic islands through the existing discovery/lowering/handoff
 path and M247 bridge; raw scalar payload behavior remains compatible. M248 did
 not add new source lowering, a sibling fixture pipeline, pairwise
-`emit_return + intrin_compose` handling, primitive-call expansion, dependency
+`complete + intrin_compose` handling, primitive-call expansion, dependency
 closure, template-side type/intrinsic decisions, Python-owned C++/Rust
 primitive bodies, or runtime dependencies on `frozen`/`tslgenold`.
 
@@ -1074,7 +1074,7 @@ now recognizes exact `var<init_register>`, `loop<unroll>`,
 `loop<range>`, nested `value<generation>(vector::length)`, nested
 `call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(...)`,
 nested `type<backend>(vector::as_extension(scalar))`, and
-`emit_return(result)` islands. Assignment/indexing text such as
+`complete(result)` islands. Assignment/indexing text such as
 `result[i] = ` and `left[i], right[i]` remains raw source-owned text. The
 corpus completion audit now reports `loop<range>`, `loop<unroll>`,
 `type<backend>`, `value<generation>`, and `var<init_register>` as exact
@@ -1132,7 +1132,7 @@ only.
 
 M254.5 migrated direct selected-body lowering in `Lowerer._lower_direct_body`
 through one local selected-body token view. Fragment-backed selected bodies now
-provide temporary compatibility tokens for exact `emit_return(...)`,
+provide temporary compatibility tokens for exact `complete(...)`,
 primitive-call return payload lowering, unsupported return-expression
 diagnostics, and primitive-call diagnostics when this preserves accepted
 diagnostic boundaries. Existing `ImplementationBody.tokens` remain
@@ -1319,7 +1319,9 @@ instead of `vector::mask_underlying_t`. A post-verify Rust parity fix keeps the
 generic `load_mask_repr` unpacked path reading from a reinterpreted unsigned
 lane-word pointer and reinterprets AVX2/SSE register comparison masks back to
 the current vector's mask representation before returning, preserving the same
-layout contract across C++ and Rust.
+layout contract across C++ and Rust. The TSIL value-result directive is now
+`complete(expr)` across active source data, lowering, backend translation
+metadata, tests, and docs, with no compatibility alias for the former spelling.
 
 Active prompt:
 docs/agent/runs/tslc-design-principles-residual-risk-review-prompt.md
@@ -1349,7 +1351,8 @@ Next expected action: review the focused design-principles residual-risk
 cleanup. Confirm that dependency extraction is backend-neutral, scalar
 source-type facts have a single typed owner, dependency closure remains
 deterministic, and `load_mask_repr` no longer relies on the older unpacked
-mask-underlying source spelling.
+mask-underlying source spelling. Also confirm that `complete(...)` is the sole
+accepted TSIL completion directive.
 ```
 
 Value-test completeness validation (2026-06-24):
@@ -1395,6 +1398,19 @@ After the Rust `load_mask_repr` parity fix,
 passed with 1 test;
 `python -m pytest -q tslc/tests/test_build_verify.py::test_full_corpus_builds`
 passed with 1 test;
+`./verify.sh` passed all targeted validations, including 185 non-build tests
+and 53 generated-build tests across its shards.
+```
+
+TSIL completion directive rename validation (2026-06-24):
+
+```text
+`python -B -m compileall -q tslc/src/tslc tslc/tests` passed;
+`python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/test_diagnostic_provenance.py tslc/tests/test_select_and_lower.py tslc/tests/test_parse_arithmetic.py tslc/tests/test_catalog.py`
+passed with 48 tests;
+`python -m pytest -q tslc/tests --ignore=tslc/tests/test_build_verify.py`
+passed with 185 tests;
+`git diff --check` passed;
 `./verify.sh` passed all targeted validations, including 185 non-build tests
 and 53 generated-build tests across its shards.
 ```
@@ -1721,6 +1737,9 @@ expansion, and completing the `load_mask_repr` unpacked typed layout follow-up.
 The final source revision also preserves Rust mask representation parity by
 casting the generic pointer to unsigned lane-word storage before indexing and by
 reinterpreting AVX2/SSE register-mask results back to the current vector.
+It also renames the TSIL value-result directive to `complete(expr)` across
+active source data, lowering, backend translation metadata, tests, and docs,
+with no compatibility alias.
 
 Next expected action: run the residual-risk cleanup review. If accepted, select
 the next concrete planning/review prompt from the active TSLc backlog; if it
@@ -1743,6 +1762,13 @@ After the Rust `load_mask_repr` parity fix,
 passed with 1 test;
 `python -m pytest -q tslc/tests/test_build_verify.py::test_full_corpus_builds`
 passed with 1 test;
+`./verify.sh` passed all targeted validations, including 185 non-build tests
+and 53 generated-build tests across its shards.
+After the `complete(...)` directive rename,
+`python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/test_diagnostic_provenance.py tslc/tests/test_select_and_lower.py tslc/tests/test_parse_arithmetic.py tslc/tests/test_catalog.py`
+passed with 48 tests;
+`python -m pytest -q tslc/tests --ignore=tslc/tests/test_build_verify.py`
+passed with 185 tests;
 `./verify.sh` passed all targeted validations, including 185 non-build tests
 and 53 generated-build tests across its shards.
 

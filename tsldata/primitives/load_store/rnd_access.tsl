@@ -32,28 +32,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=1]>(
+                complete(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=1]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   1
                 ));
               }
               2 => {
-                emit_return(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=2]>(
+                complete(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=2]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   2
                 ));
               }
               4 => {
-                emit_return(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=4]>(
+                complete(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=4]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   4
                 ));
               }
               8 => {
-                emit_return(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=8]>(
+                complete(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=8]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   8
@@ -65,7 +65,7 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 loop<backend>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
-                emit_return(call<primitive=from_array[Vec]>(result));
+                complete(call<primitive=from_array[Vec]>(result));
               }
             }
           """
@@ -76,28 +76,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=1]>(
+                complete(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=1]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   1
                 ));
               }
               2 => {
-                emit_return(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=2]>(
+                complete(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=2]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   2
                 ));
               }
               4 => {
-                emit_return(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=4]>(
+                complete(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=4]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   4
                 ));
               }
               8 => {
-                emit_return(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=8]>(
+                complete(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=8]>(
                   index,
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   8
@@ -109,7 +109,7 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 loop<backend>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
-                emit_return(call<primitive=from_array[Vec]>(result));
+                complete(call<primitive=from_array[Vec]>(result));
               }
             }
           """
@@ -119,28 +119,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin<i32gather, build[immediate(2)=1]>(
+                complete(intrin<i32gather, build[immediate(2)=1]>(
                   index,
                   base_ptr,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin<i32gather, build[immediate(2)=2]>(
+                complete(intrin<i32gather, build[immediate(2)=2]>(
                   index,
                   base_ptr,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin<i32gather, build[immediate(2)=4]>(
+                complete(intrin<i32gather, build[immediate(2)=4]>(
                   index,
                   base_ptr,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin<i32gather, build[immediate(2)=8]>(
+                complete(intrin<i32gather, build[immediate(2)=8]>(
                   index,
                   base_ptr,
                   8
@@ -152,7 +152,7 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 loop<backend>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
-                emit_return(call<primitive=from_array[Vec]>(result));
+                complete(call<primitive=from_array[Vec]>(result));
               }
             }
           """
@@ -162,28 +162,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin<i64gather, build[immediate(2)=1]>(
+                complete(intrin<i64gather, build[immediate(2)=1]>(
                   index,
                   base_ptr,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin<i64gather, build[immediate(2)=2]>(
+                complete(intrin<i64gather, build[immediate(2)=2]>(
                   index,
                   base_ptr,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin<i64gather, build[immediate(2)=4]>(
+                complete(intrin<i64gather, build[immediate(2)=4]>(
                   index,
                   base_ptr,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin<i64gather, build[immediate(2)=8]>(
+                complete(intrin<i64gather, build[immediate(2)=8]>(
                   index,
                   base_ptr,
                   8
@@ -195,7 +195,7 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 loop<backend>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
-                emit_return(call<primitive=from_array[Vec]>(result));
+                complete(call<primitive=from_array[Vec]>(result));
               }
             }
           """
@@ -209,28 +209,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=1]>(
+                complete(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=1]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=2]>(
+                complete(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=2]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=4]>(
+                complete(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=4]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=8]>(
+                complete(intrin<i32gather, build[suffix=base::signed_of(base::in), immediate(2)=8]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   8
@@ -242,7 +242,7 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 loop<backend>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
-                emit_return(call<primitive=from_array[Vec]>(result));
+                complete(call<primitive=from_array[Vec]>(result));
               }
             }
           """
@@ -255,28 +255,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=1]>(
+                complete(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=1]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=2]>(
+                complete(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=2]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=4]>(
+                complete(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=4]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=8]>(
+                complete(intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=8]>(
                   cast<reinterpret>(SignedBase const *, base_ptr),
                   index,
                   8
@@ -288,7 +288,7 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 loop<backend>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
-                emit_return(call<primitive=from_array[Vec]>(result));
+                complete(call<primitive=from_array[Vec]>(result));
               }
             }
           """
@@ -300,28 +300,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin<i32gather, build[immediate(2)=1]>(
+                complete(intrin<i32gather, build[immediate(2)=1]>(
                   base_ptr,
                   index,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin<i32gather, build[immediate(2)=2]>(
+                complete(intrin<i32gather, build[immediate(2)=2]>(
                   base_ptr,
                   index,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin<i32gather, build[immediate(2)=4]>(
+                complete(intrin<i32gather, build[immediate(2)=4]>(
                   base_ptr,
                   index,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin<i32gather, build[immediate(2)=8]>(
+                complete(intrin<i32gather, build[immediate(2)=8]>(
                   base_ptr,
                   index,
                   8
@@ -333,7 +333,7 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 loop<backend>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
-                emit_return(call<primitive=from_array[Vec]>(result));
+                complete(call<primitive=from_array[Vec]>(result));
               }
             }
           """
@@ -345,28 +345,28 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin<i64gather, build[immediate(2)=1]>(
+                complete(intrin<i64gather, build[immediate(2)=1]>(
                   base_ptr,
                   index,
                   1
                 ));
               }
               2 => {
-                emit_return(intrin<i64gather, build[immediate(2)=2]>(
+                complete(intrin<i64gather, build[immediate(2)=2]>(
                   base_ptr,
                   index,
                   2
                 ));
               }
               4 => {
-                emit_return(intrin<i64gather, build[immediate(2)=4]>(
+                complete(intrin<i64gather, build[immediate(2)=4]>(
                   base_ptr,
                   index,
                   4
                 ));
               }
               8 => {
-                emit_return(intrin<i64gather, build[immediate(2)=8]>(
+                complete(intrin<i64gather, build[immediate(2)=8]>(
                   base_ptr,
                   index,
                   8
@@ -378,7 +378,7 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 loop<backend>(i, 0, value<generation>(vector::length), 1) {
                   result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                 }
-                emit_return(call<primitive=from_array[Vec]>(result));
+                complete(call<primitive=from_array[Vec]>(result));
               }
             }
           """
@@ -401,7 +401,7 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
             }
-            emit_return(call<primitive=from_array[Vec]>(result));
+            complete(call<primitive=from_array[Vec]>(result));
           """
     scalar:
       arith:
@@ -416,7 +416,7 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
                 ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[0], scale))
               )
             );
-            emit_return(*ptr);
+            complete(*ptr);
           """
 prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, source, scale):
   brief_description "[Example: avx512 + si32]: Gather 32-bit integers from memory using 32-bit indices. 32-bit elements are loaded from addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\"). Gathered elements are merged into \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set). \"scale\" should be 1, 2, 4 or 8."
@@ -454,7 +454,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin<mask_i32gather, build[suffix=base::signed_of(base::in), immediate(4)=1]>(
+                complete(intrin<mask_i32gather, build[suffix=base::signed_of(base::in), immediate(4)=1]>(
                   source,
                   mask,
                   index,
@@ -463,7 +463,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               2 => {
-                emit_return(intrin<mask_i32gather, build[suffix=base::signed_of(base::in), immediate(4)=2]>(
+                complete(intrin<mask_i32gather, build[suffix=base::signed_of(base::in), immediate(4)=2]>(
                   source,
                   mask,
                   index,
@@ -472,7 +472,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               4 => {
-                emit_return(intrin<mask_i32gather, build[suffix=base::signed_of(base::in), immediate(4)=4]>(
+                complete(intrin<mask_i32gather, build[suffix=base::signed_of(base::in), immediate(4)=4]>(
                   source,
                   mask,
                   index,
@@ -481,7 +481,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               8 => {
-                emit_return(intrin<mask_i32gather, build[suffix=base::signed_of(base::in), immediate(4)=8]>(
+                complete(intrin<mask_i32gather, build[suffix=base::signed_of(base::in), immediate(4)=8]>(
                   source,
                   mask,
                   index,
@@ -497,7 +497,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                     result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                   }
                 }
-                emit_return(call<primitive=from_array[Vec]>(result));
+                complete(call<primitive=from_array[Vec]>(result));
               }
             }
           """
@@ -508,7 +508,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin<mask_i64gather, build[suffix=base::signed_of(base::in), immediate(4)=1]>(
+                complete(intrin<mask_i64gather, build[suffix=base::signed_of(base::in), immediate(4)=1]>(
                   source,
                   mask,
                   index,
@@ -517,7 +517,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               2 => {
-                emit_return(intrin<mask_i64gather, build[suffix=base::signed_of(base::in), immediate(4)=2]>(
+                complete(intrin<mask_i64gather, build[suffix=base::signed_of(base::in), immediate(4)=2]>(
                   source,
                   mask,
                   index,
@@ -526,7 +526,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               4 => {
-                emit_return(intrin<mask_i64gather, build[suffix=base::signed_of(base::in), immediate(4)=4]>(
+                complete(intrin<mask_i64gather, build[suffix=base::signed_of(base::in), immediate(4)=4]>(
                   source,
                   mask,
                   index,
@@ -535,7 +535,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               8 => {
-                emit_return(intrin<mask_i64gather, build[suffix=base::signed_of(base::in), immediate(4)=8]>(
+                complete(intrin<mask_i64gather, build[suffix=base::signed_of(base::in), immediate(4)=8]>(
                   source,
                   mask,
                   index,
@@ -551,7 +551,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                     result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                   }
                 }
-                emit_return(call<primitive=from_array[Vec]>(result));
+                complete(call<primitive=from_array[Vec]>(result));
               }
             }
           """
@@ -561,7 +561,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin<mask_i32gather, build[immediate(4)=1]>(
+                complete(intrin<mask_i32gather, build[immediate(4)=1]>(
                   source,
                   mask,
                   index,
@@ -570,7 +570,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               2 => {
-                emit_return(intrin<mask_i32gather, build[immediate(4)=2]>(
+                complete(intrin<mask_i32gather, build[immediate(4)=2]>(
                   source,
                   mask,
                   index,
@@ -579,7 +579,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               4 => {
-                emit_return(intrin<mask_i32gather, build[immediate(4)=4]>(
+                complete(intrin<mask_i32gather, build[immediate(4)=4]>(
                   source,
                   mask,
                   index,
@@ -588,7 +588,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               8 => {
-                emit_return(intrin<mask_i32gather, build[immediate(4)=8]>(
+                complete(intrin<mask_i32gather, build[immediate(4)=8]>(
                   source,
                   mask,
                   index,
@@ -604,7 +604,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                     result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                   }
                 }
-                emit_return(call<primitive=from_array[Vec]>(result));
+                complete(call<primitive=from_array[Vec]>(result));
               }
             }
           """
@@ -614,7 +614,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
           tsil """
             switch<compile>(scale) {
               1 => {
-                emit_return(intrin<mask_i64gather, build[immediate(4)=1]>(
+                complete(intrin<mask_i64gather, build[immediate(4)=1]>(
                   source,
                   mask,
                   index,
@@ -623,7 +623,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               2 => {
-                emit_return(intrin<mask_i64gather, build[immediate(4)=2]>(
+                complete(intrin<mask_i64gather, build[immediate(4)=2]>(
                   source,
                   mask,
                   index,
@@ -632,7 +632,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               4 => {
-                emit_return(intrin<mask_i64gather, build[immediate(4)=4]>(
+                complete(intrin<mask_i64gather, build[immediate(4)=4]>(
                   source,
                   mask,
                   index,
@@ -641,7 +641,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 ));
               }
               8 => {
-                emit_return(intrin<mask_i64gather, build[immediate(4)=8]>(
+                complete(intrin<mask_i64gather, build[immediate(4)=8]>(
                   source,
                   mask,
                   index,
@@ -657,7 +657,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                     result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
                   }
                 }
-                emit_return(call<primitive=from_array[Vec]>(result));
+                complete(call<primitive=from_array[Vec]>(result));
               }
             }
           """
@@ -682,7 +682,7 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                 result[i] = *cast<reinterpret>(type<generation>(base::in) const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)));
               }
             }
-            emit_return(call<primitive=from_array[Vec]>(result));
+            complete(call<primitive=from_array[Vec]>(result));
           """
     scalar:
       arith:
@@ -698,9 +698,9 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
                   ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[0], scale))
                 )
               );
-              emit_return(*ptr);
+              complete(*ptr);
             }
-            emit_return(source);
+            complete(source);
           """
 prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
   brief_description "[Example: avx512 + si32]: Scatter 32-bit integers from \"a\" into memory using 32-bit indices. 32-bit elements are stored at addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\"). \"scale\" should be 1, 2, 4 or 8."

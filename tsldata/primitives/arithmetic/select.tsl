@@ -25,7 +25,7 @@ prim<v:=(v,v)> max(vec_a, vec_b):
           sve [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=blend>(
                 call<primitive=less_than>(vec_a, vec_b),
                 vec_a,
@@ -59,7 +59,7 @@ prim<v:=(v,v)> min(vec_a, vec_b):
           sve [sve]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=blend>(
                 call<primitive=less_than>(vec_a, vec_b),
                 vec_b,
