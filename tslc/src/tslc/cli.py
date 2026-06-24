@@ -56,6 +56,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--coverage", action="store_true", help="print a behavior-coverage report"
     )
+    parser.add_argument(
+        "--value-test-warnings",
+        action="store_true",
+        help="warn when authored value-test cases cannot be planned for a backend/profile",
+    )
     args = parser.parse_args(argv)
 
     result = generate_project(
@@ -66,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         type_tags=_split(args.types),
         backends=_split(args.backends),
         generation_mode=args.generation_mode,
+        value_test_warnings=args.value_test_warnings,
     )
 
     for diagnostic in result.diagnostics:

@@ -78,35 +78,43 @@ class ValueTestPlanner:
             )
             if primitive is None or not primitive.tests:
                 continue
-            before = len(cases)
-            if pattern is not None:
-                for index, test_case in enumerate(primitive.tests):
-                    cases.extend(
-                        self._supported_cases(
-                            pattern.plan_case(
-                                backend=backend,
-                                emitted_name=emitted_name,
-                                index=index,
-                                case=test_case,
-                                specs=specs,
-                                catalog=self._catalog,
-                                harness=harness,
+            for index, test_case in enumerate(primitive.tests):
+                planned = (
+                    pattern.plan_case(
+                        backend=backend,
+                        emitted_name=emitted_name,
+                        index=index,
+                        case=test_case,
+                        specs=specs,
+                        catalog=self._catalog,
+                        harness=harness,
+                    )
+                    if pattern is not None
+                    else ()
+                )
+                supported = self._supported_cases(planned, backend)
+                cases.extend(supported)
+                if not supported:
+                    diagnostics.append(
+                        Diagnostic(
+                            severity="warning",
+                            code="TSL-VALUE-TEST-UNSUPPORTED-CASE",
+                            message=(
+                                f"no {profile.backend_id} value-test plan for case "
+                                f"{test_case.name!r} of primitive {source_name!r} "
+                                f"in profile {profile.profile_name!r}"
                             ),
-                            backend,
+                            location=(
+                                test_case.source.start
+                                if test_case.source is not None
+                                else (
+                                    primitive.source.start
+                                    if primitive.source is not None
+                                    else None
+                                )
+                            ),
                         )
                     )
-            if len(cases) == before:
-                diagnostics.append(
-                    Diagnostic(
-                        severity="warning",
-                        code="TSL-VALUE-TEST-UNSUPPORTED-SHAPE",
-                        message=(
-                            f"no {profile.backend_id} value-test plan for primitive "
-                            f"{source_name!r} in profile {profile.profile_name!r}"
-                        ),
-                        location=primitive.source.start if primitive.source is not None else None,
-                    )
-                )
         return ValueTestProfilePlan(
             backend_id=profile.backend_id,
             profile_name=profile.profile_name,

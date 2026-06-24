@@ -60,6 +60,10 @@ class GenerationRequest:
     # into the dependency closure so the generated differential tests can build a hardware
     # register from a lane array and read its result back. Off for ordinary generation.
     test_harness: bool = False
+    # Report authored value-test cases that could not be planned for a backend/profile. Off for
+    # ordinary generation because source data often includes broader test intent than the current
+    # backend test harness supports.
+    value_test_warnings: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,7 +216,7 @@ class _GenerationSession:
                 self.request.backends,
                 self.inputs.imm_split_names,
                 catalog=self.inputs.catalog,
-                value_test_warnings=self.request.test_harness,
+                value_test_warnings=self.request.value_test_warnings,
             )
             if self.profile_renders
             else None

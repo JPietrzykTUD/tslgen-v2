@@ -40,6 +40,7 @@ def generate_project(
     backends: Iterable[str] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
     generation_mode: GenerationMode = "partial",
     test_harness: bool = False,
+    value_test_warnings: bool = False,
 ) -> GenerationResult:
     """Run the full compiler pipeline and return in-memory artifacts.
 
@@ -58,6 +59,7 @@ def generate_project(
         backends=tuple(backends),
         mode=generation_mode,
         test_harness=test_harness,
+        value_test_warnings=value_test_warnings,
     )
     return generate(request)
 

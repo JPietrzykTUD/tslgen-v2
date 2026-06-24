@@ -1120,8 +1120,11 @@ Key points:
   (`v:=s[]`, `s[]:=v`, and `im:=m`) instead of fixed primitive names. Pipeline
   `test_harness=True` seeds dependency closure from those discovered names.
 - Value-test planning diagnostics are surfaced through `RenderedProject` and
-  `GenerationResult`. Warnings are only surfaced for explicit test-harness
-  generation; planning errors remain surfaced for ordinary generation.
+  `GenerationResult`. Warnings are surfaced only when explicitly requested with
+  `value_test_warnings=True` / `--value-test-warnings`; planning errors remain
+  surfaced for ordinary generation. This is intentionally independent of
+  `test_harness`, whose job is dependency closure for generated value-test
+  binaries.
 
 Focused coverage:
 
@@ -1139,6 +1142,10 @@ Focused coverage:
   `render_cpp.py`, renamed source-looking plan kinds to `vector_to_array` and
   `mask_to_vector`, and added an architecture guard for renderer literal
   ownership plus planner size.
+- The 2026-06-24 design-principles follow-up tightened unsupported authored
+  case diagnostics: each `tests:` case that cannot produce a backend-supported
+  plan now emits `TSL-VALUE-TEST-UNSUPPORTED-CASE`, even when sibling cases for
+  the same primitive/profile plan successfully.
 
 Validation for this slice:
 

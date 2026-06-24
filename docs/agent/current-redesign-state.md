@@ -1596,6 +1596,42 @@ No `docs/redesign/design-decisions.md` update was made because the TSLc slice
 implements the existing capability-boundary direction rather than a new policy.
 ```
 
+Latest follow-up cleanup:
+
+```text
+The TSLc design-principles follow-up cleanup is implemented and awaiting
+review. Active run prompt:
+`docs/agent/runs/tslc-design-principles-follow-up-cleanup-review-prompt.md`.
+
+Current action: review the focused cleanup, not a new milestone. The cleanup
+addresses the actionable design-principles findings by making value-test
+planning warn per unsupported authored `tests:` case, introducing an explicit
+`value_test_warnings` API/request/CLI switch instead of tying warning visibility
+to `test_harness`, and moving raw TSIL text tokenization from `lowerer.py` to
+`tslc.lower.raw_text`.
+
+Next expected action: run the follow-up cleanup review. If accepted, select the
+next concrete planning/review prompt from the active TSLc backlog; if it needs
+revision, create a narrow revision prompt for the named blocking issue.
+
+Boundary rules: do not broaden value-test shape support, do not make
+`test_harness` control diagnostics visibility, do not add renderer-side
+semantic inference, and do not turn `raw_text.py` into a new TSIL parser.
+
+Validation already run for the cleanup:
+`python -m pytest -q tslc/tests/test_value_test_planning.py` passed with
+9 tests; `python -m compileall -q tslc/src/tslc tslc/tests` passed;
+`python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_support_policy.py tslc/tests/test_support_policy_views.py tslc/tests/test_tsil_scan.py tslc/tests/test_masks_and_calls.py tslc/tests/test_generation_conditionals.py tslc/tests/test_select_and_lower.py`
+passed with 75 tests;
+`python -m pytest -q tslc/tests/test_catalog_validation.py tslc/tests/test_catalog_tests.py tslc/tests/test_value_tests.py tslc/tests/test_coverage.py`
+passed with 30 tests; `git diff --check` passed.
+
+Known follow-ups: no new architectural decision was recorded because this is a
+review-finding cleanup. Future lowerer work should continue splitting cohesive
+helper families before `lowerer.py` grows back toward the module-size
+guardrail.
+```
+
 Validation commands for the active `tslc` line:
 
 ```bash

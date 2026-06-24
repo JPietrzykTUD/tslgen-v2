@@ -38,6 +38,7 @@ from tslc.lower.context import (
     LoweringScope,
     LoweringSession,
 )
+from tslc.lower.raw_text import render_raw_text
 from tslc.lower.regions import DEFAULT_REGION_LOWERERS, RegionLowerer, StatementFinalizer
 from tslc.render.model import (
     LoweredBody,
@@ -181,7 +182,7 @@ class ExpressionRenderer:
 
     def _render_segment(self, segment: Segment) -> RenderText:
         if isinstance(segment, RawText):
-            return _render_raw_text(segment.text, self._context)
+            return render_raw_text(segment.text, self._context)
         lowerer = self._lowerers.get(segment.keyword)
         if lowerer is None:
             self._context.effects.skip(
@@ -448,67 +449,6 @@ def _lane_list_param_map(
             lane_expression=lane_expression,
         )
     return result
-
-
-def _render_raw_text(text: str, context: LoweringSession) -> RenderText:
-    """Turn raw source text into terminal literal chunks plus typed alias references.
-
-    This is a source-boundary operation: aliases introduced by earlier ``let<type>`` regions are
-    tokenized as explicit render values before the body becomes backend render text. Quoted string
-    contents remain literal.
-    """
-
-    parts: list[RenderText] = []
-    literal: list[str] = []
-    index = 0
-
-    def flush_literal() -> None:
-        if literal:
-            parts.append(literal_text("".join(literal)))
-            literal.clear()
-
-    while index < len(text):
-        char = text[index]
-        if char == '"':
-            literal.append(char)
-            index += 1
-            escaped = False
-            while index < len(text):
-                inner = text[index]
-                literal.append(inner)
-                index += 1
-                if escaped:
-                    escaped = False
-                elif inner == "\\":
-                    escaped = True
-                elif inner == '"':
-                    break
-            continue
-        if _is_identifier_start(char):
-            start = index
-            index += 1
-            while index < len(text) and _is_identifier_part(text[index]):
-                index += 1
-            name = text[start:index]
-            alias = context.scope.type_aliases.get(name)
-            if alias is None:
-                literal.append(name)
-            else:
-                flush_literal()
-                parts.append(alias)
-            continue
-        literal.append(char)
-        index += 1
-    flush_literal()
-    return render_sequence(tuple(parts))
-
-
-def _is_identifier_start(char: str) -> bool:
-    return char == "_" or char.isalpha()
-
-
-def _is_identifier_part(char: str) -> bool:
-    return char == "_" or char.isalnum()
 
 
 def _resolve_target_vector(

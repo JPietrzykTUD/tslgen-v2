@@ -7,7 +7,7 @@ from tslc.catalog.model import Catalog, Primitive, TestArg as TslTestArg, TestCa
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.render.emitted_names import finalize_emitted_names
 from tslc.render.model import LoweredBody
-from tslc.render.project import ProfileRender
+from tslc.render.project import ProfileRender, render_project
 from tslc.value_tests import (
     ValueTestBackendProfileInput,
     ValueTestPlanner,
@@ -73,7 +73,7 @@ def test_planner_uses_source_identity_for_emitted_mask_name() -> None:
             ),
         ),
     )
-    catalog = _catalog(primitive)
+    catalog = _catalog(primitive, *_harness_primitives())
     spec = _spec(
         "sum_maskz",
         "sum",
@@ -121,6 +121,89 @@ def test_lane_list_value_tests_are_planned_and_rendered() -> None:
     assert "tsl::set<Vec>(values)" in cpp_source
     assert "let mut values: <Vec as SimdVector>::Array = Default::default();" in rust_source
     assert "set::<Vec>(values)" in rust_source
+
+
+def test_planner_warns_for_each_unsupported_authored_case() -> None:
+    primitive = Primitive(
+        "neg",
+        "v:=v",
+        ("value",),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="good",
+                type_tag="si32",
+                tags=("basic",),
+                lanes=4,
+                inputs=(TslTestArg("vector", values=("1", "2", "3", "4")),),
+                expected=("-1", "-2", "-3", "-4"),
+            ),
+            TslTestCase(
+                name="bad",
+                type_tag="si32",
+                tags=("bad",),
+                lanes=4,
+                inputs=(TslTestArg("vector", values=("1", "2", "3", "4")),),
+                expected=("-1", "-2", "-3"),
+            ),
+        ),
+    )
+    catalog = _catalog(primitive, *_harness_primitives())
+    spec = _spec("neg", "neg", param_kinds=("v",))
+    profile = _profile(cpp={"neg": (spec,)})
+
+    plan = ValueTestPlanner(catalog, _VALUE_TEST_SUPPORTS).plan(_inputs(profile))
+
+    assert [case.case_name for case in plan.profiles_for("cpp")[0].cases] == ["good"]
+    warnings = [
+        diagnostic
+        for diagnostic in plan.diagnostics
+        if diagnostic.code == "TSL-VALUE-TEST-UNSUPPORTED-CASE"
+    ]
+    assert len(warnings) == 1
+    assert "bad" in warnings[0].message
+
+
+def test_render_project_surfaces_value_test_warnings_when_requested() -> None:
+    primitive = Primitive(
+        "neg",
+        "v:=v",
+        ("value",),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="bad",
+                type_tag="si32",
+                tags=("bad",),
+                lanes=4,
+                inputs=(TslTestArg("vector", values=("1", "2", "3", "4")),),
+                expected=("-1", "-2", "-3"),
+            ),
+        ),
+    )
+    catalog = _catalog(primitive, *_harness_primitives())
+    spec = _spec("neg", "neg", param_kinds=("v",))
+    profile = _profile(cpp={"neg": (spec,)})
+
+    rendered = render_project(
+        (profile,),
+        backends=("cpp",),
+        catalog=catalog,
+        value_test_warnings=True,
+    )
+
+    assert [diagnostic.code for diagnostic in rendered.diagnostics] == [
+        "TSL-VALUE-TEST-UNSUPPORTED-CASE"
+    ]
+    suppressed = render_project(
+        (profile,),
+        backends=("cpp",),
+        catalog=catalog,
+        value_test_warnings=False,
+    )
+    assert suppressed.diagnostics == ()
 
 
 def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
@@ -183,6 +266,7 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
     patterns = Path("tslc/src/tslc/value_tests/patterns.py").read_text(encoding="utf-8")
     case_plans = Path("tslc/src/tslc/value_tests/case_plans.py").read_text(encoding="utf-8")
     render_cpp = Path("tslc/src/tslc/value_tests/render_cpp.py").read_text(encoding="utf-8")
+    pipeline = Path("tslc/src/tslc/pipeline.py").read_text(encoding="utf-8")
 
     assert len(planner.splitlines()) < 250
     assert "def discover_harness_primitives" not in planner
@@ -194,6 +278,8 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
     assert 'extension_name == "scalar"' not in case_plans
     assert "_rust_literal" not in render_cpp
     assert 'backend_id == "rust"' not in render_cpp
+    assert "value_test_warnings=self.request.value_test_warnings" in pipeline
+    assert "value_test_warnings=self.request.test_harness" not in pipeline
 
 
 def _catalog(*primitives: Primitive) -> Catalog:
@@ -203,6 +289,14 @@ def _catalog(*primitives: Primitive) -> Catalog:
         extensions={},
         type_spellings={},
         translations={},
+    )
+
+
+def _harness_primitives() -> tuple[Primitive, ...]:
+    return (
+        Primitive("lane_in", "v:=s[]", ("data",), (), ()),
+        Primitive("lane_out", "s[]:=v", ("data",), (), ()),
+        Primitive("mask_bits", "im:=m", ("mask",), (), ()),
     )
 
 
