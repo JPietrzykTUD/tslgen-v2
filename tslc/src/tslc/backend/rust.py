@@ -34,15 +34,19 @@ class RustBackend:
         if varying_positions(specializations):
             return self._render_overloaded(primitive_name, specializations)
         shape = specializations[0]
-        trait = self._trait(primitive_name, shape)
-        impls = [self._impl(spec) for spec in specializations]
-        wrapper = self._wrapper(primitive_name, shape)
+        caller_unsafe = _any_caller_unsafe(specializations)
+        trait = self._trait(primitive_name, shape, caller_unsafe=caller_unsafe)
+        impls = [
+            self._impl(spec, caller_unsafe=caller_unsafe) for spec in specializations
+        ]
+        wrapper = self._wrapper(primitive_name, shape, caller_unsafe=caller_unsafe)
         return "\n\n".join([trait, *impls, wrapper])
 
     def _render_overloaded(
         self, primitive_name: str, specs: tuple[LoweredSpecialization, ...]
     ) -> str:
         shape = specs[0]
+        caller_unsafe = _any_caller_unsafe(specs)
         vi = varying_positions(specs)[0]  # one varying position in scope
         arg_trait = f"{_trait_name(primitive_name)}Arg"
         fixed = [
@@ -60,7 +64,7 @@ class RustBackend:
         fixed_trait = "".join(f", {n}: {_kind_type(k, 'S')}" for n, k in fixed)
         trait = (
             f"pub trait {arg_trait}<S: SimdVector{axis_decl}{gp_decl}> {{\n"
-            f"    fn apply(self{fixed_trait}) -> {ret};\n"
+            f"    {_unsafe_prefix(caller_unsafe)}fn apply(self{fixed_trait}) -> {ret};\n"
             f"}}"
         )
 
@@ -121,7 +125,7 @@ class RustBackend:
             )
             impls.append(
                 f"{impl_prefix} {arg_trait}{trait_args} for {self_ty} {{\n"
-                f"    fn apply(self{fixed_impl}) -> {ret_impl} {{\n"
+                f"    {_unsafe_prefix(caller_unsafe)}fn apply(self{fixed_impl}) -> {ret_impl} {{\n"
                 f"        {bind}{body}\n"
                 f"    }}\n"
                 f"}}"
@@ -136,15 +140,27 @@ class RustBackend:
             for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
         )
         fixed_names = ", ".join(n for n, _ in fixed)
+        call = f"{shape.param_names[vi]}.apply({fixed_names})"
+        call = _unsafe_call(call, caller_unsafe)
+        unsafe_prefix = _unsafe_prefix(caller_unsafe)
+        ret_type = _kind_type(shape.result_kind, "S")
         wrapper = (
-            f"pub fn {primitive_name}<S: SimdVector, {axis_wrap}{gp_wrap}"
-            f"V: {arg_trait}<S{axis_args}{gp_args}>>({wrap_params}) -> {_kind_type(shape.result_kind, 'S')} {{\n"
-            f"    {shape.param_names[vi]}.apply({fixed_names})\n"
+            f"pub {unsafe_prefix}fn {primitive_name}"
+            f"<S: SimdVector, {axis_wrap}{gp_wrap}"
+            f"V: {arg_trait}<S{axis_args}{gp_args}>>"
+            f"({wrap_params}) -> {ret_type} {{\n"
+            f"    {call}\n"
             f"}}"
         )
         return "\n\n".join([trait, *impls, wrapper])
 
-    def _trait(self, primitive_name: str, shape: LoweredSpecialization) -> str:
+    def _trait(
+        self,
+        primitive_name: str,
+        shape: LoweredSpecialization,
+        *,
+        caller_unsafe: bool,
+    ) -> str:
         # Boolean-wildcard axes and an `sImm` immediate become const-generics on the trait,
         # so the `[aligned=*]` variants are distinct impls (`StoreImpl<false>`/`StoreImpl<true>`)
         # and the immediate is a free param (`MulImmImpl<const factor: u32>`).
@@ -162,13 +178,17 @@ class RustBackend:
         vidx_type = f"{shape.type_params[0][0]}::RegisterType" if shape.type_params else None
         params = _params(shape, "Self", vt_type=vt_type, vidx_type=vidx_type)
         generics = f"<{', '.join(decls)}>" if decls else ""
+        trait_header = (
+            f"pub trait {_trait_name(primitive_name)}{generics}: "
+            f"SimdVector{_index_where(shape)}"
+        )
         return (
-            f"pub trait {_trait_name(primitive_name)}{generics}: SimdVector{_index_where(shape)} {{\n"
-            f"    fn apply({params}) -> {ret};\n"
+            f"{trait_header} {{\n"
+            f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret};\n"
             f"}}"
         )
 
-    def _impl(self, spec: LoweredSpecialization) -> str:
+    def _impl(self, spec: LoweredSpecialization, *, caller_unsafe: bool) -> str:
         # A sized vector's impl is parameterized by its lane const generic; an `sImm` immediate
         # is a further free const generic. A monomorphized slot (numeric `lane_parameter`) is over
         # a concrete `Generic<N>` instead, so it declares no lane generic.
@@ -207,13 +227,19 @@ class RustBackend:
         return (
             f"impl{impl_generics} {_trait_name(spec.primitive_name)}{trait_args} for {key}"
             f"{_index_where(spec, impl_register=impl_register)} {{\n"
-            f"    fn apply({params}) -> {ret} {{\n"
+            f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret} {{\n"
             f"        {spec.body_text}\n"
             f"    }}\n"
             f"}}"
         )
 
-    def _wrapper(self, primitive_name: str, shape: LoweredSpecialization) -> str:
+    def _wrapper(
+        self,
+        primitive_name: str,
+        shape: LoweredSpecialization,
+        *,
+        caller_unsafe: bool,
+    ) -> str:
         names = _runtime_names(shape)
         # `S` comes first, then the const-generic axis/immediate params — the same turbofish
         # order as the overloaded wrapper (`S, ALIGNED, V`), so a call site can spell
@@ -246,8 +272,9 @@ class RustBackend:
         params = _params(shape, "S", vt_type=vt_type, vidx_type=vidx_type)
         trait_args = f"<{', '.join(targs)}>" if targs else ""
         decls = "".join(f", {d}" for d in decl_list)
+        call = _unsafe_call(call, caller_unsafe)
         return (
-            f"pub fn {rust_raw_identifier(primitive_name)}"
+            f"pub {_unsafe_prefix(caller_unsafe)}fn {rust_raw_identifier(primitive_name)}"
             f"<S: {_trait_name(primitive_name)}{trait_args}{decls}>"
             f"({params}) -> {ret}{_index_where(shape)} {{\n"
             f"    {call}\n"
@@ -269,11 +296,25 @@ def _free_function(spec: LoweredSpecialization) -> str:
         if spec.result_kind == "void"
         else f" -> {_free_kind_type(spec.result_kind, spec.base_type_spelling)}"
     )
+    unsafe_prefix = _unsafe_prefix(spec.safety.caller_unsafe)
+    function_name = rust_raw_identifier(spec.primitive_name)
     return (
-        f"pub fn {rust_raw_identifier(spec.primitive_name)}({params}){ret_clause} {{\n"
+        f"pub {unsafe_prefix}fn {function_name}({params}){ret_clause} {{\n"
         f"    {spec.body_text}\n"
         f"}}"
     )
+
+
+def _any_caller_unsafe(specs: tuple[LoweredSpecialization, ...]) -> bool:
+    return any(spec.safety.caller_unsafe for spec in specs)
+
+
+def _unsafe_prefix(enabled: bool) -> str:
+    return "unsafe " if enabled else ""
+
+
+def _unsafe_call(call: str, enabled: bool) -> str:
+    return f"unsafe {{ {call} }}" if enabled else call
 
 
 def _free_kind_type(kind: str, base_spelling: str) -> str:

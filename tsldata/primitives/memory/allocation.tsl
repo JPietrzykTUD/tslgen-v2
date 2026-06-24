@@ -21,6 +21,10 @@ prim<ptr:=(usize)> allocate(count_bytes):
           scalar []
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
         implementation:
           tsil """
               complete(cast<reinterpret>(type<generation>(base::in), mem<alloc>(count_bytes)));
@@ -50,6 +54,10 @@ prim<ptr:=(usize,usize)> allocate_aligned(count_bytes, alignment):
           scalar []
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
         implementation:
           tsil """
               complete(cast<reinterpret>(type<generation>(base::in), mem<alloc_aligned>(count_bytes, alignment)));
@@ -79,6 +87,10 @@ prim<void:=(ptr)> deallocate(ptr):
           scalar []
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
         implementation:
           tsil """
               mem<free>(ptr);

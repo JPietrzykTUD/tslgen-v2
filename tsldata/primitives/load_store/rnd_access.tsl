@@ -27,6 +27,10 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
     avx512:
       ?i32:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
@@ -71,6 +75,10 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           """
       ?i64:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
@@ -115,6 +123,10 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           """
       f32:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             switch<compile>(scale) {
@@ -158,6 +170,10 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           """
       f64:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             switch<compile>(scale) {
@@ -204,6 +220,10 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
         requires:
           avx2 [avx, avx2]
           avx2_vl [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
@@ -250,6 +270,10 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
         requires:
           avx2 [avx, avx2]
           avx2_vl [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
@@ -296,6 +320,10 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
         requires:
           avx2 [avx, avx2]
           avx2_vl [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             switch<compile>(scale) {
@@ -341,6 +369,10 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
         requires:
           avx2 [avx, avx2]
           avx2_vl [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             switch<compile>(scale) {
@@ -394,6 +426,10 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
           sve [sve]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
@@ -406,6 +442,10 @@ prim<v:=(ptr,vidx,sImm)> gather(base_ptr, index, scale):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
@@ -449,6 +489,10 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
     avx512:
       ?i32:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
@@ -503,6 +547,10 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
           """
       ?i64:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
@@ -557,6 +605,10 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
           """
       f32:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             switch<compile>(scale) {
@@ -610,6 +662,10 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
           """
       f64:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             switch<compile>(scale) {
@@ -673,6 +729,10 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
           sve [sve]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
@@ -687,6 +747,10 @@ prim<v:=(m,ptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, so
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
@@ -734,6 +798,10 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
@@ -788,6 +856,10 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
@@ -842,6 +914,10 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             switch<compile>(scale) {
@@ -895,6 +971,10 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             switch<compile>(scale) {
@@ -955,6 +1035,10 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           sve [sve]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<const_infer>(val_array, call<primitive=to_array[Vec]>(a));
@@ -966,6 +1050,10 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
     scalar:
       ?i?:
         requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
@@ -1012,6 +1100,10 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
@@ -1072,6 +1164,10 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
@@ -1132,6 +1228,10 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             switch<compile>(scale) {
@@ -1191,6 +1291,10 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             switch<compile>(scale) {
@@ -1257,6 +1361,10 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           sve [sve]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
@@ -1270,6 +1378,10 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
     scalar:
       ?i?:
         requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));

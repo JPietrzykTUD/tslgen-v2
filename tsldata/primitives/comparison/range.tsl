@@ -12,11 +12,19 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete((left <= x) && (x <= right));"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -29,6 +37,10 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -41,6 +53,10 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
     oneAPIfpgaRTL:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -62,6 +78,10 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -76,6 +96,10 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -88,6 +112,10 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -99,6 +127,10 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -114,6 +146,10 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
           [si8, si16, si32, ui8, ui16, ui32] [sse2]
           si64 [sse4_2]
           ui64 [sse2, sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -125,6 +161,10 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
           """
       f32:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -136,6 +176,10 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
           """
       f64:
         requires [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -148,6 +192,10 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -160,6 +208,10 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -182,11 +234,19 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete((left <= x) && (x < right));"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -199,6 +259,10 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -211,6 +275,10 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
     oneAPIfpgaRTL:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -232,6 +300,10 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -246,6 +318,10 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -258,6 +334,10 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -269,6 +349,10 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -284,6 +368,10 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
           [si8, si16, si32, ui8, ui16, ui32] [sse2]
           si64 [sse4_2]
           ui64 [sse2, sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -295,6 +383,10 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
           """
       f32:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -306,6 +398,10 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
           """
       f64:
         requires [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -318,6 +414,10 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -330,6 +430,10 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -352,11 +456,19 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete((left < x) && (x <= right));"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -369,6 +481,10 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -381,6 +497,10 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
     oneAPIfpgaRTL:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -402,6 +522,10 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -416,6 +540,10 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -428,6 +556,10 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -439,6 +571,10 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -454,6 +590,10 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
           [si8, si16, si32, ui8, ui16, ui32] [sse2]
           si64 [sse4_2]
           ui64 [sse2, sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -465,6 +605,10 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
           """
       f32:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -476,6 +620,10 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
           """
       f64:
         requires [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -488,6 +636,10 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -500,6 +652,10 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -522,11 +678,19 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete((left < x) && (x < right));"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -539,6 +703,10 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -551,6 +719,10 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
     oneAPIfpgaRTL:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -572,6 +744,10 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -586,6 +762,10 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -598,6 +778,10 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -609,6 +793,10 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -624,6 +812,10 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
           [si8, si16, si32, ui8, ui16, ui32] [sse2]
           si64 [sse4_2]
           ui64 [sse2, sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -635,6 +827,10 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
           """
       f32:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -646,6 +842,10 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
           """
       f64:
         requires [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -658,6 +858,10 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -670,6 +874,10 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -692,6 +900,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -704,6 +916,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -716,6 +932,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -728,6 +948,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
     oneAPIfpgaRTL:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -749,6 +973,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -763,6 +991,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -775,6 +1007,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -786,6 +1022,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -801,6 +1041,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
           [si8, si16, si32, ui8, ui16, ui32] [sse2]
           si64 [sse4_2]
           ui64 [sse2, sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -812,6 +1056,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
           """
       f32:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -823,6 +1071,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
           """
       f64:
         requires [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -835,6 +1087,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -847,6 +1103,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -869,6 +1129,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -881,6 +1145,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -893,6 +1161,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -905,6 +1177,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
     oneAPIfpgaRTL:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -926,6 +1202,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -940,6 +1220,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -952,6 +1236,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -963,6 +1251,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -978,6 +1270,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
           [si8, si16, si32, ui8, ui16, ui32] [sse2]
           si64 [sse4_2]
           ui64 [sse2, sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -989,6 +1285,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
           """
       f32:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1000,6 +1300,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
           """
       f64:
         requires [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1012,6 +1316,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1024,6 +1332,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1046,6 +1358,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1058,6 +1374,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1070,6 +1390,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1082,6 +1406,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
     oneAPIfpgaRTL:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1103,6 +1431,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1117,6 +1449,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1129,6 +1465,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1140,6 +1480,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1155,6 +1499,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
           [si8, si16, si32, ui8, ui16, ui32] [sse2]
           si64 [sse4_2]
           ui64 [sse2, sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1166,6 +1514,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
           """
       f32:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1177,6 +1529,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
           """
       f64:
         requires [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1189,6 +1545,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1201,6 +1561,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1223,6 +1587,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1235,6 +1603,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1247,6 +1619,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1259,6 +1635,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
     oneAPIfpgaRTL:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1280,6 +1660,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1294,6 +1678,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1306,6 +1694,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1317,6 +1709,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1332,6 +1728,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
           [si8, si16, si32, ui8, ui16, ui32] [sse2]
           si64 [sse4_2]
           ui64 [sse2, sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1343,6 +1743,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
           """
       f32:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1354,6 +1758,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
           """
       f64:
         requires [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1366,6 +1774,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1378,6 +1790,10 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(

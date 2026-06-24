@@ -21,7 +21,7 @@ class MemLowerer:
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
-        context.effects.mark_unsafe()
+        context.effects.mark_internal_unsafe("raw_memory")
         op = region.selector_text.strip()
         args: list[RenderText] = []
         for group in _split_arg_groups(region.body):

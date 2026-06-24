@@ -14,7 +14,7 @@ it has not been touched in recent history (the last 20+ commits are entirely
 The authoritative running handoff for the active `tslc` work is
 `docs/agent/tslc-vector-query-handoff.md`. Source-language and architecture
 decisions for `tslc` are recorded in `docs/redesign/design-decisions.md`
-(most recently ADR-091 Rust warning hygiene ownership). The
+(most recently ADR-092 implementation safety contract). The
 `## Current Work State` section near the end of this file has been refreshed to
 describe `tslc`; the long milestone history that follows it is retained only as
 the `tslgen` record.
@@ -1359,12 +1359,41 @@ warnings; remaining warnings are the separate unnecessary-`unsafe` follow-up.
 `./verify.sh` passed after the cleanup with 191 non-build tests and 53
 generated-build tests across its shards.
 
+The typed implementation safety contract slice is now implemented. Catalog
+promotion stores selector-inherited `ImplementationSafety` values on
+implementations, with `internal_unsafe`, `caller_unsafe`, and open reason
+labels. Schema validation checks supported `safety:` blocks, lowering combines
+source safety with inferred intrinsic, memory, and raw-pointer effects, and
+Rust rendering emits `unsafe fn` only from lowered caller-safety facts.
+After dependency pruning, the pipeline propagates caller-unsafe callees to an
+internal unsafe frame plus `unsafe_callee` reason on callers; it deliberately
+does not automatically propagate the public caller contract, so wrappers that
+discharge raw-pointer callees with locally-owned storage can remain safe.
+Rust lowering now renders calls to caller-unsafe generated wrappers as local
+typed unsafe call-site fragments. Callee-only transitive unsafety records
+`unsafe_callee` in lowered safety metadata without forcing a whole-body unsafe
+frame, avoiding nested `unsafe` warnings around expression-local templates such
+as `MaybeUninit::assume_init()`.
+The primitive corpus has been annotated with explicit local `safety:` metadata
+beside every implementation body: 1,327 primitive implementation bodies and
+1,327 local safety blocks. Schema validation now rejects unsupported children
+under `implementation:` body fields so misplaced safety metadata cannot be
+silently ignored.
+Focused validation passed: `python -m compileall -q tslc/src/tslc`;
+`python -m pytest -q tslc/tests/test_safety_contract.py` with 9 tests; and a
+broader safety/lowering/generated-build suite with 107 tests. Corpus
+parse/build/validation returned zero diagnostics and confirmed 1,327 local
+safety blocks. The Rust value-test CLI command passed with zero
+`unnecessary unsafe` warnings. `./verify.sh` passed with 201 non-build tests
+and 53 generated-build tests.
+
 Active prompt:
-docs/agent/runs/tslc-rust-warning-hygiene-review-prompt.md
+docs/agent/runs/tslc-implementation-safety-contract-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
 boundary review prompt:
+docs/agent/runs/tslc-rust-warning-hygiene-review-prompt.md
 docs/agent/runs/tslc-cli-test-flag-review-prompt.md
 docs/agent/runs/tslc-design-principles-review-prompt.md
 docs/agent/runs/tslc-design-follow-up-cleanup-review-prompt.md
@@ -2001,7 +2030,7 @@ docs/agent/runs/tslc-typed-render-values-review-prompt.md
 Active prompt:
 
 ```text
-docs/agent/runs/tslc-value-test-backend-capability-review-prompt.md
+docs/agent/runs/tslc-implementation-safety-contract-review-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

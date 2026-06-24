@@ -41,6 +41,10 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
           sse_vl:
             idqword [avx512f, avx512vl, sse, sse2]
             bword   [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
@@ -55,6 +59,10 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             intrin<mask_compressstoreu, build>(
@@ -66,6 +74,10 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
     sve:
       [?i32, ?i64, f32, f64]:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(IndexBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
@@ -84,6 +96,10 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
           sse [sse2]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
                var<const_infer>(imask, call<primitive=to_integral[Vec]>(m));
@@ -101,6 +117,10 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
                var<infer>(offset, 0);
@@ -114,6 +134,10 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
               if(m){
@@ -163,6 +187,10 @@ prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
           sse_vl:
             idqword [avx512f, avx512vl, sse, sse2]
             bword   [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
@@ -179,6 +207,10 @@ prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             complete(
@@ -196,6 +228,10 @@ prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
           sse [sse2]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
                var<const_infer>(imask, call<primitive=to_integral[Vec]>(m));
@@ -214,6 +250,10 @@ prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
                var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
@@ -229,6 +269,10 @@ prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
                if(m) {
@@ -276,6 +320,10 @@ prim<v:=ptr+> load_convert_up(ptr):
         ToBase:
           si16:
             requires [avx512bw]
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(avx2, type<generation>(base::in))));
@@ -284,6 +332,10 @@ prim<v:=ptr+> load_convert_up(ptr):
                    complete(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepi8_epi16>(loaded)));
                 """
           si32:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(sse, type<generation>(base::in))));
@@ -296,6 +348,10 @@ prim<v:=ptr+> load_convert_up(ptr):
         ToBase:
           ui16:
             requires [avx512bw]
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(avx2, type<generation>(base::in))));
@@ -304,6 +360,10 @@ prim<v:=ptr+> load_convert_up(ptr):
                    complete(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepu8_epi16>(loaded)));
                 """
           ui32:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(sse, type<generation>(base::in))));
@@ -315,6 +375,10 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires [avx512f]
         ToBase:
           si32:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(avx2, type<generation>(base::in))));
@@ -323,6 +387,10 @@ prim<v:=ptr+> load_convert_up(ptr):
                    complete(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepi16_epi32>(loaded)));
                 """
           si64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(sse, type<generation>(base::in))));
@@ -334,6 +402,10 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires [avx512f]
         ToBase:
           ui32:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(avx2, type<generation>(base::in))));
@@ -342,6 +414,10 @@ prim<v:=ptr+> load_convert_up(ptr):
                    complete(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepu16_epi32>(loaded)));
                 """
           ui64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(sse, type<generation>(base::in))));
@@ -353,6 +429,10 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires [avx512f]
         ToBase:
           si64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(avx2, type<generation>(base::in))));
@@ -364,6 +444,10 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires [avx512f]
         ToBase:
           ui64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(avx2, type<generation>(base::in))));
@@ -375,6 +459,10 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires [avx512f]
         ToBase:
           f64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(avx2, type<generation>(base::in))));
@@ -384,6 +472,10 @@ prim<v:=ptr+> load_convert_up(ptr):
                 """
       arith:
         requires [avx512f, avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
                let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
@@ -401,6 +493,10 @@ prim<v:=ptr+> load_convert_up(ptr):
           avx2_vl [avx2]
         ToBase:
           si16:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(sse, type<generation>(base::in))));
@@ -414,6 +510,10 @@ prim<v:=ptr+> load_convert_up(ptr):
           avx2_vl [avx2]
         ToBase:
           ui16:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(sse, type<generation>(base::in))));
@@ -427,6 +527,10 @@ prim<v:=ptr+> load_convert_up(ptr):
           avx2_vl [avx2]
         ToBase:
           si32:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(sse, type<generation>(base::in))));
@@ -440,6 +544,10 @@ prim<v:=ptr+> load_convert_up(ptr):
           avx2_vl [avx2]
         ToBase:
           ui32:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(sse, type<generation>(base::in))));
@@ -453,6 +561,10 @@ prim<v:=ptr+> load_convert_up(ptr):
           avx2_vl [avx2]
         ToBase:
           si64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(sse, type<generation>(base::in))));
@@ -466,6 +578,10 @@ prim<v:=ptr+> load_convert_up(ptr):
           avx2_vl [avx2]
         ToBase:
           ui64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(sse, type<generation>(base::in))));
@@ -479,6 +595,10 @@ prim<v:=ptr+> load_convert_up(ptr):
           avx2_vl [avx]
         ToBase:
           f64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(InVec, type<generation>(vector::as(sse, type<generation>(base::in))));
@@ -490,6 +610,10 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires:
           avx2 [avx2]
           avx2_vl [avx512f, avx512vl, avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
                let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
@@ -505,18 +629,30 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires [sve]
         ToBase:
           si16:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
                    complete(intrin<svld1sb, build[suffix=ToBase]>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           si32:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
                    complete(intrin<svld1sb, build[suffix=ToBase]>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           si64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
@@ -526,18 +662,30 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires [sve]
         ToBase:
           ui16:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
                    complete(intrin<svld1ub, build[suffix=ToBase]>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           ui32:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
                    complete(intrin<svld1ub, build[suffix=ToBase]>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           ui64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
@@ -547,12 +695,20 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires [sve]
         ToBase:
           si32:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
                    complete(intrin<svld1sh, build[suffix=ToBase]>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           si64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
@@ -562,12 +718,20 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires [sve]
         ToBase:
           ui32:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
                    complete(intrin<svld1uh, build[suffix=ToBase]>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
           ui64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
@@ -577,6 +741,10 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires [sve]
         ToBase:
           si64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
@@ -586,6 +754,10 @@ prim<v:=ptr+> load_convert_up(ptr):
         requires [sve]
         ToBase:
           ui64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
             implementation:
               tsil """
                    let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
@@ -601,6 +773,10 @@ prim<v:=ptr+> load_convert_up(ptr):
           generic []
           oneAPIfpga [oneAPIfpgaDev]
           scalar []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
                let<type>(OutVec, type<generation>(vector::as_base(ToBase)));

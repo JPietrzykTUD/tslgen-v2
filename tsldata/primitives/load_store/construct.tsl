@@ -24,6 +24,10 @@ prim<v:=s> set1(value):
     avx512:
       ?i?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -34,6 +38,10 @@ prim<v:=s> set1(value):
           """
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -45,6 +53,10 @@ prim<v:=s> set1(value):
         requires:
           avx2 [avx]
           sse [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
@@ -64,6 +76,10 @@ prim<v:=s> set1(value):
         requires:
           avx2 [avx]
           sse [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -73,6 +89,10 @@ prim<v:=s> set1(value):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -82,6 +102,10 @@ prim<v:=s> set1(value):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -91,6 +115,10 @@ prim<v:=s> set1(value):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(value);"
     [generic, oneAPIfpga]:
@@ -98,6 +126,10 @@ prim<v:=s> set1(value):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, result_arr, value<backend>(uninit::array));
@@ -135,6 +167,10 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
     avx512:
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
@@ -149,6 +185,10 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
     avx2:
       arith:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
@@ -163,6 +203,10 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
     sse:
       arith:
         requires [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
@@ -177,6 +221,10 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                complete(
@@ -190,6 +238,10 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
                complete(
@@ -205,6 +257,10 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<init_register>(result);
@@ -219,6 +275,10 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                if(mask) {
@@ -253,6 +313,10 @@ prim<v:=()>[value=zero] set_zero():
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), 0));"
     [generic, oneAPIfpga]:
@@ -260,6 +324,10 @@ prim<v:=()>[value=zero] set_zero():
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<const_init_register>(result_arr);
@@ -271,6 +339,10 @@ prim<v:=()>[value=zero] set_zero():
           avx512 [avx512f]
           avx2 [avx]
           sse [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -284,6 +356,10 @@ prim<v:=()>[value=zero] set_zero():
           sse:
             f32 [sse]
             f64 [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -293,6 +369,10 @@ prim<v:=()>[value=zero] set_zero():
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<const_infer>(undef, call<primitive=set_undef[Vec]>());
@@ -303,6 +383,10 @@ prim<v:=()>[value=zero] set_zero():
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<const_infer>(undef, call<primitive=set_undef[Vec]>());
@@ -320,6 +404,10 @@ prim<v:=()>[value=undef] set_undef():
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<typed>(type<generation>(base::in), result, value<backend>(uninit::scalar));
@@ -330,6 +418,10 @@ prim<v:=()>[value=undef] set_undef():
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, result, value<backend>(uninit::array));
@@ -338,10 +430,18 @@ prim<v:=()>[value=undef] set_undef():
     avx512:
       ?i?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<_mm512_undefined_epi32>());"
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -353,6 +453,10 @@ prim<v:=()>[value=undef] set_undef():
         requires:
           avx2 [avx]
           sse [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -365,6 +469,10 @@ prim<v:=()>[value=undef] set_undef():
           sse:
             f32 [sse]
             f64 [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -374,6 +482,10 @@ prim<v:=()>[value=undef] set_undef():
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(Value, type<generation>(vector::register));
@@ -383,6 +495,10 @@ prim<v:=()>[value=undef] set_undef():
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -416,6 +532,10 @@ prim<v:=(lanes<s>)> set(values):
     avx512:
       ?i?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
@@ -440,6 +560,10 @@ prim<v:=(lanes<s>)> set(values):
           """
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -456,6 +580,10 @@ prim<v:=(lanes<s>)> set(values):
         requires:
           avx2 [avx]
           sse [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
@@ -482,6 +610,10 @@ prim<v:=(lanes<s>)> set(values):
         requires:
           avx2 [avx]
           sse [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -500,6 +632,10 @@ prim<v:=(lanes<s>)> set(values):
           sve [sve]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<const_infer>(zero, call<primitive=set_zero[Vec]>());
@@ -512,5 +648,9 @@ prim<v:=(lanes<s>)> set(values):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(lanes<at>(values, 0));"

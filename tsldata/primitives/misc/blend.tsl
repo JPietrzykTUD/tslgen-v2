@@ -26,6 +26,10 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               if (mask) {
@@ -39,6 +43,10 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<infer>(result, call<primitive=to_array[Vec]>(left));
@@ -56,6 +64,10 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -75,6 +87,10 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           sse_vl:
             [si8, ui8, si16, ui16] [avx512bw, avx512f, avx512vl, sse, sse2]
             [si32, ui32, si64, ui64] [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -90,6 +106,10 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           sse:
             f32 [sse, sse4_1]
             f64 [sse2, sse4_1]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -104,6 +124,10 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
         requires:
           avx2 [avx2]
           sse [sse2, sse4_1]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -124,6 +148,10 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
             ?i? [sse, sse2]
             f32 [sse]
             f64 [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               complete(
@@ -142,6 +170,10 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
@@ -152,6 +184,10 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -188,6 +224,10 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               if (mask) {
@@ -202,6 +242,10 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -221,6 +265,10 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
           sse_vl:
             [si8, ui8, si16, ui16] [avx512bw, avx512f, avx512vl, sse, sse2]
             [si32, ui32, si64, ui64] [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -243,6 +291,10 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
           sve [sve]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               complete(
@@ -282,6 +334,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               if (mask) {
@@ -296,6 +352,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -315,6 +375,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
           sse_vl:
             [si8, ui8, si16, ui16] [avx512bw, avx512f, avx512vl, sse, sse2]
             [si32, ui32, si64, ui64] [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -337,6 +401,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
           sve [sve]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               complete(

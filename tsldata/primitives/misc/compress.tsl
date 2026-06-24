@@ -28,6 +28,10 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
         requires:
           idqword [avx512f]
           bword [avx512_vbmi2, avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -39,6 +43,10 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
             """
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -53,6 +61,10 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
         requires:
           avx2 [avx512_vbmi2, avx512f, avx512vl, avx2]
           avx2_vl [avx512_vbmi2, avx512f, avx512vl, avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
@@ -67,6 +79,10 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
         requires:
           avx2 [avx512_vbmi2, avx512f, avx512vl, avx2]
           avx2_vl [avx512_vbmi2, avx512f, avx512vl, avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
@@ -81,6 +97,10 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
         requires:
           avx2 [avx512f, avx512vl, avx2]
           avx2_vl [avx512f, avx512vl, avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
@@ -95,6 +115,10 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
         requires:
           avx2 [avx512f, avx512vl, avx]
           avx2_vl [avx512f, avx512vl, avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
@@ -110,6 +134,10 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
         requires:
           sse [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
           sse_vl [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
@@ -124,6 +152,10 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
         requires:
           sse [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
           sse_vl [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
@@ -138,6 +170,10 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
         requires:
           sse [avx512f, avx512vl, sse, sse2]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
@@ -154,6 +190,10 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
             f32 [avx512f, avx512vl, sse]
             f64 [avx512f, avx512vl, sse, sse2]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
@@ -167,6 +207,10 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
     sve:
       [?i32, ?i64, f32, f64]:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               let<type>(IndexBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
@@ -180,6 +224,10 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
             """
       [?i8, ?i16]:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(values, call<primitive=to_array[Vec]>(data));
@@ -201,6 +249,10 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           neon [neon]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(values, call<primitive=to_array[Vec]>(data));
@@ -217,6 +269,10 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               if (mask) {

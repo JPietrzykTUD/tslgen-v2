@@ -24,6 +24,10 @@ prim<im:=(im,im)> test_imask(mask, position):
           scalar []
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), (mask >> position) & cast<static>(type<generation>(vector::imask), 1)));"
 prim<im:=(im,im,im)> insert_imask(mask_a, mask_b, position):
@@ -52,6 +56,10 @@ prim<im:=(im,im,im)> insert_imask(mask_a, mask_b, position):
           scalar []
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask_a | (mask_b << position));"
 prim<im:=(im,im)> extract_imask(mask, position):
@@ -80,5 +88,9 @@ prim<im:=(im,im)> extract_imask(mask, position):
           scalar []
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask >> position);"

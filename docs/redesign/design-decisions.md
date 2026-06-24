@@ -4630,3 +4630,82 @@ Consequences:
   `unnecessary parentheses around ...` or `unused_mut` warnings.
 - Remaining Rust warnings are a separate follow-up: unnecessary `unsafe`
   wrappers around calls that are already safe in the selected context.
+
+## ADR-092: Implementation Safety Is A Typed Contract
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+Generated Rust code previously treated unsafety as a body-rendering detail:
+lowering marked a body as needing `unsafe { ... }`, and renderers still exposed
+safe public functions. That hid two different facts behind one boolean:
+
+- the implementation body performs an unsafe operation internally;
+- the generated API requires the caller to uphold a safety contract.
+
+Decision:
+
+Add a typed `ImplementationSafety` value to catalog implementations and lowered
+specializations. Source may declare selector-level safety metadata beside the
+implementation body:
+
+```tsl
+impls:
+  scalar:
+    safety:
+      internal_unsafe true
+      caller_unsafe false
+      reasons [intrinsic]
+    anyint:
+      implementation:
+        tsil "complete(data);"
+```
+
+The safety block inherits down nested implementation selectors like `requires`
+and `unroll_variants`. Validation checks only the supported structural shape:
+boolean fields are `true`/`false`, and `reasons` is a scalar label list.
+Reason labels remain open data.
+
+The active primitive corpus uses this as explicit source metadata rather than
+implicit compiler inference alone: every primitive implementation body carries
+a local `safety:` block. A corpus guard checks that all current primitive bodies
+remain annotated and that direct unsafe facts (`intrin<`, `mem<`, and pointer
+parameters) are reflected by the authored safety metadata. Schema validation
+also rejects unsupported children under an `implementation:` body field so a
+misplaced `safety:` block cannot be silently ignored.
+
+Lowering combines source-authored safety with inferred body effects. Intrinsics
+and memory regions mark `internal_unsafe`; raw pointer parameters mark both
+`internal_unsafe` and `caller_unsafe` because callers must uphold pointer
+validity. After unresolved callees are pruned, the pipeline propagates
+caller-unsafe callees transitively as an internal unsafe requirement on callers.
+It does not automatically propagate the public `caller_unsafe` contract,
+because higher-level wrappers can safely discharge a raw-pointer callee by
+passing locally-owned storage.
+Safety propagation uses a lowered-body key that includes signature and
+immediate shape, so runtime and immediate overloads can share the pruning key
+without overwriting each other's internal unsafe facts.
+
+Transitive `unsafe_callee` is rendered with local unsafe call-site blocks for
+Rust rather than by forcing a whole-body unsafe frame. This keeps wrappers such
+as `to_array` public-safe and avoids nesting expression-local unsafe templates
+like `MaybeUninit::assume_init()` inside a broader generated `unsafe { ... }`.
+The render model carries an unsafe block as typed render text that suppresses
+itself when the surrounding lowered body already renders inside an unsafe
+frame.
+
+Rust rendering consumes the lowered safety facts. Caller-unsafe primitives emit
+`unsafe fn` trait methods, impl methods, free functions, and wrappers, while
+internal unsafe still controls the lowered body frame.
+
+Consequences:
+
+- Safety is represented at a typed catalog/lowering boundary, not inferred by
+  string inspection in renderers.
+- Safe abstractions can encapsulate internal unsafe blocks without forcing their
+  public API to become unsafe.
+- Transitive unsafe callees are not silent: callers get an internal unsafe
+  frame and retain `unsafe_callee` in their safety reasons.
+- Future source-owned safety documentation can be attached to `reasons` without
+  changing renderer behavior.

@@ -32,6 +32,10 @@ prim<s[]:=v> to_array(a):
           ui32 [avx512f]
           si64 [avx512f]
           ui64 [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
@@ -40,6 +44,10 @@ prim<s[]:=v> to_array(a):
             """
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
@@ -49,6 +57,10 @@ prim<s[]:=v> to_array(a):
     avx2:
       ?i?:
         requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx], ui32 [avx], si64 [avx], ui64 [avx]}
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
@@ -57,6 +69,10 @@ prim<s[]:=v> to_array(a):
             """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
@@ -66,6 +82,10 @@ prim<s[]:=v> to_array(a):
     sse:
       ?i?:
         requires [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
@@ -74,6 +94,10 @@ prim<s[]:=v> to_array(a):
             """
       f?:
         requires {f32 [sse], f64 [sse, sse2]}
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
@@ -83,6 +107,10 @@ prim<s[]:=v> to_array(a):
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
@@ -91,6 +119,10 @@ prim<s[]:=v> to_array(a):
             """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
@@ -100,6 +132,10 @@ prim<s[]:=v> to_array(a):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, tmp, value<backend>(uninit::array));
@@ -115,11 +151,19 @@ prim<s[]:=v> to_array(a):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(a);"
     scalar:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, temp, value<backend>(uninit::array));
@@ -128,6 +172,10 @@ prim<s[]:=v> to_array(a):
             """
       f?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, temp, value<backend>(uninit::array));
@@ -144,6 +192,10 @@ prim<v:=s[]> from_array(data):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(data[0]);"
     [generic, oneAPIfpga]:
@@ -151,6 +203,10 @@ prim<v:=s[]> from_array(data):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<infer>(local_data, data);
@@ -159,6 +215,10 @@ prim<v:=s[]> from_array(data):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<infer>(local_data, data);
@@ -171,6 +231,10 @@ prim<v:=s[]> from_array(data):
           avx2 [avx]
           avx512 [avx512f]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<infer>(local_data, data);
@@ -206,6 +270,10 @@ prim<s:=v[idx]> extract_value(a):
     avx512:
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
@@ -214,6 +282,10 @@ prim<s:=v[idx]> extract_value(a):
     avx2:
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
@@ -222,6 +294,10 @@ prim<s:=v[idx]> extract_value(a):
     sse:
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
@@ -230,11 +306,19 @@ prim<s:=v[idx]> extract_value(a):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<vgetq_lane, build[suffix=base::in, immediate(1)=Index]>(a, Index));"
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
@@ -245,10 +329,18 @@ prim<s:=v[idx]> extract_value(a):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(a[cast<static>(type<backend>(scalar::size), Index)]);"
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(a);"

@@ -17,6 +17,7 @@ from tslc.catalog.model import (
     ImaskPolicy,
     ImmediateParam,
     Implementation,
+    ImplementationSafety,
     MaskPolicy,
     ParamTypeRule,
     Primitive,
@@ -227,8 +228,10 @@ def _implementations_from_entries(
     target_name: str | None = None,
     inherited: tuple[RequirementClause, ...] = (),
     inherited_unroll: bool | None = None,
+    inherited_safety: ImplementationSafety | None = None,
 ) -> list[Implementation]:
     implementations: list[Implementation] = []
+    parent_safety = inherited_safety or ImplementationSafety()
     for entry in entries:
         # An entry's bodies carry its own `requires` PLUS those of its selector ancestors —
         # a nested level (`avx512: ?i?: ToExtension: sse:`) inherits the `[avx512f]` declared at
@@ -240,6 +243,7 @@ def _implementations_from_entries(
         unroll = _entry_unroll_variants(entry)
         if unroll is None:
             unroll = inherited_unroll
+        safety = parent_safety.merge(_entry_safety(entry))
         for envelope in entry.body_envelopes:
             head = envelope.selector_path[0] if envelope.selector_path else ""
             type_group, to_target_group = _split_target_selector(
@@ -260,6 +264,7 @@ def _implementations_from_entries(
                         source_order=envelope.source_order,
                         to_target_group=to_target_group,
                         unroll_variants=unroll,
+                        safety=safety,
                         source=_source_span(envelope.envelope_source),
                         selector_source=_source_span(entry.source),
                         body_source=_source_span(envelope.payload_source),
@@ -267,7 +272,12 @@ def _implementations_from_entries(
                 )
         implementations.extend(
             _implementations_from_entries(
-                entry.children, extension_names, target_name, requirements, unroll
+                entry.children,
+                extension_names,
+                target_name,
+                requirements,
+                unroll,
+                safety,
             )
         )
     return implementations
@@ -283,6 +293,26 @@ def _entry_unroll_variants(
         if field.key.text == "unroll_variants":
             return (_field_text(field) or "").lower() == "true"
     return None
+
+
+def _entry_safety(entry: ParsedImplementationSelectorEntry) -> ImplementationSafety:
+    safety = ImplementationSafety()
+    for field in entry.fields:
+        if field.key.text != "safety":
+            continue
+        children = {child.key.text: child for child in _children(field)}
+        safety = safety.merge(
+            ImplementationSafety(
+                internal_unsafe=_bool_field(children.get("internal_unsafe")),
+                caller_unsafe=_bool_field(children.get("caller_unsafe")),
+                reasons=frozenset(_list_text(children.get("reasons"))),
+            )
+        )
+    return safety
+
+
+def _bool_field(field: ParsedTslField | None) -> bool:
+    return (_field_text(field) or "").lower() == "true"
 
 
 def _split_target_selector(

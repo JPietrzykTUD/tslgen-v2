@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Literal, Protocol
 
@@ -43,6 +43,7 @@ class RenderContext:
     current_imask: str | None = None
     target_vector: str | None = None
     target_register: str | None = None
+    in_unsafe_block: bool = False
 
 
 class RenderText(Protocol):
@@ -92,6 +93,21 @@ class TrimmedText:
 
     def render(self, context: RenderContext | None = None) -> str:
         return self.content.render(context).strip()
+
+
+@dataclass(frozen=True, slots=True)
+class UnsafeBlockText:
+    content: RenderText
+
+    def render(self, context: RenderContext | None = None) -> str:
+        rendered = self.content.render(context)
+        if (
+            context is not None
+            and context.backend_id == "rust"
+            and not context.in_unsafe_block
+        ):
+            return f"unsafe {{ {rendered} }}"
+        return rendered
 
 
 RenderField = str | RenderText
@@ -189,9 +205,10 @@ class LoweredBody:
 
     def render(self, context: RenderContext | None = None) -> str:
         active_context = context or RenderContext(backend_id=self.backend_id)
-        body = self.content.render(active_context)
         if self.backend_id == "rust" and self.requires_unsafe:
+            body = self.content.render(replace(active_context, in_unsafe_block=True))
             return f"unsafe {{ {body} }}"
+        body = self.content.render(active_context)
         return body
 
 
@@ -216,3 +233,7 @@ def render_sequence(parts: tuple[str | RenderText, ...]) -> RenderText:
 
 def trimmed_text(value: str | RenderText) -> RenderText:
     return TrimmedText(as_render_text(value))
+
+
+def unsafe_block(value: str | RenderText) -> RenderText:
+    return UnsafeBlockText(as_render_text(value))

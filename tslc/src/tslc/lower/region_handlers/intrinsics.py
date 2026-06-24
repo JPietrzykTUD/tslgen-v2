@@ -117,7 +117,7 @@ class IntrinLowerer:
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
-        context.effects.mark_unsafe()
+        context.effects.mark_internal_unsafe("intrinsic")
         selector = IntrinsicSelector.parse(region.selector_text)
         if selector.name is None:
             context.effects.skip(

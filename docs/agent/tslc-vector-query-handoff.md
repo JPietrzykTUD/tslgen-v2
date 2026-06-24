@@ -124,6 +124,85 @@ git diff --check
 
 Result: passed.
 
+## 2026-06-24 — Typed Implementation Safety Contract
+
+The implementation safety contract is now typed through catalog promotion,
+lowering, dependency propagation, and Rust rendering.
+
+Implemented pieces:
+
+1. `ImplementationSafety` carries `internal_unsafe`, `caller_unsafe`, and
+   reason labels on catalog implementations and lowered specializations.
+2. Selector-level `safety:` blocks are parsed as implementation metadata,
+   inherit down nested selector entries, and are structurally validated.
+3. Lowering combines source safety with inferred effects: intrinsics and memory
+   regions mark internal unsafe, and raw-pointer parameter signatures infer a
+   caller safety contract.
+4. After unresolved callees are pruned, the pipeline propagates caller-unsafe
+   callees to an internal unsafe frame plus `unsafe_callee` reason on callers.
+   Public `caller_unsafe` does not automatically propagate; safe wrappers may
+   discharge raw-pointer callees with locally-owned storage.
+5. The Rust renderer emits `unsafe fn` trait methods, impl methods, wrappers,
+   and free functions from lowered caller-safety facts only.
+6. The primitive corpus now carries explicit local `safety:` metadata beside
+   every implementation body. The current corpus has 1,327 primitive
+   implementation bodies and 1,327 local safety blocks.
+7. Rust calls to caller-unsafe generated wrappers are lowered as local typed
+   unsafe call-site render fragments. If the whole body already renders inside
+   an unsafe frame, those local fragments suppress their own `unsafe { ... }`.
+   This removes the nested `MaybeUninit`/callee-call warning pattern from
+   `to_array` and similar wrappers while keeping transitive `unsafe_callee`
+   safety reasons visible.
+
+Focused coverage:
+
+- `tslc/tests/test_safety_contract.py` covers safety promotion/inheritance,
+  malformed safety diagnostics, misplaced body-nested safety diagnostics,
+  transitive internal-unsafe propagation, the runtime/immediate overload
+  safety-key regression, Rust unsafe signature rendering, corpus-local safety
+  coverage, direct corpus facts for intrinsic, memory, and raw-pointer safety,
+  and source-backed local unsafe lowering for `call<primitive=store>`.
+- `tslc/tests/test_render_model.py` covers typed local unsafe render fragments
+  suppressing themselves inside an already unsafe Rust body frame.
+- Generated load/store, masked load/store, allocation, shift, and masked-value
+  build checks cover raw-pointer caller safety, safe wrapper discharge
+  behavior, and immediate intrinsic unsafe frames.
+
+Validation:
+
+```bash
+python -m compileall -q tslc/src/tslc
+```
+
+Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_safety_contract.py
+```
+
+Result: `9 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_safety_contract.py tslc/tests/test_catalog_validation.py tslc/tests/test_catalog_tests.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_specialization.py tslc/tests/test_render_model.py tslc/tests/test_build_verify.py::test_load_store_builds tslc/tests/test_build_verify.py::test_masked_load_store_build tslc/tests/test_build_verify.py::test_allocate_family_builds tslc/tests/test_build_verify.py::test_shift_left_builds tslc/tests/test_build_verify.py::test_shift_right_delegation_builds tslc/tests/test_build_verify.py::test_masked_value_ops_build tslc/tests/test_build_verify.py::test_shift_right_avx512_immediate_builds tslc/tests/test_build_verify.py::test_shift_float_builds
+```
+
+Result: `107 passed`.
+
+```bash
+./verify.sh
+```
+
+Result: passed all targeted validations, including 201 non-build tests and 53
+generated-build tests.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends rust --output-root ./tslctmp/TEST --test --value-test-warnings
+```
+
+Result after local unsafe call-site rendering: passed with `0` Rust
+`unnecessary unsafe` warnings. Rust value-test planning still reports the known
+unsupported-case warnings for backend gaps.
+
 ### Primitive Value-Test Source Shape Cleanup
 
 The primitive value-test source contract has been simplified after the coverage

@@ -22,6 +22,10 @@ prim<void:=(ptr,ptr,s,s)> memory_cp(dst, src, count_bytes, copy_kind):
           scalar []
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
         implementation:
           tsil """
               mem<copy>(cast<reinterpret>(void *, dst), cast<reinterpret>(void const *, src), count_bytes);
@@ -38,6 +42,10 @@ prim<void:=(ptr,ptr,s,s)> memory_cp(dst, src, count_bytes, copy_kind):
           scalar []
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_memory, raw_pointer]
         implementation:
           tsil """
               mem<copy>(cast<reinterpret>(void *, dst), cast<reinterpret>(void const *, src), count_bytes);

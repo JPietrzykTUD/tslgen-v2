@@ -12,36 +12,64 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
         requires:
           avx512 [avx512f]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask_a & mask_b);"
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask_a & mask_b);"
     sse_vl:
       arith:
         requires [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask_a & mask_b);"
     avx2:
       arith:
         requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx, avx2], ui32 [avx, avx2], si64 [avx, avx2], ui64 [avx, avx2], f32 [avx], f64 [avx]}
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
     sse:
       arith:
         requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2], ui64 [sse, sse2], f32 [sse], f64 [sse, sse2]}
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask_a & mask_b);"
     [generic, oneAPIfpga]:
@@ -49,6 +77,10 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(MaskT, type<generation>(vector::mask));
@@ -74,36 +106,64 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
         requires:
           avx512 [avx512f]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask_a | mask_b);"
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask_a | mask_b);"
     sse_vl:
       arith:
         requires [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask_a | mask_b);"
     avx2:
       arith:
         requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx, avx2], ui32 [avx, avx2], si64 [avx, avx2], ui64 [avx, avx2], f32 [avx], f64 [avx]}
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=binary_or[Vec]>(mask_a, mask_b));"
     sse:
       arith:
         requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2], ui64 [sse, sse2], f32 [sse], f64 [sse, sse2]}
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=binary_or[Vec]>(mask_a, mask_b));"
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=binary_or[Vec]>(mask_a, mask_b));"
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask_a | mask_b);"
     [generic, oneAPIfpga]:
@@ -111,6 +171,10 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(MaskT, type<generation>(vector::mask));
@@ -136,36 +200,64 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
         requires:
           avx512 [avx512f]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask_a ^ mask_b);"
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask_a ^ mask_b);"
     sse_vl:
       arith:
         requires [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask_a ^ mask_b);"
     avx2:
       arith:
         requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx, avx2], ui32 [avx, avx2], si64 [avx, avx2], ui64 [avx, avx2], f32 [avx], f64 [avx]}
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=binary_xor[Vec]>(mask_a, mask_b));"
     sse:
       arith:
         requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2], ui64 [sse, sse2], f32 [sse], f64 [sse, sse2]}
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=binary_xor[Vec]>(mask_a, mask_b));"
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=binary_xor[Vec]>(mask_a, mask_b));"
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask_a ^ mask_b);"
     [generic, oneAPIfpga]:
@@ -173,6 +265,10 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(MaskT, type<generation>(vector::mask));
@@ -202,36 +298,64 @@ prim<m:=m> mask_binary_not(mask):
         requires:
           avx512 [avx512f]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(op<bit_negate>(mask));"
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(op<bit_negate>(mask));"
     sse_vl:
       arith:
         requires [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(op<bit_negate>(mask));"
     avx2:
       arith:
         requires [avx, avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
     sse:
       arith:
         requires {si8 [sse, sse2], ui8 [sse, sse2], si16 [sse, sse2], ui16 [sse, sse2], si32 [sse, sse2], ui32 [sse, sse2], si64 [sse, sse2, sse4_1], ui64 [sse, sse2, sse4_1], f32 [sse, sse2], f64 [sse, sse2, sse4_1]}
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(!mask);"
     [generic, oneAPIfpga]:
@@ -239,6 +363,10 @@ prim<m:=m> mask_binary_not(mask):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(MaskT, type<generation>(vector::mask));
@@ -277,6 +405,10 @@ prim<usize:=m> mask_population_count(mask):
           sse [sse2]
           neon [neon]
           scalar []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
@@ -290,26 +422,50 @@ prim<usize:=m> mask_population_count(mask):
     sve:
       ?i8:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b8>(call<primitive=mask_true[Vec]>(), mask)));"
       ?i16:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b16>(call<primitive=mask_true[Vec]>(), mask)));"
       ?i32:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
       ?i64:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
       f32:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
       f64:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
     [generic, oneAPIfpga]:
@@ -317,6 +473,10 @@ prim<usize:=m> mask_population_count(mask):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(CountT, type<backend>(scalar::size));
@@ -352,6 +512,10 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
           scalar []
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
           if<compile>(( value<generation>(type::is_signed(type<generation>(vector::imask))) ) && (!PreserveSign)) {
@@ -372,6 +536,10 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
           scalar []
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
            complete(data >> cast<static>(type<generation>(vector::imask), shift)) ;

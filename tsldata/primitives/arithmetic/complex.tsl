@@ -24,6 +24,10 @@ prim<v:=(v,v)> mul(factor1, factor2):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(op<mul>(factor1, factor2));"
     [generic, oneAPIfpga]:
@@ -31,6 +35,10 @@ prim<v:=(v,v)> mul(factor1, factor2):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<init_register>(result);
@@ -42,6 +50,10 @@ prim<v:=(v,v)> mul(factor1, factor2):
     avx512:
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<mul, build>(factor1, factor2));"
       [si16, si32, si64]:
@@ -49,6 +61,10 @@ prim<v:=(v,v)> mul(factor1, factor2):
           si16 [avx512bw, avx512f]
           si32 [avx512f]
           si64 [avx512dq, avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -57,6 +73,10 @@ prim<v:=(v,v)> mul(factor1, factor2):
           """
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -71,10 +91,18 @@ prim<v:=(v,v)> mul(factor1, factor2):
     avx2:
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<mul, build>(factor1, factor2));"
       ?i16:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -83,6 +111,10 @@ prim<v:=(v,v)> mul(factor1, factor2):
           """
       ?i32:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -91,6 +123,10 @@ prim<v:=(v,v)> mul(factor1, factor2):
           """
       ?i64:
         requires [avx, avx512dq, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -99,6 +135,10 @@ prim<v:=(v,v)> mul(factor1, factor2):
           """
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -113,14 +153,26 @@ prim<v:=(v,v)> mul(factor1, factor2):
     sse:
       f32:
         requires [sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<mul, build>(factor1, factor2));"
       f64:
         requires [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<mul, build>(factor1, factor2));"
       ?i16:
         requires [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -129,6 +181,10 @@ prim<v:=(v,v)> mul(factor1, factor2):
           """
       ?i32:
         requires [sse4_1]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -137,6 +193,10 @@ prim<v:=(v,v)> mul(factor1, factor2):
           """
       ?i64:
         requires [avx512dq, avx512vl, sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -145,6 +205,10 @@ prim<v:=(v,v)> mul(factor1, factor2):
           """
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -159,10 +223,18 @@ prim<v:=(v,v)> mul(factor1, factor2):
     neon:
       [si8, si16, si32, ui8, ui16, ui32, f32, f64]:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<vmulq, build>(factor1, factor2));"
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -177,6 +249,10 @@ prim<v:=(v,v)> mul(factor1, factor2):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svmul, build[post=x]>(call<primitive=mask_true[Vec]>(), factor1, factor2));"
 prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
@@ -189,6 +265,10 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
@@ -201,6 +281,10 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -217,6 +301,10 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
           avx512  [avx512bw, avx512f]
           avx2_vl [avx2, avx512bw, avx512f, avx512vl]
           sse_vl  [sse2, avx512bw, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -228,6 +316,10 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse4_1, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -239,6 +331,10 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
           avx512  [avx512dq, avx512f]
           avx2_vl [avx, avx512dq, avx512vl]
           sse_vl  [sse, avx512dq, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -250,6 +346,10 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<maskz_mul, build>(mask, factor1, factor2));"
       arith:
@@ -257,6 +357,10 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -273,6 +377,10 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
           avx2 [avx]
           sse [sse]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -286,6 +394,10 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svmul, build[post=z]>(mask, factor1, factor2));"
 prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
@@ -298,6 +410,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
@@ -310,6 +426,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -326,6 +446,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
           avx512  [avx512bw, avx512f]
           avx2_vl [avx2, avx512bw, avx512f, avx512vl]
           sse_vl  [sse2, avx512bw, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -337,6 +461,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse4_1, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -348,6 +476,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
           avx512  [avx512dq, avx512f]
           avx2_vl [avx, avx512dq, avx512vl]
           sse_vl  [sse, avx512dq, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -359,6 +491,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<mask_mul, build>(factor1, mask, factor1, factor2));"
       arith:
@@ -366,6 +502,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -382,6 +522,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
           avx2 [avx]
           sse [sse]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -395,6 +539,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svmul, build[post=m]>(mask, factor1, factor2));"
 prim<v:=(v,v)> div(divident, divisor):
@@ -409,6 +557,10 @@ prim<v:=(v,v)> div(divident, divisor):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(divident / divisor);"
     [generic, oneAPIfpga]:
@@ -416,6 +568,10 @@ prim<v:=(v,v)> div(divident, divisor):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<init_register>(result);
@@ -427,29 +583,53 @@ prim<v:=(v,v)> div(divident, divisor):
     avx512:
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<div, build>(divident, divisor));"
     avx2:
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<div, build>(divident, divisor));"
     sse:
       f32:
         requires [sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<div, build>(divident, divisor));"
       f64:
         requires [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<div, build>(divident, divisor));"
     neon:
       f?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<vdivq, build>(divident, divisor));"
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -464,6 +644,10 @@ prim<v:=(v,v)> div(divident, divisor):
     sve:
       idqword:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svdiv, build[post=x]>(call<primitive=mask_true[Vec]>(), divident, divisor));"
 prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
@@ -477,6 +661,10 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
@@ -489,6 +677,10 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -505,6 +697,10 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<maskz_div, build>(mask, divident, divisor));"
     [avx2, sse]:
@@ -515,6 +711,10 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
           sse:
             f32 [sse]
             f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -528,6 +728,10 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -541,6 +745,10 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
     sve:
       idqword:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svdiv, build[post=z]>(mask, divident, divisor));"
 prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
@@ -554,6 +762,10 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
@@ -566,6 +778,10 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -582,6 +798,10 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<mask_div, build>(divident, mask, divident, divisor));"
     [avx2, sse]:
@@ -592,6 +812,10 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
           sse:
             f32 [sse]
             f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -605,6 +829,10 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -618,6 +846,10 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
     sve:
       idqword:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svdiv, build[post=m]>(mask, divident, divisor));"
 prim<v:=(v,sImm)> mul_imm(data, factor):
@@ -633,6 +865,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(details::arith_mul(data, cast<static>(type<generation>(base::in), factor)));"
     [generic, oneAPIfpga]:
@@ -640,6 +876,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<init_register>(result);
@@ -651,6 +891,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
     avx512:
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -662,6 +906,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i16:
         requires [avx512bw, avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -673,6 +921,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i32:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -684,6 +936,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i64:
         requires [avx512dq, avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -695,6 +951,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -707,6 +967,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
     avx2:
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -718,6 +982,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i16:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -729,6 +997,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i32:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -740,6 +1012,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i64:
         requires [avx, avx512dq, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -751,6 +1027,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -763,6 +1043,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
     sse:
       f32:
         requires [sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -774,6 +1058,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       f64:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -785,6 +1073,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i16:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -796,6 +1088,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i32:
         requires [sse, sse4_1]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -807,6 +1103,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i64:
         requires [avx512dq, avx512vl, sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -818,6 +1118,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -830,6 +1134,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
     neon:
       [si8, si16, si32, ui8, ui16, ui32, f32, f64]:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -841,6 +1149,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -853,6 +1165,10 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -872,6 +1188,10 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
@@ -889,6 +1209,10 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
           sse [sse]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -909,6 +1233,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
@@ -926,6 +1254,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
           sse [sse]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -956,6 +1288,10 @@ prim<v:=(v,v)> mod(dividend, divisor):
     avx512:
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -970,6 +1306,10 @@ prim<v:=(v,v)> mod(dividend, divisor):
     avx2:
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -984,6 +1324,10 @@ prim<v:=(v,v)> mod(dividend, divisor):
     sse:
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -998,6 +1342,10 @@ prim<v:=(v,v)> mod(dividend, divisor):
     sve:
       idqword:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1013,11 +1361,19 @@ prim<v:=(v,v)> mod(dividend, divisor):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(details::arith_rem(dividend, divisor));"
     generic:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<init_register>(result);
@@ -1028,6 +1384,10 @@ prim<v:=(v,v)> mod(dividend, divisor):
           """
       f?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<init_register>(result);
@@ -1045,6 +1405,10 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
@@ -1060,6 +1424,10 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1079,6 +1447,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
@@ -1094,6 +1466,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1120,6 +1496,10 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
           avx2 [avx]
           sse [sse]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1132,11 +1512,19 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(details::arith_rem(dividend, cast<static>(type<generation>(base::in), divisor)));"
     generic:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<init_register>(result);
@@ -1147,6 +1535,10 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
           """
       f?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<init_register>(result);
@@ -1164,6 +1556,10 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
@@ -1179,6 +1575,10 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1198,6 +1598,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
@@ -1213,6 +1617,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(

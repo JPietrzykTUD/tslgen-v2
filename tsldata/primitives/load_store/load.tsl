@@ -27,6 +27,10 @@ prim<v:=ptr>[aligned=*] load(ptr):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil "complete(*ptr);"
     [generic, oneAPIfpga]:
@@ -34,6 +38,10 @@ prim<v:=ptr>[aligned=*] load(ptr):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
               var<init_register>(reg);
@@ -48,6 +56,10 @@ prim<v:=ptr>[aligned=*] load(ptr):
           avx512 [avx512f]
           avx2 [avx]
           sse [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
@@ -72,6 +84,10 @@ prim<v:=ptr>[aligned=*] load(ptr):
           avx512 [avx512f]
           avx [avx]
           sse [sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
@@ -91,6 +107,10 @@ prim<v:=ptr>[aligned=*] load(ptr):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
               if<generation>(value<generation>(primitive::attribute(aligned))) {
@@ -110,6 +130,10 @@ prim<v:=ptr>[aligned=*] load(ptr):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
               if<generation>(value<generation>(primitive::attribute(aligned))) {
@@ -148,6 +172,10 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             complete(call<primitive=mov, attrs[mask=zero]>(mask, *ptr));
@@ -157,6 +185,10 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<init_register>(result);
@@ -181,6 +213,10 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
           sse_vl:
             idqword [avx512f, avx512vl, sse, sse2]
             bword   [avx512f, avx512vl, avx512bw, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
@@ -195,6 +231,10 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
@@ -217,6 +257,10 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
           avx2 [avx]
           sse [sse, sse2]
           neon [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             complete(
@@ -231,6 +275,10 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
@@ -268,6 +316,10 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             if (mask) {
@@ -281,6 +333,10 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<init_register>(result);
@@ -305,6 +361,10 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
           sse_vl:
             idqword [avx512f, avx512vl, sse, sse2]
             bword   [avx512f, avx512vl, avx512bw, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
@@ -321,6 +381,10 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
@@ -347,6 +411,10 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
           avx2 [avx]
           sse [sse, sse2]
           neon [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             complete(
@@ -362,6 +430,10 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             complete(
@@ -389,6 +461,10 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
@@ -407,6 +483,10 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
@@ -430,6 +510,10 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
@@ -455,6 +539,10 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
             [si8, ui8, si16, ui16, si32, ui32, f32, f64] [sse, sse2]
             [si64, ui64] [sse, sse2, sse4_1]
           neon [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
@@ -479,6 +567,10 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
@@ -549,5 +641,9 @@ prim<s:=ptr>[aligned=false] load_scalar(ptr):
           neon [neon]
           sve [sve]
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil "complete(*ptr);"

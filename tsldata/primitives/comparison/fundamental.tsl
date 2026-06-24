@@ -29,11 +29,19 @@ prim<m:=(v,v)> equal(left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(left == right);"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
@@ -48,6 +56,10 @@ prim<m:=(v,v)> equal(left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(RegisterT, type<generation>(vector::register));
@@ -71,6 +83,10 @@ prim<m:=(v,v)> equal(left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -82,6 +98,10 @@ prim<m:=(v,v)> equal(left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -91,6 +111,10 @@ prim<m:=(v,v)> equal(left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -99,6 +123,10 @@ prim<m:=(v,v)> equal(left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -110,6 +138,10 @@ prim<m:=(v,v)> equal(left, right):
         requires:
           [?i8, ?i16, ?i32] [sse2]
           ?i64 [sse4_1]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -120,6 +152,10 @@ prim<m:=(v,v)> equal(left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -129,6 +165,10 @@ prim<m:=(v,v)> equal(left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
@@ -141,6 +181,10 @@ prim<m:=(v,v)> equal(left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -180,11 +224,19 @@ prim<m:=(v,v)> nequal(left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(left != right);"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
@@ -199,6 +251,10 @@ prim<m:=(v,v)> nequal(left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(RegisterT, type<generation>(vector::register));
@@ -222,6 +278,10 @@ prim<m:=(v,v)> nequal(left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -233,6 +293,10 @@ prim<m:=(v,v)> nequal(left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -242,6 +306,10 @@ prim<m:=(v,v)> nequal(left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -253,6 +321,10 @@ prim<m:=(v,v)> nequal(left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -264,6 +336,10 @@ prim<m:=(v,v)> nequal(left, right):
         requires:
           [?i8, ?i16, ?i32] [sse2]
           ?i64 [sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -277,6 +353,10 @@ prim<m:=(v,v)> nequal(left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -286,6 +366,10 @@ prim<m:=(v,v)> nequal(left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(call<primitive=inv>(call<primitive=equal>(left, right)));
@@ -293,6 +377,10 @@ prim<m:=(v,v)> nequal(left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -330,11 +418,19 @@ prim<m:=(v,v)> less_than(left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(left < right);"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
@@ -349,6 +445,10 @@ prim<m:=(v,v)> less_than(left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(RegisterT, type<generation>(vector::register));
@@ -372,6 +472,10 @@ prim<m:=(v,v)> less_than(left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -383,6 +487,10 @@ prim<m:=(v,v)> less_than(left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -392,10 +500,18 @@ prim<m:=(v,v)> less_than(left, right):
     avx2:
       si?:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<cmpgt, build>(right, left));"
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -404,6 +520,10 @@ prim<m:=(v,v)> less_than(left, right):
           """
       ui?:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
@@ -430,10 +550,18 @@ prim<m:=(v,v)> less_than(left, right):
     sse:
       [si8, si16, si32]:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<cmplt, build>(left, right));"
       si64:
         requires [sse4_2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(intrin<cmpgt, build>(right, left));
@@ -442,12 +570,20 @@ prim<m:=(v,v)> less_than(left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<cmplt, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
           ui64              [sse2, sse4_2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
@@ -474,6 +610,10 @@ prim<m:=(v,v)> less_than(left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
@@ -486,6 +626,10 @@ prim<m:=(v,v)> less_than(left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -523,11 +667,19 @@ prim<m:=(v,v)> greater_than(left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(left > right);"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
@@ -542,6 +694,10 @@ prim<m:=(v,v)> greater_than(left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(RegisterT, type<generation>(vector::register));
@@ -565,6 +721,10 @@ prim<m:=(v,v)> greater_than(left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -576,6 +736,10 @@ prim<m:=(v,v)> greater_than(left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -585,10 +749,18 @@ prim<m:=(v,v)> greater_than(left, right):
     avx2:
       si?:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<cmpgt, build>(left, right));"
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -597,6 +769,10 @@ prim<m:=(v,v)> greater_than(left, right):
           """
       ui?:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
@@ -623,10 +799,18 @@ prim<m:=(v,v)> greater_than(left, right):
     sse:
       [si8, si16, si32]:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<cmpgt, build>(left, right));"
       si64:
         requires [sse4_2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(intrin<cmpgt, build>(left, right));
@@ -635,12 +819,20 @@ prim<m:=(v,v)> greater_than(left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<cmpgt, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
           ui64              [sse2, sse4_2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
@@ -667,6 +859,10 @@ prim<m:=(v,v)> greater_than(left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
@@ -679,6 +875,10 @@ prim<m:=(v,v)> greater_than(left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -716,11 +916,19 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(left <= right);"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
@@ -735,6 +943,10 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(RegisterT, type<generation>(vector::register));
@@ -758,6 +970,10 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -769,6 +985,10 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -778,6 +998,10 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -789,6 +1013,10 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -800,6 +1028,10 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         requires:
           [si8, si16, si32] [sse2]
           si64              [sse4_2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -813,12 +1045,20 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<cmple, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
           ui64              [sse2, sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -831,6 +1071,10 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
@@ -843,6 +1087,10 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -880,11 +1128,19 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(left >= right);"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
@@ -899,6 +1155,10 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(RegisterT, type<generation>(vector::register));
@@ -922,6 +1182,10 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -933,6 +1197,10 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -942,6 +1210,10 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -953,6 +1225,10 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -964,6 +1240,10 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         requires:
           [si8, si16, si32] [sse2]
           si64              [sse4_2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -977,12 +1257,20 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<cmpge, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
           ui64              [sse2, sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -995,6 +1283,10 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
@@ -1007,6 +1299,10 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1029,6 +1325,10 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1041,6 +1341,10 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
@@ -1058,6 +1362,10 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(RegisterT, type<generation>(vector::register));
@@ -1084,6 +1392,10 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1095,6 +1407,10 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1109,6 +1425,10 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1120,6 +1440,10 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1134,6 +1458,10 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         requires:
           [?i8, ?i16, ?i32] [sse2]
           ?i64 [sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1147,6 +1475,10 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1159,6 +1491,10 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1171,6 +1507,10 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1193,6 +1533,10 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1205,6 +1549,10 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
@@ -1222,6 +1570,10 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(RegisterT, type<generation>(vector::register));
@@ -1248,6 +1600,10 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1259,6 +1615,10 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1273,6 +1633,10 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1284,6 +1648,10 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1298,6 +1666,10 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         requires:
           [?i8, ?i16, ?i32] [sse2]
           ?i64 [sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1311,6 +1683,10 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1323,6 +1699,10 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1335,6 +1715,10 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1357,6 +1741,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1369,6 +1757,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
@@ -1386,6 +1778,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(RegisterT, type<generation>(vector::register));
@@ -1412,6 +1808,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1423,6 +1823,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1437,6 +1841,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1448,6 +1856,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1462,6 +1874,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         requires:
           [?i8, ?i16, ?i32] [sse2]
           ?i64 [sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1475,6 +1891,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1487,6 +1907,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1499,6 +1923,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1521,6 +1949,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1533,6 +1965,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
@@ -1550,6 +1986,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(RegisterT, type<generation>(vector::register));
@@ -1576,6 +2016,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1587,6 +2031,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1601,6 +2049,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1612,6 +2064,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1626,6 +2082,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         requires:
           [?i8, ?i16, ?i32] [sse2]
           ?i64 [sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1639,6 +2099,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1651,6 +2115,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1663,6 +2131,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1685,6 +2157,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1697,6 +2173,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
@@ -1714,6 +2194,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(RegisterT, type<generation>(vector::register));
@@ -1740,6 +2224,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1751,6 +2239,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1765,6 +2257,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1776,6 +2272,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1790,6 +2290,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         requires:
           [?i8, ?i16, ?i32] [sse2]
           ?i64 [sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1803,6 +2307,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1815,6 +2323,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1827,6 +2339,10 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1849,6 +2365,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1861,6 +2381,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(MaskT, type<generation>(vector::mask));
@@ -1878,6 +2402,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(RegisterT, type<generation>(vector::register));
@@ -1904,6 +2432,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1915,6 +2447,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -1929,6 +2465,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1940,6 +2480,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1954,6 +2498,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         requires:
           [?i8, ?i16, ?i32] [sse2]
           ?i64 [sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1967,6 +2515,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1979,6 +2531,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -1991,6 +2547,10 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(

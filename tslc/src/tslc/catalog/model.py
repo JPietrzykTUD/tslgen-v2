@@ -53,6 +53,28 @@ class RequirementClause:
 
 
 @dataclass(frozen=True, slots=True)
+class ImplementationSafety:
+    """Safety contract for one implementation body.
+
+    ``internal_unsafe`` means the generated Rust body needs an unsafe operation
+    boundary. ``caller_unsafe`` means calling the generated API requires the
+    caller to uphold an unsafe contract. ``reasons`` are stable source-authored
+    and compiler-propagated labels for diagnostics, review, and future docs.
+    """
+
+    internal_unsafe: bool = False
+    caller_unsafe: bool = False
+    reasons: frozenset[str] = frozenset()
+
+    def merge(self, other: "ImplementationSafety") -> "ImplementationSafety":
+        return ImplementationSafety(
+            internal_unsafe=self.internal_unsafe or other.internal_unsafe,
+            caller_unsafe=self.caller_unsafe or other.caller_unsafe,
+            reasons=self.reasons | other.reasons,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class Implementation:
     """One source-authored body for a (extension, type-group) selector path."""
 
@@ -73,6 +95,7 @@ class Implementation:
     # extension's ``size_bits`` (one concrete-lane specialization per size) instead of a single
     # ``LANES`` template — so stable Rust can spell the width-changed output type.
     unroll_variants: bool | None = None
+    safety: ImplementationSafety = field(default_factory=ImplementationSafety)
     source: SourceSpan | None = None
     selector_source: SourceSpan | None = None
     body_source: SourceSpan | None = None

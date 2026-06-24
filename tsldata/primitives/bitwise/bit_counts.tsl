@@ -26,6 +26,10 @@ prim<v:=v> popcnt(data):
           avx512  [avx512_bitalg, avx512f]
           avx2_vl [avx512_bitalg, avx512f, avx512vl, avx]
           sse_vl  [avx512_bitalg, avx512f, avx512vl, sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<popcnt, build[suffix=base::signed_of(base::in)]>(data));"
       [?i32, ?i64]:
@@ -33,20 +37,36 @@ prim<v:=v> popcnt(data):
           avx512  [avx512_vpopcntdq, avx512f]
           avx2_vl [avx512_vpopcntdq, avx512f, avx512vl, avx]
           sse_vl  [avx512_vpopcntdq, avx512f, avx512vl, sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<popcnt, build[suffix=base::signed_of(base::in)]>(data));"
     neon:
       ?i8:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<vcntq, build>(data));"
     sve:
       ui?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svcnt, build[post=x]>(call<primitive=mask_true[Vec]>(), data));"
       si?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -63,6 +83,10 @@ prim<v:=v> popcnt(data):
           neon [neon]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
@@ -74,6 +98,10 @@ prim<v:=v> popcnt(data):
     scalar:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), details::popcount(data)));"
 prim<s:=s> lzc_scalar(data):
@@ -88,12 +116,20 @@ prim<s:=s> lzc_scalar(data):
         requires:
           scalar []
           generic []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), details::clz(data)));"
       f?:
         requires:
           scalar []
           generic []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [raw_memory]
         implementation:
           tsil """
                let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
@@ -104,11 +140,19 @@ prim<s:=s> lzc_scalar(data):
     oneAPIfpga:
       ?i?:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), details::clz_recursive<type<generation>(base::in), type<generation>(vector::offset_base)::apply>(data)));"
     oneAPIfpgaRTL:
       ?i?:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), details::clz_recursive<type<generation>(base::in), type<generation>(vector::offset_base)::apply>(data)));"
 prim<v:=v> lzc(data):
@@ -138,20 +182,36 @@ prim<v:=v> lzc(data):
           avx512 [avx512cd, avx512f]
           avx2_vl [avx512cd, avx512f, avx512vl, avx]
           sse_vl [avx512cd, avx512f, avx512vl, sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<lzcnt, build[suffix=base::signed_of(base::in)]>(data));"
     neon:
       [si8, si16, si32, ui8, ui16, ui32]:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<vclzq, build>(data));"
     sve:
       ui?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svclz, build[post=x]>(call<primitive=mask_true[Vec]>(), data));"
       si?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -169,6 +229,10 @@ prim<v:=v> lzc(data):
           neon [neon]
           scalar []
           generic []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
@@ -182,6 +246,10 @@ prim<v:=v> lzc(data):
         requires:
           oneAPIfpga [oneAPIfpgaDev]
           oneAPIfpgaRTL [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
@@ -206,6 +274,10 @@ prim<s:=m> lzc_imask(value):
           neon [neon]
           scalar []
           generic []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), details::clz(call<primitive=to_integral[Vec]>(value))));"
     [oneAPIfpga, oneAPIfpgaRTL]:
@@ -213,6 +285,10 @@ prim<s:=m> lzc_imask(value):
         requires:
           oneAPIfpga [oneAPIfpgaDev]
           oneAPIfpgaRTL [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(details::clz_recursive<type<generation>(vector::imask), type<backend>(intrin::vector::imask)::apply>(call<primitive=to_integral[Vec]>(value)));"
 prim<s:=m> tzc(value):
@@ -231,5 +307,9 @@ prim<s:=m> tzc(value):
           neon [neon]
           scalar []
           generic []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), details::ctz(call<primitive=to_integral[Vec]>(value))));"

@@ -18,6 +18,7 @@ from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedBlockDeclaration,
+    ParsedImplementationSelectorEntry,
     ParsedPrimitiveDeclaration,
     ParsedTslAttribute,
     ParsedTslField,
@@ -38,6 +39,8 @@ _KNOWN_IMASK_POLICY_KINDS = frozenset(
 )
 _KNOWN_GENERIC_PARAM_KINDS = frozenset({"bool", "int", "simd_type"})
 _KNOWN_IMMEDIATE_DISPATCH = frozenset({"literal_match"})
+_KNOWN_SAFETY_FIELDS = frozenset({"internal_unsafe", "caller_unsafe", "reasons"})
+_KNOWN_BOOLEAN_VALUES = frozenset({"true", "false"})
 _KNOWN_PRIMITIVE_FIELDS = frozenset(
     {
         "brief_description",
@@ -281,6 +284,7 @@ def _validate_primitive(
     _validate_generic_params(declaration, diagnostics)
     _validate_immediate_params(declaration, diagnostics)
     _validate_param_types(declaration, diagnostics)
+    _validate_implementation_safety(declaration, diagnostics)
     _validate_return_type(declaration, diagnostics)
     _validate_tests(declaration, diagnostics)
     validate_requires(declaration, diagnostics)
@@ -540,6 +544,115 @@ def _validate_immediate_params(
                         f"immediate dispatch strategy {strategy!r}",
                         sorted(_KNOWN_IMMEDIATE_DISPATCH),
                 )
+
+
+def _validate_implementation_safety(
+    declaration: ParsedPrimitiveDeclaration,
+    diagnostics: list[Diagnostic],
+) -> None:
+    def walk(entry: ParsedImplementationSelectorEntry) -> None:
+        _diagnose_duplicate_fields(
+            tuple(field for field in entry.fields if field.key.text == "safety"),
+            diagnostics,
+            label="implementation safety block",
+        )
+        for field in entry.fields:
+            if field.key.text == "safety":
+                _validate_safety_field(field, diagnostics)
+            elif field.key.text == "implementation":
+                _validate_implementation_body_field(field, diagnostics)
+        for child_entry in entry.children:
+            walk(child_entry)
+
+    for entry in declaration.impl_entries:
+        walk(entry)
+
+
+def _validate_implementation_body_field(
+    field: ParsedTslField,
+    diagnostics: list[Diagnostic],
+) -> None:
+    body_children = children(field)
+    _validate_known_fields(
+        body_children,
+        frozenset({"tsil", "tsl"}),
+        diagnostics,
+        owner="implementation body",
+    )
+    for body in body_children:
+        if body.key.text not in {"tsil", "tsl"}:
+            continue
+        if (
+            not isinstance(body.value, ParsedTslScalarValue)
+            or body.value.quote_form not in {"inline", "multiline"}
+        ):
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-MALFORMED-IMPLEMENTATION",
+                    message="implementation body must be a quoted tsil/tsl field",
+                    source=source_span(body.source),
+                )
+            )
+
+
+def _validate_safety_field(
+    field: ParsedTslField,
+    diagnostics: list[Diagnostic],
+) -> None:
+    field_children = children(field)
+    if not field_children:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-MALFORMED-SAFETY",
+                message="implementation safety must contain safety fields",
+                source=source_span(field.source),
+            )
+        )
+        return
+    _validate_known_fields(
+        field_children,
+        _KNOWN_SAFETY_FIELDS,
+        diagnostics,
+        owner="implementation safety",
+    )
+    _diagnose_duplicate_fields(
+        field_children, diagnostics, label="implementation safety field"
+    )
+    for name in ("internal_unsafe", "caller_unsafe"):
+        bool_field = child(field, name)
+        value = field_text(bool_field)
+        if bool_field is not None and value not in _KNOWN_BOOLEAN_VALUES:
+            _invalid_enum(
+                diagnostics,
+                bool_field,
+                f"implementation safety {name} value {value!r}",
+                sorted(_KNOWN_BOOLEAN_VALUES),
+            )
+    reasons = child(field, "reasons")
+    if reasons is None:
+        return
+    if not isinstance(reasons.value, ParsedTslListValue):
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-MALFORMED-SAFETY",
+                message="implementation safety reasons must be a scalar list",
+                source=source_span(reasons.source),
+            )
+        )
+        return
+    for item in reasons.value.items:
+        if not isinstance(item, ParsedTslScalarValue):
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-MALFORMED-SAFETY",
+                    message="implementation safety reasons must be scalar labels",
+                    source=source_span(item.source),
+                )
+            )
 
 
 def _validate_param_types(

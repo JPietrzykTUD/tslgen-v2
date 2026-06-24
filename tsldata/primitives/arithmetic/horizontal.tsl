@@ -15,29 +15,53 @@ prim<s:=v> hadd(vec):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), intrin<svaddv, build>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svaddv, build>(call<primitive=mask_true[Vec]>(), vec));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_add, build[suffix=base::signed_of(base::in)]>(vec)));"
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<reduce_add, build>(vec));"
     [avx2_vl, sse_vl]:
       [si16, ui16]:
         requires [avx512bw, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_add, build[suffix=base::signed_of(base::in)]>(vec)));"
     avx2:
       [si32, ui32]:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
@@ -49,6 +73,10 @@ prim<s:=v> hadd(vec):
           """
       [si64, ui64]:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
@@ -59,6 +87,10 @@ prim<s:=v> hadd(vec):
           """
       f32:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(lo, intrin<_mm256_extractf128_ps>(vec, 0));
@@ -70,6 +102,10 @@ prim<s:=v> hadd(vec):
           """
       f64:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(lo, intrin<_mm256_extractf128_pd>(vec, 0));
@@ -80,6 +116,10 @@ prim<s:=v> hadd(vec):
           """
       arith:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
@@ -92,6 +132,10 @@ prim<s:=v> hadd(vec):
     sse:
       [si32, ui32]:
         requires [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<infer>(temp, vec);
@@ -101,6 +145,10 @@ prim<s:=v> hadd(vec):
           """
       [si64, ui64]:
         requires [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(temp, intrin<_mm_add_epi64>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)));
@@ -108,6 +156,10 @@ prim<s:=v> hadd(vec):
           """
       f32:
         requires [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<infer>(temp, vec);
@@ -117,6 +169,10 @@ prim<s:=v> hadd(vec):
           """
       f64:
         requires [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(temp, intrin<_mm_add_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
@@ -124,6 +180,10 @@ prim<s:=v> hadd(vec):
           """
       arith:
         requires [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
@@ -144,6 +204,10 @@ prim<s:=v> hadd(vec):
           sse [sse2]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
@@ -168,29 +232,53 @@ prim<s:=v> hmax(vec):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), intrin<svmaxv, build>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svmaxv, build>(call<primitive=mask_true[Vec]>(), vec));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_max, build>(vec)));"
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<reduce_max, build>(vec));"
     [avx2_vl, sse_vl]:
       [si16, ui16]:
         requires [avx512bw, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_max, build>(vec)));"
     avx2:
       si32:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
@@ -202,6 +290,10 @@ prim<s:=v> hmax(vec):
           """
       ui32:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
@@ -213,6 +305,10 @@ prim<s:=v> hmax(vec):
           """
       f32:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(lo, intrin<_mm256_extractf128_ps>(vec, 0));
@@ -224,6 +320,10 @@ prim<s:=v> hmax(vec):
           """
       f64:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(lo, intrin<_mm256_extractf128_pd>(vec, 0));
@@ -235,6 +335,10 @@ prim<s:=v> hmax(vec):
     sse:
       f32:
         requires [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<infer>(temp, vec);
@@ -244,6 +348,10 @@ prim<s:=v> hmax(vec):
           """
       f64:
         requires [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(temp, intrin<_mm_max_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
@@ -260,6 +368,10 @@ prim<s:=v> hmax(vec):
           sse [sse2]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
@@ -286,29 +398,53 @@ prim<s:=v> hmin(vec):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), intrin<svminv, build>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svminv, build>(call<primitive=mask_true[Vec]>(), vec));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_min, build>(vec)));"
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<reduce_min, build>(vec));"
     [avx2_vl, sse_vl]:
       [si16, ui16]:
         requires [avx512bw, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_min, build>(vec)));"
     avx2:
       si32:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
@@ -320,6 +456,10 @@ prim<s:=v> hmin(vec):
           """
       ui32:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
@@ -331,6 +471,10 @@ prim<s:=v> hmin(vec):
           """
       f32:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(lo, intrin<_mm256_extractf128_ps>(vec, 0));
@@ -342,6 +486,10 @@ prim<s:=v> hmin(vec):
           """
       f64:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(lo, intrin<_mm256_extractf128_pd>(vec, 0));
@@ -353,6 +501,10 @@ prim<s:=v> hmin(vec):
     sse:
       f32:
         requires [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<infer>(temp, vec);
@@ -362,6 +514,10 @@ prim<s:=v> hmin(vec):
           """
       f64:
         requires [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(temp, intrin<_mm_min_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
@@ -378,6 +534,10 @@ prim<s:=v> hmin(vec):
           sse [sse2]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
@@ -402,24 +562,44 @@ prim<s:=(m,v)> hadd(mask, vec):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), intrin<svaddv, build>(mask, vec)));"
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svaddv, build>(mask, vec));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_add, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<mask_reduce_add, build>(mask, vec));"
     [avx2_vl, sse_vl]:
       [si16, ui16]:
         requires [avx512bw, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_add, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
     [avx2, sse]:
@@ -427,6 +607,10 @@ prim<s:=(m,v)> hadd(mask, vec):
         requires:
           avx2 [avx2]
           sse [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=hadd>(call<primitive=blend>(mask, call<primitive=set_zero[Vec]>(), vec)));"
     [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
@@ -440,6 +624,10 @@ prim<s:=(m,v)> hadd(mask, vec):
           sse [sse2]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
@@ -465,6 +653,10 @@ prim<s:=(m,v)> hmax(mask, vec):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
@@ -475,6 +667,10 @@ prim<s:=(m,v)> hmax(mask, vec):
           """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
@@ -486,6 +682,10 @@ prim<s:=(m,v)> hmax(mask, vec):
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
@@ -496,6 +696,10 @@ prim<s:=(m,v)> hmax(mask, vec):
           """
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
@@ -507,6 +711,10 @@ prim<s:=(m,v)> hmax(mask, vec):
     [avx2_vl, sse_vl]:
       [si16, ui16]:
         requires [avx512bw, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
@@ -526,6 +734,10 @@ prim<s:=(m,v)> hmax(mask, vec):
           sse [sse2]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
@@ -557,6 +769,10 @@ prim<s:=(m,v)> hmin(mask, vec):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
@@ -567,6 +783,10 @@ prim<s:=(m,v)> hmin(mask, vec):
           """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
@@ -578,6 +798,10 @@ prim<s:=(m,v)> hmin(mask, vec):
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
@@ -588,6 +812,10 @@ prim<s:=(m,v)> hmin(mask, vec):
           """
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
@@ -599,6 +827,10 @@ prim<s:=(m,v)> hmin(mask, vec):
     [avx2_vl, sse_vl]:
       [si16, ui16]:
         requires [avx512bw, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
@@ -618,6 +850,10 @@ prim<s:=(m,v)> hmin(mask, vec):
           sse [sse2]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));

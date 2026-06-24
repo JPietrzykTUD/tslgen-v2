@@ -29,6 +29,10 @@ prim<v:=(v,sImm)> shift_left(data, shift):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           # Shift the bit pattern via the same-width unsigned type: a signed-negative left shift is
           # UB in C++ (and the vector path already does this), so the scalar path must too. Covers
@@ -43,6 +47,10 @@ prim<v:=(v,sImm)> shift_left(data, shift):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<init_register>(result);
@@ -57,10 +65,18 @@ prim<v:=(v,sImm)> shift_left(data, shift):
           ?i16 [avx512bw, avx512f]
           ?i32 [avx512f]
           ?i64 [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<slli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -76,10 +92,18 @@ prim<v:=(v,sImm)> shift_left(data, shift):
     avx2:
       [?i16, ?i32, ?i64]:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<slli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -95,10 +119,18 @@ prim<v:=(v,sImm)> shift_left(data, shift):
     sse:
       [?i16, ?i32, ?i64]:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<slli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -114,6 +146,10 @@ prim<v:=(v,sImm)> shift_left(data, shift):
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -127,6 +163,10 @@ prim<v:=(v,sImm)> shift_left(data, shift):
           """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -142,6 +182,10 @@ prim<v:=(v,sImm)> shift_left(data, shift):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -150,6 +194,10 @@ prim<v:=(v,sImm)> shift_left(data, shift):
             """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -200,6 +248,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
@@ -210,6 +262,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<init_register>(result);
@@ -225,6 +281,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
     avx512:
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
@@ -233,6 +293,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
     avx2:
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
@@ -241,6 +305,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
     sse:
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
@@ -249,6 +317,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
@@ -257,6 +329,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
@@ -286,6 +362,10 @@ prim<v:=(v,s)> shift_left(data, shift):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           # Shift the bit pattern via the same-width unsigned type: a signed-negative left shift is
           # UB in C++ (and the vector path already does this), so the scalar path must too. Covers
@@ -300,6 +380,10 @@ prim<v:=(v,s)> shift_left(data, shift):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<init_register>(result);
@@ -314,10 +398,18 @@ prim<v:=(v,s)> shift_left(data, shift):
           ?i16 [avx512bw, avx512f]
           ?i32 [avx512f]
           ?i64 [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<sllv, build[suffix=base::signed_of(base::in)]>(data, call<primitive=set1>(shift)));"
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -337,10 +429,18 @@ prim<v:=(v,s)> shift_left(data, shift):
           ?i16 [avx, avx512bw, avx512vl]
           ?i32 [avx, avx2]
           ?i64 [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<sllv, build[suffix=base::signed_of(base::in)]>(data, call<primitive=set1>(shift)));"
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -357,6 +457,10 @@ prim<v:=(v,s)> shift_left(data, shift):
     sse:
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -373,6 +477,10 @@ prim<v:=(v,s)> shift_left(data, shift):
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             complete(
@@ -386,6 +494,10 @@ prim<v:=(v,s)> shift_left(data, shift):
           """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -402,6 +514,10 @@ prim<v:=(v,s)> shift_left(data, shift):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -410,6 +526,10 @@ prim<v:=(v,s)> shift_left(data, shift):
             """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -433,6 +553,10 @@ prim<v:=(v,v)> shift_left(data, shift):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           # Shift the bit pattern via the same-width unsigned type: a signed-negative left shift is
           # UB in C++ (and the vector path already does this), so the scalar path must too. Covers
@@ -447,6 +571,10 @@ prim<v:=(v,v)> shift_left(data, shift):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<init_register>(result);
@@ -461,10 +589,18 @@ prim<v:=(v,v)> shift_left(data, shift):
           ?i16 [avx512bw, avx512f]
           ?i32 [avx512f]
           ?i64 [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<sllv, build[suffix=base::signed_of(base::in)]>(data, shift));"
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -485,10 +621,18 @@ prim<v:=(v,v)> shift_left(data, shift):
           ?i16 [avx, avx512bw, avx512vl]
           ?i32 [avx, avx2]
           ?i64 [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<sllv, build[suffix=base::signed_of(base::in)]>(data, shift));"
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -506,6 +650,10 @@ prim<v:=(v,v)> shift_left(data, shift):
     sse:
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -523,6 +671,10 @@ prim<v:=(v,v)> shift_left(data, shift):
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
@@ -541,6 +693,10 @@ prim<v:=(v,v)> shift_left(data, shift):
             """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -557,6 +713,10 @@ prim<v:=(v,v)> shift_left(data, shift):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
                var<const_infer>(pg, call<primitive=mask_true[Vec]>());
@@ -565,6 +725,10 @@ prim<v:=(v,v)> shift_left(data, shift):
             """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -613,6 +777,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
     scalar:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
@@ -629,6 +797,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
       f?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
@@ -646,6 +818,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<init_register>(result);
@@ -660,6 +836,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           ui16 [avx512bw, avx512f]
           ui32 [avx512f]
           ui64 [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<srli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       [si16, si32, si64]:
@@ -667,6 +847,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           si16 [avx512bw, avx512f]
           si32 [avx512f]
           si64 [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
@@ -680,6 +864,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -694,6 +882,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -709,10 +901,18 @@ prim<v:=(v,sImm)> shift_right(data, shift):
     avx2:
       [ui16, ui32, ui64]:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<srli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       [si16, si32]:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
@@ -726,6 +926,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
       si64:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -740,6 +944,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -754,6 +962,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -769,10 +981,18 @@ prim<v:=(v,sImm)> shift_right(data, shift):
     sse:
       [ui16, ui32, ui64]:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<srli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       [si16, si32]:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
@@ -786,6 +1006,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
       si64:
         requires [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -800,6 +1024,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
       f?:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -814,6 +1042,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -829,6 +1061,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
@@ -846,6 +1082,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -861,6 +1101,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
@@ -880,6 +1124,10 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -920,6 +1168,10 @@ prim<v:=(v,s)> shift_right(data, shift):
     scalar:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
@@ -936,6 +1188,10 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       f?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
@@ -947,6 +1203,10 @@ prim<v:=(v,s)> shift_right(data, shift):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<init_register>(result);
@@ -958,18 +1218,34 @@ prim<v:=(v,s)> shift_right(data, shift):
     avx512:
       ui16:
         requires [avx512bw, avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<_mm512_srl_epi16>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       ui32:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<_mm512_srl_epi32>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       ui64:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<_mm512_srl_epi64>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       si16:
         requires [avx512bw, avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
@@ -983,6 +1259,10 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       si32:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
@@ -996,6 +1276,10 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       si64:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
@@ -1009,6 +1293,10 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -1024,6 +1312,10 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -1040,18 +1332,34 @@ prim<v:=(v,s)> shift_right(data, shift):
     avx2:
       ui16:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<_mm256_srl_epi16>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       ui32:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<_mm256_srl_epi32>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       ui64:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<_mm256_srl_epi64>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       si16:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
@@ -1065,6 +1373,10 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       si32:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
@@ -1078,6 +1390,10 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       si64:
         requires [avx, avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -1093,6 +1409,10 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -1108,6 +1428,10 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -1124,18 +1448,34 @@ prim<v:=(v,s)> shift_right(data, shift):
     sse:
       ui16:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<_mm_srl_epi16>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       ui32:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<_mm_srl_epi32>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       ui64:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<_mm_srl_epi64>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       si16:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
@@ -1149,6 +1489,10 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       si32:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
@@ -1162,6 +1506,10 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       si64:
         requires [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -1177,6 +1525,10 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       f?:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -1192,6 +1544,10 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -1208,6 +1564,10 @@ prim<v:=(v,s)> shift_right(data, shift):
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
@@ -1236,6 +1596,10 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -1252,6 +1616,10 @@ prim<v:=(v,s)> shift_right(data, shift):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
@@ -1272,6 +1640,10 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -1299,6 +1671,10 @@ prim<v:=(v,v)> shift_right(data, shift):
     scalar:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
@@ -1315,6 +1691,10 @@ prim<v:=(v,v)> shift_right(data, shift):
             """
       f?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
@@ -1326,6 +1706,10 @@ prim<v:=(v,v)> shift_right(data, shift):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<init_register>(result);
@@ -1339,6 +1723,10 @@ prim<v:=(v,v)> shift_right(data, shift):
       ui64 {intrinsic "intrin<_mm512_srlv_epi64>", requires [avx512f]}
       si32:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
@@ -1353,6 +1741,10 @@ prim<v:=(v,v)> shift_right(data, shift):
             """
       si64:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
@@ -1367,6 +1759,10 @@ prim<v:=(v,v)> shift_right(data, shift):
             """
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -1383,6 +1779,10 @@ prim<v:=(v,v)> shift_right(data, shift):
             """
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -1402,6 +1802,10 @@ prim<v:=(v,v)> shift_right(data, shift):
       ui64 {intrinsic "intrin<_mm256_srlv_epi64>", requires [avx, avx2]}
       si32:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
@@ -1416,6 +1820,10 @@ prim<v:=(v,v)> shift_right(data, shift):
             """
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -1433,6 +1841,10 @@ prim<v:=(v,v)> shift_right(data, shift):
     sse:
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -1450,6 +1862,10 @@ prim<v:=(v,v)> shift_right(data, shift):
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
@@ -1472,6 +1888,10 @@ prim<v:=(v,v)> shift_right(data, shift):
             """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
@@ -1489,6 +1909,10 @@ prim<v:=(v,v)> shift_right(data, shift):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
@@ -1509,6 +1933,10 @@ prim<v:=(v,v)> shift_right(data, shift):
             """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));

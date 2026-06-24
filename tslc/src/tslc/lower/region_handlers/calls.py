@@ -10,7 +10,7 @@ from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.common import _vector_spelling
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.render.model import RenderField, render_text
+from tslc.render.model import RenderField, render_text, unsafe_block
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 class CallLowerer:
@@ -96,7 +96,7 @@ class CallLowerer:
         axis_values = tuple(
             attrs.get(key, "false") for key in context.env.primitive_axes.get(name, ())
         )
-        return context.env.backend.syntax.render_call(
+        call = context.env.backend.syntax.render_call(
             call_name,
             render(region.body),
             axis_values,
@@ -104,6 +104,9 @@ class CallLowerer:
             vec_override,
             tuple(extra_args),
         )
+        if context.env.primitive_caller_unsafe.get(name, False):
+            return unsafe_block(call)
+        return call
 
     def _resolve_attr_value(self, value: str, context: LoweringSession) -> str:
         """An `attrs[key=value]` value. A literal (`false`) passes through; a generation query

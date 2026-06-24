@@ -16,7 +16,7 @@ this file.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 
 from tslc.backend.translation import BackendDialect
@@ -25,6 +25,7 @@ from tslc.catalog.model import (
     RESULT_DIM_BASE,
     Catalog,
     ImmediateParam,
+    ImplementationSafety,
 )
 from tslc.catalog.scalar_types import scalar_bit_width_or_default
 from tslc.catalog.signatures import SignatureShape, parse_signature
@@ -128,6 +129,7 @@ class LoweredSpecialization:
     mask_policy: str | None = None
     # First-class lane-list parameters (`lanes<s>`) selected for this specialization.
     lane_list_params: tuple[LaneListParameter, ...] = ()
+    safety: ImplementationSafety = field(default_factory=ImplementationSafety)
 
     @property
     def body_text(self) -> str:
@@ -144,6 +146,7 @@ class LoweringResult:
 class _LowererCatalogFacts:
     primitive_axes: MappingProxyType[str, tuple[str, ...]]
     primitive_arg_generics: MappingProxyType[str, int]
+    primitive_caller_unsafe: MappingProxyType[str, bool]
     policy_split_names: frozenset[str]
     immediate_split_names: frozenset[str]
 
@@ -156,6 +159,9 @@ class _LowererCatalogFacts:
         return cls(
             primitive_axes=MappingProxyType(_primitive_axes(catalog)),
             primitive_arg_generics=MappingProxyType(_primitive_arg_generics(catalog)),
+            primitive_caller_unsafe=MappingProxyType(
+                _primitive_caller_unsafe(catalog, support)
+            ),
             policy_split_names=policy_split_names(catalog, support),
             immediate_split_names=immediate_split_names(catalog, support),
         )
@@ -275,6 +281,7 @@ class Lowerer:
                 attributes=dict(selected.primitive.attributes),
                 primitive_axes=catalog_facts.primitive_axes,
                 primitive_arg_generics=catalog_facts.primitive_arg_generics,
+                primitive_caller_unsafe=catalog_facts.primitive_caller_unsafe,
                 policy_split_names=catalog_facts.policy_split_names,
                 immediate_split_names=catalog_facts.immediate_split_names,
                 current_primitive=selected.primitive.name,
@@ -298,8 +305,9 @@ class Lowerer:
 
         # Dereferencing a raw pointer is `unsafe` in Rust, so a `ptr`/`ptr+`-taking body needs
         # the unsafe frame even when it uses no intrinsics (e.g. scalar `*ptr = data;`).
+        # Raw-pointer APIs also require callers to uphold pointer validity.
         if self._support.requires_unsafe_frame(shape):
-            context.effects.mark_unsafe()
+            context.effects.mark_caller_unsafe("raw_pointer")
 
         segments = (
             body_segments
@@ -337,10 +345,11 @@ class Lowerer:
             return LoweringResult(
                 specialization=None, diagnostics=tuple(context.effects.diagnostics)
             )
+        safety = selected.implementation.safety.merge(context.effects.safety)
         body = LoweredBody.from_render_text(
             rendered_body,
             backend_id=backend.backend_id,
-            requires_unsafe=context.effects.requires_unsafe,
+            requires_unsafe=safety.internal_unsafe,
         )
 
         specialization = LoweredSpecialization(
@@ -387,6 +396,7 @@ class Lowerer:
             target=target,
             mask_policy=selected.primitive.attributes.get("mask"),
             lane_list_params=tuple(context.env.lane_list_params.values()),
+            safety=safety,
         )
         return LoweringResult(
             specialization=specialization,
@@ -722,6 +732,29 @@ def _primitive_arg_generics(catalog: Catalog) -> dict[str, int]:
             1 for i in range(arity) if len({k[i] for k in same}) > 1
         )
     return counts
+
+
+def _primitive_caller_unsafe(
+    catalog: Catalog,
+    support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
+) -> dict[str, bool]:
+    """Whether a primitive's emitted Rust wrapper requires an unsafe call.
+
+    Rust wrappers are grouped per primitive name and become unsafe if any emitted
+    specialization exposes a caller contract. This catalog view mirrors that
+    public wrapper contract for call-site lowering.
+    """
+
+    values: dict[str, bool] = {}
+    for primitive in catalog.primitives:
+        shape = parse_signature(primitive.signature)
+        inferred = shape is not None and support.requires_unsafe_frame(shape)
+        authored = any(
+            implementation.safety.caller_unsafe
+            for implementation in primitive.implementations
+        )
+        values[primitive.name] = values.get(primitive.name, False) or inferred or authored
+    return values
 
 
 def varying_positions(specs: tuple[LoweredSpecialization, ...]) -> tuple[int, ...]:

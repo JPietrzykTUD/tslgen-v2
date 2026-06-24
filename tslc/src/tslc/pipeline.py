@@ -9,14 +9,20 @@ headers/modules with a top-level dispatch.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
 from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
-from tslc.catalog.model import Catalog, Extension, RESULT_DIM_BASE, RESULT_DIM_EXTENSION
+from tslc.catalog.model import (
+    Catalog,
+    Extension,
+    ImplementationSafety,
+    RESULT_DIM_BASE,
+    RESULT_DIM_EXTENSION,
+)
 from tslc.catalog.validation import validate_catalog
 from tslc.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
@@ -508,56 +514,178 @@ def _prune_unresolved(
     policy to `None`, so a bare caller (`max`'s `blend`) and a policy-tagged caller (`mov`'s
     `blend attrs[mask=pass_through]`) both resolve the one bare spec."""
 
-    def policy_of(name: str, policy: str | None) -> str | None:
-        return policy if name in split_names else None
-
-    def key(
-        slot: _LoweredSlot,
-    ) -> tuple[str, str, str | None, VectorIdentity, VectorIdentity | None]:
-        s = slot.spec
-        return (
-            slot.backend,
-            s.primitive_name,
-            policy_of(s.primitive_name, s.mask_policy),
-            VectorIdentity(s.type_tag, s.extension_name),
-            (
-                VectorIdentity(s.target.base_tag, s.target.extension_isa)
-                if s.target is not None
-                else None
-            ),
-        )
-
-    valid = {key(slot) for slot in slots}
+    valid = {_slot_key(slot, split_names) for slot in slots}
     changed = True
     while changed:
         changed = False
         for slot in slots:
-            slot_key = key(slot)
+            slot_key = _slot_key(slot, split_names)
             if slot_key not in valid:
                 continue
             for dependency in slot.callees:
-                resolved = (
-                    slot.backend,
-                    dependency.primitive,
-                    policy_of(dependency.primitive, dependency.mask_policy),
-                    dependency.source,
-                    dependency.target,
-                )
+                resolved = _dependency_key(slot, dependency, split_names)
                 if resolved not in valid:
                     valid.discard(slot_key)
                     changed = True
                     break
 
+    live_slots = [slot for slot in slots if _slot_key(slot, split_names) in valid]
+    _propagate_transitive_safety(live_slots, split_names)
+
     grouped: dict[str, dict[str, list[LoweredSpecialization]]] = {}
     pruned: list[_LoweredSlot] = []
     for slot in slots:
-        if key(slot) in valid:
+        if _slot_key(slot, split_names) in valid:
             grouped.setdefault(slot.backend, {}).setdefault(
                 slot.spec.primitive_name, []
             ).append(slot.spec)
         else:
             pruned.append(slot)
     return grouped, pruned
+
+
+def _policy_of(
+    name: str,
+    policy: str | None,
+    split_names: frozenset[str],
+) -> str | None:
+    return policy if name in split_names else None
+
+
+def _slot_key(
+    slot: _LoweredSlot,
+    split_names: frozenset[str],
+) -> tuple[str, str, str | None, VectorIdentity, VectorIdentity | None]:
+    spec = slot.spec
+    return (
+        slot.backend,
+        spec.primitive_name,
+        _policy_of(spec.primitive_name, spec.mask_policy, split_names),
+        VectorIdentity(spec.type_tag, spec.extension_name),
+        (
+            VectorIdentity(spec.target.base_tag, spec.target.extension_isa)
+            if spec.target is not None
+            else None
+        ),
+    )
+
+
+def _dependency_key(
+    slot: _LoweredSlot,
+    dependency: CallDependency,
+    split_names: frozenset[str],
+) -> tuple[str, str, str | None, VectorIdentity, VectorIdentity | None]:
+    return (
+        slot.backend,
+        dependency.primitive,
+        _policy_of(dependency.primitive, dependency.mask_policy, split_names),
+        dependency.source,
+        dependency.target,
+    )
+
+
+def _propagate_transitive_safety(
+    slots: list[_LoweredSlot],
+    split_names: frozenset[str],
+) -> None:
+    """Propagate caller-unsafe contracts through the lowered call graph.
+
+    A caller that reaches a caller-unsafe callee has an internal unsafe
+    requirement for Rust. The call lowerer marks those call sites as local unsafe
+    blocks, so callee-only unsafety does not force a whole-body unsafe frame.
+    The public caller contract remains the caller's own explicit or inferred
+    contract: higher-level wrappers such as vector-from-array can discharge a
+    raw-pointer callee's requirements by passing a pointer they created from
+    local storage.
+    """
+
+    safety_by_key = {
+        _safety_key(slot, split_names): slot.spec.safety for slot in slots
+    }
+    dependency_targets: dict[
+        tuple[str, str, str | None, VectorIdentity, VectorIdentity | None],
+        list[tuple[
+            tuple[str, str, str | None, VectorIdentity, VectorIdentity | None],
+            tuple[str, ...],
+            tuple[str, str] | None,
+            tuple[tuple[str, str, str], ...],
+        ]],
+    ] = {}
+    for slot in slots:
+        dependency_targets.setdefault(_slot_key(slot, split_names), []).append(
+            _safety_key(slot, split_names)
+        )
+    changed = True
+    while changed:
+        changed = False
+        for slot in slots:
+            slot_key = _safety_key(slot, split_names)
+            safety = safety_by_key[slot_key]
+            propagated = safety
+            for dependency in sorted(
+                slot.callees,
+                key=lambda dependency: (
+                    dependency.primitive,
+                    dependency.mask_policy or "",
+                    dependency.source.base_tag,
+                    dependency.source.extension_isa,
+                    dependency.target.base_tag if dependency.target is not None else "",
+                    dependency.target.extension_isa
+                    if dependency.target is not None
+                    else "",
+                ),
+            ):
+                for dependency_safety_key in dependency_targets.get(
+                    _dependency_key(slot, dependency, split_names), []
+                ):
+                    dependency_safety = safety_by_key[dependency_safety_key]
+                    if not dependency_safety.caller_unsafe:
+                        continue
+                    propagated = propagated.merge(
+                        ImplementationSafety(
+                            internal_unsafe=True,
+                            reasons=dependency_safety.reasons
+                            | frozenset({"unsafe_callee"}),
+                        )
+                    )
+            if propagated != safety:
+                safety_by_key[slot_key] = propagated
+                changed = True
+
+    for slot in slots:
+        slot_key = _safety_key(slot, split_names)
+        safety = safety_by_key[slot_key]
+        if safety == slot.spec.safety:
+            continue
+        slot.spec = replace(
+            slot.spec,
+            safety=safety,
+        )
+
+
+def _safety_key(
+    slot: _LoweredSlot,
+    split_names: frozenset[str],
+) -> tuple[
+    tuple[str, str, str | None, VectorIdentity, VectorIdentity | None],
+    tuple[str, ...],
+    tuple[str, str] | None,
+    tuple[tuple[str, str, str], ...],
+]:
+    """A lowered-body identity for safety propagation before emitted-name splits.
+
+    Runtime and immediate overloads intentionally share the pruning key until
+    final emitted-name splitting. Safety must keep them distinct, because their
+    bodies can have different unsafe requirements.
+    """
+
+    spec = slot.spec
+    return (
+        _slot_key(slot, split_names),
+        spec.param_kinds,
+        spec.immediate,
+        spec.generic_params,
+    )
 
 
 def _finalize(

@@ -18,6 +18,10 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
         requires [avx2]
         ToExtension:
           sse:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm256_extracti128_si256>(data, index));
@@ -26,6 +30,10 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
         requires [avx]
         ToExtension:
           sse:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm256_extractf128_ps>(data, index));
@@ -34,6 +42,10 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
         requires [avx]
         ToExtension:
           sse:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm256_extractf128_pd>(data, index));
@@ -43,6 +55,10 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
         requires [avx2]
         ToExtension:
           sse:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm256_extracti128_si256>(data, index));
@@ -51,6 +67,10 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
         requires [avx]
         ToExtension:
           sse:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm256_extractf128_ps>(data, index));
@@ -59,6 +79,10 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
         requires [avx]
         ToExtension:
           sse:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm256_extractf128_pd>(data, index));
@@ -69,11 +93,19 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
         ToExtension:
           avx2:
             requires [avx512dq]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm512_extracti64x4_epi64>(data, index));
                 """
           sse:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm512_extracti32x4_epi32>(data, index));
@@ -83,11 +115,19 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
         ToExtension:
           avx2:
             requires [avx512dq]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm512_extractf32x8_ps>(data, index));
                 """
           sse:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm512_extractf32x4_ps>(data, index));
@@ -96,12 +136,20 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
         requires [avx512f]
         ToExtension:
           avx2:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm512_extractf64x4_pd>(data, index));
                 """
           sse:
             requires [avx512dq]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm512_extractf64x2_pd>(data, index));
@@ -113,6 +161,10 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
           where:
             family same_as
             width smaller_than
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
             implementation:
               tsl """
                   let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
@@ -131,6 +183,10 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
           where:
             family same_as
             width smaller_than
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
             implementation:
               tsl """
                   let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
@@ -148,6 +204,10 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
           scalar []
         ToExtension:
           scalar:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
             implementation:
               tsl """
                   let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
@@ -171,6 +231,10 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
           where:
             family same_as
             width smaller_than
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
             implementation:
               tsl """
                   let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
@@ -201,12 +265,20 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
         ToExtension:
           avx2:
             requires [avx2]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm256_inserti128_si256>(orig, data, index));
                 """
           avx512:
             requires [avx512f]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm512_inserti32x4>(orig, data, index));
@@ -215,12 +287,20 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
         ToExtension:
           avx2:
             requires [avx]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm256_insertf128_ps>(orig, data, index));
                 """
           avx512:
             requires [avx512f]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm512_insertf32x4>(orig, data, index));
@@ -229,12 +309,20 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
         ToExtension:
           avx2:
             requires [avx]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm256_insertf128_pd>(orig, data, index));
                 """
           avx512:
             requires [avx512f, avx512dq]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm512_insertf64x2>(orig, data, index));
@@ -244,6 +332,10 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
         ToExtension:
           avx512:
             requires [avx512f]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm512_inserti64x4>(orig, data, index));
@@ -252,6 +344,10 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
         ToExtension:
           avx512:
             requires [avx512dq]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm512_insertf32x8>(orig, data, index));
@@ -260,6 +356,10 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
         ToExtension:
           avx512:
             requires [avx512f]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(intrin<_mm512_insertf64x4>(orig, data, index));
@@ -271,6 +371,10 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
           where:
             family same_as
             width larger_than
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
             implementation:
               tsl """
                   let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
@@ -289,6 +393,10 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
           where:
             family same_as
             width larger_than
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
             implementation:
               tsl """
                   let<type>(OutVec, type<generation>(vector::as_extension(ToExtension)));
@@ -328,6 +436,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [sse4_1]
         ToBase:
           ?i16:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -351,6 +463,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
           ?i32:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -380,6 +496,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
           ?i64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -424,6 +544,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [sse4_1]
         ToBase:
           ?i32:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -447,6 +571,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
           ?i64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -479,6 +607,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [sse4_1]
         ToBase:
           ?i64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -505,6 +637,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [sse2]
         ToBase:
           f64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -532,6 +668,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [avx2]
         ToBase:
           ?i16:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
@@ -541,6 +681,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
           ?i32:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -586,6 +730,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
           ?i64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -662,6 +810,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [avx2]
         ToBase:
           ?i32:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
@@ -671,6 +823,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
           ?i64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -719,6 +875,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [avx2]
         ToBase:
           ?i64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_same(type<generation>(base::in), si32))) {
@@ -731,6 +891,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [avx]
         ToBase:
           f64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm256_cvtps_pd>(intrin<extractf128, build[suffix=ps, immediate(1)=index]>(data, index))));
@@ -740,6 +904,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [avx512f]
         ToBase:
           ?i16:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
@@ -749,6 +917,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
           ?i32:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_same(type<generation>(base::in), si8))) {
@@ -758,6 +930,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
           ?i64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -834,6 +1010,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [avx512f, avx512dq]
         ToBase:
           ?i32:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
@@ -843,6 +1023,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
           ?i64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_same(type<generation>(base::in), si16))) {
@@ -855,6 +1039,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [avx512f]
         ToBase:
           ?i64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_same(type<generation>(base::in), si32))) {
@@ -867,6 +1055,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [avx512f]
         ToBase:
           f64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   complete(cast<reinterpret>(type<generation>(register::generic(type<generation>(vector::window_base(ToBase)))), intrin<_mm512_cvtps_pd>(intrin<extractf32x8, build[suffix=ps, immediate(1)=index]>(data, index))));
@@ -876,6 +1068,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [neon]
         ToBase:
           ?i16:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -899,6 +1095,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
           ?i32:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -928,6 +1128,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
           ?i64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -972,6 +1176,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [neon]
         ToBase:
           ?i32:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -995,6 +1203,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
           ?i64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -1027,6 +1239,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [neon]
         ToBase:
           ?i64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -1053,6 +1269,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [neon]
         ToBase:
           f64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -1080,6 +1300,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [sve]
         ToBase:
           ?i16:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -1110,6 +1334,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
           ?i32:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
             implementation:
               tsil """
                   if<compile>(index == 0) {
@@ -1127,6 +1355,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
           ?i64:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
             implementation:
               tsil """
                   if<compile>(index == 0) {
@@ -1147,6 +1379,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [sve]
         ToBase:
           ?i32:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -1177,6 +1413,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
           ?i64:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
             implementation:
               tsil """
                   if<compile>(index == 0) {
@@ -1197,6 +1437,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [sve]
         ToBase:
           ?i64:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   switch<compile>(index) {
@@ -1230,6 +1474,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [sve]
         ToBase:
           f64:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
             implementation:
               tsil """
                   if<compile>(index == 0) {
@@ -1250,6 +1498,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         requires [sve]
         ToBase:
           f64:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
             implementation:
               tsil """
                   if<compile>(index == 0) {
@@ -1281,6 +1533,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
           generic []
           oneAPIfpga [oneAPIfpgaDev]
           scalar []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsl """
               let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1328,6 +1584,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           sse_vl [sse2]
         ToBase:
           si8:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1346,6 +1606,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           sse_vl [sse2]
         ToBase:
           ui8:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1364,6 +1628,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           sse_vl [sse2]
         ToBase:
           si16:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1382,6 +1650,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           sse_vl [sse4_1]
         ToBase:
           ui16:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1399,6 +1671,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         requires [avx2]
         ToBase:
           si8:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1410,6 +1686,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         requires [avx2]
         ToBase:
           ui8:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1421,6 +1701,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         requires [avx2]
         ToBase:
           si16:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1432,6 +1716,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         requires [avx2]
         ToBase:
           ui16:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1443,6 +1731,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         requires [avx]
         ToBase:
           f32:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1455,6 +1747,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         requires [avx2]
         ToBase:
           si8:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1466,6 +1762,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         requires [avx2]
         ToBase:
           ui8:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1477,6 +1777,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         requires [avx2]
         ToBase:
           si16:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1488,6 +1792,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         requires [avx2]
         ToBase:
           ui16:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1499,6 +1807,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         requires [avx]
         ToBase:
           f32:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1512,6 +1824,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         ToBase:
           si8:
             requires [avx512bw]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1523,6 +1839,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         requires [avx512f]
         ToBase:
           si8:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1537,6 +1857,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   complete(call<primitive=from_array[OutVec]>(result));
                 """
           si16:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1549,6 +1873,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         ToBase:
           ui8:
             requires [avx512bw]
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1560,6 +1888,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         requires [avx512f]
         ToBase:
           ui8:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1574,6 +1906,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   complete(call<primitive=from_array[OutVec]>(result));
                 """
           ui16:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1585,6 +1921,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         requires [avx512f]
         ToBase:
           si8:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1599,6 +1939,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   complete(call<primitive=from_array[OutVec]>(result));
                 """
           si16:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1613,6 +1957,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   complete(call<primitive=from_array[OutVec]>(result));
                 """
           si32:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1624,6 +1972,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         requires [avx512f]
         ToBase:
           ui8:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1638,6 +1990,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   complete(call<primitive=from_array[OutVec]>(result));
                 """
           ui16:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1652,6 +2008,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   complete(call<primitive=from_array[OutVec]>(result));
                 """
           ui32:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1663,6 +2023,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
         requires [avx512f, avx512dq]
         ToBase:
           f32:
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [intrinsic]
             implementation:
               tsil """
                   let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
@@ -1684,6 +2048,10 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           generic []
           oneAPIfpga [oneAPIfpgaDev]
           scalar []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsl """
               let<type>(OutVec, type<generation>(vector::window_base(ToBase)));

@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 
 from tslc.backend.translation import BackendDialect
-from tslc.catalog.model import Catalog, Extension
+from tslc.catalog.model import Catalog, Extension, ImplementationSafety
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
 from tslc.render.model import RenderText, as_render_text
 
@@ -75,6 +75,9 @@ class LoweringEnv:
     # callee name -> count of overload-dispatch generic params (one per varying argument
     # position), so a Rust call site can spell the inferred `_` turbofish args.
     primitive_arg_generics: Mapping[str, int] = field(default_factory=dict)
+    # callee name -> whether the generated public Rust wrapper is caller-unsafe. Calls to such
+    # primitives need a local unsafe block unless the whole body already renders inside one.
+    primitive_caller_unsafe: Mapping[str, bool] = field(default_factory=dict)
     # names with >1 emitted form (unmasked + value-masking mask policies), so a
     # `call<…attrs[mask=…]>` to them is mangled to `<name>_mask`/`<name>_maskz` (matching the
     # render rename). Single-form callees (`blend`) are absent → keep their bare names.
@@ -122,6 +125,11 @@ class LoweringEnv:
             self,
             "primitive_arg_generics",
             _frozen_mapping(self.primitive_arg_generics),
+        )
+        object.__setattr__(
+            self,
+            "primitive_caller_unsafe",
+            _frozen_mapping(self.primitive_caller_unsafe),
         )
         object.__setattr__(
             self, "lane_list_params", _frozen_mapping(self.lane_list_params)
@@ -203,7 +211,7 @@ class LoweringScope:
 @dataclass(slots=True)
 class LoweringEffects:
     diagnostics: list[Diagnostic] = field(default_factory=list)
-    requires_unsafe: bool = False
+    safety: ImplementationSafety = field(default_factory=ImplementationSafety)
     unsupported: bool = False  # a not-yet-supported construct -> skip this specialization
 
     def error(
@@ -223,8 +231,26 @@ class LoweringEffects:
             diagnostic_at(severity="info", code=code, message=message, source=source)
         )
 
+    def mark_internal_unsafe(self, reason: str) -> None:
+        self.safety = self.safety.merge(
+            ImplementationSafety(internal_unsafe=True, reasons=frozenset({reason}))
+        )
+
+    def mark_caller_unsafe(self, reason: str) -> None:
+        self.safety = self.safety.merge(
+            ImplementationSafety(
+                internal_unsafe=True,
+                caller_unsafe=True,
+                reasons=frozenset({reason}),
+            )
+        )
+
     def mark_unsafe(self) -> None:
-        self.requires_unsafe = True
+        self.mark_internal_unsafe("unsafe_operation")
+
+    @property
+    def requires_unsafe(self) -> bool:
+        return self.safety.internal_unsafe
 
     @property
     def has_errors(self) -> bool:

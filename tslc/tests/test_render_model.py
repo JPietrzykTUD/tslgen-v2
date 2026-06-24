@@ -20,6 +20,7 @@ from tslc.render.model import (
     TemplateApplication,
     TemplateRenderError,
     render_sequence,
+    unsafe_block,
 )
 from tslc.select.selector import Selector
 
@@ -72,6 +73,23 @@ def test_lowered_body_literal_text_is_not_rewritten_by_context() -> None:
 
     assert body.render(RenderContext(backend_id="rust", current_vector="Vec")) == (
         'return "~::<Self> Self::RegisterType";'
+    )
+
+
+def test_rust_local_unsafe_block_suppresses_inside_body_unsafe_frame() -> None:
+    body = LoweredBody.from_render_text(
+        render_sequence(("let value = ", unsafe_block("make_value()"), ";")),
+        backend_id="rust",
+    )
+
+    assert body.render() == "let value = unsafe { make_value() };"
+    assert (
+        LoweredBody.from_render_text(
+            body.content,
+            backend_id="rust",
+            requires_unsafe=True,
+        ).render()
+        == "unsafe { let value = make_value(); }"
     )
 
 

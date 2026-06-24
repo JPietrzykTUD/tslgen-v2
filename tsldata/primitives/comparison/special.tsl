@@ -29,16 +29,28 @@ prim<m:=v>[value=zero] unequal_zero(data):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
     [avx512, avx2_vl, sse_vl]:
@@ -47,26 +59,46 @@ prim<m:=v>[value=zero] unequal_zero(data):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
     avx2:
       arith:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
     sse:
       arith:
         requires [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
 
@@ -98,16 +130,28 @@ prim<s:=(v,s)> count_matches(data, value):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     [avx512, avx2_vl, sse_vl]:
@@ -116,25 +160,45 @@ prim<s:=(v,s)> count_matches(data, value):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     avx2:
       arith:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     sse:
       arith:
         requires [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"

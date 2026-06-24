@@ -23,6 +23,10 @@ prim<v:=(v,v)> max(vec_a, vec_b):
           sse [sse2]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(
@@ -57,6 +61,10 @@ prim<v:=(v,v)> min(vec_a, vec_b):
           sse [sse2]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             complete(

@@ -22,6 +22,10 @@ prim<v:=v> conflict(data):
     avx512:
       [?i32, ?i64]:
         requires [avx512cd, avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -35,6 +39,10 @@ prim<v:=v> conflict(data):
         requires:
           avx2 [avx512cd, avx512vl, avx2]
           avx2_vl [avx512cd, avx512vl, avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -48,6 +56,10 @@ prim<v:=v> conflict(data):
         requires:
           sse [avx512cd, avx512vl, sse, sse2]
           sse_vl [avx512cd, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               complete(
@@ -68,6 +80,10 @@ prim<v:=v> conflict(data):
           sve [sve]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(ConflictT, type<backend>(scalar::size));
@@ -87,6 +103,10 @@ prim<v:=v> conflict(data):
     scalar:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), 0));"
 prim<m:=(m,v)> conflict_free(mask, data):
@@ -123,6 +143,10 @@ prim<m:=(m,v)> conflict_free(mask, data):
           sse_vl [sse2]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               complete(

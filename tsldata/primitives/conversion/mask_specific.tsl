@@ -29,15 +29,27 @@ prim<im:=m> to_integral(mask):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask);"
     avx2:
       ?i8:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_epi8>(mask)));"
       ?i16:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
                var<const_infer>(packed, intrin<_mm256_packs_epi16>(mask, intrin<_mm256_setzero_si256>()));
@@ -48,27 +60,51 @@ prim<im:=m> to_integral(mask):
             """
       f32:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_ps>(mask)));"
       ?i32:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_ps>(intrin<_mm256_castsi256_ps>(mask))));"
       ?i64:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_pd>(intrin<_mm256_castsi256_pd>(mask))));"
       f64:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_pd>(mask)));"
     sse:
       ?i8:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_epi8>(mask)));"
       ?i16:
         requires [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
                var<const_infer>(packed, intrin<_mm_packs_epi16>(mask, intrin<_mm_setzero_si128>()));
@@ -76,23 +112,43 @@ prim<im:=m> to_integral(mask):
             """
       f32:
         requires [sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_ps>(mask)));"
       ?i32:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_ps>(intrin<_mm_castsi128_ps>(mask))));"
       ?i64:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_pd>(intrin<_mm_castsi128_pd>(mask))));"
       f64:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_pd>(mask)));"
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                let<type>(ImaskT, type<generation>(vector::imask));
@@ -108,6 +164,10 @@ prim<im:=m> to_integral(mask):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               if (mask) {
@@ -119,6 +179,10 @@ prim<im:=m> to_integral(mask):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                let<type>(ImaskT, type<generation>(vector::imask));
@@ -159,14 +223,26 @@ prim<v:=m> to_vector(mask):
     avx512:
       [ ?i32, ?i64 ]:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<maskz_set1, build[suffix=base::signed_of(base::in)]>(mask, -1));"
       [ ?i8, ?i16 ]:
         requires [avx512bw, avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil "complete(intrin<maskz_set1, build[suffix=base::signed_of(base::in)]>(mask, -1));"
       f32:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(bits, intrin<maskz_set1, build[suffix=si32]>(mask, -1));
@@ -174,6 +250,10 @@ prim<v:=m> to_vector(mask):
             """
       f64:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(bits, intrin<maskz_set1, build[suffix=si64]>(mask, -1));
@@ -184,6 +264,10 @@ prim<v:=m> to_vector(mask):
         requires:
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               complete(
@@ -196,26 +280,46 @@ prim<v:=m> to_vector(mask):
     avx2:
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask);"
     sse:
       arith:
         requires [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask);"
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask);"
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), cast<static>(si32, mask)));"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<init_register>(result);
@@ -245,6 +349,10 @@ prim<m:=im> to_mask(mask):
     avx512:
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask);"
     [avx2_vl, sse_vl]:
@@ -252,11 +360,19 @@ prim<m:=im> to_mask(mask):
         requires:
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete(mask);"
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
@@ -274,6 +390,10 @@ prim<m:=im> to_mask(mask):
     avx2:
       ?i8:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(permute_vec, intrin<_mm256_set_epi64x>(0x303030303030303, 0x202020202020202, 0x101010101010101, 0x0));
@@ -285,6 +405,10 @@ prim<m:=im> to_mask(mask):
             """
       [ ?i16, ?i32, ?i64 ]:
         requires [avx, avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
@@ -299,6 +423,10 @@ prim<m:=im> to_mask(mask):
             """
       f32:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(and_vec, intrin<_mm256_set_epi64x>(0x8000000040, 0x2000000010, 0x800000004, 0x200000001));
@@ -308,6 +436,10 @@ prim<m:=im> to_mask(mask):
             """
       f64:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(and_vec, intrin<_mm256_set_epi64x>(cast<static>(si64, cast<static>(ui64, 0x8)), cast<static>(si64, cast<static>(ui64, 0x4)), cast<static>(si64, cast<static>(ui64, 0x2)), cast<static>(si64, cast<static>(ui64, 0x1))));
@@ -318,6 +450,10 @@ prim<m:=im> to_mask(mask):
     sse:
       ?i8:
         requires [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
@@ -330,6 +466,10 @@ prim<m:=im> to_mask(mask):
             """
       [ ?i16, ?i32 ]:
         requires [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
@@ -344,6 +484,10 @@ prim<m:=im> to_mask(mask):
             """
       ?i64:
         requires [sse, sse2, sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
@@ -358,6 +502,10 @@ prim<m:=im> to_mask(mask):
             """
       f32:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(and_vec, intrin<_mm_set_epi32>(0x8, 0x4, 0x2, 0x1));
@@ -367,6 +515,10 @@ prim<m:=im> to_mask(mask):
             """
       f64:
         requires [sse, sse2, sse4_1]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               var<const_infer>(and_vec, intrin<_mm_set_epi64x>(cast<static>(si64, cast<static>(ui64, 0x2)), cast<static>(si64, cast<static>(ui64, 0x1))));
@@ -377,6 +529,10 @@ prim<m:=im> to_mask(mask):
     neon:
       ?i8:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
@@ -389,6 +545,10 @@ prim<m:=im> to_mask(mask):
             """
       ?i16:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
@@ -403,6 +563,10 @@ prim<m:=im> to_mask(mask):
             """
       ?i32:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
@@ -417,6 +581,10 @@ prim<m:=im> to_mask(mask):
             """
       ?i64:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
@@ -431,6 +599,10 @@ prim<m:=im> to_mask(mask):
             """
       f32:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(MaskVec, type<generation>(vector::as_base(type<backend>(scalar::si32))));
@@ -447,6 +619,10 @@ prim<m:=im> to_mask(mask):
             """
       f64:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(MaskVec, type<generation>(vector::as_base(type<backend>(scalar::si64))));
@@ -464,11 +640,19 @@ prim<m:=im> to_mask(mask):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil "complete((mask & 1) != 0);"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(MaskT, type<generation>(vector::mask));

@@ -33,6 +33,10 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
           sve [sve]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(data));
@@ -42,6 +46,10 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
     neon:
       si64:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(data));
