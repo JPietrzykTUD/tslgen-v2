@@ -118,7 +118,7 @@ prim<s:=v> hand(vec):
         requires [sse2]
         implementation:
           tsil """
-            var<infer>(temp, intrin<_mm_and_si128>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)));
+            var<const_infer>(temp, intrin<_mm_and_si128>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)));
             complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       ?i?:
@@ -361,7 +361,7 @@ prim<s:=v> hor(vec):
         requires [sse2]
         implementation:
           tsil """
-            var<infer>(temp, intrin<_mm_or_si128>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)));
+            var<const_infer>(temp, intrin<_mm_or_si128>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)));
             complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       ?i?:
@@ -593,7 +593,7 @@ prim<s:=(m,v)> hor(mask, vec):
           sve [sve]
         implementation:
           tsil """
-            var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
+            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
@@ -618,7 +618,7 @@ prim<s:=(m,v)> hor(mask, vec):
         implementation:
           tsil """
             let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
-            var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
+            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
             loop<backend>(i, 0, value<generation>(vector::length), 1) {

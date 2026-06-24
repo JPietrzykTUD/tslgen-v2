@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import shlex
 import sys
 from pathlib import Path
 
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.diagnostics import has_errors
+from tslc.output.verify import BuildVerificationReport
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -44,6 +46,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-root", default=None, help="write artifacts under this root")
     parser.add_argument("--verify", action="store_true", help="build-verify after writing")
     parser.add_argument(
+        "--test",
+        action="store_true",
+        help="build and run generated value tests (implies --verify)",
+    )
+    parser.add_argument(
         "--cpp-compiler",
         default=None,
         help="C++ compiler command for build verification, e.g. /usr/bin/c++",
@@ -63,6 +70,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.test and args.output_root is None:
+        print(
+            "[error] --test requires --output-root so generated artifacts can "
+            "be written before value-test verification",
+            file=sys.stderr,
+        )
+        return 1
+
     result = generate_project(
         [Path(path) for path in args.sources],
         machine_profiles_path=args.machine_profiles,
@@ -71,7 +86,8 @@ def main(argv: list[str] | None = None) -> int:
         type_tags=_split(args.types),
         backends=_split(args.backends),
         generation_mode=args.generation_mode,
-        value_test_warnings=args.value_test_warnings,
+        test_harness=args.test,
+        value_test_warnings=args.value_test_warnings or args.test,
     )
 
     for diagnostic in result.diagnostics:
@@ -99,26 +115,52 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(f"wrote {len(write_report.written)} files under {write_report.output_root}")
 
-        if args.verify and result.rendered is not None:
+        if (args.verify or args.test) and result.rendered is not None:
+            if args.test:
+                print("building and running generated value tests")
             verify_report = verify_project(
                 args.output_root,
                 result.rendered.verify,
                 cpp_compiler=args.cpp_compiler,
                 rust_compiler=args.rust_compiler,
+                run_value_tests=args.test,
             )
             for note in verify_report.skipped:
                 print(f"[verify-skip] {note}", file=sys.stderr)
             for diagnostic in verify_report.diagnostics:
                 print(f"[verify] {diagnostic.code}: {diagnostic.message}", file=sys.stderr)
+            if args.test:
+                _print_test_output(verify_report)
             if has_errors(verify_report.diagnostics):
                 return 1
-            print(f"build-verified {len(verify_report.commands)} commands")
+            verified = "build/test-verified" if args.test else "build-verified"
+            print(f"{verified} {len(verify_report.commands)} commands")
 
     return 0
 
 
 def _split(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _print_test_output(report: BuildVerificationReport) -> None:
+    for result in report.commands:
+        if result.command.step != "test":
+            continue
+        command = result.command
+        print(
+            f"[test-output] {command.backend_id} {command.profile_name}: "
+            f"{shlex.join(command.argv)}"
+        )
+        _print_captured_stream("stdout", result.stdout)
+        _print_captured_stream("stderr", result.stderr)
+
+
+def _print_captured_stream(label: str, text: str) -> None:
+    stripped = text.strip()
+    if stripped:
+        print(f"[{label}]")
+        print(stripped)
 
 
 if __name__ == "__main__":

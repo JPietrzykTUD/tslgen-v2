@@ -262,7 +262,7 @@ prim<v:=()>[value=zero] set_zero():
           oneAPIfpga [oneAPIfpgaDev]
         implementation:
           tsil """
-            var<init_register>(result_arr);
+            var<const_init_register>(result_arr);
             complete(result_arr);
           """
     [avx512, avx2, sse]:

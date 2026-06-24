@@ -223,11 +223,9 @@ class _RustSyntax:
             inner = "u8"
         return render_sequence(
             (
-                literal_text("("),
                 expr,
                 literal_text(f" as *{'const' if is_const else 'mut'} "),
                 inner,
-                literal_text(")"),
             )
         )
 

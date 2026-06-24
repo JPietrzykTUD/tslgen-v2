@@ -42,22 +42,23 @@ class VarLowerer:
             # Both are `(type, name, value)` 3-group forms; `_typed` keys on the variant
             # (`var_typed` / `var_const_typed`), so a const-qualified typed local works too.
             return self._typed(variant, groups, region, context, render)
-        if variant == "init_register":
+        if variant in ("init_register", "const_init_register"):
             # A zero-initialized register declaration: `var<init_register>(name)`. The type is
             # the vector's register type (C++ template uses it; the Rust template builds
             # `[BaseType::default(); LANES]` and ignores it).
+            key = f"var_{variant}"
             if (
                 len(groups) != 1
-                or context.env.backend.templates.template("var_init_register") is None
+                or context.env.backend.templates.template(key) is None
             ):
                 context.effects.skip(
                     "TSL-LOWER-UNSUPPORTED-VAR",
-                    f"unsupported var<init_register>: {region.full_text!r}",
+                    f"unsupported var<{variant}>: {region.full_text!r}",
                     source=region.source,
                 )
                 return region.full_text
             return context.env.backend.templates.render_template(
-                "var_init_register",
+                key,
                 type=context.env.backend.types.register_type_spelling(),
                 name=render_text(render(groups[0])).strip(),
             )

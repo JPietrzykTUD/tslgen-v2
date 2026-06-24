@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(PYTHONPATH=src python -c ' *)"
+      "Bash(PYTHONPATH=src python -c ' *)",
+      "Bash(timeout 590 python -m pytest -q -p no:cacheprovider tslc/tests/test_build_verify.py::test_full_corpus_builds)",
+      "Bash(timeout 590 python -m pytest -q -p no:cacheprovider tslc/tests/test_value_tests.py)",
+      "Bash(cd /workspaces/tslgen-v99; grep -n \"def function_name\\\\|def sanitize\" tslc/src/tslc/value_tests/case_helpers.py; sed -n '/def function_name/,/^def /p' tslc/src/tslc/value_tests/case_helpers.py)",
+      "Bash(git show *)",
+      "Bash(python -m pytest tests/test_catalog.py tests/test_catalog_validation.py -q)"
+    ],
+    "additionalDirectories": [
+      "/workspaces/tslgen-v99/tslc/src/tslc/value_tests"
     ]
   }
 }

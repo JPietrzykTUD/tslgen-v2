@@ -14,7 +14,7 @@ it has not been touched in recent history (the last 20+ commits are entirely
 The authoritative running handoff for the active `tslc` work is
 `docs/agent/tslc-vector-query-handoff.md`. Source-language and architecture
 decisions for `tslc` are recorded in `docs/redesign/design-decisions.md`
-(most recently ADR-084 backend loop surface cleanup). The
+(most recently ADR-091 Rust warning hygiene ownership). The
 `## Current Work State` section near the end of this file has been refreshed to
 describe `tslc`; the long milestone history that follows it is retained only as
 the `tslgen` record.
@@ -1330,12 +1330,42 @@ conditional shape, and value-test pointer-layout planning resolves those rules
 for mask representation load/store buffers while keeping generated wrapper ABI
 unchanged.
 
+The CLI now exposes `--test` as a thin value-test convenience over existing
+pipeline and verifier contracts. The flag requires `--output-root`, enables
+value-test harness dependency closure and value-test planning warnings during
+generation, and runs the existing after-write verifier with
+`run_value_tests=True`. It prints explicit feedback before value-test
+verification (`building and running generated value tests`) and reports
+captured stdout/stderr from verifier commands whose step is `test`, which
+surfaces C++ `ctest` and Rust `cargo test` output without dumping configure or
+build command chatter. It reports `build/test-verified ... commands` after
+success. It does not add a new pipeline mode, API wrapper, or verifier path;
+`--verify` keeps its compile-only behavior.
+
+The Rust warning hygiene slice is now implemented. Runtime `if` rendering uses
+backend translation templates, preserving C++ `if ({cond})` while Rust emits
+`if {cond}`. Rust cast templates now wrap only the operand (`({expr}) as Type`)
+and pointer casts avoid an extra outer parenthesis. The primitive corpus was
+audited so non-mutated `var<infer>` / `var<typed>` declarations use const forms,
+while declarations mutated by assignments, mask setters, pointer writes, or
+`mem<copy>` destinations stay mutable. Cast-before-shift source expressions
+explicitly parenthesize the cast result. Rust `s[]` parameters render as
+immutable bindings by default, source bodies that need `.data()` introduce a
+mutable local copy explicitly, and `var<const_init_register>` covers zero
+register locals returned without mutation. The warning-focused Rust value-test
+CLI run passed and a quiet all-feature `cargo test` warning census reported
+zero Rust `unnecessary parentheses around ...` warnings and zero `unused_mut`
+warnings; remaining warnings are the separate unnecessary-`unsafe` follow-up.
+`./verify.sh` passed after the cleanup with 191 non-build tests and 53
+generated-build tests across its shards.
+
 Active prompt:
-docs/agent/runs/tslc-param-types-layout-contract-review-prompt.md
+docs/agent/runs/tslc-rust-warning-hygiene-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
 boundary review prompt:
+docs/agent/runs/tslc-cli-test-flag-review-prompt.md
 docs/agent/runs/tslc-design-principles-review-prompt.md
 docs/agent/runs/tslc-design-follow-up-cleanup-review-prompt.md
 docs/agent/runs/tslc-loop-backend-unroll-review-prompt.md
@@ -1354,11 +1384,12 @@ docs/agent/runs/tslc-value-test-completeness-review-prompt.md
 docs/agent/runs/tslc-store-mask-packed-layout-review-prompt.md
 docs/agent/runs/tslc-mask-repr-primitive-rename-review-prompt.md
 docs/agent/runs/tslc-design-principles-residual-risk-review-prompt.md
+docs/agent/runs/tslc-param-types-layout-contract-review-prompt.md
 
-Next expected action: review the focused `param_types` layout-contract slice.
-Confirm that `param_types` is promoted, validated, and consumed by value-test
-planning without changing generated wrapper signatures or moving semantic layout
-logic into renderers.
+Next expected action: review the focused CLI `--test` slice. Confirm that it
+stays a command-line convenience over existing `test_harness` and
+`run_value_tests` behavior, requires a written output root, and does not create
+new pipeline or verifier machinery.
 ```
 
 Value-test completeness validation (2026-06-24):
@@ -1372,6 +1403,21 @@ passed with 1 test;
 `python -m pytest -q tslc/tests/test_value_tests.py` passed with 3 tests;
 `./verify.sh` passed all targeted validations, including 184 non-build tests
 and 53 generated-build tests across its shards.
+```
+
+CLI value-test flag validation (2026-06-24):
+
+```text
+`python -B -m compileall -q tslc/src/tslc tslc/tests/test_cli.py` passed;
+`python -m pytest -q tslc/tests/test_cli.py` passed with 2 tests;
+`PYTHONPATH=tslc/src python -m tslc.cli --help` passed and listed `--test`;
+`./verify.sh` passed all targeted validations, including 190 non-build tests
+and 53 generated-build tests across its shards.
+After the final CLI output wording adjustment, `git diff --check`,
+`python -B -m compileall -q tslc/src/tslc tslc/tests/test_cli.py`, and
+`python -m pytest -q tslc/tests/test_cli.py` passed again.
+After adding captured `ctest` / `cargo test` output display for CLI `--test`,
+the same compileall and CLI pytest checks passed again.
 ```
 
 Mask representation primitive rename validation (2026-06-24):

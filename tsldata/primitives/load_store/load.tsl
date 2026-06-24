@@ -397,7 +397,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
               let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
               complete(
                 call<primitive=to_mask[Vec]>(
-                  cast<static>(type<generation>(vector::imask), *cast<reinterpret>(MaskWord const*, ptr))
+                  cast<static>(type<generation>(vector::imask), *(cast<reinterpret>(MaskWord const*, ptr)))
                 )
               );
             }
@@ -433,7 +433,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
-              complete(*cast<reinterpret>(type<generation>(vector::imask) const*, ptr));
+              complete(*(cast<reinterpret>(type<generation>(vector::imask) const*, ptr)));
             } else<generation> {
               let<type>(MaskBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
               let<type>(MaskVec, type<generation>(vector::as_base(MaskBase)));

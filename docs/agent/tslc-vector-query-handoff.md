@@ -865,6 +865,48 @@ git diff --check
 
 Result: passed.
 
+### CLI Value-Test Flag Slice
+
+The CLI now exposes the existing value-test path through `--test`.
+
+Implemented pieces:
+
+1. `--test` requires `--output-root` so artifacts are written before build/test
+   verification.
+2. CLI generation passes `test_harness=True` and enables value-test planning
+   warnings when `--test` is present.
+3. CLI after-write verification runs when either `--verify` or `--test` is
+   present, and passes `run_value_tests=True` only for `--test`.
+4. CLI output says `building and running generated value tests` before
+   invoking the verifier, prints captured stdout/stderr for verifier commands
+   whose step is `test` (`ctest` and value-enabled `cargo test`), and reports
+   `build/test-verified ... commands` after success.
+5. No new pipeline mode, API wrapper, verifier path, or source test semantics
+   were added.
+
+Focused coverage:
+
+- `tslc/tests/test_cli.py` asserts the `--test` mapping to existing generation
+  and verifier options.
+- `tslc/tests/test_cli.py` asserts `--test` exits before generation when
+  `--output-root` is missing.
+- `tslc/tests/test_cli.py` asserts captured test-command output is printed and
+  non-test build output remains quiet.
+
+Validation for this slice:
+
+```bash
+python -B -m compileall -q tslc/src/tslc tslc/tests/test_cli.py
+```
+
+Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_cli.py
+```
+
+Result: `2 passed`.
+
 ```bash
 python -m pytest -q tslc/tests/test_build_verify.py::test_set_builds tslc/tests/test_build_verify.py::test_convert_builds tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds
 ```
@@ -1783,9 +1825,28 @@ scanner recognizes only `complete`, backend translation metadata uses the
 value-returning body has no completion directive. Focused TSIL/lowering/catalog
 tests, the full non-build suite, and `./verify.sh` passed after the rename.
 
+After the Rust warning hygiene slice, runtime `if` rendering uses backend
+translation templates (`if ({cond})` for C++ and `if {cond}` for Rust), Rust
+casts wrap only their operand (`({expr}) as Type`), and Rust pointer casts avoid
+an extra outer pair of parentheses. Non-mutated `var<infer>` / `var<typed>`
+declarations in `tsldata/primitives` now use const forms, and cast-before-shift
+source expressions explicitly parenthesize the cast result. Rust `s[]`
+parameters render as immutable bindings by default; source bodies that need
+`.data()` introduce a mutable local copy explicitly. `var<const_init_register>`
+covers zero registers returned without mutation.
+
+The warning-focused Rust CLI value-test run passed, and a quiet all-feature
+`cargo test` warning census reported zero `unnecessary parentheses around ...`
+warnings and zero `unused_mut` warnings. The remaining Rust warning family is
+the separate unnecessary `unsafe` wrapper follow-up. `./verify.sh` also passed
+after the warning cleanup, with 191 non-build tests and 53 generated-build
+tests across its shards.
+
 Known follow-ups:
 
 - Rust value-test parity is still a separate milestone.
+- Rust warning hygiene still has one non-blocking follow-up: make unnecessary
+  unsafe wrappers conditional.
 - The completeness gate is intentionally C++ AVX2-first; future profiles should
   add their own typed admission rules instead of broadening this gate by source
   primitive name.

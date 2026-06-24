@@ -34,6 +34,14 @@ python -m pytest -q
 # Write scratch/output under the workspace (./tslctmp), not /tmp: on WSL the
 # container overlay (which backs /tmp) only grows the VHDX and never shrinks.
 python -m tslc.cli --sources ../tsldata \
-  --primitives add,sub --extensions scalar,avx2 \
+  --machine-profiles ../supplementary/buildsystem/machine_profiles.json \
+  --primitives add,sub --profiles scalar,avx2 \
   --output-root ./tslctmp/generated --verify
+
+# Build and run generated value tests.
+# The CLI prints captured ctest/cargo test output for the test steps.
+python -m tslc.cli --sources ../tsldata \
+  --machine-profiles ../supplementary/buildsystem/machine_profiles.json \
+  --primitives add,sub --profiles avx2 --backends cpp \
+  --output-root ./tslctmp/value-tests --test
 ```

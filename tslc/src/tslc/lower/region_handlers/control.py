@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 
 from tslc.ir.segments import Region, Segment
@@ -12,6 +13,7 @@ from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue
 from tslc.lower.region_handlers.common import _segment_text, _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.render.model import RenderField, literal_text, render_sequence, render_text
+
 
 def _split_top_level_op(text: str, op: str) -> list[str]:
     """Split ``text`` on the two-char operator ``op`` at paren/bracket/string depth
@@ -63,6 +65,26 @@ def _strip_outer_parens(text: str) -> str:
         text = text[1:-1].strip()
     return text
 
+
+@dataclass(frozen=True, slots=True)
+class _RuntimeCondition:
+    """Render a runtime condition in statement position.
+
+    Expression atoms stay precedence-safe, but a backend-owned ``if`` wrapper
+    does not need the atom's outer guard parentheses around the whole condition.
+    """
+
+    content: RenderField
+
+    def render(self, context=None) -> str:
+        text = (
+            self.content
+            if isinstance(self.content, str)
+            else self.content.render(context)
+        )
+        return _strip_outer_parens(text)
+
+
 class IfLowerer:
     """``if(cond) { ... } [else ...]`` in two modes, by selector:
 
@@ -91,7 +113,7 @@ class IfLowerer:
     ) -> RenderField:
         selector = region.selector_text.strip()
         if selector not in self._SPLICE_SELECTORS:
-            return self._runtime(region, render)
+            return self._runtime(region, context, render)
 
         condition = _segment_text(region.body)
         taken = self._evaluate_condition(condition, context)
@@ -134,15 +156,25 @@ class IfLowerer:
         )
         return region.full_text
 
-    def _runtime(self, region: Region, render: RenderBody) -> RenderField:
+    def _runtime(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
         """A native runtime ``if``: emit the condition + branches verbatim for the target."""
 
         then = render(region.block) if region.block is not None else ""
+        header = render_sequence(
+            (
+                context.env.backend.templates.render_template(
+                    "flow_if_runtime",
+                    "if ({cond})",
+                    cond=_RuntimeCondition(render(region.body)),
+                ),
+                literal_text(" {\n        "),
+            )
+        )
         out: RenderField = render_sequence(
             (
-                literal_text("if ("),
-                render(region.body),
-                literal_text(") {\n        "),
+                header,
                 then,
                 literal_text("\n      }"),
             )

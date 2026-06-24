@@ -96,7 +96,7 @@ def test_cast_lowers_integer_reductions(data_root: Path, machine_profiles_path: 
     # hadd's avx512 integer reduction casts the result to the base type:
     # cast<static>(type<generation>(base::in), intrin<reduce_add, build[...]>(vec)).
     assert "static_cast<int32_t>(_mm512_reduce_add_epi32(vec))" in sky_cpp
-    assert "(core::arch::x86_64::_mm512_reduce_add_epi32(vec) as i32)" in sky_rust
+    assert "(core::arch::x86_64::_mm512_reduce_add_epi32(vec)) as i32" in sky_rust
 
 
 def test_coverage_counts_specializations(data_root: Path, machine_profiles_path: Path) -> None:

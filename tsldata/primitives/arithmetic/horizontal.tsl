@@ -103,7 +103,7 @@ prim<s:=v> hadd(vec):
         requires [sse2]
         implementation:
           tsil """
-            var<infer>(temp, intrin<_mm_add_epi64>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)));
+            var<const_infer>(temp, intrin<_mm_add_epi64>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)));
             complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       f32:
@@ -119,7 +119,7 @@ prim<s:=v> hadd(vec):
         requires [sse2]
         implementation:
           tsil """
-            var<infer>(temp, intrin<_mm_add_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
+            var<const_infer>(temp, intrin<_mm_add_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
             complete(intrin<_mm_cvtsd_f64>(temp));
           """
       arith:
@@ -246,7 +246,7 @@ prim<s:=v> hmax(vec):
         requires [sse2]
         implementation:
           tsil """
-            var<infer>(temp, intrin<_mm_max_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
+            var<const_infer>(temp, intrin<_mm_max_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
             complete(intrin<_mm_cvtsd_f64>(temp));
           """
     [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
@@ -364,7 +364,7 @@ prim<s:=v> hmin(vec):
         requires [sse2]
         implementation:
           tsil """
-            var<infer>(temp, intrin<_mm_min_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
+            var<const_infer>(temp, intrin<_mm_min_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
             complete(intrin<_mm_cvtsd_f64>(temp));
           """
     [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
@@ -442,7 +442,7 @@ prim<s:=(m,v)> hadd(mask, vec):
           sve [sve]
         implementation:
           tsil """
-            var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
+            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
@@ -528,7 +528,7 @@ prim<s:=(m,v)> hmax(mask, vec):
           sve [sve]
         implementation:
           tsil """
-            var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
+            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
             type<backend>(scalar::size) found = 0;
@@ -620,7 +620,7 @@ prim<s:=(m,v)> hmin(mask, vec):
           sve [sve]
         implementation:
           tsil """
-            var<infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
+            var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
             type<backend>(scalar::size) found = 0;

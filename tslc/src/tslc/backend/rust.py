@@ -160,7 +160,7 @@ class RustBackend:
         # Free SIMD type params (gather's `IndicesType`) — a `vidx` param projects through one.
         decls = _type_param_decls(shape) + decls
         vidx_type = f"{shape.type_params[0][0]}::RegisterType" if shape.type_params else None
-        params = _params(shape, "Self", binding_mut=False, vt_type=vt_type, vidx_type=vidx_type)
+        params = _params(shape, "Self", vt_type=vt_type, vidx_type=vidx_type)
         generics = f"<{', '.join(decls)}>" if decls else ""
         return (
             f"pub trait {_trait_name(primitive_name)}{generics}: SimdVector{_index_where(shape)} {{\n"
@@ -441,14 +441,12 @@ def _params(
     shape: LoweredSpecialization,
     owner: str,
     *,
-    binding_mut: bool = True,
     vt_type: str | None = None,
     vidx_type: str | None = None,
 ) -> str:
-    # An array (`s[]`) parameter is bound `mut` so the body can take a pointer into it
-    # (`data.data()` borrows `&mut`); `mut` on an owned binding is otherwise harmless.
-    # A trait *declaration* has no body, where a binding pattern like `mut` is rejected,
-    # so it passes ``binding_mut=False``. A `vt` (target-axis vector) param uses `vt_type` —
+    # A body that needs a mutable `s[]` borrow should introduce a mutable local explicitly
+    # in source (`var<infer>(local, data)`), keeping read-only array parameters const in
+    # generated Rust. A `vt` (target-axis vector) param uses `vt_type` —
     # the per-context target register spelling (trait `ToVec::RegisterType` / impl concrete /
     # wrapper `T::RegisterType`); a `vidx` (index vector) param uses `vidx_type`
     # (`IndicesType::RegisterType` — the generic name is the same in every context).
@@ -462,7 +460,7 @@ def _params(
             typ = vidx_type
         else:
             typ = _kind_type(kind, owner)
-        parts.append(f"{'mut ' if binding_mut and kind == 's[]' else ''}{name}: {typ}")
+        parts.append(f"{name}: {typ}")
     return ", ".join(parts)
 
 

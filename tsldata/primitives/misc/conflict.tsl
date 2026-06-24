@@ -77,7 +77,7 @@ prim<v:=v> conflict(data):
                 var<infer>(conflict, cast<static>(ConflictT, 0));
                 loop<backend>(cur, 0, idx, 1) {
                   if ((cur < (value<generation>(type::size_bytes(type<generation>(base::in))) * 8)) && (values[idx] == values[cur])) {
-                    conflict |= (cast<static>(ConflictT, 1) << cur);
+                    conflict |= (cast<static>(ConflictT, 1)) << cur;
                   }
                 }
                 result[idx] = cast<static>(type<generation>(base::in), conflict);

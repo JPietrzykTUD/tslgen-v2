@@ -63,6 +63,7 @@ translation cpp:
   var_array_uninit "{type} {name}{};"
   var_uninit "{type} {name};"
   var_init_register "{type} {name}{};"
+  var_const_init_register "{type} {name}{};"
   let_type "using {name} = {type};"
   op_add "({a0} + {a1})"
   op_sub "({a0} - {a1})"

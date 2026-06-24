@@ -228,6 +228,15 @@ def test_scalar_load_store_rust_is_unsafe(catalog: Catalog, machine_profiles) ->
     assert store is not None and store.body_text.startswith("unsafe {")
 
 
+def test_runtime_if_uses_backend_condition_syntax(catalog: Catalog, machine_profiles) -> None:
+    cpp = _spec(catalog, machine_profiles, "scalar", "blend", "scalar", "si32")
+    rust = _spec(catalog, machine_profiles, "scalar", "blend", "scalar", "si32", backend="rust")
+
+    assert cpp is not None and "if (mask) {" in cpp.body_text
+    assert rust is not None and "if mask {" in rust.body_text
+    assert "if (mask)" not in rust.body_text
+
+
 # --- boolean-wildcard attribute axis: SIMD load/store (both aligned variants) --
 
 

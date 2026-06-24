@@ -4543,3 +4543,90 @@ Consequences:
   drive public API or overload rendering.
 - Unsupported type expressions remain outside this first resolver and produce
   unplanned value-test coverage rather than renderer-side guessing.
+
+## ADR-090: CLI `--test` Reuses The Value-Test Pipeline
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+The API already exposes the two facts needed to run generated value tests:
+generation can include value-test harness dependencies through `test_harness`,
+and after-write verification can run backend value-test targets through
+`run_value_tests`. The CLI only exposed `--verify`, so users had to know the
+Python API or pytest entry points to run the generated value-test gate.
+
+Decision:
+
+Add a CLI `--test` flag as a thin convenience over those existing contracts.
+The flag:
+
+- requires `--output-root`, because value tests are built and run from written
+  generated artifacts;
+- enables `test_harness` during generation;
+- enables value-test planning warnings;
+- runs the existing verifier even when `--verify` is not also present;
+- passes `run_value_tests=True` to the verifier.
+- prints an explicit progress line before invoking value-test verification, so
+  users can see that tests are being built and run rather than only compiled.
+- prints captured stdout/stderr for verifier commands whose step is `test`,
+  which surfaces C++ `ctest` and Rust `cargo test` output without dumping every
+  configure/build command.
+
+Consequences:
+
+- No new pipeline stage, generation mode, verifier path, or API wrapper is
+  introduced.
+- `--verify` keeps its existing compile-only behavior; `--test` means
+  compile plus generated value-test execution.
+- The verifier still owns subprocess execution and capture. The CLI formats
+  already-recorded `BuildCommandResult` test output for user feedback.
+- CLI tests assert only the option-to-existing-contract mapping, while the
+  generated value-test build/run behavior remains covered by the existing
+  value-test integration tests.
+
+## ADR-091: Rust Warning Hygiene Follows Source And Backend Ownership
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+Running generated Rust value tests surfaced a large number of compiler warnings
+from two different ownership layers:
+
+- backend syntax warnings, such as Rust `if (...)` conditions and casts wrapped
+  as whole parenthesized expressions;
+- source-body constness warnings, where non-mutated TSIL variables were emitted
+  as mutable Rust bindings.
+
+Decision:
+
+Keep the cleanup split by ownership.
+
+Runtime `if` rendering now uses backend translation templates. C++ keeps
+`if ({cond})`, while Rust uses `if {cond}`. Rust cast templates wrap only the
+cast operand, `({expr}) as {type}`, preserving precedence without adding a
+parenthesized return/assignment/function-argument expression. Rust pointer
+casts likewise avoid wrapping the whole cast in an extra pair of parentheses.
+
+Source bodies under `tsldata/primitives` were audited for non-mutated
+`var<infer>` and `var<typed>` declarations. Read-only temporaries now use
+`var<const_infer>` or `var<const_typed>`. Declarations that are mutated through
+assignment, indexed writes, mask setters, pointer writes, or `mem<copy>`
+destinations stay mutable. Source bodies also parenthesize the result of casts
+that are intentionally shifted, so Rust sees `(cast_result) << i` rather than a
+generic-argument ambiguity.
+
+`s[]` parameters are rendered as immutable Rust bindings by default. Source
+bodies that need a mutable array pointer introduce a mutable local copy
+explicitly before calling `.data()`. A narrow `var<const_init_register>` form
+covers zero-initialized register locals that are returned without mutation.
+
+Consequences:
+
+- Renderers format target-language syntax but do not guess source mutability.
+- Source constness remains explicit and benefits both Rust and C++ output.
+- The warning-focused Rust value-test run no longer reports any
+  `unnecessary parentheses around ...` or `unused_mut` warnings.
+- Remaining Rust warnings are a separate follow-up: unnecessary `unsafe`
+  wrappers around calls that are already safe in the selected context.

@@ -100,7 +100,7 @@ prim<im:=m> to_integral(mask):
               var<const_typed>(type<backend>(scalar::size), mask_bits, value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8);
                loop<backend>(i, 0, value<generation>(vector::length), 1)  {
                 if (i < mask_bits && mask<test>(mask, i)) {
-                  result |= cast<static>(ImaskT, 1) << i;
+                  result |= (cast<static>(ImaskT, 1)) << i;
                 }
               }
                complete(result) ;
@@ -126,7 +126,7 @@ prim<im:=m> to_integral(mask):
               var<const_typed>(type<backend>(scalar::size), mask_bits, value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8);
                loop<backend>(i, 0, value<generation>(vector::length), 1)  {
                 if (i < mask_bits && mask<test>(mask, i)) {
-                  result |= cast<static>(ImaskT, 1) << i;
+                  result |= (cast<static>(ImaskT, 1)) << i;
                 }
               }
                complete(result) ;
@@ -219,15 +219,7 @@ prim<v:=m> to_vector(mask):
         implementation:
           tsil """
               var<init_register>(result);
-              var<typed>(type<generation>(base::in), true_val, cast<static>(type<generation>(base::in), cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF))));
-              if<compile>( value<generation>(type::is_same(type<generation>(base::in), f32)) ) {
-                 var<const_infer>(bits32, cast<static>(type<backend>(scalar::ui32), 0xFFFFFFFF));
-                true_val = cast<bitcast>(type<generation>(base::in), bits32);
-              }
-              if<compile>( value<generation>(type::is_same(type<generation>(base::in), f64)) ) {
-                 var<const_infer>(bits64, cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF));
-                true_val = cast<bitcast>(type<generation>(base::in), bits64);
-              }
+              var<const_infer>(true_val, value<generation>(mask::lane::all_true));
                loop<backend>(i, 0, value<generation>(vector::length), 1)  {
                 if (mask<test>(mask, i)) {
                   result[i] = true_val;
@@ -297,7 +289,7 @@ prim<m:=im> to_mask(mask):
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
               loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
+                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.data()));
@@ -342,7 +334,7 @@ prim<m:=im> to_mask(mask):
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
               loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
+                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.data()));
@@ -356,7 +348,7 @@ prim<m:=im> to_mask(mask):
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
               loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
+                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.data()));
@@ -401,7 +393,7 @@ prim<m:=im> to_mask(mask):
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
               loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
+                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.data()));
@@ -415,7 +407,7 @@ prim<m:=im> to_mask(mask):
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
               loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
+                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.data()));
@@ -429,7 +421,7 @@ prim<m:=im> to_mask(mask):
           tsil """
               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
               loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
+                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
                 and_values[i] = cast<static>(type<generation>(base::in), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.data()));
@@ -444,7 +436,7 @@ prim<m:=im> to_mask(mask):
               let<type>(MaskVec, type<generation>(vector::as_base(type<backend>(scalar::si32))));
               var<typed>(array_type<type<backend>(scalar::si32), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
               loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
+                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
                 and_values[i] = cast<static>(type<backend>(scalar::si32), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[MaskVec], attrs[aligned=false]>(and_values.data()));
@@ -460,7 +452,7 @@ prim<m:=im> to_mask(mask):
               let<type>(MaskVec, type<generation>(vector::as_base(type<backend>(scalar::si64))));
               var<typed>(array_type<type<backend>(scalar::si64), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
               loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, cast<static>(type<backend>(scalar::ui64), 1) << i);
+                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
                 and_values[i] = cast<static>(type<backend>(scalar::si64), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[MaskVec], attrs[aligned=false]>(and_values.data()));
