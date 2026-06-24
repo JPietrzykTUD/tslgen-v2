@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from tslc.catalog.model import Catalog, TestCase
-from tslc.catalog.scalar_types import unsigned_of
+from tslc.catalog.model import Catalog, Primitive, TestCase
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests.case_helpers import (
     args_match as _args_match,
@@ -27,6 +26,7 @@ from tslc.value_tests.case_helpers import (
     vector_inputs as _vector_inputs,
 )
 from tslc.value_tests.model import HarnessPrimitiveNames, ValueTestCasePlan
+from tslc.value_tests.param_layouts import resolve_param_layout
 
 
 def generic_golden_case(
@@ -416,6 +416,7 @@ def mask_pointer_load_case(
     index: int,
     case: TestCase,
     specs: tuple[LoweredSpecialization, ...],
+    primitive: Primitive,
 ) -> ValueTestCasePlan | None:
     base_spelling = _ordinary_base_spelling(case, specs)
     if base_spelling is None or len(case.expected) != 1:
@@ -424,6 +425,14 @@ def mask_pointer_load_case(
     if len(vector_inputs) != 1:
         return None
     lanes = _valid_generic_lanes(case.type_tag, case.lanes or len(vector_inputs[0]))
+    target_base_spelling = None
+    expected_type_tag = None
+    if case.attrs.get("packed") == "false":
+        layout = resolve_param_layout(primitive, "ptr", case, specs)
+        if layout is None:
+            return None
+        target_base_spelling = layout.base_spelling
+        expected_type_tag = layout.type_tag
     return _plan(
         "mask_pointer_load",
         name,
@@ -432,6 +441,8 @@ def mask_pointer_load_case(
         specs,
         base_spelling,
         vector_inputs=vector_inputs,
+        target_base_spelling=target_base_spelling,
+        expected_type_tag=expected_type_tag,
         axis_args=_axis_args(specs[0], case),
         buffer_offset=case.offset or 0,
         buffer_length=len(vector_inputs[0]),
@@ -444,6 +455,7 @@ def mask_store_case(
     index: int,
     case: TestCase,
     specs: tuple[LoweredSpecialization, ...],
+    primitive: Primitive,
 ) -> ValueTestCasePlan | None:
     base_spelling = _ordinary_base_spelling(case, specs)
     if base_spelling is None:
@@ -456,10 +468,11 @@ def mask_store_case(
     expected_type_tag = None
     target_base_spelling = None
     if not packed:
-        expected_type_tag = unsigned_of(case.type_tag)
-        target_base_spelling = _base_spelling(specs, expected_type_tag)
-        if target_base_spelling is None:
+        layout = resolve_param_layout(primitive, "ptr", case, specs)
+        if layout is None:
             return None
+        expected_type_tag = layout.type_tag
+        target_base_spelling = layout.base_spelling
     return _plan(
         "mask_store",
         name,

@@ -93,6 +93,20 @@ def test_extension_test_config_is_promoted(catalog: Catalog) -> None:
     assert "scatter" in catalog.extensions["avx2"].test_filter_exclude_templates
 
 
+def test_param_type_rules_are_promoted(catalog: Catalog) -> None:
+    store = _first(catalog, "store_mask_repr", masked=False)
+    packed_false = next(
+        rule
+        for rule in store.param_type_rules
+        if rule.parameter_name == "ptr"
+        and rule.attribute_name == "packed"
+        and rule.attribute_value == "false"
+    )
+
+    assert "base::unsigned_of" in packed_false.type_expr
+    assert packed_false.source is not None
+
+
 # --- structural validation ---------------------------------------------------
 
 
@@ -112,6 +126,43 @@ def _diagnostics(test_block: str) -> set[str]:
     diagnostics: list[Diagnostic] = []
     validate_parsed_documents(parsed, diagnostics)
     return {d.code for d in diagnostics}
+
+
+def _diagnostics_for_source(source: str) -> set[str]:
+    document = SourceDocument(Path("tests_fixture.tsl"), source, "d", "tsl")
+    parsed = TslParser().parse((document,))
+    assert parsed.diagnostics == (), parsed.diagnostics
+    diagnostics: list[Diagnostic] = []
+    validate_parsed_documents(parsed, diagnostics)
+    return {d.code for d in diagnostics}
+
+
+def test_param_type_rules_are_validated() -> None:
+    codes = _diagnostics_for_source(
+        "prim<v:=ptr>[packed=*] id(ptr):\n"
+        "  param_types:\n"
+        "    missing:\n"
+        '      "if packed=true" "type<generation>(base::in) *"\n'
+        "    ptr:\n"
+        '      "if unknown=true" "type<generation>(base::in) *"\n'
+        '      "when packed=true" "type<generation>(base::in) *"\n'
+        '      "if packed=maybe" "type<generation>(base::in) *"\n'
+        '      "if packed=false" "type<generation>(base::in) *"\n'
+        '      "if packed=false" "type<generation>(base::in) const*"\n'
+        '      "if packed=true" ""\n'
+        "  impls:\n"
+        "    scalar:\n"
+        "      anyint:\n"
+        "        implementation:\n"
+        '          tsil "complete(*ptr);"\n'
+    )
+
+    assert "TSL-CATALOG-PARAM-TYPES-UNKNOWN-PARAM" in codes
+    assert "TSL-CATALOG-PARAM-TYPES-UNKNOWN-ATTRIBUTE" in codes
+    assert "TSL-CATALOG-PARAM-TYPES-BAD-CONDITION" in codes
+    assert "TSL-CATALOG-INVALID-ENUM" in codes
+    assert "TSL-CATALOG-PARAM-TYPES-DUPLICATE-RULE" in codes
+    assert "TSL-CATALOG-PARAM-TYPES-MISSING-TYPE" in codes
 
 
 def test_unknown_test_field_is_diagnosed() -> None:

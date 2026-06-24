@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Sequence
+import re
 
 from tslc.catalog.validation.requires_validation import validate_requires
 from tslc.catalog.validation.source_spans import (
@@ -60,6 +61,7 @@ _KNOWN_PRIMITIVE_ATTRIBUTES = {
     "packed": frozenset({"true", "false", "*"}),
     "value": frozenset({"zero", "undef", "all"}),
 }
+_PARAM_TYPE_CONDITION_RE = re.compile(r"^if\s+([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_]+)$")
 _KNOWN_EXTENSION_FIELDS = frozenset(
     {
         "autodetect",
@@ -278,6 +280,7 @@ def _validate_primitive(
     _validate_attributes(declaration.attributes, diagnostics)
     _validate_generic_params(declaration, diagnostics)
     _validate_immediate_params(declaration, diagnostics)
+    _validate_param_types(declaration, diagnostics)
     _validate_return_type(declaration, diagnostics)
     _validate_tests(declaration, diagnostics)
     validate_requires(declaration, diagnostics)
@@ -536,7 +539,112 @@ def _validate_immediate_params(
                         child_field,
                         f"immediate dispatch strategy {strategy!r}",
                         sorted(_KNOWN_IMMEDIATE_DISPATCH),
+                )
+
+
+def _validate_param_types(
+    declaration: ParsedPrimitiveDeclaration,
+    diagnostics: list[Diagnostic],
+) -> None:
+    attributes = {attribute.key.text: attribute for attribute in declaration.attributes}
+    seen: set[tuple[str, str, str]] = set()
+    for field in declaration.fields_by_name("param_types"):
+        _diagnose_duplicate_fields(children(field.field), diagnostics, label="param_types parameter")
+        for parameter in children(field.field):
+            parameter_name = parameter.key.text
+            if parameter_name not in declaration.parameters:
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-PARAM-TYPES-UNKNOWN-PARAM",
+                        message=(
+                            f"primitive {declaration.name!r} param_types references "
+                            f"unknown parameter {parameter_name!r}"
+                        ),
+                        source=source_span(parameter.source),
                     )
+                )
+            for entry in children(parameter):
+                parsed = _parse_param_type_condition(entry.key.text)
+                if parsed is None:
+                    diagnostics.append(
+                        diagnostic_at(
+                            severity="error",
+                            code="TSL-CATALOG-PARAM-TYPES-BAD-CONDITION",
+                            message=(
+                                f"primitive {declaration.name!r} param_types rule "
+                                f"{_unquote_key(entry.key.text)!r} must be shaped "
+                                "as 'if attribute=value'"
+                            ),
+                            source=source_span(entry.source),
+                        )
+                    )
+                    continue
+                attribute_name, attribute_value = parsed
+                attribute = attributes.get(attribute_name)
+                if attribute is None:
+                    diagnostics.append(
+                        diagnostic_at(
+                            severity="error",
+                            code="TSL-CATALOG-PARAM-TYPES-UNKNOWN-ATTRIBUTE",
+                            message=(
+                                f"primitive {declaration.name!r} param_types rule references "
+                                f"unknown attribute {attribute_name!r}"
+                            ),
+                            source=source_span(entry.source),
+                        )
+                    )
+                    continue
+                allowed = _KNOWN_PRIMITIVE_ATTRIBUTES.get(attribute_name, frozenset())
+                if attribute_value not in allowed or attribute_value == "*":
+                    _invalid_enum(
+                        diagnostics,
+                        entry,
+                        (
+                            f"param_types condition value {attribute_value!r} for "
+                            f"attribute {attribute_name!r}"
+                        ),
+                        sorted(value for value in allowed if value != "*"),
+                    )
+                identity = (parameter_name, attribute_name, attribute_value)
+                if identity in seen:
+                    diagnostics.append(
+                        diagnostic_at(
+                            severity="error",
+                            code="TSL-CATALOG-PARAM-TYPES-DUPLICATE-RULE",
+                            message=(
+                                f"duplicate param_types rule for parameter {parameter_name!r} "
+                                f"when {attribute_name}={attribute_value}"
+                            ),
+                            source=source_span(entry.source),
+                        )
+                    )
+                seen.add(identity)
+                if not field_text(entry):
+                    diagnostics.append(
+                        diagnostic_at(
+                            severity="error",
+                            code="TSL-CATALOG-PARAM-TYPES-MISSING-TYPE",
+                            message=(
+                                f"primitive {declaration.name!r} param_types rule for "
+                                f"parameter {parameter_name!r} has no type expression"
+                            ),
+                            source=source_span(entry.source),
+                        )
+                    )
+
+
+def _parse_param_type_condition(text: str) -> tuple[str, str] | None:
+    match = _PARAM_TYPE_CONDITION_RE.fullmatch(_unquote_key(text))
+    if match is None:
+        return None
+    return match.group(1), match.group(2)
+
+
+def _unquote_key(text: str) -> str:
+    if len(text) >= 2 and text[0] == text[-1] == '"':
+        return text[1:-1]
+    return text
 
 
 def _validate_return_type(

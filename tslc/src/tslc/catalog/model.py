@@ -89,6 +89,12 @@ class Primitive:
     # (aligned/packed) is expanded by the builder into concrete-value copies, so here the
     # value is always concrete. `attribute_keys` is kept for the masked-variant filter.
     attributes: Mapping[str, str] = field(default_factory=dict)
+    # Conditional pointer parameter layout rules from a `param_types:` block.
+    # These are source-owned facts about what an abstract `ptr` parameter points
+    # to under a concrete attribute value. They do not change the public wrapper
+    # ABI by themselves; consumers such as value-test planning resolve them when
+    # they need storage layout.
+    param_type_rules: tuple["ParamTypeRule", ...] = ()
     # Per-parameter metadata for `sImm` compile-time immediates, from the `params:` block
     # (keyed by the signature parameter name). Empty when absent — the lowerer then defaults
     # the immediate to ``ui32`` with no forwarding strategy (a positional const arg). See
@@ -158,6 +164,17 @@ class GenericParam:
     name: str
     kind: str  # currently always "bool"
     default: str  # e.g. "true"
+    source: SourceSpan | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ParamTypeRule:
+    """One conditional `param_types:` rule for a primitive parameter."""
+
+    parameter_name: str
+    attribute_name: str
+    attribute_value: str
+    type_expr: str
     source: SourceSpan | None = None
 
 

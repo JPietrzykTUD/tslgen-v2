@@ -543,16 +543,19 @@ def _scalar_pointer_load(case: ValueTestCasePlan) -> str:
 def _mask_pointer_load(case: ValueTestCasePlan) -> str:
     expected_int = int(case.expected[0])
     bits = ", ".join("1" if (expected_int >> i) & 1 else "0" for i in range(case.lanes))
-    literals = cpp_literal_list(case.vector_inputs[0], case.type_tag)
+    input_type = case.expected_type_tag or case.type_tag
+    storage_type = case.target_base_spelling or case.base_spelling
+    literals = cpp_literal_list(case.vector_inputs[0], input_type)
     axis = _axis_suffix(case)
     buflen = case.buffer_length or len(case.vector_inputs[0])
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
-        f"  static const {case.base_spelling} in0[{buflen}] = {{{literals}}};",
-        f"  {case.base_spelling} buf[{buflen}] = {{0}};",
+        f"  static const {storage_type} in0[{buflen}] = {{{literals}}};",
+        f"  {storage_type} buf[{buflen}] = {{0}};",
         f"  for (std::size_t i = 0; i < {buflen}; ++i) buf[i] = in0[i];",
-        f"  typename Vec::mask_type result = tsl::{case.call_name}<Vec{axis}>(buf + {case.buffer_offset});",
+        f"  typename Vec::mask_type result = tsl::{case.call_name}<Vec{axis}>("
+        f"reinterpret_cast<typename Vec::base_type *>(buf + {case.buffer_offset}));",
         f"  static const int expected[{case.lanes}] = {{{bits}}};",
         f'  return tsl::test::check_mask("{case.case_name}", result, expected, {case.lanes});',
         "}",

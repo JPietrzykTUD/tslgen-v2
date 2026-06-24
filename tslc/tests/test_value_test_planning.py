@@ -3,7 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import Catalog, Primitive, TestArg as TslTestArg, TestCase as TslTestCase
+from tslc.catalog.model import (
+    Catalog,
+    ParamTypeRule,
+    Primitive,
+    TestArg as TslTestArg,
+    TestCase as TslTestCase,
+)
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.render.emitted_names import finalize_emitted_names
 from tslc.render.model import LoweredBody
@@ -121,6 +127,53 @@ def test_lane_list_value_tests_are_planned_and_rendered() -> None:
     assert "tsl::set<Vec>(values)" in cpp_source
     assert "let mut values: <Vec as SimdVector>::Array = Default::default();" in rust_source
     assert "set::<Vec>(values)" in rust_source
+
+
+def test_pointer_layout_planning_consumes_param_types() -> None:
+    primitive = Primitive(
+        "store_mask_repr",
+        "void:=(ptr,m)",
+        ("ptr", "mask"),
+        (),
+        (),
+        attributes={"aligned": "true", "packed": "false"},
+        param_type_rules=(
+            ParamTypeRule(
+                parameter_name="ptr",
+                attribute_name="packed",
+                attribute_value="false",
+                type_expr="type<generation>(base::in) *",
+            ),
+        ),
+        tests=(
+            TslTestCase(
+                name="store_mask_repr_si32_packed_false_layout",
+                type_tag="si32",
+                tags=("layout",),
+                lanes=4,
+                inputs=(TslTestArg("mask", mask_bits="5"),),
+                expected=("1", "0", "1", "0"),
+                attrs={"aligned": "true", "packed": "false"},
+            ),
+        ),
+    )
+    catalog = _catalog(primitive, *_harness_primitives())
+    spec = _spec(
+        "store_mask_repr",
+        "store_mask_repr",
+        param_kinds=("ptr", "m"),
+        result_kind="void",
+        axis=(("aligned", "true"), ("packed", "false")),
+    )
+    profile = _profile(cpp={"store_mask_repr": (spec,)})
+
+    plan = ValueTestPlanner(catalog, _VALUE_TEST_SUPPORTS).plan(_inputs(profile))
+
+    cases = plan.profiles_for("cpp")[0].cases
+    assert len(cases) == 1
+    assert cases[0].kind == "mask_store"
+    assert cases[0].expected_type_tag == "si32"
+    assert cases[0].target_base_spelling == "std::int32_t"
 
 
 def test_planner_warns_for_each_unsupported_authored_case() -> None:
@@ -327,6 +380,7 @@ def _spec(
     result_kind: str = "v",
     immediate: tuple[str, str] | None = None,
     mask_policy: str | None = None,
+    axis: tuple[tuple[str, str], ...] = (),
 ) -> LoweredSpecialization:
     return LoweredSpecialization(
         backend_id="cpp",
@@ -341,6 +395,7 @@ def _spec(
         body=LoweredBody.from_text("", backend_id="cpp"),
         uses_sized_vector=True,
         lane_parameter="4",
+        axis=axis,
         immediate=immediate,
         mask_policy=mask_policy,
     )

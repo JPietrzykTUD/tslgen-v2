@@ -7,6 +7,7 @@ and no dependency on lowering.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import re
 
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
@@ -17,6 +18,7 @@ from tslc.catalog.model import (
     ImmediateParam,
     Implementation,
     MaskPolicy,
+    ParamTypeRule,
     Primitive,
     RequirementClause,
     TestArg,
@@ -99,6 +101,7 @@ class CatalogBuilder:
 
 
 _BOOLEAN_WILDCARD_VALUES = ("true", "false")
+_PARAM_TYPE_CONDITION_RE = re.compile(r"^if\s+([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_]+)$")
 
 
 def _source_span(source: ParsedTslSourceSpan | None) -> SourceSpan | None:
@@ -136,6 +139,7 @@ def _build_primitives(
 
     # Per-parameter `sImm` immediate metadata from the `params:` block (type, value_range,
     # per-backend dispatch strategy), keyed by the signature parameter name.
+    param_type_rules = _param_type_rules(declaration)
     immediate_params = _immediate_params(declaration, diagnostics)
     generic_params = _generic_params(declaration)
     tests = _test_cases(declaration, diagnostics)
@@ -148,6 +152,7 @@ def _build_primitives(
             attribute_keys=attribute_keys,
             implementations=implementations,
             attributes=attributes,
+            param_type_rules=param_type_rules,
             immediate_params=immediate_params,
             generic_params=generic_params,
             result_target=result_target,
@@ -178,6 +183,42 @@ def _expand_wildcards(attributes: dict[str, str]) -> list[dict[str, str]]:
 def _attribute_value(attribute) -> str:  # noqa: ANN001 - ParsedTslAttribute
     value = attribute.value
     return value.text if isinstance(value, ParsedTslScalarValue) else ""
+
+
+def _param_type_rules(declaration: ParsedPrimitiveDeclaration) -> tuple[ParamTypeRule, ...]:
+    rules: list[ParamTypeRule] = []
+    for field in declaration.fields_by_name("param_types"):
+        for parameter in _children(field.field):
+            for entry in _children(parameter):
+                condition = _parse_param_type_condition(entry.key.text)
+                type_expr = _field_text(entry)
+                if condition is None or not type_expr:
+                    continue
+                attribute_name, attribute_value = condition
+                rules.append(
+                    ParamTypeRule(
+                        parameter_name=parameter.key.text,
+                        attribute_name=attribute_name,
+                        attribute_value=attribute_value,
+                        type_expr=type_expr,
+                        source=_source_span(entry.source),
+                    )
+                )
+    return tuple(rules)
+
+
+def _parse_param_type_condition(text: str) -> tuple[str, str] | None:
+    condition = _unquote_key(text)
+    match = _PARAM_TYPE_CONDITION_RE.fullmatch(condition)
+    if match is None:
+        return None
+    return match.group(1), match.group(2)
+
+
+def _unquote_key(text: str) -> str:
+    if len(text) >= 2 and text[0] == text[-1] == '"':
+        return text[1:-1]
+    return text
 
 
 def _implementations_from_entries(

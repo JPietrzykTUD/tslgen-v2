@@ -4498,3 +4498,48 @@ Consequences:
   the `complete` template.
 - Lowering diagnostics use `TSL-LOWER-NO-COMPLETE` when a value-returning body
   has no supported completion directive.
+
+## ADR-089: `param_types` Is A Typed Value-Test Layout Contract
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+Mask representation primitives use an abstract `ptr` signature, but their
+pointed-to storage layout depends on source attributes such as `packed`.
+Leaving `param_types` as a parsed-but-unused annotation would duplicate the
+same layout rule in value-test planning and make the source field decorative.
+
+Decision:
+
+Promote `param_types:` entries into typed catalog `ParamTypeRule` values on
+`Primitive`. A rule records the parameter name, the controlling primitive
+attribute, the concrete attribute value, the source type expression, and source
+provenance.
+
+Catalog validation checks the supported first-slice shape:
+
+- the parameter exists on the primitive;
+- the condition is shaped as `if attribute=value`;
+- the controlling attribute exists on the primitive;
+- the condition value is a valid concrete value for that attribute;
+- duplicate `(parameter, attribute, value)` rules are diagnostics;
+- the rule has a non-empty type expression.
+
+Value-test planning consumes these rules through a small pointer-layout
+resolver. The resolver currently supports scalar lane-word expressions needed
+by authored tests: `base::in`, `base::signed_of(base::in)`, and
+`base::unsigned_of(base::in)`, with optional `type<generation>(...)` wrapping
+and pointer/const decoration. Resolved storage facts are carried on
+`ValueTestCasePlan` as `target_base_spelling` and `expected_type_tag`; C++
+renderers continue to format already-decided plan data.
+
+Consequences:
+
+- `param_types` is no longer sugar: changing a supported source type rule can
+  change value-test buffer/storage typing.
+- Generated wrapper signatures remain unchanged in this slice. `ptr` still
+  lowers through the existing abstract pointer ABI; `param_types` does not yet
+  drive public API or overload rendering.
+- Unsupported type expressions remain outside this first resolver and produce
+  unplanned value-test coverage rather than renderer-side guessing.

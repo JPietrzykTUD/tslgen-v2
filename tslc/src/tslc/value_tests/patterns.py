@@ -60,6 +60,18 @@ class CasePlanBuilder(Protocol):
         ...
 
 
+class PointerLayoutCasePlanBuilder(Protocol):
+    def __call__(
+        self,
+        name: str,
+        index: int,
+        case: TestCase,
+        specs: tuple[LoweredSpecialization, ...],
+        primitive: Primitive,
+    ) -> ValueTestCasePlan | None:
+        ...
+
+
 class ValueTestPattern(Protocol):
     """A typed test-shape planner."""
 
@@ -123,7 +135,7 @@ def default_value_test_patterns(
         _SimpleShapePattern(mask_result_case, "m", ()),
         _SimpleShapePattern(mask_result_case, "m", ("im",)),
         _SimpleShapePattern(mask_result_case, "m", ("m", "v")),
-        _SimpleShapePattern(mask_pointer_load_case, "m", ("ptr",), allow_axis=True),
+        _PointerLayoutShapePattern(mask_pointer_load_case, "m", ("ptr",), allow_axis=True),
         _SimpleShapePattern(vector_to_array_case, "s[]", ("v",)),
         _SimpleShapePattern(broadcast_case, "v", ("s",)),
         _SimpleShapePattern(scalar_vector_case, "v", ("s", "s")),
@@ -131,7 +143,7 @@ def default_value_test_patterns(
         _SimpleShapePattern(lane_list_case, "v", (support.lane_list_kind,)),
         _ImmediatePattern(support),
         _SimpleShapePattern(mask_to_vector_case, "v", ("m",)),
-        _SimpleShapePattern(mask_store_case, "void", ("ptr", "m"), allow_axis=True),
+        _PointerLayoutShapePattern(mask_store_case, "void", ("ptr", "m"), allow_axis=True),
         _IndexedMemoryPattern(result_kind="v"),
         _IndexedMemoryPattern(result_kind="void"),
         _PointerLifetimePattern(),
@@ -275,6 +287,47 @@ class _SimpleShapePattern(_BasePattern):
             kwargs["index"],
             kwargs["case"],
             kwargs["specs"],
+        )
+        return (plan,) if plan is not None else ()
+
+
+@dataclass(frozen=True, slots=True)
+class _PointerLayoutShapePattern(_BasePattern):
+    build_case: PointerLayoutCasePlanBuilder
+    result_kind: str
+    param_kinds: tuple[str, ...]
+    allow_axis: bool = False
+    allow_generic_params: bool = False
+
+    def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
+        spec = specs[0]
+        if spec.result_kind != self.result_kind or tuple(spec.param_kinds) != self.param_kinds:
+            return False
+        if spec.target is not None or spec.mask_policy is not None:
+            return False
+        if spec.immediate is not None or spec.type_params:
+            return False
+        if spec.generic_params and not self.allow_generic_params:
+            return False
+        if not self.allow_axis and spec.axis:
+            return False
+        return self.allow_axis or not spec.axis
+
+    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+        specs = kwargs["specs"]
+        primitive = self.source_primitive(
+            kwargs["catalog"],
+            specs[0].source_primitive_name,
+            specs[0],
+        )
+        if primitive is None:
+            return ()
+        plan = self.build_case(
+            kwargs["emitted_name"],
+            kwargs["index"],
+            kwargs["case"],
+            specs,
+            primitive,
         )
         return (plan,) if plan is not None else ()
 

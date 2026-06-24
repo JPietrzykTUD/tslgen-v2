@@ -1323,8 +1323,15 @@ layout contract across C++ and Rust. The TSIL value-result directive is now
 `complete(expr)` across active source data, lowering, backend translation
 metadata, tests, and docs, with no compatibility alias for the former spelling.
 
+The `param_types` field is now a consumed typed value-test layout contract
+rather than a decorative source annotation. Catalog promotion stores
+`ParamTypeRule` values on primitives, schema validation checks the supported
+conditional shape, and value-test pointer-layout planning resolves those rules
+for mask representation load/store buffers while keeping generated wrapper ABI
+unchanged.
+
 Active prompt:
-docs/agent/runs/tslc-design-principles-residual-risk-review-prompt.md
+docs/agent/runs/tslc-param-types-layout-contract-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
@@ -1346,13 +1353,12 @@ docs/agent/runs/tslc-value-test-source-shape-review-prompt.md
 docs/agent/runs/tslc-value-test-completeness-review-prompt.md
 docs/agent/runs/tslc-store-mask-packed-layout-review-prompt.md
 docs/agent/runs/tslc-mask-repr-primitive-rename-review-prompt.md
+docs/agent/runs/tslc-design-principles-residual-risk-review-prompt.md
 
-Next expected action: review the focused design-principles residual-risk
-cleanup. Confirm that dependency extraction is backend-neutral, scalar
-source-type facts have a single typed owner, dependency closure remains
-deterministic, and `load_mask_repr` no longer relies on the older unpacked
-mask-underlying source spelling. Also confirm that `complete(...)` is the sole
-accepted TSIL completion directive.
+Next expected action: review the focused `param_types` layout-contract slice.
+Confirm that `param_types` is promoted, validated, and consumed by value-test
+planning without changing generated wrapper signatures or moving semantic layout
+logic into renderers.
 ```
 
 Value-test completeness validation (2026-06-24):
@@ -1393,6 +1399,20 @@ passed with 1 test under escalated filesystem permissions because the generated
 C++ build uses `/root/.cache/zig`;
 `python -m pytest -q tslc/tests/test_masks_and_calls.py tslc/tests/test_support_policy.py tslc/tests/test_support_policy_views.py tslc/tests/test_tsil_scan.py tslc/tests/test_generation_conditionals.py tslc/tests/test_select_and_lower.py tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py`
 passed with 79 tests under the same generated-build permissions.
+
+Param-types layout-contract validation (2026-06-24):
+
+```text
+`python -m compileall -q tslc/src/tslc tslc/tests` passed;
+`python -m pytest -q tslc/tests/test_catalog_tests.py::test_param_type_rules_are_promoted tslc/tests/test_catalog_tests.py::test_param_type_rules_are_validated tslc/tests/test_value_test_planning.py::test_pointer_layout_planning_consumes_param_types`
+passed with 3 tests;
+`python -m pytest -q tslc/tests/test_catalog_tests.py tslc/tests/test_value_test_planning.py`
+passed with 25 tests;
+`python -m pytest -q tslc/tests/test_value_tests.py` passed with 3 tests;
+`git diff --check` passed;
+`./verify.sh` passed all targeted validations, including 188 non-build tests
+and 53 generated-build tests across its shards.
+```
 After the Rust `load_mask_repr` parity fix,
 `python -m pytest -q tslc/tests/test_build_verify.py::test_masked_memory_build`
 passed with 1 test;
