@@ -232,7 +232,7 @@ rough value order:
 3. **Reduce other in-primitive skip counts** (deferred slots — skips, not failures).
    Check the inventory's "skipped slots" / "dominant gap" columns. Known:
    - unresolved `type<generation>`/`value<generation>` queries — the `select(...)` query
-     (gates `hand`/`hor` float generic), `vector::mask_underlying_t` (store_mask unpacked),
+     (gates `hand`/`hor` float generic), `vector::mask_underlying_t` (store_mask_repr unpacked),
      etc. Add `QueryFunction` classes in `tslc/src/tslc/lower/queries.py` (one class + one
      registry entry each; `type::size_bytes`/`SizeBytesQuery` is the worked example).
    - dependency-closure pruning (e.g. `to_ostream` shows "pruned (closure)" slots): a

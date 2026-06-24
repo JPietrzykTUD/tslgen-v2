@@ -1143,7 +1143,7 @@ def test_leading_zeros_build(
 def test_masked_memory_build(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
-    # The masked / sparse memory family: `load_mask` (`m:=ptr`) / `store_mask`
+    # The masked / sparse memory family: `load_mask_repr` (`m:=ptr`) / `store_mask_repr`
     # (`void:=(ptr,m)`), `masked_set1` (`v:=(m,v,s)`), `compress` (`v:=(m,v)`),
     # `expand_load` (`v:=(m,ptr)`). avx512 native mask_compress/mask_expandload plus the
     # generic/sse/avx2 per-lane fallbacks whose loop tests the mask with `mask<test>`. That
@@ -1157,7 +1157,7 @@ def test_masked_memory_build(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=[
-            "load_mask", "store_mask", "masked_set1", "compress", "compress_store",
+            "load_mask_repr", "store_mask_repr", "masked_set1", "compress", "compress_store",
             "expand_load",
         ],
         profiles=["sse2", "avx2", "skylake"],

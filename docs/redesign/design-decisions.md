@@ -4362,3 +4362,64 @@ Consequences:
   duplicates behind numeric source-order suffixes.
 - Test coverage audits can reason over semantic tags rather than parsing
   renderer-facing names.
+
+## ADR-086: Value-Test Completeness Is A Typed Coverage Contract
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+The value-test planner previously emitted the cases it recognized and separate
+tests inferred coverage gaps by scanning generated source text. That made
+coverage dependent on renderer output shape and allowed selected primitives,
+authored test cases, and backend-unsupported plan kinds to disappear without a
+single typed accounting boundary.
+
+Decision:
+
+Value-test planning now produces explicit coverage entries for every selected
+backend/profile/primitive test responsibility. A coverage entry is one of:
+
+- `emitted`: at least one backend-supported value-test plan was emitted;
+- `compile_only_emitted`: an authored compile-only smoke case was emitted;
+- `missing_authored_tests`: a selected primitive has no authored tests;
+- `authored_unplanned`: an authored applicable test case was not accepted by
+  any planner pattern;
+- `backend_unsupported`: the planner produced a case kind the backend renderer
+  does not support.
+
+The full C++ AVX2 value-test gate asserts zero `missing_authored_tests`, zero
+`authored_unplanned`, and zero `backend_unsupported` entries. Profile-specific
+authored cases are admitted only when the selected specialization set contains
+the matching typed extension, type tag, and representation axis facts.
+
+Authored source tests also carry a typed role. `role "value"` is the default.
+`role "compile"` is the current explicit smoke-test role for deterministic
+compile-only cases such as undefined-value constructors. Source test arguments
+are promoted to typed `vector`, `mask`, or `scalar` values according to their
+signature position before value-test planning runs.
+
+Consequences:
+
+- C++ AVX2 is the current completeness gate: every applicable selected
+  primitive test case is emitted as a value test or compile-only smoke case.
+- Rust keeps its narrower value-test surface; unsupported planned kinds are
+  reported as `backend_unsupported` rather than silently rendered or skipped.
+- Renderers consume `ValueTestCasePlan` objects and coverage lives on
+  `ValueTestProjectPlan`; tests no longer regex generated source to infer
+  planning behavior.
+- Planner support remains typed and signature-driven. New primitive tests
+  should normally be added in `tsldata`, with new planner patterns added only
+  for genuinely new typed shapes.
+- The C++ renderer and case planner are split into helper modules before they
+  become catch-all files: shared case-planning helpers live in
+  `value_tests.case_helpers`, and pure C++ formatting helpers live in
+  `value_tests.render_cpp_helpers`.
+- `store_mask_repr` tests cover both compact `packed=true` storage and representative
+  unpacked `packed=false` storage. The unpacked storage type is a typed
+  planning fact (`target_base_spelling` and `expected_type_tag`), so the C++
+  renderer formats an already-decided unsigned lane-word layout instead of
+  inferring mask storage from primitive names or backend families.
+- The mask representation source primitives are named `load_mask_repr` and
+  `store_mask_repr` so they do not collide with emitted masked overload names
+  such as `load_mask`, `load_maskz`, and `store_mask`.

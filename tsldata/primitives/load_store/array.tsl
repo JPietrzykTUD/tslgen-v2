@@ -137,6 +137,9 @@ prim<s[]:=v> to_array(a):
 prim<v:=s[]> from_array(data):
   brief_description "Loads SIMD register from array."
   operation ""
+  tests:
+    - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
   impls:
     scalar:
       arith:

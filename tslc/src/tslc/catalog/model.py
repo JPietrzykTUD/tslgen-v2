@@ -166,15 +166,15 @@ class TestArg:
     """One input argument of a :class:`TestCase`.
 
     A ``"vector"`` arg is a per-lane list of numeric literal *tokens* (kept verbatim so float
-    specials like ``INFINITY`` / ``-0.0`` and exact-width integers survive to emit time); it is
-    materialized into a vector via ``from_array``. A ``"mask"`` arg is a single integer bitmask
-    token (bit ``j`` = lane ``j`` active); it is materialized into the target's mask
-    representation via ``to_mask``.
+    specials like ``INFINITY`` / ``-0.0`` and exact-width integers survive to emit time). A
+    ``"mask"`` arg is a single integer bitmask token (bit ``j`` = lane ``j`` active). A
+    ``"scalar"`` arg is a single non-mask scalar token such as an immediate, size, or base value.
     """
 
-    kind: str  # "vector" | "mask"
+    kind: str  # "vector" | "mask" | "scalar"
     values: tuple[str, ...] = ()  # vector: per-lane literal tokens
     mask_bits: str | None = None  # mask: the bitmask literal token
+    scalar: str | None = None  # scalar: the literal token
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,7 +185,9 @@ class TestCase:
     optionally ``id``/``lane_count``; catalog promotion derives the stable case name and the lane
     count. ``expected`` holds per-lane literal tokens (a store case's ``expected`` instead models
     the destination buffer and may exceed ``lanes``); ``expected_rule`` (e.g. ``"popcnt"``) names a
-    computed oracle in place of literal expected.
+    computed oracle in place of literal expected. ``role`` is normally ``"value"``; ``"compile"``
+    means the case intentionally checks that the callable instantiates without asserting a
+    deterministic runtime value.
 
     Optional axes pin a case to one specialization or carry operand metadata: ``extension`` (a
     specific subject extension), ``to_type``/``to_extension`` (representation-change targets),
@@ -199,6 +201,7 @@ class TestCase:
     tags: tuple[str, ...]
     inputs: tuple[TestArg, ...]
     expected: tuple[str, ...]
+    role: str = "value"
     lanes: int | None = None
     id: str | None = None
     extension: str | None = None

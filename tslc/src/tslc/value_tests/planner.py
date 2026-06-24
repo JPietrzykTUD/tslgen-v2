@@ -6,14 +6,24 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from tslc.catalog.model import Catalog
-from tslc.diagnostics import Diagnostic
+from tslc.diagnostics import Diagnostic, SourceLocation
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
+from tslc.value_tests.case_plans import compile_only_case
+from tslc.value_tests.coverage import (
+    CoverageIdentity,
+    case_coverage,
+    coverage_diagnostics,
+    coverage_identity,
+    coverage_key,
+    merge_coverage,
+)
 from tslc.value_tests.harness import discover_harness_primitives
 from tslc.value_tests.model import (
     HarnessPrimitiveNames,
     ValueTestBackendSupport,
     ValueTestCasePlan,
+    ValueTestCoverageEntry,
     ValueTestProfilePlan,
     ValueTestProjectPlan,
 )
@@ -46,22 +56,28 @@ class ValueTestPlanner:
     def plan(self, profiles: tuple[ValueTestBackendProfileInput, ...]) -> ValueTestProjectPlan:
         harness = discover_harness_primitives(self._catalog)
         diagnostics = list(harness.diagnostics)
+        raw_coverage: list[ValueTestCoverageEntry] = []
+        coverage_locations: dict[CoverageIdentity, SourceLocation | None] = {}
         profile_plans = [
-            self._plan_backend_profile(profile, harness, diagnostics)
+            self._plan_backend_profile(profile, harness, raw_coverage, coverage_locations)
             for profile in profiles
             if profile.backend_id in self._backend_supports
         ]
+        coverage = merge_coverage(raw_coverage)
+        diagnostics.extend(coverage_diagnostics(coverage, coverage_locations))
         diagnostics.extend(_duplicate_case_diagnostics(profile_plans))
         return ValueTestProjectPlan(
             profiles=tuple(profile_plans),
             diagnostics=tuple(diagnostics),
+            coverage=tuple(sorted(coverage, key=coverage_key)),
         )
 
     def _plan_backend_profile(
         self,
         profile: ValueTestBackendProfileInput,
         harness: HarnessPrimitiveNames,
-        diagnostics: list[Diagnostic],
+        coverage: list[ValueTestCoverageEntry],
+        coverage_locations: dict[CoverageIdentity, SourceLocation | None],
     ) -> ValueTestProfilePlan:
         backend = self._backend_supports[profile.backend_id]
         cases: list[ValueTestCasePlan] = []
@@ -76,45 +92,61 @@ class ValueTestPlanner:
                 if pattern is not None
                 else self._catalog.primitive(source_name, unmasked=False)
             )
-            if primitive is None or not primitive.tests:
+            if primitive is None:
+                continue
+            if not primitive.tests:
+                entry = ValueTestCoverageEntry(
+                    backend_id=profile.backend_id,
+                    profile_name=profile.profile_name,
+                    primitive_name=source_name,
+                    case_name=None,
+                    status="missing_authored_tests",
+                    reason="selected primitive has no authored tests",
+                )
+                coverage.append(entry)
+                coverage_locations.setdefault(coverage_identity(entry), _primitive_location(primitive))
                 continue
             for index, test_case in enumerate(primitive.tests):
-                planned = (
-                    pattern.plan_case(
-                        backend=backend,
-                        emitted_name=emitted_name,
-                        index=index,
-                        case=test_case,
-                        specs=specs,
-                        catalog=self._catalog,
-                        harness=harness,
+                if _case_extension_unselected(test_case, specs):
+                    continue
+                if _representation_case_unselected(test_case, specs):
+                    continue
+                if test_case.role == "compile":
+                    plan = compile_only_case(emitted_name, index, test_case, specs)
+                    planned = (plan,) if plan is not None else ()
+                else:
+                    planned = (
+                        pattern.plan_case(
+                            backend=backend,
+                            emitted_name=emitted_name,
+                            index=index,
+                            case=test_case,
+                            specs=specs,
+                            catalog=self._catalog,
+                            harness=harness,
+                        )
+                        if pattern is not None
+                        else ()
                     )
-                    if pattern is not None
-                    else ()
-                )
                 supported = self._supported_cases(planned, backend)
                 cases.extend(supported)
-                if not supported:
-                    diagnostics.append(
-                        Diagnostic(
-                            severity="warning",
-                            code="TSL-VALUE-TEST-UNSUPPORTED-CASE",
-                            message=(
-                                f"no {profile.backend_id} value-test plan for case "
-                                f"{test_case.name!r} of primitive {source_name!r} "
-                                f"in profile {profile.profile_name!r}"
-                            ),
-                            location=(
-                                test_case.source.start
-                                if test_case.source is not None
-                                else (
-                                    primitive.source.start
-                                    if primitive.source is not None
-                                    else None
-                                )
-                            ),
-                        )
-                    )
+                entry = case_coverage(
+                    backend=backend,
+                    profile_name=profile.profile_name,
+                    primitive_name=source_name,
+                    case_name=test_case.name,
+                    planned=planned,
+                    supported=supported,
+                )
+                coverage.append(entry)
+                coverage_locations.setdefault(
+                    coverage_identity(entry),
+                    (
+                        test_case.source.start
+                        if test_case.source is not None
+                        else _primitive_location(primitive)
+                    ),
+                )
         return ValueTestProfilePlan(
             backend_id=profile.backend_id,
             profile_name=profile.profile_name,
@@ -158,6 +190,45 @@ def _duplicate_case_diagnostics(
                 )
             )
     return tuple(diagnostics)
+
+
+def _primitive_location(primitive) -> SourceLocation | None:  # noqa: ANN001
+    return primitive.source.start if primitive.source is not None else None
+
+
+def _representation_case_unselected(
+    case,
+    specs: tuple[LoweredSpecialization, ...],
+) -> bool:  # noqa: ANN001
+    if case.to_extension is not None:
+        return not any(
+            spec.extension_name == case.extension
+            and spec.type_tag == case.type_tag
+            and spec.target is not None
+            and spec.target.extension_isa == case.to_extension
+            for spec in specs
+        )
+    if case.to_type is not None and case.extension is not None:
+        return not any(
+            spec.extension_name == case.extension
+            and spec.type_tag == case.type_tag
+            and spec.target is not None
+            and spec.target.base_tag == case.to_type
+            for spec in specs
+        )
+    return False
+
+
+def _case_extension_unselected(
+    case,
+    specs: tuple[LoweredSpecialization, ...],
+) -> bool:  # noqa: ANN001
+    if case.extension is None:
+        return False
+    return not any(
+        spec.extension_name == case.extension and spec.type_tag == case.type_tag
+        for spec in specs
+    )
 
 
 __all__ = ("ValueTestBackendProfileInput", "ValueTestPlanner")

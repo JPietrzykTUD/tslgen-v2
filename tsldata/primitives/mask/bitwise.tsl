@@ -331,6 +331,9 @@ prim<usize:=m> mask_population_count(mask):
 prim<im:=(im,s)> shift_right_imask(data, shift):
   brief_description "Arithmetic shift of an imask to the right by n bits."
   operation ""
+  tests:
+    - {tags [basic], type "ui32", lane_count 16, case {inputs [240, 4], expected 15}}
+    - {tags [zero], type "ui32", lane_count 16, case {inputs [0, 4], expected 0}}
   generic_params:
     PreserveSign:
       kind bool

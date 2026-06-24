@@ -79,6 +79,9 @@ prim<v:=v> popcnt(data):
 prim<s:=s> lzc_scalar(data):
   brief_description "Counts leading zeros (scalar)."
   operation ""
+  tests:
+    - {tags [basic], type "ui32", lane_count 8, case {inputs [16], expected 27}}
+    - {tags [edge], type "ui32", lane_count 8, case {inputs [0], expected 32}}
   impls:
     [scalar, generic]:
       ?i?:
@@ -190,6 +193,9 @@ prim<v:=v> lzc(data):
 prim<s:=m> lzc_imask(value):
   brief_description "Counts leading zeros in an imask."
   operation ""
+  tests:
+    - {tags [basic], type "ui32", expected_rule "lzc", lane_count 8, case {inputs [8], expected 60}}
+    - {tags [edge], type "ui32", expected_rule "lzc", lane_count 8, case {inputs [0], expected 64}}
   impls:
     [avx512, avx2, sse, neon, scalar, generic]:
       arith:
@@ -214,7 +220,7 @@ prim<s:=m> tzc(value):
   operation ""
   tests:
     - {tags [basic], type "ui32", expected_rule "tzc", lane_count 8, case {inputs [8], expected 3}}
-    - {tags [edge], type "ui32", expected_rule "tzc", lane_count 8, case {inputs [0], expected 32}}
+    - {tags [edge], type "ui32", expected_rule "tzc", lane_count 8, case {inputs [0], expected 64}}
   impls:
     [avx512, avx2, sse, neon, scalar, generic]:
       arith:

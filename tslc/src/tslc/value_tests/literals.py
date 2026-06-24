@@ -12,6 +12,9 @@ def cpp_literal(token: str, type_tag: str) -> str:
             return "-INFINITY"
         if upper in ("NAN", "+NAN", "-NAN"):
             return "NAN"
+        if _is_numeric_token(token):
+            target = "float" if type_tag == "f32" else "double"
+            return f"static_cast<{target}>({token})"
         return token
     wrapped = _wrapped_int(token, type_tag)
     return wrapped if wrapped is not None else token
@@ -62,6 +65,14 @@ def _wrapped_int(token: str, type_tag: str) -> str | None:
     if type_tag.startswith("s") and value >= (1 << (bits - 1)):
         value -= 1 << bits
     return str(value)
+
+
+def _is_numeric_token(token: str) -> bool:
+    try:
+        float(token)
+    except ValueError:
+        return False
+    return True
 
 
 def _type_bits(type_tag: str) -> int | None:

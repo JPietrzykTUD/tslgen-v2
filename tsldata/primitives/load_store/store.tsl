@@ -119,54 +119,57 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
                 );
               }
             """
-prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
+prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
   param_types:
     ptr:
       "if packed=true" "type<generation>(vector::imask) *"
-      "if packed=false" "type<generation>(vector::mask_underlying_t) *"
+      "if packed=false" "type<generation>(base::unsigned_of(type<generation>(base::in))) *"
   brief_description "Stores a mask to aligned memory."
   operation ""
   tests:
-    - {tags [mask, basic], attrs [aligned=true, packed=false], type "ui8", offset 0, case {inputs [12297829382473034410], expected [12297829382473034410, 0, 0]}}
-    - {tags [mask, edge], attrs [aligned=true, packed=false], type "ui8", offset 0, case {inputs [18446744073709551615], expected [18446744073709551615, 0, 0]}}
-    - {tags [mask, basic], attrs [aligned=true, packed=false], type "si8", offset 0, case {inputs [12297829382473034410], expected [12297829382473034410, 0, 0]}}
-    - {tags [mask, edge], attrs [aligned=true, packed=false], type "si8", offset 0, case {inputs [18446744073709551615], expected [18446744073709551615, 0, 0]}}
-    - {tags [mask, basic], attrs [aligned=true, packed=false], type "ui16", offset 0, case {inputs [2863311530], expected [2863311530, 0, 0]}}
-    - {tags [mask, edge], attrs [aligned=true, packed=false], type "ui16", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
-    - {tags [mask, basic], attrs [aligned=true, packed=false], type "si16", offset 0, case {inputs [2863311530], expected [2863311530, 0, 0]}}
-    - {tags [mask, edge], attrs [aligned=true, packed=false], type "si16", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
-    - {tags [mask, basic], attrs [aligned=true, packed=false], type "ui32", offset 0, case {inputs [43690], expected [43690, 0, 0]}}
-    - {tags [mask, edge], attrs [aligned=true, packed=false], type "ui32", offset 0, case {inputs [65535], expected [65535, 0, 0]}}
-    - {tags [mask, basic], attrs [aligned=true, packed=false], type "si32", offset 0, case {inputs [43690], expected [43690, 0, 0]}}
-    - {tags [mask, edge], attrs [aligned=true, packed=false], type "si32", offset 0, case {inputs [65535], expected [65535, 0, 0]}}
-    - {tags [mask, basic], attrs [aligned=true, packed=false], type "f32", offset 0, case {inputs [43690], expected [43690, 0, 0]}}
-    - {tags [mask, edge], attrs [aligned=true, packed=false], type "f32", offset 0, case {inputs [65535], expected [65535, 0, 0]}}
-    - {tags [mask, basic], attrs [aligned=true, packed=false], type "ui64", offset 0, case {inputs [170], expected [170, 0, 0]}}
-    - {tags [mask, edge], attrs [aligned=true, packed=false], type "ui64", offset 0, case {inputs [255], expected [255, 0, 0]}}
-    - {tags [mask, basic], attrs [aligned=true, packed=false], type "si64", offset 0, case {inputs [170], expected [170, 0, 0]}}
-    - {tags [mask, edge], attrs [aligned=true, packed=false], type "si64", offset 0, case {inputs [255], expected [255, 0, 0]}}
-    - {tags [mask, basic], attrs [aligned=true, packed=false], type "f64", offset 0, case {inputs [170], expected [170, 0, 0]}}
-    - {tags [mask, edge], attrs [aligned=true, packed=false], type "f64", offset 0, case {inputs [255], expected [255, 0, 0]}}
-    - {tags [mask, basic], attrs [aligned=false, packed=false], type "ui8", offset 1, case {inputs [12297829382473034410], expected [0, 12297829382473034410, 0]}}
-    - {tags [mask, edge], attrs [aligned=false, packed=false], type "ui8", offset 1, case {inputs [18446744073709551615], expected [0, 18446744073709551615, 0]}}
-    - {tags [mask, basic], attrs [aligned=false, packed=false], type "si8", offset 1, case {inputs [12297829382473034410], expected [0, 12297829382473034410, 0]}}
-    - {tags [mask, edge], attrs [aligned=false, packed=false], type "si8", offset 1, case {inputs [18446744073709551615], expected [0, 18446744073709551615, 0]}}
-    - {tags [mask, basic], attrs [aligned=false, packed=false], type "ui16", offset 1, case {inputs [2863311530], expected [0, 2863311530, 0]}}
-    - {tags [mask, edge], attrs [aligned=false, packed=false], type "ui16", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
-    - {tags [mask, basic], attrs [aligned=false, packed=false], type "si16", offset 1, case {inputs [2863311530], expected [0, 2863311530, 0]}}
-    - {tags [mask, edge], attrs [aligned=false, packed=false], type "si16", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
-    - {tags [mask, basic], attrs [aligned=false, packed=false], type "ui32", offset 1, case {inputs [43690], expected [0, 43690, 0]}}
-    - {tags [mask, edge], attrs [aligned=false, packed=false], type "ui32", offset 1, case {inputs [65535], expected [0, 65535, 0]}}
-    - {tags [mask, basic], attrs [aligned=false, packed=false], type "si32", offset 1, case {inputs [43690], expected [0, 43690, 0]}}
-    - {tags [mask, edge], attrs [aligned=false, packed=false], type "si32", offset 1, case {inputs [65535], expected [0, 65535, 0]}}
-    - {tags [mask, basic], attrs [aligned=false, packed=false], type "f32", offset 1, case {inputs [43690], expected [0, 43690, 0]}}
-    - {tags [mask, edge], attrs [aligned=false, packed=false], type "f32", offset 1, case {inputs [65535], expected [0, 65535, 0]}}
-    - {tags [mask, basic], attrs [aligned=false, packed=false], type "ui64", offset 1, case {inputs [170], expected [0, 170, 0]}}
-    - {tags [mask, edge], attrs [aligned=false, packed=false], type "ui64", offset 1, case {inputs [255], expected [0, 255, 0]}}
-    - {tags [mask, basic], attrs [aligned=false, packed=false], type "si64", offset 1, case {inputs [170], expected [0, 170, 0]}}
-    - {tags [mask, edge], attrs [aligned=false, packed=false], type "si64", offset 1, case {inputs [255], expected [0, 255, 0]}}
-    - {tags [mask, basic], attrs [aligned=false, packed=false], type "f64", offset 1, case {inputs [170], expected [0, 170, 0]}}
-    - {tags [mask, edge], attrs [aligned=false, packed=false], type "f64", offset 1, case {inputs [255], expected [0, 255, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=true], type "ui8", offset 0, case {inputs [12297829382473034410], expected [12297829382473034410, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=true], type "ui8", offset 0, case {inputs [18446744073709551615], expected [18446744073709551615, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=true], type "si8", offset 0, case {inputs [12297829382473034410], expected [12297829382473034410, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=true], type "si8", offset 0, case {inputs [18446744073709551615], expected [18446744073709551615, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=true], type "ui16", offset 0, case {inputs [2863311530], expected [2863311530, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=true], type "ui16", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=true], type "si16", offset 0, case {inputs [2863311530], expected [2863311530, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=true], type "si16", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=true], type "ui32", offset 0, case {inputs [43690], expected [43690, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=true], type "ui32", offset 0, case {inputs [65535], expected [65535, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=true], type "si32", offset 0, case {inputs [43690], expected [43690, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=true], type "si32", offset 0, case {inputs [65535], expected [65535, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=true], type "f32", offset 0, case {inputs [43690], expected [43690, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=true], type "f32", offset 0, case {inputs [65535], expected [65535, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=true], type "ui64", offset 0, case {inputs [170], expected [170, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=true], type "ui64", offset 0, case {inputs [255], expected [255, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=true], type "si64", offset 0, case {inputs [170], expected [170, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=true], type "si64", offset 0, case {inputs [255], expected [255, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=true, packed=true], type "f64", offset 0, case {inputs [170], expected [170, 0, 0]}}
+    - {tags [mask, edge], attrs [aligned=true, packed=true], type "f64", offset 0, case {inputs [255], expected [255, 0, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=true], type "ui8", offset 1, case {inputs [12297829382473034410], expected [0, 12297829382473034410, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=true], type "ui8", offset 1, case {inputs [18446744073709551615], expected [0, 18446744073709551615, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=true], type "si8", offset 1, case {inputs [12297829382473034410], expected [0, 12297829382473034410, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=true], type "si8", offset 1, case {inputs [18446744073709551615], expected [0, 18446744073709551615, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=true], type "ui16", offset 1, case {inputs [2863311530], expected [0, 2863311530, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=true], type "ui16", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=true], type "si16", offset 1, case {inputs [2863311530], expected [0, 2863311530, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=true], type "si16", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=true], type "ui32", offset 1, case {inputs [43690], expected [0, 43690, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=true], type "ui32", offset 1, case {inputs [65535], expected [0, 65535, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=true], type "si32", offset 1, case {inputs [43690], expected [0, 43690, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=true], type "si32", offset 1, case {inputs [65535], expected [0, 65535, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=true], type "f32", offset 1, case {inputs [43690], expected [0, 43690, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=true], type "f32", offset 1, case {inputs [65535], expected [0, 65535, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=true], type "ui64", offset 1, case {inputs [170], expected [0, 170, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=true], type "ui64", offset 1, case {inputs [255], expected [0, 255, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=true], type "si64", offset 1, case {inputs [170], expected [0, 170, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=true], type "si64", offset 1, case {inputs [255], expected [0, 255, 0]}}
+    - {tags [mask, basic], attrs [aligned=false, packed=true], type "f64", offset 1, case {inputs [170], expected [0, 170, 0]}}
+    - {tags [mask, edge], attrs [aligned=false, packed=true], type "f64", offset 1, case {inputs [255], expected [0, 255, 0]}}
+    - {tags [mask, unpacked], attrs [aligned=true, packed=false], type "ui32", offset 0, case {inputs [10], expected [0, 4294967295, 0, 4294967295]}}
+    - {tags [mask, unpacked], attrs [aligned=false, packed=false], type "ui32", offset 1, case {inputs [10], expected [0, 0, 4294967295, 0, 4294967295]}}
+    - {tags [mask, unpacked], attrs [aligned=true, packed=false], type "f32", offset 0, case {inputs [10], expected [0, 4294967295, 0, 4294967295]}}
   impls:
     scalar:
       arith:
@@ -177,11 +180,12 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               *cast<reinterpret>(type<generation>(vector::imask) *, ptr) = imask;
             } else<generation> {
-              let<type>(MaskWord, type<generation>(vector::mask_underlying_t));
+              let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              var<const_infer>(out, cast<reinterpret>(MaskWord *, ptr));
               if (mask) {
-                *ptr = cast<static>(MaskWord, cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF));
+                *out = cast<static>(MaskWord, cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF));
               } else {
-                *ptr = cast<static>(MaskWord, 0);
+                *out = cast<static>(MaskWord, 0);
               }
             }
           """
@@ -196,16 +200,20 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
                 var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
                 *cast<reinterpret>(type<generation>(vector::imask) *, ptr) = imask;
               } else<generation> {
-                let<type>(MaskWord, type<generation>(vector::mask_underlying_t));
-                const MaskWord one_bits = cast<static>(
-                  MaskWord,
-                  cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)
+                let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                var<const_infer>(out, cast<reinterpret>(MaskWord *, ptr));
+                var<const_infer>(
+                  one_bits,
+                  cast<static>(
+                    MaskWord,
+                    cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)
+                  )
                 );
                 loop<backend>(i, 0, value<generation>(vector::length), 1) {
                   if (mask<test>(mask, i)) {
-                    *ptr_add_mut(ptr, i) = one_bits;
+                    *ptr_add_mut(out, i) = one_bits;
                   } else {
-                    *ptr_add_mut(ptr, i) = cast<static>(MaskWord, 0);
+                    *ptr_add_mut(out, i) = cast<static>(MaskWord, 0);
                   }
                 }
               }
@@ -215,14 +223,46 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
         requires:
           avx512 [avx512f]
         implementation:
-          tsil "*cast<reinterpret>(type<generation>(vector::imask) *, ptr) = mask;"
+          tsil """
+            if<generation>(value<generation>(primitive::attribute(packed))) {
+              *cast<reinterpret>(type<generation>(vector::imask) *, ptr) = mask;
+            } else<generation> {
+              let<type>(MaskBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(MaskVec, type<generation>(vector::as_base(MaskBase)));
+              call<primitive=store[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                cast<reinterpret>(MaskBase *, ptr),
+                call<primitive=mov[MaskVec], attrs[mask=zero]>(
+                  mask,
+                  call<primitive=set1[MaskVec]>(
+                    cast<static>(MaskBase, cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF))
+                  )
+                )
+              );
+            }
+          """
     [avx2_vl, sse_vl]:
       arith:
         requires:
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
-          tsil "*cast<reinterpret>(type<generation>(vector::imask) *, ptr) = mask;"
+          tsil """
+            if<generation>(value<generation>(primitive::attribute(packed))) {
+              *cast<reinterpret>(type<generation>(vector::imask) *, ptr) = mask;
+            } else<generation> {
+              let<type>(MaskBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(MaskVec, type<generation>(vector::as_base(MaskBase)));
+              call<primitive=store[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                cast<reinterpret>(MaskBase *, ptr),
+                call<primitive=mov[MaskVec], attrs[mask=zero]>(
+                  mask,
+                  call<primitive=set1[MaskVec]>(
+                    cast<static>(MaskBase, cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF))
+                  )
+                )
+              );
+            }
+          """
     [avx2, sse, neon]:
       arith:
         requires:
@@ -235,9 +275,12 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
               *cast<reinterpret>(type<generation>(vector::imask) *, ptr) = imask;
             } else<generation> {
-              let<type>(MaskVec, type<generation>(vector::transform(type<generation>(vector::mask_underlying_t))));
+              let<type>(MaskVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
               var<const_infer>(mask_vec, call<primitive=reinterpret[Vec, MaskVec]>(mask));
-              call<primitive=store[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(ptr, mask_vec);
+              call<primitive=store[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                cast<reinterpret>(type<generation>(base::unsigned_of(type<generation>(base::in))) *, ptr),
+                mask_vec
+              );
             }
           """
     sve:
@@ -262,16 +305,20 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask(ptr, mask):
                 }
               }
             } else<generation> {
-              let<type>(MaskWord, type<generation>(vector::mask_underlying_t));
-              const MaskWord one_bits = cast<static>(
-                MaskWord,
-                cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)
+              let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              var<const_infer>(out, cast<reinterpret>(MaskWord *, ptr));
+              var<const_infer>(
+                one_bits,
+                cast<static>(
+                  MaskWord,
+                  cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)
+                )
               );
               loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 if (mask<test>(mask, i)) {
-                  *ptr_add_mut(ptr, i) = one_bits;
+                  *ptr_add_mut(out, i) = one_bits;
                 } else {
-                  *ptr_add_mut(ptr, i) = cast<static>(MaskWord, 0);
+                  *ptr_add_mut(out, i) = cast<static>(MaskWord, 0);
                 }
               }
             }

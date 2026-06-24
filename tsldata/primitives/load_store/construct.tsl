@@ -314,6 +314,8 @@ prim<v:=()>[value=zero] set_zero():
 prim<v:=()>[value=undef] set_undef():
   brief_description "[Example: sse + si8]: Return vector of type __m128i with undefined elements."
   operation ""
+  tests:
+    - {role "compile", tags [compile], type "si32", lane_count 4, case {inputs [], expected []}}
   impls:
     scalar:
       arith:

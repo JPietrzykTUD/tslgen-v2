@@ -4,6 +4,7 @@ from tslc.value_tests.model import (
     HarnessPrimitiveNames,
     ValueTestBackendSupport,
     ValueTestCasePlan,
+    ValueTestCoverageEntry,
     ValueTestProfilePlan,
     ValueTestProjectPlan,
 )
@@ -16,6 +17,7 @@ __all__ = (
     "ValueTestBackendProfileInput",
     "ValueTestBackendSupport",
     "ValueTestCasePlan",
+    "ValueTestCoverageEntry",
     "ValueTestPlanner",
     "ValueTestPattern",
     "ValueTestProfilePlan",

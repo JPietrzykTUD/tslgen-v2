@@ -21,7 +21,7 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 
 ### Build-verified (89) — compile in C++ & Rust
 
-`add`, `allocate`, `allocate_aligned`, `between_exclusive`, `between_inclusive`, `between_left_inclusive`, `between_right_inclusive`, `binary_and`, `binary_andnot`, `binary_or`, `binary_xor`, `blend`, `blend_add`, `cast`, `compress`, `compress_store`, `conflict`, `conflict_free`, `convert_down`, `convert_up`, `count_matches`, `custom_sequence`, `deallocate`, `div`, `equal`, `expand_load`, `extract`, `extract_imask`, `extract_value`, `from_array`, `gather`, `greater_than`, `greater_than_or_equal`, `hadd`, `hand`, `hmax`, `hmin`, `hor`, `insert`, `insert_imask`, `inv`, `less_than`, `less_than_or_equal`, `load`, `load_convert_up`, `load_mask`, `load_scalar`, `lzc`, `lzc_imask`, `lzc_scalar`, `mask_binary_and`, `mask_binary_not`, `mask_binary_or`, `mask_binary_xor`, `mask_false`, `mask_population_count`, `mask_true`, `masked_set1`, `max`, `memory_cp`, `min`, `mod`, `mod_imm`, `mov`, `mul`, `mul_imm`, `nequal`, `popcnt`, `reinterpret`, `scatter`, `sequence`, `set`, `set1`, `set_undef`, `set_zero`, `shift_left`, `shift_right`, `shift_right_imask`, `store`, `store_mask`, `sub`, `test_imask`, `to_array`, `to_integral`, `to_mask`, `to_ostream`, `to_vector`, `tzc`, `unequal_zero`
+`add`, `allocate`, `allocate_aligned`, `between_exclusive`, `between_inclusive`, `between_left_inclusive`, `between_right_inclusive`, `binary_and`, `binary_andnot`, `binary_or`, `binary_xor`, `blend`, `blend_add`, `cast`, `compress`, `compress_store`, `conflict`, `conflict_free`, `convert_down`, `convert_up`, `count_matches`, `custom_sequence`, `deallocate`, `div`, `equal`, `expand_load`, `extract`, `extract_imask`, `extract_value`, `from_array`, `gather`, `greater_than`, `greater_than_or_equal`, `hadd`, `hand`, `hmax`, `hmin`, `hor`, `insert`, `insert_imask`, `inv`, `less_than`, `less_than_or_equal`, `load`, `load_convert_up`, `load_mask_repr`, `load_scalar`, `lzc`, `lzc_imask`, `lzc_scalar`, `mask_binary_and`, `mask_binary_not`, `mask_binary_or`, `mask_binary_xor`, `mask_false`, `mask_population_count`, `mask_true`, `masked_set1`, `max`, `memory_cp`, `min`, `mod`, `mod_imm`, `mov`, `mul`, `mul_imm`, `nequal`, `popcnt`, `reinterpret`, `scatter`, `sequence`, `set`, `set1`, `set_undef`, `set_zero`, `shift_left`, `shift_right`, `shift_right_imask`, `store`, `store_mask_repr`, `sub`, `test_imask`, `to_array`, `to_integral`, `to_mask`, `to_ostream`, `to_vector`, `tzc`, `unequal_zero`
 
 ### Lower but not build-verified (0) — codegen clean, compilation unconfirmed
 
@@ -84,7 +84,7 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `less_than_or_equal` | `m:=(m,v,v)` `m:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `load` | `v:=(m,ptr)` `v:=(m,ptr,v)` `v:=ptr` | VERIFIED | avx2/avx512/generic/scalar/sse | 96 | pruned (closure) |
 | `load_convert_up` | `v:=ptr+` | VERIFIED | avx2/avx512 | 4 | pruned (closure) |
-| `load_mask` | `m:=ptr` | VERIFIED | avx2/avx512/generic/scalar/sse | 164 | unresolved pointer-cast type |
+| `load_mask_repr` | `m:=ptr` | VERIFIED | avx2/avx512/generic/scalar/sse | 164 | unresolved pointer-cast type |
 | `load_scalar` | `s:=ptr` | VERIFIED | avx2/avx512/generic/sse | 0 | — |
 | `lzc` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 100 | pruned (closure) |
 | `lzc_imask` | `s:=m` | VERIFIED | avx2/avx512/generic/scalar/sse | 8 | pruned (closure) |
@@ -118,7 +118,7 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `shift_right` | `v:=(v,s)` `v:=(v,sImm)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 72 | pruned (closure) |
 | `shift_right_imask` | `im:=(im,s)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `store` | `void:=(m,ptr,v)` `void:=(ptr,s)` `void:=(ptr,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 8 | pruned (closure) |
-| `store_mask` | `void:=(ptr,m)` | VERIFIED | avx2/avx512/generic/scalar/sse | 880 | unresolved type query |
+| `store_mask_repr` | `void:=(ptr,m)` | VERIFIED | avx2/avx512/generic/scalar/sse | 880 | unresolved type query |
 | `sub` | `v:=(m,v,v)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `test_imask` | `im:=(im,im)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `to_array` | `s[]:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
@@ -134,7 +134,7 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | skips | category | meaning / action |
 |--:|---|---|
 | 1064 | pruned (closure) | Dependency-closure dropped a body whose callee is unavailable in that profile. **Structural, not a defect** — expected behavior. |
-| 872 | unresolved type query | A `type<generation>(...)` query is not yet evaluated (e.g. `vector::offset_base`, `vector::mask_underlying_t`, `vector::transform(...)`). Blocks compress/expand/conflict/popcnt/lzc/hand/hor/store_mask generic paths. |
+| 872 | unresolved type query | A `type<generation>(...)` query is not yet evaluated (e.g. `vector::offset_base`, `vector::mask_underlying_t`, `vector::transform(...)`). Blocks compress/expand/conflict/popcnt/lzc/hand/hor/store_mask_repr generic paths. |
 | 398 | no top-level emit_return | Body has no top-level `emit_return(...)` (where:-clause / switch-bodied forms) — not lowerable yet (reinterpret, compress, cast). |
 | 216 | call type-args (bare-ext/index) | `call<primitive=extract[Vec, sse, 0]>` style: a bare extension + literal index in call type-args not yet supported. |
 | 152 | unresolved pointer-cast type | `cast<reinterpret>` to a `vector::mask_underlying_t` pointer not resolved. |

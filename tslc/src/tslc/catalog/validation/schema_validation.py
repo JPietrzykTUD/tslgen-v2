@@ -352,6 +352,7 @@ _KNOWN_TEST_FIELDS = frozenset(
         "id",
         "tags",
         "type",
+        "role",
         "lane_count",
         "extension",
         "expected_rule",
@@ -368,6 +369,7 @@ _KNOWN_TEST_FIELDS = frozenset(
     }
 )
 _REQUIRED_TEST_FIELDS = ("tags", "type", "case")
+_KNOWN_TEST_ROLES = frozenset({"value", "compile"})
 
 
 def _validate_tests(
@@ -457,6 +459,14 @@ def _validate_test_case(
                 message=f"{owner}: `lane_count` must be a positive integer",
                 source=source_span(entries["lane_count"].source),
             )
+        )
+    role = field_text(entries.get("role"))
+    if role is not None and role not in _KNOWN_TEST_ROLES:
+        _invalid_enum(
+            diagnostics,
+            entries.get("role"),
+            f"test role {role!r}",
+            sorted(_KNOWN_TEST_ROLES),
         )
     case = entries.get("case")
     if case is not None:

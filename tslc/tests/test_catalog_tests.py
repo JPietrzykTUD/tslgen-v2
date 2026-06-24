@@ -40,6 +40,28 @@ def test_masked_add_routes_mask_arg(catalog: Catalog) -> None:
     assert mask_arg.mask_bits is not None
 
 
+def test_scalar_and_compile_test_fields_are_promoted(catalog: Catalog) -> None:
+    shift = _first(catalog, "shift_right_imask", masked=False)
+    case = next(t for t in shift.tests if t.name == "shift_right_imask_ui32_basic")
+    assert case.role == "value"
+    assert [arg.kind for arg in case.inputs] == ["mask", "scalar"]
+    assert case.inputs[0].mask_bits == "240"
+    assert case.inputs[1].scalar == "4"
+
+    undef = _first(catalog, "set_undef", masked=False)
+    compile_case = next(t for t in undef.tests if t.role == "compile")
+    assert compile_case.name == "set_undef_si32_compile"
+    assert compile_case.lanes == 4
+
+
+def test_flat_ptr_plus_test_input_is_promoted_as_buffer_vector(catalog: Catalog) -> None:
+    load_convert = _first(catalog, "load_convert_up", masked=False)
+    case = next(t for t in load_convert.tests if t.name == "load_convert_up_ui8_avx2_to_ui16_basic")
+    assert len(case.inputs) == 1
+    assert case.inputs[0].kind == "vector"
+    assert case.inputs[0].values[:4] == ("1", "2", "3", "4")
+
+
 def test_equal_mask_result_expected_is_per_lane(catalog: Catalog) -> None:
     equal = _first(catalog, "equal", masked=False)
     basic = next(t for t in equal.tests if t.name == "equal_ui32_basic")
@@ -115,6 +137,15 @@ def test_non_positive_lane_count_is_diagnosed() -> None:
         "case {inputs [[1]], expected [1]}}\n"
     )
     assert "TSL-CATALOG-TEST-BAD-LANE-COUNT" in codes
+
+
+def test_unknown_test_role_is_diagnosed() -> None:
+    codes = _diagnostics(
+        "  tests:\n"
+        '    - {role "runtime", tags [basic], type "si32", '
+        "case {inputs [[1]], expected [1]}}\n"
+    )
+    assert "TSL-CATALOG-INVALID-ENUM" in codes
 
 
 def test_well_formed_tests_have_no_diagnostics() -> None:

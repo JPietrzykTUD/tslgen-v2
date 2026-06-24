@@ -1282,8 +1282,35 @@ Duplicate derived test names are catalog errors, and value-test render function
 names now use the derived case name directly instead of hiding duplicates behind
 source-order indexes.
 
+The value-test completeness slice is also implemented. Source test inputs now
+promote to typed `vector`, `mask`, or `scalar` arguments, source tests carry
+typed roles (`value` by default, plus `compile`), and
+`ValueTestProjectPlan.coverage` is exposed through `RenderedProject`. The full
+C++ AVX2 value gate now asserts that every applicable selected primitive test is
+emitted, compile-only, or reported as a blocking typed coverage status. New C++
+planner/render cases cover the current full corpus, while Rust remains narrower
+and reports unsupported planned kinds honestly. The large value-test modules
+were split before becoming new monoliths:
+`tslc.value_tests.case_helpers` owns shared case-planning helpers and
+`tslc.value_tests.render_cpp_helpers` owns pure C++ formatting helpers.
+
+The focused `store_mask_repr` packed-layout follow-up is also implemented. The
+`store_mask_repr` source body now distinguishes `packed=true` compact integral-mask
+storage from `packed=false` unsigned lane-word storage for AVX512/VL and the
+existing fallback families. The unpacked path uses
+`base::unsigned_of(base::in)` and reinterprets the wrapper's base pointer at the
+source-body boundary instead of relying on the undocumented
+`vector::mask_underlying_t` spelling. C++ value-test plans carry the unpacked
+storage spelling (`target_base_spelling`) and expected type tag, so the renderer
+formats already-decided storage facts. The full AVX2 coverage test now asserts
+that representative `packed=false` `store_mask_repr` cases are emitted.
+
+The mask representation primitive pair is now named `load_mask_repr` /
+`store_mask_repr`, avoiding collision with emitted masked overload names such as
+`store_mask`.
+
 Active prompt:
-docs/agent/runs/tslc-value-test-source-shape-review-prompt.md
+docs/agent/runs/tslc-mask-repr-primitive-rename-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
@@ -1301,14 +1328,64 @@ docs/agent/runs/tslc-value-test-plan-boundary-review-prompt.md
 docs/agent/runs/tslc-support-policy-capability-review-prompt.md
 docs/agent/runs/tslc-catalog-profile-validation-review-prompt.md
 docs/agent/runs/tslc-typed-render-values-review-prompt.md
+docs/agent/runs/tslc-value-test-source-shape-review-prompt.md
+docs/agent/runs/tslc-value-test-completeness-review-prompt.md
+docs/agent/runs/tslc-store-mask-packed-layout-review-prompt.md
 
-Next expected action: review the value-test source-shape cleanup prompt above.
-Confirm the authored primitive tests are now semantic and deduplicated, that
-lane-count inference is conservative, and that renderers still consume typed
-plans rather than rediscovering source semantics. The broad design-principles
-prompt remains useful background evidence after this narrower slice is
-reviewed.
+Next expected action: review the focused mask-representation primitive rename.
+Confirm that `load_mask_repr` / `store_mask_repr` remove the source/emitted-name
+collision without changing emitted mask-policy names such as `store_mask`.
 ```
+
+Value-test completeness validation (2026-06-24):
+
+```text
+`python -m compileall -q tslc/src/tslc` passed;
+`python -m pytest -q tslc/tests/test_catalog_tests.py tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_coverage_is_complete`
+passed with 23 tests;
+`python -m pytest -q tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds`
+passed with 1 test;
+`python -m pytest -q tslc/tests/test_value_tests.py` passed with 3 tests;
+`./verify.sh` passed all targeted validations, including 184 non-build tests
+and 53 generated-build tests across its shards.
+```
+
+Mask representation primitive rename validation (2026-06-24):
+
+```text
+`python -m compileall -q tslc/src/tslc` passed;
+`python -m pytest -q tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_coverage_is_complete`
+passed with 1 test;
+`python -m pytest -q tslc/tests/test_build_verify.py::test_masked_memory_build`
+passed with 1 test;
+`python -m pytest -q tslc/tests/test_value_tests.py` passed with 3 tests;
+`python -m pytest -q tslc/tests/test_build_verify.py::test_full_corpus_builds`
+passed with 1 test;
+`git diff --check` passed;
+`./verify.sh` passed all targeted validations, including 184 non-build tests
+and 53 generated-build tests across its shards.
+```
+
+Store-mask packed-layout follow-up validation (2026-06-24):
+
+```text
+`python -m compileall -q tslc/src/tslc` passed;
+`git diff --check` passed;
+`python -m pytest -q tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_coverage_is_complete`
+passed with 1 test;
+`python -m pytest -q tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds`
+passed with 1 test;
+`python -m pytest -q tslc/tests/test_value_tests.py` passed with 3 tests;
+`python -m pytest -q tslc/tests/test_build_verify.py::test_full_corpus_builds`
+passed with 1 test after replacing raw C-style source declarations with TSIL
+`var<const_infer>` declarations;
+`./verify.sh` passed all targeted validations, including 184 non-build tests
+and 53 generated-build tests across its shards.
+```
+
+Known follow-up from this slice: `load_mask_repr` still contains the older
+`vector::mask_underlying_t` spelling for `packed=false` and should get its own
+typed layout cleanup rather than being folded into this store-focused fix.
 
 Verification status (2026-06-23):
 

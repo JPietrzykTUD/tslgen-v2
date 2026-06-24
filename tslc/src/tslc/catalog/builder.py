@@ -22,7 +22,7 @@ from tslc.catalog.model import (
     TestArg,
     TestCase,
 )
-from tslc.catalog.signatures import parse_signature
+from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.catalog.test_cases import derive_test_case_name, infer_test_lane_count
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
 from tslc.syntax.ast import (
@@ -517,7 +517,8 @@ def _test_cases(
         case_field = entries.get("case")
         tags = _tag_list(entries.get("tags"))
         case_id = _field_text(entries.get("id"))
-        inputs = _test_inputs(_child(case_field, "inputs"))
+        shape = parse_signature(declaration.signature)
+        inputs = _test_inputs(_child(case_field, "inputs"), shape)
         expected = _expected_tokens(_child(case_field, "expected"))
         attrs = _attr_map(entries.get("attrs"))
         explicit_lane_count = _opt_int(_field_text(entries.get("lane_count")))
@@ -550,6 +551,7 @@ def _test_cases(
                 id=case_id,
                 inputs=inputs,
                 expected=expected,
+                role=_field_text(entries.get("role")) or "value",
                 lanes=lanes,
                 extension=_field_text(entries.get("extension")),
                 expected_rule=_field_text(entries.get("expected_rule")),
@@ -569,10 +571,21 @@ def _test_cases(
     return tuple(cases)
 
 
-def _test_inputs(field: ParsedTslField | None) -> tuple[TestArg, ...]:
+def _test_inputs(
+    field: ParsedTslField | None,
+    shape: SignatureShape | None,
+) -> tuple[TestArg, ...]:
     if field is None or not isinstance(field.value, ParsedTslListValue):
         return ()
     args: list[TestArg] = []
+    param_kinds = shape.param_kinds if shape is not None else ()
+    if param_kinds == ("ptr+",):
+        flat_values = tuple(
+            item.text for item in field.value.items if isinstance(item, ParsedTslScalarValue)
+        )
+        if len(flat_values) == len(field.value.items):
+            return (TestArg(kind="vector", values=flat_values),)
+    scalar_position = 0
     for item in field.value.items:
         if isinstance(item, ParsedTslListValue):
             args.append(
@@ -583,9 +596,23 @@ def _test_inputs(field: ParsedTslField | None) -> tuple[TestArg, ...]:
                     ),
                 )
             )
+            scalar_position += 1
         elif isinstance(item, ParsedTslScalarValue):
-            args.append(TestArg(kind="mask", mask_bits=item.text))
+            param_kind = _test_param_kind(param_kinds, scalar_position)
+            if param_kind in {"m", "im"}:
+                args.append(TestArg(kind="mask", mask_bits=item.text))
+            else:
+                args.append(TestArg(kind="scalar", scalar=item.text))
+            scalar_position += 1
     return tuple(args)
+
+
+def _test_param_kind(param_kinds: tuple[str, ...], position: int) -> str | None:
+    if not param_kinds:
+        return None
+    if len(param_kinds) == 1 and param_kinds[0].startswith("lanes<"):
+        return param_kinds[0]
+    return param_kinds[min(position, len(param_kinds) - 1)]
 
 
 def _tag_list(field: ParsedTslField | None) -> tuple[str, ...]:

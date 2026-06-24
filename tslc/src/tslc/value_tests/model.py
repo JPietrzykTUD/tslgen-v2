@@ -53,6 +53,21 @@ class ValueTestCasePlan:
     to_integral_name: str | None = None
     buffer_offset: int = 0
     buffer_length: int | None = None
+    source_offset: int = 0
+    scalar_inputs: tuple[str, ...] = ()
+    text_expected: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ValueTestCoverageEntry:
+    """Planning outcome for one authored value-test case or primitive test gap."""
+
+    backend_id: str
+    profile_name: str
+    primitive_name: str
+    case_name: str | None
+    status: str
+    reason: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +90,7 @@ class ValueTestProfilePlan:
 class ValueTestProjectPlan:
     profiles: tuple[ValueTestProfilePlan, ...]
     diagnostics: tuple[Diagnostic, ...] = ()
+    coverage: tuple[ValueTestCoverageEntry, ...] = ()
 
     def profiles_for(self, backend_id: str) -> tuple[ValueTestProfilePlan, ...]:
         return tuple(profile for profile in self.profiles if profile.backend_id == backend_id)
@@ -82,6 +98,7 @@ class ValueTestProjectPlan:
 
 __all__ = (
     "ValueTestBackendSupport",
+    "ValueTestCoverageEntry",
     "HarnessPrimitiveNames",
     "ValueTestCasePlan",
     "ValueTestProfilePlan",

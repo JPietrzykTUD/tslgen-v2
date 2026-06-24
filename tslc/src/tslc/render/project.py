@@ -42,6 +42,9 @@ class RenderedProject:
     artifacts: ArtifactSet
     verify: VerifyProject
     diagnostics: tuple[Diagnostic, ...] = ()
+    value_tests: ValueTestProjectPlan = field(
+        default_factory=lambda: ValueTestProjectPlan(profiles=())
+    )
 
 
 def render_project(
@@ -98,6 +101,7 @@ def render_project(
         artifacts=ArtifactSet.create(tuple(artifacts)),
         verify=VerifyProject(backends=tuple(verify_backends)),
         diagnostics=test_diagnostics,
+        value_tests=test_plan,
     )
 
 

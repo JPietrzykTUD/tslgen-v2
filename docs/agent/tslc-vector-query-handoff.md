@@ -1688,6 +1688,93 @@ secondary locations, CLI/API request provenance, build verifier/output writer
 locations, generated text changes, source repair, and any broad diagnostic
 framework replacement.
 
+### Value-Test Completeness Slice
+
+The value-test completeness slice is implemented for the C++ AVX2 full-corpus
+gate. The planner now treats coverage as a typed output instead of a generated
+source-code heuristic.
+
+Implemented pieces:
+
+1. `TestArg` now promotes source inputs to typed `vector`, `mask`, or `scalar`
+   values according to the primitive signature position.
+2. `TestCase.role` defaults to `value`; `role "compile"` is accepted for
+   deterministic compile-only smoke cases such as `set_undef`.
+3. `ValueTestCoverageEntry` records `emitted`, `compile_only_emitted`,
+   `missing_authored_tests`, `authored_unplanned`, and `backend_unsupported`
+   outcomes. `ValueTestProjectPlan.coverage` is exposed through
+   `RenderedProject.value_tests`.
+4. The full C++ AVX2 coverage test asserts no missing authored tests, no
+   authored applicable-but-unplanned cases, and no backend-unsupported cases.
+5. The C++ planner patterns now cover additional typed roles: vector/array
+   round trips, scalar results, mask constants and mask/scalar conversions,
+   scalar and mask pointer loads/stores, masked contiguous memory operations,
+   memory copy, pointer lifetime/free smoke cases, indexed gather/scatter,
+   load-convert, stream output, scalar-to-vector constructors, extension
+   insert/extract, representation-change cases, and compile-only cases.
+6. Profile-specific authored tests are admitted only when the selected
+   specialization set contains the matching extension/type/target facts.
+7. The primitive corpus has added or repaired completeness tests for
+   `from_array`, `lzc_imask`, `lzc_scalar`, `set_undef`,
+   `shift_right_imask`, and selected mask-store packed/unpacked cases.
+8. `case_plans.py` and `render_cpp.py` were split before becoming new
+   monoliths. Shared planner helpers live in `tslc.value_tests.case_helpers`;
+   pure C++ formatting helpers live in `tslc.value_tests.render_cpp_helpers`.
+9. A focused `store_mask_repr` follow-up makes `packed=false` an explicit source
+   layout distinction. Packed cases store the compact integral mask; unpacked
+   cases store unsigned lane words through a source-body reinterpret cast, and
+   the C++ value-test plan carries the expected unsigned storage type/tag.
+10. The mask representation primitives are named `load_mask_repr` and
+   `store_mask_repr` to avoid colliding with emitted masked overload names such
+   as `store_mask`.
+
+Validation so far:
+
+```bash
+python -m compileall -q tslc/src/tslc
+```
+
+Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_catalog_tests.py tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_coverage_is_complete
+```
+
+Result: `23 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_value_tests.py
+```
+
+Result: `3 passed`.
+
+```bash
+./verify.sh
+```
+
+Result: passed all targeted validations, including 184 non-build tests and 53
+generated-build tests across its shards.
+
+After the focused `store_mask_repr` packed-layout follow-up, the exact
+`test_full_corpus_builds` regression and the full `./verify.sh` gate were rerun
+with the same 184 non-build and 53 generated-build counts.
+
+After the mask-representation primitive rename to `load_mask_repr` /
+`store_mask_repr`, targeted value/build tests and `./verify.sh` were rerun
+again with the same 184 non-build and 53 generated-build counts.
+
+Known follow-ups:
+
+- Rust value-test parity is still a separate milestone.
+- The completeness gate is intentionally C++ AVX2-first; future profiles should
+  add their own typed admission rules instead of broadening this gate by source
+  primitive name.
+- `case_plans.py` is below the module-size guardrail but still dense; future
+  additions should prefer new focused helper modules or per-shape builders.
+- `load_mask_repr` still contains the older `vector::mask_underlying_t` spelling for
+  `packed=false`; give it a separate typed layout cleanup rather than folding it
+  into the completed store-focused fix.
+
 ### TSIL Region Span Slice
 
 The follow-up TSIL span slice now refines provenance inside implementation body
