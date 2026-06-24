@@ -379,7 +379,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
   param_types:
     ptr:
       "if packed=true" "type<generation>(vector::imask) const*"
-      "if packed=false" "type<generation>(vector::mask_underlying_t) const*"
+      "if packed=false" "type<generation>(base::unsigned_of(type<generation>(base::in))) const*"
   brief_description "Loads data from memory to a mask."
   operation ""
   tests:
@@ -390,7 +390,18 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
       arith:
         requires []
         implementation:
-          tsil "emit_return(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));"
+          tsil """
+            if<generation>(value<generation>(primitive::attribute(packed))) {
+              emit_return(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
+            } else<generation> {
+              let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              emit_return(
+                call<primitive=to_mask[Vec]>(
+                  cast<static>(type<generation>(vector::imask), *cast<reinterpret>(MaskWord const*, ptr))
+                )
+              );
+            }
+          """
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -402,9 +413,10 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
               emit_return(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
             } else<generation> {
               let<type>(MaskT, type<generation>(vector::mask));
+              let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
               var<typed>(MaskT, result, mask<zero>());
               loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                if ((*ptr_add(ptr, i)) != cast<static>(type<generation>(base::in), 0)) {
+                if ((*ptr_add(ptr, i)) != cast<static>(MaskWord, 0)) {
                   mask<set:1>(result, i);
                 }
               }
@@ -418,7 +430,22 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
         implementation:
-          tsil "emit_return(*cast<reinterpret>(type<generation>(vector::imask) *, ptr));"
+          tsil """
+            if<generation>(value<generation>(primitive::attribute(packed))) {
+              emit_return(*cast<reinterpret>(type<generation>(vector::imask) const*, ptr));
+            } else<generation> {
+              let<type>(MaskBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(MaskVec, type<generation>(vector::as_base(MaskBase)));
+              emit_return(
+                call<primitive=nequal[MaskVec]>(
+                  call<primitive=load[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                    cast<reinterpret>(MaskBase *, ptr)
+                  ),
+                  call<primitive=set_zero[MaskVec]>()
+                )
+              );
+            }
+          """
     [avx2, sse, neon]:
       arith:
         requires:
@@ -432,9 +459,14 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
             if<generation>(value<generation>(primitive::attribute(packed))) {
               emit_return(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
             } else<generation> {
+              let<type>(MaskBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(MaskVec, type<generation>(vector::as_base(MaskBase)));
               emit_return(
-                call<primitive=load, attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
-                  cast<reinterpret>(type<generation>(vector::mask_underlying_t) const*, ptr)
+                call<primitive=nequal[MaskVec]>(
+                  call<primitive=load[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                    cast<reinterpret>(MaskBase *, ptr)
+                  ),
+                  call<primitive=set_zero[MaskVec]>()
                 )
               );
             }

@@ -334,9 +334,11 @@ class _GenerationSession:
 
             if slot_lowered:
                 discovered_primitives.extend(
-                    dependency.primitive
-                    for dependency in callees
-                    if catalog.primitives_named(dependency.primitive, unmasked=False)
+                    dependency_primitive
+                    for dependency_primitive in sorted(
+                        {dependency.primitive for dependency in callees}
+                    )
+                    if catalog.primitives_named(dependency_primitive, unmasked=False)
                 )
 
         return lowered_slots, discovered_primitives

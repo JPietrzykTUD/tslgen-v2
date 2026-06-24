@@ -12,7 +12,13 @@ from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.diagnostics import has_errors
 from tslc.lower.calls import ParsedCallSelector, parse_call_selector
+from tslc.lower.dependencies import (
+    CallDependency,
+    VectorIdentity,
+    extract_call_dependencies_from_segments,
+)
 from tslc.lower.lowerer import Lowerer, _type_param_bounds
+from tslc.ir.scan import scan
 from tslc.select.selector import Selector
 from tslc.support_policy_views import immediate_split_names
 
@@ -105,6 +111,36 @@ def test_call_selector_parser_keeps_syntax_only_shape() -> None:
     )
     assert parse_call_selector("primitive=@self[Vec] attrs[mask=zero]") is None
     assert parse_call_selector("primitive=set_zero trailing") is None
+
+
+def test_dependency_extraction_resolves_queries_without_backend_dialect(
+    catalog: Catalog,
+) -> None:
+    body = """
+      let<type>(ScalarVec, type<backend>(vector::as_extension(scalar)));
+      call<primitive=@self[ScalarVec], attrs[mask=zero]>(left, right);
+    """
+
+    dependencies = extract_call_dependencies_from_segments(
+        scan(body),
+        "add",
+        "avx2",
+        "si32",
+        None,
+        None,
+        None,
+        catalog,
+    )
+
+    assert dependencies == frozenset(
+        {
+            CallDependency(
+                "add",
+                "zero",
+                VectorIdentity("si32", "scalar"),
+            )
+        }
+    )
 
 
 def test_primitive_corpus_uses_comma_separated_call_attrs(data_root: Path) -> None:

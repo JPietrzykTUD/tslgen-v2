@@ -11,6 +11,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from tslc.catalog.model import RESULT_DIM_BASE, Extension
+from tslc.catalog.scalar_types import (
+    same_scalar_width,
+    scalar_bit_width,
+    scalar_bit_width_or_default,
+)
 from tslc.catalog.signatures import LANE_LIST_KIND, SignatureShape
 
 
@@ -149,15 +154,13 @@ class SupportPolicy:
         return result_dim == RESULT_DIM_BASE
 
     def same_type_width(self, target_tag: str, source_tag: str) -> bool:
-        tw, sw = self.type_bit_width(target_tag), self.type_bit_width(source_tag)
-        return tw is not None and tw == sw
+        return same_scalar_width(target_tag, source_tag)
 
     def type_bit_width(self, type_tag: str) -> int | None:
-        digits = "".join(c for c in type_tag if c.isdigit())
-        return int(digits) if digits else None
+        return scalar_bit_width(type_tag)
 
     def type_bit_width_or_default(self, type_tag: str, default: int = 8) -> int:
-        return self.type_bit_width(type_tag) or default
+        return scalar_bit_width_or_default(type_tag, default)
 
     def supports_all_backends(self, backend_ids: Iterable[str]) -> bool:
         return all(self.supports_backend(backend_id) for backend_id in backend_ids)

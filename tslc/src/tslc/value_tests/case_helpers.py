@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tslc.catalog.model import TestCase
+from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests.model import ValueTestCasePlan
 
@@ -236,8 +237,7 @@ def valid_generic_lanes(type_tag: str, lanes: int) -> int:
 
 
 def type_bits_for_tag(type_tag: str) -> int | None:
-    digits = "".join(c for c in type_tag if c.isdigit())
-    return int(digits) if digits else None
+    return scalar_bit_width(type_tag)
 
 
 def base_spelling(

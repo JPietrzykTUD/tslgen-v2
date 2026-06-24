@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from tslc.catalog.model import Catalog
+from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS, normalize_scalar_tag
 from tslc.catalog.signatures import (
     LANE_LIST_KIND,
     SignatureShape,
@@ -24,10 +25,6 @@ from tslc.syntax.ast import (
     ParsedTslScalarValue,
 )
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
-
-_KNOWN_TYPE_TAGS = frozenset(
-    {"si8", "si16", "si32", "si64", "ui8", "ui16", "ui32", "ui64", "f32", "f64"}
-)
 
 
 def validate_required_backends(
@@ -73,7 +70,7 @@ def validate_backend_type_spellings(
             continue
         spellings = catalog.type_spellings.get(backend, {})
         for type_tag in type_tags:
-            key = _normalize_scalar_tag(type_tag)
+            key = normalize_scalar_tag(type_tag)
             if key not in spellings:
                 diagnostics.append(
                     diagnostic_at(
@@ -244,19 +241,19 @@ def validate_extension_inheritance(
 def _catalog_type_tags(catalog: Catalog) -> tuple[str, ...]:
     tags: set[str] = set()
     for members in catalog.type_groups.values():
-        tags.update(member for member in members if member in _KNOWN_TYPE_TAGS)
+        tags.update(member for member in members if member in KNOWN_SCALAR_TYPE_TAGS)
     for primitive in catalog.primitives:
         for implementation in primitive.implementations:
             tags.update(
                 member
                 for member in catalog.type_group_members(implementation.type_group)
-                if member in _KNOWN_TYPE_TAGS
+                if member in KNOWN_SCALAR_TYPE_TAGS
             )
             if implementation.to_target_group is not None:
                 tags.update(
                     member
                     for member in catalog.type_group_members(implementation.to_target_group)
-                    if member in _KNOWN_TYPE_TAGS
+                    if member in KNOWN_SCALAR_TYPE_TAGS
                 )
     return tuple(sorted(tags))
 
@@ -274,7 +271,10 @@ def _type_member_sources(
                 if types is None or not isinstance(types.value, ParsedTslListValue):
                     continue
                 for item in types.value.items:
-                    if isinstance(item, ParsedTslScalarValue) and item.text in _KNOWN_TYPE_TAGS:
+                    if (
+                        isinstance(item, ParsedTslScalarValue)
+                        and item.text in KNOWN_SCALAR_TYPE_TAGS
+                    ):
                         sources.setdefault(item.text, source_span(item.source))
     return sources
 
@@ -291,11 +291,3 @@ def _inherit_sources(parsed: OuterTslParseResult | None) -> dict[str, SourceSpan
             if declaration.name is not None and inherit is not None:
                 sources[declaration.name] = source_span(inherit.source)
     return sources
-
-
-def _normalize_scalar_tag(type_tag: str) -> str:
-    if type_tag.startswith("si") and type_tag[2:].isdigit():
-        return "s" + type_tag[2:]
-    if type_tag.startswith("ui") and type_tag[2:].isdigit():
-        return "u" + type_tag[2:]
-    return type_tag

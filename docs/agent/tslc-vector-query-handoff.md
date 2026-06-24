@@ -1763,6 +1763,11 @@ After the mask-representation primitive rename to `load_mask_repr` /
 `store_mask_repr`, targeted value/build tests and `./verify.sh` were rerun
 again with the same 184 non-build and 53 generated-build counts.
 
+After the design-principles residual-risk cleanup, `load_mask_repr`
+`packed=false` uses explicit unsigned lane-word storage like `store_mask_repr`,
+and dependency extraction no longer constructs a backend dialect for
+backend-neutral call closure.
+
 Known follow-ups:
 
 - Rust value-test parity is still a separate milestone.
@@ -1771,9 +1776,6 @@ Known follow-ups:
   primitive name.
 - `case_plans.py` is below the module-size guardrail but still dense; future
   additions should prefer new focused helper modules or per-shape builders.
-- `load_mask_repr` still contains the older `vector::mask_underlying_t` spelling for
-  `packed=false`; give it a separate typed layout cleanup rather than folding it
-  into the completed store-focused fix.
 
 ### TSIL Region Span Slice
 

@@ -1309,8 +1309,16 @@ The mask representation primitive pair is now named `load_mask_repr` /
 `store_mask_repr`, avoiding collision with emitted masked overload names such as
 `store_mask`.
 
+A focused design-principles residual-risk cleanup is now implemented. Dependency
+extraction resolves source query identities through a narrow semantic resolver
+instead of constructing a C++ backend dialect, scalar type facts are centralized
+in `tslc.catalog.scalar_types`, dependency worklist expansion sorts discovered
+primitive names before enqueueing them, and `load_mask_repr` `packed=false`
+now mirrors `store_mask_repr` by using explicit unsigned lane-word storage
+instead of `vector::mask_underlying_t`.
+
 Active prompt:
-docs/agent/runs/tslc-mask-repr-primitive-rename-review-prompt.md
+docs/agent/runs/tslc-design-principles-residual-risk-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
@@ -1331,10 +1339,13 @@ docs/agent/runs/tslc-typed-render-values-review-prompt.md
 docs/agent/runs/tslc-value-test-source-shape-review-prompt.md
 docs/agent/runs/tslc-value-test-completeness-review-prompt.md
 docs/agent/runs/tslc-store-mask-packed-layout-review-prompt.md
+docs/agent/runs/tslc-mask-repr-primitive-rename-review-prompt.md
 
-Next expected action: review the focused mask-representation primitive rename.
-Confirm that `load_mask_repr` / `store_mask_repr` remove the source/emitted-name
-collision without changing emitted mask-policy names such as `store_mask`.
+Next expected action: review the focused design-principles residual-risk
+cleanup. Confirm that dependency extraction is backend-neutral, scalar
+source-type facts have a single typed owner, dependency closure remains
+deterministic, and `load_mask_repr` no longer relies on the older unpacked
+mask-underlying source spelling.
 ```
 
 Value-test completeness validation (2026-06-24):
@@ -1366,6 +1377,17 @@ passed with 1 test;
 and 53 generated-build tests across its shards.
 ```
 
+Design-principles residual-risk cleanup validation (2026-06-24):
+
+```text
+`python -B -m compileall -q tslc/src/tslc tslc/tests` passed;
+`python -m pytest -q tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds`
+passed with 1 test under escalated filesystem permissions because the generated
+C++ build uses `/root/.cache/zig`;
+`python -m pytest -q tslc/tests/test_masks_and_calls.py tslc/tests/test_support_policy.py tslc/tests/test_support_policy_views.py tslc/tests/test_tsil_scan.py tslc/tests/test_generation_conditionals.py tslc/tests/test_select_and_lower.py tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py`
+passed with 79 tests under the same generated-build permissions.
+```
+
 Store-mask packed-layout follow-up validation (2026-06-24):
 
 ```text
@@ -1383,9 +1405,9 @@ passed with 1 test after replacing raw C-style source declarations with TSIL
 and 53 generated-build tests across its shards.
 ```
 
-Known follow-up from this slice: `load_mask_repr` still contains the older
-`vector::mask_underlying_t` spelling for `packed=false` and should get its own
-typed layout cleanup rather than being folded into this store-focused fix.
+The former known follow-up for `load_mask_repr` is resolved: its `packed=false`
+source contract now uses `base::unsigned_of(base::in)` lane-word storage rather
+than `vector::mask_underlying_t`.
 
 Verification status (2026-06-23):
 
@@ -1676,37 +1698,37 @@ implements the existing capability-boundary direction rather than a new policy.
 Latest follow-up cleanup:
 
 ```text
-The TSLc design-principles follow-up cleanup is implemented and awaiting
+The TSLc design-principles residual-risk cleanup is implemented and awaiting
 review. Active run prompt:
-`docs/agent/runs/tslc-design-principles-follow-up-cleanup-review-prompt.md`.
+`docs/agent/runs/tslc-design-principles-residual-risk-review-prompt.md`.
 
 Current action: review the focused cleanup, not a new milestone. The cleanup
-addresses the actionable design-principles findings by making value-test
-planning warn per unsupported authored `tests:` case, introducing an explicit
-`value_test_warnings` API/request/CLI switch instead of tying warning visibility
-to `test_harness`, and moving raw TSIL text tokenization from `lowerer.py` to
-`tslc.lower.raw_text`.
+addresses the medium findings and residual risks from the latest
+design-principles review by removing the backend dialect from dependency
+extraction, centralizing scalar source-type facts, sorting dependency worklist
+expansion, and completing the `load_mask_repr` unpacked typed layout follow-up.
 
-Next expected action: run the follow-up cleanup review. If accepted, select the
-next concrete planning/review prompt from the active TSLc backlog; if it needs
-revision, create a narrow revision prompt for the named blocking issue.
+Next expected action: run the residual-risk cleanup review. If accepted, select
+the next concrete planning/review prompt from the active TSLc backlog; if it
+needs revision, create a narrow revision prompt for the named blocking issue.
 
-Boundary rules: do not broaden value-test shape support, do not make
-`test_harness` control diagnostics visibility, do not add renderer-side
-semantic inference, and do not turn `raw_text.py` into a new TSIL parser.
+Boundary rules: keep dependency extraction backend-neutral, keep scalar TSL tag
+semantics in `tslc.catalog.scalar_types`, do not broaden TSIL expression
+parsing, do not repair malformed source bodies, and do not add renderer-side
+semantic inference.
 
 Validation already run for the cleanup:
-`python -m pytest -q tslc/tests/test_value_test_planning.py` passed with
-9 tests; `python -m compileall -q tslc/src/tslc tslc/tests` passed;
-`python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_support_policy.py tslc/tests/test_support_policy_views.py tslc/tests/test_tsil_scan.py tslc/tests/test_masks_and_calls.py tslc/tests/test_generation_conditionals.py tslc/tests/test_select_and_lower.py`
-passed with 75 tests;
-`python -m pytest -q tslc/tests/test_catalog_validation.py tslc/tests/test_catalog_tests.py tslc/tests/test_value_tests.py tslc/tests/test_coverage.py`
-passed with 30 tests; `git diff --check` passed.
+`python -B -m compileall -q tslc/src/tslc tslc/tests` passed;
+`python -m pytest -q tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_builds`
+passed with 1 test under escalated filesystem permissions because the generated
+C++ build uses `/root/.cache/zig`;
+`python -m pytest -q tslc/tests/test_masks_and_calls.py tslc/tests/test_support_policy.py tslc/tests/test_support_policy_views.py tslc/tests/test_tsil_scan.py tslc/tests/test_generation_conditionals.py tslc/tests/test_select_and_lower.py tslc/tests/test_value_test_planning.py tslc/tests/test_value_tests.py`
+passed with 79 tests under the same generated-build permissions.
 
-Known follow-ups: no new architectural decision was recorded because this is a
-review-finding cleanup. Future lowerer work should continue splitting cohesive
-helper families before `lowerer.py` grows back toward the module-size
-guardrail.
+Known follow-ups: the low-severity value-test planner/renderer module-size
+guardrail still applies before adding more case families. Remaining digit
+parsing should stay presentation-specific, such as emitted immediate type
+spellings and backend base-type spellings.
 ```
 
 Validation commands for the active `tslc` line:

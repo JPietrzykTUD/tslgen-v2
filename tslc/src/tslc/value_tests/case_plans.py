@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from tslc.backend.translation_common import unsigned_of
 from tslc.catalog.model import Catalog, TestCase
+from tslc.catalog.scalar_types import unsigned_of
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests.case_helpers import (
     args_match as _args_match,

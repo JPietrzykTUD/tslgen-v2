@@ -26,6 +26,7 @@ from tslc.catalog.model import (
     Catalog,
     ImmediateParam,
 )
+from tslc.catalog.scalar_types import scalar_bit_width_or_default
 from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at, sort_diagnostics
 from tslc.ir.scan import scan
@@ -412,8 +413,7 @@ def _resolve_immediate_range(
         return None
     lo, hi_expr, inclusive = imm_param.value_range
     if hi_expr == "base_bit_width(data)":
-        digits = "".join(c for c in type_tag if c.isdigit())
-        hi = int(digits) if digits else 8
+        hi = scalar_bit_width_or_default(type_tag)
     elif hi_expr.lstrip("-").isdigit():
         hi = int(hi_expr)
     else:

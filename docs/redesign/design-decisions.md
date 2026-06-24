@@ -4423,3 +4423,50 @@ Consequences:
 - The mask representation source primitives are named `load_mask_repr` and
   `store_mask_repr` so they do not collide with emitted masked overload names
   such as `load_mask`, `load_maskz`, and `store_mask`.
+
+## ADR-087: TSLc Scalar Facts And Dependency Closure Stay Semantic
+
+Status: Accepted and implemented in `tslc`.
+
+Context:
+
+A design-principles review found that primitive-call dependency extraction
+constructed a concrete C++ backend dialect even though dependency closure only
+needs source-level vector identities. The same review found scalar width and
+signedness facts duplicated through local digit parsing in validation, support
+policy, lowering, and value-test helpers. A related residual risk remained in
+`load_mask_repr`, whose unpacked layout still relied on the older
+`vector::mask_underlying_t` source spelling after `store_mask_repr` had moved
+to explicit unsigned lane-word storage.
+
+Decision:
+
+Scalar TSL type tags are catalog/domain facts. `tslc.catalog.scalar_types` owns
+the explicit scalar table (`si8`/`ui8`/`f32`, widths, signedness, floatingness,
+and backend type-map keys). Validation, support policy, query evaluation,
+immediate-range lowering, and value-test scalar-tag helpers consume that table
+instead of rediscovering scalar facts from raw strings.
+
+Primitive-call dependency extraction uses a narrow semantic query resolver for
+dependency identity. It recognizes the source forms needed for call closure:
+`type`/`value` wrappers, `base::in`, signed/unsigned base transforms,
+`vector::as_extension`, `vector::as_base`, `vector::window_base`, `vector::as`,
+`base::generic`, target aliases, source-local `let<type>` aliases, concrete
+scalar type tags, and extension names. It does not construct a backend dialect
+or render backend spellings.
+
+`load_mask_repr` and `store_mask_repr` now share the same unpacked layout
+contract: `packed=false` uses unsigned lane-word storage derived from
+`base::unsigned_of(base::in)`. Source bodies convert those typed lane-word
+vectors to masks before returning. Dependency worklist expansion sorts
+discovered primitive names before adding them to the queue.
+
+Consequences:
+
+- Call closure remains backend-neutral and deterministic.
+- Scalar source semantics have one typed owner; presentation-only helpers may
+  still parse emitted spellings when they are formatting backend substrate
+  names rather than interpreting TSL type tags.
+- `vector::mask_underlying_t` remains a supported backend/member query where
+  documented, but it is no longer the unpacked mask representation source
+  contract for `load_mask_repr` / `store_mask_repr`.

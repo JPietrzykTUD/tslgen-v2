@@ -24,11 +24,10 @@ import re
 from dataclasses import dataclass, replace
 from typing import Protocol
 
-_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-from tslc.backend.translation import (
+from tslc.catalog.scalar_types import (
     is_signed,
     is_type_tag,
+    scalar_byte_width_or_default,
     signed_of,
     unsigned_of,
 )
@@ -37,6 +36,8 @@ from tslc.lower._text import split_head_arg, split_top_level
 from tslc.lower.context import LoweringSession, VectorValue
 from tslc.render.model import RenderField, render_text
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
+
+_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 # --- query value types (extend as new queries need new result kinds) ---------
@@ -61,11 +62,6 @@ class BoolValue:
 
 
 QueryValue = TypeValue | TextValue | BoolValue | VectorValue
-
-
-def _type_bits(base_tag: str) -> int:
-    digits = "".join(c for c in base_tag if c.isdigit())
-    return int(digits) if digits else 8
 
 
 def _vector_value(base_tag: str, context: LoweringSession) -> VectorValue:
@@ -303,12 +299,7 @@ class SizeBytesQuery:
 def _type_byte_width(type_tag: str) -> int:
     """Byte width of a scalar type tag (``si8`` -> 1, ``f64`` -> 8)."""
 
-    digits = ""
-    for char in reversed(type_tag):
-        if not char.isdigit():
-            break
-        digits = char + digits
-    return (int(digits) if digits else 8) // 8
+    return scalar_byte_width_or_default(type_tag)
 
 
 class IsSignedQuery:

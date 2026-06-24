@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tslc.catalog.scalar_types import scalar_bit_width
+
 
 def cpp_literal(token: str, type_tag: str) -> str:
     if type_tag.startswith("f"):
@@ -76,8 +78,7 @@ def _is_numeric_token(token: str) -> bool:
 
 
 def _type_bits(type_tag: str) -> int | None:
-    digits = "".join(c for c in type_tag if c.isdigit())
-    return int(digits) if digits else None
+    return scalar_bit_width(type_tag)
 
 
 __all__ = (

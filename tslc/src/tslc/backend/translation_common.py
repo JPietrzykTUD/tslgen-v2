@@ -3,58 +3,17 @@
 from __future__ import annotations
 
 from tslc.catalog.model import Catalog, Extension
-from tslc.render.model import RenderField, RenderText, TemplateApplication
-
-_KNOWN_TYPE_TAGS = frozenset(
-    {"si8", "si16", "si32", "si64", "ui8", "ui16", "ui32", "ui64", "f32", "f64"}
+from tslc.catalog.scalar_types import (
+    is_signed,
+    is_type_tag,
+    normalize_scalar_tag,
+    signed_of,
+    unsigned_of,
 )
+from tslc.render.model import RenderField, RenderText, TemplateApplication
 
 # x86 register width in bits, keyed by ISA name. Shared by backend translation and render.
 X86_REGISTER_BITS = {"sse": 128, "avx2": 256, "avx512": 512}
-
-
-def is_type_tag(text: str) -> bool:
-    return text in _KNOWN_TYPE_TAGS
-
-
-def signed_of(type_tag: str) -> str:
-    """The same-width signed integer tag."""
-
-    if type_tag.startswith("ui"):
-        return "si" + type_tag[2:]
-    if type_tag.startswith("f"):
-        return "si" + type_tag[1:]
-    return type_tag
-
-
-def unsigned_of(type_tag: str) -> str:
-    """The unsigned integer tag of the same width."""
-
-    if type_tag.startswith("si"):
-        return "ui" + type_tag[2:]
-    if type_tag.startswith("f"):
-        return "ui" + type_tag[1:]
-    return type_tag
-
-
-def is_signed(type_tag: str) -> bool:
-    """Whether a width tag denotes a signed arithmetic type."""
-
-    if type_tag.startswith("ui") and type_tag[2:].isdigit():
-        return False
-    if type_tag.startswith("si") and type_tag[2:].isdigit():
-        return True
-    return type_tag.startswith("f")
-
-
-def normalize_scalar_tag(type_tag: str) -> str:
-    """``si32 -> s32``, ``ui32 -> u32``, ``f32 -> f32`` for type-map lookup."""
-
-    if type_tag.startswith("si") and type_tag[2:].isdigit():
-        return "s" + type_tag[2:]
-    if type_tag.startswith("ui") and type_tag[2:].isdigit():
-        return "u" + type_tag[2:]
-    return type_tag
 
 
 def scalar_spelling(catalog: Catalog, backend_id: str, type_tag: str) -> str | None:
