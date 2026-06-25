@@ -901,7 +901,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                 """
     avx512:
       ?i8:
-        requires [avx512f]
+        requires [avx512f, avx512bw]
         ToBase:
           ?i16:
             safety:
@@ -1007,7 +1007,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
       ?i16:
-        requires [avx512f, avx512dq]
+        requires [avx512f, avx512bw]
         ToBase:
           ?i32:
             safety:
@@ -1036,7 +1036,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
       ?i32:
-        requires [avx512f]
+        requires [avx512f, avx512dq]
         ToBase:
           ?i64:
             safety:
@@ -1052,7 +1052,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                   }
                 """
       f32:
-        requires [avx512f]
+        requires [avx512f, avx512dq]
         ToBase:
           f64:
             safety:

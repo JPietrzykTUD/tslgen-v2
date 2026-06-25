@@ -1026,6 +1026,60 @@ git diff --check
 
 Result: passed.
 
+### SDE Value-Test Execution Slice
+
+The after-write verifier now supports SDE-backed value-test execution for
+SDE-annotated x86 machine profiles. This closes the current runtime coverage
+goal for provided x86 profiles by running generated value tests for both C++
+and Rust through Intel SDE when native host ISA support is unavailable.
+
+Implemented pieces:
+
+1. `MachineProfile` accepts optional validated `sde` chip aliases from
+   `supplementary/buildsystem/machine_profiles.json`.
+2. C++ and Rust profile render data pass the chip alias into `VerifyProfile`.
+3. `tslc.cli --test --sde [PATH]` passes an explicit emulator executable into
+   `verify_project`.
+4. C++ value-test commands wrap `ctest` as `sde -chip -- ctest ...` for
+   profiles with an SDE alias.
+5. Rust value-test commands build tests with
+   `cargo test --no-run --message-format=json`, parse compiler-artifact test
+   executables, and run each binary through the same SDE prefix.
+6. Missing SDE executables and missing Rust test binaries produce structured
+   verifier diagnostics.
+7. Source-owned feature metadata exposed by the SDE sweep was corrected in
+   machine profiles and `.tsl` implementation selectors rather than hidden in
+   verifier exceptions.
+
+SDE runtime sweep:
+
+```text
+sse, sse2, sse3, avx, avx2, knl, kml, skylake, cannonlake,
+cascadelake, cooperlake, icelake-rockerlake, tigerlake, zen4,
+sapphirerapids, zen5
+```
+
+Result: every profile generated, wrote artifacts, and verified C++ plus Rust
+value tests through `/opt/intel-sde/sde64` with zero diagnostics.
+
+Focused validation:
+
+```bash
+python -m compileall -q tslc/src/tslc
+python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_build_verify_config.py tslc/tests/test_catalog_validation.py::test_machine_profile_sde_metadata_is_validated tslc/tests/test_cli.py
+```
+
+Result: `30 passed`.
+
+Full validation:
+
+```bash
+./verify.sh
+```
+
+Result: passed all targeted validations, including 220 non-build tests and 53
+generated-build tests.
+
 ### CLI Value-Test Flag Slice
 
 The CLI now exposes the existing value-test path through `--test`.

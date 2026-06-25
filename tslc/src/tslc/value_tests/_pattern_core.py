@@ -124,7 +124,27 @@ class _SimpleShapePattern(_BasePattern):
     allow_generic_params: bool = False
 
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
-        spec = specs[0]
+        return bool(self._matching_specs(specs))
+
+    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+        specs = self._matching_specs(kwargs["specs"])
+        if not specs:
+            return ()
+        plan = self.build_case(
+            kwargs["emitted_name"],
+            kwargs["index"],
+            kwargs["case"],
+            specs,
+        )
+        return (plan,) if plan is not None else ()
+
+    def _matching_specs(
+        self,
+        specs: tuple[LoweredSpecialization, ...],
+    ) -> tuple[LoweredSpecialization, ...]:
+        return tuple(spec for spec in specs if self._matches_spec(spec))
+
+    def _matches_spec(self, spec: LoweredSpecialization) -> bool:
         if spec.result_kind != self.result_kind or tuple(spec.param_kinds) != self.param_kinds:
             return False
         if spec.target is not None or spec.mask_policy is not None:
@@ -136,15 +156,6 @@ class _SimpleShapePattern(_BasePattern):
         if not self.allow_axis and spec.axis:
             return False
         return self.allow_axis or not spec.axis
-
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
-        plan = self.build_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
-        )
-        return (plan,) if plan is not None else ()
 
 class _IndexedScalarPattern(_BasePattern):
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:

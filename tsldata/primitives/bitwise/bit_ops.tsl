@@ -75,7 +75,7 @@ prim<v:=(v,v)> binary_and(left, right):
             complete(intrin<and, build[suffix=intrin::suffix("stream")]>(left, right));
           """
       f?:
-        requires [avx512f]
+        requires [avx512f, avx512dq]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -262,7 +262,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
             complete(intrin<andnot, build[suffix=intrin::suffix("stream")]>(left, right));
           """
       f?:
-        requires [avx512f]
+        requires [avx512f, avx512dq]
         safety:
           internal_unsafe true
           caller_unsafe false

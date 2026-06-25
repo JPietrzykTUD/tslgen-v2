@@ -30,6 +30,9 @@ class MachineProfile:
     # feature -> its compiler/target-feature spelling when it differs from the token
     # (e.g. avx512_vpclmulqdq -> vpclmulqdq, neon -> asimd).
     alternatives: Mapping[str, str]
+    # Optional Intel SDE chip alias used by the after-write verifier to run value tests
+    # on hosts that do not support the profile's ISA natively.
+    sde: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "alternatives", MappingProxyType(dict(self.alternatives)))
@@ -130,7 +133,7 @@ def load_machine_profiles_checked(path: Path) -> MachineProfileLoadResult:
             fields = _object_fields(entry, path, diagnostics)
             _unknown_fields(
                 fields,
-                {"name", "flags", "alternatives"},
+                {"name", "flags", "alternatives", "sde"},
                 path,
                 diagnostics,
                 owner=f"profile entry under {family!r}",
@@ -172,11 +175,13 @@ def load_machine_profiles_checked(path: Path) -> MachineProfileLoadResult:
             )
             alternatives_value = fields.get("alternatives", _JsonObject(()))
             alternatives = _alternatives(name, alternatives_value, path, diagnostics)
+            sde = _sde_chip(name, fields.get("sde"), path, diagnostics)
             profiles[name] = MachineProfile(
                 name=name,
                 family=family,
                 features=features,
                 alternatives=alternatives,
+                sde=sde,
             )
     return MachineProfileLoadResult(
         profiles=MappingProxyType(profiles),
@@ -260,6 +265,26 @@ def _alternatives(
             continue
         alternatives[key] = spelling
     return alternatives
+
+
+def _sde_chip(
+    profile_name: str,
+    value: Any,
+    path: Path,
+    diagnostics: list[Diagnostic],
+) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-MALFORMED-SDE",
+                f"machine profile {profile_name!r} sde chip must be a non-empty string",
+            )
+        )
+        return None
+    return value.strip().lstrip("-")
 
 
 def _diagnostic(path: Path, code: str, message: str) -> Diagnostic:

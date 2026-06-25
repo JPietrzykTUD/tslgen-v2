@@ -55,6 +55,16 @@ def main(argv: list[str] | None = None) -> int:
         help="build and run generated value tests (implies --verify)",
     )
     parser.add_argument(
+        "--sde",
+        nargs="?",
+        const="/opt/intel-sde/sde64",
+        default=None,
+        help=(
+            "run value-test executables for SDE-annotated profiles through Intel SDE; "
+            "optionally pass the SDE executable path"
+        ),
+    )
+    parser.add_argument(
         "--cpp-compiler",
         default=None,
         help="C++ compiler command for build verification, e.g. /usr/bin/c++",
@@ -126,13 +136,17 @@ def main(argv: list[str] | None = None) -> int:
 
         if (args.verify or args.test) and result.rendered is not None:
             if args.test:
-                print("building and running generated value tests")
+                if args.sde:
+                    print(f"building and running generated value tests through Intel SDE: {args.sde}")
+                else:
+                    print("building and running generated value tests")
             verify_report = verify_project(
                 args.output_root,
                 result.rendered.verify,
                 cpp_compiler=args.cpp_compiler,
                 rust_compiler=args.rust_compiler,
                 run_value_tests=args.test,
+                sde_path=args.sde,
             )
             for note in verify_report.skipped:
                 print(f"[verify-skip] {note}", file=sys.stderr)

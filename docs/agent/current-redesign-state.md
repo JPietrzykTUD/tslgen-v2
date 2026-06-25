@@ -4,7 +4,7 @@ This file is the handoff state for Codex tasks. It is intentionally concise and
 must be updated after accepted milestones, accepted documentation corrections,
 or accepted planning passes.
 
-## Active Line: `tslc` (updated 2026-06-20)
+## Active Line: `tslc` (updated 2026-06-25)
 
 The active codebase is **`tslc/`**. The `tslgen/` line documented by the
 milestone history below (M1–M254.x) is the **prior, now-superseded** approach;
@@ -14,7 +14,7 @@ it has not been touched in recent history (the last 20+ commits are entirely
 The authoritative running handoff for the active `tslc` work is
 `docs/agent/tslc-vector-query-handoff.md`. Source-language and architecture
 decisions for `tslc` are recorded in `docs/redesign/design-decisions.md`
-(most recently ADR-094 value-test parity inventory). The
+(most recently ADR-095 SDE value-test execution). The
 `## Current Work State` section near the end of this file has been refreshed to
 describe `tslc`; the long milestone history that follows it is retained only as
 the `tslgen` record.
@@ -1455,8 +1455,36 @@ value tests with zero diagnostics and zero warning markers. `./verify.sh`
 passed after this parity expansion with 214 non-build tests and 53
 generated-build tests.
 
+The SDE value-test execution slice extends the after-write verifier so
+SDE-annotated x86 machine profiles can run generated value tests for both C++
+and Rust on hosts without native ISA support. Machine profiles now carry
+optional validated `sde` chip aliases, `tslc.cli --test --sde [PATH]` passes an
+explicit emulator executable into the verifier, C++ wraps profile `ctest`
+commands through SDE, and Rust builds tests with
+`cargo test --no-run --message-format=json` before running each emitted test
+binary through SDE. Missing emulator paths and missing Rust test binaries are
+reported as structured verifier diagnostics.
+
+The real SDE sweep passed for both C++ and Rust over all SDE-annotated x86
+profiles: `sse`, `sse2`, `sse3`, `avx`, `avx2`, `knl`, `kml`, `skylake`,
+`cannonlake`, `cascadelake`, `cooperlake`, `icelake-rockerlake`, `tigerlake`,
+`zen4`, `sapphirerapids`, and `zen5`. Each profile generated, wrote, and
+verified with zero diagnostics. The slice also fixed source-owned profile and
+feature metadata exposed by that sweep: KNL/KML no longer advertise compiler-
+unsupported unused AVX-512 subsets, AVX2 floating load requirements are scoped
+correctly, and selected AVX-512 bitwise/convert-up implementation selectors
+now carry the actual intrinsic feature requirements.
+
+Focused validation after the SDE slice passed with
+`python -m compileall -q tslc/src/tslc` and
+`python -m pytest -q tslc/tests/test_value_test_planning.py
+tslc/tests/test_build_verify_config.py
+tslc/tests/test_catalog_validation.py::test_machine_profile_sde_metadata_is_validated
+tslc/tests/test_cli.py` (`30 passed`). `./verify.sh` passed with 220
+non-build tests and 53 generated-build tests.
+
 Active prompt:
-docs/agent/runs/tslc-value-test-parity-inventory-review-prompt.md
+docs/agent/runs/tslc-sde-value-test-execution-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
@@ -1482,11 +1510,13 @@ docs/agent/runs/tslc-store-mask-packed-layout-review-prompt.md
 docs/agent/runs/tslc-mask-repr-primitive-rename-review-prompt.md
 docs/agent/runs/tslc-design-principles-residual-risk-review-prompt.md
 docs/agent/runs/tslc-param-types-layout-contract-review-prompt.md
+docs/agent/runs/tslc-value-test-parity-inventory-review-prompt.md
 
-Next expected action: review the focused CLI `--test` slice. Confirm that it
-stays a command-line convenience over existing `test_harness` and
-`run_value_tests` behavior, requires a written output root, and does not create
-new pipeline or verifier machinery.
+Next expected action: review the SDE value-test execution slice. Confirm that
+emulator execution stays in the after-write verifier, both C++ and Rust consume
+the same typed profile metadata, source feature fixes remain source-owned, and
+no profile- or primitive-specific exception logic leaked into renderers or
+value-test planning.
 ```
 
 Value-test completeness validation (2026-06-24):

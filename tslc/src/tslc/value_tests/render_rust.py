@@ -242,6 +242,33 @@ def _mask_result(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 
+def _mask_logic(case: ValueTestCasePlan) -> str:
+    expected = int(case.expected[0])
+    lines = [
+        "    #[test]",
+        f"    fn {case.function_name}() {{",
+        f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
+    ]
+    arg_names = []
+    for position, mask in enumerate(case.mask_inputs):
+        lines.append(
+            f"        let m{position}: <Vec as SimdVector>::MaskType = {mask}u64;"
+        )
+        arg_names.append(f"m{position}")
+    lines.append(
+        f"        let result = {rust_raw_identifier(case.call_name)}"
+        f"::<Vec>({', '.join(arg_names)});"
+    )
+    for lane in range(case.lanes):
+        bit = "true" if (expected >> lane) & 1 else "false"
+        lines.append(
+            f"        assert_eq!(mask_bit(result as u64, {lane}), {bit}, "
+            f'"{case.case_name} lane {lane}");'
+        )
+    lines.append("    }")
+    return "\n".join(lines)
+
+
 def _broadcast(case: ValueTestCasePlan) -> str:
     value = rust_literal(case.scalar_input or "0", case.type_tag)
     expected = rust_literal_list(case.expected, case.type_tag)
@@ -392,6 +419,7 @@ RUST_CASE_RENDERERS: dict[str, RustCaseRenderer] = {
     "lane_list": _lane_list,
     "load": _load,
     "load_convert": _load_convert,
+    "mask_logic": _mask_logic,
     "mask_pointer_load": _mask_pointer_load,
     "mask_result": _mask_result,
     "mask_store": _mask_store,

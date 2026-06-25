@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+import json
 
 from tslc.output.verify import (
     BuildCommand,
@@ -197,6 +198,164 @@ def test_rust_verifier_skips_missing_explicit_compiler(tmp_path: Path) -> None:
     assert report.diagnostics == ()
     assert seen == []
     assert report.skipped == ("rust: Rust compiler /definitely/missing/rustc not found",)
+
+
+def test_cpp_value_test_run_can_be_wrapped_with_sde(tmp_path: Path) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="cpp",
+                root_path="cpp",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="avx2",
+                        file_stem="avx2",
+                        sde="hsw",
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=BuildVerifierConfig.create(
+            cpp_compiler="/usr/bin/c++",
+            run_value_tests=True,
+            sde_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen] == [
+        "preflight",
+        "configure",
+        "build",
+        "build-values",
+        "test",
+    ]
+    assert seen[-2].argv[0] == "cmake"
+    assert seen[-1].argv[:3] == (sys.executable, "-hsw", "--")
+    assert seen[-1].argv[3] == "ctest"
+
+
+def test_rust_value_tests_run_built_binaries_through_sde(tmp_path: Path) -> None:
+    executable = str(tmp_path / "rust" / "target" / "debug" / "deps" / "values")
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="avx2",
+                        file_stem="avx2",
+                        rust_target_features=("+avx2",),
+                        sde="hsw",
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        if command.step == "build-tests":
+            stdout = "\n".join(
+                (
+                    json.dumps(
+                        {
+                            "reason": "compiler-artifact",
+                            "executable": executable,
+                        }
+                    ),
+                    "non-json cargo noise",
+                )
+            )
+            return BuildCommandResult(command=command, returncode=0, stdout=stdout)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=BuildVerifierConfig.create(
+            rust_compiler=sys.executable,
+            run_value_tests=True,
+            sde_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen] == ["preflight", "build-tests", "test"]
+    assert "--no-run" in seen[1].argv
+    assert "--message-format=json" in seen[1].argv
+    assert seen[1].argv[0] == "cargo"
+    assert seen[2].argv == (sys.executable, "-hsw", "--", executable)
+
+
+def test_rust_sde_value_tests_diagnose_missing_test_binaries(tmp_path: Path) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(VerifyProfile(profile_name="avx2", file_stem="avx2", sde="hsw"),),
+            ),
+        )
+    )
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        return BuildCommandResult(command=command, returncode=0, stdout="{}")
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=BuildVerifierConfig.create(
+            rust_compiler=sys.executable,
+            run_value_tests=True,
+            sde_path=sys.executable,
+        ),
+    )
+
+    assert [diagnostic.code for diagnostic in report.diagnostics] == [
+        "TSL-BUILD-VERIFY-NO-RUST-TEST-BINARIES"
+    ]
+
+
+def test_explicit_sde_path_must_exist(tmp_path: Path) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(VerifyProfile(profile_name="avx2", file_stem="avx2", sde="hsw"),),
+            ),
+        )
+    )
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        config=BuildVerifierConfig.create(
+            rust_compiler=sys.executable,
+            run_value_tests=True,
+            sde_path="/definitely/missing/sde",
+        ),
+    )
+
+    assert [diagnostic.code for diagnostic in report.diagnostics] == [
+        "TSL-BUILD-VERIFY-SDE-MISSING"
+    ]
 
 
 def _env(command: BuildCommand) -> dict[str, str]:

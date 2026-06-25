@@ -69,6 +69,7 @@ def cpp_verify_profiles(profiles: tuple[ProfileRender, ...]) -> tuple[VerifyProf
             profile_name=slug(profile_render.profile.name),
             file_stem=slug(profile_render.profile.name),
             cpp_flags=cpp_flags(profile_render.profile),
+            sde=profile_render.profile.sde,
         )
         for profile_render in profiles
     )

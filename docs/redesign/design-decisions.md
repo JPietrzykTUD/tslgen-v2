@@ -4842,3 +4842,53 @@ Consequences:
 - Full-corpus Rust AVX2 value tests build and run warning-clean, so warning
   hygiene remains a source/backend ownership contract rather than a renderer
   suppression mechanism.
+
+## ADR-095: SDE Runs Profile Value Tests After Artifact Generation
+
+Context:
+
+The AVX2 parity gate proves C++ and Rust value-test parity for one profile, but
+it does not prove every x86 machine profile can build and run its generated
+value tests on a host without native support for that ISA. Intel SDE is
+available in the development environment and can emulate the relevant x86
+profiles after generated artifacts exist.
+
+Decision:
+
+Keep emulator execution in the after-write build verifier. Machine profiles may
+declare an optional `sde` chip alias in
+`supplementary/buildsystem/machine_profiles.json`. The profile loader validates
+that alias as typed profile metadata, and renderers pass it through to
+`VerifyProfile`.
+
+`tslc.cli --test --sde [PATH]` supplies an optional SDE executable to the
+verifier. C++ value-test execution wraps the generated profile's `ctest`
+command with `sde -chip -- ...` when the profile declares an SDE chip. Rust
+cannot run `cargo test` itself under SDE as a precise profile test runner, so
+the verifier builds Rust tests with `cargo test --no-run --message-format=json`,
+extracts the compiler-artifact test executables, and runs each executable
+through the same SDE prefix.
+
+SDE remains explicit. Generation does not autodetect host hardware, and normal
+verification does not require an emulator. If `--sde` names a missing
+executable, the verifier reports `TSL-BUILD-VERIFY-SDE-MISSING`. If Rust test
+build output does not expose runnable test binaries for an SDE profile, the
+verifier reports `TSL-BUILD-VERIFY-NO-RUST-TEST-BINARIES`.
+
+The SDE sweep also corrected source profile/requirement facts rather than
+adding verifier exceptions. KNL/KML machine profile flags now exclude legacy
+AVX-512 subsets that the current compiler toolchains do not accept and that
+the current corpus does not use. A few `.tsl` implementation selectors now
+carry the feature requirements needed by the actual intrinsics they select,
+including AVX-512 floating bitwise operations, byte/word convert-up paths,
+and the AVX2 floating load family.
+
+Consequences:
+
+- SDE execution is a verifier-side side effect, not a rendering or planning
+  concern.
+- C++ and Rust use the same profile metadata and the same explicit CLI opt-in.
+- Value-test runtime feedback can cover all SDE-annotated x86 profiles without
+  requiring the host CPU to support those instruction sets.
+- Source feature requirements stay source-owned and typed; verifier failures
+  exposed metadata drift instead of becoming hard-coded profile exceptions.

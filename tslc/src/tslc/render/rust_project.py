@@ -66,6 +66,7 @@ def rust_verify_profiles(profiles: tuple[ProfileRender, ...]) -> tuple[VerifyPro
             profile_name=slug(profile_render.profile.name),
             file_stem=slug(profile_render.profile.name),
             rust_target_features=rust_target_features(profile_render.profile),
+            sde=profile_render.profile.sde,
         )
         for profile_render in profiles
     )

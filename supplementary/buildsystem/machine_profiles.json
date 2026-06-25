@@ -8,51 +8,63 @@
   "x86": [
     {
       "name": "sse",
-      "flags": "sse"
+      "flags": "sse",
+      "sde": "mrm"
     },
     {
       "name": "sse2",
-      "flags": "sse sse2"
+      "flags": "sse sse2",
+      "sde": "mrm"
     },
     {
       "name": "sse3",
-      "flags": "sse sse2 ssse3"
+      "flags": "sse sse2 ssse3",
+      "sde": "mrm"
     },
     {
       "name": "avx",
-      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx"
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx",
+      "sde": "snb"
     },
     {
       "name": "avx2",
-      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2"
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2",
+      "sde": "hsw"
     },
     {
       "name": "knl",
-      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512er avx512pf"
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd",
+      "sde": "future"
     },
     {
       "name": "kml",
-      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512er avx512pf avx512_4fmaps avx512_4vnniw avx512_vpopcntdq"
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512_vpopcntdq",
+      "sde": "future"
     },
     {
       "name": "skylake",
-      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw"
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw",
+      "sde": "skx"
     },
     {
       "name": "cannonlake",
-      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512ifma avx512vbmi"
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512ifma avx512vbmi",
+      "sde": "cnl"
     },
     {
       "name": "cascadelake",
-      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni"
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni",
+      "sde": "clx"
     },
     {
       "name": "cooperlake",
-      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni avx512_bf16"
+      "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni avx512_bf16",
+      "sde": "cpx"
     },
     {
       "name": "icelake-rockerlake",
       "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
+      "sde": "icl",
       "alternatives": {
         "avx512_vpclmulqdq": "vpclmulqdq",
         "avx512_gfni": "gfni",
@@ -62,6 +74,7 @@
     {
       "name": "tigerlake",
       "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_vp2intersect",
+      "sde": "tgl",
       "alternatives": {
         "avx512_vpclmulqdq": "vpclmulqdq",
         "avx512_gfni": "gfni",
@@ -71,6 +84,7 @@
     {
       "name": "zen4",
       "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
+      "sde": "future",
       "alternatives": {
         "avx512_vpclmulqdq": "vpclmulqdq",
         "avx512_gfni": "gfni",
@@ -80,6 +94,7 @@
     {
       "name": "sapphirerapids",
       "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_fp16",
+      "sde": "spr",
       "alternatives": {
         "avx512_vpclmulqdq": "vpclmulqdq",
         "avx512_gfni": "gfni",
@@ -89,6 +104,7 @@
     {
       "name": "zen5",
       "flags": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_vp2intersect",
+      "sde": "future",
       "alternatives": {
         "avx512_vpclmulqdq": "vpclmulqdq",
         "avx512_gfni": "gfni",

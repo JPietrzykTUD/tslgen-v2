@@ -82,7 +82,7 @@ prim<v:=ptr>[aligned=*] load(ptr):
       f?:
         requires:
           avx512 [avx512f]
-          avx [avx]
+          avx2 [avx]
           sse [sse]
         safety:
           internal_unsafe true

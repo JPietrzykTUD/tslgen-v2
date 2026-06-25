@@ -316,7 +316,7 @@ prim<v:=ptr+> load_convert_up(ptr):
   impls:
     avx512:
       si8:
-        requires [avx512f]
+        requires [avx512f, avx512bw]
         ToBase:
           si16:
             requires [avx512bw]
@@ -344,7 +344,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                    complete(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepi8_epi32>(loaded)));
                 """
       ui8:
-        requires [avx512f]
+        requires [avx512f, avx512bw]
         ToBase:
           ui16:
             requires [avx512bw]
@@ -372,7 +372,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                    complete(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepu8_epi32>(loaded)));
                 """
       si16:
-        requires [avx512f]
+        requires [avx512f, avx512bw]
         ToBase:
           si32:
             safety:
@@ -399,7 +399,7 @@ prim<v:=ptr+> load_convert_up(ptr):
                    complete(cast<reinterpret>(type<generation>(register::generic(OutVec)), intrin<_mm512_cvtepi16_epi64>(loaded)));
                 """
       ui16:
-        requires [avx512f]
+        requires [avx512f, avx512bw]
         ToBase:
           ui32:
             safety:

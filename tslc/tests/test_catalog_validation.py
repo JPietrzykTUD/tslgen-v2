@@ -254,3 +254,21 @@ def test_machine_profile_duplicate_json_keys_are_diagnosed(tmp_path: Path) -> No
     result = load_machine_profiles_checked(path)
 
     assert "TSL-PROFILE-DUPLICATE-KEY" in {d.code for d in result.diagnostics}
+
+
+def test_machine_profile_sde_metadata_is_validated(tmp_path: Path) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{\n'
+        '  "x86": [\n'
+        '    {"name": "avx2", "flags": "avx avx2", "sde": "-hsw"},\n'
+        '    {"name": "bad", "flags": "avx", "sde": []}\n'
+        '  ]\n'
+        '}\n',
+        encoding="utf-8",
+    )
+
+    result = load_machine_profiles_checked(path)
+
+    assert result.profiles["avx2"].sde == "hsw"
+    assert "TSL-PROFILE-MALFORMED-SDE" in {d.code for d in result.diagnostics}

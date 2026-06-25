@@ -92,6 +92,8 @@ def test_cli_test_flag_enables_existing_value_test_paths(
             "--output-root",
             str(tmp_path),
             "--test",
+            "--sde",
+            "/tmp/sde64",
         ]
     )
 
@@ -103,7 +105,9 @@ def test_cli_test_flag_enables_existing_value_test_paths(
     assert generate_kwargs["value_test_warnings"] is True
     _, _, verify_kwargs = calls["verify"]
     assert verify_kwargs["run_value_tests"] is True
+    assert verify_kwargs["sde_path"] == "/tmp/sde64"
     assert "building and running generated value tests" in captured.out
+    assert "through Intel SDE: /tmp/sde64" in captured.out
     assert "[test-output] cpp avx2: ctest --test-dir build --output-on-failure" in captured.out
     assert "100% tests passed" in captured.out
     assert "[test-output] rust avx2: cargo test --features avx2,value_tests" in captured.out

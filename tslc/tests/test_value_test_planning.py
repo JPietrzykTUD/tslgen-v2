@@ -105,6 +105,55 @@ def test_planner_uses_source_identity_for_emitted_mask_name() -> None:
     assert cpp_profiles[0].cases[0].kind == "masked"
 
 
+def test_simple_shape_patterns_are_not_ordered_by_first_overload() -> None:
+    primitive = Primitive(
+        "store",
+        "void:=(ptr,v)",
+        ("ptr", "data"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="basic",
+                type_tag="si32",
+                tags=("basic",),
+                lanes=4,
+                inputs=(TslTestArg("vector", values=("1", "2", "3", "4")),),
+                expected=("1", "2", "3", "4"),
+                attrs={"aligned": "false"},
+            ),
+        ),
+    )
+    scalar_overload = _spec(
+        "store",
+        "store",
+        result_kind="void",
+        param_kinds=("ptr", "s"),
+        axis=(("aligned", "false"),),
+    )
+    vector_overload = _spec(
+        "store",
+        "store",
+        result_kind="void",
+        param_kinds=("ptr", "v"),
+        axis=(("aligned", "false"),),
+    )
+    profile = _profile(cpp={"store": (scalar_overload, vector_overload)})
+
+    plan = ValueTestPlanner(
+        _catalog(primitive, *_harness_primitives()),
+        (CPP_VALUE_TEST_SUPPORT,),
+    ).plan(
+        (ValueTestBackendProfileInput("cpp", "unit", profile.cpp),)
+    )
+
+    assert plan.diagnostics == ()
+    cases = plan.profiles_for("cpp")[0].cases
+    assert [(case.kind, case.case_name, case.axis_args) for case in cases] == [
+        ("store", "basic", ("false",))
+    ]
+
+
 def test_lane_list_value_tests_are_planned_and_rendered() -> None:
     primitive = Primitive(
         "set",
@@ -360,6 +409,27 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
     )
     assert "equal::<Vec>(v0, v1)" in rust_mask_result_source
     assert 'assert_eq!(mask_bit(result as u64, 2), true, "equal lane 2");' in rust_mask_result_source
+
+    rust_mask_logic_case = ValueTestCasePlan(
+        kind="mask_logic",
+        function_name="test_mask_and",
+        case_name="mask_and",
+        call_name="mask_binary_and",
+        type_tag="ui32",
+        base_spelling="u32",
+        lanes=4,
+        expected=("8",),
+        mask_inputs=("10", "12"),
+        param_kinds=("m", "m"),
+    )
+    rust_mask_logic_source = render_rust_values_file(
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_mask_logic_case,)),)
+    )
+    assert "mask_binary_and::<Vec>(m0, m1)" in rust_mask_logic_source
+    assert (
+        'assert_eq!(mask_bit(result as u64, 3), true, "mask_and lane 3");'
+        in rust_mask_logic_source
+    )
 
     rust_broadcast_case = ValueTestCasePlan(
         kind="broadcast",

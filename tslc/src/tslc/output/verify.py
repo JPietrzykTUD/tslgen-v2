@@ -7,6 +7,7 @@ driven by a small, explicit project description instead of a heavy render model.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
 import os
 from pathlib import Path
 import shlex
@@ -25,6 +26,8 @@ class VerifyProfile:
     # C++ extra compile flags (e.g. ("-mavx2", "-mavx")); Rust target features (e.g. ("+avx2",)).
     cpp_flags: tuple[str, ...] = ()
     rust_target_features: tuple[str, ...] = ()
+    # Optional Intel SDE chip alias used to run value tests for this profile.
+    sde: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +57,8 @@ class BuildVerifierConfig:
     # (`tsl_smoke`), so adding value testing to the standard gate does not double every
     # project's build cost. The dedicated value-test gate opts in.
     run_value_tests: bool = False
+    # Optional Intel SDE executable. Profiles opt in with VerifyProfile.sde.
+    sde_path: str | None = None
 
     @classmethod
     def create(
@@ -62,11 +67,13 @@ class BuildVerifierConfig:
         cpp_compiler: str | Sequence[str] | None = None,
         rust_compiler: str | None = None,
         run_value_tests: bool = False,
+        sde_path: str | None = None,
     ) -> "BuildVerifierConfig":
         return cls(
             cpp_compiler=_normalize_compiler_command(cpp_compiler),
             rust_compiler=_normalize_compiler_executable(rust_compiler),
             run_value_tests=run_value_tests,
+            sde_path=_normalize_compiler_executable(sde_path),
         )
 
 
@@ -146,7 +153,16 @@ def verify_generated_project(
     diagnostics: list[Diagnostic] = []
     skipped: list[str] = []
 
+    sde_missing = _sde_missing_diagnostic(config)
+    if sde_missing is not None:
+        return BuildVerificationReport(
+            commands=(),
+            diagnostics=(sde_missing,),
+            skipped=(),
+        )
+
     for backend in project.backends:
+        profiles_by_name = {profile.profile_name: profile for profile in backend.profiles}
         missing = _missing_tool(backend.backend_id)
         if missing is not None:
             skipped.append(f"{backend.backend_id}: {missing} not found")
@@ -188,6 +204,20 @@ def verify_generated_project(
                 if result.returncode != 0:
                     diagnostics.append(_command_diagnostic(result))
                     break
+                if command.backend_id == "rust" and command.step == "build-tests":
+                    profile = profiles_by_name[command.profile_name]
+                    followups, followup_diagnostics = _rust_sde_test_commands(
+                        result,
+                        profile,
+                        config,
+                    )
+                    diagnostics.extend(followup_diagnostics)
+                    for followup in followups:
+                        followup_result = runner(followup)
+                        results.append(followup_result)
+                        if followup_result.returncode != 0:
+                            diagnostics.append(_command_diagnostic(followup_result))
+                            break
 
     return BuildVerificationReport(
         commands=tuple(results),
@@ -206,6 +236,19 @@ def _missing_tool(backend_id: str) -> str | None:
 
 def _missing_executable(executable: str) -> str | None:
     return executable if shutil.which(executable) is None else None
+
+
+def _sde_missing_diagnostic(config: BuildVerifierConfig) -> Diagnostic | None:
+    if config.sde_path is None or not config.run_value_tests:
+        return None
+    missing = _missing_executable(config.sde_path)
+    if missing is None:
+        return None
+    return Diagnostic(
+        severity="error",
+        code="TSL-BUILD-VERIFY-SDE-MISSING",
+        message=f"Intel SDE executable {missing} not found",
+    )
 
 
 def _command_groups(
@@ -275,7 +318,13 @@ def _cpp_command_groups(
                     backend_id="cpp",
                     profile_name=profile.profile_name,
                     step="test",
-                    argv=("ctest", "--test-dir", str(build_dir), "--output-on-failure"),
+                    argv=(
+                        *_sde_prefix(profile, config),
+                        "ctest",
+                        "--test-dir",
+                        str(build_dir),
+                        "--output-on-failure",
+                    ),
                     cwd=root,
                     env=env,
                     severity_on_failure="warning",
@@ -299,15 +348,20 @@ def _rust_command_groups(
         # failure is reported as a warning (report-then-promote), like the C++ ctest step.
         features = profile.profile_name
         severity = "error"
+        step = "test"
+        extra_args: tuple[str, ...] = ()
         if config.run_value_tests:
             features = f"{profile.profile_name},value_tests"
             severity = "warning"
+            if _sde_prefix(profile, config):
+                step = "build-tests"
+                extra_args = ("--no-run", "--message-format=json")
         groups.append(
             (
                 BuildCommand(
                     backend_id="rust",
                     profile_name=profile.profile_name,
-                    step="test",
+                    step=step,
                     argv=(
                         "cargo",
                         "test",
@@ -316,6 +370,7 @@ def _rust_command_groups(
                         "--no-default-features",
                         "--features",
                         features,
+                        *extra_args,
                     ),
                     cwd=root,
                     env=_rust_environment(profile, config),
@@ -324,6 +379,75 @@ def _rust_command_groups(
             )
         )
     return tuple(groups)
+
+
+def _sde_prefix(
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+) -> tuple[str, ...]:
+    if config.sde_path is None or profile.sde is None:
+        return ()
+    return (config.sde_path, f"-{profile.sde}", "--")
+
+
+def _rust_sde_test_commands(
+    result: BuildCommandResult,
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+) -> tuple[tuple[BuildCommand, ...], tuple[Diagnostic, ...]]:
+    prefix = _sde_prefix(profile, config)
+    if not prefix:
+        return (), ()
+
+    executables = _rust_test_executables(result.stdout)
+    if not executables:
+        return (
+            (),
+            (
+                Diagnostic(
+                    severity=result.command.severity_on_failure,
+                    code="TSL-BUILD-VERIFY-NO-RUST-TEST-BINARIES",
+                    message=(
+                        f"rust profile {profile.profile_name} value-test build produced "
+                        "no runnable test binaries"
+                    ),
+                ),
+            ),
+        )
+
+    return (
+        tuple(
+            BuildCommand(
+                backend_id="rust",
+                profile_name=profile.profile_name,
+                step="test",
+                argv=(*prefix, executable),
+                cwd=result.command.cwd,
+                severity_on_failure=result.command.severity_on_failure,
+            )
+            for executable in executables
+        ),
+        (),
+    )
+
+
+def _rust_test_executables(stdout: str) -> tuple[str, ...]:
+    executables: list[str] = []
+    seen: set[str] = set()
+    for line in stdout.splitlines():
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(data, dict) or data.get("reason") != "compiler-artifact":
+            continue
+        executable = data.get("executable")
+        if not isinstance(executable, str) or not executable:
+            continue
+        if executable not in seen:
+            seen.add(executable)
+            executables.append(executable)
+    return tuple(executables)
 
 
 def _rust_environment(
