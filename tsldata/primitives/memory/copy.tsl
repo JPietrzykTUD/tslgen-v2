@@ -28,6 +28,7 @@ prim<void:=(ptr,ptr,s,s)> memory_cp(dst, src, count_bytes, copy_kind):
           reasons [raw_memory, raw_pointer]
         implementation:
           tsil """
+              var<const_infer>(_copy_kind, copy_kind);
               mem<copy>(cast<reinterpret>(void *, dst), cast<reinterpret>(void const *, src), count_bytes);
             """
       arith:
@@ -48,5 +49,6 @@ prim<void:=(ptr,ptr,s,s)> memory_cp(dst, src, count_bytes, copy_kind):
           reasons [raw_memory, raw_pointer]
         implementation:
           tsil """
+              var<const_infer>(_copy_kind, copy_kind);
               mem<copy>(cast<reinterpret>(void *, dst), cast<reinterpret>(void const *, src), count_bytes);
             """

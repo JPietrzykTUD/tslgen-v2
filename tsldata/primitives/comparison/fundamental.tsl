@@ -526,26 +526,43 @@ prim<m:=(v,v)> less_than(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
             if<generation>(type::is_same(type<generation>(base::in), ui8)) {
-              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
+              var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
+              complete(
+                intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                  call<primitive=binary_xor>(right, sign_bit),
+                  call<primitive=binary_xor>(left, sign_bit)
+                )
+              );
             } else<generation> {
               if<generation>(type::is_same(type<generation>(base::in), ui16)) {
-                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000));
+                var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000)));
+                complete(
+                  intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                    call<primitive=binary_xor>(right, sign_bit),
+                    call<primitive=binary_xor>(left, sign_bit)
+                  )
+                );
               } else<generation> {
                 if<generation>(type::is_same(type<generation>(base::in), ui32)) {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(right, sign_bit),
+                      call<primitive=binary_xor>(left, sign_bit)
+                    )
+                  );
                 } else<generation> {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(right, sign_bit),
+                      call<primitive=binary_xor>(left, sign_bit)
+                    )
+                  );
                 }
               }
             }
-            complete(
-              intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                call<primitive=binary_xor>(right, sign_bit),
-                call<primitive=binary_xor>(left, sign_bit)
-              )
-            );
           """
     sse:
       [si8, si16, si32]:
@@ -586,26 +603,43 @@ prim<m:=(v,v)> less_than(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
             if<generation>(type::is_same(type<generation>(base::in), ui8)) {
-              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
+              var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
+              complete(
+                intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                  call<primitive=binary_xor>(right, sign_bit),
+                  call<primitive=binary_xor>(left, sign_bit)
+                )
+              );
             } else<generation> {
               if<generation>(type::is_same(type<generation>(base::in), ui16)) {
-                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000));
+                var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000)));
+                complete(
+                  intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                    call<primitive=binary_xor>(right, sign_bit),
+                    call<primitive=binary_xor>(left, sign_bit)
+                  )
+                );
               } else<generation> {
                 if<generation>(type::is_same(type<generation>(base::in), ui32)) {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(right, sign_bit),
+                      call<primitive=binary_xor>(left, sign_bit)
+                    )
+                  );
                 } else<generation> {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(right, sign_bit),
+                      call<primitive=binary_xor>(left, sign_bit)
+                    )
+                  );
                 }
               }
             }
-            complete(
-              intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                call<primitive=binary_xor>(right, sign_bit),
-                call<primitive=binary_xor>(left, sign_bit)
-              )
-            );
           """
     neon:
       arith:
@@ -775,26 +809,43 @@ prim<m:=(v,v)> greater_than(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
             if<generation>(type::is_same(type<generation>(base::in), ui8)) {
-              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
+              var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
+              complete(
+                intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                  call<primitive=binary_xor>(left, sign_bit),
+                  call<primitive=binary_xor>(right, sign_bit)
+                )
+              );
             } else<generation> {
               if<generation>(type::is_same(type<generation>(base::in), ui16)) {
-                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000));
+                var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000)));
+                complete(
+                  intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                    call<primitive=binary_xor>(left, sign_bit),
+                    call<primitive=binary_xor>(right, sign_bit)
+                  )
+                );
               } else<generation> {
                 if<generation>(type::is_same(type<generation>(base::in), ui32)) {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(left, sign_bit),
+                      call<primitive=binary_xor>(right, sign_bit)
+                    )
+                  );
                 } else<generation> {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(left, sign_bit),
+                      call<primitive=binary_xor>(right, sign_bit)
+                    )
+                  );
                 }
               }
             }
-            complete(
-              intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                call<primitive=binary_xor>(left, sign_bit),
-                call<primitive=binary_xor>(right, sign_bit)
-              )
-            );
           """
     sse:
       [si8, si16, si32]:
@@ -835,26 +886,43 @@ prim<m:=(v,v)> greater_than(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
             if<generation>(type::is_same(type<generation>(base::in), ui8)) {
-              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
+              var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
+              complete(
+                intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                  call<primitive=binary_xor>(left, sign_bit),
+                  call<primitive=binary_xor>(right, sign_bit)
+                )
+              );
             } else<generation> {
               if<generation>(type::is_same(type<generation>(base::in), ui16)) {
-                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000));
+                var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000)));
+                complete(
+                  intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                    call<primitive=binary_xor>(left, sign_bit),
+                    call<primitive=binary_xor>(right, sign_bit)
+                  )
+                );
               } else<generation> {
                 if<generation>(type::is_same(type<generation>(base::in), ui32)) {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(left, sign_bit),
+                      call<primitive=binary_xor>(right, sign_bit)
+                    )
+                  );
                 } else<generation> {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(left, sign_bit),
+                      call<primitive=binary_xor>(right, sign_bit)
+                    )
+                  );
                 }
               }
             }
-            complete(
-              intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                call<primitive=binary_xor>(left, sign_bit),
-                call<primitive=binary_xor>(right, sign_bit)
-              )
-            );
           """
     neon:
       arith:

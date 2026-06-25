@@ -5,6 +5,8 @@ from tslc.value_tests.model import (
     ValueTestBackendSupport,
     ValueTestCasePlan,
     ValueTestCoverageEntry,
+    ValueTestCoverageStatus,
+    ValueTestParityEntry,
     ValueTestProfilePlan,
     ValueTestProjectPlan,
 )
@@ -18,6 +20,8 @@ __all__ = (
     "ValueTestBackendSupport",
     "ValueTestCasePlan",
     "ValueTestCoverageEntry",
+    "ValueTestCoverageStatus",
+    "ValueTestParityEntry",
     "ValueTestPlanner",
     "ValueTestPattern",
     "ValueTestProfilePlan",

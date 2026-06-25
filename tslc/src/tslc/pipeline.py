@@ -57,7 +57,7 @@ _TYPE_ORDER = {
 class GenerationRequest:
     source_paths: tuple[Path, ...]
     machine_profiles_path: Path
-    primitives: tuple[str, ...]
+    primitives: tuple[str, ...] | None
     profiles: tuple[str, ...]
     type_tags: tuple[str, ...]
     backends: tuple[str, ...] = _DEFAULT_BACKENDS
@@ -248,7 +248,7 @@ class _GenerationSession:
         # Which extension block this profile selected for each emitted ISA tag, so the renderer
         # can register the right mask_type (lane-bitmask vs native __mmaskN).
         selected_extensions: dict[str, Extension] = {}
-        worklist = list(self.request.primitives)
+        worklist = list(_requested_primitives(self.request, self.inputs.catalog))
         if self.request.test_harness:
             worklist.extend(
                 name
@@ -696,6 +696,21 @@ def _profile_with_required_features(
                 required.update(spec.required_features)
     features = frozenset(required)
     return profile if features == profile.features else replace(profile, features=features)
+
+
+def _requested_primitives(
+    request: GenerationRequest,
+    catalog: Catalog,
+) -> tuple[str, ...]:
+    """Primitive roots requested by the caller.
+
+    ``None`` means "the whole loaded catalog"; an explicit empty tuple remains
+    a deliberate request for no roots.
+    """
+
+    if request.primitives is not None:
+        return request.primitives
+    return tuple(sorted({primitive.name for primitive in catalog.primitives}))
 
 
 def _safety_key(

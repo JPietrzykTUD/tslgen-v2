@@ -3,8 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 from tslc.diagnostics import Diagnostic
+
+ValueTestCoverageStatus = Literal[
+    "emitted",
+    "compile_only_emitted",
+    "missing_authored_tests",
+    "authored_unplanned",
+    "backend_unsupported",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,8 +75,25 @@ class ValueTestCoverageEntry:
     profile_name: str
     primitive_name: str
     case_name: str | None
-    status: str
+    status: ValueTestCoverageStatus
     reason: str = ""
+    case_kind: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ValueTestParityEntry:
+    """Per-backend planning outcomes for one authored value-test identity."""
+
+    profile_name: str
+    primitive_name: str
+    case_name: str | None
+    backend_statuses: tuple[ValueTestCoverageEntry, ...]
+
+    def status_for(self, backend_id: str) -> ValueTestCoverageStatus | None:
+        for entry in self.backend_statuses:
+            if entry.backend_id == backend_id:
+                return entry.status
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +125,8 @@ class ValueTestProjectPlan:
 __all__ = (
     "ValueTestBackendSupport",
     "ValueTestCoverageEntry",
+    "ValueTestCoverageStatus",
+    "ValueTestParityEntry",
     "HarnessPrimitiveNames",
     "ValueTestCasePlan",
     "ValueTestProfilePlan",

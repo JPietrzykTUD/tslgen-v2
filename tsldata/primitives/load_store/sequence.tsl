@@ -493,4 +493,7 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(start);"
+          tsil """
+            var<infer>(_stepwidth, stepwidth);
+            complete(start);
+          """

@@ -25,7 +25,11 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="path to machine_profiles.json",
     )
-    parser.add_argument("--primitives", default="add,hadd", help="comma-separated primitive names")
+    parser.add_argument(
+        "--primitives",
+        default=None,
+        help="comma-separated primitive names; omit to generate every catalog primitive",
+    )
     parser.add_argument(
         "--profiles",
         default="scalar,sse2,avx,avx2,skylake",
@@ -78,16 +82,21 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
+    generate_kwargs = {
+        "machine_profiles_path": args.machine_profiles,
+        "profiles": _split(args.profiles),
+        "type_tags": _split(args.types),
+        "backends": _split(args.backends),
+        "generation_mode": args.generation_mode,
+        "test_harness": args.test,
+        "value_test_warnings": args.value_test_warnings or args.test,
+    }
+    if args.primitives is not None:
+        generate_kwargs["primitives"] = _split(args.primitives)
+
     result = generate_project(
         [Path(path) for path in args.sources],
-        machine_profiles_path=args.machine_profiles,
-        primitives=_split(args.primitives),
-        profiles=_split(args.profiles),
-        type_tags=_split(args.types),
-        backends=_split(args.backends),
-        generation_mode=args.generation_mode,
-        test_harness=args.test,
-        value_test_warnings=args.value_test_warnings or args.test,
+        **generate_kwargs,
     )
 
     for diagnostic in result.diagnostics:
@@ -131,7 +140,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"[verify] {diagnostic.code}: {diagnostic.message}", file=sys.stderr)
             if args.test:
                 _print_test_output(verify_report)
-            if has_errors(verify_report.diagnostics):
+            if has_errors(verify_report.diagnostics) or (
+                args.test and verify_report.diagnostics
+            ):
                 return 1
             verified = "build/test-verified" if args.test else "build-verified"
             print(f"{verified} {len(verify_report.commands)} commands")

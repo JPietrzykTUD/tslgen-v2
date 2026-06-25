@@ -262,6 +262,29 @@ Full current validation after adding the metadata audit tool:
 Result: passed all targeted validations, including 207 non-build tests and 53
 generated-build tests.
 
+The value-test completeness campaign now has a hard typed C++/Rust AVX2 parity
+gate for the current corpus. `ValueTestCoverageEntry` uses a typed status
+vocabulary and records the planned case kind, `ValueTestParityEntry` groups one
+authored value-test identity across backends, and `tslc.value_tests.coverage`
+exposes `parity_inventory(...)` and `parity_gaps(...)`. The full-corpus AVX2
+parity test requests both C++ and Rust and requires zero missing authored
+tests, zero authored-unplanned cases, zero backend-unsupported cases, matching
+emitted case counts, and no parity gaps. Rust now emits every current planned
+value-test case kind, with the same single compile-only smoke case as C++.
+
+Focused validation:
+
+```bash
+python -m pytest -q tslc/tests/test_value_tests.py
+./verify.sh
+```
+
+Results: focused value-test/planning pytest passed with `19 passed`. A full
+Rust AVX2 value-test execution smoke over all 89 selected primitives reported
+`rust compile_only_emitted=1` and `rust emitted=1107`, then built and ran with
+zero verification diagnostics and zero warning markers. `./verify.sh` passed
+with 214 non-build tests and 53 generated-build tests.
+
 ### Primitive Value-Test Source Shape Cleanup
 
 The primitive value-test source contract has been simplified after the coverage
@@ -1019,7 +1042,13 @@ Implemented pieces:
    invoking the verifier, prints captured stdout/stderr for verifier commands
    whose step is `test` (`ctest` and value-enabled `cargo test`), and reports
    `build/test-verified ... commands` after success.
-5. No new pipeline mode, API wrapper, verifier path, or source test semantics
+5. Omitting `--primitives` now means the pipeline starts from every primitive
+   in the loaded catalog. An explicit `--primitives ...` list narrows the run
+   for focused smoke tests. The all-corpus default is resolved after catalog
+   building, not by a CLI-side source scan.
+6. A `--test` run returns failure for any verifier diagnostic, so failed
+   generated value-test commands cannot still produce `build/test-verified`.
+7. No new pipeline mode, API wrapper, verifier path, or source test semantics
    were added.
 
 Focused coverage:
@@ -1030,6 +1059,10 @@ Focused coverage:
   `--output-root` is missing.
 - `tslc/tests/test_cli.py` asserts captured test-command output is printed and
   non-test build output remains quiet.
+- `tslc/tests/test_cli.py` asserts omitted `--primitives` delegates to the API
+  all-catalog default.
+- `tslc/tests/test_cli.py` asserts value-test verifier diagnostics fail the CLI
+  even when their diagnostic severity is warning.
 
 Validation for this slice:
 
@@ -1870,9 +1903,9 @@ framework replacement.
 
 ### Value-Test Completeness Slice
 
-The value-test completeness slice is implemented for the C++ AVX2 full-corpus
-gate. The planner now treats coverage as a typed output instead of a generated
-source-code heuristic.
+The value-test completeness slice is implemented for the C++ and Rust AVX2
+full-corpus gate. The planner now treats coverage as a typed output instead of
+a generated source-code heuristic.
 
 Implemented pieces:
 

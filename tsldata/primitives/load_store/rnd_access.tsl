@@ -1057,7 +1057,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
         implementation:
           tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
-            var<infer>(
+            var<const_infer>(
               ptr,
               cast<reinterpret>(
                 type<generation>(base::in) *,
@@ -1386,7 +1386,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
             if (mask) {
-              var<infer>(
+              var<const_infer>(
                 ptr,
                 cast<reinterpret>(
                   type<generation>(base::in) *,

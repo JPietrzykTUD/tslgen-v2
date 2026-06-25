@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from tslc import cli
+from tslc.diagnostics import Diagnostic
 
 
 def test_cli_test_flag_enables_existing_value_test_paths(
@@ -97,6 +98,7 @@ def test_cli_test_flag_enables_existing_value_test_paths(
     captured = capsys.readouterr()
     assert rc == 0
     _, generate_kwargs = calls["generate"]
+    assert generate_kwargs["primitives"] == ["add"]
     assert generate_kwargs["test_harness"] is True
     assert generate_kwargs["value_test_warnings"] is True
     _, _, verify_kwargs = calls["verify"]
@@ -108,6 +110,91 @@ def test_cli_test_flag_enables_existing_value_test_paths(
     assert "test result: ok" in captured.out
     assert "quiet build output" not in captured.out
     assert "build/test-verified" in captured.out
+
+
+def test_cli_omitted_primitives_uses_all_catalog_default(monkeypatch, capsys) -> None:
+    calls: dict[str, object] = {}
+
+    def fake_generate_project(source_paths, **kwargs):
+        calls["generate"] = (source_paths, kwargs)
+        return SimpleNamespace(
+            diagnostics=(),
+            coverage=(object(),),
+            artifacts=SimpleNamespace(artifacts=(object(),)),
+            rendered=None,
+        )
+
+    monkeypatch.setattr(cli, "generate_project", fake_generate_project)
+
+    rc = cli.main(
+        [
+            "--sources",
+            "tsldata",
+            "--machine-profiles",
+            "supplementary/buildsystem/machine_profiles.json",
+            "--profiles",
+            "avx2",
+            "--backends",
+            "rust",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    _, generate_kwargs = calls["generate"]
+    assert "primitives" not in generate_kwargs
+    assert "generated 1 specializations" in captured.out
+
+
+def test_cli_test_flag_fails_on_value_test_diagnostic(monkeypatch, tmp_path, capsys) -> None:
+    def fake_generate_project(source_paths, **kwargs):
+        return SimpleNamespace(
+            diagnostics=(),
+            coverage=(object(),),
+            artifacts=SimpleNamespace(artifacts=(object(),)),
+            rendered=SimpleNamespace(verify=object()),
+        )
+
+    def fake_write_artifacts(artifacts, output_root):
+        return SimpleNamespace(
+            diagnostics=(),
+            written=(Path(output_root) / "generated.txt",),
+            output_root=Path(output_root),
+        )
+
+    def fake_verify_project(output_root, verify, **kwargs):
+        return SimpleNamespace(
+            skipped=(),
+            diagnostics=(
+                Diagnostic(
+                    severity="warning",
+                    code="TSL-BUILD-VERIFY-COMMAND-FAILED",
+                    message="rust profile skylake test command failed",
+                ),
+            ),
+            commands=(),
+        )
+
+    monkeypatch.setattr(cli, "generate_project", fake_generate_project)
+    monkeypatch.setattr(cli, "write_artifacts", fake_write_artifacts)
+    monkeypatch.setattr(cli, "verify_project", fake_verify_project)
+
+    rc = cli.main(
+        [
+            "--sources",
+            "tsldata",
+            "--machine-profiles",
+            "supplementary/buildsystem/machine_profiles.json",
+            "--output-root",
+            str(tmp_path),
+            "--test",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert "[verify] TSL-BUILD-VERIFY-COMMAND-FAILED" in captured.err
+    assert "build/test-verified" not in captured.out
 
 
 def test_cli_test_flag_requires_output_root(monkeypatch, capsys) -> None:

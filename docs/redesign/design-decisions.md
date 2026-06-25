@@ -4401,10 +4401,13 @@ signature position before value-test planning runs.
 
 Consequences:
 
-- C++ AVX2 is the current completeness gate: every applicable selected
-  primitive test case is emitted as a value test or compile-only smoke case.
-- Rust keeps its narrower value-test surface; unsupported planned kinds are
-  reported as `backend_unsupported` rather than silently rendered or skipped.
+- C++ and Rust AVX2 are the current full-corpus completeness gates: every
+  applicable selected primitive test case is emitted as a value test or
+  compile-only smoke case, and the two backends must have no parity gaps for
+  the current authored inventory.
+- Unsupported planned kinds remain represented as `backend_unsupported` for
+  future backend bring-up work; the current C++/Rust AVX2 gate requires that
+  status to be absent.
 - Renderers consume `ValueTestCasePlan` objects and coverage lives on
   `ValueTestProjectPlan`; tests no longer regex generated source to infer
   planning behavior.
@@ -4572,6 +4575,13 @@ The flag:
 - prints captured stdout/stderr for verifier commands whose step is `test`,
   which surfaces C++ `ctest` and Rust `cargo test` output without dumping every
   configure/build command.
+- treats verifier diagnostics as a failed `--test` run, even when the verifier
+  reports a value-test command failure with warning severity for API callers.
+
+Omitting `--primitives` means the request starts from every primitive in the
+loaded catalog. An explicit `--primitives ...` list is the narrowing mechanism
+for focused smoke runs. This all-corpus default is resolved after catalog
+building in the pipeline, not by a CLI-side source scan.
 
 Consequences:
 
@@ -4581,9 +4591,14 @@ Consequences:
   compile plus generated value-test execution.
 - The verifier still owns subprocess execution and capture. The CLI formats
   already-recorded `BuildCommandResult` test output for user feedback.
+- A CLI `--test` run must not print `build/test-verified` or exit 0 after a
+  failed generated test command.
 - CLI tests assert only the option-to-existing-contract mapping, while the
   generated value-test build/run behavior remains covered by the existing
   value-test integration tests.
+- The CLI no longer defaults to a tiny `add,hadd` smoke set. A command such as
+  `--backends rust --test` without `--primitives` exercises every selected
+  primitive root for the requested profiles/types.
 
 ## ADR-091: Rust Warning Hygiene Follows Source And Backend Ownership
 
@@ -4775,3 +4790,55 @@ Consequences:
   intrinsic-name string guessing.
 - The tool's source edits are intentionally small and span-based; it is not a
   general TSL formatter.
+
+## ADR-094: Value-Test Parity Uses Typed Coverage Inventory
+
+Context:
+
+The C++ AVX2 value-test gate was the first strict full-corpus runtime gate.
+Rust initially supported fewer case kinds, so the completeness campaign needed
+to expose every Rust gap explicitly before closing case families. Otherwise
+missing Rust tests could look like absent planning data instead of a tracked
+backend parity problem.
+
+Decision:
+
+Keep value-test coverage accounting inside the value-test planning boundary.
+`ValueTestCoverageEntry` now uses a typed status set and carries the planned
+case kind when one exists. `ValueTestParityEntry` groups per-backend outcomes
+for one authored value-test identity. The coverage helper exposes deterministic
+parity inventories and parity gaps for requested backend sets.
+
+The final current AVX2 parity gate requests C++ and Rust together. It requires
+zero `missing_authored_tests`, zero `authored_unplanned`, zero
+`backend_unsupported`, matching emitted value-test counts, and no parity gaps.
+Both backends keep compile-only smoke cases in the same typed inventory.
+
+Rust value-test rendering now covers every planned full-corpus AVX2 case kind:
+masked/vector/scalar/mask cases, immediates, reductions, broadcasts, lane-list
+and scalar-vector constructors, array/vector round trips, contiguous and
+indexed memory operations, mask loads/stores, load-convert, memory copy,
+pointer lifetime/free, stream output, representation-change cases, and
+extension insert/extract. The Rust renderer is split into focused formatting
+modules for shared helpers, memory cases, and conversion/extension cases while
+the main renderer remains a dispatch boundary over already-planned
+`ValueTestCasePlan` objects.
+
+Source bodies that intentionally ignore or branch over values made visible by
+Rust tests should make that fact explicit in TSIL source. Examples in this
+slice include scalar `custom_sequence`, scalar `conflict`, `memory_cp`, scalar
+scatter pointer locals, and unsigned comparison sign-bit selection. The
+renderer does not carry primitive-specific warning suppression.
+
+Consequences:
+
+- Renderers still format `ValueTestCasePlan` objects and do not compute
+  semantic coverage.
+- Unsupported value-test families remain visible as structured planning records
+  and warnings when future backends request value-test warnings.
+- The current C++/Rust AVX2 full-corpus gate is hard parity by typed inventory:
+  Rust reports 1 `compile_only_emitted` case and 1,107 emitted value cases, with
+  no backend-unsupported or parity-gap records.
+- Full-corpus Rust AVX2 value tests build and run warning-clean, so warning
+  hygiene remains a source/backend ownership contract rather than a renderer
+  suppression mechanism.

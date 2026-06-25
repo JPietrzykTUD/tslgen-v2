@@ -36,6 +36,8 @@ def rust_literal(token: str, type_tag: str) -> str:
             return f"{ty}::NEG_INFINITY"
         if upper in ("NAN", "+NAN", "-NAN"):
             return f"{ty}::NAN"
+        if _is_numeric_token(token) and all(ch not in token.lower() for ch in (".", "e")):
+            return f"{token}.0"
         return token
     wrapped = _wrapped_int(token, type_tag)
     return wrapped if wrapped is not None else token

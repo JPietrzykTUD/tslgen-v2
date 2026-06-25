@@ -7,6 +7,7 @@ to a focused primitive/profile set to bound its cost.
 
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 
 from tslc.api import generate_project, verify_project, write_artifacts
@@ -14,6 +15,7 @@ from tslc.catalog.builder import CatalogBuilder
 from tslc.diagnostics import has_errors
 from tslc.sources import SourceLoader
 from tslc.syntax.parser import TslParser
+from tslc.value_tests.coverage import parity_gaps
 
 
 def test_golden_value_tests_build_and_pass(
@@ -24,8 +26,8 @@ def test_golden_value_tests_build_and_pass(
     # integer-bitset mask.
     # `test_harness` also pulls in the vector<->array round-trip so the differential cases
     # (hardware avx2 vs the generic reference at the same lane count) are emitted and run.
-    # C++ only: Rust value verification is deferred (host-flaky toolchain, and Rust debug builds
-    # panic on integer overflow where C++ wraps — a parity finding still to resolve).
+    # This focused gate stays C++ only to keep the inner value-test smoke cheap; full-corpus Rust
+    # value execution is covered below.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
@@ -91,12 +93,34 @@ def test_value_full_corpus_avx2_coverage_is_complete(
     assert len(plan.coverage) >= 1000
 
 
+def test_value_full_corpus_avx2_rust_parity_inventory_is_explicit(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    """Rust and C++ full-corpus AVX2 value-test inventories are in parity."""
+
+    result = _full_corpus_avx2(data_root, machine_profiles_path, backends=("cpp", "rust"))
+    assert result.rendered is not None
+    plan = result.rendered.value_tests
+    status_counts = Counter((entry.backend_id, entry.status) for entry in plan.coverage)
+
+    assert status_counts[("cpp", "missing_authored_tests")] == 0
+    assert status_counts[("cpp", "authored_unplanned")] == 0
+    assert status_counts[("cpp", "backend_unsupported")] == 0
+    assert status_counts[("rust", "missing_authored_tests")] == 0
+    assert status_counts[("rust", "authored_unplanned")] == 0
+    assert status_counts[("rust", "backend_unsupported")] == 0
+    assert status_counts[("rust", "compile_only_emitted")] == 1
+    assert status_counts[("rust", "emitted")] == status_counts[("cpp", "emitted")]
+    assert parity_gaps(plan.coverage, ("cpp", "rust")) == ()
+    assert Counter(diagnostic.code for diagnostic in plan.diagnostics) == {}
+
+
 def test_value_full_corpus_avx2_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
     """Promoted value gate: the WHOLE corpus' golden + differential value tests pass on avx2
-    (C++). Rust is omitted while its toolchain is host-flaky. A failure here is a real value
-    regression (a lane mismatch) — or, rarely, a transient compiler failure under host load."""
+    (C++). A failure here is a real value regression (a lane mismatch) — or, rarely, a transient
+    compiler failure under host load."""
 
     result = _full_corpus_cpp_avx2(data_root, machine_profiles_path)
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -109,7 +133,33 @@ def test_value_full_corpus_avx2_builds(
     assert report.diagnostics == (), report.diagnostics
 
 
+def test_value_full_corpus_avx2_rust_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    """Rust runs the same full-corpus AVX2 authored value-test inventory as C++."""
+
+    result = _full_corpus_avx2(data_root, machine_profiles_path, backends=("rust",))
+    assert result.diagnostics == (), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    report = verify_project(tmp_path, result.rendered.verify, run_value_tests=True)
+    assert report.diagnostics == (), report.diagnostics
+
+
 def _full_corpus_cpp_avx2(data_root: Path, machine_profiles_path: Path):
+    result = _full_corpus_avx2(data_root, machine_profiles_path, backends=("cpp",))
+    assert result.diagnostics == (), result.diagnostics
+    return result
+
+
+def _full_corpus_avx2(
+    data_root: Path,
+    machine_profiles_path: Path,
+    *,
+    backends: tuple[str, ...],
+):
     documents = SourceLoader().load(tuple(sorted(data_root.rglob("*.tsl"))))
     catalog = CatalogBuilder().build(TslParser().parse(documents.documents)).catalog
     assert catalog is not None
@@ -119,7 +169,7 @@ def _full_corpus_cpp_avx2(data_root: Path, machine_profiles_path: Path):
         machine_profiles_path=machine_profiles_path,
         primitives=names,
         profiles=["avx2"],
-        backends=("cpp",),
+        backends=backends,
         test_harness=True,
         value_test_warnings=True,
     )

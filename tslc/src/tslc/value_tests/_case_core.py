@@ -242,6 +242,9 @@ def scalar_result_case(
     lanes = _effective_lanes(case)
     if not _args_match(case, specs[0].param_kinds):
         return None
+    generic_defaults = ()
+    if case.index is None:
+        generic_defaults = tuple(default for _name, _type, default in specs[0].generic_params)
     return _plan(
         "scalar_result",
         name,
@@ -253,6 +256,7 @@ def scalar_result_case(
         mask_inputs=_mask_inputs(case),
         scalar_inputs=_scalar_inputs(case),
         lanes=lanes,
+        generic_defaults=generic_defaults,
     )
 
 def mask_result_case(

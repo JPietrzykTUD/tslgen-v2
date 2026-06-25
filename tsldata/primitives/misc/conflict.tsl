@@ -108,7 +108,10 @@ prim<v:=v> conflict(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), 0));"
+          tsil """
+              var<infer>(_data, data);
+              complete(cast<static>(type<generation>(base::in), 0));
+            """
 prim<m:=(m,v)> conflict_free(mask, data):
   brief_description "Checks whether all active elements are unique and returns the semantic mask of conflict-free lanes."
   operation ""

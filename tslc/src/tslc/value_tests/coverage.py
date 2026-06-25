@@ -9,9 +9,16 @@ from tslc.value_tests.model import (
     ValueTestBackendSupport,
     ValueTestCasePlan,
     ValueTestCoverageEntry,
+    ValueTestParityEntry,
 )
 
 CoverageIdentity = tuple[str, str, str, str | None]
+ParityIdentity = tuple[str, str, str | None]
+
+BLOCKING_COVERAGE_STATUSES = frozenset(
+    {"missing_authored_tests", "authored_unplanned", "backend_unsupported"}
+)
+SUCCESS_COVERAGE_STATUSES = frozenset({"emitted", "compile_only_emitted"})
 
 _COVERAGE_PRIORITY = {
     "missing_authored_tests": 0,
@@ -43,6 +50,7 @@ def case_coverage(
             primitive_name=primitive_name,
             case_name=case_name,
             status=status,
+            case_kind=_case_kinds(supported),
         )
     if planned:
         return ValueTestCoverageEntry(
@@ -52,6 +60,7 @@ def case_coverage(
             case_name=case_name,
             status="backend_unsupported",
             reason="planned case kind is not supported by this backend renderer",
+            case_kind=_case_kinds(planned),
         )
     return ValueTestCoverageEntry(
         backend_id=backend.backend_id,
@@ -75,6 +84,55 @@ def merge_coverage(
     return tuple(merged.values())
 
 
+def parity_inventory(
+    entries: tuple[ValueTestCoverageEntry, ...],
+    backend_ids: tuple[str, ...],
+) -> tuple[ValueTestParityEntry, ...]:
+    """Group coverage by authored value-test identity across requested backends."""
+
+    by_case: dict[ParityIdentity, dict[str, ValueTestCoverageEntry]] = {}
+    for entry in entries:
+        if entry.backend_id not in backend_ids:
+            continue
+        key = (entry.profile_name, entry.primitive_name, entry.case_name)
+        by_case.setdefault(key, {})[entry.backend_id] = entry
+    result: list[ValueTestParityEntry] = []
+    for key, statuses in by_case.items():
+        profile_name, primitive_name, case_name = key
+        result.append(
+            ValueTestParityEntry(
+                profile_name=profile_name,
+                primitive_name=primitive_name,
+                case_name=case_name,
+                backend_statuses=tuple(
+                    statuses[backend_id]
+                    for backend_id in backend_ids
+                    if backend_id in statuses
+                ),
+            )
+        )
+    return tuple(sorted(result, key=parity_key))
+
+
+def parity_gaps(
+    entries: tuple[ValueTestCoverageEntry, ...],
+    backend_ids: tuple[str, ...],
+) -> tuple[ValueTestParityEntry, ...]:
+    """Coverage identities that are not equivalent successful outcomes on every backend."""
+
+    gaps: list[ValueTestParityEntry] = []
+    expected = set(backend_ids)
+    for entry in parity_inventory(entries, backend_ids):
+        statuses = {status.backend_id: status.status for status in entry.backend_statuses}
+        if set(statuses) != expected:
+            gaps.append(entry)
+            continue
+        unique_statuses = set(statuses.values())
+        if len(unique_statuses) != 1 or not unique_statuses <= SUCCESS_COVERAGE_STATUSES:
+            gaps.append(entry)
+    return tuple(gaps)
+
+
 def coverage_diagnostics(
     entries: tuple[ValueTestCoverageEntry, ...],
     locations: Mapping[CoverageIdentity, SourceLocation | None],
@@ -90,7 +148,7 @@ def coverage_diagnostics(
                 message=(
                     f"no {entry.backend_id} value-test plan for case {entry.case_name!r} "
                     f"of primitive {entry.primitive_name!r} in profile {entry.profile_name!r}: "
-                    f"{entry.reason}"
+                    f"{entry.reason}{_case_kind_suffix(entry)}"
                 ),
                 location=locations.get(coverage_identity(entry)),
             )
@@ -112,11 +170,30 @@ def coverage_key(entry: ValueTestCoverageEntry) -> tuple[str, str, str, str, str
     )
 
 
+def parity_key(entry: ValueTestParityEntry) -> tuple[str, str, str]:
+    return (entry.profile_name, entry.primitive_name, entry.case_name or "")
+
+
+def _case_kinds(cases: tuple[ValueTestCasePlan, ...]) -> str | None:
+    kinds = sorted({case.kind for case in cases})
+    return ",".join(kinds) if kinds else None
+
+
+def _case_kind_suffix(entry: ValueTestCoverageEntry) -> str:
+    return f" ({entry.case_kind})" if entry.case_kind else ""
+
+
 __all__ = (
+    "BLOCKING_COVERAGE_STATUSES",
     "CoverageIdentity",
+    "ParityIdentity",
+    "SUCCESS_COVERAGE_STATUSES",
     "case_coverage",
     "coverage_diagnostics",
     "coverage_identity",
     "coverage_key",
     "merge_coverage",
+    "parity_gaps",
+    "parity_inventory",
+    "parity_key",
 )

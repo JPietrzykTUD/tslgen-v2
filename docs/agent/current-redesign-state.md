@@ -14,7 +14,7 @@ it has not been touched in recent history (the last 20+ commits are entirely
 The authoritative running handoff for the active `tslc` work is
 `docs/agent/tslc-vector-query-handoff.md`. Source-language and architecture
 decisions for `tslc` are recorded in `docs/redesign/design-decisions.md`
-(most recently ADR-093 metadata audit maintenance tooling). The
+(most recently ADR-094 value-test parity inventory). The
 `## Current Work State` section near the end of this file has been refreshed to
 describe `tslc`; the long milestone history that follows it is retained only as
 the `tslgen` record.
@@ -1286,11 +1286,11 @@ The value-test completeness slice is also implemented. Source test inputs now
 promote to typed `vector`, `mask`, or `scalar` arguments, source tests carry
 typed roles (`value` by default, plus `compile`), and
 `ValueTestProjectPlan.coverage` is exposed through `RenderedProject`. The full
-C++ AVX2 value gate now asserts that every applicable selected primitive test is
-emitted, compile-only, or reported as a blocking typed coverage status. New C++
-planner/render cases cover the current full corpus, while Rust remains narrower
-and reports unsupported planned kinds honestly. The large value-test modules
-were split before becoming new monoliths:
+C++ and Rust AVX2 value gates now assert that every applicable selected
+primitive test is emitted, compile-only, or reported as a blocking typed
+coverage status, with no C++/Rust parity gaps for the current authored
+inventory. The large value-test modules were split before becoming new
+monoliths:
 `tslc.value_tests.case_helpers` owns shared case-planning helpers and
 `tslc.value_tests.render_cpp_helpers` owns pure C++ formatting helpers.
 
@@ -1340,7 +1340,12 @@ captured stdout/stderr from verifier commands whose step is `test`, which
 surfaces C++ `ctest` and Rust `cargo test` output without dumping configure or
 build command chatter. It reports `build/test-verified ... commands` after
 success. It does not add a new pipeline mode, API wrapper, or verifier path;
-`--verify` keeps its compile-only behavior.
+`--verify` keeps its compile-only behavior. Omitting `--primitives` now means
+the pipeline starts from every primitive in the loaded catalog; an explicit
+`--primitives ...` list is the focused-smoke narrowing mechanism. A `--test`
+run now treats any verifier diagnostic as failure, so failed `ctest` or
+`cargo test` commands cannot be followed by `build/test-verified` and a zero
+CLI exit.
 
 The Rust warning hygiene slice is now implemented. Runtime `if` rendering uses
 backend translation templates, preserving C++ `if ({cond})` while Rust emits
@@ -1415,8 +1420,43 @@ The maintenance tool package has been normalized to
 live there and run through module entry points rather than a mix of package and
 repo-local script locations.
 
+The value-test completeness campaign has reached the current C++/Rust AVX2
+parity target. `ValueTestCoverageEntry` has a typed status vocabulary and
+planned case-kind field, `ValueTestParityEntry` groups one authored test
+identity across requested backends, and `tslc.value_tests.coverage` exposes
+deterministic `parity_inventory(...)` and `parity_gaps(...)` helpers. The
+full-corpus AVX2 planning test now requests both C++ and Rust and requires zero
+`missing_authored_tests`, zero `authored_unplanned`, zero
+`backend_unsupported`, matching emitted case counts, and no parity gaps.
+
+Rust value-test rendering now supports every current planned full-corpus AVX2
+case kind. The remaining non-value case is the same compile-only smoke case
+visible on C++: Rust reports 1 `compile_only_emitted` case and 1,107 emitted
+value cases for the full AVX2 corpus. The Rust renderer was split into focused
+formatting helpers for shared utilities, memory cases, and conversion/extension
+cases so the main renderer remains a dispatch boundary over
+`ValueTestCasePlan`. Renderer support is guarded by a test that checks the
+declared support set against the actual dispatch table.
+
+Source cleanup needed for warning-clean Rust parity is source-owned: scalar
+`custom_sequence`, scalar `conflict`, and `memory_cp` bodies explicitly consume
+otherwise-unused semantic inputs; scalar scatter pointer locals use constness
+where possible; and unsigned comparison sign-bit branches now produce
+generation-time branch-local const values instead of a mutable local that is
+overwritten before use. Full-corpus Rust AVX2 value tests build and run with
+zero verification diagnostics and zero Rust warning markers.
+
+Focused validation passed with
+`python -m pytest -q tslc/tests/test_value_test_planning.py
+tslc/tests/test_value_tests.py` (`19 passed`). A full Rust AVX2 value-test
+execution smoke over all 89 selected primitives reported coverage
+`rust compile_only_emitted=1` and `rust emitted=1107`, then ran generated Rust
+value tests with zero diagnostics and zero warning markers. `./verify.sh`
+passed after this parity expansion with 214 non-build tests and 53
+generated-build tests.
+
 Active prompt:
-docs/agent/runs/tslc-metadata-audit-tool-review-prompt.md
+docs/agent/runs/tslc-value-test-parity-inventory-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
@@ -2058,7 +2098,7 @@ docs/agent/runs/tslc-typed-render-values-review-prompt.md
 Active prompt:
 
 ```text
-docs/agent/runs/tslc-metadata-audit-tool-review-prompt.md
+docs/agent/runs/tslc-value-test-parity-inventory-review-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

@@ -27,6 +27,7 @@ def plan_case(
     source_offset: int = 0,
     text_expected: str | None = None,
     immediate_value: str | None = None,
+    generic_defaults: tuple[str, ...] = (),
     result_kind: str | None = None,
     expected_type_tag: str | None = None,
     target_base_spelling: str | None = None,
@@ -56,6 +57,7 @@ def plan_case(
         text_expected=text_expected,
         index_value=str(case.index) if case.index is not None else None,
         immediate_value=immediate_value,
+        generic_defaults=generic_defaults,
         target_base_spelling=target_base_spelling,
         target_lanes=target_lanes,
     )
