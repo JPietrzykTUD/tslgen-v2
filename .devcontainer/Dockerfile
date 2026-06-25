@@ -49,6 +49,19 @@ RUN /opt/venv/bin/pip install --no-cache-dir \
     pytest mypy ruff black build \
     "mkdocstrings[python]" \
     mkdocs-git-revision-date-localized-plugin
+
+
+COPY .devcontainer/download_sde.py /tmp/download_sde.py
+
+RUN ACCEPT_INTEL_SDE_LICENSE=yes \
+    python3 /tmp/download_sde.py --out-dir /tmp/sde && \
+    mkdir -p /opt/intel-sde && \
+    tar -xf /tmp/sde/sde-external-10.8.0-2026-03-15-lin.tar.xz \
+        --strip-components=1 \
+        -C /opt/intel-sde && \
+    rm -rf /tmp/sde
+
+ENV PATH="/opt/intel-sde:${PATH}"
 # codon-jit
 # RUN yes | /bin/bash -c "$(curl -fsSL https://exaloop.io/install.sh)"
 

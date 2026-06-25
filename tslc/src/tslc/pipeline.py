@@ -277,9 +277,10 @@ class _GenerationSession:
         for slot in pruned:
             self._record_pruned_skip(profile_name, slot)
         self._record_coverage(profile_name, lowered_specs, pruned)
+        effective_profile = _profile_with_required_features(profile, grouped)
         self.profile_renders.append(
             ProfileRender(
-                profile=profile,
+                profile=effective_profile,
                 cpp=_finalize(grouped.get("cpp", {})),
                 rust=_finalize(grouped.get("rust", {})),
                 extensions=selected_extensions,
@@ -530,7 +531,7 @@ def _prune_unresolved(
                     break
 
     live_slots = [slot for slot in slots if _slot_key(slot, split_names) in valid]
-    _propagate_transitive_safety(live_slots, split_names)
+    _propagate_transitive_call_facts(live_slots, split_names)
 
     grouped: dict[str, dict[str, list[LoweredSpecialization]]] = {}
     pruned: list[_LoweredSlot] = []
@@ -584,23 +585,32 @@ def _dependency_key(
     )
 
 
-def _propagate_transitive_safety(
+def _propagate_transitive_call_facts(
     slots: list[_LoweredSlot],
     split_names: frozenset[str],
 ) -> None:
-    """Propagate caller-unsafe contracts through the lowered call graph.
+    """Propagate lowered call facts through the live call graph.
 
-    A caller that reaches a caller-unsafe callee has an internal unsafe
-    requirement for Rust. The call lowerer marks those call sites as local unsafe
-    blocks, so callee-only unsafety does not force a whole-body unsafe frame.
-    The public caller contract remains the caller's own explicit or inferred
-    contract: higher-level wrappers such as vector-from-array can discharge a
-    raw-pointer callee's requirements by passing a pointer they created from
-    local storage.
+    A caller that reaches unsafe callee metadata records an internal unsafe
+    dependency for review/diagnostics. The call lowerer marks direct
+    caller-unsafe call sites as local unsafe blocks, so callee-only unsafety does
+    not force a whole-body unsafe frame. The public caller contract remains the
+    caller's own explicit or inferred contract: higher-level wrappers such as
+    vector-from-array can discharge a raw-pointer callee's requirements by
+    passing a pointer they created from local storage.
+
+    Required feature flags also propagate bottom-up. If ``prim1`` calls
+    ``prim2`` and ``prim2`` eventually calls a body requiring ``avx512f``, the
+    lowered ``prim1`` specialization carries ``avx512f`` too, and the generated
+    profile can compile every reached body with the effective architecture
+    flags.
     """
 
     safety_by_key = {
         _safety_key(slot, split_names): slot.spec.safety for slot in slots
+    }
+    features_by_key = {
+        _safety_key(slot, split_names): slot.spec.required_features for slot in slots
     }
     dependency_targets: dict[
         tuple[str, str, str | None, VectorIdentity, VectorIdentity | None],
@@ -621,7 +631,9 @@ def _propagate_transitive_safety(
         for slot in slots:
             slot_key = _safety_key(slot, split_names)
             safety = safety_by_key[slot_key]
+            features = features_by_key[slot_key]
             propagated = safety
+            propagated_features = features
             for dependency in sorted(
                 slot.callees,
                 key=lambda dependency: (
@@ -639,28 +651,51 @@ def _propagate_transitive_safety(
                     _dependency_key(slot, dependency, split_names), []
                 ):
                     dependency_safety = safety_by_key[dependency_safety_key]
-                    if not dependency_safety.caller_unsafe:
-                        continue
-                    propagated = propagated.merge(
-                        ImplementationSafety(
-                            internal_unsafe=True,
-                            reasons=dependency_safety.reasons
-                            | frozenset({"unsafe_callee"}),
+                    if (
+                        dependency_safety.internal_unsafe
+                        or dependency_safety.caller_unsafe
+                    ):
+                        propagated = propagated.merge(
+                            ImplementationSafety(
+                                internal_unsafe=True,
+                                reasons=dependency_safety.reasons
+                                | frozenset({"unsafe_callee"}),
+                            )
                         )
-                    )
-            if propagated != safety:
+                    dependency_features = features_by_key[dependency_safety_key]
+                    if not dependency_features <= propagated_features:
+                        propagated_features = propagated_features | dependency_features
+            if propagated != safety or propagated_features != features:
                 safety_by_key[slot_key] = propagated
+                features_by_key[slot_key] = propagated_features
                 changed = True
 
     for slot in slots:
         slot_key = _safety_key(slot, split_names)
         safety = safety_by_key[slot_key]
-        if safety == slot.spec.safety:
+        features = features_by_key[slot_key]
+        if safety == slot.spec.safety and features == slot.spec.required_features:
             continue
         slot.spec = replace(
             slot.spec,
             safety=safety,
+            required_features=features,
         )
+
+
+def _profile_with_required_features(
+    profile: MachineProfile,
+    grouped: dict[str, dict[str, list[LoweredSpecialization]]],
+) -> MachineProfile:
+    """Profile plus the transitive feature flags required by live lowered specs."""
+
+    required = set(profile.features)
+    for by_primitive in grouped.values():
+        for specs in by_primitive.values():
+            for spec in specs:
+                required.update(spec.required_features)
+    features = frozenset(required)
+    return profile if features == profile.features else replace(profile, features=features)
 
 
 def _safety_key(

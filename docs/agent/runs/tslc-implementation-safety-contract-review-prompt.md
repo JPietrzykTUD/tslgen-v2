@@ -2,9 +2,11 @@
 
 ## Goal
 
-Review the typed implementation safety contract slice, including the explicit
-primitive corpus safety annotation sweep, transitive internal-unsafe
-propagation, local unsafe call-site rendering, and Rust `unsafe fn` rendering.
+Review the typed implementation safety contract and required-feature call
+propagation slice, including the explicit primitive corpus safety annotation
+sweep, recursive post-prune call-fact propagation, local unsafe call-site
+rendering, effective verification feature flags, and Rust `unsafe fn`
+rendering.
 
 ## Scope
 
@@ -19,9 +21,12 @@ Files to inspect:
 - `tslc/src/tslc/lower/region_handlers/calls.py`
 - `tslc/src/tslc/lower/region_handlers/intrinsics.py`
 - `tslc/src/tslc/lower/region_handlers/memory.py`
+- `tslc/src/tslc/select/selector.py`
 - `tslc/src/tslc/pipeline.py`
 - `tslc/src/tslc/backend/rust.py`
 - `tslc/src/tslc/render/model.py`
+- `tslc/src/tslc/render/cpp_project.py`
+- `tslc/src/tslc/render/rust_project.py`
 - `tsldata/primitives/**/*.tsl`
 - `tslc/tests/test_safety_contract.py`
 - `docs/redesign/design-decisions.md`
@@ -47,16 +52,23 @@ Files to inspect:
   - memory regions mark internal unsafe with reason `raw_memory`;
   - raw-pointer parameter signatures infer caller unsafe with reason
     `raw_pointer`.
+- Selection preserves concrete feature flags from extension/type-scoped
+  `requires` clauses, and lowering carries them on
+  `LoweredSpecialization.required_features`.
 - Transitivity runs after unresolved dependencies are pruned and before render
-  finalization. Caller-unsafe callees propagate an internal unsafe requirement
-  and `unsafe_callee` reason to callers, but do not automatically propagate the
-  public caller contract; safe wrappers may discharge unsafe callees with
-  locally-owned storage.
+  finalization. Live call-graph facts propagate bottom-up to a fixpoint:
+  unsafe callee metadata propagates an internal unsafe dependency and
+  `unsafe_callee` reason to callers, while required feature flags propagate
+  through recursive primitive calls.
+- Public `caller_unsafe` does not automatically propagate; safe wrappers may
+  discharge unsafe callees with locally-owned storage.
+- Generated verification profiles should include machine profile features plus
+  propagated required features from live lowered specializations.
 - Rust lowering renders calls to caller-unsafe generated wrappers as typed local
   unsafe call-site fragments. Callee-only transitive unsafety should not force a
   whole-body unsafe frame, and local unsafe fragments should suppress themselves
   when an enclosing body frame is already unsafe.
-- Safety propagation keeps runtime/immediate overload bodies distinct even
+- Call-fact propagation keeps runtime/immediate overload bodies distinct even
   though dependency pruning still uses the broader pre-finalization callable
   identity.
 - Rust renderers consume lowered safety facts only. They should format
@@ -77,19 +89,19 @@ Result: passed.
 python -m pytest -q tslc/tests/test_safety_contract.py
 ```
 
-Result: `9 passed`.
+Result: `11 passed`.
 
 ```bash
-python -m pytest -q tslc/tests/test_safety_contract.py tslc/tests/test_catalog_validation.py tslc/tests/test_catalog_tests.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_specialization.py tslc/tests/test_render_model.py tslc/tests/test_build_verify.py::test_load_store_builds tslc/tests/test_build_verify.py::test_masked_load_store_build tslc/tests/test_build_verify.py::test_allocate_family_builds tslc/tests/test_build_verify.py::test_shift_left_builds tslc/tests/test_build_verify.py::test_shift_right_delegation_builds tslc/tests/test_build_verify.py::test_masked_value_ops_build tslc/tests/test_build_verify.py::test_shift_right_avx512_immediate_builds tslc/tests/test_build_verify.py::test_shift_float_builds
+python -m pytest -q tslc/tests/test_safety_contract.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_profile_rendering.py tslc/tests/test_build_verify.py::test_shift_right_avx512_immediate_builds tslc/tests/test_build_verify.py::test_masked_load_store_build
 ```
 
-Result: `107 passed`.
+Result: `54 passed`.
 
 ```bash
 ./verify.sh
 ```
 
-Result: passed, including 201 non-build tests and 53 generated-build tests.
+Result: passed, including 203 non-build tests and 53 generated-build tests.
 
 Additional corpus evidence:
 
@@ -106,7 +118,8 @@ Rust value-test CLI unnecessary unsafe warnings: 0
 1. Is the safety contract owned by typed catalog/lowering data rather than
    renderer-local inference?
 2. Is transitive propagation conservative enough to compile current wrappers
-   while still surfacing unsafe callees as internal unsafe requirements?
+   while still surfacing unsafe callees and architecture requirements on
+   callers?
 3. Are raw-pointer APIs correctly inferred as caller-unsafe without making
    safe higher-level abstractions unnecessarily unsafe?
 4. Does the Rust renderer keep formatting separate from semantic safety

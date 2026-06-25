@@ -1359,16 +1359,23 @@ warnings; remaining warnings are the separate unnecessary-`unsafe` follow-up.
 `./verify.sh` passed after the cleanup with 191 non-build tests and 53
 generated-build tests across its shards.
 
-The typed implementation safety contract slice is now implemented. Catalog
-promotion stores selector-inherited `ImplementationSafety` values on
-implementations, with `internal_unsafe`, `caller_unsafe`, and open reason
-labels. Schema validation checks supported `safety:` blocks, lowering combines
-source safety with inferred intrinsic, memory, and raw-pointer effects, and
-Rust rendering emits `unsafe fn` only from lowered caller-safety facts.
-After dependency pruning, the pipeline propagates caller-unsafe callees to an
-internal unsafe frame plus `unsafe_callee` reason on callers; it deliberately
-does not automatically propagate the public caller contract, so wrappers that
-discharge raw-pointer callees with locally-owned storage can remain safe.
+The typed implementation safety contract and required-feature call propagation
+slice is now implemented. Catalog promotion stores selector-inherited
+`ImplementationSafety` values on implementations, with `internal_unsafe`,
+`caller_unsafe`, and open reason labels. Schema validation checks supported
+`safety:` blocks, lowering combines source safety with inferred intrinsic,
+memory, and raw-pointer effects, and Rust rendering emits `unsafe fn` only from
+lowered caller-safety facts. Selection now preserves the concrete feature flags
+selected from extension/type-scoped `requires` clauses, and lowering carries
+them on `LoweredSpecialization.required_features`.
+After dependency pruning, the pipeline propagates live call-graph facts
+bottom-up to a fixpoint: unsafe callee metadata becomes an internal unsafe
+dependency plus `unsafe_callee` reason on callers, and required feature flags
+propagate through the same graph. The pipeline deliberately does not
+automatically propagate the public caller contract, so wrappers that discharge
+raw-pointer callees with locally-owned storage can remain safe. Generated
+verification profiles use the machine profile features plus propagated required
+features from live lowered specializations.
 Rust lowering now renders calls to caller-unsafe generated wrappers as local
 typed unsafe call-site fragments. Callee-only transitive unsafety records
 `unsafe_callee` in lowered safety metadata without forcing a whole-body unsafe
@@ -1380,11 +1387,12 @@ beside every implementation body: 1,327 primitive implementation bodies and
 under `implementation:` body fields so misplaced safety metadata cannot be
 silently ignored.
 Focused validation passed: `python -m compileall -q tslc/src/tslc`;
-`python -m pytest -q tslc/tests/test_safety_contract.py` with 9 tests; and a
-broader safety/lowering/generated-build suite with 107 tests. Corpus
+`python -m pytest -q tslc/tests/test_safety_contract.py` with 11 tests; and a
+targeted safety/lowering/profile-rendering/generated-build suite with 54 tests.
+Corpus
 parse/build/validation returned zero diagnostics and confirmed 1,327 local
 safety blocks. The Rust value-test CLI command passed with zero
-`unnecessary unsafe` warnings. `./verify.sh` passed with 201 non-build tests
+`unnecessary unsafe` warnings. `./verify.sh` passed with 203 non-build tests
 and 53 generated-build tests.
 
 Active prompt:

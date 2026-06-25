@@ -4678,14 +4678,24 @@ misplaced `safety:` block cannot be silently ignored.
 Lowering combines source-authored safety with inferred body effects. Intrinsics
 and memory regions mark `internal_unsafe`; raw pointer parameters mark both
 `internal_unsafe` and `caller_unsafe` because callers must uphold pointer
-validity. After unresolved callees are pruned, the pipeline propagates
-caller-unsafe callees transitively as an internal unsafe requirement on callers.
-It does not automatically propagate the public `caller_unsafe` contract,
-because higher-level wrappers can safely discharge a raw-pointer callee by
-passing locally-owned storage.
-Safety propagation uses a lowered-body key that includes signature and
+validity. Selection also preserves the concrete feature flags selected from
+extension/type-scoped `requires` clauses and lowering carries them as
+`LoweredSpecialization.required_features`.
+
+After unresolved callees are pruned, the pipeline propagates live call-graph
+facts bottom-up to a fixpoint. Unsafe callee metadata propagates as an internal
+unsafe dependency plus `unsafe_callee` reason on callers. The public
+`caller_unsafe` contract does not automatically propagate, because higher-level
+wrappers can safely discharge a raw-pointer callee by passing locally-owned
+storage. Required feature flags propagate through the same lowered call graph,
+so if `prim1 -> prim2 -> primX` and `primX` requires `avx512f`, the lowered
+`prim1` specialization carries `avx512f` too. The generated profile's effective
+feature set is the machine profile features plus every propagated required
+feature from live lowered specializations.
+
+Call-fact propagation uses a lowered-body key that includes signature and
 immediate shape, so runtime and immediate overloads can share the pruning key
-without overwriting each other's internal unsafe facts.
+without overwriting each other's internal unsafe or required-feature facts.
 
 Transitive `unsafe_callee` is rendered with local unsafe call-site blocks for
 Rust rather than by forcing a whole-body unsafe frame. This keeps wrappers such
@@ -4703,6 +4713,9 @@ Consequences:
 
 - Safety is represented at a typed catalog/lowering boundary, not inferred by
   string inspection in renderers.
+- Architecture feature requirements selected from `requires` are represented as
+  typed lowered facts and propagate through primitive calls before rendering or
+  verification.
 - Safe abstractions can encapsulate internal unsafe blocks without forcing their
   public API to become unsafe.
 - Transitive unsafe callees are not silent: callers get an internal unsafe

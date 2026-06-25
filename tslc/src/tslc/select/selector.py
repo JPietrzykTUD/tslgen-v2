@@ -41,6 +41,9 @@ class SelectedImplementation:
     implementation: Implementation
     extension: Extension
     type_tag: str
+    # The concrete feature flags selected for this implementation body after
+    # applying extension/type-scoped `requires` clauses.
+    required_features: frozenset[str] = frozenset()
     # For a representation-change primitive (`result_target`), the concrete target this slot
     # is monomorphized for: a target *type tag* (base dim, e.g. ``ui32``) or a target
     # *extension name* (extension dim, e.g. ``sse``). None for ordinary primitives.
@@ -56,6 +59,12 @@ class SelectedImplementation:
 class ProfileSelectionResult:
     selected: tuple[SelectedImplementation, ...]
     diagnostics: tuple[Diagnostic, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _BestBody:
+    implementation: Implementation
+    required_features: frozenset[str]
 
 
 class Selector:
@@ -138,14 +147,15 @@ class Selector:
                         if best is not None:
                             extension = catalog.extensions[extension_name]
                             for lanes in self._monomorphized_lanes(
-                                extension, best, type_tag
+                                extension, best.implementation, type_tag
                             ):
                                 selected.append(
                                     SelectedImplementation(
                                         primitive=primitive,
-                                        implementation=best,
+                                        implementation=best.implementation,
                                         extension=extension,
                                         type_tag=type_tag,
+                                        required_features=best.required_features,
                                         to_target=to_target,
                                         concrete_lanes=lanes,
                                     )
@@ -203,7 +213,7 @@ class Selector:
         type_tag: str,
         to_target: str | None,
         warnings: dict[str, Diagnostic],
-    ) -> Implementation | None:
+    ) -> _BestBody | None:
         # Gather candidates from the extension and the ancestors it inherits from
         # (e.g. avx2_vl borrows avx2's body where it has none of its own).
         chain = catalog.extension_chain(extension_name)
@@ -273,7 +283,7 @@ class Selector:
                     source=best.selector_source or best.source or primitive.source,
                 ),
             )
-        return best
+        return _BestBody(best, best_flags)
         # (a) before (b): when a derived extension is active and supersedes its base
         # (e.g. avx2_vl over avx2 on an avx512vl profile), the derived ext's OWN body
         # wins even if a base body is more type-specific — so avx512vl comparisons use

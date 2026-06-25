@@ -20,6 +20,7 @@ from tslc.value_tests import (
     discover_harness_primitives,
 )
 from tslc.value_tests.model import ValueTestCasePlan, ValueTestProfilePlan
+from tslc.value_tests._render_cpp_dispatch import CPP_CASE_RENDERERS
 from tslc.value_tests.render_cpp import CPP_VALUE_TEST_SUPPORT, render_cpp_values_runner
 from tslc.value_tests.render_rust import RUST_VALUE_TEST_SUPPORT, render_rust_values_file
 
@@ -315,13 +316,59 @@ def test_render_tests_project_stays_an_assembler() -> None:
 
 
 def test_value_test_modules_keep_owned_boundaries() -> None:
+    value_tests = Path("tslc/src/tslc/value_tests")
     planner = Path("tslc/src/tslc/value_tests/planner.py").read_text(encoding="utf-8")
-    patterns = Path("tslc/src/tslc/value_tests/patterns.py").read_text(encoding="utf-8")
-    case_plans = Path("tslc/src/tslc/value_tests/case_plans.py").read_text(encoding="utf-8")
-    render_cpp = Path("tslc/src/tslc/value_tests/render_cpp.py").read_text(encoding="utf-8")
+    patterns = "\n".join(
+        (value_tests / name).read_text(encoding="utf-8")
+        for name in (
+            "patterns.py",
+            "_pattern_base.py",
+            "_pattern_core.py",
+            "_pattern_memory.py",
+            "_pattern_conversion.py",
+        )
+    )
+    case_plans = "\n".join(
+        (value_tests / name).read_text(encoding="utf-8")
+        for name in (
+            "case_plans.py",
+            "_case_common.py",
+            "_case_core.py",
+            "_case_memory.py",
+            "_case_conversion.py",
+        )
+    )
+    render_cpp = "\n".join(
+        (value_tests / name).read_text(encoding="utf-8")
+        for name in (
+            "render_cpp.py",
+            "_render_cpp_core.py",
+            "_render_cpp_memory.py",
+            "_render_cpp_conversion.py",
+            "_render_cpp_dispatch.py",
+        )
+    )
     pipeline = Path("tslc/src/tslc/pipeline.py").read_text(encoding="utf-8")
 
     assert len(planner.splitlines()) < 250
+    for path in (
+        "case_plans.py",
+        "_case_common.py",
+        "_case_core.py",
+        "_case_memory.py",
+        "_case_conversion.py",
+        "patterns.py",
+        "_pattern_base.py",
+        "_pattern_core.py",
+        "_pattern_memory.py",
+        "_pattern_conversion.py",
+        "render_cpp.py",
+        "_render_cpp_core.py",
+        "_render_cpp_memory.py",
+        "_render_cpp_conversion.py",
+        "_render_cpp_dispatch.py",
+    ):
+        assert len((value_tests / path).read_text(encoding="utf-8").splitlines()) < 500
     assert "def discover_harness_primitives" not in planner
     assert "class _GenericGoldenPattern" not in planner
     assert "backend_ids" not in patterns
@@ -333,6 +380,10 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
     assert 'backend_id == "rust"' not in render_cpp
     assert "value_test_warnings=self.request.value_test_warnings" in pipeline
     assert "value_test_warnings=self.request.test_harness" not in pipeline
+
+
+def test_cpp_value_test_support_matches_renderer_dispatch() -> None:
+    assert CPP_VALUE_TEST_SUPPORT.case_kinds == frozenset(CPP_CASE_RENDERERS)
 
 
 def _catalog(*primitives: Primitive) -> Catalog:

@@ -7,13 +7,18 @@ from pathlib import Path
 from tslc.backend.translation import create_backend_dialect
 from tslc.backend.rust import RustBackend
 from tslc.catalog.builder import CatalogBuilder
+from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, ImplementationSafety
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog.validation import validate_catalog
 from tslc.diagnostics import Diagnostic
 from tslc.lower.dependencies import CallDependency, VectorIdentity
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
-from tslc.pipeline import _LoweredSlot, _propagate_transitive_safety
+from tslc.pipeline import (
+    _LoweredSlot,
+    _profile_with_required_features,
+    _propagate_transitive_call_facts,
+)
 from tslc.render.model import LoweredBody
 from tslc.select.selector import Selector
 from tslc.sources import SourceDocument, SourceLoader
@@ -107,7 +112,7 @@ def test_caller_unsafe_callees_transitively_require_internal_unsafe() -> None:
         ),
     )
 
-    _propagate_transitive_safety([caller, callee], frozenset())
+    _propagate_transitive_call_facts([caller, callee], frozenset())
 
     assert caller.spec.safety.caller_unsafe is False
     assert caller.spec.safety.internal_unsafe is True
@@ -129,11 +134,83 @@ def test_transitive_safety_keeps_runtime_and_immediate_overloads_distinct() -> N
         immediate=("shift", "u32"),
     )
 
-    _propagate_transitive_safety([runtime, immediate], frozenset())
+    _propagate_transitive_call_facts([runtime, immediate], frozenset())
 
     assert runtime.spec.body.requires_unsafe is False
     assert immediate.spec.body.requires_unsafe is True
     assert immediate.spec.body_text == "unsafe { return data; }"
+
+
+def test_call_facts_propagate_bottom_up_recursively() -> None:
+    leaf = _slot(
+        "leaf",
+        required_features=frozenset({"avx512f"}),
+        safety=ImplementationSafety(
+            internal_unsafe=True,
+            caller_unsafe=True,
+            reasons=frozenset({"raw_pointer"}),
+        ),
+    )
+    middle = _slot(
+        "middle",
+        required_features=frozenset({"avx2"}),
+        callees=frozenset(
+            {
+                CallDependency(
+                    primitive="leaf",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                )
+            }
+        ),
+    )
+    root = _slot(
+        "root",
+        callees=frozenset(
+            {
+                CallDependency(
+                    primitive="middle",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                )
+            }
+        ),
+    )
+
+    _propagate_transitive_call_facts([root, middle, leaf], frozenset())
+
+    assert middle.spec.required_features == frozenset({"avx2", "avx512f"})
+    assert root.spec.required_features == frozenset({"avx2", "avx512f"})
+    assert middle.spec.safety.internal_unsafe is True
+    assert root.spec.safety.internal_unsafe is True
+    assert "unsafe_callee" in middle.spec.safety.reasons
+    assert "unsafe_callee" in root.spec.safety.reasons
+    assert middle.spec.body.requires_unsafe is False
+    assert root.spec.body.requires_unsafe is False
+
+
+def test_render_profile_features_include_transitive_lowered_requirements() -> None:
+    profile = MachineProfile(
+        name="fixture",
+        family="x86",
+        features=frozenset({"sse2"}),
+        alternatives={},
+    )
+    grouped = {
+        "rust": {
+            "root": [
+                _spec(
+                    "root",
+                    required_features=frozenset({"avx2", "avx512f"}),
+                )
+            ]
+        }
+    }
+
+    effective = _profile_with_required_features(profile, grouped)
+
+    assert effective.features == frozenset({"sse2", "avx2", "avx512f"})
+    assert effective.name == profile.name
 
 
 def test_rust_backend_formats_caller_unsafe_contract() -> None:
@@ -302,6 +379,7 @@ def _slot(
     *,
     body: str = "return data;",
     safety: ImplementationSafety = ImplementationSafety(),
+    required_features: frozenset[str] = frozenset(),
     param_kinds: tuple[str, ...] = ("v",),
     immediate: tuple[str, str] | None = None,
     callees: frozenset[CallDependency] = frozenset(),
@@ -312,6 +390,7 @@ def _slot(
             primitive_name,
             body=body,
             safety=safety,
+            required_features=required_features,
             param_kinds=param_kinds,
             immediate=immediate,
         ),
@@ -324,6 +403,7 @@ def _spec(
     *,
     body: str = "return data;",
     safety: ImplementationSafety = ImplementationSafety(),
+    required_features: frozenset[str] = frozenset(),
     param_kinds: tuple[str, ...] = ("v",),
     immediate: tuple[str, str] | None = None,
 ) -> LoweredSpecialization:
@@ -345,5 +425,6 @@ def _spec(
         ),
         immediate=immediate,
         register_is_base=True,
+        required_features=required_features,
         safety=safety,
     )

@@ -126,8 +126,9 @@ Result: passed.
 
 ## 2026-06-24 — Typed Implementation Safety Contract
 
-The implementation safety contract is now typed through catalog promotion,
-lowering, dependency propagation, and Rust rendering.
+The implementation safety contract and required-feature call propagation are
+now typed through catalog promotion, selection/lowering, dependency
+propagation, and Rust rendering.
 
 Implemented pieces:
 
@@ -138,27 +139,36 @@ Implemented pieces:
 3. Lowering combines source safety with inferred effects: intrinsics and memory
    regions mark internal unsafe, and raw-pointer parameter signatures infer a
    caller safety contract.
-4. After unresolved callees are pruned, the pipeline propagates caller-unsafe
-   callees to an internal unsafe frame plus `unsafe_callee` reason on callers.
-   Public `caller_unsafe` does not automatically propagate; safe wrappers may
+4. Selection preserves the concrete feature flags selected from
+   extension/type-scoped `requires` clauses, and lowering carries them on
+   `LoweredSpecialization.required_features`.
+5. After unresolved callees are pruned, the pipeline propagates live call-graph
+   facts bottom-up to a fixpoint. Unsafe callee metadata becomes an internal
+   unsafe dependency plus `unsafe_callee` reason on callers. Required feature
+   flags propagate through the same graph, so `prim1 -> prim2 -> primX`
+   carries `primX`'s architecture requirements back to `prim1`.
+6. Public `caller_unsafe` does not automatically propagate; safe wrappers may
    discharge raw-pointer callees with locally-owned storage.
-5. The Rust renderer emits `unsafe fn` trait methods, impl methods, wrappers,
+7. The Rust renderer emits `unsafe fn` trait methods, impl methods, wrappers,
    and free functions from lowered caller-safety facts only.
-6. The primitive corpus now carries explicit local `safety:` metadata beside
+8. The primitive corpus now carries explicit local `safety:` metadata beside
    every implementation body. The current corpus has 1,327 primitive
    implementation bodies and 1,327 local safety blocks.
-7. Rust calls to caller-unsafe generated wrappers are lowered as local typed
+9. Rust calls to caller-unsafe generated wrappers are lowered as local typed
    unsafe call-site render fragments. If the whole body already renders inside
    an unsafe frame, those local fragments suppress their own `unsafe { ... }`.
    This removes the nested `MaybeUninit`/callee-call warning pattern from
    `to_array` and similar wrappers while keeping transitive `unsafe_callee`
    safety reasons visible.
+10. Generated verification profiles use the machine profile feature set plus
+    propagated required features from live lowered specializations.
 
 Focused coverage:
 
 - `tslc/tests/test_safety_contract.py` covers safety promotion/inheritance,
   malformed safety diagnostics, misplaced body-nested safety diagnostics,
-  transitive internal-unsafe propagation, the runtime/immediate overload
+  recursive call-fact propagation for safety metadata and required features,
+  effective verification profile features, the runtime/immediate overload
   safety-key regression, Rust unsafe signature rendering, corpus-local safety
   coverage, direct corpus facts for intrinsic, memory, and raw-pointer safety,
   and source-backed local unsafe lowering for `call<primitive=store>`.
@@ -180,19 +190,19 @@ Result: passed.
 python -m pytest -q tslc/tests/test_safety_contract.py
 ```
 
-Result: `9 passed`.
+Result: `11 passed`.
 
 ```bash
-python -m pytest -q tslc/tests/test_safety_contract.py tslc/tests/test_catalog_validation.py tslc/tests/test_catalog_tests.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_specialization.py tslc/tests/test_render_model.py tslc/tests/test_build_verify.py::test_load_store_builds tslc/tests/test_build_verify.py::test_masked_load_store_build tslc/tests/test_build_verify.py::test_allocate_family_builds tslc/tests/test_build_verify.py::test_shift_left_builds tslc/tests/test_build_verify.py::test_shift_right_delegation_builds tslc/tests/test_build_verify.py::test_masked_value_ops_build tslc/tests/test_build_verify.py::test_shift_right_avx512_immediate_builds tslc/tests/test_build_verify.py::test_shift_float_builds
+python -m pytest -q tslc/tests/test_safety_contract.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_profile_rendering.py tslc/tests/test_build_verify.py::test_shift_right_avx512_immediate_builds tslc/tests/test_build_verify.py::test_masked_load_store_build
 ```
 
-Result: `107 passed`.
+Result: `54 passed`.
 
 ```bash
 ./verify.sh
 ```
 
-Result: passed all targeted validations, including 201 non-build tests and 53
+Result: passed all targeted validations, including 203 non-build tests and 53
 generated-build tests.
 
 ```bash

@@ -129,6 +129,9 @@ class LoweredSpecialization:
     mask_policy: str | None = None
     # First-class lane-list parameters (`lanes<s>`) selected for this specialization.
     lane_list_params: tuple[LaneListParameter, ...] = ()
+    # Feature flags required by this body, including call-graph propagation after
+    # dependency pruning.
+    required_features: frozenset[str] = frozenset()
     safety: ImplementationSafety = field(default_factory=ImplementationSafety)
 
     @property
@@ -396,6 +399,7 @@ class Lowerer:
             target=target,
             mask_policy=selected.primitive.attributes.get("mask"),
             lane_list_params=tuple(context.env.lane_list_params.values()),
+            required_features=selected.required_features,
             safety=safety,
         )
         return LoweringResult(
