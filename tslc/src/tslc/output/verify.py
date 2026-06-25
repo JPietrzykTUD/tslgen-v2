@@ -23,6 +23,7 @@ from tslc.diagnostics import Diagnostic
 class VerifyProfile:
     profile_name: str
     file_stem: str
+    family: str = "generic"
     # C++ extra compile flags (e.g. ("-mavx2", "-mavx")); Rust target features (e.g. ("+avx2",)).
     cpp_flags: tuple[str, ...] = ()
     rust_target_features: tuple[str, ...] = ()
@@ -69,11 +70,19 @@ class BuildVerifierConfig:
         run_value_tests: bool = False,
         sde_path: str | None = None,
     ) -> "BuildVerifierConfig":
+        normalized_sde_path = _normalize_compiler_executable(sde_path)
+        normalized_cpp_compiler = _normalize_compiler_command(cpp_compiler)
+        if normalized_cpp_compiler is None and normalized_sde_path is not None and run_value_tests:
+            # SDE profile tests execute binaries for low-ISA chips. An ambient CXX
+            # such as `zig c++` can inject runtime helpers that use newer
+            # instructions than the requested chip, so pin the verifier default
+            # unless the caller explicitly chose a compiler.
+            normalized_cpp_compiler = ("c++",)
         return cls(
-            cpp_compiler=_normalize_compiler_command(cpp_compiler),
+            cpp_compiler=normalized_cpp_compiler,
             rust_compiler=_normalize_compiler_executable(rust_compiler),
             run_value_tests=run_value_tests,
-            sde_path=_normalize_compiler_executable(sde_path),
+            sde_path=normalized_sde_path,
         )
 
 
@@ -162,11 +171,15 @@ def verify_generated_project(
         )
 
     for backend in project.backends:
-        profiles_by_name = {profile.profile_name: profile for profile in backend.profiles}
         missing = _missing_tool(backend.backend_id)
         if missing is not None:
             skipped.append(f"{backend.backend_id}: {missing} not found")
             continue
+        backend, profile_skips = _filter_sde_verifiable_profiles(backend, config)
+        skipped.extend(profile_skips)
+        if not backend.profiles:
+            continue
+        profiles_by_name = {profile.profile_name: profile for profile in backend.profiles}
         if backend.backend_id == "cpp":
             compiler = _effective_cpp_compiler(config)
             missing_compiler = _missing_executable(compiler[0])
@@ -251,6 +264,33 @@ def _sde_missing_diagnostic(config: BuildVerifierConfig) -> Diagnostic | None:
     )
 
 
+def _filter_sde_verifiable_profiles(
+    backend: VerifyBackend,
+    config: BuildVerifierConfig,
+) -> tuple[VerifyBackend, tuple[str, ...]]:
+    if config.sde_path is None or not config.run_value_tests:
+        return backend, ()
+
+    profiles: list[VerifyProfile] = []
+    skipped: list[str] = []
+    for profile in backend.profiles:
+        if profile.sde is None and profile.family != "generic":
+            skipped.append(
+                f"{backend.backend_id}: profile {profile.profile_name} has no SDE "
+                "chip alias; value-test verification skipped"
+            )
+            continue
+        profiles.append(profile)
+    return (
+        VerifyBackend(
+            backend_id=backend.backend_id,
+            root_path=backend.root_path,
+            profiles=tuple(profiles),
+        ),
+        tuple(skipped),
+    )
+
+
 def _command_groups(
     root: Path,
     backend: VerifyBackend,
@@ -273,34 +313,48 @@ def _cpp_command_groups(
     groups: list[tuple[BuildCommand, ...]] = []
     for profile in backend.profiles:
         build_dir = project_root / "build" / profile.file_stem
-        commands = [
-            BuildCommand(
-                backend_id="cpp",
-                profile_name=profile.profile_name,
-                step="configure",
-                argv=(
-                    "cmake",
-                    "-S",
-                    str(project_root),
-                    "-B",
-                    str(build_dir),
-                    f"-DTSL_PROFILE={profile.profile_name}",
+        commands: list[BuildCommand] = []
+        if config.run_value_tests and config.sde_path is not None:
+            commands.append(
+                BuildCommand(
+                    backend_id="cpp",
+                    profile_name=profile.profile_name,
+                    step="clean",
+                    argv=("cmake", "-E", "rm", "-rf", str(build_dir)),
+                    cwd=root,
+                    env=env,
+                )
+            )
+        commands.extend(
+            [
+                BuildCommand(
+                    backend_id="cpp",
+                    profile_name=profile.profile_name,
+                    step="configure",
+                    argv=(
+                        "cmake",
+                        "-S",
+                        str(project_root),
+                        "-B",
+                        str(build_dir),
+                        f"-DTSL_PROFILE={profile.profile_name}",
+                    ),
+                    cwd=root,
+                    env=env,
                 ),
-                cwd=root,
-                env=env,
-            ),
-            # Build only the substrate-compile target by default; the heavy value-test binary
-            # is built (and run) only when value testing is requested, so the standard gate
-            # keeps its single-target cost.
-            BuildCommand(
-                backend_id="cpp",
-                profile_name=profile.profile_name,
-                step="build",
-                argv=("cmake", "--build", str(build_dir), "--target", "tsl_smoke"),
-                cwd=root,
-                env=env,
-            ),
-        ]
+                # Build only the substrate-compile target by default; the heavy
+                # value-test binary is built (and run) only when value testing is
+                # requested, so the standard gate keeps its single-target cost.
+                BuildCommand(
+                    backend_id="cpp",
+                    profile_name=profile.profile_name,
+                    step="build",
+                    argv=("cmake", "--build", str(build_dir), "--target", "tsl_smoke"),
+                    cwd=root,
+                    env=env,
+                ),
+            ]
+        )
         if config.run_value_tests:
             commands.append(
                 BuildCommand(

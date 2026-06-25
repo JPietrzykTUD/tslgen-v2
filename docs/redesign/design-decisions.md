@@ -4869,6 +4869,15 @@ the verifier builds Rust tests with `cargo test --no-run --message-format=json`,
 extracts the compiler-artifact test executables, and runs each executable
 through the same SDE prefix.
 
+When SDE value-test mode is enabled and the caller did not explicitly choose a
+C++ compiler, the verifier pins the C++ compiler command to `c++` instead of
+inheriting ambient `CXX`. This avoids accidentally building low-ISA SDE test
+binaries with toolchain runtime helpers such as Zig compiler-rt routines that
+use newer instructions than the selected SDE chip. Explicit `--cpp-compiler`
+configuration still wins. SDE-mode C++ verification also removes profile build
+directories before configure so an existing CMake cache cannot preserve a
+previous incompatible compiler.
+
 SDE remains explicit. Generation does not autodetect host hardware, and normal
 verification does not require an emulator. If `--sde` names a missing
 executable, the verifier reports `TSL-BUILD-VERIFY-SDE-MISSING`. If Rust test
@@ -4883,11 +4892,22 @@ carry the feature requirements needed by the actual intrinsics they select,
 including AVX-512 floating bitwise operations, byte/word convert-up paths,
 and the AVX2 floating load family.
 
+Omitting `--profiles` on the CLI now means every loaded machine profile. The
+API represents that as `profiles=None`; explicit `--profiles` remains the
+narrowing mechanism. When SDE value-test mode is active, non-generic profiles
+without an SDE chip alias are skipped by the verifier with a visible
+`verify-skip` note instead of being built with an incompatible host toolchain.
+This allows default generation to include non-x86 artifacts such as `neon`
+while keeping x86 SDE runtime testing scoped to profiles SDE can actually
+emulate.
+
 Consequences:
 
 - SDE execution is a verifier-side side effect, not a rendering or planning
   concern.
 - C++ and Rust use the same profile metadata and the same explicit CLI opt-in.
+- Omitting `--profiles` is the way to request all loaded profiles; there is no
+  magic `--profiles all` selector.
 - Value-test runtime feedback can cover all SDE-annotated x86 profiles without
   requiring the host CPU to support those instruction sets.
 - Source feature requirements stay source-owned and typed; verifier failures

@@ -39,8 +39,13 @@ Files to inspect:
   profile-loading boundary and passed through render data to verification.
 - `--sde` is explicit CLI opt-in. Normal generation and verification must not
   require host autodetection or an emulator.
+- Omitting `--profiles` should request every loaded machine profile. Explicit
+  `--profiles` is only a narrowing mechanism; there should be no special
+  user-facing `--profiles all` selector.
 - C++ and Rust consume the same profile metadata. C++ may wrap `ctest` through
   SDE; Rust should build test binaries first and run the binaries through SDE.
+- In SDE value-test mode, non-generic profiles without an SDE chip alias should
+  be skipped visibly rather than built with an incompatible host toolchain.
 - Missing emulator paths and missing Rust test binaries must surface as
   structured diagnostics.
 - Source metadata corrections exposed by SDE should remain source-owned
@@ -60,6 +65,14 @@ python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_build
 
 Result: `30 passed`.
 
+Default-profile follow-up:
+
+```bash
+python -m pytest -q tslc/tests/test_cli.py tslc/tests/test_profile_rendering.py tslc/tests/test_build_verify_config.py
+```
+
+Result: `21 passed`.
+
 Full repository gate:
 
 ```bash
@@ -68,6 +81,16 @@ Full repository gate:
 
 Result: passed all targeted validations, including 220 non-build tests and 53
 generated-build tests.
+
+Exact C++ SDE CLI command without `--profiles`:
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --output-root ./tslctmp/TEST --test --value-test-warnings --sde /opt/intel-sde/sde64
+```
+
+Result: passed. The run generated 59 artifacts, emitted all loaded profile
+headers including `tsl_neon.hpp`, ran every SDE-annotated x86 C++ value test,
+and reported a visible verify-skip for `neon`.
 
 Real SDE both-backend sweep:
 
@@ -91,6 +114,8 @@ value tests through `/opt/intel-sde/sde64` with zero diagnostics.
 5. Are the KNL/KML profile and `.tsl` requirement corrections legitimate
    source metadata fixes, and are they covered by generated-build or SDE
    evidence?
+6. Does the default profile behavior generate all loaded profiles while keeping
+   SDE execution limited to profiles SDE can actually emulate?
 
 ## Expected Verdict
 

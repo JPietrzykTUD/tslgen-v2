@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from tslc.api import generate_project
+from tslc.catalog.machine_profiles import load_machine_profiles_checked
+from tslc.render._common import slug
 
 
 def _roots(result) -> set[str]:
@@ -59,3 +61,26 @@ def test_feature_flag_spelling(data_root: Path, machine_profiles_path: Path) -> 
     # the naive (wrong) spellings must not appear
     assert "-mavx512_gfni" not in cmake
     assert "-mavx512_vnni" not in cmake
+
+
+def test_omitted_profiles_use_all_loaded_profiles(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    profile_result = load_machine_profiles_checked(machine_profiles_path)
+    assert profile_result.diagnostics == ()
+    expected = sorted(slug(name) for name in profile_result.profiles)
+
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["add"],
+        backends=["cpp"],
+    )
+
+    assert result.rendered is not None
+    actual = sorted(result.rendered.verify.backends[0].profiles, key=lambda p: p.profile_name)
+    assert [profile.file_stem for profile in actual] == expected
+    assert "cpp/include/tsl_neon.hpp" in {
+        artifact.logical_path for artifact in result.artifacts.artifacts
+    }

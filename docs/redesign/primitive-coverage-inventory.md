@@ -10,7 +10,7 @@ Generated 2026-06-19 by `tslc.maintenance.coverage_inventory`. **Regenerate** wi
 - **0 lower cleanly but are not build-verified** (codegen succeeds, 0 skips; compilation unconfirmed).
 - **0 partial** (emit for some extension/type slots, skip others).
 - **0 emit nothing** under the probed profiles.
-- **61614 / 64382 (profile×backend×ext×type) slots lower**; **0 errors**.
+- **65468 / 67052 (profile×backend×ext×type) slots lower**; **0 errors**.
 - **C++/Rust parity is exact**: every primitive emits the identical extension set for both backends.
 
 Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen clean, 0 skips, no build test; **partial** = some slots lower, some skip; **NONE** = nothing emitted.
@@ -53,23 +53,23 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `blend` | `v:=(m,v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `blend_add` | `v:=(m,v,v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `cast` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 300 | call type-args (bare-ext/index) |
-| `compress` | `v:=(m,v)` | VERIFIED | avx2/avx512/generic/sse | 140 | no top-level complete |
+| `compress` | `v:=(m,v)` | VERIFIED | avx2/avx512/generic/sse | 136 | implementation for 'compress' has no top |
 | `compress_store` | `void:=(m,ptr,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `conflict` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `conflict_free` | `m:=(m,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 4 | pruned (closure) |
-| `convert_down` | `v:=(v,sImm)` | VERIFIED | avx2/avx512/sse | 24 | call type-args (bare-ext/index) |
-| `convert_up` | `v:=(v,sImm)` | VERIFIED | avx2/avx512/sse | 0 | — |
+| `convert_down` | `v:=(v,sImm)` | VERIFIED | avx2/avx512/generic/scalar/sse | 24 | call type-args (bare-ext/index) |
+| `convert_up` | `v:=(v,sImm)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `count_matches` | `s:=(v,s)` | VERIFIED | avx2/avx512/generic/scalar/sse | 4 | pruned (closure) |
-| `custom_sequence` | `v:=(s,s)` | VERIFIED | avx2/avx512/generic/scalar/sse | 24 | pruned (closure) |
+| `custom_sequence` | `v:=(s,s)` | VERIFIED | avx2/avx512/generic/scalar/sse | 8 | pruned (closure) |
 | `deallocate` | `void:=(ptr)` | VERIFIED | avx2/generic | 0 | — |
 | `div` | `v:=(m,v,v)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `equal` | `m:=(m,v,v)` `m:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
-| `expand_load` | `v:=(m,ptr)` | VERIFIED | avx2/avx512/generic/scalar/sse | 4 | pruned (closure) |
+| `expand_load` | `v:=(m,ptr)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `extract` | `v:=(v,sImm)` | VERIFIED | avx2/avx512/scalar | 0 | — |
 | `extract_imask` | `im:=(im,im)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `extract_value` | `s:=v[idx]` | VERIFIED | avx2/avx512/generic/scalar/sse | 8 | pruned (closure) |
-| `from_array` | `v:=s[]` | VERIFIED | avx2/avx512/generic/scalar/sse | 16 | pruned (closure) |
-| `gather` | `v:=(m,ptr,vidx,v,sImm)` `v:=(ptr,vidx,sImm)` | VERIFIED | avx2/avx512/generic/scalar/sse | 12 | pruned (closure) |
+| `from_array` | `v:=s[]` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
+| `gather` | `v:=(m,ptr,vidx,v,sImm)` `v:=(ptr,vidx,sImm)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `greater_than` | `m:=(m,v,v)` `m:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `greater_than_or_equal` | `m:=(m,v,v)` `m:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `hadd` | `s:=(m,v)` `s:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
@@ -82,9 +82,9 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `inv` | `v:=(m,v)` `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 16 | pruned (closure) |
 | `less_than` | `m:=(m,v,v)` `m:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `less_than_or_equal` | `m:=(m,v,v)` `m:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
-| `load` | `v:=(m,ptr)` `v:=(m,ptr,v)` `v:=ptr` | VERIFIED | avx2/avx512/generic/scalar/sse | 96 | pruned (closure) |
-| `load_convert_up` | `v:=ptr+` | VERIFIED | avx2/avx512 | 4 | pruned (closure) |
-| `load_mask_repr` | `m:=ptr` | VERIFIED | avx2/avx512/generic/scalar/sse | 164 | unresolved pointer-cast type |
+| `load` | `v:=(m,ptr)` `v:=(m,ptr,v)` `v:=ptr` | VERIFIED | avx2/avx512/generic/scalar/sse | 64 | pruned (closure) |
+| `load_convert_up` | `v:=ptr+` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
+| `load_mask_repr` | `m:=ptr` | VERIFIED | avx2/avx512/generic/scalar/sse | 64 | pruned (closure) |
 | `load_scalar` | `s:=ptr` | VERIFIED | avx2/avx512/generic/sse | 0 | — |
 | `lzc` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 100 | pruned (closure) |
 | `lzc_imask` | `s:=m` | VERIFIED | avx2/avx512/generic/scalar/sse | 8 | pruned (closure) |
@@ -96,29 +96,29 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 | `mask_false` | `m:=()` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `mask_population_count` | `usize:=m` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `mask_true` | `m:=()` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
-| `masked_set1` | `v:=(m,v,s)` | VERIFIED | avx2/avx512/generic/scalar/sse | 12 | pruned (closure) |
+| `masked_set1` | `v:=(m,v,s)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `max` | `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 4 | pruned (closure) |
 | `memory_cp` | `void:=(ptr,ptr,s,s)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `min` | `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 4 | pruned (closure) |
-| `mod` | `v:=(m,v,v)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 88 | pruned (closure) |
-| `mod_imm` | `v:=(m,v,sImm)` `v:=(v,sImm)` | VERIFIED | avx2/avx512/generic/scalar/sse | 88 | pruned (closure) |
+| `mod` | `v:=(m,v,v)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 40 | pruned (closure) |
+| `mod_imm` | `v:=(m,v,sImm)` `v:=(v,sImm)` | VERIFIED | avx2/avx512/generic/scalar/sse | 40 | pruned (closure) |
 | `mov` | `v:=(m,v)` `v:=(m,v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `mul` | `v:=(m,v,v)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 40 | pruned (closure) |
 | `mul_imm` | `v:=(m,v,sImm)` `v:=(v,sImm)` | VERIFIED | avx2/avx512/generic/scalar/sse | 40 | pruned (closure) |
 | `nequal` | `m:=(m,v,v)` `m:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `popcnt` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 8 | pruned (closure) |
-| `reinterpret` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 220 | no top-level complete |
+| `reinterpret` | `v:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 220 | implementation for 'reinterpret' has no  |
 | `scatter` | `void:=(m,ptr,vidx,v,sImm)` `void:=(ptr,vidx,v,sImm)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `sequence` | `v:=()` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
-| `set` | `v:=s...` | VERIFIED | avx2/avx512/scalar/sse | 0 | — |
+| `set` | `v:=(lanes<s>)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `set1` | `v:=s` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `set_undef` | `v:=()` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `set_zero` | `v:=()` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
-| `shift_left` | `v:=(m,v,sImm)` `v:=(v,s)` `v:=(v,sImm)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 104 | pruned (closure) |
-| `shift_right` | `v:=(v,s)` `v:=(v,sImm)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 72 | pruned (closure) |
+| `shift_left` | `v:=(m,v,sImm)` `v:=(v,s)` `v:=(v,sImm)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 40 | pruned (closure) |
+| `shift_right` | `v:=(v,s)` `v:=(v,sImm)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 24 | pruned (closure) |
 | `shift_right_imask` | `im:=(im,s)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
-| `store` | `void:=(m,ptr,v)` `void:=(ptr,s)` `void:=(ptr,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 8 | pruned (closure) |
-| `store_mask_repr` | `void:=(ptr,m)` | VERIFIED | avx2/avx512/generic/scalar/sse | 880 | unresolved type query |
+| `store` | `void:=(m,ptr,v)` `void:=(ptr,s)` `void:=(ptr,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
+| `store_mask_repr` | `void:=(ptr,m)` | VERIFIED | avx2/avx512/generic/scalar/sse | 112 | pruned (closure) |
 | `sub` | `v:=(m,v,v)` `v:=(v,v)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `test_imask` | `im:=(im,im)` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
 | `to_array` | `s[]:=v` | VERIFIED | avx2/avx512/generic/scalar/sse | 0 | — |
@@ -133,11 +133,12 @@ Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen cle
 
 | skips | category | meaning / action |
 |--:|---|---|
-| 1064 | pruned (closure) | Dependency-closure dropped a body whose callee is unavailable in that profile. **Structural, not a defect** — expected behavior. |
-| 872 | unresolved type query | A `type<generation>(...)` query is not yet evaluated (e.g. `vector::offset_base`, `vector::mask_underlying_t`, `vector::transform(...)`). Blocks compress/expand/conflict/popcnt/lzc/hand/hor/store_mask_repr generic paths. |
-| 398 | no top-level complete | Body has no top-level `complete(...)` (where:-clause / switch-bodied forms) — not lowerable yet (reinterpret, compress, cast). |
+| 712 | pruned (closure) | Dependency-closure dropped a body whose callee is unavailable in that profile. **Structural, not a defect** — expected behavior. |
+| 220 | implementation for 'reinterpret' has no  |  |
 | 216 | call type-args (bare-ext/index) | `call<primitive=extract[Vec, sse, 0]>` style: a bare extension + literal index in call type-args not yet supported. |
-| 152 | unresolved pointer-cast type | `cast<reinterpret>` to a `vector::mask_underlying_t` pointer not resolved. |
+| 192 | unresolved type query | A `type<generation>(...)` query is not yet evaluated (e.g. `vector::offset_base`, `vector::mask_underlying_t`, `vector::transform(...)`). Blocks compress/expand/conflict/popcnt/lzc/hand/hor/store_mask generic paths. |
+| 120 | implementation for 'compress' has no top |  |
+| 58 | implementation for 'cast' has no top-lev |  |
 | 50 | unresolved value query | A `value<generation>(...)` / `value<backend>(...)` query unevaluated (e.g. `type::size_bytes(...)`, `x86::mm_fround_to_zero`). Blocks to_integral/to_mask generic + div/mod float rounding. |
 | 16 | unsupported mask<test> | `mask<test>` on the `native_predicate_by_lanes` (avx512 `__mmaskN`) representation. |
 

@@ -1465,6 +1465,12 @@ commands through SDE, and Rust builds tests with
 binary through SDE. Missing emulator paths and missing Rust test binaries are
 reported as structured verifier diagnostics.
 
+Omitting `--profiles` now requests every loaded machine profile. Explicit
+`--profiles` remains the narrowing mechanism; there is no special
+`--profiles all` selector. In SDE value-test mode, non-generic profiles without
+an SDE chip alias, such as `neon`, are generated but skipped by the after-write
+verifier with a visible `verify-skip` note because x86 SDE cannot emulate them.
+
 The real SDE sweep passed for both C++ and Rust over all SDE-annotated x86
 profiles: `sse`, `sse2`, `sse3`, `avx`, `avx2`, `knl`, `kml`, `skylake`,
 `cannonlake`, `cascadelake`, `cooperlake`, `icelake-rockerlake`, `tigerlake`,
@@ -1482,6 +1488,14 @@ tslc/tests/test_build_verify_config.py
 tslc/tests/test_catalog_validation.py::test_machine_profile_sde_metadata_is_validated
 tslc/tests/test_cli.py` (`30 passed`). `./verify.sh` passed with 220
 non-build tests and 53 generated-build tests.
+
+After the default-profile correction, focused validation passed with
+`python -m pytest -q tslc/tests/test_cli.py tslc/tests/test_profile_rendering.py
+tslc/tests/test_build_verify_config.py` (`21 passed`). The exact C++ SDE CLI
+command without `--profiles` generated 59 artifacts, emitted headers for every
+loaded profile including `tsl_neon.hpp`, ran every SDE-annotated x86 C++ value
+test successfully, skipped `neon` with a visible verify-skip note, and exited
+successfully.
 
 Active prompt:
 docs/agent/runs/tslc-sde-value-test-execution-review-prompt.md

@@ -150,6 +150,38 @@ def test_cli_omitted_primitives_uses_all_catalog_default(monkeypatch, capsys) ->
     assert "generated 1 specializations" in captured.out
 
 
+def test_cli_omitted_profiles_uses_all_catalog_default(monkeypatch, capsys) -> None:
+    calls: dict[str, object] = {}
+
+    def fake_generate_project(source_paths, **kwargs):
+        calls["generate"] = (source_paths, kwargs)
+        return SimpleNamespace(
+            diagnostics=(),
+            coverage=(object(),),
+            artifacts=SimpleNamespace(artifacts=(object(),)),
+            rendered=None,
+        )
+
+    monkeypatch.setattr(cli, "generate_project", fake_generate_project)
+
+    rc = cli.main(
+        [
+            "--sources",
+            "tsldata",
+            "--machine-profiles",
+            "supplementary/buildsystem/machine_profiles.json",
+            "--backends",
+            "cpp",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    _, generate_kwargs = calls["generate"]
+    assert "profiles" not in generate_kwargs
+    assert "generated 1 specializations" in captured.out
+
+
 def test_cli_test_flag_fails_on_value_test_diagnostic(monkeypatch, tmp_path, capsys) -> None:
     def fake_generate_project(source_paths, **kwargs):
         return SimpleNamespace(

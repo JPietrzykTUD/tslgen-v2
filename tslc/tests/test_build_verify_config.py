@@ -236,6 +236,7 @@ def test_cpp_value_test_run_can_be_wrapped_with_sde(tmp_path: Path) -> None:
     assert report.diagnostics == ()
     assert [command.step for command in seen] == [
         "preflight",
+        "clean",
         "configure",
         "build",
         "build-values",
@@ -244,6 +245,90 @@ def test_cpp_value_test_run_can_be_wrapped_with_sde(tmp_path: Path) -> None:
     assert seen[-2].argv[0] == "cmake"
     assert seen[-1].argv[:3] == (sys.executable, "-hsw", "--")
     assert seen[-1].argv[3] == "ctest"
+
+
+def test_sde_cpp_value_tests_pin_default_compiler_over_ambient_cxx(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("CXX", "zig c++")
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="cpp",
+                root_path="cpp",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="sse2",
+                        file_stem="sse2",
+                        sde="mrm",
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=BuildVerifierConfig.create(
+            run_value_tests=True,
+            sde_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen[:3]] == ["preflight", "clean", "configure"]
+    assert seen[0].argv[0] == "c++"
+    assert _env(seen[1])["CXX"] == "c++"
+    assert _env(seen[2])["CXX"] == "c++"
+
+
+def test_sde_value_tests_skip_non_generic_profiles_without_sde_alias(
+    tmp_path: Path,
+) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="cpp",
+                root_path="cpp",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="neon",
+                        file_stem="neon",
+                        family="aarch64",
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=BuildVerifierConfig.create(
+            run_value_tests=True,
+            sde_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert report.skipped == (
+        "cpp: profile neon has no SDE chip alias; value-test verification skipped",
+    )
+    assert seen == []
 
 
 def test_rust_value_tests_run_built_binaries_through_sde(tmp_path: Path) -> None:

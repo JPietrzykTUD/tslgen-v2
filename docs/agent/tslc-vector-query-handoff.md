@@ -1033,6 +1033,12 @@ SDE-annotated x86 machine profiles. This closes the current runtime coverage
 goal for provided x86 profiles by running generated value tests for both C++
 and Rust through Intel SDE when native host ISA support is unavailable.
 
+Omitting `--profiles` on the CLI requests every loaded machine profile. The API
+represents that as `profiles=None`; explicit `--profiles` remains only a
+narrowing mechanism. In SDE value-test mode, non-generic profiles without an
+SDE chip alias, such as `neon`, are generated but skipped by the verifier with
+a visible `verify-skip` note because x86 SDE cannot emulate them.
+
 Implemented pieces:
 
 1. `MachineProfile` accepts optional validated `sde` chip aliases from
@@ -1050,6 +1056,8 @@ Implemented pieces:
 7. Source-owned feature metadata exposed by the SDE sweep was corrected in
    machine profiles and `.tsl` implementation selectors rather than hidden in
    verifier exceptions.
+8. Non-generic profiles without SDE aliases are skipped during SDE value-test
+   verification instead of being built with an incompatible host toolchain.
 
 SDE runtime sweep:
 
@@ -1079,6 +1087,25 @@ Full validation:
 
 Result: passed all targeted validations, including 220 non-build tests and 53
 generated-build tests.
+
+Default-profile follow-up:
+
+```bash
+python -m pytest -q tslc/tests/test_cli.py tslc/tests/test_profile_rendering.py tslc/tests/test_build_verify_config.py
+```
+
+Result: `21 passed`.
+
+The exact C++ SDE CLI command without `--profiles`:
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --output-root ./tslctmp/TEST --test --value-test-warnings --sde /opt/intel-sde/sde64
+```
+
+Result: passed. It generated 59 artifacts, emitted headers for every loaded
+profile including `tsl_neon.hpp`, ran all SDE-annotated x86 C++ value tests,
+and skipped `neon` with a visible `verify-skip` note because no x86 SDE chip
+alias exists for that AArch64 profile.
 
 ### CLI Value-Test Flag Slice
 

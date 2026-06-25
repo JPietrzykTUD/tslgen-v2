@@ -58,7 +58,7 @@ class GenerationRequest:
     source_paths: tuple[Path, ...]
     machine_profiles_path: Path
     primitives: tuple[str, ...] | None
-    profiles: tuple[str, ...]
+    profiles: tuple[str, ...] | None
     type_tags: tuple[str, ...]
     backends: tuple[str, ...] = _DEFAULT_BACKENDS
     mode: GenerationMode = "partial"
@@ -202,7 +202,10 @@ class _GenerationSession:
         self.profile_renders: list[ProfileRender] = []
 
     def run(self) -> GenerationResult:
-        for profile_name in sorted(self.request.profiles):
+        for profile_name in _expand_requested_profiles(
+            self.request.profiles,
+            self.inputs.machine_profiles,
+        ):
             profile = self.inputs.machine_profiles.get(profile_name)
             if profile is None:
                 self._record_unknown_profile(profile_name)
@@ -752,6 +755,18 @@ def _spec_key(spec: LoweredSpecialization) -> tuple[int, str, str]:
 
 def _sorted_type_tags(type_tags: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(sorted(type_tags, key=lambda tag: (_TYPE_ORDER.get(tag, 99), tag)))
+
+
+def _expand_requested_profiles(
+    requested: tuple[str, ...] | None,
+    machine_profiles: Mapping[str, MachineProfile],
+) -> tuple[str, ...]:
+    if requested is None:
+        return tuple(sorted(machine_profiles))
+    names: set[str] = set()
+    for profile_name in requested:
+        names.add(profile_name)
+    return tuple(sorted(names))
 
 
 def _coverage_key(entry: CoverageEntry) -> tuple[str, str, str, str, int, str]:

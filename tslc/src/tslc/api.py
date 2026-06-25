@@ -35,7 +35,7 @@ def generate_project(
     *,
     machine_profiles_path: Path | str,
     primitives: Iterable[str] | None = None,
-    profiles: Iterable[str],
+    profiles: Iterable[str] | None = None,
     type_tags: Iterable[str] = _ARITH_TYPE_TAGS,
     backends: Iterable[str] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
     generation_mode: GenerationMode = "partial",
@@ -48,6 +48,7 @@ def generate_project(
     are expanded to every ``.tsl`` file beneath them (the catalog needs the
     extension/type/language definitions alongside the primitive files).
     ``profiles`` names machine feature-profiles from ``machine_profiles_path``.
+    ``profiles=None`` means every loaded machine profile.
     ``primitives=None`` means every primitive in the loaded catalog.
     """
 
@@ -55,7 +56,7 @@ def generate_project(
         source_paths=_expand_sources(source_paths),
         machine_profiles_path=Path(machine_profiles_path),
         primitives=tuple(primitives) if primitives is not None else None,
-        profiles=tuple(profiles),
+        profiles=tuple(profiles) if profiles is not None else None,
         type_tags=tuple(type_tags),
         backends=tuple(backends),
         mode=generation_mode,

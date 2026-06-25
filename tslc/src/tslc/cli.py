@@ -32,8 +32,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--profiles",
-        default="scalar,sse2,avx,avx2,skylake",
-        help="comma-separated machine profiles",
+        default=None,
+        help=(
+            "comma-separated machine profile names; omit to generate every "
+            "loaded machine profile"
+        ),
     )
     parser.add_argument(
         "--types",
@@ -94,13 +97,14 @@ def main(argv: list[str] | None = None) -> int:
 
     generate_kwargs = {
         "machine_profiles_path": args.machine_profiles,
-        "profiles": _split(args.profiles),
         "type_tags": _split(args.types),
         "backends": _split(args.backends),
         "generation_mode": args.generation_mode,
         "test_harness": args.test,
         "value_test_warnings": args.value_test_warnings or args.test,
     }
+    if args.profiles is not None:
+        generate_kwargs["profiles"] = _split(args.profiles)
     if args.primitives is not None:
         generate_kwargs["primitives"] = _split(args.primitives)
 
