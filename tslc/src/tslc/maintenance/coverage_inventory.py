@@ -93,8 +93,8 @@ def _category(reason: str) -> str:
     if "uses an unsupported kind" in reason:
         match = re.search(r"signature '([^']+)'", reason)
         return f"unsupported signature kind {match.group(1) if match else ''}".strip()
-    if "has no top-level emit_return" in reason:
-        return "no top-level emit_return"
+    if "has no top-level complete" in reason or "has no top-level emit_return" in reason:
+        return "no top-level complete"
     if reason.startswith("call type-args"):
         return "call type-args (bare-ext/index)"
     if reason.startswith("unsupported mask<test>"):
@@ -124,8 +124,8 @@ _CATEGORY_NOTES = {
     "unresolved pointer-cast type": (
         "`cast<reinterpret>` to a `vector::mask_underlying_t` pointer not resolved."
     ),
-    "no top-level emit_return": (
-        "Body has no top-level `emit_return(...)` (where:-clause / switch-bodied "
+    "no top-level complete": (
+        "Body has no top-level `complete(...)` (where-clause / switch-bodied "
         "forms) — not lowerable yet (reinterpret, compress, cast)."
     ),
     "call type-args (bare-ext/index)": (
@@ -247,6 +247,10 @@ def main() -> int:
     w("")
 
     w("## Skip-reason taxonomy (what blocks the gaps)\n")
+    w("> Skip counts are candidate specialization slots "
+      "(`profile×backend×extension×type`), not primitives. A primitive can be "
+      "**VERIFIED** while still listing skipped slots when another profile/type/"
+      "extension variant is deliberately pruned or deferred.\n")
     w("| skips | category | meaning / action |")
     w("|--:|---|---|")
     for category, count in histogram.most_common():
@@ -254,12 +258,25 @@ def main() -> int:
         w(f"| {count} | {category} | {_CATEGORY_NOTES.get(key, '')} |")
     w("")
     w("### NONE primitives — why nothing emits\n")
-    w("- `allocate`, `allocate_aligned`, `deallocate`: host memory helpers with no "
-      "vector (`v`) axis (`ptr:=(s)` etc.), so the per-type selector produces no "
-      "slots. Not a lowering defect; needs a non-vector codegen path if wanted.")
-    w("- `lzc_scalar` (`s:=s`): attempted but every slot blocked by an unresolved type query.")
-    w("- `set` (`v:=s...`): variadic scalar-pack kind `s...` is an unsupported signature kind.")
-    w("- `to_ostream` (`o:=(o,v,s)`): ostream kind `o` is an unsupported signature kind.\n")
+    if not tier["NONE"]:
+        w("No primitives are currently in the NONE tier; every primitive emits at "
+          "least one slot under the probed profiles.\n")
+    else:
+        for name in tier["NONE"]:
+            signatures = " ".join(f"`{s}`" for s in sorted(sigs[name]))
+            if reasons[name]:
+                category = _category(reasons[name].most_common(1)[0][0])
+                key = (
+                    "unsupported signature kind"
+                    if category.startswith("unsupported signature kind")
+                    else category
+                )
+                note = _CATEGORY_NOTES.get(key, "")
+                suffix = f": {category}. {note}" if note else f": {category}."
+            else:
+                suffix = "."
+            w(f"- `{name}` ({signatures}){suffix}")
+        w("")
 
     _OUT.write_text("\n".join(out))
     print(f"wrote {_OUT.relative_to(_REPO_ROOT)}")
