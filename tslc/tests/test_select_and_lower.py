@@ -107,6 +107,93 @@ def test_lower_scalar_add_has_no_unsafe(catalog: Catalog, machine_profiles) -> N
     assert rust.body_text == "return left.tsl_add(right);"
 
 
+def test_backend_value_query_uses_backend_translation_template(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slot = next(
+        s
+        for s in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "cast", ("f32",))
+        .selected
+        if s.extension.name == "avx2" and s.to_target == "si32"
+    )
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert cpp is not None
+    assert "_MM_FROUND_TO_ZERO" in cpp.body_text
+
+    rust = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+    assert rust is not None
+    assert "core::arch::x86_64::_MM_FROUND_TO_ZERO" in rust.body_text
+
+
+def test_sse41_cast_fast_path_wins_over_portable_fallback(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slot = next(
+        s
+        for s in Selector()
+        .select_profile(catalog, machine_profiles["avx"], "cast", ("f32",))
+        .selected
+        if s.extension.name == "sse" and s.type_tag == "f32" and s.to_target == "si32"
+    )
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert cpp is not None
+    assert "_mm_round_ps" in cpp.body_text
+    assert "_mm_cvtps_epi32" in cpp.body_text
+
+
+def test_sse41_to_mask_fast_paths_win_over_portable_fallback(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slots = {
+        (s.type_tag, s.extension.name): s
+        for s in Selector()
+        .select_profile(catalog, machine_profiles["avx"], "to_mask", ("si64", "f64"))
+        .selected
+    }
+
+    cpp_si64 = Lowerer().lower(
+        slots[("si64", "sse")], catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert cpp_si64 is not None
+    assert "sse4_1" in cpp_si64.required_features
+    assert "::tsl::equal<Vec>" in cpp_si64.body_text
+
+    cpp_f64 = Lowerer().lower(
+        slots[("f64", "sse")], catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert cpp_f64 is not None
+    assert "_mm_cmpeq_epi64" in cpp_f64.body_text
+
+
+def test_masked_set1_reuses_blend_and_set1_on_x86(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slots = {
+        (s.type_tag, s.extension.name): s
+        for s in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "masked_set1", ("si32",))
+        .selected
+    }
+
+    cpp = Lowerer().lower(
+        slots[("si32", "avx2")], catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert "::tsl::blend<Vec>" in cpp.body_text
+    assert "::tsl::set1<Vec>" in cpp.body_text
+    assert "to_array" not in cpp.body_text
+
+
 def test_consumed_tsil_statement_terminators_render_once() -> None:
     ext = Extension(
         name="scalar",

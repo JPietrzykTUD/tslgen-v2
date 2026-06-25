@@ -529,7 +529,7 @@ prim<s:=v> hor(vec):
           tsil """
             let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
-            UnsignedT result = cast<static>(UnsignedT, 0);
+            var<typed>(UnsignedT, result, cast<static>(UnsignedT, 0));
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
               mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
@@ -842,7 +842,7 @@ prim<s:=(m,v)> hor(mask, vec):
           tsil """
             let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
-            UnsignedT result = cast<static>(UnsignedT, 0);
+            var<typed>(UnsignedT, result, cast<static>(UnsignedT, 0));
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
               mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
@@ -890,7 +890,7 @@ prim<s:=(m,v)> hor(mask, vec):
           tsil """
             let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
-            UnsignedT result = cast<static>(UnsignedT, 0);
+            var<typed>(UnsignedT, result, cast<static>(UnsignedT, 0));
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
               mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));

@@ -123,12 +123,13 @@ def test_to_from_array_roundtrip_builds(
     # parameter, a `load attrs[aligned=false]` call / scalar `data[0]`). Exercises the new
     # generic constructs (`type<generation>`/`value<generation>` regions, `var<typed>` +
     # uninit array, calls into the axis'd/overloaded `store`/`load`) end-to-end in C++ and
-    # Rust across scalar + SIMD; the closure pulls in `load`/`store`.
+    # Rust across scalar + SIMD; the closure pulls in `load`/`store`. Including `avx`
+    # guards the AVX-only 256-bit integer store/load fallback used by byte/word arrays.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["to_array", "from_array"],
-        profiles=["scalar", "avx2", "skylake"],
+        profiles=["scalar", "avx", "avx2", "skylake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -1098,8 +1099,8 @@ def test_bit_reductions_build(
     # plus the `to_array` + `var<typed>` accumulator loop) and `popcnt` (`v:=v`, per-lane
     # population count on the AVX512 VPOPCNTDQ/BITALG native path — hence icelake-rockerlake —
     # plus the sse/avx2 intrinsic slots), and `tzc` (`s:=m`, `details::ctz` of the integral
-    # mask, cast to the result scalar). Both backends; the generic
-    # `details::popcount<T,offset>` fallback is gated on `vector::offset_base` (Phase B2).
+    # mask, cast to the result scalar). Both backends; the generic fallbacks use width-aware
+    # helper functions and no longer depend on a `vector::offset_base` query.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
@@ -1123,8 +1124,8 @@ def test_leading_zeros_build(
     # `lzc_imask` (`s:=m`, `details::clz` of the integral mask, cast to the result scalar). The
     # closure pulls `lzc_scalar` (`s:=s`), whose integer body is `details::clz(data)` — the
     # `clz` helper is width-aware via `sizeof(T)` / Rust `leading_zeros`, so no offset arg is
-    # needed. Integer types only (lzc has no float tests; the float `lzc_scalar` bit-reinterpret
-    # path needs `mem<copy>` and stays deferred). Both backends, scalar + sse2 + avx2 + skylake.
+    # needed. The float `lzc_scalar` bit-reinterpret path uses `mem<copy>` into an unsigned
+    # carrier and the same width-aware helper. Both backends, scalar + sse2 + avx2 + skylake.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,

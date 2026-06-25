@@ -52,6 +52,25 @@ def test_type_is_same_query(catalog: Catalog) -> None:
     assert ev.evaluate("type::is_same(type<generation>(base::in), ui8)", ctx) == BoolValue(False)
 
 
+def test_select_query_chooses_same_kind_generation_value(catalog: Catalog) -> None:
+    ev = QueryEvaluator()
+    ctx_f32 = _ctx(catalog, "avx2", "f32")
+    ctx_f64 = _ctx(catalog, "avx2", "f64")
+
+    query = (
+        "select(value<generation>(type::is_same(type<generation>(base::in), f32)), "
+        "ui32, ui64)"
+    )
+
+    assert ev.evaluate(query, ctx_f32) == TypeValue("ui32")
+    assert ev.evaluate(query, ctx_f64) == TypeValue("ui64")
+    assert ev.evaluate(
+        "select(value<generation>(type::is_same(type<generation>(base::in), f32)), "
+        "ui32, scalar::size)",
+        ctx_f32,
+    ) is None
+
+
 def test_named_stream_suffix_resolves_per_extension(catalog: Catalog) -> None:
     ev = QueryEvaluator()
     # whole-register integer suffix: si128 on sse, si256 on avx2.
@@ -115,6 +134,39 @@ def test_signed_and_float_compares_lower_on_avx2(catalog: Catalog, machine_profi
     ]:
         spec = _spec(catalog, machine_profiles, "avx2", prim, "avx2", "si32")
         assert spec is not None and expect in spec.body_text
+
+
+def test_hand_float_bitwise_carrier_type_query_lowers(catalog: Catalog, machine_profiles) -> None:
+    spec_f32 = _spec(catalog, machine_profiles, "avx2", "hand", "avx2", "f32")
+    spec_f64 = _spec(catalog, machine_profiles, "avx2", "hand", "avx2", "f64")
+    rust_f32 = _spec(catalog, machine_profiles, "avx2", "hand", "avx2", "f32", backend="rust")
+
+    assert spec_f32 is not None and "static_cast<uint32_t>(0)" in spec_f32.body_text
+    assert spec_f64 is not None and "static_cast<uint64_t>(0)" in spec_f64.body_text
+    assert "select(" not in spec_f32.body_text
+    assert "select(" not in spec_f64.body_text
+    assert rust_f32 is not None
+    assert "core::ptr::addr_of_mut!(result).cast::<u8>()" in rust_f32.body_text
+    assert "core::ptr::addr_of!(data_arr[0]).cast::<u8>()" in rust_f32.body_text
+
+
+def test_lzc_scalar_float_bitwise_path_does_not_need_offset_base(
+    catalog: Catalog, machine_profiles
+) -> None:
+    spec_cpp = _spec(catalog, machine_profiles, "scalar", "lzc_scalar", "scalar", "f32")
+    spec_rust = _spec(
+        catalog, machine_profiles, "scalar", "lzc_scalar", "scalar", "f32", backend="rust"
+    )
+
+    assert spec_cpp is not None
+    assert "details::clz(bits)" in spec_cpp.body_text
+    assert "offset_base" not in spec_cpp.body_text
+    assert spec_rust is not None
+    assert "details::clz(bits)" in spec_rust.body_text
+    assert "offset_base" not in spec_rust.body_text
+    assert "bits{}" not in spec_rust.body_text
+    assert "let mut bits" in spec_rust.body_text
+    assert "core::ptr::addr_of_mut!(bits).cast::<u8>()" in spec_rust.body_text
 
 
 # --- selection enablers ------------------------------------------------------

@@ -38,11 +38,11 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
               tsil "complete(cast<bitcast>(type<generation>(register::generic(ToType)), data));"
           f?:
             safety:
-              internal_unsafe true
+              internal_unsafe false
               caller_unsafe false
-              reasons [intrinsic]
+              reasons []
             implementation:
-              tsil "complete(cast<bitcast>(type<generation>(register::generic(ToType)), intrin<cast, build[infix=base::in, infix_sep=\"\", suffix=ToBase]>(data)));"
+              tsil "complete(cast<bitcast>(type<generation>(register::generic(ToType)), data));"
           ?i?:
             safety:
               internal_unsafe true
@@ -498,6 +498,21 @@ prim<v:=v>[cast=convert] cast(data):
               reasons []
             implementation:
               tsil "complete(cast<reinterpret>(type<generation>(register::generic(ToType)), data));"
+          ui32:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
+                  var<const_infer>(in_arr, call<primitive=to_array[Vec]>(data));
+                  var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
+                  loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+                    result[i] = cast<static>(type<generation>(base::generic(OutVec)), in_arr[i]);
+                  }
+                  complete(call<primitive=from_array[OutVec]>(result));
+                """
           ?i32:
             safety:
               internal_unsafe true
@@ -676,13 +691,29 @@ prim<v:=v>[cast=convert] cast(data):
               reasons [intrinsic]
             implementation:
               tsil "complete(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm_cvtps_pd>(data)));"
-          ?i32:
+          si32:
+            requires [sse4_1]
             safety:
               internal_unsafe true
               caller_unsafe false
               reasons [intrinsic]
             implementation:
               tsil "complete(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<cvt, build[infix=base::in, infix_sep=\"\", suffix=ToBase]>(intrin<_mm_round_ps>(data, value<backend>(x86::mm_fround_to_zero)))));"
+          ?i32:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
+                  var<const_infer>(in_arr, call<primitive=to_array[Vec]>(data));
+                  var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
+                  loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+                    result[i] = cast<static>(type<generation>(base::generic(OutVec)), in_arr[i]);
+                  }
+                  complete(call<primitive=from_array[OutVec]>(result));
+                """
           "*":
             safety:
               internal_unsafe false
@@ -712,12 +743,28 @@ prim<v:=v>[cast=convert] cast(data):
                    complete(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<_mm_cvtepi32_epi64>(temp))) ;
                 """
           si32:
+            requires [sse4_1]
             safety:
               internal_unsafe true
               caller_unsafe false
               reasons [intrinsic]
             implementation:
               tsil "complete(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<cvt, build[infix=base::in, infix_sep=\"\", suffix=ToBase]>(intrin<_mm_round_pd>(data, value<backend>(x86::mm_fround_to_zero)))));"
+          ?i32:
+            safety:
+              internal_unsafe false
+              caller_unsafe false
+              reasons []
+            implementation:
+              tsil """
+                  let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
+                  var<const_infer>(in_arr, call<primitive=to_array[Vec]>(data));
+                  var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
+                  loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+                    result[i] = cast<static>(type<generation>(base::generic(OutVec)), in_arr[i]);
+                  }
+                  complete(call<primitive=from_array[OutVec]>(result));
+                """
           "*":
             safety:
               internal_unsafe false

@@ -1497,12 +1497,146 @@ loaded profile including `tsl_neon.hpp`, ran every SDE-annotated x86 C++ value
 test successfully, skipped `neon` with a visible verify-skip note, and exited
 successfully.
 
+The first primitive-finalization slice is implemented for `reinterpret`.
+Inline `tsil "..."` implementation body envelopes now carry decoded scalar
+text as `payload_text` while preserving raw `payload_source` spans for
+diagnostics, so escaped source quotes no longer prevent top-level
+`complete(...)` recognition. The x86 `reinterpret` `f? -> f?` source body now
+uses the no-instruction bitcast path instead of non-existent same-type cast
+intrinsics. Focused parser tests passed, the per-primitive C++/Rust SDE
+value-test command for `reinterpret` passed with `build/test-verified 152
+commands`, and the regenerated primitive coverage inventory reports
+`reinterpret` with `0` skipped slots.
+
+The second primitive-finalization slice is implemented for `compress`. The
+scalar body now uses `complete(result)` instead of raw target-language
+`return`s, and AVX-512VL byte/word fallback paths now convert native predicate
+masks through `to_integral[Vec]` before testing bits instead of using
+`mask<test>` on `native_predicate_by_lanes`. The per-primitive C++/Rust SDE
+value-test command for `compress` passed with `build/test-verified 152
+commands`. The regenerated primitive coverage inventory reports `compress`
+with `0` skipped slots and `65976 / 67052` lowered slots overall; the
+`unsupported mask<test>` category is no longer present in the current
+inventory.
+
+The third primitive-finalization slice is implemented for `cast`. TSIL
+primitive-call type arguments now accept decimal integer constants, so source
+calls such as `call<primitive=extract[Vec, sse, 0]>(data)` lower through the
+generic call boundary instead of skipping. Backend-scoped value leaves such as
+`value<backend>(x86::mm_fround_to_zero)` resolve through backend translation
+templates named `value_...`, keeping emitted C++/Rust spellings source-data
+owned. The `cast` source data now uses portable array round-trip fallbacks for
+AVX2 `f32 -> ui32` and SSE `f32/f64 -> ?i32` paths where the previous bodies
+used AVX-512VL or SSE4.1-only instructions without matching profile
+requirements. The per-primitive C++/Rust SDE value-test command for `cast`
+passed with `build/test-verified 152 commands`. The regenerated primitive
+coverage inventory reports `cast` and `convert_down` with `0` skipped slots
+and `66310 / 67062` lowered slots overall; the `call type-args`,
+`unresolved value query`, `no top-level complete`, and `unsupported mask<test>`
+categories are no longer present in the current inventory.
+
+The fourth primitive-finalization slice is implemented for `hand` and also
+clears the same unresolved type-query gap from `hor`. `QueryEvaluator` now
+supports a narrow typed `select(cond, then, else)` query that folds only when
+the condition is a generation-time boolean and both branches have the same
+query-value kind. This resolves the float bitwise horizontal-reduction carrier
+type (`ui32` for `f32`, `ui64` for `f64`) without primitive-name logic.
+Rust pointer casts of address expressions now render through
+`core::ptr::addr_of!` / `addr_of_mut!` before byte-casting, so source-owned
+`mem<copy>` fallbacks compile in Rust. Focused generation-condition tests
+passed with `22 passed`; the Rust-only `hand` CLI value-test run passed with
+`build/test-verified 19 commands`; and the per-primitive C++/Rust SDE value-test
+command for `hand` passed with `build/test-verified 152 commands`. The
+regenerated primitive coverage inventory reports `hand` and `hor` with `0`
+skipped slots and `66454 / 67062` lowered slots overall. At that point, the
+only remaining non-closure skip category was `unresolved type query` with 48
+candidate slots, owned by `lzc_scalar`.
+
+The fifth primitive-finalization slice is implemented for `lzc_scalar`. The
+source body no longer calls the vestigial
+`details::clz<T, vector::offset_base>(...)` helper form; both backend helper
+implementations are width-aware already, so the source now initializes an
+unsigned carrier with `var<infer>`, bit-copies float scalar input into it with
+`mem<copy>`, and calls `details::clz(bits)`. No `vector::offset_base` query was
+added to the compiler. The focused generation-condition regression passed with
+`1 passed`; the Rust-only `lzc_scalar` CLI value-test run passed with
+`build/test-verified 19 commands`; and the per-primitive C++/Rust SDE
+value-test command for `lzc_scalar` passed with `build/test-verified 152
+commands`. The regenerated primitive coverage inventory reports all 89
+primitives as `VERIFIED`, with `66594 / 67062` lowered slots overall. The only
+remaining skip taxonomy category is `pruned (closure)`.
+
+The sixth primitive-finalization micro-slice is implemented for `to_array`
+under the AVX profile. Closure diagnostics showed AVX-profile `avx2`
+byte/word fallback bodies pruning because `to_array[Vec]` required `avx2` for
+`si8`, `ui8`, `si16`, and `ui16`. The `to_array` body delegates to `store`, and
+`store` already declares AVX-only support for all AVX2 integer widths, so
+`to_array` was stricter than its actual implementation. The `avx2` integer
+`to_array` requirement is now `[avx]` for every integer type tag. The
+`test_to_from_array_roundtrip_builds` generated-build test now includes the
+`avx` profile and passed with `1 passed`; the per-primitive C++/Rust SDE
+value-test command for `to_array,from_array` passed with
+`build/test-verified 152 commands`; and the regenerated primitive coverage
+inventory reports `66722 / 67070` lowered slots overall, reducing remaining
+closure-pruned slots from 468 to 348.
+
+The seventh primitive-finalization slice closes the remaining selected-corpus
+closure gaps without adding child-extension workaround bodies. `avx2_vl` and
+`sse_vl` continue to inherit usable `avx2`/`sse` bodies; explicit child bodies
+remain reserved for genuinely different AVX-512VL representation paths. Source
+data now fills the actual missing closure links: `blend` has an AVX-only
+array-roundtrip fallback used by AVX-profile masked `mov`; `mask_true` and
+`mask_false` no longer use an unsupported `default` requirement key for SSE
+types; `to_integral` has an AVX2 arithmetic fallback; AVX-512 float bitwise
+bodies reinterpret through the signed carrier matching the current base width;
+`inv` float requirements match its AVX-capable callees; SSE `equal` and
+`less_than` have SSE2-compatible 64-bit lane-array fallbacks; `nequal` can now
+compose those SSE64 comparisons; and SSE64 `to_mask` uses lane-array mask
+construction instead of requiring SSE4.1 `cmpeq_epi64`.
+
+The same full-corpus build surfaced an existing source-form issue in AVX-512
+float `hor` bodies: raw `UnsignedT result = ...` declarations rendered as C
+syntax in Rust. Those bodies now use canonical `var<typed>(UnsignedT, result,
+...)` TSIL declarations. No renderer-side primitive special case was added.
+
+Validation for this closure-completion slice passed:
+
+```bash
+python -m compileall -q tslc/src/tslc
+python -m pytest -q tslc/tests/test_build_verify.py::test_full_corpus_builds
+python -m pytest -q tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_coverage_is_complete tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_rust_parity_inventory_is_explicit tslc/tests/test_build_verify.py::test_masked_memory_build tslc/tests/test_build_verify.py::test_to_mask_builds
+PYTHONPATH=tslc/src python -m tslc.maintenance.coverage_inventory
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives blend,mov,load,mask_true,mask_false,to_integral,to_mask,store_mask_repr,load_mask_repr,lzc_imask,tzc,binary_and,binary_or,binary_xor,inv,equal,nequal,less_than,hor --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --output-root ./tslctmp/TEST --test --value-test-warnings --sde /opt/intel-sde/sde64
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --output-root ./tslctmp/FULL --test --value-test-warnings --sde /opt/intel-sde/sde64
+git diff --check
+./verify.sh
+```
+
+Results: full-corpus build `1 passed`; focused value/masked-memory checks
+`4 passed`; regenerated primitive inventory reports `89 verified, 0 lowers, 0
+partial, 0 none; 67232/67232 slots`; and the clustered C++/Rust SDE CLI run
+generated 83 artifacts and ended with `build/test-verified 152 commands`.
+The broad all-primitive C++/Rust SDE CLI run, with `--primitives` omitted,
+generated 220352 specializations across 83 artifacts, wrote them under
+`tslctmp/FULL`, visibly skipped `neon` value-test verification because it has
+no x86 SDE chip alias, ran the SDE-backed x86 value tests, and ended with
+`build/test-verified 152 commands`.
+The full wrapper `./verify.sh` passed with 230 non-build tests and 53
+generated-build tests.
+
 Active prompt:
-docs/agent/runs/tslc-sde-value-test-execution-review-prompt.md
+docs/agent/runs/tslc-primitive-finalization-closure-completion-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
 boundary review prompt:
+docs/agent/runs/tslc-primitive-finalization-reinterpret-compress-cast-hand-hor-lzc-scalar-to-array-avx-review-prompt.md
+docs/agent/runs/tslc-primitive-finalization-reinterpret-compress-cast-hand-hor-lzc-scalar-review-prompt.md
+docs/agent/runs/tslc-primitive-finalization-reinterpret-compress-cast-hand-hor-review-prompt.md
+docs/agent/runs/tslc-primitive-finalization-reinterpret-compress-cast-review-prompt.md
+docs/agent/runs/tslc-primitive-finalization-reinterpret-compress-review-prompt.md
+docs/agent/runs/tslc-primitive-finalization-reinterpret-review-prompt.md
+docs/agent/runs/tslc-sde-value-test-execution-review-prompt.md
 docs/agent/runs/tslc-rust-warning-hygiene-review-prompt.md
 docs/agent/runs/tslc-cli-test-flag-review-prompt.md
 docs/agent/runs/tslc-design-principles-review-prompt.md
@@ -1526,11 +1660,19 @@ docs/agent/runs/tslc-design-principles-residual-risk-review-prompt.md
 docs/agent/runs/tslc-param-types-layout-contract-review-prompt.md
 docs/agent/runs/tslc-value-test-parity-inventory-review-prompt.md
 
-Next expected action: review the SDE value-test execution slice. Confirm that
-emulator execution stays in the after-write verifier, both C++ and Rust consume
-the same typed profile metadata, source feature fixes remain source-owned, and
-no profile- or primitive-specific exception logic leaked into renderers or
-value-test planning.
+Next expected action: review the `reinterpret` + `compress` + `cast` + `hand` /
+`hor` + `lzc_scalar` + `to_array` AVX primitive-finalization slice. Confirm
+that decoded inline TSIL payloads preserve source-body integrity and diagnostic
+provenance, primitive body changes are source-owned, `compress` and `cast`
+fallbacks reuse typed primitive calls and existing propagation, the `cast` TSIL
+call/value query additions and the `select(...)` query are generic
+typed-boundary capabilities, Rust address pointer casts stay syntax-only,
+`lzc_scalar` removes vestigial source helper arguments instead of growing the
+compiler query vocabulary, `to_array` AVX byte/word coverage is a correct
+source requirement fix matching its `store` callee, child extensions inherit
+parent bodies unless their own representation or intrinsic path genuinely
+differs, and no primitive- or extension-specific exception logic leaked into
+`tslc`.
 ```
 
 Value-test completeness validation (2026-06-24):
@@ -2133,16 +2275,79 @@ lowering execution-review. M254 execution-review returned Accept and selected
 M255 real generic self-call selector specialization lowering execution-review.
 ```
 
+The latest follow-up after closure completion is a source-owned specialization
+cleanup series. First, SSE `cast` gained signed `f32 -> si32` and `f64 -> si32`
+SSE4.1 fast paths, SSE `to_mask` gained SSE4.1 `?i64` and `f64` fast paths,
+and the existing `compress`/`blend` tiering was revalidated without adding
+redundant child-extension bodies. The new bodies are selected through authored
+`requires` data and existing selector ordering, not compiler-side primitive
+knowledge.
+
+Second, a fallback-shaped x86 implementation audit scanned implementation
+entries with array round-trips, backend loops, `mask<test>`, generation loops,
+or `set_zero` composition. The actionable cleanup was `masked_set1`: x86 no
+longer performs a manual array round-trip and lane loop, and now shares the
+same typed primitive composition as NEON:
+`blend(mask, data, set1(scalar))`. Backend-specific blend and broadcast
+selection stays owned by those primitive implementations.
+
+The fallback-shaped x86 inventory dropped from `314` entries across `38`
+primitives to `311` entries across `37` primitives. Remaining buckets are
+documented in `docs/agent/tslc-vector-query-handoff.md` as deliberate
+lower-feature fallbacks or dedicated future primitive-by-primitive
+specialization work, not safe drive-by edits.
+
+Validation for the first follow-up:
+
+```text
+python -m pytest -q tslc/tests/test_select_and_lower.py
+```
+
+Result: `21 passed`.
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives cast,to_mask,compress,blend --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --output-root ./tslctmp/TEST --test --value-test-warnings --sde /opt/intel-sde/sde64
+```
+
+Result: generated `47258` specializations across `83` artifacts and ended with
+`build/test-verified 152 commands`; C++ and Rust value tests ran through SDE
+for x86 profiles, with `neon` skipped because there is no x86 SDE chip alias.
+A first sandboxed attempt failed with SDE `PTRACE_ATTACH` errors; the same
+command passed when rerun with elevated SDE permissions.
+
+```text
+python -m compileall -q tslc/src/tslc
+git diff --check
+```
+
+Result: passed.
+
+Validation for the fallback audit follow-up:
+
+```text
+python -m pytest -q tslc/tests/test_select_and_lower.py
+```
+
+Result: `22 passed`.
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives masked_set1 --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --output-root ./tslctmp/TEST --test --value-test-warnings --sde /opt/intel-sde/sde64
+```
+
+Result: generated `32776` specializations across `83` artifacts and ended with
+`build/test-verified 152 commands`; C++ and Rust value tests ran through SDE
+for x86 profiles, with `neon` skipped because there is no x86 SDE chip alias.
+
 Completed prompt:
 
 ```text
-docs/agent/runs/tslc-typed-render-values-review-prompt.md
+docs/agent/runs/tslc-primitive-finalization-closure-completion-review-prompt.md
 ```
 
 Active prompt:
 
 ```text
-docs/agent/runs/tslc-value-test-parity-inventory-review-prompt.md
+docs/agent/runs/tslc-source-specialization-fallback-audit-review-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

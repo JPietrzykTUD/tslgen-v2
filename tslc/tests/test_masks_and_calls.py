@@ -186,3 +186,22 @@ def test_convert_down_insert_call_uses_target_vector_alias(
         "tsl::simd<float, tsl::avx2>, index>"
     ) in blob
     assert "insert::<Simd<f32, Sse>, Simd<f32, Avx2>, index>" in blob
+
+
+def test_call_type_args_accept_extension_and_literal_index(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["cast"],
+        profiles=["avx2"],
+        backends=["cpp", "rust"],
+        type_tags=["si8"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert all("call type-args" not in skip.reason for skip in result.skipped)
+
+    blob = "\n".join(artifact.content for artifact in result.artifacts.artifacts)
+    assert "::tsl::extract<Vec, tsl::simd<int8_t, tsl::sse>, 0>" in blob
+    assert "extract::<Self, Simd<i8, Sse>, 0>" in blob

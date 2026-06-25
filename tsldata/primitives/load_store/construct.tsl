@@ -164,63 +164,13 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
     - {tags [masked, set1, basic], type "f64", case {inputs [2, [1.0, -2.0], -2.25], expected [1.0, -2.25]}}
     - {tags [masked, set1, edge], type "f64", case {inputs [3, [1.0, -2.0], -2.25], expected [-2.25, -2.25]}}
   impls:
-    avx512:
+    [avx512, avx2, sse, neon]:
       arith:
-        requires [avx512f]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
-               var<infer>(values, call<primitive=to_array[Vec]>(data));
-               loop<backend>(i, 0, value<generation>(vector::length), 1)  {
-                if (((imask >> i) & 1) != 0) {
-                  values[i] = scalar;
-                }
-              }
-               complete(call<primitive=load[Vec], attrs[aligned=false]>(values.data())) ;
-            """
-    avx2:
-      arith:
-        requires [avx2]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
-               var<infer>(values, call<primitive=to_array[Vec]>(data));
-               loop<backend>(i, 0, value<generation>(vector::length), 1)  {
-                if (((imask >> i) & 1) != 0) {
-                  values[i] = scalar;
-                }
-              }
-               complete(call<primitive=load[Vec], attrs[aligned=false]>(values.data())) ;
-            """
-    sse:
-      arith:
-        requires [sse2]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-               var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
-               var<infer>(values, call<primitive=to_array[Vec]>(data));
-               loop<backend>(i, 0, value<generation>(vector::length), 1)  {
-                if (((imask >> i) & 1) != 0) {
-                  values[i] = scalar;
-                }
-              }
-               complete(call<primitive=load[Vec], attrs[aligned=false]>(values.data())) ;
-            """
-    neon:
-      arith:
-        requires [neon]
+        requires:
+          avx512 [avx512f]
+          avx2 [avx2]
+          sse [sse2]
+          neon [neon]
         safety:
           internal_unsafe false
           caller_unsafe false

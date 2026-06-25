@@ -90,6 +90,23 @@ prim<im:=m> to_integral(mask):
           reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_pd>(mask)));"
+      arith:
+        requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              let<type>(ImaskT, type<generation>(vector::imask));
+              var<infer>(result, cast<static>(ImaskT, 0));
+              loop<backend>(i, 0, value<generation>(vector::length), 1)  {
+                if (mask<test>(mask, i)) {
+                  result |= (cast<static>(ImaskT, 1)) << i;
+                }
+              }
+              complete(result);
+            """
     sse:
       ?i8:
         requires [sse, sse2]
@@ -500,6 +517,22 @@ prim<m:=im> to_mask(mask):
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec));
               complete(call<primitive=equal[Vec]>(anded_vec, and_vec));
             """
+      ?i64:
+        requires [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
+                if (((mask >> i) & 1) != 0) {
+                  values[i] = value<generation>(mask::lane::all_true);
+                }
+              }
+              complete(call<primitive=from_array[Vec]>(values));
+            """
       f32:
         requires [sse, sse2]
         safety:
@@ -525,6 +558,22 @@ prim<m:=im> to_mask(mask):
               var<const_infer>(data_vec, intrin<_mm_set1_epi64x>(cast<static>(si64, mask)));
               var<const_infer>(anded_vec, intrin<_mm_and_si128>(data_vec, and_vec));
               complete(intrin<_mm_castsi128_pd>(intrin<_mm_cmpeq_epi64>(anded_vec, and_vec)));
+            """
+      f64:
+        requires [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
+                if (((mask >> i) & 1) != 0) {
+                  values[i] = value<generation>(mask::lane::all_true);
+                }
+              }
+              complete(call<primitive=from_array[Vec]>(values));
             """
     neon:
       ?i8:

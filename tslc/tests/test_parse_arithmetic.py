@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tslc.sources import SourceLoader
+from tslc.sources import SourceDocument, SourceLoader
 from tslc.syntax.parser import TslParser
 
 
@@ -40,3 +40,23 @@ def test_body_envelopes_carry_selector_paths(fundamental_path: Path) -> None:
     assert "intrin<add, build[" in avx2_int
     assert "suffix=base::signed_of(base::in)" in avx2_int
     assert by_path[("avx2", "f?")].strip() == "complete(intrin<add, build>(left, right));"
+
+
+def test_inline_tsil_body_envelope_uses_decoded_string_payload(tmp_path: Path) -> None:
+    path = tmp_path / "escaped.tsl"
+    text = (
+        'prim<v:=v> escaped(data):\n'
+        '  impls:\n'
+        '    scalar:\n'
+        '      arith:\n'
+        '        implementation:\n'
+        '          tsil "complete(intrin<foo, build[infix_sep=\\"\\"]>(data));"\n'
+    )
+    document = SourceDocument(path=path, text=text, digest="", kind="tsl")
+
+    result = TslParser().parse((document,))
+
+    assert result.diagnostics == ()
+    envelope = result.documents[0].primitives[0].body_envelopes[0]
+    assert envelope.payload_text == 'complete(intrin<foo, build[infix_sep=""]>(data));'
+    assert envelope.payload_source.text == 'complete(intrin<foo, build[infix_sep=\\"\\"]>(data));'

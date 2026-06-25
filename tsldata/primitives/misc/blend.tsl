@@ -138,12 +138,27 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
                 )
               );
             """
-    [avx2, sse]:
+    avx2:
+      arith:
+        requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              var<infer>(result, call<primitive=to_array[Vec]>(left));
+              var<const_infer>(right_array, call<primitive=to_array[Vec]>(right));
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
+                if (mask<test>(mask, i)) {
+                  result[i] = right_array[i];
+                }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    sse:
       arith:
         requires:
-          avx2:
-            ?i? [avx, avx2]
-            f? [avx]
           sse:
             ?i? [sse, sse2]
             f32 [sse]
@@ -281,7 +296,7 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
       arith:
         requires:
           avx2:
-            ?i? [avx, avx2]
+            ?i? [avx]
             f? [avx]
           sse:
             ?i? [sse, sse2]
@@ -391,7 +406,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
       arith:
         requires:
           avx2:
-            ?i? [avx, avx2]
+            ?i? [avx]
             f? [avx]
           sse:
             ?i? [sse, sse2]

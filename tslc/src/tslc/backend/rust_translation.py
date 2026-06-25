@@ -12,6 +12,7 @@ from tslc.render.model import (
     RenderText,
     literal_text,
     render_sequence,
+    render_text,
 )
 
 _RUST_ARCH_MODULE: dict[str, str] = {
@@ -221,6 +222,31 @@ class _RustSyntax:
         # matching the byte-addressed `mem_copy` helper.
         if inner == "void":
             inner = "u8"
+        expr_text = render_text(expr).strip()
+        if expr_text.startswith("&mut "):
+            target = expr_text[len("&mut ") :].strip()
+            macro = "addr_of!" if is_const else "addr_of_mut!"
+            return render_sequence(
+                (
+                    literal_text(f"core::ptr::{macro}("),
+                    literal_text(target),
+                    literal_text(").cast::<"),
+                    inner,
+                    literal_text(">()"),
+                )
+            )
+        if expr_text.startswith("&"):
+            target = expr_text[1:].strip()
+            macro = "addr_of!" if is_const else "addr_of_mut!"
+            return render_sequence(
+                (
+                    literal_text(f"core::ptr::{macro}("),
+                    literal_text(target),
+                    literal_text(").cast::<"),
+                    inner,
+                    literal_text(">()"),
+                )
+            )
         return render_sequence(
             (
                 expr,

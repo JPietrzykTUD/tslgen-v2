@@ -13,6 +13,9 @@ from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.render.model import RenderField, render_text, unsafe_block
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
+_DECIMAL_INTEGER = re.compile(r"^[0-9]+$")
+
+
 class CallLowerer:
     """``call<primitive=NAME[Vec], attrs[aligned=…]>(args)`` -> a call to NAME's wrapper.
 
@@ -151,6 +154,8 @@ class CallLowerer:
                 else None
             )
         if entry == context.env.immediate_name:
+            return entry
+        if _DECIMAL_INTEGER.match(entry):
             return entry
         if any(
             re.search(rf"\b{re.escape(name)}\b", entry)

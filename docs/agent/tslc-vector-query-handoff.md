@@ -1026,6 +1026,132 @@ git diff --check
 
 Result: passed.
 
+### Source Specialization Requires Follow-Up
+
+The focused source-owned feature-tier pass added SSE4.1 fast paths for signed
+SSE `cast` and `to_mask` cases while leaving lower-feature fallbacks in place.
+`compress` and `blend` tiering was revalidated without adding redundant
+`avx2_vl` / `sse_vl` child-extension bodies where inherited `avx2` / `sse`
+bodies already cover the profile.
+
+Validation:
+
+```text
+python -m pytest -q tslc/tests/test_select_and_lower.py
+```
+
+Result: `21 passed`.
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives cast,to_mask,compress,blend --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --output-root ./tslctmp/TEST --test --value-test-warnings --sde /opt/intel-sde/sde64
+```
+
+Result: generated `47258` specializations across `83` artifacts and ended with
+`build/test-verified 152 commands`; C++ CTest and Rust value tests ran through
+SDE for x86 profiles, with `neon` skipped because there is no x86 SDE chip
+alias.
+
+```text
+python -m compileall -q tslc/src/tslc
+git diff --check
+```
+
+Result: passed.
+
+### Source Specialization Fallback Audit
+
+A follow-up audit scanned fallback-shaped x86 implementation bodies after the
+SSE4.1 source-specialization slice. The inventory looked for selected
+`sse`/`avx2`/`avx512`/`sse_vl`/`avx2_vl` implementation entries containing
+array round-trips, backend loops, `mask<test>`, generation loops, or
+`set_zero` composition.
+
+The actionable cleanup was `masked_set1`: the x86 bodies for `avx512`, `avx2`,
+and `sse` performed a manual array round-trip and lane loop even though the
+same source file already expressed the exact operation as
+`blend(mask, data, set1(scalar))` for another backend. `masked_set1` now uses
+one shared `[avx512, avx2, sse, neon]` body that composes the existing typed
+`blend` and `set1` primitives. Backend-specific blend/broadcast selection stays
+owned by those primitives and their `requires` fields.
+
+The fallback-shaped inventory dropped from `314` x86 entries across `38`
+primitives to `311` entries across `37` primitives. The remaining buckets were
+left alone because they are deliberate lower-feature fallbacks or need a
+dedicated semantic slice, not a safe drive-by specialization:
+
+- packed `compress` / `expand` load-store already have AVX-512/VL native tiers;
+- `conflict`, `popcnt`, and `lzc` already use direct feature tiers where the
+  ISA provides them and fallback elsewhere;
+- `blend`, `equal`, `less_than`, `to_integral`, and `to_mask` keep lower-feature
+  fallback/composition paths where direct instructions require newer features;
+- `convert_up` / `convert_down`, shifts, horizontal reductions, gather/scatter,
+  extraction, and conversion-load cases have partial direct tiers plus broad
+  fallbacks whose further optimization should be reviewed primitive by
+  primitive;
+- `to_array`, `from_array`, `mask_false`, `unequal_zero`, and `to_ostream`
+  remain representation or helper compositions rather than missing intrinsic
+  implementations.
+
+Validation:
+
+```text
+python -m pytest -q tslc/tests/test_select_and_lower.py
+```
+
+Result: `22 passed`.
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives masked_set1 --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --output-root ./tslctmp/TEST --test --value-test-warnings --sde /opt/intel-sde/sde64
+```
+
+Result: generated `32776` specializations across `83` artifacts and ended with
+`build/test-verified 152 commands`; C++ CTest and Rust value tests ran through
+SDE for x86 profiles, with `neon` skipped because there is no x86 SDE chip
+alias.
+
+### Source-Owned Feature-Gated Specialization Follow-Up
+
+The source corpus now adds feature-gated fast paths where a stronger hardware
+feature has a better implementation while the lower-feature fallback remains
+available:
+
+1. `cast` on SSE has signed `f32 -> si32` and `f64 -> si32` SSE4.1 fast paths
+   using explicit rounding-to-zero plus `cvt*` intrinsics. Unsigned destinations
+   stay on the portable fallback path because the corresponding SSE intrinsic
+   spelling is not generally available.
+2. `to_mask` on SSE has SSE4.1 fast paths for `?i64` and `f64`; SSE/SSE2
+   lane-array construction remains the fallback. The new fast paths spell the
+   full requirement set (`sse`, `sse2`, `sse4_1`) so the selector's
+   more-required-features tie-break chooses them when available.
+3. `compress` and `blend` were reviewed in the same pass. Their existing
+   native/fallback tiering already carries the needed `requires` layering, so
+   no redundant source bodies were added there.
+
+Validation for this follow-up:
+
+```bash
+python -m pytest -q tslc/tests/test_select_and_lower.py
+```
+
+Result: `21 passed`.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives cast,to_mask,compress,blend --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --output-root ./tslctmp/TEST --test --value-test-warnings --sde /opt/intel-sde/sde64
+```
+
+Result: generated `47258` specializations across `83` artifacts and ended with
+`build/test-verified 152 commands`; C++ and Rust value tests ran through Intel
+SDE for x86 profiles, with `neon` skipped because there is no x86 SDE chip
+alias. A first sandboxed attempt failed with SDE `PTRACE_ATTACH` errors; the
+same command passed when rerun with elevated execution permissions for SDE.
+
+```bash
+python -m compileall -q tslc/src/tslc
+git diff --check
+```
+
+Result: passed.
+
 ### SDE Value-Test Execution Slice
 
 The after-write verifier now supports SDE-backed value-test execution for
@@ -1106,6 +1232,265 @@ Result: passed. It generated 59 artifacts, emitted headers for every loaded
 profile including `tsl_neon.hpp`, ran all SDE-annotated x86 C++ value tests,
 and skipped `neon` with a visible `verify-skip` note because no x86 SDE chip
 alias exists for that AArch64 profile.
+
+### Primitive Finalization: `reinterpret`
+
+The primitive-by-primitive finalization campaign has started with
+`reinterpret`. The main coverage blocker was not a primitive-specific compiler
+rule: inline `tsil "..."` implementation bodies were promoted from raw payload
+source text, so escaped source quotes such as `infix_sep=\"\"` reached the TSIL
+scanner and prevented top-level `complete(...)` recognition in otherwise valid
+bodies. The parser now stores decoded inline scalar text in
+`ParsedImplementationBodyEnvelope.payload_text` while keeping
+`payload_source` as the raw source span for diagnostics.
+
+After that source-boundary fix, the newly emitted x86 same-type float
+reinterpret bodies exposed an invalid source intrinsic spelling
+(`_mm*_castps_ps` / `_mm*_castpd_pd`). The x86 `f? -> f?` branch now uses the
+no-instruction bitcast path instead of an intrinsic and records no internal
+unsafe reason.
+
+Validation:
+
+```bash
+python -m pytest -q tslc/tests/test_parse_arithmetic.py
+```
+
+Result: `3 passed`.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives reinterpret --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --output-root ./tslctmp/TEST --test --value-test-warnings --sde /opt/intel-sde/sde64
+```
+
+Result: passed. The run generated 33,288 specializations across 83 artifacts,
+ran C++ value tests through SDE for every SDE-annotated x86 profile, ran Rust
+test binaries through SDE, skipped `neon` visibly because no x86 SDE chip alias
+exists, and reported `build/test-verified 152 commands`.
+
+`python -m tslc.maintenance.coverage_inventory` now reports
+`reinterpret` with `0` skipped slots and the full inventory moved to
+`65840 / 67052` lowered slots.
+
+### Primitive Finalization: `compress`
+
+The next primitive-finalization slice completed `compress`. Its scalar body
+still used raw target-language `return` statements after the active TSIL
+completion directive had become `complete(expr)`, so every scalar slot skipped
+as "no top-level complete". The scalar implementation now computes a local
+`result`, updates it through a runtime `if (mask)`, and emits
+`complete(result)`.
+
+The remaining skipped slots were AVX-512VL-derived `avx2_vl` / `sse_vl` byte
+and word fallback paths. Those inherited the generic AVX2/SSE array fallback,
+which used `mask<test>` even though AVX-512VL masks use the
+`native_predicate_by_lanes` representation. A source-owned VL fallback now
+calls `to_integral[Vec]` once and tests the resulting integral mask bits inside
+the array compaction loop.
+
+Validation:
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives compress --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --output-root ./tslctmp/TEST --test --value-test-warnings --sde /opt/intel-sde/sde64
+```
+
+Result: passed. The run generated 31,236 specializations across 83 artifacts,
+ran C++ value tests through SDE for every SDE-annotated x86 profile, ran Rust
+test binaries through SDE, skipped `neon` visibly because no x86 SDE chip alias
+exists, and reported `build/test-verified 152 commands`.
+
+`python -m tslc.maintenance.coverage_inventory` now reports `compress` with
+`0` skipped slots and the full inventory moved to `65976 / 67052` lowered
+slots. The `unsupported mask<test>` taxonomy category disappeared from the
+current inventory.
+
+### Primitive Finalization: `cast`
+
+The next primitive-finalization slice completed `cast` and also removed the
+same call-type-argument blocker from `convert_down`.
+
+The first blocker was generic TSIL call-lowering capability, not a
+primitive-specific `cast` rule. Source bodies such as
+`call<primitive=extract[Vec, sse, 0]>(data)` use a target vector plus a literal
+lane index as forwarded wrapper arguments. `CallLowerer` now accepts decimal
+integer call-bracket entries as render-ready template/const arguments; extension
+names were already resolved through the typed catalog. A regression in
+`test_masks_and_calls.py` asserts the real C++ and Rust `extract` call shapes
+and verifies that this no longer records a `call type-args` skip.
+
+The second blocker surfaced after those bodies lowered: `value<backend>(
+x86::mm_fround_to_zero)` was present in source but not evaluated. The query
+evaluator now resolves zero-argument `x86::...` backend value leaves through the
+active backend translation template named `value_...`. The emitted C++ and Rust
+spellings still come from `translate_cpp.tsl` / `translate_rust.tsl`, not from
+hard-coded lowerer strings. A lowering regression asserts `_MM_FROUND_TO_ZERO`
+and `core::arch::x86_64::_MM_FROUND_TO_ZERO` on real `cast` slots.
+
+With those skips gone, build verification exposed source bodies that used
+instructions beyond their declared profile requirements. The `avx2` `f32 ->
+ui32` path now uses the existing portable array round-trip fallback instead of
+the AVX-512VL-only `_mm256_cvtps_epu32`. The SSE `f32 -> ?i32` and `f64 ->
+?i32` paths also use the same fallback instead of SSE4.1 round intrinsics, so
+SSE2/SSE3 profiles compile and run under SDE.
+
+Validation:
+
+```bash
+python -m pytest -q tslc/tests/test_masks_and_calls.py::test_call_type_args_accept_extension_and_literal_index tslc/tests/test_select_and_lower.py::test_backend_value_query_uses_backend_translation_template
+```
+
+Result: `2 passed`.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives cast --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --output-root ./tslctmp/TEST --test --value-test-warnings --sde /opt/intel-sde/sde64
+```
+
+Result: passed. The run generated 40,474 specializations across 83 artifacts,
+ran C++ value tests through SDE for every SDE-annotated x86 profile, ran Rust
+test binaries through SDE, skipped `neon` visibly because no x86 SDE chip alias
+exists, and reported `build/test-verified 152 commands`.
+
+`python -m tslc.maintenance.coverage_inventory` now reports `cast` and
+`convert_down` with `0` skipped slots and the full inventory moved to
+`66310 / 67062` lowered slots. The `call type-args`, `unresolved value query`,
+`no top-level complete`, and `unsupported mask<test>` taxonomy categories are
+no longer present in the current inventory.
+
+### Primitive Finalization: `hand` / `hor`
+
+The next primitive-finalization slice completed `hand` and also cleared the
+same unresolved type-query gap from `hor`.
+
+The blocker was generic TSIL query vocabulary, not a primitive-specific rule.
+Float bitwise horizontal reductions need a generation-time carrier type:
+`select(type::is_same(base::in, f32), ui32, ui64)`. `QueryEvaluator` now has a
+small typed `select(cond, then, else)` query function that folds only when the
+condition is a `BoolValue` and both branches produce the same query-value kind.
+This lets the existing source bodies resolve `UnsignedT` without renderer or
+primitive-name inference.
+
+The newly lowered Rust paths exposed a backend syntax issue for source-owned
+raw-memory fallbacks. Rust pointer casts of address expressions such as
+`cast<reinterpret>(void*, &result)` now render through
+`core::ptr::addr_of_mut!(result).cast::<u8>()`; const address expressions use
+`core::ptr::addr_of!(...).cast::<u8>()`. Ordinary pointer expressions still use
+the normal raw-pointer cast path.
+
+Validation:
+
+```bash
+python -m pytest -q tslc/tests/test_generation_conditionals.py
+```
+
+Result: `22 passed`.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives hand --machine-profiles supplementary/buildsystem/machine_profiles.json --backends rust --output-root ./tslctmp/TEST_HAND_RUST --test --value-test-warnings
+```
+
+Result: passed with `build/test-verified 19 commands`.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives hand --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --output-root ./tslctmp/TEST --test --value-test-warnings --sde /opt/intel-sde/sde64
+```
+
+Result: passed. The run generated 31,268 specializations across 83 artifacts,
+ran C++ value tests through SDE for every SDE-annotated x86 profile, ran Rust
+test binaries through SDE, skipped `neon` visibly because no x86 SDE chip alias
+exists, and reported `build/test-verified 152 commands`.
+
+`python -m tslc.maintenance.coverage_inventory` now reports `hand` and `hor`
+with `0` skipped slots and the full inventory moved to `66454 / 67062` lowered
+slots. At that point, the only non-closure skip category left was
+`unresolved type query` with 48 candidate slots, owned by `lzc_scalar`.
+
+### Primitive Finalization: `lzc_scalar`
+
+The next primitive-finalization slice completed `lzc_scalar` and removed the
+last non-closure skip category from the current coverage inventory.
+
+The blocker was not a missing compiler query. The source body still called the
+old helper shape `details::clz<T, vector::offset_base>(...)`, but the C++ and
+Rust helper implementations are already width-aware: C++ dispatches via
+`sizeof(T)` and Rust uses the scalar type's `leading_zeros` implementation.
+The source body now keeps the typed unsigned carrier selected by
+`select(type::is_same(...), ui32, ui64)`, initializes it with `var<infer>`, uses
+`mem<copy>` to bit-copy the float scalar into that carrier, and calls
+`details::clz(bits)`.
+
+This deliberately does **not** add a `vector::offset_base` query to the
+compiler. The old argument was vestigial source debt, and removing it keeps the
+query vocabulary smaller.
+
+Validation:
+
+```bash
+python -m pytest -q tslc/tests/test_generation_conditionals.py::test_lzc_scalar_float_bitwise_path_does_not_need_offset_base
+```
+
+Result: `1 passed`.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives lzc_scalar --machine-profiles supplementary/buildsystem/machine_profiles.json --backends rust --output-root ./tslctmp/TEST_LZC_RUST --test --value-test-warnings
+```
+
+Result: passed with `build/test-verified 19 commands`.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives lzc_scalar --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --output-root ./tslctmp/TEST --test --value-test-warnings --sde /opt/intel-sde/sde64
+```
+
+Result: passed. The run generated 30,524 specializations across 83 artifacts,
+ran C++ value tests through SDE for every SDE-annotated x86 profile, ran Rust
+test binaries through SDE, skipped `neon` visibly because no x86 SDE chip alias
+exists, and reported `build/test-verified 152 commands`.
+
+`python -m tslc.maintenance.coverage_inventory` now reports all 89 primitives
+as `VERIFIED`, with `66594 / 67062` lowered slots. The only remaining skip
+taxonomy category is `pruned (closure)`, which records dependency-closure
+drops where a callee is unavailable in a profile and is structural rather than
+a lowering defect.
+
+### Primitive Finalization: `to_array` AVX Requirement
+
+The next primitive-finalization micro-slice reduced closure-pruned slots by
+aligning `to_array` requirements with the implementation it actually delegates
+to.
+
+The remaining closure inventory showed many AVX-profile `avx2` byte/word
+fallback bodies pruned because they called `to_array[Vec]` for `si8`, `ui8`,
+`si16`, or `ui16`. The `to_array` implementation simply creates a temporary
+array and calls `store(tmp.data(), a)`. `store` already declares AVX-only
+support for every AVX2 integer width, including byte and word lanes, because
+the relevant 256-bit integer register store is available under the existing
+AVX profile support. `to_array` was stricter than its callee and required
+`avx2` for byte/word lanes.
+
+The `avx2` `to_array` integer requirement is now the same for all integer type
+tags: `[avx]`. This is a source metadata correction, not a compiler special
+case. It also follows the extension-inheritance rule: do not add child-specific
+fallback bodies when the parent body and its actual callees are already valid.
+
+Validation:
+
+```bash
+python -m pytest -q tslc/tests/test_build_verify.py::test_to_from_array_roundtrip_builds
+```
+
+Result: `1 passed`. The test now includes the `avx` profile so this requirement
+boundary is build-verified.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives to_array,from_array --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --output-root ./tslctmp/TEST --test --value-test-warnings --sde /opt/intel-sde/sde64
+```
+
+Result: passed. The run generated 29,812 specializations across 83 artifacts,
+ran C++ value tests through SDE for every SDE-annotated x86 profile, ran Rust
+test binaries through SDE, skipped `neon` visibly because no x86 SDE chip alias
+exists, and reported `build/test-verified 152 commands`.
+
+`python -m tslc.maintenance.coverage_inventory` now reports all 89 primitives
+as `VERIFIED`, with `66722 / 67070` lowered slots. Remaining closure-pruned
+slots dropped from 468 to 348.
 
 ### CLI Value-Test Flag Slice
 
@@ -2180,6 +2565,87 @@ python -m pytest -q tslc/tests --ignore=tslc/tests/test_build_verify.py
 ```
 
 Result: `80 passed`.
+
+```bash
+git diff --check
+```
+
+Result: passed.
+
+### Primitive Finalization Closure Completion
+
+The selected C++/Rust corpus now has exact closure coverage for the probed
+profiles without adding generic workaround bodies for inherited `_vl`
+extensions. `avx2_vl` still inherits from `avx2`, and `sse_vl` still inherits
+from `sse`; explicit child bodies remain reserved for genuinely different
+AVX-512VL representation paths.
+
+Source-data fixes in this slice:
+
+1. `blend` has an AVX-only array-roundtrip fallback used by AVX-profile masked
+   `mov` composition.
+2. `mask_true` and `mask_false` no longer use an unsupported `default`
+   requirement key for SSE; the SSE type groups are explicit.
+3. `to_integral` has an AVX2 arithmetic fallback using `mask<test>` over
+   `vector::length`.
+4. AVX-512 float `binary_and`, `binary_or`, and `binary_xor` reinterpret
+   through the signed carrier matching the current base width instead of
+   hard-wiring a 64-bit carrier.
+5. `inv` float requirements now match the AVX-capable callees it composes.
+6. SSE `equal` and `less_than` have SSE2-compatible 64-bit lane-array
+   fallbacks, and `nequal` can compose those SSE64 comparisons.
+7. SSE64 `to_mask` uses lane-array mask construction rather than requiring
+   SSE4.1 `cmpeq_epi64`.
+8. AVX-512 float `hor` bodies now use canonical
+   `var<typed>(UnsignedT, result, ...)` TSIL declarations instead of raw
+   C-style `UnsignedT result = ...`, which had rendered invalid Rust once the
+   full-corpus build reached those bodies.
+
+Validation for this slice:
+
+```bash
+python -m compileall -q tslc/src/tslc
+```
+
+Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_build_verify.py::test_full_corpus_builds
+```
+
+Result: `1 passed`.
+
+```bash
+python -m pytest -q tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_coverage_is_complete tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_rust_parity_inventory_is_explicit tslc/tests/test_build_verify.py::test_masked_memory_build tslc/tests/test_build_verify.py::test_to_mask_builds
+```
+
+Result: `4 passed`.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.maintenance.coverage_inventory
+```
+
+Result: wrote `docs/redesign/primitive-coverage-inventory.md` with `89
+verified, 0 lowers, 0 partial, 0 none; 67232/67232 slots`.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives blend,mov,load,mask_true,mask_false,to_integral,to_mask,store_mask_repr,load_mask_repr,lzc_imask,tzc,binary_and,binary_or,binary_xor,inv,equal,nequal,less_than,hor --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --output-root ./tslctmp/TEST --test --value-test-warnings --sde /opt/intel-sde/sde64
+```
+
+Result: generated 83 artifacts and ended with `build/test-verified 152
+commands`; C++ CTest and Rust value tests ran successfully through SDE for
+annotated x86 profiles, with `neon` visibly skipped because there is no x86
+SDE chip alias.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --output-root ./tslctmp/FULL --test --value-test-warnings --sde /opt/intel-sde/sde64
+```
+
+Result: with `--primitives` omitted, generated all primitives by default:
+220352 specializations across 83 artifacts. C++ and Rust value tests ran
+successfully through SDE for annotated x86 profiles, `neon` was visibly skipped
+because there is no x86 SDE chip alias, and the command ended with
+`build/test-verified 152 commands`.
 
 ```bash
 git diff --check

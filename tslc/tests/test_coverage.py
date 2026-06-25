@@ -1,4 +1,4 @@
-"""The coverage report tracks emitted vs skipped behavior with reasons."""
+"""The coverage report tracks emitted vs skipped behavior deterministically."""
 
 from __future__ import annotations
 
@@ -18,47 +18,37 @@ def _result(data_root: Path, machine_profiles_path: Path):
     )
 
 
-def test_coverage_separates_emitted_and_skipped(
+def test_coverage_reports_full_emission_when_no_gaps_remain(
     data_root: Path, machine_profiles_path: Path
 ) -> None:
     result = _result(data_root, machine_profiles_path)
     by = {row.primitive: row for row in coverage_by_primitive(result)}
 
-    # add lowers everywhere it is selected; it now also emits masked variants (`add_mask`/
-    # `add_maskz`). Integer masked specs lower; the *float* masked specs on sse/avx2 prune
-    # cleanly (their `mov[mask=zero]` float delegate isn't generated there), and the generic
-    # `<LANES>` masked loop is deferred — so `add` shows some skips.
+    # These primitives used to provide representative support gaps. The current
+    # primitive-finalization contract is stricter: selected corpus slots should
+    # lower everywhere, so coverage rows are emitted == attempted.
     assert by["add"].emitted > 0
-    assert by["add"].emitted > by["add"].skipped
+    assert by["add"].emitted == by["add"].attempted
+    assert by["add"].skipped == 0
 
-    # hadd now lowers fully: SIMD bodies plus the loop fallback (to_array + loop<backend> +
-    # details::arith_add); hmax/hmin likewise lower fully now that runtime `if` translates.
     assert by["hadd"].emitted == by["hadd"].attempted > 0
     assert by["hadd"].skipped == 0
 
-    # cast lowers on scalar + the x86 ISAs, but its generic `<LANES>`-vector
-    # representation-change body is deferred (the lowerer skips it with
-    # `TSL-LOWER-UNSUPPORTED-TARGET-VECTOR`), so it shows both columns. (`to_integral` is no
-    # longer a gap example — its generic bit-loop now lowers via `type::size_bytes` +
-    # `vector::imask` resolving to the concrete u64 imask.)
-    assert by["cast"].emitted > 0
-    assert by["cast"].skipped > 0
+    assert by["cast"].emitted == by["cast"].attempted > 0
+    assert by["cast"].skipped == 0
 
-    # skips carry an actionable reason, and they are NOT surfaced as errors/warnings.
-    assert result.skipped
-    assert all(entry.reason for entry in result.skipped)
+    assert result.skipped == ()
     assert not any(d.severity in ("warning", "error") for d in result.diagnostics)
 
 
 def test_report_text_is_actionable(data_root: Path, machine_profiles_path: Path) -> None:
     report = format_coverage_report(_result(data_root, machine_profiles_path))
     assert "add" in report and "emitted" in report
-    assert "skipped because" in report
-    # the report names the construct blocking the remaining bodies (here: the cast type).
-    assert any(token in report for token in ("cast", "region", "kind", "signature", "if"))
+    assert "3464 emitted / 3464 attempted" in report
+    assert "skipped because" not in report
 
 
-def test_strict_generation_reports_support_gaps_as_errors(
+def test_strict_generation_succeeds_when_no_support_gaps_remain(
     data_root: Path, machine_profiles_path: Path
 ) -> None:
     result = generate_project(
@@ -69,11 +59,7 @@ def test_strict_generation_reports_support_gaps_as_errors(
         generation_mode="strict",
     )
 
-    assert result.skipped
-    assert has_errors(result.diagnostics)
-    assert result.rendered is None
-    assert result.artifacts.artifacts == ()
-    assert any(
-        diagnostic.severity == "error" and diagnostic.code.startswith("TSL-LOWER-")
-        for diagnostic in result.diagnostics
-    )
+    assert result.skipped == ()
+    assert not has_errors(result.diagnostics)
+    assert result.rendered is not None
+    assert result.artifacts.artifacts

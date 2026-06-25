@@ -56,7 +56,7 @@ prim<s[]:=v> to_array(a):
             """
     avx2:
       ?i?:
-        requires {si8 [avx, avx2], ui8 [avx, avx2], si16 [avx, avx2], ui16 [avx, avx2], si32 [avx], ui32 [avx], si64 [avx], ui64 [avx]}
+        requires [avx]
         safety:
           internal_unsafe false
           caller_unsafe false

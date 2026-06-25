@@ -82,11 +82,12 @@ prim<v:=(v,v)> binary_and(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
+            let<type>(BitBase, type<generation>(base::signed_of(type<generation>(base::in))));
             complete(
-              call<primitive=reinterpret[Vec<si64>, Vec]>(
+              call<primitive=reinterpret[Vec<BitBase>, Vec]>(
                 intrin<and, build[suffix=intrin::suffix("stream")]>(
-                  call<primitive=reinterpret[Vec, Vec<si64>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<si64>]>(right)
+                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(right)
                 )
               )
             );
@@ -465,11 +466,12 @@ prim<v:=(v,v)> binary_or(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
+            let<type>(BitBase, type<generation>(base::signed_of(type<generation>(base::in))));
             complete(
-              call<primitive=reinterpret[Vec<si64>, Vec]>(
+              call<primitive=reinterpret[Vec<BitBase>, Vec]>(
                 intrin<or, build[suffix=intrin::suffix("stream")]>(
-                  call<primitive=reinterpret[Vec, Vec<si64>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<si64>]>(right)
+                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(right)
                 )
               )
             );
@@ -666,11 +668,12 @@ prim<v:=(v,v)> binary_xor(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
+            let<type>(BitBase, type<generation>(base::signed_of(type<generation>(base::in))));
             complete(
-              call<primitive=reinterpret[Vec<si64>, Vec]>(
+              call<primitive=reinterpret[Vec<BitBase>, Vec]>(
                 intrin<xor, build[suffix=intrin::suffix("stream")]>(
-                  call<primitive=reinterpret[Vec, Vec<si64>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<si64>]>(right)
+                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(right)
                 )
               )
             );
@@ -820,7 +823,9 @@ prim<v:=v> inv(data):
           generic []
           oneAPIfpga [oneAPIfpgaDev]
           avx512 [avx512f]
-          avx2 [avx2]
+          avx2:
+            ?i? [avx2]
+            f? [avx]
           sse [sse2]
           neon [neon]
           sve [sve]

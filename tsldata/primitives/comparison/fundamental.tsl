@@ -162,6 +162,24 @@ prim<m:=(v,v)> equal(left, right):
               intrin<cmpeq, build>(left, right)
             );
           """
+      arith:
+        requires [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+            var<const_infer>(left_values, call<primitive=to_array[Vec]>(left));
+            var<const_infer>(right_values, call<primitive=to_array[Vec]>(right));
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+              if (left_values[i] == right_values[i]) {
+                result[i] = value<generation>(mask::lane::all_true);
+              }
+            }
+            complete(call<primitive=from_array[Vec]>(result));
+          """
     neon:
       arith:
         requires [neon]
@@ -335,7 +353,7 @@ prim<m:=(v,v)> nequal(left, right):
       ?i?:
         requires:
           [?i8, ?i16, ?i32] [sse2]
-          ?i64 [sse4_1]
+          ?i64 [sse, sse2]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -640,6 +658,24 @@ prim<m:=(v,v)> less_than(left, right):
                 }
               }
             }
+          """
+      arith:
+        requires [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+            var<const_infer>(left_values, call<primitive=to_array[Vec]>(left));
+            var<const_infer>(right_values, call<primitive=to_array[Vec]>(right));
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+              if (left_values[i] < right_values[i]) {
+                result[i] = value<generation>(mask::lane::all_true);
+              }
+            }
+            complete(call<primitive=from_array[Vec]>(result));
           """
     neon:
       arith:

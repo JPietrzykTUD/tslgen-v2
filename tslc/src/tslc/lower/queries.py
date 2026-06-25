@@ -230,6 +230,27 @@ class ValueQuery:
         return args[0] if len(args) == 1 else None
 
 
+class SelectQuery:
+    """``select(cond, then, else)`` -> one already-evaluated branch.
+
+    This is a generation-time query helper, not target-language condition
+    rendering. Both branches must carry the same typed query value kind so the
+    selected result can be consumed uniformly by surrounding queries such as
+    ``type<generation>(...)``.
+    """
+
+    head = "select"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 3 or not isinstance(args[0], BoolValue):
+            return None
+        true_value = args[1]
+        false_value = args[2]
+        if type(true_value) is not type(false_value):
+            return None
+        return true_value if args[0].value else false_value
+
+
 class IntrinPrefixQuery:
     """``intrin::prefix`` -> the selected extension's backend intrinsic prefix."""
 
@@ -603,6 +624,7 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     UnsignedOfQuery(),
     TypeQuery(),
     ValueQuery(),
+    SelectQuery(),
     IntrinPrefixQuery(),
     IntrinSuffixQuery(),
     IsSameQuery(),
@@ -697,6 +719,13 @@ class QueryEvaluator:
             if is_type_tag(scalar_tag):
                 return TypeValue(scalar_tag)
             spelling = context.env.backend.types.scalar_spelling(scalar_tag)
+            return TextValue(spelling) if spelling is not None else None
+        # Backend-scoped value leaves (currently x86 immediate-control constants) are spelled
+        # by backend translation templates. The namespace remains source-level; the emitted text
+        # still comes from the active backend dialect.
+        if not term.args and term.head.startswith("x86::"):
+            key = f"value_{term.head[len('x86::') :]}"
+            spelling = context.env.backend.templates.template(key)
             return TextValue(spelling) if spelling is not None else None
         # A bare quoted string literal (e.g. a named suffix policy) is text.
         if not term.args and len(term.head) >= 2 and term.head[0] == '"' == term.head[-1]:

@@ -241,7 +241,7 @@ class _DocumentTransformer:
                 ParsedImplementationBodyEnvelope(
                     selector_path=selector_path,
                     quote_form=child.value.quote_form,
-                    payload_text=child.value.payload_source.text,
+                    payload_text=child.value.text,
                     envelope_source=child.source,
                     payload_source=child.value.payload_source,
                     source_order=child.source_order,
