@@ -14,7 +14,7 @@ it has not been touched in recent history (the last 20+ commits are entirely
 The authoritative running handoff for the active `tslc` work is
 `docs/agent/tslc-vector-query-handoff.md`. Source-language and architecture
 decisions for `tslc` are recorded in `docs/redesign/design-decisions.md`
-(most recently ADR-092 implementation safety contract). The
+(most recently ADR-093 metadata audit maintenance tooling). The
 `## Current Work State` section near the end of this file has been refreshed to
 describe `tslc`; the long milestone history that follows it is retained only as
 the `tslgen` record.
@@ -1395,8 +1395,28 @@ safety blocks. The Rust value-test CLI command passed with zero
 `unnecessary unsafe` warnings. `./verify.sh` passed with 203 non-build tests
 and 53 generated-build tests.
 
+The metadata audit maintenance tool is also implemented as
+`python -m tslc.maintenance.metadata_audit`. It reports typed source metadata
+suggestions for `safety:` and `requires`, supports check-only, interactive, and
+automatic-apply modes, and only applies span-based edits when the source shape
+is narrow enough to avoid semantic guessing. Direct safety facts are
+high-confidence automatic suggestions; transitive required-feature drift is
+reported from the lowered live call graph, with automatic edits limited to
+simple local `requires [..]` lines or leaf-selector insertions. Focused tests
+for the tool passed with `3 passed`, and the real-corpus safety audit reported
+`0 suggestion(s), 0 applicable`. A focused real-corpus requires smoke for
+`add` on AVX2/CPP/si32 reported `9 suggestion(s), 0 applicable`, all
+low-confidence manual suggestions for broad/scoped selector shapes.
+`./verify.sh` passed after adding the tool, with 207 non-build tests and 53
+generated-build tests.
+
+The maintenance tool package has been normalized to
+`tslc/src/tslc/maintenance/`. Both metadata auditing and coverage inventory now
+live there and run through module entry points rather than a mix of package and
+repo-local script locations.
+
 Active prompt:
-docs/agent/runs/tslc-implementation-safety-contract-review-prompt.md
+docs/agent/runs/tslc-metadata-audit-tool-review-prompt.md
 
 The previous support-policy, catalog/profile validation, and typed-render
 review prompts remain useful background, along with the original value-test
@@ -2038,7 +2058,7 @@ docs/agent/runs/tslc-typed-render-values-review-prompt.md
 Active prompt:
 
 ```text
-docs/agent/runs/tslc-implementation-safety-contract-review-prompt.md
+docs/agent/runs/tslc-metadata-audit-tool-review-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.

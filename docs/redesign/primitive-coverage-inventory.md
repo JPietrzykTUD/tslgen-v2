@@ -1,7 +1,7 @@
 # Primitive Coverage Inventory
 
-Generated 2026-06-19 by `tslc/tools/coverage_inventory.py`. **Regenerate** with
-`python tslc/tools/coverage_inventory.py`; do not hand-edit (it rewrites this file).
+Generated 2026-06-19 by `tslc.maintenance.coverage_inventory`. **Regenerate** with
+`PYTHONPATH=tslc/src python -m tslc.maintenance.coverage_inventory`; do not hand-edit (it rewrites this file).
 
 ## Summary
 

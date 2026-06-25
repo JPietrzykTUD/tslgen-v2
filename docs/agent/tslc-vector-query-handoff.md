@@ -213,6 +213,55 @@ Result after local unsafe call-site rendering: passed with `0` Rust
 `unnecessary unsafe` warnings. Rust value-test planning still reports the known
 unsupported-case warnings for backend gaps.
 
+Metadata audit maintenance tooling is implemented as
+`python -m tslc.maintenance.metadata_audit`. It reports typed suggestions for
+source-owned `safety:` and `requires` metadata, supports check-only mode,
+interactive accept/skip/diff prompts, and automatic application of applicable
+suggestions. Automatic safety edits cover direct `intrin<`, `mem<`, and pointer
+signature facts. Requirement suggestions compare direct source requirements
+with transitive lowered call requirements; automatic `requires` edits are
+limited to simple local `requires [..]` lines or leaf-selector insertions, while
+scoped/broad forms remain manual suggestions.
+
+Maintenance scripts are now consistently package-owned under
+`tslc/src/tslc/maintenance/`. The coverage inventory tool moved from the
+repo-local `tslc/tools/coverage_inventory.py` script path to
+`python -m tslc.maintenance.coverage_inventory`.
+
+Focused validation for the metadata audit tool:
+
+```bash
+python -m pytest -q tslc/tests/test_metadata_audit.py
+```
+
+Result: `3 passed`.
+
+Real-corpus safety audit:
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.maintenance.metadata_audit --sources tsldata --checks safety --machine-profiles supplementary/buildsystem/machine_profiles.json
+```
+
+Result: `0 suggestion(s), 0 applicable`.
+
+Focused real-corpus requires smoke:
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.maintenance.metadata_audit --sources tsldata --checks requires --machine-profiles supplementary/buildsystem/machine_profiles.json --profiles avx2 --backends cpp --types si32 --primitives add
+```
+
+Result: `9 suggestion(s), 0 applicable`; all were low-confidence manual
+suggestions for broad/scoped selector shapes.
+
+Full current validation after adding the metadata audit tool:
+
+```bash
+./verify.sh
+```
+
+Result: passed all targeted validations, including 207 non-build tests and 53
+generated-build tests.
+
 ### Primitive Value-Test Source Shape Cleanup
 
 The primitive value-test source contract has been simplified after the coverage

@@ -5,9 +5,9 @@ Drives the compiler over every primitive in ``tsldata/`` across the canonical
 profile set and both backends, cross-references the build-verified set parsed
 from ``tslc/tests/test_build_verify.py``, and writes the coverage table.
 
-Run from anywhere (it puts ``tslc/src`` on ``sys.path`` itself):
+Run from the repository with ``tslc/src`` on ``PYTHONPATH``:
 
-    python tslc/tools/coverage_inventory.py
+    PYTHONPATH=tslc/src python -m tslc.maintenance.coverage_inventory
 
 Lowering-only (no compilation); takes ~1 minute. "lowers" is NOT a compile
 guarantee — only build-verified primitives are confirmed to compile.
@@ -21,16 +21,23 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(_REPO_ROOT / "tslc" / "src"))
-
-from tslc.api import generate_project  # noqa: E402
-from tslc.catalog.builder import CatalogBuilder  # noqa: E402
-from tslc.diagnostics import has_errors  # noqa: E402
-from tslc.sources import SourceLoader  # noqa: E402
-from tslc.syntax.parser import TslParser  # noqa: E402
+from tslc.api import generate_project
+from tslc.catalog.builder import CatalogBuilder
+from tslc.diagnostics import has_errors
+from tslc.sources import SourceLoader
+from tslc.syntax.parser import TslParser
 
 PROFILES = ("scalar", "sse2", "avx", "avx2", "skylake", "icelake-rockerlake")
+
+
+def _find_repo_root(start: Path) -> Path:
+    for candidate in (start, *start.parents):
+        if (candidate / "tsldata").is_dir() and (candidate / "tslc" / "src").is_dir():
+            return candidate
+    raise RuntimeError(f"could not find repository root from {start}")
+
+
+_REPO_ROOT = _find_repo_root(Path(__file__).resolve())
 _DATA_ROOT = _REPO_ROOT / "tsldata"
 _PROFILES_PATH = _REPO_ROOT / "supplementary" / "buildsystem" / "machine_profiles.json"
 _BUILD_TEST = _REPO_ROOT / "tslc" / "tests" / "test_build_verify.py"
@@ -188,8 +195,14 @@ def main() -> int:
     out: list[str] = []
     w = out.append
     w("# Primitive Coverage Inventory\n")
-    w(f"Generated {_DATE} by `tslc/tools/coverage_inventory.py`. **Regenerate** with")
-    w("`python tslc/tools/coverage_inventory.py`; do not hand-edit (it rewrites this file).\n")
+    w(
+        "Generated "
+        f"{_DATE} by `tslc.maintenance.coverage_inventory`. **Regenerate** with"
+    )
+    w(
+        "`PYTHONPATH=tslc/src python -m tslc.maintenance.coverage_inventory`; "
+        "do not hand-edit (it rewrites this file).\n"
+    )
     w("## Summary\n")
     w(f"- **{len(names)} distinct primitives** in `tsldata/`.")
     w(f"- **{len(tier['VERIFIED'])} build-verified** (compile in C++ *and* Rust via "

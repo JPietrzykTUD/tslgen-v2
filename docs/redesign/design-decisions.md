@@ -4722,3 +4722,56 @@ Consequences:
   frame and retain `unsafe_callee` in their safety reasons.
 - Future source-owned safety documentation can be attached to `reasons` without
   changing renderer behavior.
+
+## ADR-093: Metadata Audit Tool Suggests Source Contract Updates
+
+Context:
+
+The active corpus now carries source-owned implementation metadata for
+`safety:` and `requires`. Keeping those fields synchronized by hand is tedious,
+but automatically "fixing" semantic source contracts inside the compiler would
+violate the source-body integrity boundary.
+
+Decision:
+
+Add `python -m tslc.maintenance.metadata_audit` as a maintenance script outside
+the normal generation CLI. Maintenance commands live under the importable
+`tslc.maintenance` package rather than split between package modules and
+repo-local scripts. The tool loads TSL sources through the existing
+source/parser/catalog boundary and returns typed `MetadataSuggestion` records.
+It supports check-only reporting, an interactive prompt, and automatic
+application of suggestions that carry a narrow source edit.
+
+Safety suggestions are high-confidence only for direct facts that the compiler
+already infers:
+
+- `intrin<...>` body regions imply `internal_unsafe true` plus reason
+  `intrinsic`;
+- `mem<...>` body regions imply `internal_unsafe true` plus reason
+  `raw_memory`;
+- pointer-taking signatures imply `internal_unsafe true`,
+  `caller_unsafe true`, and reason `raw_pointer`.
+
+Requirement suggestions use the lowered, post-prune call graph introduced by
+ADR-092. Selection preserves direct `requires` flags on selected
+implementations, lowering carries them on `LoweredSpecialization`, and the
+pipeline propagates live callees' required features bottom-up. The audit tool
+compares direct source requirements with propagated requirements and suggests
+local updates for callers.
+
+Automatic `requires` edits are deliberately conservative. The tool applies them
+only when the target selector has a simple local `requires [..]` list, or when a
+leaf implementation selector can receive a new simple local `requires [..]`
+line. Scoped `requires:` maps and broad nested selector shapes remain visible
+manual suggestions.
+
+Consequences:
+
+- Normal generation still compiles source truth; it does not rewrite source
+  metadata or guess source intent.
+- The maintenance tool can keep direct `safety:` metadata current without
+  forcing developers to hand-edit repetitive blocks.
+- Requirement drift is surfaced from typed selected/lowered facts instead of
+  intrinsic-name string guessing.
+- The tool's source edits are intentionally small and span-based; it is not a
+  general TSL formatter.
