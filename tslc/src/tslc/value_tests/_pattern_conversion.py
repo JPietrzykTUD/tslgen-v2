@@ -21,7 +21,7 @@ class _LoadConvertPattern(_BasePattern):
         return any(
             spec.result_kind == "v"
             and spec.target is not None
-            and tuple(spec.param_kinds) == ("ptr+",)
+            and tuple(spec.param_kinds) == ("cptr+",)
             for spec in specs
         )
 

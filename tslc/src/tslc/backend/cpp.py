@@ -214,13 +214,15 @@ def _free_function(spec: LoweredSpecialization, *, define: bool) -> str:
 
 
 def _free_kind_type(kind: str, base_spelling: str) -> str:
-    """A free function's kind -> concrete type (no `Vec` projection). `ptr` is the base spelling
-    itself (the `ptr` type tag spells `void *`); `usize` a size; `void` nothing."""
+    """A free function's kind -> concrete type (no `Vec` projection). Pointer spellings
+    carry their own mutability; `usize` is a size; `void` is no value."""
 
     if kind == "void":
         return "void"
     if kind == "usize":
         return "std::size_t"
+    if DEFAULT_SUPPORT_POLICY.is_const_pointer_kind(kind):
+        return f"const {base_spelling}"
     return base_spelling
 
 
@@ -274,8 +276,10 @@ def _param_type(kind: str, index_type: str | None = None) -> str:
         return "std::size_t"
     if kind == "o":  # a text-buffer stream
         return "std::string &"
-    if kind in DEFAULT_SUPPORT_POLICY.pointer_kinds:
+    if DEFAULT_SUPPORT_POLICY.is_const_pointer_kind(kind):
+        return "typename Vec::base_type const *"
+    if DEFAULT_SUPPORT_POLICY.is_mutable_pointer_kind(kind):
         return "typename Vec::base_type *"
     if kind in ("s[]", DEFAULT_SUPPORT_POLICY.lane_list_kind):
-        return "typename ::tsl::array_for<Vec>::type"
+        return "typename ::tsl::array_param<Vec>::type"
     return "typename Vec::base_type"

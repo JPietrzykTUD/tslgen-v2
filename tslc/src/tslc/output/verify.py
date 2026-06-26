@@ -7,12 +7,14 @@ driven by a small, explicit project description instead of a heavy render model.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
 import json
 import os
 from pathlib import Path
 import shlex
 import shutil
 import subprocess
+import tempfile
 from collections.abc import Sequence
 from typing import Protocol
 
@@ -130,6 +132,7 @@ def run_subprocess_build_command(command: BuildCommand) -> BuildCommandResult:
     completed = subprocess.run(  # noqa: S603 - argv is generated, not shell text.
         command.argv,
         cwd=command.cwd,
+        stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
         check=False,
@@ -397,6 +400,7 @@ def _rust_command_groups(
     manifest = project_root / "Cargo.toml"
     groups: list[tuple[BuildCommand, ...]] = []
     for profile in backend.profiles:
+        target_dir = project_root / "target" / profile.file_stem
         # Value testing adds the opt-in `value_tests` feature (so `cargo test` compiles+runs the
         # generated value tests); without it `tests/values.rs` is cfg'd empty. A value-mode
         # failure is reported as a warning (report-then-promote), like the C++ ctest step.
@@ -424,6 +428,8 @@ def _rust_command_groups(
                         "--no-default-features",
                         "--features",
                         features,
+                        "--target-dir",
+                        str(target_dir),
                         *extra_args,
                     ),
                     cwd=root,
@@ -670,9 +676,25 @@ def _command_diagnostic(result: BuildCommandResult) -> Diagnostic:
 
 
 def _subprocess_env(command: BuildCommand) -> dict[str, str] | None:
-    if not command.env:
-        return None
     environment = dict(os.environ)
+    # Zig defaults to ~/.cache/zig, which can be read-only in sandboxed or CI
+    # environments. On this workspace mount, Zig can also fail to discover libc
+    # when its cache is under the generated project tree, so keep verifier-owned
+    # caches in /tmp while still isolating them by command root. ``BuildCommand.env``
+    # can override this for a deliberately constructed command.
+    zig_local_cache, zig_global_cache = _zig_cache_dirs(command.cwd)
+    environment["ZIG_LOCAL_CACHE_DIR"] = str(zig_local_cache)
+    environment["ZIG_GLOBAL_CACHE_DIR"] = str(zig_global_cache)
     for item in command.env:
         environment[item.key] = item.value
     return environment
+
+
+def _zig_cache_dirs(command_root: Path) -> tuple[Path, Path]:
+    digest = hashlib.sha256(str(command_root.resolve()).encode("utf-8")).hexdigest()[:16]
+    root = Path(tempfile.gettempdir()) / "tslc-zig-cache" / digest
+    local = root / "local"
+    global_ = root / "global"
+    local.mkdir(parents=True, exist_ok=True)
+    global_.mkdir(parents=True, exist_ok=True)
+    return local, global_

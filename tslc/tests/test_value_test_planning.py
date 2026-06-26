@@ -185,7 +185,7 @@ def test_lane_list_value_tests_are_planned_and_rendered() -> None:
     assert "typename tsl::array_for<Vec>::type values;" in cpp_source
     assert "tsl::set<Vec>(values)" in cpp_source
     assert "let mut values: <Vec as SimdVector>::Array = Default::default();" in rust_source
-    assert "set::<Vec>(values)" in rust_source
+    assert "set::<Vec>(&values)" in rust_source
 
 
 def test_pointer_layout_planning_consumes_param_types() -> None:
@@ -797,26 +797,26 @@ def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog() ->
 
     source = render_rust_values_file((ValueTestProfilePlan("rust", "unit-profile", cases),))
 
-    assert "from_array::<Vec>(values)" in source
+    assert "from_array::<Vec>(&values)" in source
     assert "to_array::<Vec>(v0)" in source
-    assert "load::<Vec, true>(buf.as_mut_ptr().add(0))" in source
+    assert "load::<Vec, true>(buf.as_ptr().add(0))" in source
     assert "store::<Vec, false, _>(" in source
-    assert "load_scalar::<Vec, false>(buf.as_mut_ptr().add(1))" in source
+    assert "load_scalar::<Vec, false>(buf.as_ptr().add(1))" in source
     assert "load_mask_repr::<Vec, false, false>(" in source
-    assert "expand_load::<Vec, true>(mask, buf.as_mut_ptr())" in source
+    assert "expand_load::<Vec, true>(mask, buf.as_ptr())" in source
     assert "compress_store::<Vec, true>(" in source
     assert "memory_cp::<Vec>(" in source
     assert "let ptr = allocate(64usize);" in source
     assert "unsafe { deallocate(ptr); }" in source
-    assert "gather::<Vec, Indices, 4, 4>(data.as_mut_ptr(), idx)" in source
+    assert "gather::<Vec, Indices, 4, 4>(data.as_ptr(), idx)" in source
     assert "scatter::<Vec, Indices, 4, 4>(data.as_mut_ptr(), idx, values);" in source
     assert 'assert_eq!(result.as_str(), "4|3|2|1|\\n", "to_ostream");' in source
     assert "type Vec = Simd<i16, Avx2>;" in source
-    assert "load_convert_up::<Vec, ToVec>(buf.as_mut_ptr())" in source
+    assert "load_convert_up::<Vec, ToVec>(buf.as_ptr())" in source
     assert "type Vec = Simd<i32, Avx2>;" in source
-    assert "extract::<Vec, ToVec, 1>(from_array::<Vec>(h0))" in source
+    assert "extract::<Vec, ToVec, 1>(from_array::<Vec>(&h0))" in source
     assert "type DataVec = Simd<i32, Sse>;" in source
-    assert "insert::<DataVec, ResultVec, 1>(from_array::<ResultVec>(orig), from_array::<DataVec>(data))" in source
+    assert "insert::<DataVec, ResultVec, 1>(from_array::<ResultVec>(&orig), from_array::<DataVec>(&data))" in source
 
 
 def test_render_tests_project_stays_an_assembler() -> None:

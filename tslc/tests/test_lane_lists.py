@@ -141,11 +141,11 @@ def test_lanes_at_renders_array_like_cpp_and_rust_parameters() -> None:
 
     cpp_text = CppBackend().render_primitive("lane_set", (cpp_spec,))
     assert "template <class... Args>" not in cpp_text
-    assert "typename ::tsl::array_for<Vec>::type values" in cpp_text
+    assert "typename ::tsl::array_param<Vec>::type values" in cpp_text
     assert "return values[0];" in cpp_text
 
     rust_text = RustBackend().render_primitive("lane_set", (rust_spec,))
-    assert "values: Self::Array" in rust_text
+    assert "values: &Self::Array" in rust_text
     assert "return values[0];" in rust_text
 
 

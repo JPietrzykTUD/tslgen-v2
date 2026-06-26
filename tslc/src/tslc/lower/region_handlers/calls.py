@@ -8,9 +8,9 @@ from tslc.ir.segments import Region
 from tslc.lower.calls import parse_call_selector
 from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue, TypeValue
-from tslc.lower.region_handlers.common import _vector_spelling
+from tslc.lower.region_handlers.common import _split_arg_groups, _vector_spelling
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.render.model import RenderField, render_text, unsafe_block
+from tslc.render.model import RenderField, as_render_text, literal_text, render_sequence, render_text, unsafe_block
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 _DECIMAL_INTEGER = re.compile(r"^[0-9]+$")
@@ -101,7 +101,7 @@ class CallLowerer:
         )
         call = context.env.backend.syntax.render_call(
             call_name,
-            render(region.body),
+            self._render_call_args(region, context, render, name),
             axis_values,
             context.env.primitive_arg_generics.get(call_name, 0),
             vec_override,
@@ -110,6 +110,29 @@ class CallLowerer:
         if context.env.primitive_caller_unsafe.get(name, False):
             return unsafe_block(call)
         return call
+
+    def _render_call_args(
+        self,
+        region: Region,
+        context: LoweringSession,
+        render: RenderBody,
+        primitive_name: str,
+    ) -> RenderField:
+        borrowed = context.env.primitive_borrowed_arg_positions.get(primitive_name, ())
+        prefix = context.env.backend.syntax.borrowed_call_arg_prefix
+        if prefix is None or not borrowed:
+            return render(region.body)
+        groups = _split_arg_groups(region.body)
+        borrowed_positions = set(borrowed)
+        parts: list[RenderField] = []
+        for index, group in enumerate(groups):
+            if parts:
+                parts.append(literal_text(", "))
+            value = render(group)
+            if index in borrowed_positions:
+                value = render_sequence((literal_text(prefix), as_render_text(value)))
+            parts.append(value)
+        return render_sequence(tuple(as_render_text(part) for part in parts))
 
     def _resolve_attr_value(self, value: str, context: LoweringSession) -> str:
         """An `attrs[key=value]` value. A literal (`false`) passes through; a generation query

@@ -44,7 +44,7 @@ def _mask_pointer_load(case: ValueTestCasePlan) -> str:
         f"  {storage_type} buf[{buflen}] = {{0}};",
         f"  for (std::size_t i = 0; i < {buflen}; ++i) buf[i] = in0[i];",
         f"  typename Vec::mask_type result = tsl::{case.call_name}<Vec{axis}>("
-        f"reinterpret_cast<typename Vec::base_type *>(buf + {case.buffer_offset}));",
+        f"reinterpret_cast<typename Vec::base_type const *>(buf + {case.buffer_offset}));",
         f"  static const int expected[{case.lanes}] = {{{bits}}};",
         f'  return tsl::test::check_mask("{case.case_name}", result, expected, {case.lanes});',
         "}",

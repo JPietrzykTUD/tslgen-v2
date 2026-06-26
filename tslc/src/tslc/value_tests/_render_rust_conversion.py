@@ -80,7 +80,7 @@ def _fixed_extension_repr_cast(case: ValueTestCasePlan) -> str:
             f"        for i in 0..{case.lanes} {{ h0[i] = in0[i]; }}",
             f"        let expected: [{target}; {target_lanes}] = [{expected}];",
             f"        let result = {rust_raw_identifier(case.call_name)}"
-            f"::<Vec, ToVec>({from_array}::<Vec>(h0));",
+            f"::<Vec, ToVec>({from_array}::<Vec>(&h0));",
             f"        let out = {to_array}::<ToVec>(result);",
             f"        for i in 0..{target_lanes} {{ assert!(out[i].lane_eq(expected[i]), "
             f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
@@ -110,7 +110,7 @@ def _load_convert(case: ValueTestCasePlan) -> str:
             f"        for i in 0..{case.lanes} {{ buf[i] = in0[i]; }}",
             f"        let expected: [{target}; {target_lanes}] = [{expected}];",
             f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}"
-            "::<Vec, ToVec>(buf.as_mut_ptr()) };",
+            "::<Vec, ToVec>(buf.as_ptr()) };",
             f"        for i in 0..{target_lanes} {{ assert!(result[i].lane_eq(expected[i]), "
             f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
             "i, expected[i], result[i]); }",
@@ -139,7 +139,7 @@ def _fixed_extension_load_convert(
             f"        for i in 0..{case.lanes} {{ buf[i] = in0[i]; }}",
             f"        let expected: [{target}; {target_lanes}] = [{expected}];",
             f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}"
-            "::<Vec, ToVec>(buf.as_mut_ptr()) };",
+            "::<Vec, ToVec>(buf.as_ptr()) };",
             f"        let out = {to_array}::<ToVec>(result);",
             f"        for i in 0..{target_lanes} {{ assert!(out[i].lane_eq(expected[i]), "
             f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
@@ -166,7 +166,7 @@ def _extension_extract(case: ValueTestCasePlan) -> str:
             f"        for i in 0..{case.lanes} {{ h0[i] = in0[i]; }}",
             f"        let expected: [{case.base_spelling}; {out_lanes}] = [{expected}];",
             f"        let result = {rust_raw_identifier(case.call_name)}"
-            f"::<Vec, ToVec, {case.index_value}>({from_array}::<Vec>(h0));",
+            f"::<Vec, ToVec, {case.index_value}>({from_array}::<Vec>(&h0));",
             f"        let out = {to_array}::<ToVec>(result);",
             f"        for i in 0..{out_lanes} {{ assert!(out[i].lane_eq(expected[i]), "
             f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
@@ -198,7 +198,7 @@ def _extension_insert(case: ValueTestCasePlan) -> str:
             f"        let expected: [{case.base_spelling}; {out_lanes}] = [{expected}];",
             f"        let result = {rust_raw_identifier(case.call_name)}"
             f"::<DataVec, ResultVec, {case.index_value}>("
-            f"{from_array}::<ResultVec>(orig), {from_array}::<DataVec>(data));",
+            f"{from_array}::<ResultVec>(&orig), {from_array}::<DataVec>(&data));",
             f"        let out = {to_array}::<ResultVec>(result);",
             f"        for i in 0..{out_lanes} {{ assert!(out[i].lane_eq(expected[i]), "
             f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '

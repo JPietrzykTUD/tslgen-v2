@@ -99,6 +99,9 @@ if [[ -z "${CMAKE_BUILD_PARALLEL_LEVEL:-}" ]]; then
 fi
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$CMAKE_BUILD_PARALLEL_LEVEL}"
 
+verify_tmp_root="${TSLC_VERIFY_TMPROOT:-/tmp/tslc-verify}"
+mkdir -p "$verify_tmp_root"
+
 python -m compileall -q tslc/src/tslc
 
 require_collected_test() {
@@ -130,6 +133,22 @@ require_collected_test \
   "${nonbuild_tests[@]}"
 echo "Collected ${#nonbuild_tests[@]} non-build tests from tslc/tests, excluding test_build_verify.py."
 
+regular_nonbuild_tests=()
+value_tests=()
+for test_id in "${nonbuild_tests[@]}"; do
+  case "$test_id" in
+    tslc/tests/test_value_tests.py::*)
+      value_tests+=("$test_id")
+      ;;
+    *)
+      regular_nonbuild_tests+=("$test_id")
+      ;;
+  esac
+done
+if (( ${#value_tests[@]} > 0 )); then
+  echo "Value-test build/run checks will run serially: ${#value_tests[@]} tests."
+fi
+
 mapfile -t build_tests < <(
   pytest --collect-only -q tslc/tests/test_build_verify.py |
     sed -n 's#^tests/#tslc/tests/#p'
@@ -146,64 +165,76 @@ echo "Collected ${#build_tests[@]} generated-build tests from tslc/tests/test_bu
 if (( verify_workers == 1 )); then
   echo "Running non-build tests from tslc/tests, excluding test_build_verify.py."
   pytest --basetemp=tslctmp/pytest_verify_nonbuild \
-    "${nonbuild_tests[@]}" \
+    "${regular_nonbuild_tests[@]}" \
     -q
 
+  if (( ${#value_tests[@]} > 0 )); then
+    echo "Running value-test build/run checks serially."
+    pytest --basetemp="$verify_tmp_root/pytest_verify_values" \
+      "${value_tests[@]}" \
+      -q
+  fi
+
   echo "Running generated build matrix from tslc/tests/test_build_verify.py."
-  pytest --basetemp=tslctmp/pytest_build_verify \
+  pytest --basetemp="$verify_tmp_root/pytest_build_verify" \
     "${build_tests[@]}" \
     -q
 else
-  pids=()
-  logs=()
+  run_shards() {
+    local group_name="$1"
+    local test_source="$2"
+    local basetemp_prefix="$3"
+    shift 3
+    local tests=("$@")
 
-  for ((shard = 0; shard < verify_workers; shard++)); do
-    shard_tests=()
-    for ((index = shard; index < ${#nonbuild_tests[@]}; index += verify_workers)); do
-      shard_tests+=("${nonbuild_tests[$index]}")
+    local pids=()
+    local logs=()
+    local shard
+    for ((shard = 0; shard < verify_workers; shard++)); do
+      shard_tests=()
+      for ((index = shard; index < ${#tests[@]}; index += verify_workers)); do
+        shard_tests+=("${tests[$index]}")
+      done
+      if (( ${#shard_tests[@]} == 0 )); then
+        continue
+      fi
+      log="${basetemp_prefix}_${shard}.log"
+      logs+=("$log")
+      (
+        echo "$group_name shard $((shard + 1))/$verify_workers: ${#shard_tests[@]} tests$test_source"
+        pytest --basetemp="${basetemp_prefix}_${shard}" "${shard_tests[@]}" -q
+      ) >"$log" 2>&1 &
+      pids+=("$!")
     done
-    if (( ${#shard_tests[@]} == 0 )); then
-      continue
-    fi
-    log="tslctmp/pytest_verify_nonbuild_${shard}.log"
-    logs+=("$log")
-    (
-      echo "non-build shard $((shard + 1))/$verify_workers: ${#shard_tests[@]} tests"
-      pytest --basetemp="tslctmp/pytest_verify_nonbuild_${shard}" "${shard_tests[@]}" -q
-    ) >"$log" 2>&1 &
-    pids+=("$!")
-  done
 
-  for ((shard = 0; shard < verify_workers; shard++)); do
-    shard_tests=()
-    for ((index = shard; index < ${#build_tests[@]}; index += verify_workers)); do
-      shard_tests+=("${build_tests[$index]}")
+    failed=0
+    for index in "${!pids[@]}"; do
+      if ! wait "${pids[$index]}"; then
+        failed=1
+      fi
+      cat "${logs[$index]}"
     done
-    if (( ${#shard_tests[@]} == 0 )); then
-      continue
+    if (( failed != 0 )); then
+      exit 1
     fi
-    log="tslctmp/pytest_build_verify_${shard}.log"
-    logs+=("$log")
-    (
-      echo "build-verify shard $((shard + 1))/$verify_workers: ${#shard_tests[@]} tests from test_build_verify.py"
-      export ZIG_LOCAL_CACHE_DIR="$PWD/tslctmp/zig-local-cache-${shard}"
-      export ZIG_GLOBAL_CACHE_DIR="$PWD/tslctmp/zig-global-cache-${shard}"
-      mkdir -p "$ZIG_LOCAL_CACHE_DIR" "$ZIG_GLOBAL_CACHE_DIR"
-      pytest --basetemp="tslctmp/pytest_build_verify_${shard}" "${shard_tests[@]}" -q
-    ) >"$log" 2>&1 &
-    pids+=("$!")
-  done
+  }
 
-  failed=0
-  for index in "${!pids[@]}"; do
-    if ! wait "${pids[$index]}"; then
-      failed=1
-    fi
-    cat "${logs[$index]}"
-  done
-  if (( failed != 0 )); then
-    exit 1
+  run_shards \
+    "non-build" \
+    "" \
+    "tslctmp/pytest_verify_nonbuild" \
+    "${regular_nonbuild_tests[@]}"
+
+  if (( ${#value_tests[@]} > 0 )); then
+    echo "value-test build/run checks: ${#value_tests[@]} tests"
+    pytest --basetemp="$verify_tmp_root/pytest_verify_values" "${value_tests[@]}" -q
   fi
+
+  run_shards \
+    "build-verify" \
+    " from test_build_verify.py" \
+    "$verify_tmp_root/pytest_build_verify" \
+    "${build_tests[@]}"
 fi
 
 if grep -RIn 'BackendTranslation' tslc/src/tslc tslc/tests --include='*.py'; then

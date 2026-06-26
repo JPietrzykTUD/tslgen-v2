@@ -1,5 +1,5 @@
 description "Load primitives"
-prim<v:=ptr>[aligned=*] load(ptr):
+prim<v:=cptr>[aligned=*] load(ptr):
   brief_description "[Example: sse + si8]: Load 128-bits of integer data from memory into \"dst\". \n\t\"mem_addr\" must be aligned on a 16-byte boundary or a general-protection exception may be generated."
   operation "[Example: sse + si8]: dst[127:0] := MEM[mem_addr+127:mem_addr]"
   tests:
@@ -153,7 +153,7 @@ prim<v:=ptr>[aligned=*] load(ptr):
               }
             """
 
-prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
+prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
   brief_description "TODO"
   operation "TODO"
   tests:
@@ -297,7 +297,7 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
               );
             }
           """
-prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
+prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
   brief_description "Masked load with pass-through semantics: lanes enabled by the mask are loaded from memory, and disabled lanes are taken from data."
   operation "TODO"
   tests:
@@ -447,7 +447,7 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
             );
           """
 
-prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
+prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
   param_types:
     ptr:
       "if packed=true" "type<generation>(vector::imask) const*"
@@ -494,7 +494,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
             } else<generation> {
               let<type>(MaskT, type<generation>(vector::mask));
               let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
-              var<const_infer>(words, cast<reinterpret>(MaskWord *, ptr));
+              var<const_infer>(words, cast<reinterpret>(MaskWord const *, ptr));
               var<typed>(MaskT, result, mask<zero>());
               loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 if ((*ptr_add(words, i)) != cast<static>(MaskWord, 0)) {
@@ -524,7 +524,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
               complete(
                 call<primitive=nequal[MaskVec]>(
                   call<primitive=load[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
-                    cast<reinterpret>(MaskBase *, ptr)
+                    cast<reinterpret>(MaskBase const *, ptr)
                   ),
                   call<primitive=set_zero[MaskVec]>()
                 )
@@ -554,7 +554,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
                 loaded_mask,
                 call<primitive=nequal[MaskVec]>(
                   call<primitive=load[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
-                    cast<reinterpret>(MaskBase *, ptr)
+                    cast<reinterpret>(MaskBase const *, ptr)
                   ),
                   call<primitive=set_zero[MaskVec]>()
                 )
@@ -606,7 +606,7 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask_repr(ptr):
             }
           """
 
-prim<s:=ptr>[aligned=false] load_scalar(ptr):
+prim<s:=cptr>[aligned=false] load_scalar(ptr):
   brief_description "Loads a scalar mask from memory."
   operation ""
   tests:

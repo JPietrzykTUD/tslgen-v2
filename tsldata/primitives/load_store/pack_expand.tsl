@@ -144,7 +144,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
                 *ptr = a;
               }
             """
-prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
+prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
   brief_description "Loads contiguous data using a mask."
   operation ""
   tests:
@@ -281,7 +281,7 @@ prim<v:=(m,ptr)>[aligned=true, op=expand] expand_load(m, ptr):
                  complete(cast<static>(type<generation>(base::in), 0));
                }
             """
-prim<v:=ptr+> load_convert_up(ptr):
+prim<v:=cptr+> load_convert_up(ptr):
   brief_description "Loads and widens elements."
   operation ""
   return_type:

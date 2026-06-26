@@ -14,10 +14,11 @@ pub trait SimdVector {
     // The integral mask (to_integral's result): the mask packed into an unsigned integer,
     // one bit per lane (the native __mmaskN, or a lane-sized uint on lane-bitmask ISAs).
     type ImaskType;
-    // The array type this vector lowers to (the `s[]` kind: to_array's result /
-    // from_array's argument), one element per lane. Indexable (yielding a lane's base value) so
-    // an element-wise loop body in a *generic* context — e.g. gather's `idx_array[i]` over a free
-    // `IndicesType` — can read/write lanes; concrete `array_type` already satisfies this.
+    // The array type this vector lowers to (the `s[]` kind: to_array's owned result /
+    // from_array's read-only input), one element per lane. Indexable (yielding a lane's base
+    // value) so an element-wise loop body in a *generic* context — e.g. gather's `idx_array[i]`
+    // over a free `IndicesType` — can read/write lanes; concrete `array_type` already satisfies
+    // this.
     type Array: Index<usize, Output = Self::BaseType> + IndexMut<usize>;
 
     // Test lane `index` of a register-backed lane mask (sse/avx2): the mask IS a data register
@@ -91,6 +92,14 @@ pub struct ArrayStorage<T, const N: usize> {
 
 impl<T, const N: usize> ArrayStorage<T, N> {
     pub fn data(&mut self) -> *mut T {
+        self.as_mut_ptr()
+    }
+
+    pub fn as_ptr(&self) -> *const T {
+        self.storage.as_ptr()
+    }
+
+    pub fn as_mut_ptr(&mut self) -> *mut T {
         self.storage.as_mut_ptr()
     }
 }
@@ -280,7 +289,7 @@ impl_tsl_clz!(u16);
 impl_tsl_clz!(u32);
 impl_tsl_clz!(u64);
 
-pub fn ptr_add<T>(p: *mut T, i: usize) -> *mut T {
+pub fn ptr_add<T>(p: *const T, i: usize) -> *const T {
     p.wrapping_add(i)
 }
 pub fn ptr_add_mut<T>(p: *mut T, i: usize) -> *mut T {

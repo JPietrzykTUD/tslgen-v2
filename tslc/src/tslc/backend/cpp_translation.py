@@ -120,6 +120,7 @@ class _CppTemplates:
 class _CppSyntax:
     catalog: Catalog
     backend_id: str
+    borrowed_call_arg_prefix: str | None = None
 
     def frame_return(self, value: RenderField) -> RenderText:
         return common.frame_return(self.catalog, self.backend_id, value)

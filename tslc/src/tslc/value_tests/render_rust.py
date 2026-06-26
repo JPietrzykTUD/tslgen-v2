@@ -158,7 +158,7 @@ def _array_to_vector_like(case: ValueTestCasePlan, local_name: str) -> str:
             f"        let mut {local_name}: <Vec as SimdVector>::Array = Default::default();",
             f"        for i in 0..{input_lanes} {{ {local_name}[i] = in0[i]; }}",
             f"        let expected: [{case.base_spelling}; {expected_lanes}] = [{expected}];",
-            f"        let result = {rust_raw_identifier(case.call_name)}::<Vec>({local_name});",
+            f"        let result = {rust_raw_identifier(case.call_name)}::<Vec>(&{local_name});",
             _lane_assert(case, expected_lanes, "result"),
             "    }",
         ]

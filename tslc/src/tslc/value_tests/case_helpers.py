@@ -129,7 +129,7 @@ def load_convert_match(
                 and spec.type_tag == case.type_tag
                 and spec.target is not None
                 and spec.target.base_tag == case.to_type
-                and tuple(spec.param_kinds) == ("ptr+",)
+                and tuple(spec.param_kinds) == ("cptr+",)
             ),
             None,
         )
@@ -141,7 +141,7 @@ def load_convert_match(
             and spec.type_tag == case.type_tag
             and spec.target is not None
             and spec.target.base_tag == case.to_type
-            and tuple(spec.param_kinds) == ("ptr+",)
+            and tuple(spec.param_kinds) == ("cptr+",)
         ),
         None,
     )
@@ -168,7 +168,9 @@ def extension_repr_match(
 
 def args_match(case: TestCase, param_kinds: tuple[str, ...]) -> bool:
     vector_count = sum(
-        1 for kind in param_kinds if kind in {"v", "vt", "ptr", "vidx", "s[]"}
+        1
+        for kind in param_kinds
+        if kind in {"v", "vt", "ptr", "cptr", "ptr+", "cptr+", "vidx", "s[]"}
     )
     mask_count = sum(1 for kind in param_kinds if kind in {"m", "im"})
     scalar_count = sum(1 for kind in param_kinds if kind in {"s", "sImm", "usize"})

@@ -261,8 +261,8 @@ def test_masked_only_primitive_is_selectable(catalog: Catalog, machine_profiles)
 
 
 def test_scalar_load_store_kinds(catalog: Catalog, machine_profiles) -> None:
-    # `store<void:=(ptr,v)>` and `load<v:=ptr>` introduce the ptr param + void result
-    # kinds. Scalar bodies are raw pointer ops; void carries no complete.
+    # `store<void:=(ptr,v)>` and `load<v:=cptr>` introduce mutable/read-only pointer
+    # params plus a void result kind. Scalar bodies are raw pointer ops; void carries no complete.
     store = _spec(catalog, machine_profiles, "scalar", "store", "scalar", "si32")
     assert store is not None
     assert store.result_kind == "void" and store.param_kinds == ("ptr", "v")
@@ -270,7 +270,7 @@ def test_scalar_load_store_kinds(catalog: Catalog, machine_profiles) -> None:
 
     load = _spec(catalog, machine_profiles, "scalar", "load", "scalar", "si32")
     assert load is not None
-    assert load.result_kind == "v" and load.param_kinds == ("ptr",)
+    assert load.result_kind == "v" and load.param_kinds == ("cptr",)
     assert "return *ptr;" in load.body_text
 
 

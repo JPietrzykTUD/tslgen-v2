@@ -31,6 +31,8 @@ class SupportPolicy:
     lane_list_kind: str
     index_vector_kind: str
     pointer_kinds: frozenset[str]
+    const_pointer_kinds: frozenset[str]
+    mutable_pointer_kinds: frozenset[str]
     sized_vector_bits_kinds: frozenset[str]
     scalar_register_policy_kind: str
     default_size_parameter_name: str
@@ -128,6 +130,15 @@ class SupportPolicy:
     def requires_unsafe_frame(self, shape: SignatureShape) -> bool:
         return any(kind in self.pointer_kinds for kind in shape.param_kinds)
 
+    def is_const_pointer_kind(self, kind: str) -> bool:
+        return kind in self.const_pointer_kinds
+
+    def is_mutable_pointer_kind(self, kind: str) -> bool:
+        return kind in self.mutable_pointer_kinds
+
+    def is_borrowed_parameter_kind(self, kind: str) -> bool:
+        return kind in {"s[]", self.lane_list_kind}
+
     def is_maskable_signature(self, shape: SignatureShape) -> bool:
         return (
             shape.result_kind in self.maskable_result_kinds
@@ -179,6 +190,8 @@ DEFAULT_SUPPORT_POLICY = SupportPolicy(
             "sImm",
             "ptr",
             "ptr+",
+            "cptr",
+            "cptr+",
             "void",
             "s[]",
             LANE_LIST_KIND,
@@ -193,7 +206,9 @@ DEFAULT_SUPPORT_POLICY = SupportPolicy(
     immediate_kind="sImm",
     lane_list_kind=LANE_LIST_KIND,
     index_vector_kind="vidx",
-    pointer_kinds=frozenset({"ptr", "ptr+"}),
+    pointer_kinds=frozenset({"ptr", "ptr+", "cptr", "cptr+"}),
+    const_pointer_kinds=frozenset({"cptr", "cptr+"}),
+    mutable_pointer_kinds=frozenset({"ptr", "ptr+"}),
     # Vector-bits kinds whose lane count is a runtime/symbolic parameter (`LANES`) rather than a
     # compile-time constant. Only `"sized"` (the generic-like family) is wired into the
     # sized-vector render/lower paths today. SVE's `"scalable"` kind is declared in the corpus

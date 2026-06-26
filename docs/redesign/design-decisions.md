@@ -4912,3 +4912,71 @@ Consequences:
   requiring the host CPU to support those instruction sets.
 - Source feature requirements stay source-owned and typed; verifier failures
   exposed metadata drift instead of becoming hard-coded profile exceptions.
+
+## ADR-096: Pointer Mutability And Array Parameters Are Typed
+
+Context:
+
+The `set` and `from_array` families exposed a parameter-passing mismatch:
+array-like values are read-only inputs, but C++ previously passed lane arrays
+by value and Rust owned array arguments. Memory loads also used the same `ptr`
+kind as stores, which hid whether a primitive reads through a pointer or
+writes through it.
+
+Decision:
+
+Encode pointer mutability in the signature vocabulary. `ptr` and `ptr+` remain
+mutable pointer kinds for stores and other output/input-output operations.
+`cptr` and `cptr+` are read-only pointer kinds for loads, gathers,
+load-convert, scalar loads, mask loads, and memory-copy sources.
+
+Keep array/lane-list constness as backend parameter policy derived from typed
+signature terms. `s[]` and `lanes<s>` parameters are read-only inputs: C++
+renders them through `array_param<Vec>` (`const array_for<Vec>::type &`) and
+Rust renders them as `&S::Array`/`&Self::Array`. Owned array results such as
+`s[]:=v` still return `array_for<Vec>::type` / `S::Array` by value.
+
+Rust primitive-call lowering uses catalog-derived borrowed argument positions
+to borrow `s[]` and `lanes<s>` call arguments at call sites. TSIL source stays
+semantic (`call<primitive=from_array>(result)`); it does not spell backend
+borrow syntax. Read-only array buffers use `as_ptr()`, while mutable output
+buffers keep `data()`/`as_mut_ptr()`.
+
+Consequences:
+
+- Source signatures now say whether a pointer parameter is read-only or
+  mutable.
+- `from_array` no longer needs a local copy workaround before loading from its
+  input array.
+- Generic C++ vector register parameters use `reg_param` by const reference;
+  real SIMD registers keep the existing value-passing behavior.
+- The design avoids body mutation inference. If a future primitive genuinely
+  needs caller-visible mutable array input, that should become an explicit
+  typed signature role rather than a renderer heuristic.
+
+## ADR-097: Generated Build Verification Uses Isolated Toolchain Scratch
+
+Context:
+
+The generated value/build tests can invoke ambient compilers such as
+`CXX="zig c++"`. Under the workspace mount, Zig can fail during CMake compiler
+checks even when the generated source is valid. Running value-test build/run
+checks in parallel with the rest of the suite can also oversubscribe the host
+and turn toolchain scratch failures into misleading compile diagnostics.
+
+Decision:
+
+Keep build verification as the side-effect boundary, but isolate its toolchain
+scratch deliberately. `verify.sh` runs ordinary non-build tests in shards,
+runs value-test build/run checks serially, and runs generated-build shards
+with basetemps under `/tmp/tslc-verify` by default. The verifier subprocess
+runner supplies per-command-root Zig caches under `/tmp/tslc-zig-cache`.
+`TSLC_VERIFY_TMPROOT` can override the generated-build pytest temp root.
+
+Consequences:
+
+- Generated project verification remains deterministic with ambient Zig
+  compilers in this workspace.
+- Regular non-build tests can keep the repo-local pytest temp policy.
+- Toolchain scratch placement stays in the verifier/wrapper boundary, not in
+  parsing, selection, lowering, rendering, or artifact writing.

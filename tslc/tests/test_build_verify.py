@@ -301,7 +301,7 @@ def test_load_store_builds(data_root: Path, machine_profiles_path: Path, tmp_pat
 
 def test_convert_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # The width-changing conversion family (`return_type: base: ToBase`): `convert_up`/
-    # `convert_down` (`v:=(v,sImm)`) select+widen/narrow a chunk; `load_convert_up` (`v:=ptr+`)
+    # `convert_down` (`v:=(v,sImm)`) select+widen/narrow a chunk; `load_convert_up` (`v:=cptr+`)
     # widens straight from memory. Their native bodies compose intrinsics from SPACE-separated
     # `intrin<..., build[...]>` modifiers + `infix`/`infix_sep`
     # (`<cvt, build[infix=epi8, infix_sep="", suffix=epi16]>`
@@ -1006,7 +1006,7 @@ def test_nullary_constants_build(
 def test_simple_memory_build(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
-    # `load_scalar` (`s:=ptr`, a scalar dereference / masked-zero variant). Builds in both
+    # `load_scalar` (`s:=cptr`, a scalar dereference / masked-zero variant). Builds in both
     # backends across scalar + SIMD. (Deferred siblings: `memory_cp`'s `mem<copy>` directive
     # and `void`-pointer types aren't lowered for Rust yet; `compress_store`'s generic
     # fallback needs `details::mask_test` — see test_masked_memory_build, skipped.)
@@ -1144,9 +1144,9 @@ def test_leading_zeros_build(
 def test_masked_memory_build(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
-    # The masked / sparse memory family: `load_mask_repr` (`m:=ptr`) / `store_mask_repr`
+    # The masked / sparse memory family: `load_mask_repr` (`m:=cptr`) / `store_mask_repr`
     # (`void:=(ptr,m)`), `masked_set1` (`v:=(m,v,s)`), `compress` (`v:=(m,v)`),
-    # `expand_load` (`v:=(m,ptr)`). avx512 native mask_compress/mask_expandload plus the
+    # `expand_load` (`v:=(m,cptr)`). avx512 native mask_compress/mask_expandload plus the
     # generic/sse/avx2 per-lane fallbacks whose loop tests the mask with `mask<test>`. That
     # region now lowers per physical mask repr: the generic vector's integer bitset uses the
     # inline `(m>>i)&1` shift, while sse/avx2 register lane-masks route to the universal
@@ -1173,7 +1173,7 @@ def test_masked_memory_build(
 
 
 def test_memory_cp_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
-    # `memory_cp` (`void:=(ptr,ptr,s,s)`) copies raw bytes via the `mem<copy>` TSIL region:
+    # `memory_cp` (`void:=(ptr,cptr,s,s)`) copies raw bytes via the `mem<copy>` TSIL region:
     # `mem<copy>(cast<reinterpret>(void *, dst), cast<reinterpret>(void const *, src),
     # count_bytes)`. `mem` is a scanned keyword lowered by `MemLowerer` to the `mem_copy`
     # translate template — C++ `std::memcpy` over `void *` reinterprets, Rust

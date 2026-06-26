@@ -78,6 +78,9 @@ class LoweringEnv:
     # callee name -> whether the generated public Rust wrapper is caller-unsafe. Calls to such
     # primitives need a local unsafe block unless the whole body already renders inside one.
     primitive_caller_unsafe: Mapping[str, bool] = field(default_factory=dict)
+    # callee name -> parameter positions rendered as read-only references by the Rust backend.
+    # The positions are derived from typed signature kinds such as `s[]` and `lanes<s>`.
+    primitive_borrowed_arg_positions: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
     # names with >1 emitted form (unmasked + value-masking mask policies), so a
     # `call<…attrs[mask=…]>` to them is mangled to `<name>_mask`/`<name>_maskz` (matching the
     # render rename). Single-form callees (`blend`) are absent → keep their bare names.
@@ -130,6 +133,11 @@ class LoweringEnv:
             self,
             "primitive_caller_unsafe",
             _frozen_mapping(self.primitive_caller_unsafe),
+        )
+        object.__setattr__(
+            self,
+            "primitive_borrowed_arg_positions",
+            _frozen_mapping(self.primitive_borrowed_arg_positions),
         )
         object.__setattr__(
             self, "lane_list_params", _frozen_mapping(self.lane_list_params)

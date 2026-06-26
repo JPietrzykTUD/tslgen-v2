@@ -24,7 +24,7 @@ def _load(case: ValueTestCasePlan) -> str:
             f"        for i in 0..{case.lanes} {{ buf[{case.buffer_offset} + i] = in0[i]; }}",
             f"        let expected: [{case.base_spelling}; {case.lanes}] = [{expected}];",
             f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}"
-            f"::<Vec{axis}>(buf.as_mut_ptr().add({case.buffer_offset})) }};",
+            f"::<Vec{axis}>(buf.as_ptr().add({case.buffer_offset})) }};",
             f"        for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), "
             f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
             "i, expected[i], result[i]); }",
@@ -76,7 +76,7 @@ def _scalar_pointer_load(case: ValueTestCasePlan) -> str:
             f"[Default::default(); {buflen}];",
             f"        for i in 0..{buflen} {{ buf[i] = in0[i]; }}",
             f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}"
-            f"::<Vec{axis}>(buf.as_mut_ptr().add({case.buffer_offset})) }};",
+            f"::<Vec{axis}>(buf.as_ptr().add({case.buffer_offset})) }};",
             f"        let expected: {case.base_spelling} = {expected};",
             f"        assert!(result.lane_eq(expected), "
             f'"{case.case_name}: expected {{:?}}, got {{:?}}", expected, result);',
@@ -100,7 +100,7 @@ def _mask_pointer_load(case: ValueTestCasePlan) -> str:
         f"        let mut buf: [{storage_type}; {buflen}] = [Default::default(); {buflen}];",
         f"        for i in 0..{buflen} {{ buf[i] = in0[i]; }}",
         f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}::<Vec{axis}>(",
-        f"            buf.as_mut_ptr().add({case.buffer_offset}) as *mut <Vec as SimdVector>::BaseType",
+        f"            buf.as_ptr().add({case.buffer_offset}) as *const <Vec as SimdVector>::BaseType",
         "        ) };",
     ]
     for lane in range(case.lanes):
@@ -129,7 +129,7 @@ def _masked_pointer_load(case: ValueTestCasePlan) -> str:
             f"        for i in 0..{case.lanes} {{ buf[i] = in0[i]; }}",
             f"        let expected: [{case.base_spelling}; {case.lanes}] = [{expected}];",
             f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}"
-            f"::<Vec{axis}>(mask, buf.as_mut_ptr()) }};",
+            f"::<Vec{axis}>(mask, buf.as_ptr()) }};",
             f"        for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), "
             f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
             "i, expected[i], result[i]); }",
@@ -188,7 +188,7 @@ def _memory_copy(case: ValueTestCasePlan) -> str:
             f"        for i in 0..{src_len} {{ src[{case.source_offset} + i] = src_in[i]; }}",
             f"        unsafe {{ {rust_raw_identifier(case.call_name)}::<Vec>(",
             f"            dst.as_mut_ptr().add({case.buffer_offset}),",
-            f"            src.as_mut_ptr().add({case.source_offset}),",
+            f"            src.as_ptr().add({case.source_offset}),",
             f"            {count},",
             f"            {zero},",
             "        ); }",
@@ -265,12 +265,12 @@ def _indexed_load(case: ValueTestCasePlan) -> str:
         lines.append(f"        for i in 0..{lanes} {{ source[i] = source_in[i]; }}")
         lines.append(
             f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}"
-            f"::<Vec, Indices, {scale}, {lanes}>(mask, data.as_mut_ptr(), idx, source) }};"
+            f"::<Vec, Indices, {scale}, {lanes}>(mask, data.as_ptr(), idx, source) }};"
         )
     else:
         lines.append(
             f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}"
-            f"::<Vec, Indices, {scale}, {lanes}>(data.as_mut_ptr(), idx) }};"
+            f"::<Vec, Indices, {scale}, {lanes}>(data.as_ptr(), idx) }};"
         )
     lines.extend(
         [

@@ -61,7 +61,7 @@ class RustBackend:
         # `generic_params` (e.g. `PreserveSign`) are free const generics on the arg-trait too.
         gp_decl = "".join(f", const {name}: {typ}" for name, typ, _ in shape.generic_params)
         gp_names = [name for name, _, _ in shape.generic_params]
-        fixed_trait = "".join(f", {n}: {_kind_type(k, 'S')}" for n, k in fixed)
+        fixed_trait = "".join(f", {n}: {_param_kind_type(k, 'S')}" for n, k in fixed)
         trait = (
             f"pub trait {arg_trait}<S: SimdVector{axis_decl}{gp_decl}> {{\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply(self{fixed_trait}) -> {ret};\n"
@@ -104,7 +104,7 @@ class RustBackend:
                 + ">"
             )
             fixed_impl = "".join(
-                f", {n}: {_rust_concrete(spec, k)}" for n, k in fixed
+                f", {n}: {_rust_concrete_param(spec, k)}" for n, k in fixed
             )
             ret_impl = _rust_concrete_result(spec)
             bind = f"let {spec.param_names[vi]} = self;\n        "
@@ -136,7 +136,7 @@ class RustBackend:
         gp_wrap = "".join(f"const {name}: {typ}, " for name, typ, _ in shape.generic_params)
         gp_args = "".join(f", {name}" for name in gp_names)
         wrap_params = ", ".join(
-            (f"{name}: V" if i == vi else f"{name}: {_kind_type(kind, 'S')}")
+            (f"{name}: V" if i == vi else f"{name}: {_param_kind_type(kind, 'S')}")
             for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
         )
         fixed_names = ", ".join(n for n, _ in fixed)
@@ -318,13 +318,17 @@ def _unsafe_call(call: str, enabled: bool) -> str:
 
 
 def _free_kind_type(kind: str, base_spelling: str) -> str:
-    """A free function's kind -> concrete Rust type (no `Self` projection). `ptr` is the base
-    spelling (the `ptr` tag spells `*mut core::ffi::c_void`); `usize` a size; `void` unit."""
+    """A free function's kind -> concrete Rust type (no `Self` projection). Pointer spellings
+    carry their own mutability; `usize` is a size; `void` is unit."""
 
     if kind == "void":
         return "()"
     if kind == "usize":
         return "usize"
+    if DEFAULT_SUPPORT_POLICY.is_const_pointer_kind(kind):
+        if base_spelling.startswith("*mut "):
+            return "*const " + base_spelling[len("*mut ") :]
+        return f"*const {base_spelling}"
     return base_spelling
 
 
@@ -421,8 +425,12 @@ def _rust_concrete(spec: LoweredSpecialization, kind: str) -> str:
             uses_sized_vector=spec.uses_sized_vector,
             lane_parameter=spec.lane_parameter,
         )
-    if kind in DEFAULT_SUPPORT_POLICY.pointer_kinds:
+    if DEFAULT_SUPPORT_POLICY.is_const_pointer_kind(kind):
+        return f"*const {base}"
+    if DEFAULT_SUPPORT_POLICY.is_mutable_pointer_kind(kind):
         return f"*mut {base}"
+    if DEFAULT_SUPPORT_POLICY.is_borrowed_parameter_kind(kind):
+        return _rust_concrete_array(spec)
     if kind == "void":
         return "()"
     if kind == "m":  # not reached by current overloads (store/shift vary in v/s)
@@ -444,8 +452,19 @@ def _rust_concrete(spec: LoweredSpecialization, kind: str) -> str:
     return base  # s
 
 
+def _rust_concrete_param(spec: LoweredSpecialization, kind: str) -> str:
+    if DEFAULT_SUPPORT_POLICY.is_borrowed_parameter_kind(kind):
+        return f"&{_rust_concrete_array(spec)}"
+    return _rust_concrete(spec, kind)
+
+
 def _rust_concrete_result(spec: LoweredSpecialization) -> str:
     return _rust_concrete(spec, spec.result_kind)
+
+
+def _rust_concrete_array(spec: LoweredSpecialization) -> str:
+    lane_parameter = spec.lane_parameter
+    return f"array_type<{spec.base_type_spelling}, {lane_parameter}>"
 
 
 def _vector_type(spec: LoweredSpecialization) -> str:
@@ -456,14 +475,13 @@ def _vector_type(spec: LoweredSpecialization) -> str:
 
 
 def _kind_type(kind: str, owner: str) -> str:
-    if kind in DEFAULT_SUPPORT_POLICY.pointer_kinds:
+    if DEFAULT_SUPPORT_POLICY.is_const_pointer_kind(kind):
+        return f"*const {owner}::BaseType"
+    if DEFAULT_SUPPORT_POLICY.is_mutable_pointer_kind(kind):
         return f"*mut {owner}::BaseType"
     if kind == "void":
         return "()"
-    if kind in (
-        "s[]",
-        DEFAULT_SUPPORT_POLICY.lane_list_kind,
-    ):
+    if kind in ("s[]", DEFAULT_SUPPORT_POLICY.lane_list_kind):
         return f"{owner}::Array"
     if kind == "usize":  # a fixed count type, not a vector projection
         return "usize"
@@ -476,6 +494,12 @@ def _kind_type(kind: str, owner: str) -> str:
         "im": "ImaskType",
     }[kind]
     return f"{owner}::{suffix}"
+
+
+def _param_kind_type(kind: str, owner: str) -> str:
+    if DEFAULT_SUPPORT_POLICY.is_borrowed_parameter_kind(kind):
+        return f"&{owner}::Array"
+    return _kind_type(kind, owner)
 
 
 def _params(
@@ -500,7 +524,7 @@ def _params(
         elif kind == DEFAULT_SUPPORT_POLICY.index_vector_kind:
             typ = vidx_type
         else:
-            typ = _kind_type(kind, owner)
+            typ = _param_kind_type(kind, owner)
         parts.append(f"{name}: {typ}")
     return ", ".join(parts)
 

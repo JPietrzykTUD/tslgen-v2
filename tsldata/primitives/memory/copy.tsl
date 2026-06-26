@@ -1,4 +1,4 @@
-prim<void:=(ptr,ptr,s,s)> memory_cp(dst, src, count_bytes, copy_kind):
+prim<void:=(ptr,cptr,s,s)> memory_cp(dst, src, count_bytes, copy_kind):
   brief_description "Copy memory."
   operation ""
   tests:

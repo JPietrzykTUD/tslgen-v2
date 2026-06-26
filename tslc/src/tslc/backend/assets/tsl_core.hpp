@@ -127,14 +127,16 @@ struct alignas(Align) array_type {
     std::array<T, N> _storage;
     T *data() { return _storage.data(); }
     const T *data() const { return _storage.data(); }
+    const T *as_ptr() const { return _storage.data(); }
+    T *as_mut_ptr() { return _storage.data(); }
     T &operator[](std::size_t i) { return _storage[i]; }
     const T &operator[](std::size_t i) const { return _storage[i]; }
     void fill(const T &value) { _storage.fill(value); }
 };
 
-// The array type a vector lowers to (to_array's result / from_array's argument): one
-// element per lane, over-aligned to the register. Derived from the register/base sizes,
-// so it matches the body's explicit `array_type<base, length, alignment>`.
+// The array type a vector lowers to (to_array's owned result / from_array's read-only
+// input): one element per lane, over-aligned to the register. Derived from the register/base
+// sizes, so it matches the body's explicit `array_type<base, length, alignment>`.
 template <class Vec>
 struct array_for {
     // Element-aligned (not register-aligned) so the array type is identical across extensions
@@ -143,6 +145,11 @@ struct array_for {
     using type = array_type<typename Vec::base_type,
                             sizeof(typename Vec::register_type) / sizeof(typename Vec::base_type),
                             alignof(typename Vec::base_type)>;
+};
+
+template <class Vec>
+struct array_param {
+    using type = const typename array_for<Vec>::type &;
 };
 
 // Format a lane array into a text buffer (the `to_ostream` body). `modifier` selects the base
@@ -202,6 +209,11 @@ struct simd<T, generic<LANES>> {
     // Integral mask: the same 64-bit bitset (LANES is a template param, so the lane count
     // can't size a smaller integer at this point).
     using imask_type = std::uint64_t;
+};
+
+template <class T, std::size_t LANES>
+struct reg_param<simd<T, generic<LANES>>> {
+    using type = const typename simd<T, generic<LANES>>::register_type &;
 };
 
 // Scalar-core helpers used by emulated (loop) bodies. Grows one function at a time as the

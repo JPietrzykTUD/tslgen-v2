@@ -650,7 +650,7 @@ def _test_inputs(
         return ()
     args: list[TestArg] = []
     param_kinds = shape.param_kinds if shape is not None else ()
-    if param_kinds == ("ptr+",):
+    if param_kinds in {("ptr+",), ("cptr+",)}:
         flat_values = tuple(
             item.text for item in field.value.items if isinstance(item, ParsedTslScalarValue)
         )

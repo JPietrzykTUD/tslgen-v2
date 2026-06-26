@@ -2347,8 +2347,89 @@ docs/agent/runs/tslc-primitive-finalization-closure-completion-review-prompt.md
 Active prompt:
 
 ```text
-docs/agent/runs/tslc-source-specialization-fallback-audit-review-prompt.md
+docs/agent/runs/tslc-const-pointer-array-param-review-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.
 Use `docs/redesign/implementation-roadmap.md` for older milestone history.
+
+## Active Const Pointer And Array Parameter Slice
+
+The current implementation slice makes pointer mutability and array-like
+parameter ownership explicit in typed compiler data:
+
+- `ptr`/`ptr+` are mutable pointer kinds;
+- `cptr`/`cptr+` are read-only pointer kinds;
+- `s[]` and `lanes<s>` parameters are read-only generated parameters;
+- `s[]` results remain owned return values.
+
+Implementation notes:
+
+1. `SupportPolicy` owns const/mutable pointer kind sets and borrowed
+   array-like parameter kinds.
+2. Catalog signature parsing accepts `cptr`; `cptr+` remains a vector-axis
+   pointer-conversion kind.
+3. Lowering builds catalog-derived borrowed argument positions and Rust
+   `CallLowerer` uses those typed positions to borrow `s[]`/`lanes<s>` call
+   arguments.
+4. C++ renders array/lane-list params through `array_param<Vec>` and keeps
+   owned `array_for<Vec>::type` results. Generic vector register params use
+   `reg_param` by const reference while real SIMD registers remain by value.
+5. Rust separates parameter types from value/result types so `&S::Array`
+   appears only in parameter positions.
+6. Read-side memory signatures in `tsldata` now use `cptr`/`cptr+`; stores,
+   scatter, and destination pointers keep `ptr`.
+7. `from_array` no longer creates a local copy and reads from `data.as_ptr()`.
+8. Build verification now isolates generated-project toolchain scratch more
+   carefully: value-test build/run checks are run serially by `verify.sh`,
+   generated-build pytest basetemps default to `/tmp/tslc-verify`, and Zig
+   compiler caches are per-command-root directories under `/tmp/tslc-zig-cache`.
+   This avoids workspace-mount failures from ambient `CXX="zig c++"` while
+   keeping regular non-build pytest scratch under `tslctmp`.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+```
+
+Result: passed.
+
+```text
+python -m pytest -q tslc/tests/test_support_policy.py tslc/tests/test_lane_lists.py tslc/tests/test_generation_conditionals.py tslc/tests/test_value_test_planning.py
+```
+
+Result: `58 passed`.
+
+```text
+python -m pytest -q tslc/tests/test_build_verify_config.py tslc/tests/test_generation_conditionals.py tslc/tests/test_lane_lists.py
+```
+
+Result: `52 passed`.
+
+```text
+python -m pytest -q --basetemp=/tmp/tslc-build-after-cachefix-fresh8 tslc/tests/test_build_verify.py::test_to_from_array_roundtrip_builds tslc/tests/test_build_verify.py::test_load_store_builds tslc/tests/test_build_verify.py::test_convert_builds tslc/tests/test_build_verify.py::test_gather_scatter_builds tslc/tests/test_build_verify.py::test_masked_load_store_build tslc/tests/test_build_verify.py::test_masked_memory_build tslc/tests/test_build_verify.py::test_memory_cp_builds tslc/tests/test_build_verify.py::test_set_builds
+```
+
+Result: `8 passed`.
+
+```text
+python -m pytest -q --basetemp=/tmp/tslc-value-after-env-force tslc/tests/test_value_tests.py
+```
+
+Result: `5 passed`.
+
+```text
+./verify.sh
+```
+
+Result: passed all targeted validations: `235` regular non-build tests
+collected, `5` value-test build/run checks run serially, and `53`
+generated-build tests passed across the generated-build shards.
+
+Note: intermediate verification attempts exposed two environment issues, not
+generated-code regressions. First, running value-test build/run checks in
+parallel with other shards oversubscribed the host and produced transient
+toolchain failures. Second, `zig c++` failed when CMake build trees and Zig
+caches lived under the workspace mount. The final wrapper runs value tests
+serially and keeps generated-build temp roots/Zig caches under `/tmp`.

@@ -593,7 +593,7 @@ prim<v:=(lanes<s>)> set(values):
                loop<backend>(i, 0, value<generation>(vector::length), 1)  {
                 data[i] = cast<static>(type<generation>(base::in), values[value<generation>(vector::length) - 1 - i]);
               }
-               complete(call<primitive=load[Vec], attrs[aligned=false]>(data.data())) ;
+               complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr())) ;
             """
     scalar:
       arith:

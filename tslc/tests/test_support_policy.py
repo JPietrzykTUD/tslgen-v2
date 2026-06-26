@@ -14,6 +14,7 @@ def test_policy_owns_backend_and_signature_support() -> None:
     assert policy.supports_backend("cpp")
     assert not policy.supports_backend("c17")
     assert policy.supports_signature(parse_signature("v:=(ptr,vidx,sImm)"))
+    assert policy.supports_signature(parse_signature("v:=(cptr,vidx,sImm)"))
     lane_list_shape = parse_signature("v:=(lanes<s>)")
     assert lane_list_shape is not None
     assert lane_list_shape.param_kinds == ("lanes<s>",)
@@ -32,7 +33,7 @@ def test_policy_owns_backend_and_signature_support() -> None:
 def test_policy_owns_mask_forms() -> None:
     policy = DEFAULT_SUPPORT_POLICY
     add_shape = parse_signature("v:=(m,v,v)")
-    gather_shape = parse_signature("v:=(m,ptr,vidx,v,sImm)")
+    gather_shape = parse_signature("v:=(m,cptr,vidx,v,sImm)")
     assert add_shape is not None
     assert gather_shape is not None
 

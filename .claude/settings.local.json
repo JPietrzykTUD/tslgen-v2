@@ -6,7 +6,22 @@
       "Bash(timeout 590 python -m pytest -q -p no:cacheprovider tslc/tests/test_value_tests.py)",
       "Bash(cd /workspaces/tslgen-v99; grep -n \"def function_name\\\\|def sanitize\" tslc/src/tslc/value_tests/case_helpers.py; sed -n '/def function_name/,/^def /p' tslc/src/tslc/value_tests/case_helpers.py)",
       "Bash(git show *)",
-      "Bash(python -m pytest tests/test_catalog.py tests/test_catalog_validation.py -q)"
+      "Bash(python -m pytest tests/test_catalog.py tests/test_catalog_validation.py -q)",
+      "Bash(cd /workspaces/tslgen-v99; echo \"=== function_name signature + body ===\"; grep -n \"def function_name\" tslc/src/tslc/value_tests/case_helpers.py; sed -n \"/def function_name/,/return/p\" tslc/src/tslc/value_tests/case_helpers.py | head -8; echo \"=== call sites \\(do they pass name,index?\\) ===\"; grep -rn \"function_name\\(\" tslc/src/tslc/value_tests/case_plans.py | head -3)",
+      "Bash(PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --primitives load,store --profiles skylake --backends cpp --output-root tslctmp/mm)",
+      "Bash(cmake -S cpp -B b -DTSL_PROFILE=skylake)",
+      "Bash(cmake --build b --target tsl_smoke)",
+      "Bash(cmake --build b --target tsl_values)",
+      "Bash(python -m pytest -q -p no:cacheprovider tslc/tests/test_build_verify.py -k \"masked_memory or full_corpus\")",
+      "Bash(python -m pytest -q -p no:cacheprovider tslc/tests/test_value_tests.py)",
+      "Bash(ruff check *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(grep \"\\\\.py$\")",
+      "Bash(python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests)",
+      "Bash(timeout 590 python -m pytest -q -p no:cacheprovider tslc/tests/test_build_verify.py::test_full_corpus_builds tslc/tests/test_value_tests.py)",
+      "Bash(python -m pytest -q -p no:cacheprovider \"tslc/tests/test_value_tests.py::test_golden_value_tests_build_and_pass\")",
+      "Bash(python -m pytest -q -p no:cacheprovider \"tslc/tests/test_value_tests.py::test_golden_value_tests_build_and_pass\" \"tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_rust_builds\")"
     ],
     "additionalDirectories": [
       "/workspaces/tslgen-v99/tslc/src/tslc/value_tests"

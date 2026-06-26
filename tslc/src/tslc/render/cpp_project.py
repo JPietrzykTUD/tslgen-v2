@@ -207,10 +207,12 @@ def _concrete_arg_type(vec: str, kind: str) -> str:
         return f"{vec}::register_type"
     if kind == "m":
         return f"{vec}::mask_type"
-    if kind in DEFAULT_SUPPORT_POLICY.pointer_kinds:
+    if DEFAULT_SUPPORT_POLICY.is_const_pointer_kind(kind):
+        return f"{vec}::base_type const *"
+    if DEFAULT_SUPPORT_POLICY.is_mutable_pointer_kind(kind):
         return f"{vec}::base_type *"
-    if kind == DEFAULT_SUPPORT_POLICY.lane_list_kind:
-        return f"::tsl::array_for<{vec}>::type"
+    if kind in {"s[]", DEFAULT_SUPPORT_POLICY.lane_list_kind}:
+        return f"::tsl::array_param<{vec}>::type"
     return f"{vec}::base_type"
 
 

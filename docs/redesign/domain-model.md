@@ -669,14 +669,16 @@ Supported terms observed in repository evidence include:
 - `m`: mask
 - `s`: scalar
 - `sImm`: scalar immediate
-- `ptr`: pointer
+- `ptr`: mutable pointer
+- `cptr`: read-only pointer
 - `vidx`: vector index
 - `void`: no return value
 - `o`: output stream
 - `sequence`: sequence value
 - `s[]`: scalar array
 - `v[idx]`: indexed vector element
-- `ptr+`: pointer with conversion semantics
+- `ptr+`: mutable pointer with conversion semantics
+- `cptr+`: read-only pointer with conversion semantics
 - `s...`: repeated scalar parameters
 
 Invariants:

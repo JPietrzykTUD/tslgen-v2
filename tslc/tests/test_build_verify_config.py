@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 import json
+import sys
+import tempfile
+from pathlib import Path
 
 from tslc.output.verify import (
     BuildCommand,
@@ -13,6 +14,7 @@ from tslc.output.verify import (
     VerifyBackend,
     VerifyProfile,
     VerifyProject,
+    run_subprocess_build_command,
     verify_generated_project,
 )
 
@@ -137,6 +139,8 @@ def test_rust_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
     assert [command.step for command in seen] == ["preflight", "test"]
     assert seen[0].argv[0] == sys.executable
     assert _env(seen[1])["RUSTC"] == sys.executable
+    assert "--target-dir" in seen[1].argv
+    assert str(tmp_path / "rust" / "target" / "scalar") in seen[1].argv
 
 
 def test_rust_verifier_skips_after_failed_preflight(
@@ -198,6 +202,58 @@ def test_rust_verifier_skips_missing_explicit_compiler(tmp_path: Path) -> None:
     assert report.diagnostics == ()
     assert seen == []
     assert report.skipped == ("rust: Rust compiler /definitely/missing/rustc not found",)
+
+
+def test_subprocess_runner_closes_command_stdin(tmp_path: Path) -> None:
+    command = BuildCommand(
+        backend_id="rust",
+        profile_name="unit",
+        step="stdin",
+        argv=(
+            sys.executable,
+            "-c",
+            "import sys; data = sys.stdin.read(); print('empty' if data == '' else 'nonempty')",
+        ),
+        cwd=tmp_path,
+    )
+
+    result = run_subprocess_build_command(command)
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "empty"
+
+
+def test_subprocess_runner_defaults_zig_cache_under_command_root(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ZIG_LOCAL_CACHE_DIR", "/shared/zig-local")
+    monkeypatch.setenv("ZIG_GLOBAL_CACHE_DIR", "/shared/zig-global")
+    command = BuildCommand(
+        backend_id="cpp",
+        profile_name="unit",
+        step="env",
+        argv=(
+            sys.executable,
+            "-c",
+            "import os; print(os.environ['ZIG_LOCAL_CACHE_DIR']); print(os.environ['ZIG_GLOBAL_CACHE_DIR'])",
+        ),
+        cwd=tmp_path,
+    )
+
+    result = run_subprocess_build_command(command)
+
+    assert result.returncode == 0
+    local_cache, global_cache = result.stdout.splitlines()
+    expected_root = Path(tempfile.gettempdir()) / "tslc-zig-cache"
+    assert local_cache != "/shared/zig-local"
+    assert global_cache != "/shared/zig-global"
+    assert Path(local_cache).is_dir()
+    assert Path(global_cache).is_dir()
+    assert Path(local_cache).is_relative_to(expected_root)
+    assert Path(global_cache).is_relative_to(expected_root)
+    assert Path(local_cache).name == "local"
+    assert Path(global_cache).name == "global"
 
 
 def test_cpp_value_test_run_can_be_wrapped_with_sde(tmp_path: Path) -> None:
@@ -383,6 +439,8 @@ def test_rust_value_tests_run_built_binaries_through_sde(tmp_path: Path) -> None
     assert [command.step for command in seen] == ["preflight", "build-tests", "test"]
     assert "--no-run" in seen[1].argv
     assert "--message-format=json" in seen[1].argv
+    assert "--target-dir" in seen[1].argv
+    assert str(tmp_path / "rust" / "target" / "avx2") in seen[1].argv
     assert seen[1].argv[0] == "cargo"
     assert seen[2].argv == (sys.executable, "-hsw", "--", executable)
 

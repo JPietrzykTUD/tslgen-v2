@@ -4153,7 +4153,7 @@ does not resolve raw symbol names.
 | `v:=(m,v)` | `mask=zero, op` omitted or `op=keep` | `masked_unary` |
 | `v:=()` | `value=undef` | `set_undef` |
 | `v:=()` | otherwise valid | `set_zero` |
-| `v:=ptr` | `aligned=true|false` | `load` |
+| `v:=cptr` | `aligned=true|false` | `load` |
 | `void:=(ptr,v)` | `aligned=true|false` | `store` |
 | `v:=(v,sImm)` | `cast=convert, direction=up` | `convert_up` |
 | `v:=(v,sImm)` | `cast=convert, direction=down` | `convert_down` |
@@ -4184,6 +4184,11 @@ If no rule matches, emit a diagnostic containing primitive name, signature, attr
 - The old `arg_count(<param>)=return_vector_length`, `v:=s...`,
   `pack<expand>`, and `pack<first>` forms are not production-supported for new
   source. `pack<...>` is intentionally quarantined as unsupported TSIL.
+- Pointer mutability is encoded by typed signature kind: `ptr`/`ptr+` are
+  mutable output/input-output pointer terms, while `cptr`/`cptr+` are
+  read-only pointer terms. Array-like input terms (`s[]` and `lanes<s>`) are
+  read-only parameters in generated wrappers; array results such as `s[]:=v`
+  remain owned return values.
 - Template-specific required fields from `tsldata/detail/templates.tsl` must be present after template resolution.
 
 ## Wildcard Expansion

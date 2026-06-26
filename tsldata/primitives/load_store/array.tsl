@@ -209,8 +209,7 @@ prim<v:=s[]> from_array(data):
           reasons []
         implementation:
           tsil """
-            var<infer>(local_data, data);
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(local_data.data()));
+            complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
           """
     sve:
       arith:
@@ -221,8 +220,7 @@ prim<v:=s[]> from_array(data):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<infer>(local_data, data);
-            complete(intrin<svld1>(call<primitive=mask_true[Vec]>(), local_data.data()));
+            complete(intrin<svld1>(call<primitive=mask_true[Vec]>(), data.as_ptr()));
           """
     [sse, avx2, avx512, neon]:
       arith:
@@ -237,8 +235,7 @@ prim<v:=s[]> from_array(data):
           reasons []
         implementation:
           tsil """
-            var<infer>(local_data, data);
-            complete(call<primitive=load[Vec], attrs[aligned=false]>(local_data.data()));
+            complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
           """
 prim<s:=v[idx]> extract_value(a):
   brief_description "Extracts a value at a given index."

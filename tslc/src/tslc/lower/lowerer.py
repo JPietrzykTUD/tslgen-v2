@@ -150,6 +150,7 @@ class _LowererCatalogFacts:
     primitive_axes: MappingProxyType[str, tuple[str, ...]]
     primitive_arg_generics: MappingProxyType[str, int]
     primitive_caller_unsafe: MappingProxyType[str, bool]
+    primitive_borrowed_arg_positions: MappingProxyType[str, tuple[int, ...]]
     policy_split_names: frozenset[str]
     immediate_split_names: frozenset[str]
 
@@ -164,6 +165,9 @@ class _LowererCatalogFacts:
             primitive_arg_generics=MappingProxyType(_primitive_arg_generics(catalog)),
             primitive_caller_unsafe=MappingProxyType(
                 _primitive_caller_unsafe(catalog, support)
+            ),
+            primitive_borrowed_arg_positions=MappingProxyType(
+                _primitive_borrowed_arg_positions(catalog, support)
             ),
             policy_split_names=policy_split_names(catalog, support),
             immediate_split_names=immediate_split_names(catalog, support),
@@ -285,6 +289,9 @@ class Lowerer:
                 primitive_axes=catalog_facts.primitive_axes,
                 primitive_arg_generics=catalog_facts.primitive_arg_generics,
                 primitive_caller_unsafe=catalog_facts.primitive_caller_unsafe,
+                primitive_borrowed_arg_positions=(
+                    catalog_facts.primitive_borrowed_arg_positions
+                ),
                 policy_split_names=catalog_facts.policy_split_names,
                 immediate_split_names=catalog_facts.immediate_split_names,
                 current_primitive=selected.primitive.name,
@@ -306,7 +313,7 @@ class Lowerer:
             effects=LoweringEffects(),
         )
 
-        # Dereferencing a raw pointer is `unsafe` in Rust, so a `ptr`/`ptr+`-taking body needs
+        # Dereferencing a raw pointer is `unsafe` in Rust, so a pointer-taking body needs
         # the unsafe frame even when it uses no intrinsics (e.g. scalar `*ptr = data;`).
         # Raw-pointer APIs also require callers to uphold pointer validity.
         if self._support.requires_unsafe_frame(shape):
@@ -761,6 +768,30 @@ def _primitive_caller_unsafe(
     return values
 
 
+def _primitive_borrowed_arg_positions(
+    catalog: Catalog,
+    support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
+) -> dict[str, tuple[int, ...]]:
+    """Callee argument positions that Rust passes by read-only borrow.
+
+    This is a catalog view over signature kinds, not a primitive-name rule. C++ can
+    bind these same arguments through `const&` without changing call spelling.
+    """
+
+    positions_by_name: dict[str, set[int]] = {}
+    for primitive in catalog.primitives:
+        shape = parse_signature(primitive.signature)
+        if shape is None:
+            continue
+        for index, kind in enumerate(shape.param_kinds):
+            if support.is_borrowed_parameter_kind(kind):
+                positions_by_name.setdefault(primitive.name, set()).add(index)
+    return {
+        name: tuple(sorted(positions))
+        for name, positions in sorted(positions_by_name.items())
+    }
+
+
 def varying_positions(specs: tuple[LoweredSpecialization, ...]) -> tuple[int, ...]:
     """Parameter positions whose kind differs across a primitive's signatures — the
     dispatch points of an overload (e.g. store's `(ptr,v)`/`(ptr,s)` vary at position 1).
@@ -788,7 +819,13 @@ def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
         if kind == "m":
             return "mask"
         if kind in DEFAULT_SUPPORT_POLICY.pointer_kinds:
-            return "ptr"
+            return (
+                "const_ptr"
+                if DEFAULT_SUPPORT_POLICY.is_const_pointer_kind(kind)
+                else "ptr"
+            )
+        if kind == "s[]":
+            return "array"
         if kind == DEFAULT_SUPPORT_POLICY.lane_list_kind:
             return "lane_list"
         return "base"  # s
