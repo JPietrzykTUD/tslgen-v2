@@ -68,14 +68,39 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--qemu-aarch64",
+        nargs="?",
+        const="/usr/bin/qemu-aarch64",
+        default=None,
+        help=(
+            "run value-test executables for qemu-aarch64-annotated profiles "
+            "through QEMU user-mode; optionally pass the executable path"
+        ),
+    )
+    parser.add_argument(
         "--cpp-compiler",
         default=None,
         help="C++ compiler command for build verification, e.g. /usr/bin/c++",
     )
     parser.add_argument(
+        "--cpp-target",
+        default=None,
+        help="optional C++ target triple override for build verification",
+    )
+    parser.add_argument(
         "--rust-compiler",
         default=None,
         help="Rust compiler executable for build verification, e.g. rustc",
+    )
+    parser.add_argument(
+        "--rust-target",
+        default=None,
+        help="optional Rust target triple override for build verification",
+    )
+    parser.add_argument(
+        "--rust-linker",
+        default=None,
+        help="optional Rust target linker override for build verification",
     )
     parser.add_argument(
         "--coverage", action="store_true", help="print a behavior-coverage report"
@@ -140,8 +165,12 @@ def main(argv: list[str] | None = None) -> int:
 
         if (args.verify or args.test) and result.rendered is not None:
             if args.test:
-                if args.sde:
-                    print(f"building and running generated value tests through Intel SDE: {args.sde}")
+                emulators = _configured_emulator_labels(args.sde, args.qemu_aarch64)
+                if emulators:
+                    print(
+                        "building and running generated value tests through "
+                        + ", ".join(emulators)
+                    )
                 else:
                     print("building and running generated value tests")
             verify_report = verify_project(
@@ -151,6 +180,10 @@ def main(argv: list[str] | None = None) -> int:
                 rust_compiler=args.rust_compiler,
                 run_value_tests=args.test,
                 sde_path=args.sde,
+                qemu_aarch64_path=args.qemu_aarch64,
+                cpp_target=args.cpp_target,
+                rust_target=args.rust_target,
+                rust_linker=args.rust_linker,
             )
             for note in verify_report.skipped:
                 print(f"[verify-skip] {note}", file=sys.stderr)
@@ -170,6 +203,15 @@ def main(argv: list[str] | None = None) -> int:
 
 def _split(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _configured_emulator_labels(sde: str | None, qemu_aarch64: str | None) -> list[str]:
+    labels: list[str] = []
+    if sde:
+        labels.append(f"Intel SDE: {sde}")
+    if qemu_aarch64:
+        labels.append(f"qemu-aarch64: {qemu_aarch64}")
+    return labels
 
 
 def _print_test_output(report: BuildVerificationReport) -> None:

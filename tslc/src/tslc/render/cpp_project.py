@@ -11,7 +11,7 @@ from tslc.catalog.model import Extension
 from tslc.catalog.signatures import is_free_function_signature
 from tslc.lower.lowerer import varying_positions
 from tslc.output.artifacts import Artifact
-from tslc.output.verify import VerifyProfile
+from tslc.output.verify import VerifyEmulator, VerifyProfile
 from tslc.render._common import asset, feature_spelling, fill_asset, slug, text, used_exts
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
@@ -68,16 +68,48 @@ def cpp_verify_profiles(profiles: tuple[ProfileRender, ...]) -> tuple[VerifyProf
             file_stem=slug(profile_render.profile.name),
             family=profile_render.profile.family,
             cpp_flags=cpp_flags(profile_render.profile),
-            sde=profile_render.profile.sde,
+            cpp_target=cpp_target(profile_render.profile),
+            emulator=_verify_emulator(profile_render.profile),
         )
         for profile_render in profiles
     )
 
 
 def cpp_flags(profile: MachineProfile) -> tuple[str, ...]:
+    if profile.family == "aarch64":
+        return _aarch64_cpp_flags(profile)
     return tuple(
         f"-m{feature_spelling(feature, profile.alternatives)}"
         for feature in sorted(profile.features)
+    )
+
+
+def cpp_target(profile: MachineProfile) -> str | None:
+    return "aarch64-linux-gnu" if profile.family == "aarch64" else None
+
+
+def _aarch64_cpp_flags(profile: MachineProfile) -> tuple[str, ...]:
+    features = {
+        feature_spelling(feature, profile.alternatives)
+        for feature in profile.features
+    }
+    extensions: list[str] = []
+    if "asimd" in features:
+        extensions.append("simd")
+    if "sve" in features:
+        extensions.append("sve")
+    if not extensions:
+        return ("-march=armv8-a",)
+    return (f"-march=armv8-a+{'+'.join(sorted(extensions))}",)
+
+
+def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
+    if profile.emulator is None:
+        return None
+    return VerifyEmulator(
+        kind=profile.emulator.kind,
+        profile=profile.emulator.profile,
+        args=profile.emulator.args,
     )
 
 

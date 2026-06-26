@@ -101,6 +101,10 @@ def verify_project(
     rust_compiler: str | None = None,
     run_value_tests: bool = False,
     sde_path: str | None = None,
+    qemu_aarch64_path: str | None = None,
+    cpp_target: str | None = None,
+    rust_target: str | None = None,
+    rust_linker: str | None = None,
 ) -> BuildVerificationReport:
     return verify_generated_project(
         Path(output_root),
@@ -110,5 +114,9 @@ def verify_project(
             rust_compiler=rust_compiler,
             run_value_tests=run_value_tests,
             sde_path=sde_path,
+            qemu_aarch64_path=qemu_aarch64_path,
+            cpp_target=cpp_target,
+            rust_target=rust_target,
+            rust_linker=rust_linker,
         ),
     )

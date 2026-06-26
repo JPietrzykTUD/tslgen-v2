@@ -10,7 +10,7 @@ from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
-from tslc.output.verify import VerifyProfile
+from tslc.output.verify import VerifyEmulator, VerifyProfile
 from tslc.render._common import (
     asset,
     feature_spelling,
@@ -66,7 +66,9 @@ def rust_verify_profiles(profiles: tuple[ProfileRender, ...]) -> tuple[VerifyPro
             file_stem=slug(profile_render.profile.name),
             family=profile_render.profile.family,
             rust_target_features=rust_target_features(profile_render.profile),
-            sde=profile_render.profile.sde,
+            rust_target=rust_target(profile_render.profile),
+            rust_linker=rust_linker(profile_render.profile),
+            emulator=_verify_emulator(profile_render.profile),
         )
         for profile_render in profiles
     )
@@ -76,6 +78,24 @@ def rust_target_features(profile: MachineProfile) -> tuple[str, ...]:
     return tuple(
         f"+{feature_spelling(feature, profile.alternatives)}"
         for feature in sorted(profile.features)
+    )
+
+
+def rust_target(profile: MachineProfile) -> str | None:
+    return "aarch64-unknown-linux-musl" if profile.family == "aarch64" else None
+
+
+def rust_linker(profile: MachineProfile) -> str | None:
+    return "rust-lld" if profile.family == "aarch64" else None
+
+
+def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
+    if profile.emulator is None:
+        return None
+    return VerifyEmulator(
+        kind=profile.emulator.kind,
+        profile=profile.emulator.profile,
+        args=profile.emulator.args,
     )
 
 

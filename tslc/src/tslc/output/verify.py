@@ -22,15 +22,25 @@ from tslc.diagnostics import Diagnostic
 
 
 @dataclass(frozen=True, slots=True)
+class VerifyEmulator:
+    kind: str  # "sde" | "qemu-aarch64"
+    profile: str
+    args: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class VerifyProfile:
     profile_name: str
     file_stem: str
     family: str = "generic"
     # C++ extra compile flags (e.g. ("-mavx2", "-mavx")); Rust target features (e.g. ("+avx2",)).
     cpp_flags: tuple[str, ...] = ()
+    cpp_target: str | None = None
     rust_target_features: tuple[str, ...] = ()
-    # Optional Intel SDE chip alias used to run value tests for this profile.
-    sde: str | None = None
+    rust_target: str | None = None
+    rust_linker: str | None = None
+    # Optional emulator profile used to run value tests for this profile.
+    emulator: VerifyEmulator | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,8 +70,14 @@ class BuildVerifierConfig:
     # (`tsl_smoke`), so adding value testing to the standard gate does not double every
     # project's build cost. The dedicated value-test gate opts in.
     run_value_tests: bool = False
-    # Optional Intel SDE executable. Profiles opt in with VerifyProfile.sde.
+    # Optional Intel SDE executable. Profiles opt in with VerifyProfile.emulator.
     sde_path: str | None = None
+    # Optional QEMU user-mode executable for aarch64 profile value tests.
+    qemu_aarch64_path: str | None = None
+    # Optional target overrides. Profile-derived targets are used when unset.
+    cpp_target: str | None = None
+    rust_target: str | None = None
+    rust_linker: str | None = None
 
     @classmethod
     def create(
@@ -71,8 +87,13 @@ class BuildVerifierConfig:
         rust_compiler: str | None = None,
         run_value_tests: bool = False,
         sde_path: str | None = None,
+        qemu_aarch64_path: str | None = None,
+        cpp_target: str | None = None,
+        rust_target: str | None = None,
+        rust_linker: str | None = None,
     ) -> "BuildVerifierConfig":
         normalized_sde_path = _normalize_compiler_executable(sde_path)
+        normalized_qemu_aarch64_path = _normalize_compiler_executable(qemu_aarch64_path)
         normalized_cpp_compiler = _normalize_compiler_command(cpp_compiler)
         if normalized_cpp_compiler is None and normalized_sde_path is not None and run_value_tests:
             # SDE profile tests execute binaries for low-ISA chips. An ambient CXX
@@ -85,6 +106,10 @@ class BuildVerifierConfig:
             rust_compiler=_normalize_compiler_executable(rust_compiler),
             run_value_tests=run_value_tests,
             sde_path=normalized_sde_path,
+            qemu_aarch64_path=normalized_qemu_aarch64_path,
+            cpp_target=_normalize_compiler_executable(cpp_target),
+            rust_target=_normalize_compiler_executable(rust_target),
+            rust_linker=_normalize_compiler_executable(rust_linker),
         )
 
 
@@ -165,11 +190,11 @@ def verify_generated_project(
     diagnostics: list[Diagnostic] = []
     skipped: list[str] = []
 
-    sde_missing = _sde_missing_diagnostic(config)
-    if sde_missing is not None:
+    emulator_missing = _emulator_missing_diagnostic(config)
+    if emulator_missing is not None:
         return BuildVerificationReport(
             commands=(),
-            diagnostics=(sde_missing,),
+            diagnostics=(emulator_missing,),
             skipped=(),
         )
 
@@ -178,13 +203,13 @@ def verify_generated_project(
         if missing is not None:
             skipped.append(f"{backend.backend_id}: {missing} not found")
             continue
-        backend, profile_skips = _filter_sde_verifiable_profiles(backend, config)
+        backend, profile_skips = _filter_emulator_verifiable_profiles(backend, config)
         skipped.extend(profile_skips)
         if not backend.profiles:
             continue
         profiles_by_name = {profile.profile_name: profile for profile in backend.profiles}
         if backend.backend_id == "cpp":
-            compiler = _effective_cpp_compiler(config)
+            compiler = _effective_cpp_compiler(config, backend)
             missing_compiler = _missing_executable(compiler[0])
             if missing_compiler is not None:
                 skipped.append(f"cpp: C++ compiler {missing_compiler} not found")
@@ -222,7 +247,7 @@ def verify_generated_project(
                     break
                 if command.backend_id == "rust" and command.step == "build-tests":
                     profile = profiles_by_name[command.profile_name]
-                    followups, followup_diagnostics = _rust_sde_test_commands(
+                    followups, followup_diagnostics = _rust_emulated_test_commands(
                         result,
                         profile,
                         config,
@@ -254,33 +279,50 @@ def _missing_executable(executable: str) -> str | None:
     return executable if shutil.which(executable) is None else None
 
 
-def _sde_missing_diagnostic(config: BuildVerifierConfig) -> Diagnostic | None:
-    if config.sde_path is None or not config.run_value_tests:
+def _emulator_missing_diagnostic(config: BuildVerifierConfig) -> Diagnostic | None:
+    if not config.run_value_tests:
         return None
-    missing = _missing_executable(config.sde_path)
-    if missing is None:
-        return None
-    return Diagnostic(
-        severity="error",
-        code="TSL-BUILD-VERIFY-SDE-MISSING",
-        message=f"Intel SDE executable {missing} not found",
-    )
+    for kind, executable in (
+        ("sde", config.sde_path),
+        ("qemu-aarch64", config.qemu_aarch64_path),
+    ):
+        if executable is None:
+            continue
+        missing = _missing_executable(executable)
+        if missing is not None:
+            return Diagnostic(
+                severity="error",
+                code="TSL-BUILD-VERIFY-EMULATOR-MISSING",
+                message=f"{kind} emulator executable {missing} not found",
+            )
+    return None
 
 
-def _filter_sde_verifiable_profiles(
+def _filter_emulator_verifiable_profiles(
     backend: VerifyBackend,
     config: BuildVerifierConfig,
 ) -> tuple[VerifyBackend, tuple[str, ...]]:
-    if config.sde_path is None or not config.run_value_tests:
+    configured = _configured_emulator_kinds(config)
+    if not configured or not config.run_value_tests:
         return backend, ()
 
     profiles: list[VerifyProfile] = []
     skipped: list[str] = []
     for profile in backend.profiles:
-        if profile.sde is None and profile.family != "generic":
+        if profile.emulator is None:
+            if profile.family != "generic":
+                skipped.append(
+                    f"{backend.backend_id}: profile {profile.profile_name} has no "
+                    "emulator metadata; value-test verification skipped"
+                )
+            else:
+                profiles.append(profile)
+            continue
+        if profile.emulator.kind not in configured:
             skipped.append(
-                f"{backend.backend_id}: profile {profile.profile_name} has no SDE "
-                "chip alias; value-test verification skipped"
+                f"{backend.backend_id}: profile {profile.profile_name} requires "
+                f"{profile.emulator.kind}, but that emulator is not configured; "
+                "value-test verification skipped"
             )
             continue
         profiles.append(profile)
@@ -292,6 +334,15 @@ def _filter_sde_verifiable_profiles(
         ),
         tuple(skipped),
     )
+
+
+def _configured_emulator_kinds(config: BuildVerifierConfig) -> frozenset[str]:
+    configured: set[str] = set()
+    if config.sde_path is not None:
+        configured.add("sde")
+    if config.qemu_aarch64_path is not None:
+        configured.add("qemu-aarch64")
+    return frozenset(configured)
 
 
 def _command_groups(
@@ -312,12 +363,13 @@ def _cpp_command_groups(
     config: BuildVerifierConfig,
 ) -> tuple[tuple[BuildCommand, ...], ...]:
     project_root = root / backend.root_path
-    env = _cpp_environment(config)
+    env = _cpp_environment(config, backend)
     groups: list[tuple[BuildCommand, ...]] = []
     for profile in backend.profiles:
         build_dir = project_root / "build" / profile.file_stem
+        configure_args = _cpp_configure_args(project_root, build_dir, profile, config)
         commands: list[BuildCommand] = []
-        if config.run_value_tests and config.sde_path is not None:
+        if config.run_value_tests and _configured_emulator_kinds(config):
             commands.append(
                 BuildCommand(
                     backend_id="cpp",
@@ -334,14 +386,7 @@ def _cpp_command_groups(
                     backend_id="cpp",
                     profile_name=profile.profile_name,
                     step="configure",
-                    argv=(
-                        "cmake",
-                        "-S",
-                        str(project_root),
-                        "-B",
-                        str(build_dir),
-                        f"-DTSL_PROFILE={profile.profile_name}",
-                    ),
+                    argv=configure_args,
                     cwd=root,
                     env=env,
                 ),
@@ -376,7 +421,7 @@ def _cpp_command_groups(
                     profile_name=profile.profile_name,
                     step="test",
                     argv=(
-                        *_sde_prefix(profile, config),
+                        *_ctest_prefix(profile, config),
                         "ctest",
                         "--test-dir",
                         str(build_dir),
@@ -411,9 +456,10 @@ def _rust_command_groups(
         if config.run_value_tests:
             features = f"{profile.profile_name},value_tests"
             severity = "warning"
-            if _sde_prefix(profile, config):
+            if _emulator_prefix(profile, config):
                 step = "build-tests"
                 extra_args = ("--no-run", "--message-format=json")
+        target_args = _rust_target_args(profile, config)
         groups.append(
             (
                 BuildCommand(
@@ -428,6 +474,7 @@ def _rust_command_groups(
                         "--no-default-features",
                         "--features",
                         features,
+                        *target_args,
                         "--target-dir",
                         str(target_dir),
                         *extra_args,
@@ -441,21 +488,96 @@ def _rust_command_groups(
     return tuple(groups)
 
 
-def _sde_prefix(
+def _cpp_configure_args(
+    project_root: Path,
+    build_dir: Path,
     profile: VerifyProfile,
     config: BuildVerifierConfig,
 ) -> tuple[str, ...]:
-    if config.sde_path is None or profile.sde is None:
+    args = [
+        "cmake",
+        "-S",
+        str(project_root),
+        "-B",
+        str(build_dir),
+        f"-DTSL_PROFILE={profile.profile_name}",
+    ]
+    target = _cpp_target(profile, config)
+    if target is not None:
+        args.extend(
+            (
+                "-DCMAKE_SYSTEM_NAME=Linux",
+                "-DCMAKE_SYSTEM_PROCESSOR=aarch64",
+                "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
+                f"-DCMAKE_CXX_COMPILER_TARGET={target}",
+            )
+        )
+    cross_emulator = _cmake_cross_emulator(profile, config)
+    if cross_emulator:
+        args.append(f"-DCMAKE_CROSSCOMPILING_EMULATOR={';'.join(cross_emulator)}")
+    return tuple(args)
+
+
+def _cpp_target(profile: VerifyProfile, config: BuildVerifierConfig) -> str | None:
+    return config.cpp_target or profile.cpp_target
+
+
+def _rust_target(profile: VerifyProfile, config: BuildVerifierConfig) -> str | None:
+    return config.rust_target or profile.rust_target
+
+
+def _rust_linker(profile: VerifyProfile, config: BuildVerifierConfig) -> str | None:
+    return config.rust_linker or profile.rust_linker
+
+
+def _rust_target_args(profile: VerifyProfile, config: BuildVerifierConfig) -> tuple[str, ...]:
+    target = _rust_target(profile, config)
+    return ("--target", target) if target is not None else ()
+
+
+def _ctest_prefix(
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+) -> tuple[str, ...]:
+    if profile.emulator is None or profile.emulator.kind != "sde":
         return ()
-    return (config.sde_path, f"-{profile.sde}", "--")
+    return _emulator_prefix(profile, config)
 
 
-def _rust_sde_test_commands(
+def _cmake_cross_emulator(
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+) -> tuple[str, ...]:
+    if profile.emulator is None or profile.emulator.kind != "qemu-aarch64":
+        return ()
+    prefix = _emulator_prefix(profile, config)
+    return prefix
+
+
+def _emulator_prefix(
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+) -> tuple[str, ...]:
+    emulator = profile.emulator
+    if emulator is None:
+        return ()
+    if emulator.kind == "sde":
+        if config.sde_path is None:
+            return ()
+        return (config.sde_path, f"-{emulator.profile}", *emulator.args, "--")
+    if emulator.kind == "qemu-aarch64":
+        if config.qemu_aarch64_path is None:
+            return ()
+        return (config.qemu_aarch64_path, "-cpu", emulator.profile, *emulator.args)
+    return ()
+
+
+def _rust_emulated_test_commands(
     result: BuildCommandResult,
     profile: VerifyProfile,
     config: BuildVerifierConfig,
 ) -> tuple[tuple[BuildCommand, ...], tuple[Diagnostic, ...]]:
-    prefix = _sde_prefix(profile, config)
+    prefix = _emulator_prefix(profile, config)
     if not prefix:
         return (), ()
 
@@ -517,11 +639,28 @@ def _rust_environment(
     environment: list[BuildCommandEnvironment] = []
     if config.rust_compiler is not None:
         environment.append(BuildCommandEnvironment(key="RUSTC", value=config.rust_compiler))
-    if not profile.rust_target_features:
-        return tuple(environment)
-    joined = ",".join(profile.rust_target_features)
-    environment.append(BuildCommandEnvironment(key="RUSTFLAGS", value=f"-C target-feature={joined}"))
+    target = _rust_target(profile, config)
+    linker = _rust_linker(profile, config)
+    if target is not None and linker is not None:
+        environment.append(
+            BuildCommandEnvironment(
+                key=f"CARGO_TARGET_{_cargo_target_env(target)}_LINKER",
+                value=linker,
+            )
+        )
+    if profile.rust_target_features:
+        joined = ",".join(profile.rust_target_features)
+        environment.append(
+            BuildCommandEnvironment(
+                key="RUSTFLAGS",
+                value=f"-C target-feature={joined}",
+            )
+        )
     return tuple(environment)
+
+
+def _cargo_target_env(target: str) -> str:
+    return target.upper().replace("-", "_")
 
 
 def _normalize_compiler_command(compiler: str | Sequence[str] | None) -> tuple[str, ...] | None:
@@ -541,9 +680,14 @@ def _normalize_compiler_executable(compiler: str | None) -> str | None:
     return normalized or None
 
 
-def _effective_cpp_compiler(config: BuildVerifierConfig) -> tuple[str, ...]:
+def _effective_cpp_compiler(
+    config: BuildVerifierConfig,
+    backend: VerifyBackend | None = None,
+) -> tuple[str, ...]:
     if config.cpp_compiler is not None:
         return config.cpp_compiler
+    if backend is not None and any(_cpp_target(profile, config) for profile in backend.profiles):
+        return ("clang++",)
     ambient = os.environ.get("CXX")
     if ambient:
         parsed = tuple(shlex.split(ambient))
@@ -563,10 +707,20 @@ def _effective_rust_compiler(config: BuildVerifierConfig) -> str:
     return "rustc"
 
 
-def _cpp_environment(config: BuildVerifierConfig) -> tuple[BuildCommandEnvironment, ...]:
-    if config.cpp_compiler is None:
+def _cpp_environment(
+    config: BuildVerifierConfig,
+    backend: VerifyBackend | None = None,
+) -> tuple[BuildCommandEnvironment, ...]:
+    if config.cpp_compiler is None and not (
+        backend is not None and any(_cpp_target(profile, config) for profile in backend.profiles)
+    ):
         return ()
-    return (BuildCommandEnvironment(key="CXX", value=shlex.join(config.cpp_compiler)),)
+    return (
+        BuildCommandEnvironment(
+            key="CXX",
+            value=shlex.join(_effective_cpp_compiler(config, backend)),
+        ),
+    )
 
 
 def _cpp_preflight_command(

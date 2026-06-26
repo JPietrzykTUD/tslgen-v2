@@ -12,6 +12,7 @@ from tslc.output.verify import (
     BuildCommandResult,
     BuildVerifierConfig,
     VerifyBackend,
+    VerifyEmulator,
     VerifyProfile,
     VerifyProject,
     run_subprocess_build_command,
@@ -266,7 +267,7 @@ def test_cpp_value_test_run_can_be_wrapped_with_sde(tmp_path: Path) -> None:
                     VerifyProfile(
                         profile_name="avx2",
                         file_stem="avx2",
-                        sde="hsw",
+                        emulator=VerifyEmulator(kind="sde", profile="hsw"),
                     ),
                 ),
             ),
@@ -317,7 +318,7 @@ def test_sde_cpp_value_tests_pin_default_compiler_over_ambient_cxx(
                     VerifyProfile(
                         profile_name="sse2",
                         file_stem="sse2",
-                        sde="mrm",
+                        emulator=VerifyEmulator(kind="sde", profile="mrm"),
                     ),
                 ),
             ),
@@ -346,7 +347,7 @@ def test_sde_cpp_value_tests_pin_default_compiler_over_ambient_cxx(
     assert _env(seen[2])["CXX"] == "c++"
 
 
-def test_sde_value_tests_skip_non_generic_profiles_without_sde_alias(
+def test_emulator_value_tests_skip_non_generic_profiles_without_matching_runner(
     tmp_path: Path,
 ) -> None:
     project = VerifyProject(
@@ -359,6 +360,7 @@ def test_sde_value_tests_skip_non_generic_profiles_without_sde_alias(
                         profile_name="neon",
                         file_stem="neon",
                         family="aarch64",
+                        emulator=VerifyEmulator(kind="qemu-aarch64", profile="cortex-a76"),
                     ),
                 ),
             ),
@@ -382,9 +384,119 @@ def test_sde_value_tests_skip_non_generic_profiles_without_sde_alias(
 
     assert report.diagnostics == ()
     assert report.skipped == (
-        "cpp: profile neon has no SDE chip alias; value-test verification skipped",
+        "cpp: profile neon requires qemu-aarch64, but that emulator is not "
+        "configured; value-test verification skipped",
     )
     assert seen == []
+
+
+def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(tmp_path: Path) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="cpp",
+                root_path="cpp",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="neon",
+                        file_stem="neon",
+                        family="aarch64",
+                        cpp_flags=("-march=armv8-a+simd",),
+                        cpp_target="aarch64-linux-gnu",
+                        emulator=VerifyEmulator(kind="qemu-aarch64", profile="cortex-a76"),
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=BuildVerifierConfig.create(
+            run_value_tests=True,
+            qemu_aarch64_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen] == [
+        "preflight",
+        "clean",
+        "configure",
+        "build",
+        "build-values",
+        "test",
+    ]
+    assert seen[0].argv[0] == "clang++"
+    configure = seen[2].argv
+    assert "-DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-gnu" in configure
+    assert (
+        f"-DCMAKE_CROSSCOMPILING_EMULATOR={sys.executable};-cpu;cortex-a76"
+        in configure
+    )
+    assert seen[-1].argv[0] == "ctest"
+
+
+def test_rust_qemu_value_tests_use_target_and_run_binaries(tmp_path: Path) -> None:
+    executable = str(tmp_path / "rust" / "target" / "aarch64" / "deps" / "values")
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="neon",
+                        file_stem="neon",
+                        family="aarch64",
+                        rust_target_features=("+neon",),
+                        rust_target="aarch64-unknown-linux-musl",
+                        rust_linker="rust-lld",
+                        emulator=VerifyEmulator(kind="qemu-aarch64", profile="cortex-a76"),
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        if command.step == "build-tests":
+            return BuildCommandResult(
+                command=command,
+                returncode=0,
+                stdout=json.dumps(
+                    {"reason": "compiler-artifact", "executable": executable}
+                ),
+            )
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=BuildVerifierConfig.create(
+            rust_compiler=sys.executable,
+            run_value_tests=True,
+            qemu_aarch64_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen] == ["preflight", "build-tests", "test"]
+    assert "--target" in seen[1].argv
+    assert "aarch64-unknown-linux-musl" in seen[1].argv
+    env = _env(seen[1])
+    assert env["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER"] == "rust-lld"
+    assert seen[2].argv == (sys.executable, "-cpu", "cortex-a76", executable)
 
 
 def test_rust_value_tests_run_built_binaries_through_sde(tmp_path: Path) -> None:
@@ -399,7 +511,7 @@ def test_rust_value_tests_run_built_binaries_through_sde(tmp_path: Path) -> None
                         profile_name="avx2",
                         file_stem="avx2",
                         rust_target_features=("+avx2",),
-                        sde="hsw",
+                        emulator=VerifyEmulator(kind="sde", profile="hsw"),
                     ),
                 ),
             ),
@@ -451,7 +563,13 @@ def test_rust_sde_value_tests_diagnose_missing_test_binaries(tmp_path: Path) -> 
             VerifyBackend(
                 backend_id="rust",
                 root_path="rust",
-                profiles=(VerifyProfile(profile_name="avx2", file_stem="avx2", sde="hsw"),),
+                profiles=(
+                    VerifyProfile(
+                        profile_name="avx2",
+                        file_stem="avx2",
+                        emulator=VerifyEmulator(kind="sde", profile="hsw"),
+                    ),
+                ),
             ),
         )
     )
@@ -481,7 +599,13 @@ def test_explicit_sde_path_must_exist(tmp_path: Path) -> None:
             VerifyBackend(
                 backend_id="rust",
                 root_path="rust",
-                profiles=(VerifyProfile(profile_name="avx2", file_stem="avx2", sde="hsw"),),
+                profiles=(
+                    VerifyProfile(
+                        profile_name="avx2",
+                        file_stem="avx2",
+                        emulator=VerifyEmulator(kind="sde", profile="hsw"),
+                    ),
+                ),
             ),
         )
     )
@@ -497,7 +621,7 @@ def test_explicit_sde_path_must_exist(tmp_path: Path) -> None:
     )
 
     assert [diagnostic.code for diagnostic in report.diagnostics] == [
-        "TSL-BUILD-VERIFY-SDE-MISSING"
+        "TSL-BUILD-VERIFY-EMULATOR-MISSING"
     ]
 
 

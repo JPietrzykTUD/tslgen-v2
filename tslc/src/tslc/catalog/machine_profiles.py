@@ -23,6 +23,20 @@ _NO_SIMD = "NOSIMD-INVALID"
 
 
 @dataclass(frozen=True, slots=True)
+class MachineProfileEmulator:
+    """Emulator profile metadata for after-write value-test execution.
+
+    Executable paths are deliberately not catalog data; the CLI/verifier provide
+    those. This record only says which emulator family and profile/CPU a machine
+    profile should use when tests cannot run natively.
+    """
+
+    kind: str  # "sde" | "qemu-aarch64"
+    profile: str
+    args: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class MachineProfile:
     name: str
     family: str  # "generic" | "x86" | "aarch64"
@@ -30,9 +44,9 @@ class MachineProfile:
     # feature -> its compiler/target-feature spelling when it differs from the token
     # (e.g. avx512_vpclmulqdq -> vpclmulqdq, neon -> asimd).
     alternatives: Mapping[str, str]
-    # Optional Intel SDE chip alias used by the after-write verifier to run value tests
-    # on hosts that do not support the profile's ISA natively.
-    sde: str | None = None
+    # Optional emulator profile used by the after-write verifier to run value
+    # tests on hosts that do not support the profile's ISA natively.
+    emulator: MachineProfileEmulator | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "alternatives", MappingProxyType(dict(self.alternatives)))
@@ -133,7 +147,7 @@ def load_machine_profiles_checked(path: Path) -> MachineProfileLoadResult:
             fields = _object_fields(entry, path, diagnostics)
             _unknown_fields(
                 fields,
-                {"name", "flags", "alternatives", "sde"},
+                {"name", "flags", "alternatives", "emulator"},
                 path,
                 diagnostics,
                 owner=f"profile entry under {family!r}",
@@ -175,13 +189,13 @@ def load_machine_profiles_checked(path: Path) -> MachineProfileLoadResult:
             )
             alternatives_value = fields.get("alternatives", _JsonObject(()))
             alternatives = _alternatives(name, alternatives_value, path, diagnostics)
-            sde = _sde_chip(name, fields.get("sde"), path, diagnostics)
+            emulator = _emulator(name, fields.get("emulator"), path, diagnostics)
             profiles[name] = MachineProfile(
                 name=name,
                 family=family,
                 features=features,
                 alternatives=alternatives,
-                sde=sde,
+                emulator=emulator,
             )
     return MachineProfileLoadResult(
         profiles=MappingProxyType(profiles),
@@ -267,24 +281,77 @@ def _alternatives(
     return alternatives
 
 
-def _sde_chip(
+def _emulator(
     profile_name: str,
     value: Any,
     path: Path,
     diagnostics: list[Diagnostic],
-) -> str | None:
+) -> MachineProfileEmulator | None:
     if value is None:
         return None
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, _JsonObject):
         diagnostics.append(
             _diagnostic(
                 path,
-                "TSL-PROFILE-MALFORMED-SDE",
-                f"machine profile {profile_name!r} sde chip must be a non-empty string",
+                "TSL-PROFILE-MALFORMED-EMULATOR",
+                f"machine profile {profile_name!r} emulator must be an object",
             )
         )
         return None
-    return value.strip().lstrip("-")
+    fields = _object_fields(value, path, diagnostics)
+    _unknown_fields(
+        fields,
+        {"kind", "profile", "args"},
+        path,
+        diagnostics,
+        owner=f"emulator for machine profile {profile_name!r}",
+    )
+    kind_value = fields.get("kind")
+    if not isinstance(kind_value, str) or not kind_value.strip():
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-MALFORMED-EMULATOR",
+                f"machine profile {profile_name!r} emulator kind must be a non-empty string",
+            )
+        )
+        return None
+    kind = kind_value.strip()
+    if kind not in {"sde", "qemu-aarch64"}:
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-UNSUPPORTED-EMULATOR",
+                f"machine profile {profile_name!r} emulator kind {kind!r} is not supported",
+            )
+        )
+    profile_value = fields.get("profile")
+    if not isinstance(profile_value, str) or not profile_value.strip():
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-MALFORMED-EMULATOR",
+                f"machine profile {profile_name!r} emulator profile must be a non-empty string",
+            )
+        )
+        return None
+    args_value = fields.get("args", ())
+    args: tuple[str, ...]
+    if args_value == ():
+        args = ()
+    elif isinstance(args_value, list) and all(isinstance(item, str) for item in args_value):
+        args = tuple(args_value)
+    else:
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-MALFORMED-EMULATOR",
+                f"machine profile {profile_name!r} emulator args must be a string list",
+            )
+        )
+        args = ()
+    cleaned_profile = profile_value.strip().lstrip("-") if kind == "sde" else profile_value.strip()
+    return MachineProfileEmulator(kind=kind, profile=cleaned_profile, args=args)
 
 
 def _diagnostic(path: Path, code: str, message: str) -> Diagnostic:

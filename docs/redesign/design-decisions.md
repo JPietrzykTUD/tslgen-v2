@@ -4880,9 +4880,9 @@ previous incompatible compiler.
 
 SDE remains explicit. Generation does not autodetect host hardware, and normal
 verification does not require an emulator. If `--sde` names a missing
-executable, the verifier reports `TSL-BUILD-VERIFY-SDE-MISSING`. If Rust test
-build output does not expose runnable test binaries for an SDE profile, the
-verifier reports `TSL-BUILD-VERIFY-NO-RUST-TEST-BINARIES`.
+executable, the verifier reports `TSL-BUILD-VERIFY-EMULATOR-MISSING`. If Rust
+test build output does not expose runnable test binaries for an SDE profile,
+the verifier reports `TSL-BUILD-VERIFY-NO-RUST-TEST-BINARIES`.
 
 The SDE sweep also corrected source profile/requirement facts rather than
 adding verifier exceptions. KNL/KML machine profile flags now exclude legacy
@@ -4980,3 +4980,58 @@ Consequences:
 - Regular non-build tests can keep the repo-local pytest temp policy.
 - Toolchain scratch placement stays in the verifier/wrapper boundary, not in
   parsing, selection, lowering, rendering, or artifact writing.
+
+## ADR-098: Value-Test Emulators Are Typed Verifier Metadata
+
+Context:
+
+The SDE value-test runner solved x86 execution, but it encoded profile runtime
+support as an SDE-only field. ARM profile testing needs QEMU user-mode
+execution, and QEMU cannot be modeled as “SDE but with another executable”:
+SDE can wrap `ctest`, while QEMU must run the target test binary, or be wired
+through CMake's cross-compiling emulator support.
+
+Decision:
+
+Machine profiles now declare optional emulator metadata as:
+
+```json
+"emulator": {"kind": "sde", "profile": "hsw"}
+```
+
+or:
+
+```json
+"emulator": {"kind": "qemu-aarch64", "profile": "cortex-a76"}
+```
+
+The metadata records only emulator kind, profile/CPU, and optional extra
+arguments. Executable paths remain verifier configuration supplied by the CLI
+or API (`--sde`, `--qemu-aarch64`), not profile data.
+
+The verifier carries the same `VerifyEmulator` value for C++ and Rust
+profiles. SDE preserves the existing behavior: C++ wraps `ctest` with
+`sde -chip --`, and Rust builds tests with `cargo test --no-run
+--message-format=json` before running each test binary through SDE.
+QEMU uses the same Rust no-run path, but C++ configures CMake with
+`CMAKE_CROSSCOMPILING_EMULATOR` so host `ctest` remains native and CMake wraps
+only the generated aarch64 test executable.
+
+Aarch64 verifier profiles now carry target metadata derived from the machine
+profile family. C++ profiles use `aarch64-linux-gnu` and ARM `-march=...`
+flags; the verifier defaults targeted C++ profiles to `clang++` unless the
+caller explicitly chooses a compiler. Rust profiles use
+`aarch64-unknown-linux-musl` with `rust-lld`, which is enough to build static
+test binaries runnable by `qemu-aarch64` on the current development machine.
+
+Consequences:
+
+- Emulator execution remains an after-write verifier side effect.
+- Profile data names emulator capabilities, not local executable paths.
+- SDE and QEMU share typed metadata, but their command shapes stay honest.
+- Rust NEON-profile value tests can cross-build and run through QEMU today.
+- C++ QEMU verification is wired, but it still needs an installed aarch64 C++
+  sysroot/standard library for clang to compile generated C++ artifacts.
+- Native ARM extension emission remains a separate support-policy/rendering
+  slice; the current proof exercises the NEON machine profile and QEMU runner,
+  while ARM-specific register substrate support is still deferred.

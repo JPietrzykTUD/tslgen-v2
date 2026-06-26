@@ -2347,13 +2347,90 @@ docs/agent/runs/tslc-primitive-finalization-closure-completion-review-prompt.md
 Active prompt:
 
 ```text
-docs/agent/runs/tslc-const-pointer-array-param-review-prompt.md
+docs/agent/runs/tslc-native-neon-codegen-planning-prompt.md
 ```
 
 Historical accepted prompt archive is intentionally omitted from this handoff.
 Use `docs/redesign/implementation-roadmap.md` for older milestone history.
 
-## Active Const Pointer And Array Parameter Slice
+## Active ARM Emulator Verification Slice
+
+Review verdict: `Accept With Follow-Ups`. The implementation slice generalized
+verifier-side value-test emulator metadata from the previous SDE-only shape to a
+typed emulator boundary that can also represent `qemu-aarch64`.
+
+Implemented pieces:
+
+1. `MachineProfileEmulator` and `VerifyEmulator` carry emulator kind, profile,
+   and optional args. Executable paths stay in verifier configuration.
+2. `supplementary/buildsystem/machine_profiles.json` migrated x86 SDE chip
+   aliases to `emulator {"kind": "sde", "profile": ...}` and added NEON
+   `emulator {"kind": "qemu-aarch64", "profile": "cortex-a76"}`.
+3. CLI/API verification now accepts `--qemu-aarch64`, `--cpp-target`,
+   `--rust-target`, and `--rust-linker` overrides while preserving `--sde`.
+4. C++ QEMU verification uses `CMAKE_CROSSCOMPILING_EMULATOR`; SDE keeps the
+   existing `sde -chip -- ctest ...` shape.
+5. Rust SDE and QEMU verification both build tests with
+   `cargo test --no-run --message-format=json`, then run produced test
+   executables through the selected emulator.
+6. Aarch64 verifier profiles derive C++ target/flags and Rust target/linker
+   metadata from the machine profile family.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+```
+
+Result: passed.
+
+```text
+python -m pytest -q tslc/tests/test_build_verify_config.py tslc/tests/test_catalog_validation.py::test_machine_profile_emulator_metadata_is_validated tslc/tests/test_cli.py tslc/tests/test_profile_rendering.py
+```
+
+Result: `27 passed`.
+
+```text
+./verify.sh
+```
+
+Result: passed all targeted validations: `238` non-build tests collected, `5`
+value-test build/run checks run serially, and `53` generated-build tests
+passed across the generated-build shards.
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --primitives add --profiles neon --backends rust --output-root ./tslctmp/ARM_RUST_QEMU --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64
+```
+
+Result: Rust cross-built aarch64 musl test binaries with `rust-lld`, ran them
+through `qemu-aarch64 -cpu cortex-a76`, and passed `150` generated value tests
+for the NEON-profile `add` slice.
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --primitives add --profiles neon --backends cpp --output-root ./tslctmp/ARM_CPP_QEMU --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64
+```
+
+Result: QEMU/CMake wiring was exercised, but clang failed because this
+environment lacks an aarch64 C++ sysroot/standard-library headers
+(`fatal error: 'array' file not found`).
+
+Known follow-ups:
+
+- Native ARM extension emission is still deferred. The current Rust QEMU proof
+  validates NEON-profile verifier execution and generated fallback coverage,
+  not native `Simd<_, Neon>` register substrate support.
+- A future ARM codegen slice should promote extension-owned vector register
+  spellings into typed render metadata and then enable the `arm` extension
+  family in support policy.
+- C++ ARM runtime validation needs a clang-compatible aarch64 C++ sysroot.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-native-neon-codegen-planning-prompt.md
+```
+
+## Completed Const Pointer And Array Parameter Slice
 
 The current implementation slice makes pointer mutability and array-like
 parameter ownership explicit in typed compiler data:
