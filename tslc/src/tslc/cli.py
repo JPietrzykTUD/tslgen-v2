@@ -58,6 +58,12 @@ def main(argv: list[str] | None = None) -> int:
         help="build and run generated value tests (implies --verify)",
     )
     parser.add_argument(
+        "--fuzz",
+        action="store_true",
+        help="emit and run differential-fuzz value tests (hardware vs the generic scalar "
+        "reference over random inputs); implies --test",
+    )
+    parser.add_argument(
         "--sde",
         nargs="?",
         const="/opt/intel-sde/sde64",
@@ -119,6 +125,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    # Fuzzing only matters once the value tests are built and run, and it needs the test harness
+    # (round-trip primitives) pulled into the closure — so --fuzz implies --test.
+    if args.fuzz:
+        args.test = True
+
     if args.test and args.output_root is None:
         print(
             "[error] --test requires --output-root so generated artifacts can "
@@ -134,6 +145,7 @@ def main(argv: list[str] | None = None) -> int:
         "generation_mode": args.generation_mode,
         "test_harness": args.test,
         "value_test_warnings": args.value_test_warnings or args.test,
+        "value_test_fuzz": args.fuzz,
     }
     if args.profiles is not None:
         generate_kwargs["profiles"] = _split(args.profiles)

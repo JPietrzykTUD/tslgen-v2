@@ -41,6 +41,7 @@ def generate_project(
     generation_mode: GenerationMode = "partial",
     test_harness: bool = False,
     value_test_warnings: bool = False,
+    value_test_fuzz: bool = False,
 ) -> GenerationResult:
     """Run the full compiler pipeline and return in-memory artifacts.
 
@@ -62,6 +63,7 @@ def generate_project(
         mode=generation_mode,
         test_harness=test_harness,
         value_test_warnings=value_test_warnings,
+        value_test_fuzz=value_test_fuzz,
     )
     return generate(request)
 

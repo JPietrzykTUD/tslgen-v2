@@ -205,6 +205,61 @@ def _differential(case: ValueTestCasePlan) -> str:
     lines.append("}")
     return "\n".join(lines)
 
+def _differential_fuzz(case: ValueTestCasePlan) -> str:
+    """A runtime PRNG loop comparing `prim<Hw>` to the generic reference `prim<Ref>` over many
+    random inputs. On the first disagreement it prints the failing lane (via check_match) plus the
+    reproducing iteration, seed, and the per-lane inputs, then fails."""
+
+    arity = len(case.param_kinds)
+    lanes = case.lanes
+    base = case.base_spelling
+    lines = [
+        f"int {case.function_name}() {{",
+        f"  using Hw = tsl::simd<{base}, tsl::{case.hardware_extension}>;",
+        f"  using Ref = tsl::simd<{base}, tsl::generic<{lanes}>>;",
+        f"  std::uint64_t rng = {case.fuzz_seed}ULL;",
+        f"  for (std::size_t iter = 0; iter < {case.fuzz_iterations}; ++iter) {{",
+    ]
+    for position in range(arity):
+        lines.append(f"    typename tsl::array_for<Hw>::type hin{position};")
+        lines.append(f"    typename Ref::register_type r{position};")
+    lines.append(f"    for (std::size_t i = 0; i < {lanes}; ++i) {{")
+    for position in range(arity):
+        lines.append(
+            f"      const {base} v{position} = tsl::test::fuzz_next<{base}>(rng); "
+            f"hin{position}[i] = v{position}; r{position}[i] = v{position};"
+        )
+    lines.append("    }")
+    hw_args = ", ".join(f"tsl::{case.from_array_name}<Hw>(hin{p})" for p in range(arity))
+    ref_args = ", ".join(f"r{p}" for p in range(arity))
+    hw_call = f"tsl::{case.call_name}<Hw>({hw_args})"
+    ref_call = f"tsl::{case.call_name}<Ref>({ref_args})"
+    if case.result_kind == "m":
+        lines.append(f"    auto hw = tsl::{case.to_integral_name}<Hw>({hw_call});")
+        lines.append(f"    typename Ref::mask_type ref = {ref_call};")
+        check = f'tsl::test::check_mask_match("{case.function_name}", hw, ref, {lanes})'
+    else:
+        lines.append(f"    typename tsl::array_for<Hw>::type hw = tsl::{case.to_array_name}<Hw>({hw_call});")
+        lines.append(f"    typename Ref::register_type ref = {ref_call};")
+        check = f'tsl::test::check_match<{base}>("{case.function_name}", hw, ref, {lanes})'
+    lines.append(f"    if ({check} != 0) {{")
+    lines.append(
+        f'      std::fprintf(stderr, "  reproduce: fuzz iter %zu, seed {case.fuzz_seed}\\n", iter);'
+    )
+    lines.append(f"      for (std::size_t i = 0; i < {lanes}; ++i) {{")
+    lines.append('        std::fprintf(stderr, "    lane %zu:", i);')
+    for position in range(arity):
+        lines.append(f'        std::fprintf(stderr, " arg{position}=");')
+        lines.append(f"        tsl::test::print_lane<{base}>(hin{position}[i]);")
+    lines.append('        std::fprintf(stderr, "\\n");')
+    lines.append("      }")
+    lines.append("      return 1;")
+    lines.append("    }")
+    lines.append("  }")
+    lines.append("  return 0;")
+    lines.append("}")
+    return "\n".join(lines)
+
 __all__ = (
     "_convert",
     "_repr_cast",
@@ -214,4 +269,5 @@ __all__ = (
     "_load_convert",
     "_fixed_extension_load_convert",
     "_differential",
+    "_differential_fuzz",
 )

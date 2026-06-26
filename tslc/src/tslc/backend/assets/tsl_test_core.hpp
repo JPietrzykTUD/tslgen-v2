@@ -132,5 +132,31 @@ inline int check_mask(const char *name, Mask mask, const int *expected_set, std:
     return failures;
 }
 
+// --- Differential fuzzer ----------------------------------------------------------------------
+// A deterministic xorshift64* step. The fuzz state is seeded per (primitive, type, extension), so
+// a reported seed reproduces the exact input stream. The values binary is built with -fwrapv, so
+// signed overflow wraps (two's complement) and matches SIMD — the scalar reference stays a faithful
+// oracle even on full-width random inputs.
+inline std::uint64_t fuzz_step(std::uint64_t &state) {
+    state ^= state >> 12;
+    state ^= state << 25;
+    state ^= state >> 27;
+    return state * 0x2545F4914F6CDD1DULL;
+}
+
+// One pseudo-random lane value. Integers span their full width; floats are drawn from a moderate
+// finite range so ordinary arithmetic (not just NaN/inf soup) is exercised. Comparison stays
+// bitwise / NaN-aware via `lane_eq`, so the infinities and NaN that the op itself produces match.
+template <class T>
+inline T fuzz_next(std::uint64_t &state) {
+    const std::uint64_t bits = fuzz_step(state);
+    if constexpr (std::is_floating_point_v<T>) {
+        const double unit = static_cast<double>(bits >> 11) / 9007199254740992.0;  // [0, 1)
+        return static_cast<T>(unit * 2048.0 - 1024.0);
+    } else {
+        return static_cast<T>(bits);
+    }
+}
+
 }  // namespace test
 }  // namespace tsl

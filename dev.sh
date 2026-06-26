@@ -1,25 +1,43 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Steerable end-to-end driver for the tslc generator. Drives `python -m tslc.cli` in one of:
-#   ./verify.sh generate   generate + format the C++/Rust project           (no compiler needed)
-#   ./verify.sh build      generate + build-verify both backends            [default]
-#   ./verify.sh test       generate + build + run the value tests (SDE / qemu-aarch64 when present)
-#
-# Extra tslc.cli flags pass through after the mode, e.g.:
-#   ./verify.sh test --profiles skylake --primitives add,convert_up
-#
-# Env knobs: TSLC_OUTPUT_ROOT TSLC_SOURCES TSLC_MACHINE_PROFILES TSLC_BACKENDS
-#            TSLC_SDE TSLC_QEMU_AARCH64 TSLC_VERIFY_JOBS
-#
-# The Python unit-test suite is a separate gate: run `pytest tslc/tests`.
+# Steerable task runner for the tslc generator and its maintenance tooling.
+
+self="$(basename "$0")"
+usage() {
+  cat <<EOF
+${self}: steerable task runner for the tslc generator and its maintenance tooling.
+
+Modes:
+  ./${self} generate   generate + format the C++/Rust project               (no compiler needed)
+  ./${self} build      generate + build-verify both backends                [default]
+  ./${self} test       generate + build + run the value tests (SDE / qemu-aarch64 when present)
+  ./${self} explain    diagnose ONE primitive/profile/backend/ext/type slot (no compiler needed)
+  ./${self} ratchet    coverage regression gate vs the committed baseline   (no compiler needed)
+  ./${self} dump       dump one pipeline stage (catalog/segments/selection/lowered) (no compiler)
+
+Extra flags pass through after the mode, e.g.:
+  ./${self} test    --profiles skylake --primitives add,convert_up
+  ./${self} explain --primitive add --profile avx2 --type si32 --backend cpp
+  ./${self} ratchet --update
+  ./${self} dump    --stage segments --primitive add
+
+generate/build/test drive \`python -m tslc.cli\`; explain/ratchet/dump drive the
+\`tslc.maintenance\` tools directly and need no toolchain.
+
+Env knobs (build/test only): TSLC_OUTPUT_ROOT TSLC_SOURCES TSLC_MACHINE_PROFILES
+  TSLC_BACKENDS TSLC_SDE TSLC_QEMU_AARCH64 TSLC_VERIFY_JOBS
+
+The Python unit-test suite is a separate gate: run \`pytest tslc/tests\`.
+EOF
+}
 
 mode="build"
 if (( $# > 0 )); then
   case "$1" in
-    generate|build|test) mode="$1"; shift ;;
-    -h|--help|help) sed -n '4,16p' "$0"; exit 0 ;;
-    *) echo "usage: $0 [generate|build|test] [extra tslc.cli flags...]" >&2; exit 2 ;;
+    generate|build|test|explain|ratchet|dump) mode="$1"; shift ;;
+    -h|--help|help) usage; exit 0 ;;
+    *) echo "usage: $0 [generate|build|test|explain|ratchet|dump] [extra flags...]" >&2; exit 2 ;;
   esac
 fi
 extra_args=("$@")
@@ -32,6 +50,13 @@ sde="${TSLC_SDE:-/opt/intel-sde/sde64}"
 qemu="${TSLC_QEMU_AARCH64:-/usr/bin/qemu-aarch64}"
 
 export PYTHONPATH="tslc/src${PYTHONPATH:+:$PYTHONPATH}"
+
+# Pure / lowering-only modes: no toolchain, no build scratch — drive the maintenance tool and exit.
+case "$mode" in
+  explain) exec python -m tslc.maintenance.explain "${extra_args[@]}" ;;
+  ratchet) exec python -m tslc.maintenance.coverage_ratchet "${extra_args[@]}" ;;
+  dump)    exec python -m tslc.maintenance.stage_dump "${extra_args[@]}" ;;
+esac
 
 mkdir -p tslctmp
 export ZIG_LOCAL_CACHE_DIR="${ZIG_LOCAL_CACHE_DIR:-$PWD/tslctmp/zig-local-cache}"
@@ -119,4 +144,4 @@ esac
 
 echo "tslc ${mode} -> ${output_root}"
 "${cli[@]}"
-echo "verify.sh ${mode}: OK"
+echo "${self} ${mode}: OK"

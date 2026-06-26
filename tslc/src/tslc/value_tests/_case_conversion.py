@@ -175,6 +175,76 @@ def extension_repr_case(
         to_array_name=harness.to_array,
     )
 
+# Random inputs swept per (primitive, type, extension) by one compiled fuzz function. 256 keeps
+# the values binary fast while covering far more of the input space than the handful of authored
+# cases. Deterministic: the seed is derived from the function name, so a failure reproduces.
+FUZZ_ITERATIONS = 256
+_FUZZ_BASE_SEED = 0x9E3779B97F4A7C15
+
+
+def _fuzz_seed(function_name: str) -> int:
+    """A stable 64-bit seed from the function name (FNV-1a, mixed) — unlike ``hash()`` it is
+    constant across runs, so a reported seed reproduces the exact input stream."""
+
+    digest = 0xCBF29CE484222325
+    for byte in function_name.encode("utf-8"):
+        digest = ((digest ^ byte) * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF
+    return (digest ^ _FUZZ_BASE_SEED) & 0xFFFFFFFFFFFFFFFF or 1  # xorshift must not start at 0
+
+
+def differential_fuzz_cases(
+    name: str,
+    specs: tuple[LoweredSpecialization, ...],
+    catalog: Catalog,
+    harness: HarnessPrimitiveNames,
+    iterations: int = FUZZ_ITERATIONS,
+) -> list[ValueTestCasePlan]:
+    """Random-input differential cases: one runtime PRNG loop per hardware extension, comparing
+    ``prim<Hw>`` against the generic scalar reference ``prim<Ref>`` over ``iterations`` random
+    inputs. Needs no authored inputs — the generic impl is the oracle. All-vector primitives only
+    (the caller restricts to the generic-golden shape); each emitted slot derives its own lane
+    count from the extension width."""
+
+    spec0 = specs[0]
+    if not spec0.param_kinds or any(kind != "v" for kind in spec0.param_kinds):
+        return []
+    if spec0.result_kind == "m" and harness.to_integral is None:
+        return []
+    emitted: list[ValueTestCasePlan] = []
+    for spec in specs:
+        extension = catalog.extensions.get(spec.extension_name)
+        if extension is None or spec.uses_sized_vector or extension.vector_bits <= 0:
+            continue
+        type_bits = _type_bits(spec.type_tag)
+        base_spelling = _base_spelling((spec,), spec.type_tag)
+        if type_bits is None or base_spelling is None:
+            continue
+        lanes = extension.vector_bits // type_bits
+        if lanes <= 0:
+            continue
+        function_name = f"fuzz_diff_{spec.extension_name}_{_sanitize(name)}_{spec.type_tag}"
+        emitted.append(
+            ValueTestCasePlan(
+                kind="differential_fuzz",
+                function_name=function_name,
+                case_name=f"{name}:fuzz",
+                call_name=name,
+                type_tag=spec.type_tag,
+                base_spelling=base_spelling,
+                lanes=lanes,
+                result_kind=spec.result_kind,
+                param_kinds=spec.param_kinds,
+                hardware_extension=spec.extension_name,
+                from_array_name=harness.from_array,
+                to_array_name=harness.to_array,
+                to_integral_name=harness.to_integral,
+                fuzz_seed=_fuzz_seed(function_name),
+                fuzz_iterations=iterations,
+            )
+        )
+    return emitted
+
+
 def differential_cases(
     name: str,
     index: int,

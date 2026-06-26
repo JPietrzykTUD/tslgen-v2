@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from tslc.catalog.model import Catalog, Primitive, TestCase
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import SupportPolicy
-from tslc.value_tests._case_conversion import differential_cases
+from tslc.value_tests._case_conversion import differential_cases, differential_fuzz_cases
 from tslc.value_tests._case_core import (
     generic_golden_case,
     immediate_case,
@@ -56,6 +56,25 @@ class _GenericGoldenPattern(_BasePattern):
         if backend.supports_differential and harness.round_trip_ready:
             plans.extend(differential_cases(emitted_name, index, case, specs, catalog, harness))
         return tuple(plans)
+
+    def fuzz_cases(
+        self,
+        *,
+        backend: ValueTestBackendSupport,
+        emitted_name: str,
+        specs: tuple[LoweredSpecialization, ...],
+        catalog: Catalog,
+        harness: HarnessPrimitiveNames,
+        iterations: int,
+    ) -> tuple[ValueTestCasePlan, ...]:
+        """Random-input differential cases for this primitive — independent of authored tests, so
+        even an untested all-vector primitive gets a runtime hardware-vs-generic sweep."""
+
+        if not (backend.supports_differential and harness.round_trip_ready):
+            return ()
+        return tuple(
+            differential_fuzz_cases(emitted_name, specs, catalog, harness, iterations)
+        )
 
 class _MaskedPattern(_BasePattern):
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:

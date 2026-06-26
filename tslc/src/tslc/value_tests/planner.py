@@ -9,6 +9,7 @@ from tslc.catalog.model import Catalog
 from tslc.diagnostics import Diagnostic, SourceLocation
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
+from tslc.value_tests._case_conversion import FUZZ_ITERATIONS
 from tslc.value_tests.case_plans import compile_only_case
 from tslc.value_tests.coverage import (
     CoverageIdentity,
@@ -48,10 +49,14 @@ class ValueTestPlanner:
         backend_supports: tuple[ValueTestBackendSupport, ...],
         support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
         patterns: tuple[ValueTestPattern, ...] | None = None,
+        fuzz: bool = False,
+        fuzz_iterations: int = FUZZ_ITERATIONS,
     ) -> None:
         self._catalog = catalog
         self._backend_supports = {backend.backend_id: backend for backend in backend_supports}
         self._patterns = patterns if patterns is not None else default_value_test_patterns(support)
+        self._fuzz = fuzz
+        self._fuzz_iterations = fuzz_iterations
 
     def plan(self, profiles: tuple[ValueTestBackendProfileInput, ...]) -> ValueTestProjectPlan:
         harness = discover_harness_primitives(self._catalog)
@@ -94,6 +99,13 @@ class ValueTestPlanner:
             )
             if primitive is None:
                 continue
+            fuzz_builder = getattr(pattern, "fuzz_cases", None) if self._fuzz else None
+            if fuzz_builder is not None:
+                fuzz_planned = fuzz_builder(
+                    backend=backend, emitted_name=emitted_name, specs=specs,
+                    catalog=self._catalog, harness=harness, iterations=self._fuzz_iterations,
+                )
+                cases.extend(self._supported_cases(fuzz_planned, backend))
             if not primitive.tests:
                 entry = ValueTestCoverageEntry(
                     backend_id=profile.backend_id,

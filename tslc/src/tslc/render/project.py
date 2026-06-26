@@ -53,6 +53,7 @@ def render_project(
     immediate_split_names: frozenset[str] = frozenset(),
     catalog: Catalog | None = None,
     value_test_warnings: bool = False,
+    value_test_fuzz: bool = False,
 ) -> RenderedProject:
     ordered = tuple(
         replace(
@@ -65,9 +66,9 @@ def render_project(
     artifacts: list[Artifact] = []
     verify_backends: list[VerifyBackend] = []
     test_plan = (
-        ValueTestPlanner(catalog, _value_test_supports(backends)).plan(
-            _value_test_inputs(ordered, backends)
-        )
+        ValueTestPlanner(
+            catalog, _value_test_supports(backends), fuzz=value_test_fuzz
+        ).plan(_value_test_inputs(ordered, backends))
         if catalog is not None
         else ValueTestProjectPlan(profiles=())
     )

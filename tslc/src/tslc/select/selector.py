@@ -67,6 +67,51 @@ class _BestBody:
     required_features: frozenset[str]
 
 
+@dataclass(frozen=True, slots=True)
+class RankedCandidate:
+    """A usable implementation body for one ``(extension, type, to_target)`` slot, carrying the
+    four principled ranking keys so callers (selection, and the ``explain`` tool) can see *why*
+    one body outranks another. ``sort_key`` is the exact tuple selection minimizes."""
+
+    implementation: Implementation
+    required_features: frozenset[str]
+    distance: int  # (a) position in the extension chain; own extension (0) before inherited
+    specificity: int  # (b) type-group member count; fewer = more specific
+    flag_count: int  # (c) applicable hardware-flag count; more = more specialized
+    source_order: int  # (d) first occurrence in source
+
+    @property
+    def sort_key(self) -> tuple[int, int, int, int]:
+        return (self.distance, self.specificity, -self.flag_count, self.source_order)
+
+
+@dataclass(frozen=True, slots=True)
+class RejectedCandidate:
+    """An implementation on the extension chain that could *not* serve this slot, with why."""
+
+    implementation: Implementation
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateEvaluation:
+    """The full candidate field for one slot: usable bodies (best-first) and the rejected ones."""
+
+    extension_known: bool
+    ranked: tuple[RankedCandidate, ...]
+    rejected: tuple[RejectedCandidate, ...]
+
+
+# Ranking keys, by the order selection applies them; surfaced by ``explain`` to name the decisive
+# tiebreak between the winner and the runner-up.
+RANKING_KEYS: tuple[tuple[str, str], ...] = (
+    ("distance", "own extension before an inherited one"),
+    ("specificity", "more specific type-group (fewer members)"),
+    ("flag_count", "more required hardware flags (more specialized)"),
+    ("source_order", "earlier in source (arbitrary final tiebreak)"),
+)
+
+
 class Selector:
     def __init__(self, support: SupportPolicy = DEFAULT_SUPPORT_POLICY) -> None:
         self.support = support
@@ -208,7 +253,7 @@ class Selector:
             emit.append(name)
         return sorted(emit)
 
-    def _best_body(
+    def evaluate_candidates(
         self,
         catalog: Catalog,
         profile: MachineProfile,
@@ -216,17 +261,31 @@ class Selector:
         extension_name: str,
         type_tag: str,
         to_target: str | None,
-        warnings: dict[str, Diagnostic],
-    ) -> _BestBody | None:
-        # Gather candidates from the extension and the ancestors it inherits from
-        # (e.g. avx2_vl borrows avx2's body where it has none of its own).
+    ) -> CandidateEvaluation:
+        """The candidate field for one ``(extension, type, to_target)`` slot.
+
+        Gathers bodies from the extension and the ancestors it inherits from (e.g. avx2_vl
+        borrows avx2's body where it has none of its own), splits them into usable
+        :class:`RankedCandidate` (best-first by the four principled keys) and
+        :class:`RejectedCandidate` (with the reason each on-chain body was dropped), and
+        single-sources the selection logic so both :meth:`_best_body` and the ``explain`` tool
+        agree on the ranking. Off-chain bodies are not reported — they belong to other slots.
+        """
+
         chain = catalog.extension_chain(extension_name)
         distance = {name: index for index, name in enumerate(chain)}
-        candidates: list[tuple[Implementation, frozenset[str]]] = []
+        ranked: list[RankedCandidate] = []
+        rejected: list[RejectedCandidate] = []
         for implementation in primitive.implementations:
             if implementation.extension not in distance:
-                continue
+                continue  # belongs to a different extension's slot, not this one
             if not catalog.type_group_contains(implementation.type_group, type_tag):
+                rejected.append(
+                    RejectedCandidate(
+                        implementation,
+                        f"type-group {implementation.type_group!r} does not contain {type_tag}",
+                    )
+                )
                 continue
             # Second-axis match: a body with a `to_target_group` is kept only if that group contains
             # the target (the `==`/`*` markers contain no concrete tag, so they stay unselected). A
@@ -238,22 +297,66 @@ class Selector:
                 and implementation.to_target_group is not None
                 and not catalog.type_group_contains(implementation.to_target_group, to_target)
             ):
+                rejected.append(
+                    RejectedCandidate(
+                        implementation,
+                        f"to-target-group {implementation.to_target_group!r} does not contain "
+                        f"target {to_target!r}",
+                    )
+                )
                 continue
             flags = _applicable_flags(catalog, implementation, type_tag)
-            if flags is None or not (flags <= profile.features):
+            if flags is None:
+                rejected.append(
+                    RejectedCandidate(
+                        implementation, f"no requires clause applies to {type_tag}"
+                    )
+                )
                 continue
-            candidates.append((implementation, flags))
-        if not candidates:
-            return None
-        best, best_flags = min(
-            candidates,
-            key=lambda item: (
-                distance[item[0].extension],  # own extension before inherited (a)
-                catalog.type_group_specificity(item[0].type_group),  # most specific (b)
-                -len(item[1]),  # most hardware flags (c)
-                item[0].source_order,  # first occurrence (d)
-            ),
+            if not (flags <= profile.features):
+                missing = ", ".join(sorted(flags - profile.features))
+                rejected.append(
+                    RejectedCandidate(
+                        implementation,
+                        f"requires [{', '.join(sorted(flags))}] not satisfied by profile "
+                        f"{profile.name!r} (missing: {missing})",
+                    )
+                )
+                continue
+            ranked.append(
+                RankedCandidate(
+                    implementation=implementation,
+                    required_features=flags,
+                    distance=distance[implementation.extension],
+                    specificity=catalog.type_group_specificity(implementation.type_group),
+                    flag_count=len(flags),
+                    source_order=implementation.source_order,
+                )
+            )
+        ranked.sort(key=lambda candidate: candidate.sort_key)
+        return CandidateEvaluation(
+            extension_known=bool(chain),
+            ranked=tuple(ranked),
+            rejected=tuple(rejected),
         )
+
+    def _best_body(
+        self,
+        catalog: Catalog,
+        profile: MachineProfile,
+        primitive: Primitive,
+        extension_name: str,
+        type_tag: str,
+        to_target: str | None,
+        warnings: dict[str, Diagnostic],
+    ) -> _BestBody | None:
+        ranked = self.evaluate_candidates(
+            catalog, profile, primitive, extension_name, type_tag, to_target
+        ).ranked
+        if not ranked:
+            return None
+        best = ranked[0]
+        best_impl = best.implementation
         # Ambiguity guard: warn only when the pick is genuinely *arbitrary* — two candidate
         # bodies on the same extension that tie on every principled key (a) distance,
         # (b) type-group specificity, and (c) hardware-flag count, yet are keyed to *different*
@@ -262,17 +365,16 @@ class Selector:
         # counts mean hardware-specialization doesn't separate them either — so only
         # `source_order` (d) decides, which is arbitrary. A flag-count difference IS a
         # principled tiebreak (more required features = more specialized), so it does not warn.
-        best_spec = catalog.type_group_specificity(best.type_group)
         rival_groups = {
-            impl.type_group
-            for impl, flags in candidates
-            if distance[impl.extension] == distance[best.extension]
-            and catalog.type_group_specificity(impl.type_group) == best_spec
-            and len(flags) == len(best_flags)
-            and impl.type_group != best.type_group
+            candidate.implementation.type_group
+            for candidate in ranked
+            if candidate.distance == best.distance
+            and candidate.specificity == best.specificity
+            and candidate.flag_count == best.flag_count
+            and candidate.implementation.type_group != best_impl.type_group
         }
         if rival_groups:
-            groups = ", ".join(sorted({best.type_group, *rival_groups}))
+            groups = ", ".join(sorted({best_impl.type_group, *rival_groups}))
             message = (
                 f"{primitive.name!r} on {extension_name}: type-groups {{{groups}}} are equally "
                 f"specific and incomparable (both match overlapping types); the body is chosen "
@@ -284,10 +386,10 @@ class Selector:
                     severity="warning",
                     code="TSL-SELECT-AMBIGUOUS-SPECIFICITY",
                     message=message,
-                    source=best.selector_source or best.source or primitive.source,
+                    source=best_impl.selector_source or best_impl.source or primitive.source,
                 ),
             )
-        return _BestBody(best, best_flags)
+        return _BestBody(best_impl, best.required_features)
         # (a) before (b): when a derived extension is active and supersedes its base
         # (e.g. avx2_vl over avx2 on an avx512vl profile), the derived ext's OWN body
         # wins even if a base body is more type-specific — so avx512vl comparisons use

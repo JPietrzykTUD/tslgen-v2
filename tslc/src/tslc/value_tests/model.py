@@ -65,6 +65,10 @@ class ValueTestCasePlan:
     source_offset: int = 0
     scalar_inputs: tuple[str, ...] = ()
     text_expected: str | None = None
+    # Differential-fuzz cases (kind="differential_fuzz") carry no authored inputs: the emitted code
+    # loops `fuzz_iterations` PRNG-seeded random inputs through hardware-vs-generic at runtime.
+    fuzz_seed: int | None = None
+    fuzz_iterations: int = 0
 
 
 @dataclass(frozen=True, slots=True)

@@ -24,6 +24,7 @@ from tslc.value_tests._render_cpp_core import (
 from tslc.value_tests._render_cpp_conversion import (
     _convert,
     _differential,
+    _differential_fuzz,
     _extension_extract,
     _extension_insert,
     _load_convert,
@@ -53,6 +54,7 @@ CPP_CASE_RENDERERS: dict[str, CppCaseRenderer] = {
     "compile_only": _compile_only,
     "convert": _convert,
     "differential": _differential,
+    "differential_fuzz": _differential_fuzz,
     "extension_extract": _extension_extract,
     "extension_insert": _extension_insert,
     "generic_golden": _generic_golden,

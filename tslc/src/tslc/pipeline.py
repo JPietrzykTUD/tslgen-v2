@@ -70,6 +70,10 @@ class GenerationRequest:
     # ordinary generation because source data often includes broader test intent than the current
     # backend test harness supports.
     value_test_warnings: bool = False
+    # Emit differential-fuzz value tests: a runtime PRNG loop comparing each hardware
+    # specialization against the generic scalar reference over many random inputs. Opt-in (adds
+    # build/run cost); requires the test harness so the generated code can round-trip registers.
+    value_test_fuzz: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,6 +230,7 @@ class _GenerationSession:
                 self.inputs.imm_split_names,
                 catalog=self.inputs.catalog,
                 value_test_warnings=self.request.value_test_warnings,
+                value_test_fuzz=self.request.value_test_fuzz,
             )
             if self.profile_renders
             else None

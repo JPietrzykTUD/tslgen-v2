@@ -15,5 +15,9 @@ foreach(target tsl_smoke tsl_values)
   target_include_directories(${target} PRIVATE include)
   target_compile_definitions(${target} PRIVATE TSL_PROFILE_${TSL_PROFILE_UPPER})
 endforeach()
+# The values binary runs the differential fuzzer: signed integer overflow must wrap (two's
+# complement) so the scalar `generic` reference agrees with wrapping SIMD on full-width random
+# inputs. Harmless for the in-range authored tests. GCC/Clang only (the supported toolchains).
+target_compile_options(tsl_values PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-fwrapv>)
 add_test(NAME values COMMAND tsl_values)
 @{profile_options}
