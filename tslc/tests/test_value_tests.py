@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
+import shutil
+
+import pytest
 
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.catalog.builder import CatalogBuilder
@@ -50,6 +53,50 @@ def test_golden_value_tests_build_and_pass(
     if cpp_steps:  # cpp toolchain available (else the backend was skipped)
         assert "test" in cpp_steps, cpp_steps
         assert "build-values" in cpp_steps, cpp_steps
+
+
+def test_neon_native_arithmetic_bitwise_extract_and_cast_value_tests_build_and_pass(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    """Native ARM coverage beyond `add`: arithmetic, bitwise, extract, and cast tests run."""
+
+    zig = Path("/opt/zig/zig")
+    qemu = shutil.which("qemu-aarch64")
+    if not zig.exists() or qemu is None:
+        pytest.skip("C++/Rust NEON QEMU value-test gate needs /opt/zig/zig and qemu-aarch64")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["sub", "mul", "binary_and", "extract_value", "cast"],
+        profiles=["neon"],
+        backends=("cpp", "rust"),
+        test_harness=True,
+        value_test_warnings=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        cpp_compiler=(str(zig), "c++"),
+        cpp_target="aarch64-linux-musl",
+        qemu_aarch64_path=qemu,
+        run_value_tests=True,
+    )
+    assert report.diagnostics == (), report.diagnostics
+    steps = {
+        (command.command.backend_id, command.command.step)
+        for command in report.commands
+    }
+    assert ("cpp", "test") in steps
+    assert ("rust", "test") in steps
 
 
 def test_value_full_corpus_avx2_coverage_is_complete(

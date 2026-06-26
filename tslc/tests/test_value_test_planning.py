@@ -484,6 +484,7 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
     rust_mask_store_source = render_rust_values_file(
         (ValueTestProfilePlan("rust", "unit-profile", (rust_mask_store_case,)),)
     )
+    assert not any(line.rstrip() != line for line in rust_mask_store_source.splitlines())
     assert "let mut buf: [u32; 4] = [Default::default(); 4];" in rust_mask_store_source
     assert "store_mask_repr::<Vec, false, false>(" in rust_mask_store_source
     assert (

@@ -1045,7 +1045,7 @@ prim<v:=v>[cast=convert] cast(data):
               caller_unsafe false
               reasons [intrinsic]
             implementation:
-              tsil "complete(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vcvtq, build[infix=ToBase, suffix=base::in]>(data)));"
+              tsil "complete(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vcvtq, build[infix=ToBase, infix_sep=\"_\", suffix=base::in]>(data)));"
           f64:
             safety:
               internal_unsafe false
@@ -1084,7 +1084,7 @@ prim<v:=v>[cast=convert] cast(data):
               caller_unsafe false
               reasons [intrinsic]
             implementation:
-              tsil "complete(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vcvtq, build[infix=ToBase, suffix=base::in]>(data)));"
+              tsil "complete(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vcvtq, build[infix=ToBase, infix_sep=\"_\", suffix=base::in]>(data)));"
           "*":
             safety:
               internal_unsafe false
@@ -1108,7 +1108,7 @@ prim<v:=v>[cast=convert] cast(data):
               caller_unsafe false
               reasons [intrinsic]
             implementation:
-              tsil "complete(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vcvtq, build[infix=ToBase, suffix=base::in]>(data)));"
+              tsil "complete(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vcvtq, build[infix=ToBase, infix_sep=\"_\", suffix=base::in]>(data)));"
           ?i64:
             safety:
               internal_unsafe false
@@ -1147,7 +1147,7 @@ prim<v:=v>[cast=convert] cast(data):
               caller_unsafe false
               reasons [intrinsic]
             implementation:
-              tsil "complete(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vcvtq, build[infix=ToBase, suffix=base::in]>(data)));"
+              tsil "complete(cast<reinterpret>(type<generation>(register::generic(ToType)), intrin<vcvtq, build[infix=ToBase, infix_sep=\"_\", suffix=base::in]>(data)));"
           "*":
             safety:
               internal_unsafe false

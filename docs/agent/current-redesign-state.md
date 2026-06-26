@@ -2667,12 +2667,12 @@ and CTest ran `1/1` value test successfully through QEMU with
 `build/test-verified 7 commands`; the C++-only wrapper passed with C++ NEON
 skipped by target preflight on plain clang and `build-verified 36 commands`.
 
-Full all-backend `./verify.sh` on a fresh root now reaches a broader Rust NEON
-coverage blocker when `neon` is included for every primitive. Representative
-failures include Rust `core::arch::aarch64` intrinsic spelling mismatches for
-native NEON conversion functions and const-generic lane indices rendered as
-`usize` where Rust expects `i32`. This belongs to the next ARM native coverage
-planning prompt.
+At this point in the C++ runtime-verification slice, broad all-backend
+verification exposed a Rust NEON coverage blocker when `neon` was included for
+every primitive. Representative failures included Rust `core::arch::aarch64`
+intrinsic spelling mismatches for native NEON conversion functions and
+const-generic lane indices rendered as `usize` where Rust expects `i32`. The
+later ARM native coverage slice below records the follow-up fixes.
 
 Follow-up fixed after review: profile-owned C++ compiler flags now live on
 `MachineProfile.cpp_flags` and may be supplied by `machine_profiles.json` as a
@@ -2690,5 +2690,60 @@ Result: compileall passed; focused tests passed with `51 passed`.
 Next prompt:
 
 ```text
-docs/agent/runs/tslc-arm-native-coverage-planning-prompt.md
+docs/agent/runs/tslc-arm-sve-scalable-vector-planning-prompt.md
 ```
+
+## In-Progress ARM Native Coverage Expansion
+
+The ARM coverage goal is active. This slice expanded native NEON value-test
+coverage beyond `add` without adding primitive-name or extension-name compiler
+branches.
+
+Implemented:
+
+- Rust backend integer generic parameters now render as `i32` instead of
+  `usize`. In the current corpus `generic_params {kind int}` models
+  immediate/index values, not array extents.
+- Existing source casts such as `cast<static>(type<backend>(scalar::size),
+  Index)` continue to make Rust array-index use sites explicit.
+- Native Rust NEON `extract_value` now compiles because
+  `vgetq_lane_*::<Index>` receives an `i32` const generic.
+- The NEON `cast` conversion spelling now uses the existing source-owned
+  intrinsic build separator support (`infix_sep="_"`) for `vcvtq_*_*`
+  functions, instead of relying on compiler-side intrinsic-name knowledge.
+- The focused NEON value-test regression now covers `sub`, `mul`,
+  `binary_and`, `extract_value`, and `cast` for both C++ and Rust through QEMU.
+- Rust value-test rendering strips line-end whitespace at the final generated
+  values-file boundary, so broad generated Rust value tests format cleanly.
+
+Validation run so far:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src ZIG_GLOBAL_CACHE_DIR=/tmp/zig-global-cache-tslc ZIG_LOCAL_CACHE_DIR=/tmp/zig-local-cache-tslc python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --profiles neon --primitives extract_value --backends cpp,rust --output-root /tmp/tslc-arm-neon-extract-value-fixed --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+PYTHONPATH=tslc/src ZIG_GLOBAL_CACHE_DIR=/tmp/zig-global-cache-tslc ZIG_LOCAL_CACHE_DIR=/tmp/zig-local-cache-tslc python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --profiles neon --primitives cast --backends cpp,rust --output-root /tmp/tslc-arm-neon-cast --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+PYTHONPATH=tslc/src ZIG_GLOBAL_CACHE_DIR=/tmp/zig-global-cache-tslc ZIG_LOCAL_CACHE_DIR=/tmp/zig-local-cache-tslc python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --profiles neon --backends cpp,rust --output-root /tmp/tslc-arm-neon-broad-clean --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_build_verify.py::test_extract_value_builds
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_build_verify.py::test_gather_scatter_builds
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py::test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_tests.py::test_neon_native_arithmetic_bitwise_extract_and_cast_value_tests_build_and_pass
+rg -n "[ \t]+$" /tmp/tslc-arm-neon-broad-clean/rust/src /tmp/tslc-arm-neon-broad-clean/rust/tests -g '*.rs'
+git diff --check
+```
+
+Result: compileall passed; the targeted `extract_value` CLI run generated
+`1636` specializations, C++ CTest passed through QEMU, and Rust ran `217`
+value tests through QEMU; the targeted `cast` CLI run generated `2042`
+specializations and passed C++/Rust value tests through QEMU; the broad NEON
+C++/Rust run generated `8076` specializations, formatted `cpp:7` and `rust:6`
+files, passed C++ CTest, passed Rust smoke, and ran `1087` Rust value tests
+through QEMU; the focused build-verify tests passed; the expanded NEON
+value-test regression passed; generated Rust files had no trailing whitespace;
+diff whitespace was clean.
+
+Remaining known blocker:
+
+- Fixed-width NEON C++/Rust value tests now pass broadly through QEMU for the
+  current selected corpus. The next ARM coverage step should move from NEON
+  cleanup to SVE/scalable-vector planning, because scalable ARM semantics are
+  still intentionally deferred.

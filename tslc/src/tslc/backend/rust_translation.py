@@ -109,7 +109,10 @@ class _RustTypes:
 
     def const_param_type(self, kind: str) -> str:
         if kind == "int":
-            return "usize"
+            # Source-level integer generics are immediate/index values, not array extents.
+            # Rust stdarch lane/gather immediates use signed integer const parameters; bodies
+            # that need a Rust array index cast explicitly to `scalar::size`.
+            return "i32"
         return "bool"
 
 

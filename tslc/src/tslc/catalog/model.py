@@ -182,10 +182,10 @@ class ImmediateParam:
 
 @dataclass(frozen=True, slots=True)
 class GenericParam:
-    """A `generic_params` entry: a free template parameter (name, kind, default)."""
+    """A `generic_params` entry: a free template/const parameter."""
 
     name: str
-    kind: str  # currently always "bool"
+    kind: str  # "bool", "int", or "simd_type"
     default: str  # e.g. "true"
     source: SourceSpan | None = None
 

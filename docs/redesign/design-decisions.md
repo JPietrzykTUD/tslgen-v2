@@ -5126,3 +5126,66 @@ Consequences:
   `-march=...` flags should be declared in machine profile data.
 - The ISA-neutral `lane_bitmask_int` helper lives in `tsl_core.hpp`, so ARM
   profile headers do not depend on x86 traits merely to name integral masks.
+
+## ADR-101: Rust Integer Generic Parameters Are Immediate/Index Values
+
+Context:
+
+Native NEON lane extraction exposed a Rust const-generic typing mismatch.
+`extract_value` models its lane as `generic_params: Index {kind int}`, and the
+NEON implementation forwards that value through an intrinsic
+`immediate(1)=Index` modifier. Rust `core::arch::aarch64::vgetq_lane_*`
+intrinsics require the lane const generic to be `i32`, while `tslc` had been
+rendering all Rust `kind int` generic parameters as `usize`.
+
+Decision:
+
+Render Rust `generic_params {kind int}` as `i32`. In the current corpus these
+integer generic parameters are immediate/index values (`Index` for lane
+extraction and `N` in gather/scatter metadata), not array extents. Source bodies
+that need a Rust array index already cast explicitly through
+`type<backend>(scalar::size)`, keeping the size/index conversion source-visible.
+
+Do not add primitive-name or NEON-specific compiler branches. The source still
+owns which intrinsic receives the immediate, the Rust backend owns the const
+parameter spelling, and renderers consume lowered facts.
+
+Consequences:
+
+- Native Rust NEON `extract_value` compiles and passes value tests through QEMU.
+- C++ remains unchanged: C++ `kind int` parameters continue to render as
+  `std::size_t`.
+- If a future source generic is truly an array extent rather than an immediate
+  or lane/index value, the source language should add a distinct typed kind
+  instead of overloading `kind int`.
+
+## ADR-102: NEON Conversion Intrinsic Spelling Stays Source-Owned
+
+Context:
+
+Broad native NEON Rust value-test generation exposed conversion intrinsic names
+such as `vcvtqf32_s32`. Those names are not valid Rust `core::arch::aarch64`
+spellings; the expected form is `vcvtq_f32_s32`. The same source bodies also
+need to preserve C++ behavior and avoid a Python-side table of NEON primitive
+or intrinsic spelling exceptions.
+
+Decision:
+
+Keep this spelling in source-owned TSIL intrinsic composition metadata. The
+NEON `cast` implementations use the existing
+`intrin<..., build[infix=..., infix_sep="_", suffix=...]>` form so the
+generated intrinsic name is built as `vcvtq_<to>_<from>`.
+
+Do not add primitive-name, extension-name, or backend intrinsic-name classifier
+branches in renderers. The source body owns the intrinsic spelling pieces; the
+lowerer evaluates typed generation-time selectors; renderers format the
+already-decided call.
+
+Consequences:
+
+- Native NEON `cast` now compiles and passes C++/Rust value tests through QEMU.
+- The broad fixed-width NEON C++/Rust gate now builds and runs the current
+  selected corpus through QEMU.
+- Future spelling mismatches should first be treated as source-data
+  composition issues or typed intrinsic-build capability gaps, not renderer
+  tables.

@@ -60,7 +60,8 @@ def render_rust_values_file(profiles: tuple[ValueTestProfilePlan, ...]) -> str:
             f"{body}\n"
             "}"
         )
-    return "\n\n".join(sections) + "\n"
+    source = "\n\n".join(sections) + "\n"
+    return "\n".join(line.rstrip() for line in source.splitlines()) + "\n"
 
 
 def _render_case(case: ValueTestCasePlan) -> str:
