@@ -59,6 +59,11 @@ def test_profile_reachability(catalog: Catalog, machine_profiles) -> None:
     assert {"avx2_vl", "sse_vl", "avx512"} <= sky
     assert "avx2" not in sky and "sse" not in sky
 
+    # neon is the fixed-width ARM substrate admitted in this slice; scalable SVE remains deferred.
+    neon = {s.extension.name for s in _slots(catalog, machine_profiles["neon"], "add")}
+    assert "neon" in neon
+    assert "sve" not in neon
+
 
 def test_type_group_specificity_resolves_hadd(catalog: Catalog, machine_profiles) -> None:
     # hadd avx2 has both an f64-specific body and an arith-general body; the
@@ -105,6 +110,59 @@ def test_lower_scalar_add_has_no_unsafe(catalog: Catalog, machine_profiles) -> N
     ).specialization
     assert rust.base_type_spelling == "i32"
     assert rust.body_text == "return left.tsl_add(right);"
+
+
+@pytest.mark.parametrize("backend_id", ("cpp", "rust"))
+def test_fixed_non_x86_extension_requires_register_metadata(backend_id: str) -> None:
+    ext = Extension(
+        name="tiny_arm",
+        isa_name="tiny_arm",
+        family="arm",
+        compose_prefix={},
+        compose_suffix_by_type={},
+        vector_bits=128,
+    )
+    impl = Implementation(
+        ("tiny_arm", "ints"),
+        "tiny_arm",
+        "ints",
+        "complete(data);",
+        source_order=0,
+    )
+    prim = Primitive(
+        name="metadata_guard",
+        signature="v:=v",
+        parameters=("data",),
+        attribute_keys=(),
+        implementations=(impl,),
+    )
+    catalog = Catalog(
+        primitives=(prim,),
+        type_groups={"ints": ("si32",)},
+        extensions={"tiny_arm": ext},
+        type_spellings={
+            "cpp": {"s32": "int32_t"},
+            "rust": {"s32": "i32"},
+        },
+        translations={
+            "cpp": {"complete": "return {value}"},
+            "rust": {"complete": "return {value}"},
+        },
+    )
+    slot = SelectedImplementation(
+        primitive=prim,
+        implementation=impl,
+        extension=ext,
+        type_tag="si32",
+    )
+
+    lowered = Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend_id))
+
+    assert lowered.specialization is None
+    assert [diagnostic.code for diagnostic in lowered.diagnostics] == [
+        "TSL-LOWER-NO-REGISTER-TYPE"
+    ]
+    assert "tiny_arm" in lowered.diagnostics[0].message
 
 
 def test_backend_value_query_uses_backend_translation_template(

@@ -39,6 +39,12 @@ class _CppTypes:
         if uses_sized_vector:
             # A sized-vector target is projected through the generated sized-vector substrate.
             return f"typename {self.sized_vector_spelling(base, lane_parameter)}::register_type"
+        if common.requires_declared_vector_register(self.catalog, extension_isa):
+            declared = common.vector_register_type(
+                self.catalog, self.backend_id, extension_isa, base_tag
+            )
+            if declared is None:
+                return None
         return f"typename {self.vector_type_spelling(base, extension_isa)}::register_type"
 
     def register_type_spelling(self) -> str:

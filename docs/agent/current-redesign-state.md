@@ -2560,8 +2560,69 @@ Result: generated `878` Rust specializations, cross-built for
 `aarch64-unknown-linux-musl`, ran through `qemu-aarch64 -cpu cortex-a76`, and
 passed `229` generated value tests.
 
+Review result:
+
+```text
+Accept With Follow-Ups
+```
+
+The review found no blocking defect in the NEON slice. Native register
+spellings flow from typed catalog metadata, renderers format already-lowered
+facts, fixed-width `arm` emission is enabled, and SVE/scalable-vector emission
+remains deferred. Fresh review validation passed:
+
+```text
+python -m compileall -q tslc/src/tslc
+python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_profile_rendering.py tslc/tests/test_value_test_planning.py tslc/tests/test_safety_contract.py
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --profiles neon --primitives add --backends rust --output-root /tmp/tslc-neon-native-test-audit --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64
+./verify.sh
+git diff --check
+```
+
+Follow-up: make the native register metadata invariant explicit before adding
+more fixed-width non-x86 extensions. A selected fixed-width native extension
+without backend register metadata should produce a structured diagnostic rather
+than falling through to backend/render behavior.
+
+Follow-up fixed:
+
+```text
+Completed Native Register Metadata Guardrail
+```
+
+Backend-neutral translation now names fixed-width non-x86 native substrates as
+requiring declared `vector_register_types`. C++ and Rust type dialects return
+`None` for such extensions when the selected backend/type has no register
+metadata, so the existing lowerer diagnostic path reports
+`TSL-LOWER-NO-REGISTER-TYPE` before rendering. Representation-change target
+vectors now check the same register-spelling boundary instead of carrying a
+nullable target register into renderers.
+
+Regression coverage:
+
+- fake fixed-width ARM extension without C++/Rust register metadata diagnoses
+  `TSL-LOWER-NO-REGISTER-TYPE`;
+- NEON remains selected for the `neon` profile;
+- SVE remains skipped/deferred because it is scalable;
+- existing NEON native render tests continue to assert metadata-derived C++ and
+  Rust register types.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+python -m pytest -q tslc/tests/test_select_and_lower.py::test_profile_reachability tslc/tests/test_select_and_lower.py::test_fixed_non_x86_extension_requires_register_metadata
+python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_profile_rendering.py tslc/tests/test_select_and_lower.py
+python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_safety_contract.py
+./verify.sh
+git diff --check
+```
+
+Result: all passed. `./verify.sh` collected `242` non-build tests, ran `5`
+serial value-test build/run checks, and passed `53` generated-build tests.
+
 Next prompt:
 
 ```text
-docs/agent/runs/tslc-native-neon-codegen-review-prompt.md
+docs/agent/runs/tslc-cpp-neon-runtime-verification-planning-prompt.md
 ```

@@ -559,16 +559,24 @@ def _resolve_target_vector(
                 if windowing
                 else support.size_parameter_name(selected.extension)
             )
+        register_spelling = backend.types.target_register_spelling(
+            selected.to_target,
+            selected.extension.isa_name,
+            uses_sized_vector=True,
+            lane_parameter=lane_parameter,
+        )
+        if register_spelling is None:
+            return _error(
+                "TSL-LOWER-NO-REGISTER-TYPE",
+                f"no {backend.backend_id} register-type spelling for target "
+                f"{selected.extension.isa_name!r} / {selected.to_target!r}",
+                source=_implementation_source(selected),
+            )
         return TargetVector(
             vector_spelling=backend.types.sized_vector_spelling(
                 to_base_spelling, lane_parameter
             ),
-            register_spelling=backend.types.target_register_spelling(
-                selected.to_target,
-                selected.extension.isa_name,
-                uses_sized_vector=True,
-                lane_parameter=lane_parameter,
-            ),
+            register_spelling=register_spelling,
             extension_isa=selected.extension.isa_name,
             base_tag=selected.to_target,
             base_spelling=to_base_spelling,
@@ -592,6 +600,19 @@ def _resolve_target_vector(
         lane_parameter = (
             support.size_parameter_name(selected.extension) if uses_sized_vector else None
         )
+        register_spelling = backend.types.target_register_spelling(
+            selected.to_target,
+            selected.extension.isa_name,
+            uses_sized_vector=uses_sized_vector,
+            lane_parameter=lane_parameter,
+        )
+        if register_spelling is None:
+            return _error(
+                "TSL-LOWER-NO-REGISTER-TYPE",
+                f"no {backend.backend_id} register-type spelling for target "
+                f"{selected.extension.isa_name!r} / {selected.to_target!r}",
+                source=_implementation_source(selected),
+            )
         return TargetVector(
             vector_spelling=(
                 backend.types.sized_vector_spelling(to_base_spelling, lane_parameter)
@@ -600,12 +621,7 @@ def _resolve_target_vector(
                     to_base_spelling, selected.extension.isa_name
                 )
             ),
-            register_spelling=backend.types.target_register_spelling(
-                selected.to_target,
-                selected.extension.isa_name,
-                uses_sized_vector=uses_sized_vector,
-                lane_parameter=lane_parameter,
-            ),
+            register_spelling=register_spelling,
             extension_isa=selected.extension.isa_name,
             base_tag=selected.to_target,
             base_spelling=to_base_spelling,
@@ -625,18 +641,26 @@ def _resolve_target_vector(
         else support.size_parameter_name(selected.extension)
     )
     scope.bind_extension_symbol(alias, target_isa)
+    register_spelling = backend.types.target_register_spelling(
+        selected.type_tag,
+        target_isa,
+        uses_sized_vector=target_uses_sized_vector,
+        lane_parameter=target_lane_parameter,
+    )
+    if register_spelling is None:
+        return _error(
+            "TSL-LOWER-NO-REGISTER-TYPE",
+            f"no {backend.backend_id} register-type spelling for target "
+            f"{target_isa!r} / {selected.type_tag!r}",
+            source=_implementation_source(selected),
+        )
     return TargetVector(
         vector_spelling=(
             backend.types.sized_vector_spelling(base_type_spelling, target_lane_parameter)
             if target_uses_sized_vector
             else backend.types.vector_type_spelling(base_type_spelling, target_isa)
         ),
-        register_spelling=backend.types.target_register_spelling(
-            selected.type_tag,
-            target_isa,
-            uses_sized_vector=target_uses_sized_vector,
-            lane_parameter=target_lane_parameter,
-        ),
+        register_spelling=register_spelling,
         extension_isa=target_isa,
         base_tag=selected.type_tag,
         base_spelling=base_type_spelling,

@@ -87,6 +87,8 @@ class _RustTypes:
         )
         if declared is not None:
             return declared
+        if common.requires_declared_vector_register(self.catalog, extension_isa):
+            return None
         width = common.X86_REGISTER_BITS.get(extension_isa)
         if width is None:
             return base
