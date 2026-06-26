@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import string
 from typing import TYPE_CHECKING
 
 from tslc.backend.cpp import CppBackend
@@ -19,6 +20,13 @@ if TYPE_CHECKING:
     from tslc.render.project import ProfileRender
 
 _CPP_REG_HELPER = {128: "reg128", 256: "reg256", 512: "reg512"}
+
+
+class _AtTemplate(string.Template):
+    # Generated build files (CMake/shell) use `${VAR}` natively, so the substitution delimiter is
+    # `@` (CMake's own `configure_file @ONLY` convention). This lets the `.tmpl` asset read as a
+    # real build file — `${TSL_PROFILE}` passes through untouched; only `@{name}` holes are filled.
+    delimiter = "@"
 
 
 def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
@@ -217,36 +225,22 @@ def _concrete_arg_type(vec: str, kind: str) -> str:
 
 
 def _cpp_cmakelists(profiles: tuple[ProfileRender, ...]) -> str:
-    lines = [
-        "cmake_minimum_required(VERSION 3.16)",
-        "project(tsl_generated_cpp CXX)",
-        "set(CMAKE_CXX_STANDARD 17)",
-        "set(CMAKE_CXX_STANDARD_REQUIRED ON)",
-        "if(NOT DEFINED TSL_PROFILE)",
-        "  set(TSL_PROFILE scalar)",
-        "endif()",
-        'string(TOUPPER "${TSL_PROFILE}" TSL_PROFILE_UPPER)',
-        "enable_testing()",
-        # The smoke binary forces every wrapper specialization to compile; the values binary
-        # runs the generated value-correctness checks (returns non-zero on a lane mismatch).
-        "add_executable(tsl_smoke tests/smoke_${TSL_PROFILE}.cpp)",
-        "add_executable(tsl_values tests/values_${TSL_PROFILE}.cpp)",
-        "foreach(target tsl_smoke tsl_values)",
-        "  target_include_directories(${target} PRIVATE include)",
-        "  target_compile_definitions(${target} PRIVATE TSL_PROFILE_${TSL_PROFILE_UPPER})",
-        "endforeach()",
-        "add_test(NAME values COMMAND tsl_values)",
-    ]
+    # The static CMake shape lives in the `cpp_cmakelists.txt.tmpl` asset (readable as real CMake);
+    # only the per-profile ISA-flag blocks are computed here and substituted into `@{profile_options}`.
+    # Each block pins a profile's `-m…` features so a smoke/values build under that profile gets them.
+    blocks: list[str] = []
     for profile_render in profiles:
         flags = cpp_flags(profile_render.profile)
         if not flags:
             continue
-        lines.append(f'if(TSL_PROFILE STREQUAL "{slug(profile_render.profile.name)}")')
-        lines.append(
-            f"  target_compile_options(tsl_smoke PRIVATE {' '.join(flags)})"
+        joined = " ".join(flags)
+        blocks.append(
+            f'if(TSL_PROFILE STREQUAL "{slug(profile_render.profile.name)}")\n'
+            f"  target_compile_options(tsl_smoke PRIVATE {joined})\n"
+            f"  target_compile_options(tsl_values PRIVATE {joined})\n"
+            "endif()"
         )
-        lines.append(
-            f"  target_compile_options(tsl_values PRIVATE {' '.join(flags)})"
-        )
-        lines.append("endif()")
-    return "\n".join(lines) + "\n"
+    rendered = _AtTemplate(asset("cpp_cmakelists.txt.tmpl")).substitute(
+        profile_options="\n".join(blocks)
+    )
+    return rendered.rstrip("\n") + "\n"
