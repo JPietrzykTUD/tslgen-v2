@@ -245,7 +245,7 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
               );
             } else<generation> {
               complete(
-                intrin<maskz_load, build>(
+                intrin<maskz_loadu, build>(
                   mask, ptr
                 )
               );
