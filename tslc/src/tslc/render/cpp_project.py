@@ -9,10 +9,18 @@ from tslc.backend.translation import X86_REGISTER_BITS
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
 from tslc.catalog.signatures import is_free_function_signature
-from tslc.lower.lowerer import varying_positions
+from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 from tslc.output.artifacts import Artifact
 from tslc.output.verify import VerifyEmulator, VerifyProfile
-from tslc.render._common import asset, feature_spelling, fill_asset, slug, text, used_exts
+from tslc.render._common import (
+    asset,
+    feature_spelling,
+    fill_asset,
+    slug,
+    text,
+    used_exts,
+    used_type_specs,
+)
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 if TYPE_CHECKING:
@@ -28,12 +36,15 @@ def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
         text("cpp/include/tsl_x86_traits.hpp", asset("tsl_x86_traits.hpp")),
     ]
     for profile_render in profiles:
-        x86_exts = [e for e in used_exts(profile_render.cpp) if e in X86_REGISTER_BITS]
-        includes = '#include "tsl_core.hpp"\n'
-        if x86_exts:
-            includes += '#include "tsl_x86_traits.hpp"\n'
+        emitted_exts = used_exts(profile_render.cpp)
+        x86_exts = [e for e in emitted_exts if e in X86_REGISTER_BITS]
+        includes = _cpp_includes(emitted_exts, profile_render.extensions)
         registrations = "".join(
-            _cpp_registration(ext, profile_render.extensions.get(ext)) for ext in x86_exts
+            _cpp_registration(ext, profile_render.extensions.get(ext))
+            for ext in x86_exts
+        )
+        registrations += _cpp_native_registration(
+            profile_render.cpp, profile_render.extensions
         )
         # All declarations (impl primary templates + wrappers) precede all
         # specialization bodies, so any body may call any primitive's wrapper.
@@ -113,6 +124,22 @@ def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
     )
 
 
+def _cpp_includes(emitted_exts: list[str], extensions: dict[str, Extension]) -> str:
+    lines = ['#include "tsl_core.hpp"']
+    if any(ext in X86_REGISTER_BITS for ext in emitted_exts):
+        lines.append('#include "tsl_x86_traits.hpp"')
+    headers = sorted(
+        {
+            header
+            for ext in emitted_exts
+            if ext in extensions
+            for header in extensions[ext].headers_for_backend("cpp")
+        }
+    )
+    lines.extend(f"#include <{header}>" for header in headers)
+    return "\n".join(lines) + "\n"
+
+
 def _cpp_registration(ext: str, extension: Extension | None) -> str:
     """A C++ extension tag + `simd<T, ext>` register/mask-type wiring for one ISA ext."""
 
@@ -135,13 +162,59 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
     )
 
 
-def _cpp_imask_type(extension: Extension | None, vector_bits: int, mask: str) -> str:
+def _cpp_native_registration(
+    by_primitive: dict[str, tuple[LoweredSpecialization, ...]],
+    extensions: dict[str, Extension],
+) -> str:
+    """Register non-x86 fixed native extensions from typed register spellings."""
+
+    lines: list[str] = []
+    emitted = {
+        ext
+        for ext, type_tag, _base in used_type_specs(by_primitive)
+        if ext not in X86_REGISTER_BITS
+        and (extension := extensions.get(ext)) is not None
+        and extension.direct_vector_register_type("cpp", type_tag) is not None
+    }
+    for ext in sorted(emitted):
+        lines.append(f"struct {ext} {{}};\n")
+    for ext, type_tag, base in used_type_specs(by_primitive):
+        if ext in X86_REGISTER_BITS:
+            continue
+        extension = extensions.get(ext)
+        if extension is None:
+            continue
+        register = extension.direct_vector_register_type("cpp", type_tag)
+        if register is None:
+            continue
+        bits = extension.vector_bits
+        mask = register
+        imask = _cpp_imask_type(extension, bits, mask, base_type=base)
+        lines.append(
+            f"template <>\n"
+            f"struct simd<{base}, {ext}> {{\n"
+            f"    using base_type = {base};\n"
+            f"    using register_type = {register};\n"
+            f"    using mask_type = {mask};\n"
+            f"    using imask_type = {imask};\n"
+            f"}};\n\n"
+        )
+    return "".join(lines)
+
+
+def _cpp_imask_type(
+    extension: Extension | None,
+    vector_bits: int,
+    mask: str,
+    *,
+    base_type: str = "T",
+) -> str:
     """The C++ integral-mask type for one x86 `simd<T, ext>` registration."""
 
     kind = extension.imask_policy.kind if extension is not None else "lane_bitmask"
     if kind == "same_as_mask_type":
         return mask
-    return f"typename detail::lane_bitmask_int<{vector_bits}, T>::type"
+    return f"typename detail::lane_bitmask_int<{vector_bits}, {base_type}>::type"
 
 
 def _cpp_dispatch(profiles: tuple[ProfileRender, ...]) -> str:

@@ -25,6 +25,36 @@ def default_suffix(extension: Extension, type_tag: str) -> str | None:
     return extension.compose_suffix_by_type.get(type_tag)
 
 
+def vector_register_type(
+    catalog: Catalog,
+    backend_id: str,
+    extension_isa: str,
+    type_tag: str,
+) -> str | None:
+    """Native register spelling declared by the selected extension metadata."""
+
+    for extension in _extensions_for_isa(catalog, extension_isa):
+        exact = extension.direct_vector_register_type(backend_id, type_tag)
+        if exact is not None:
+            return exact
+        for key in sorted(extension.vector_register_types):
+            if catalog.type_group_contains(key, type_tag):
+                spelling = extension.direct_vector_register_type(backend_id, key)
+                if spelling is not None:
+                    return spelling
+    return None
+
+
+def _extensions_for_isa(catalog: Catalog, extension_isa: str) -> tuple[Extension, ...]:
+    exact = catalog.extensions.get(extension_isa)
+    matches = [
+        extension
+        for name, extension in sorted(catalog.extensions.items())
+        if name != extension_isa and extension.isa_name == extension_isa
+    ]
+    return ((exact,) if exact is not None else ()) + tuple(matches)
+
+
 def compose_intrinsic_name(
     backend_id: str,
     extension: Extension,

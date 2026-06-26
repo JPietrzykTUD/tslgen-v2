@@ -79,6 +79,29 @@ def used_pairs(
     return sorted(pairs)
 
 
+def used_type_specs(
+    by_primitive: dict[str, tuple[LoweredSpecialization, ...]],
+) -> list[tuple[str, str, str]]:
+    """Used ``(extension, type_tag, base_spelling)`` triples, including targets."""
+
+    specs: set[tuple[str, str, str]] = set()
+    for lowered_specs in by_primitive.values():
+        specs.update(
+            (spec.extension_name, spec.type_tag, spec.base_type_spelling)
+            for spec in lowered_specs
+        )
+        specs.update(
+            (
+                spec.target.extension_isa,
+                spec.target.base_tag,
+                spec.target.base_spelling,
+            )
+            for spec in lowered_specs
+            if spec.target
+        )
+    return sorted(specs)
+
+
 def type_bits(base_spelling: str) -> int:
     """Bit width from a base-type spelling: ``i8``/``u32``/``f64`` -> 8/32/64."""
 

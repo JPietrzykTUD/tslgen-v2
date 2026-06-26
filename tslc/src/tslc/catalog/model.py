@@ -304,9 +304,9 @@ class Extension:
     """Hardware target metadata needed for backend translation.
 
     Identity is the TSL block name (`avx2` and `avx2_vl` are distinct extensions
-    even though they share an ISA spelling). Register types are *not* modeled here
-    — the generated library's static `simd<>` core supplies them; this carries only
-    what backend translation consumes (the intrinsic family and compose fragments).
+    even though they share an ISA spelling). Native register types and backend
+    headers are source-owned extension facts; generated core code consumes them
+    when it registers a concrete `simd<>` substrate for that extension.
     """
 
     name: str  # internal identity = TSL block name (e.g. "avx2_vl"); drives selection
@@ -314,6 +314,10 @@ class Extension:
     family: str  # "x86" | "arm" | "scalar" | … — picks the Rust core::arch module
     compose_prefix: Mapping[str, str]  # backend_id -> intrinsic prefix
     compose_suffix_by_type: Mapping[str, str]  # type tag -> suffix fragment
+    vector_register_types: Mapping[str, Mapping[str, str]] = field(
+        default_factory=dict
+    )  # type tag/group -> backend_id -> register type
+    backend_headers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     intrinsic_style: str = ""
     inherits: str | None = None  # extension this one borrows impls/metadata from
     lscpu_flags: frozenset[str] = frozenset()  # features that make this extension available
@@ -346,6 +350,31 @@ class Extension:
             "compose_suffix_by_type",
             _freeze_mapping(self.compose_suffix_by_type),
         )
+        object.__setattr__(
+            self,
+            "vector_register_types",
+            _freeze_nested_mapping(self.vector_register_types),
+        )
+        object.__setattr__(
+            self,
+            "backend_headers",
+            MappingProxyType(
+                {
+                    backend: tuple(headers)
+                    for backend, headers in self.backend_headers.items()
+                }
+            ),
+        )
+
+    def direct_vector_register_type(
+        self, backend_id: str, type_tag_or_group: str
+    ) -> str | None:
+        """The declared register spelling for an exact type tag/group key."""
+
+        return self.vector_register_types.get(type_tag_or_group, {}).get(backend_id)
+
+    def headers_for_backend(self, backend_id: str) -> tuple[str, ...]:
+        return self.backend_headers.get(backend_id, ())
 
 
 @dataclass(frozen=True, slots=True)

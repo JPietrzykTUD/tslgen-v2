@@ -83,11 +83,11 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
               tsil "complete(cast<bitcast>(type<generation>(register::generic(ToType)), data));"
           arith:
             safety:
-              internal_unsafe true
+              internal_unsafe false
               caller_unsafe false
-              reasons [intrinsic]
+              reasons []
             implementation:
-              tsil "complete(cast<bitcast>(type<generation>(register::generic(ToType)), intrin<vreinterpretq, build[infix=to_type_suffix, suffix=base::in]>(data)));"
+              tsil "complete(cast<bitcast>(type<generation>(register::generic(ToType)), data));"
       f?:
         requires [neon]
         ToBase:
@@ -100,11 +100,11 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
               tsil "complete(cast<bitcast>(type<generation>(register::generic(ToType)), data));"
           arith:
             safety:
-              internal_unsafe true
+              internal_unsafe false
               caller_unsafe false
-              reasons [intrinsic]
+              reasons []
             implementation:
-              tsil "complete(cast<bitcast>(type<generation>(register::generic(ToType)), intrin<vreinterpretq, build[infix=to_type_suffix, suffix=base::in]>(data)));"
+              tsil "complete(cast<bitcast>(type<generation>(register::generic(ToType)), data));"
     sve:
       ?i?:
         requires [sve]

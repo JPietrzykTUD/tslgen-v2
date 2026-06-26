@@ -112,12 +112,7 @@ class RustBackend:
                 RenderContext(
                     backend_id=self.backend_id,
                     current_vector=vec,
-                    current_register=rust_register_type(
-                        spec.extension_name,
-                        spec.base_type_spelling,
-                        uses_sized_vector=spec.uses_sized_vector,
-                        lane_parameter=lane_parameter,
-                    ),
+                    current_register=spec.register_spelling,
                     current_base=spec.base_type_spelling,
                     current_mask=f"<{vec} as SimdVector>::MaskType",
                     current_imask=f"<{vec} as SimdVector>::ImaskType",
@@ -224,11 +219,21 @@ class RustBackend:
             if spec.extension_name in X86_REGISTER_BITS
             else None
         )
+        body = spec.body.render(
+            RenderContext(
+                backend_id=self.backend_id,
+                current_vector=key,
+                current_register=spec.register_spelling,
+                current_base=spec.base_type_spelling,
+                current_mask=f"<{key} as SimdVector>::MaskType",
+                current_imask=f"<{key} as SimdVector>::ImaskType",
+            )
+        )
         return (
             f"impl{impl_generics} {_trait_name(spec.primitive_name)}{trait_args} for {key}"
             f"{_index_where(spec, impl_register=impl_register)} {{\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret} {{\n"
-            f"        {spec.body_text}\n"
+            f"        {body}\n"
             f"    }}\n"
             f"}}"
         )
@@ -419,12 +424,7 @@ def _rust_concrete(spec: LoweredSpecialization, kind: str) -> str:
 
     base = spec.base_type_spelling
     if kind == "v":
-        return rust_register_type(
-            spec.extension_name,
-            base,
-            uses_sized_vector=spec.uses_sized_vector,
-            lane_parameter=spec.lane_parameter,
-        )
+        return spec.register_spelling
     if DEFAULT_SUPPORT_POLICY.is_const_pointer_kind(kind):
         return f"*const {base}"
     if DEFAULT_SUPPORT_POLICY.is_mutable_pointer_kind(kind):
@@ -434,19 +434,9 @@ def _rust_concrete(spec: LoweredSpecialization, kind: str) -> str:
     if kind == "void":
         return "()"
     if kind == "m":  # not reached by current overloads (store/shift vary in v/s)
-        return rust_register_type(
-            spec.extension_name,
-            base,
-            uses_sized_vector=spec.uses_sized_vector,
-            lane_parameter=spec.lane_parameter,
-        )
+        return spec.register_spelling
     if kind == "im":  # not reached by current overloads (to_integral is single-param)
-        return rust_register_type(
-            spec.extension_name,
-            base,
-            uses_sized_vector=spec.uses_sized_vector,
-            lane_parameter=spec.lane_parameter,
-        )
+        return spec.register_spelling
     if kind == "usize":  # a count type; not reached by current overloads
         return "usize"
     return base  # s

@@ -20,12 +20,20 @@ from tslc.render._common import (
     type_bits,
     used_exts,
     used_pairs,
+    used_type_specs,
 )
 
 if TYPE_CHECKING:
     from tslc.render.project import ProfileRender
 
 _RUST_TAG = {"scalar": "Scalar", "sse": "Sse", "avx2": "Avx2", "avx512": "Avx512"}
+_RUST_ARCH_MODULE = {"x86": "x86_64", "arm": "aarch64"}
+
+
+def _rust_tag(extension_name: str) -> str:
+    return _RUST_TAG.get(
+        extension_name, extension_name[:1].upper() + extension_name[1:]
+    )
 
 
 def rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
@@ -37,12 +45,11 @@ def rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
             backend.render_primitive(name, profile_render.rust[name])
             for name in sorted(profile_render.rust)
         )
-        # x86 profiles bring the arch module into scope so intrinsic constant
-        # arguments left verbatim in bodies resolve; intrinsics themselves stay fully
-        # qualified, so the glob is only for those constants.
-        arch_use = ""
-        if any(e in X86_REGISTER_BITS for e in used_exts(profile_render.rust)):
-            arch_use = "#[allow(unused_imports)]\nuse core::arch::x86_64::*;\n"
+        # Arch modules are imported for intrinsic constants left verbatim in bodies.
+        # Intrinsics themselves stay fully qualified by lowering.
+        arch_use = _rust_arch_use(
+            used_exts(profile_render.rust), profile_render.extensions
+        )
         content = fill_asset(
             "rust_profile_module.rs.tmpl",
             arch_use=arch_use,
@@ -89,6 +96,22 @@ def rust_linker(profile: MachineProfile) -> str | None:
     return "rust-lld" if profile.family == "aarch64" else None
 
 
+def _rust_arch_use(emitted_exts: list[str], extensions: dict[str, Extension]) -> str:
+    modules = {
+        module
+        for ext in emitted_exts
+        if (extension := extensions.get(ext)) is not None
+        if (module := _RUST_ARCH_MODULE.get(extension.family)) is not None
+    }
+    if not modules:
+        return ""
+    lines = [
+        "#[allow(unused_imports)]",
+        *(f"use core::arch::{module}::*;" for module in sorted(modules)),
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
     if profile.emulator is None:
         return None
@@ -107,8 +130,9 @@ def _rust_registrations(
 
     lines: list[str] = []
     for ext in used_exts(by_primitive):
-        if ext in X86_REGISTER_BITS:
-            lines.append(f"pub struct {_RUST_TAG[ext]};")
+        extension = extensions.get(ext)
+        if ext in X86_REGISTER_BITS or _has_rust_registers(by_primitive, ext, extension):
+            lines.append(f"pub struct {_rust_tag(ext)};")
     for ext, base in used_pairs(by_primitive):
         if ext not in X86_REGISTER_BITS:
             continue
@@ -118,11 +142,43 @@ def _rust_registrations(
         imask = _rust_imask_type(extensions.get(ext), base, mask, bits)
         array = f"array_type<{base}, {bits // type_bits(base)}, {bits // 8}>"
         lines.append(
-            f"impl SimdVector for Simd<{base}, {_RUST_TAG[ext]}> {{ "
+            f"impl SimdVector for Simd<{base}, {_rust_tag(ext)}> {{ "
+            f"type BaseType = {base}; type RegisterType = {register}; "
+            f"type MaskType = {mask}; type ImaskType = {imask}; type Array = {array}; }}"
+        )
+    for ext, type_tag, base in used_type_specs(by_primitive):
+        if ext in X86_REGISTER_BITS:
+            continue
+        extension = extensions.get(ext)
+        if extension is None:
+            continue
+        register = extension.direct_vector_register_type("rust", type_tag)
+        if register is None:
+            continue
+        bits = extension.vector_bits
+        mask = _rust_mask_type(extension, base, register)
+        imask = _rust_imask_type(extension, base, mask, bits)
+        array = f"array_type<{base}, {bits // type_bits(base)}, {bits // 8}>"
+        lines.append(
+            f"impl SimdVector for Simd<{base}, {_rust_tag(ext)}> {{ "
             f"type BaseType = {base}; type RegisterType = {register}; "
             f"type MaskType = {mask}; type ImaskType = {imask}; type Array = {array}; }}"
         )
     return ("\n".join(lines) + "\n\n") if lines else ""
+
+
+def _has_rust_registers(
+    by_primitive: dict[str, tuple[LoweredSpecialization, ...]],
+    ext: str,
+    extension: Extension | None,
+) -> bool:
+    if extension is None:
+        return False
+    return any(
+        used_ext == ext
+        and extension.direct_vector_register_type("rust", type_tag) is not None
+        for used_ext, type_tag, _base in used_type_specs(by_primitive)
+    )
 
 
 def _rust_mask_type(extension: Extension | None, base_spelling: str, register: str) -> str:

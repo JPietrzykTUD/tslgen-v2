@@ -90,6 +90,7 @@ class LoweredSpecialization:
     extension_name: str  # the simd<> extension tag, e.g. "avx2"
     type_tag: str
     base_type_spelling: str  # the simd<> base-type arg, e.g. "int32_t" / "i32"
+    register_spelling: str  # the concrete register type for this specialization
     result_kind: str  # "v" | "s"
     param_names: tuple[str, ...]
     param_kinds: tuple[str, ...]
@@ -261,6 +262,25 @@ class Lowerer:
                 f"no {backend.backend_id} base-type spelling for {selected.type_tag!r}",
                 source=_implementation_source(selected),
             )
+        uses_sized_vector = self._support.uses_sized_vector(selected.extension)
+        lane_parameter = (
+            str(selected.concrete_lanes)
+            if selected.concrete_lanes is not None
+            else self._support.size_parameter_name(selected.extension)
+        ) if uses_sized_vector else None
+        register_spelling = backend.types.target_register_spelling(
+            selected.type_tag,
+            selected.extension.isa_name,
+            uses_sized_vector=uses_sized_vector,
+            lane_parameter=lane_parameter,
+        )
+        if register_spelling is None:
+            return _error(
+                "TSL-LOWER-NO-REGISTER-TYPE",
+                f"no {backend.backend_id} register-type spelling for "
+                f"{selected.extension.isa_name!r} / {selected.type_tag!r}",
+                source=_implementation_source(selected),
+            )
 
         # A representation-change primitive produces a TARGET vector; resolve it (and bind
         # its declared target alias into the scope), or propagate the skip/error it returns.
@@ -371,16 +391,13 @@ class Lowerer:
             extension_name=context.env.extension.isa_name,
             type_tag=context.env.type_tag,
             base_type_spelling=base_type_spelling,
+            register_spelling=register_spelling,
             result_kind=shape.result_kind,
             param_names=parameters,
             param_kinds=shape.param_kinds,
             body=body,
-            uses_sized_vector=self._support.uses_sized_vector(context.env.extension),
-            lane_parameter=(
-                context.env.lane_symbol()
-                if self._support.uses_sized_vector(context.env.extension)
-                else None
-            ),
+            uses_sized_vector=uses_sized_vector,
+            lane_parameter=lane_parameter,
             axis=tuple(
                 (key, selected.primitive.attributes[key])
                 for key in sorted(selected.primitive.attributes)

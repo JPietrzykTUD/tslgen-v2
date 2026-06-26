@@ -89,3 +89,31 @@ def test_omitted_profiles_use_all_loaded_profiles(
     assert "cpp/include/tsl_neon.hpp" in {
         artifact.logical_path for artifact in result.artifacts.artifacts
     }
+
+
+def test_neon_profile_registers_native_simd_types(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["add"],
+        profiles=["neon"],
+        backends=["cpp", "rust"],
+    )
+    by_path = {artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts}
+
+    cpp = by_path["cpp/include/tsl_neon.hpp"]
+    assert "#include <arm_neon.h>" in cpp
+    assert "struct neon {};" in cpp
+    assert "struct simd<int32_t, neon>" in cpp
+    assert "using register_type = int32x4_t;" in cpp
+    assert "return vaddq_s32(left, right);" in cpp
+
+    rust = by_path["rust/src/tsl_neon.rs"]
+    assert "use core::arch::aarch64::*;" in rust
+    assert "pub struct Neon;" in rust
+    assert "impl SimdVector for Simd<i32, Neon>" in rust
+    assert "type RegisterType = core::arch::aarch64::int32x4_t;" in rust
+    assert "return core::arch::aarch64::vaddq_s32(left, right);" in rust

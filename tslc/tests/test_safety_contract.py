@@ -415,6 +415,7 @@ def _spec(
         extension_name="scalar",
         type_tag="si32",
         base_type_spelling="i32",
+        register_spelling="i32",
         result_kind="v",
         param_names=param_names,
         param_kinds=param_kinds,

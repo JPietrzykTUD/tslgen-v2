@@ -438,8 +438,7 @@ prim<v:=()>[value=undef] set_undef():
           reasons []
         implementation:
           tsil """
-              let<type>(Value, type<generation>(vector::register));
-              Value value;
+              var<typed>(type<generation>(vector::register), value, value<backend>(uninit::array));
               complete(value);
             """
     sve:

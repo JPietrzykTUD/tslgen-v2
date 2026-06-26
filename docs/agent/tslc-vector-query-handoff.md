@@ -1026,6 +1026,75 @@ git diff --check
 
 Result: passed.
 
+### Native NEON Fixed-Width Codegen Slice
+
+The NEON profile now emits native fixed-width extension substrates instead of
+only scalar/generic fallback coverage.
+
+Implementation notes:
+
+1. `Extension` promotes `vector_register_types` and backend headers from
+   `tsldata/extensions/extension.tsl` into typed catalog metadata.
+2. Lowering records each specialization's concrete `register_spelling`, so
+   Rust backend rendering consumes an already-decided register type.
+3. C++ profile rendering registers non-x86 fixed native extension tags from
+   typed register metadata and includes extension-owned C++ headers such as
+   `<arm_neon.h>`.
+4. Rust profile rendering registers `Neon` from typed register metadata and
+   imports `core::arch::aarch64::*` for ARM-profile modules.
+5. `SupportPolicy` now admits fixed-width `arm` extension substrates while
+   keeping scalable vectors such as SVE deferred.
+6. NEON source bodies reached by the `add` closure were repaired with existing
+   typed TSIL forms: `blend` uses `intrin<vbslq, build[suffix=base::in]>`,
+   NEON `reinterpret` uses semantic bitcast, and NEON `set_undef` uses a typed
+   uninitialized register declaration.
+
+Validation for this slice:
+
+```bash
+python -m compileall -q tslc/src/tslc
+```
+
+Result: passed.
+
+```bash
+python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_profile_rendering.py tslc/tests/test_value_test_planning.py tslc/tests/test_safety_contract.py
+```
+
+Result: `43 passed`.
+
+```bash
+./verify.sh
+```
+
+Result: passed all targeted validations: `240` non-build tests collected, `5`
+value-test build/run checks run serially, and `53` generated-build tests
+passed across the generated-build shards.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --profiles neon --primitives add --backends rust --output-root /tmp/tslc-neon-native-test --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64
+```
+
+Result: generated `878` Rust specializations, cross-built the NEON-profile
+test binaries for `aarch64-unknown-linux-musl`, ran them through
+`qemu-aarch64 -cpu cortex-a76`, and passed `229` generated value tests.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --profiles neon --primitives add --backends cpp,rust --output-root /tmp/tslc-neon-native-smoke --value-test-warnings
+```
+
+Result: generated native C++ and Rust NEON profile artifacts. The generated
+C++ header contains `#include <arm_neon.h>`, `struct neon`, and
+`simd<int32_t, neon>` with `register_type = int32x4_t`; the Rust module
+contains `pub struct Neon`, `Simd<i32, Neon>`, and
+`core::arch::aarch64::vaddq_s32`.
+
+Known follow-ups:
+
+- C++ NEON runtime verification still needs a clang-compatible aarch64 C++
+  sysroot/standard library.
+- SVE/scalable-vector emission remains deferred for a separate design pass.
+
 ### ARM Emulator Verification Boundary
 
 The verifier now treats SDE and QEMU as one typed emulator concept instead of

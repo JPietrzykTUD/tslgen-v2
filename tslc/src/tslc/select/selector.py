@@ -191,10 +191,10 @@ class Selector:
 
         emit: list[str] = []
         for name, ext in catalog.extensions.items():
-            if not self.support.supports_extension_family(ext.family):
-                # Families without an emitted vector substrate stay source-visible but are not
-                # generated in this slice. Concrete bodies still self-gate via `requires`, so they
-                # drop on a profile lacking the flags.
+            if not self.support.supports_extension(ext):
+                # Unsupported extension substrates stay source-visible but are not generated in
+                # this slice. Concrete bodies still self-gate via `requires`, so they drop on a
+                # profile lacking the flags.
                 continue
             if not self.support.extension_targets_profile(ext.family, profile.family):
                 # An ISA-specific extension only emits for a profile of its own ISA: an

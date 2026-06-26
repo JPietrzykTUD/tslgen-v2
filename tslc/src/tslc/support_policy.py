@@ -59,6 +59,12 @@ class SupportPolicy:
     def supports_extension_family(self, family: str) -> bool:
         return family in self.emitted_extension_families
 
+    def supports_extension(self, extension: Extension) -> bool:
+        return (
+            self.supports_extension_family(extension.family)
+            and extension.vector_bits_kind != "scalable"
+        )
+
     def extension_targets_profile(self, extension_family: str, profile_family: str) -> bool:
         """Whether an extension of ``extension_family`` belongs in a project built for a profile of
         ``profile_family``. ISA-portable families (`scalar`/`generic_like`) emit on every profile;
@@ -196,7 +202,7 @@ class SupportPolicy:
 
 DEFAULT_SUPPORT_POLICY = SupportPolicy(
     backend_ids=frozenset({"cpp", "rust"}),
-    emitted_extension_families=frozenset({"scalar", "x86", "generic_like"}),
+    emitted_extension_families=frozenset({"scalar", "x86", "arm", "generic_like"}),
     supported_signature_kinds=frozenset(
         {
             "v",
@@ -237,7 +243,7 @@ DEFAULT_SUPPORT_POLICY = SupportPolicy(
     default_size_parameter_name="LANES",
     target_marker_values=frozenset({"==", "*"}),
     deferred_cases=(
-        "non-scalar/non-x86/non-generic_like extension family emission",
+        "scalable-vector extension emission",
         "masked gather/scatter forms with vidx parameters",
         "masked reductions that return scalar values",
         "sized-vector extension-dimension representation changes",

@@ -41,6 +41,16 @@ def test_scalar_extension_has_no_intrinsic_compose(catalog: Catalog) -> None:
     assert scalar.compose_prefix == {}  # scalar has no intrinsic prefix
 
 
+def test_native_extension_register_metadata_promoted(catalog: Catalog) -> None:
+    neon = catalog.extensions["neon"]
+    assert neon.direct_vector_register_type("cpp", "si32") == "int32x4_t"
+    assert (
+        neon.direct_vector_register_type("rust", "si32")
+        == "core::arch::aarch64::int32x4_t"
+    )
+    assert neon.headers_for_backend("cpp") == ("arm_neon.h",)
+
+
 def test_type_spellings_normalized(catalog: Catalog) -> None:
     assert catalog.type_spellings["cpp"]["s32"] == "int32_t"
     assert catalog.type_spellings["cpp"]["f32"] == "float"

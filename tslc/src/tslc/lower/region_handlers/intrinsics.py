@@ -257,7 +257,31 @@ class IntrinLowerer:
         infix_expr = selector.get("infix")
         if infix_expr is None:
             return base
+        if infix_expr == "to_type_suffix":
+            target_type = context.scope.resolve_target_type_symbol("ToType")
+            separator = self._infix_separator(selector, context)
+            suffix = (
+                context.env.backend.intrinsics.default_suffix(
+                    context.env.extension, target_type
+                )
+                if target_type is not None
+                else None
+            )
+            if separator is None or suffix is None:
+                return None
+            return f"{base}{separator}{suffix}"
         infix = self._evaluator.evaluate(infix_expr, context)
+        separator = self._infix_separator(selector, context)
+        if separator is None:
+            return None
+        infix_text = self._text_or_type_suffix(infix, context)
+        if infix_text is None:
+            return None
+        return f"{base}{separator}{infix_text}"
+
+    def _infix_separator(
+        self, selector: IntrinsicSelector, context: LoweringSession
+    ) -> str | None:
         sep_expr = selector.get("infix_sep")
         separator = (
             self._evaluator.evaluate(sep_expr, context)
@@ -266,10 +290,7 @@ class IntrinLowerer:
         )
         if not isinstance(separator, TextValue):
             return None
-        infix_text = self._text_or_type_suffix(infix, context)
-        if infix_text is None:
-            return None
-        return f"{base}{separator.as_text()}{infix_text}"
+        return separator.as_text()
 
     def _prefix(
         self,

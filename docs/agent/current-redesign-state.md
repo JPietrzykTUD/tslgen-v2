@@ -2427,7 +2427,7 @@ Known follow-ups:
 Next prompt:
 
 ```text
-docs/agent/runs/tslc-native-neon-codegen-planning-prompt.md
+docs/agent/runs/tslc-native-neon-codegen-review-prompt.md
 ```
 
 ## Completed Const Pointer And Array Parameter Slice
@@ -2510,3 +2510,58 @@ parallel with other shards oversubscribed the host and produced transient
 toolchain failures. Second, `zig c++` failed when CMake build trees and Zig
 caches lived under the workspace mount. The final wrapper runs value tests
 serially and keeps generated-build temp roots/Zig caches under `/tmp`.
+
+## Completed Native NEON Fixed-Width Codegen Slice
+
+The native NEON codegen slice is implemented for fixed-width extension
+substrates. `vector_register_types` and backend headers are promoted into typed
+`Extension` metadata; lowering records concrete register spellings; C++ emits
+native `tsl::simd<T, tsl::neon>` registrations and `<arm_neon.h>` includes;
+Rust emits `Simd<T, Neon>` registrations and ARM arch imports. The `arm`
+extension family is enabled for fixed-width substrates only; SVE remains
+deferred because scalable vectors need a separate design pass.
+
+Source-data cleanups required by the newly reachable native NEON dependency
+closure:
+
+- NEON `blend` uses unified `intrin<vbslq, build[suffix=base::in]>`.
+- NEON `reinterpret` uses semantic bitcast instead of backend-divergent
+  reinterpret intrinsic names.
+- NEON `set_undef` uses a backend-rendered typed uninitialized register
+  declaration.
+
+Validation so far:
+
+```text
+python -m compileall -q tslc/src/tslc
+```
+
+Result: passed.
+
+```text
+python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_profile_rendering.py tslc/tests/test_value_test_planning.py tslc/tests/test_safety_contract.py
+```
+
+Result: `43 passed`.
+
+```text
+./verify.sh
+```
+
+Result: passed all targeted validations: `240` non-build tests collected, `5`
+value-test build/run checks run serially, and `53` generated-build tests
+passed across the generated-build shards.
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --profiles neon --primitives add --backends rust --output-root /tmp/tslc-neon-native-test --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64
+```
+
+Result: generated `878` Rust specializations, cross-built for
+`aarch64-unknown-linux-musl`, ran through `qemu-aarch64 -cpu cortex-a76`, and
+passed `229` generated value tests.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-native-neon-codegen-review-prompt.md
+```

@@ -5035,3 +5035,44 @@ Consequences:
 - Native ARM extension emission remains a separate support-policy/rendering
   slice; the current proof exercises the NEON machine profile and QEMU runner,
   while ARM-specific register substrate support is still deferred.
+
+## ADR-099: Fixed Native Extension Register Substrates Come From Catalog Data
+
+Context:
+
+The NEON machine profile could be cross-built and run through QEMU, but it was
+only exercising scalar/generic fallback coverage. The `neon` extension already
+declared concrete C++ and Rust vector register spellings in
+`vector_register_types`, plus the C++ header needed for those types, but that
+metadata stopped at the source schema boundary.
+
+Decision:
+
+Promote extension-owned native register spellings and backend headers into the
+typed `Extension` catalog model. Lowering records the selected specialization's
+concrete register spelling as a lowered fact. C++ and Rust project renderers
+register any selected non-x86 fixed-width extension that declares backend
+register spellings; renderers do not infer register types from extension names.
+
+Enable the `arm` extension family only for fixed-width extension substrates in
+this slice. `neon` now emits native `tsl::simd<T, tsl::neon>` and
+`Simd<T, Neon>` registrations from typed metadata. Scalable-vector extensions
+such as SVE stay source-visible but unsupported for emission until a separate
+scalable-vector design pass.
+
+NEON source bodies that were previously hidden by fallback-only emission were
+repaired using existing typed TSIL forms: `blend` uses unified
+`intrin<..., build[suffix=...]>`, `reinterpret` uses semantic bitcast rather
+than backend-divergent reinterpret intrinsic names, and `set_undef` uses a
+backend-rendered typed uninitialized register declaration.
+
+Consequences:
+
+- Native fixed-width extension registration is data-driven by `tsldata`, not
+  hard-coded to `neon`.
+- Rust NEON value tests for the `add` slice and its dependency closure now
+  cross-build for `aarch64-unknown-linux-musl` and run through QEMU.
+- C++ NEON artifacts now render native tags and include `<arm_neon.h>`, but
+  runtime C++ QEMU verification still needs an installed aarch64 C++ sysroot.
+- SVE remains intentionally deferred; enabling `arm` does not mean scalable
+  vector semantics are modeled.

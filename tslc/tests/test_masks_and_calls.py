@@ -204,4 +204,4 @@ def test_call_type_args_accept_extension_and_literal_index(
 
     blob = "\n".join(artifact.content for artifact in result.artifacts.artifacts)
     assert "::tsl::extract<Vec, tsl::simd<int8_t, tsl::sse>, 0>" in blob
-    assert "extract::<Self, Simd<i8, Sse>, 0>" in blob
+    assert "extract::<Simd<i8, Avx2>, Simd<i8, Sse>, 0>" in blob

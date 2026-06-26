@@ -1012,6 +1012,7 @@ def _spec(
         extension_name="generic",
         type_tag="si32",
         base_type_spelling="std::int32_t",
+        register_spelling="std::int32_t[4]",
         result_kind=result_kind,
         param_names=tuple(f"p{i}" for i in range(len(param_kinds))),
         param_kinds=param_kinds,

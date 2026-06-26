@@ -82,6 +82,11 @@ class _RustTypes:
         if uses_sized_vector:
             # A sized-vector target's register is its lane array.
             return f"array_type<{base}, {lane_parameter}>"
+        declared = common.vector_register_type(
+            self.catalog, self.backend_id, extension_isa, base_tag
+        )
+        if declared is not None:
+            return declared
         width = common.X86_REGISTER_BITS.get(extension_isa)
         if width is None:
             return base

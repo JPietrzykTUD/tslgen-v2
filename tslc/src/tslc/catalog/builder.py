@@ -6,6 +6,7 @@ and no dependency on lowering.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 import re
 
@@ -425,6 +426,11 @@ def _resolve_extension_inheritance(
                 **parent.compose_suffix_by_type,
                 **ext.compose_suffix_by_type,
             },
+            vector_register_types=_merge_nested_string_maps(
+                parent.vector_register_types,
+                ext.vector_register_types,
+            ),
+            backend_headers=_merge_header_maps(parent.backend_headers, ext.backend_headers),
             # mask policy / width fall back to the parent only when this block didn't
             # state its own (every `_vl` block does, so this is just gap-filling).
             vector_bits=ext.vector_bits if ext.vector_bits_kind else parent.vector_bits,
@@ -506,6 +512,8 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
         intrinsic_style=_field_text(fields.get("intrinsic_style")) or "",
         compose_prefix=compose_prefix,
         compose_suffix_by_type=compose_suffix_by_type,
+        vector_register_types=_vector_register_types(fields.get("vector_register_types")),
+        backend_headers=_backend_headers(fields),
         inherits=_field_text(fields.get("inherits")),
         lscpu_flags=_list_text_set(fields.get("lscpu_flags")),
         vector_bits=_int_text(fields.get("vector_bits")),
@@ -531,6 +539,56 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
         ),
         unroll_variants=(_field_text(fields.get("unroll_variants")) or "").lower() == "true",
     )
+
+
+def _vector_register_types(
+    field: ParsedTslField | None,
+) -> dict[str, dict[str, str]]:
+    """Promote ``vector_register_types`` to type-key -> backend -> spelling."""
+
+    result: dict[str, dict[str, str]] = {}
+    for type_entry in _children(field):
+        by_backend = {
+            backend_entry.key.text: (_field_text(backend_entry) or "")
+            for backend_entry in _children(type_entry)
+            if _field_text(backend_entry) is not None
+        }
+        if by_backend:
+            result[type_entry.key.text] = by_backend
+    return result
+
+
+def _backend_headers(fields: dict[str, ParsedTslField]) -> dict[str, tuple[str, ...]]:
+    """Promote backend-owned extension include/import metadata."""
+
+    result: dict[str, tuple[str, ...]] = {}
+    for backend_id in ("cpp", "rust"):
+        headers = _list_text(_child(fields.get(backend_id), "headers"))
+        if headers:
+            result[backend_id] = headers
+    return result
+
+
+def _merge_nested_string_maps(
+    parent: Mapping[str, Mapping[str, str]],
+    child: Mapping[str, Mapping[str, str]],
+) -> dict[str, dict[str, str]]:
+    merged = {key: dict(value) for key, value in parent.items()}
+    for key, value in child.items():
+        merged[key] = {**merged.get(key, {}), **value}
+    return merged
+
+
+def _merge_header_maps(
+    parent: Mapping[str, tuple[str, ...]],
+    child: Mapping[str, tuple[str, ...]],
+) -> dict[str, tuple[str, ...]]:
+    merged = {key: tuple(value) for key, value in parent.items()}
+    for key, headers in child.items():
+        values = list(merged.get(key, ()))
+        values.extend(header for header in headers if header not in values)
+        merged[key] = tuple(values)
+    return merged
 
 
 def _mask_policy(field: ParsedTslField | None) -> MaskPolicy:
