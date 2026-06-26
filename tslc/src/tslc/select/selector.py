@@ -196,6 +196,11 @@ class Selector:
                 # generated in this slice. Concrete bodies still self-gate via `requires`, so they
                 # drop on a profile lacking the flags.
                 continue
+            if not self.support.extension_targets_profile(ext.family, profile.family):
+                # An ISA-specific extension only emits for a profile of its own ISA: an
+                # ISA-independent `requires []` body (the scalar-store) would otherwise leak its
+                # `simd<T, avx2>` registration onto an aarch64/generic profile that can't use it.
+                continue
             if name in superseded:
                 continue
             if ext.inherits is not None and not (ext.lscpu_flags <= profile.features):

@@ -18,6 +18,12 @@ from tslc.catalog.scalar_types import (
 )
 from tslc.catalog.signatures import LANE_LIST_KIND, SignatureShape
 
+# Extension families that are ISA-portable — emitted for every profile regardless of its ISA.
+_UNIVERSAL_EXTENSION_FAMILIES = frozenset({"scalar", "generic_like"})
+# Machine-profile ISA family -> the one ISA-specific extension family it hosts. A profile family
+# absent here (e.g. "generic") hosts only the universal families above.
+_PROFILE_ISA_EXTENSION_FAMILY = {"x86": "x86", "aarch64": "arm"}
+
 
 @dataclass(frozen=True, slots=True)
 class SupportPolicy:
@@ -52,6 +58,17 @@ class SupportPolicy:
 
     def supports_extension_family(self, family: str) -> bool:
         return family in self.emitted_extension_families
+
+    def extension_targets_profile(self, extension_family: str, profile_family: str) -> bool:
+        """Whether an extension of ``extension_family`` belongs in a project built for a profile of
+        ``profile_family``. ISA-portable families (`scalar`/`generic_like`) emit on every profile;
+        an ISA-specific family emits only on a profile of its own ISA. So an aarch64 profile never
+        registers the `x86` substrate and vice-versa — e.g. the ISA-independent ``requires []``
+        scalar-store body, keyed to every extension, no longer leaks its `simd<T, avx2>`
+        registration onto a neon profile."""
+        if extension_family in _UNIVERSAL_EXTENSION_FAMILIES:
+            return True
+        return extension_family == _PROFILE_ISA_EXTENSION_FAMILY.get(profile_family)
 
     def supports_signature(self, shape: SignatureShape) -> bool:
         return (
