@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import string
 from typing import TYPE_CHECKING
 
 from tslc.backend.cpp import CppBackend
@@ -13,20 +12,13 @@ from tslc.catalog.signatures import is_free_function_signature
 from tslc.lower.lowerer import varying_positions
 from tslc.output.artifacts import Artifact
 from tslc.output.verify import VerifyProfile
-from tslc.render._common import asset, feature_spelling, slug, text, used_exts
+from tslc.render._common import asset, feature_spelling, fill_asset, slug, text, used_exts
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 if TYPE_CHECKING:
     from tslc.render.project import ProfileRender
 
 _CPP_REG_HELPER = {128: "reg128", 256: "reg256", 512: "reg512"}
-
-
-class _AtTemplate(string.Template):
-    # Generated build files (CMake/shell) use `${VAR}` natively, so the substitution delimiter is
-    # `@` (CMake's own `configure_file @ONLY` convention). This lets the `.tmpl` asset read as a
-    # real build file — `${TSL_PROFILE}` passes through untouched; only `@{name}` holes are filled.
-    delimiter = "@"
 
 
 def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
@@ -54,13 +46,11 @@ def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
             for name in sorted(profile_render.cpp)
         )
         bodies = declarations + "\n\n" + definitions
-        content = (
-            "#pragma once\n"
-            f"{includes}\n"
-            "namespace tsl {\n\n"
-            f"{registrations}"
-            f"{bodies}\n\n"
-            "}  // namespace tsl\n"
+        content = fill_asset(
+            "cpp_profile_header.hpp.tmpl",
+            includes=includes,
+            registrations=registrations,
+            bodies=bodies,
         )
         profile_slug = slug(profile_render.profile.name)
         artifacts.append(text(f"cpp/include/tsl_{profile_slug}.hpp", content))
@@ -240,7 +230,5 @@ def _cpp_cmakelists(profiles: tuple[ProfileRender, ...]) -> str:
             f"  target_compile_options(tsl_values PRIVATE {joined})\n"
             "endif()"
         )
-    rendered = _AtTemplate(asset("cpp_cmakelists.txt.tmpl")).substitute(
-        profile_options="\n".join(blocks)
-    )
+    rendered = fill_asset("cpp_cmakelists.txt.tmpl", profile_options="\n".join(blocks))
     return rendered.rstrip("\n") + "\n"

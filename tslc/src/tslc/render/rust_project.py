@@ -14,6 +14,7 @@ from tslc.output.verify import VerifyProfile
 from tslc.render._common import (
     asset,
     feature_spelling,
+    fill_asset,
     slug,
     text,
     type_bits,
@@ -42,13 +43,11 @@ def rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
         arch_use = ""
         if any(e in X86_REGISTER_BITS for e in used_exts(profile_render.rust)):
             arch_use = "#[allow(unused_imports)]\nuse core::arch::x86_64::*;\n"
-        content = (
-            "#![allow(non_camel_case_types)]\n"
-            "#![allow(dead_code)]\n\n"
-            "use crate::tsl_core::*;\n"
-            f"{arch_use}\n"
-            f"{registrations}"
-            f"{bodies}\n"
+        content = fill_asset(
+            "rust_profile_module.rs.tmpl",
+            arch_use=arch_use,
+            registrations=registrations,
+            bodies=bodies,
         )
         artifacts.append(text(f"rust/src/tsl_{slug(profile_render.profile.name)}.rs", content))
 
@@ -153,12 +152,4 @@ def _rust_cargo(profiles: tuple[ProfileRender, ...]) -> str:
     features.extend(f"{slug(profile_render.profile.name)} = []" for profile_render in profiles)
     # Opt-in feature that compiles+runs the generated value tests (parity with the C++ ctest gate).
     features.append("value_tests = []")
-    return (
-        "[package]\n"
-        'name = "tsl_generated"\n'
-        'version = "0.1.0"\n'
-        'edition = "2021"\n\n'
-        "[lib]\n"
-        'path = "src/lib.rs"\n\n'
-        "[features]\n" + "\n".join(features) + "\n"
-    )
+    return fill_asset("rust_cargo.toml.tmpl", features="\n".join(features))
