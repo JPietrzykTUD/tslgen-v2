@@ -110,6 +110,13 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="warn when authored value-test cases cannot be planned for a backend/profile",
     )
+    parser.add_argument(
+        "--format",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="run clang-format/rustfmt over the written artifacts (best-effort; "
+        "skipped if the formatter is unavailable). Use --no-format to disable.",
+    )
     args = parser.parse_args(argv)
 
     if args.test and args.output_root is None:
@@ -162,6 +169,15 @@ def main(argv: list[str] | None = None) -> int:
         if has_errors(write_report.diagnostics):
             return 1
         print(f"wrote {len(write_report.written)} files under {write_report.output_root}")
+
+        if args.format:
+            from tslc.output.format import format_generated
+
+            format_report = format_generated(args.output_root, tuple(_split(args.backends)))
+            for note in format_report.notes:
+                print(f"[format-skip] {note}", file=sys.stderr)
+            if format_report.formatted:
+                print(f"formatted {', '.join(format_report.formatted)}")
 
         if (args.verify or args.test) and result.rendered is not None:
             if args.test:

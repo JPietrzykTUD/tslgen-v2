@@ -34,6 +34,9 @@ def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
     artifacts = [
         text("cpp/include/tsl_core.hpp", asset("tsl_core.hpp")),
         text("cpp/include/tsl_x86_traits.hpp", asset("tsl_x86_traits.hpp")),
+        # Ship the formatter config at the C++ project root so `clang-format` (ascending from
+        # include/ and tests/) finds it and the generated project is self-contained.
+        text("cpp/.clang-format", asset(".clang-format")),
     ]
     for profile_render in profiles:
         emitted_exts = used_exts(profile_render.cpp)

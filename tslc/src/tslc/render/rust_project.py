@@ -38,7 +38,12 @@ def _rust_tag(extension_name: str) -> str:
 
 def rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
     backend = RustBackend()
-    artifacts = [text("rust/src/tsl_core.rs", asset("tsl_core.rs"))]
+    artifacts = [
+        text("rust/src/tsl_core.rs", asset("tsl_core.rs")),
+        # Ship the formatter config at the crate root so `rustfmt`/`cargo fmt` finds it and the
+        # generated crate is self-contained.
+        text("rust/rustfmt.toml", asset("rustfmt.toml")),
+    ]
     for profile_render in profiles:
         registrations = _rust_registrations(profile_render.rust, profile_render.extensions)
         bodies = "\n\n".join(

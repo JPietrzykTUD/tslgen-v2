@@ -1,0 +1,3 @@
+# Formatting config for the generated Rust crate (and the hand-written substrate
+# assets in this directory). Kept minimal; rustfmt's default style otherwise.
+edition = "2021"
