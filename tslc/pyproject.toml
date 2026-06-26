@@ -16,7 +16,9 @@ where = ["src"]
 include = ["tslc*"]
 
 [tool.setuptools.package-data]
-tslc = ["syntax/grammar/*.lark", "backend/assets/*"]
+# `*` does not match dotfiles, so the `.clang-format` asset is listed explicitly — otherwise it
+# would be absent from an installed wheel and `asset(".clang-format")` would fail.
+tslc = ["syntax/grammar/*.lark", "backend/assets/*", "backend/assets/.clang-format"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
