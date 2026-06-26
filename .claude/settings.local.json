@@ -21,7 +21,14 @@
       "Bash(python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests)",
       "Bash(timeout 590 python -m pytest -q -p no:cacheprovider tslc/tests/test_build_verify.py::test_full_corpus_builds tslc/tests/test_value_tests.py)",
       "Bash(python -m pytest -q -p no:cacheprovider \"tslc/tests/test_value_tests.py::test_golden_value_tests_build_and_pass\")",
-      "Bash(python -m pytest -q -p no:cacheprovider \"tslc/tests/test_value_tests.py::test_golden_value_tests_build_and_pass\" \"tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_rust_builds\")"
+      "Bash(python -m pytest -q -p no:cacheprovider \"tslc/tests/test_value_tests.py::test_golden_value_tests_build_and_pass\" \"tslc/tests/test_value_tests.py::test_value_full_corpus_avx2_rust_builds\")",
+      "Bash(PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --primitives add --profiles scalar,avx2,skylake --backends cpp --output-root tslctmp/cm_chk)",
+      "Bash(PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --primitives add,convert_up,store --profiles scalar,avx2,skylake --backends cpp,rust --output-root tslctmp/A)",
+      "Bash(git stash *)",
+      "Bash(PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --primitives add,convert_up,store --profiles scalar,avx2,skylake --backends cpp,rust --output-root tslctmp/B)",
+      "Bash(python -m pytest -q -p no:cacheprovider tslc/tests/test_build_verify.py::test_full_corpus_builds tslc/tests/test_determinism.py tslc/tests/test_profile_rendering.py)",
+      "Bash(python3 -c ' *)",
+      "Bash(PYTHONPATH=tslc/src python3 -)"
     ],
     "additionalDirectories": [
       "/workspaces/tslgen-v99/tslc/src/tslc/value_tests"
