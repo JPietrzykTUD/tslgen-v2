@@ -152,6 +152,26 @@ struct array_param {
     using type = const typename array_for<Vec>::type &;
 };
 
+namespace detail {
+
+// Lane-bitmask integral type: the smallest unsigned integer with at least one
+// bit per lane. Native profile registrations use this for integral masks whose
+// representation is not a backend-native predicate type.
+template <int Bits> struct uint_for_bits { using type = std::uint64_t; };
+template <> struct uint_for_bits<8> { using type = std::uint8_t; };
+template <> struct uint_for_bits<16> { using type = std::uint16_t; };
+template <> struct uint_for_bits<32> { using type = std::uint32_t; };
+template <> struct uint_for_bits<64> { using type = std::uint64_t; };
+
+template <int Bits, class T>
+struct lane_bitmask_int {
+    static constexpr int lanes = Bits / (static_cast<int>(sizeof(T)) * 8);
+    static constexpr int bits = lanes <= 8 ? 8 : lanes <= 16 ? 16 : lanes <= 32 ? 32 : 64;
+    using type = typename uint_for_bits<bits>::type;
+};
+
+}  // namespace detail
+
 // Format a lane array into a text buffer (the `to_ostream` body). `modifier` selects the base
 // (0 = binary, 16 = hex, 8 = octal, else decimal); each lane is cast to a 64-bit pattern and its
 // low `sizeof(T)*8` bits are emitted, high lane first, '|'-separated, with a trailing newline.

@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from tslc.api import generate_project
-from tslc.catalog.machine_profiles import load_machine_profiles_checked
+from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
+from tslc.render.cpp_project import cpp_flags
 from tslc.render._common import slug
 
 
@@ -63,6 +64,18 @@ def test_feature_flag_spelling(data_root: Path, machine_profiles_path: Path) -> 
     assert "-mavx512_vnni" not in cmake
 
 
+def test_cpp_profile_flags_are_profile_owned() -> None:
+    profile = MachineProfile(
+        name="sve",
+        family="aarch64",
+        features=frozenset({"sve"}),
+        alternatives={},
+        cpp_flags=("-march=armv8-a+sve",),
+    )
+
+    assert cpp_flags(profile) == ("-march=armv8-a+sve",)
+
+
 def test_omitted_profiles_use_all_loaded_profiles(
     data_root: Path,
     machine_profiles_path: Path,
@@ -83,6 +96,7 @@ def test_omitted_profiles_use_all_loaded_profiles(
     assert [profile.file_stem for profile in actual] == expected
     neon_profile = next(profile for profile in actual if profile.profile_name == "neon")
     assert neon_profile.cpp_target == "aarch64-linux-gnu"
+    assert neon_profile.cpp_flags == ()
     assert neon_profile.emulator is not None
     assert neon_profile.emulator.kind == "qemu-aarch64"
     assert neon_profile.emulator.profile == "cortex-a76"

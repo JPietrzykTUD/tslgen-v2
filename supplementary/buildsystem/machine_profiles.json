@@ -116,6 +116,7 @@
     {
       "name": "neon",
       "flags": "neon",
+      "cpp_flags": [],
       "emulator": {"kind": "qemu-aarch64", "profile": "cortex-a76"},
       "alternatives": {
         "neon": "asimd"

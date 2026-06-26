@@ -91,30 +91,18 @@ def cpp_verify_profiles(profiles: tuple[ProfileRender, ...]) -> tuple[VerifyProf
 
 def cpp_flags(profile: MachineProfile) -> tuple[str, ...]:
     if profile.family == "aarch64":
-        return _aarch64_cpp_flags(profile)
-    return tuple(
-        f"-m{feature_spelling(feature, profile.alternatives)}"
-        for feature in sorted(profile.features)
+        return profile.cpp_flags
+    return (
+        *(
+            f"-m{feature_spelling(feature, profile.alternatives)}"
+            for feature in sorted(profile.features)
+        ),
+        *profile.cpp_flags,
     )
 
 
 def cpp_target(profile: MachineProfile) -> str | None:
     return "aarch64-linux-gnu" if profile.family == "aarch64" else None
-
-
-def _aarch64_cpp_flags(profile: MachineProfile) -> tuple[str, ...]:
-    features = {
-        feature_spelling(feature, profile.alternatives)
-        for feature in profile.features
-    }
-    extensions: list[str] = []
-    if "asimd" in features:
-        extensions.append("simd")
-    if "sve" in features:
-        extensions.append("sve")
-    if not extensions:
-        return ("-march=armv8-a",)
-    return (f"-march=armv8-a+{'+'.join(sorted(extensions))}",)
 
 
 def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:

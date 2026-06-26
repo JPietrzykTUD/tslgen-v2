@@ -33,20 +33,4 @@ struct native_mask {
     using type = typename mmask_of<(lanes < 8 ? 8 : lanes)>::type;
 };
 
-// Lane-bitmask integral type (sse / avx2 `to_integral`): the smallest unsigned integer
-// with at least one bit per lane (`movemask` returns an `int`, not the register). The
-// lane count `Bits / (sizeof(T) * 8)` is rounded up to a `std::uint{8,16,32,64}_t`.
-template <int Bits> struct uint_for_bits { using type = std::uint64_t; };
-template <> struct uint_for_bits<8>  { using type = std::uint8_t;  };
-template <> struct uint_for_bits<16> { using type = std::uint16_t; };
-template <> struct uint_for_bits<32> { using type = std::uint32_t; };
-template <> struct uint_for_bits<64> { using type = std::uint64_t; };
-
-template <int Bits, class T>
-struct lane_bitmask_int {
-    static constexpr int lanes = Bits / (static_cast<int>(sizeof(T)) * 8);
-    static constexpr int bits = lanes <= 8 ? 8 : lanes <= 16 ? 16 : lanes <= 32 ? 32 : 64;
-    using type = typename uint_for_bits<bits>::type;
-};
-
 }  // namespace tsl::detail

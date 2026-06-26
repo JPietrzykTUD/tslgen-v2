@@ -2797,8 +2797,10 @@ contains `pub struct Neon`, `Simd<i32, Neon>`, and
 
 Known follow-ups:
 
-- C++ NEON runtime verification still needs a clang-compatible aarch64 C++
-  sysroot/standard library.
+- Plain `clang++ --target=aarch64-linux-gnu` still needs a clang-compatible
+  aarch64 C++ sysroot/standard library in this environment, but C++ NEON
+  runtime verification now works through Zig's bundled aarch64-musl toolchain
+  using the existing verifier compiler/target knobs.
 - SVE/scalable-vector emission remains deferred for a separate design pass.
 
 ### Native Register Metadata Guardrail
@@ -2828,6 +2830,91 @@ python -m compileall -q tslc/src/tslc
 ```
 
 Result: passed.
+
+### C++ NEON Runtime Verification Through QEMU
+
+The C++ NEON runtime-verification follow-up is complete for the narrow `add`
+slice and its dependency closure.
+
+Environment findings:
+
+1. `clang++ --target=aarch64-linux-gnu` is present but cannot compile a trivial
+   C++/NEON probe in this image because standard library headers such as
+   `<array>` and target libc headers are unavailable.
+2. `/opt/zig/zig c++ -target aarch64-linux-musl` can compile and link a static
+   aarch64 C++/NEON probe when Zig cache directories are placed under `/tmp`.
+3. `/usr/bin/qemu-aarch64 -cpu cortex-a76` can run the resulting musl aarch64
+   binary.
+
+Implementation notes:
+
+1. AArch64 NEON C++ profiles declare an empty profile-owned `cpp_flags` list.
+   The target triple already selects baseline AArch64/ASIMD, and Zig's clang
+   frontend rejects redundant `-march=armv8-a+simd` as an unsupported CPU name.
+   Full profile-specific C++ compiler flags, such as future SVE `-march=...`
+   spellings, belong to machine profile data rather than `cpp_project.py`.
+2. The ISA-neutral C++ `detail::lane_bitmask_int` helper moved from
+   `tsl_x86_traits.hpp` into `tsl_core.hpp`, so native ARM profile headers can
+   name integral masks without including x86-only `<immintrin.h>` support.
+3. The C++ verifier now runs a target-specific preflight for profiles with a
+   `cpp_target`. Plain clang without an aarch64 sysroot skips only C++ NEON
+   instead of failing the whole host-buildable C++ gate.
+4. No new CLI or profile metadata plumbing was needed; the existing
+   `--cpp-compiler`, `--cpp-target`, and `--qemu-aarch64` verifier options are
+   sufficient.
+
+Validation:
+
+```bash
+python -m compileall -q tslc/src/tslc
+```
+
+Result: passed.
+
+```bash
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_profile_rendering.py tslc/tests/test_build_verify_config.py
+```
+
+Result: `22 passed`.
+
+```bash
+PYTHONPATH=tslc/src ZIG_GLOBAL_CACHE_DIR=/tmp/zig-global-cache-tslc ZIG_LOCAL_CACHE_DIR=/tmp/zig-local-cache-tslc python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --profiles neon --primitives add --backends cpp --output-root /tmp/tslc-cpp-neon-qemu-zig --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: generated `878` C++ specializations, built the NEON-profile value-test
+binary for `aarch64-linux-musl`, and CTest ran it through
+`qemu-aarch64 -cpu cortex-a76`: `1/1 Test #1: values Passed` with
+`build/test-verified 7 commands`.
+
+```bash
+TSLC_BACKENDS=cpp TSLC_OUTPUT_ROOT=/tmp/tslc-verify-cpp env -u CXX ./verify.sh
+```
+
+Result: passed for the broad C++ build gate. C++ NEON was skipped by target
+preflight because plain clang cannot find the aarch64 C++ sysroot in this
+image; the remaining host-buildable C++ profiles built successfully with
+`build-verified 36 commands`.
+
+Full all-backend `./verify.sh` on a fresh root now reaches a broader, real Rust
+NEON coverage blocker when the `neon` profile is included for every primitive
+by default. Representative failures are missing Rust `core::arch::aarch64`
+intrinsic spellings such as `vcvtqf32_s32` and const-generic lane indices typed
+as `usize` where Rust expects `i32`. That is intentionally handed to the next
+ARM native coverage planning prompt rather than folded into this C++ runtime
+verification slice.
+
+Review follow-up fixed: `MachineProfile` now carries typed `cpp_flags`, loaded
+from the optional `cpp_flags` string-list field in `machine_profiles.json`.
+The C++ renderer no longer contains AArch64 `-march=...` literals; it derives
+ordinary x86 `-m...` flags from feature tokens and forwards profile-owned C++
+flags. Validation:
+
+```bash
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_profile_rendering.py tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py tslc/tests/test_build_verify_config.py
+```
+
+Result: `51 passed` after compileall passed.
 
 ```bash
 python -m pytest -q tslc/tests/test_select_and_lower.py::test_profile_reachability tslc/tests/test_select_and_lower.py::test_fixed_non_x86_extension_requires_register_metadata

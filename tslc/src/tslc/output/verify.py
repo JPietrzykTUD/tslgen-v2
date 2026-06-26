@@ -223,6 +223,35 @@ def verify_generated_project(
             if result.returncode != 0:
                 skipped.append(_cpp_preflight_skip(result))
                 continue
+            target_profiles: list[VerifyProfile] = []
+            for profile in backend.profiles:
+                target_preflight = _cpp_target_preflight_command(
+                    root,
+                    backend,
+                    profile,
+                    config,
+                    compiler,
+                )
+                if target_preflight is None:
+                    target_profiles.append(profile)
+                    continue
+                if isinstance(target_preflight, Diagnostic):
+                    diagnostics.append(target_preflight)
+                    continue
+                result = runner(target_preflight)
+                results.append(result)
+                if result.returncode != 0:
+                    skipped.append(_cpp_target_preflight_skip(result))
+                    continue
+                target_profiles.append(profile)
+            backend = VerifyBackend(
+                backend_id=backend.backend_id,
+                root_path=backend.root_path,
+                profiles=tuple(target_profiles),
+            )
+            profiles_by_name = {profile.profile_name: profile for profile in backend.profiles}
+            if not backend.profiles:
+                continue
         if backend.backend_id == "rust":
             compiler = _effective_rust_compiler(config)
             missing_compiler = _missing_executable(compiler)
@@ -760,6 +789,67 @@ def _cpp_preflight_command(
     )
 
 
+def _cpp_target_preflight_command(
+    root: Path,
+    backend: VerifyBackend,
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+    compiler: tuple[str, ...],
+) -> BuildCommand | Diagnostic | None:
+    target = _cpp_target(profile, config)
+    if target is None:
+        return None
+
+    project_root = root / backend.root_path
+    preflight_dir = project_root / "build" / "_compiler_preflight" / profile.file_stem
+    source_path = preflight_dir / "tslc_target_check.cpp"
+    object_path = preflight_dir / "tslc_target_check.o"
+    try:
+        preflight_dir.mkdir(parents=True, exist_ok=True)
+        source_path.write_text(
+            "\n".join(
+                (
+                    "#include <array>",
+                    "#if defined(__aarch64__)",
+                    "#include <arm_neon.h>",
+                    "#endif",
+                    "int main() { std::array<int, 1> value{}; return value[0]; }",
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        return Diagnostic(
+            severity="error",
+            code="TSL-BUILD-VERIFY-PREFLIGHT-ERROR",
+            message=(
+                "could not write C++ target preflight source for profile "
+                f"{profile.profile_name} under {preflight_dir}: {exc}"
+            ),
+        )
+
+    return BuildCommand(
+        backend_id="cpp",
+        profile_name=profile.profile_name,
+        step="target-preflight",
+        argv=(
+            *compiler,
+            f"--target={target}",
+            "-x",
+            "c++",
+            "-std=c++17",
+            *profile.cpp_flags,
+            "-c",
+            str(source_path),
+            "-o",
+            str(object_path),
+        ),
+        cwd=root,
+        env=_cpp_environment(config, backend),
+    )
+
+
 def _rust_preflight_command(
     root: Path,
     backend: VerifyBackend,
@@ -801,6 +891,16 @@ def _cpp_preflight_skip(result: BuildCommandResult) -> str:
     return (
         "cpp: C++ compiler preflight failed with exit code "
         f"{result.returncode}: {command_text}{suffix}"
+    )
+
+
+def _cpp_target_preflight_skip(result: BuildCommandResult) -> str:
+    command_text = " ".join(result.command.argv)
+    detail = result.stderr.strip() or result.stdout.strip()
+    suffix = f": {detail}" if detail else ""
+    return (
+        f"cpp: profile {result.command.profile_name} target preflight failed "
+        f"with exit code {result.returncode}: {command_text}{suffix}"
     )
 
 

@@ -44,12 +44,16 @@ class MachineProfile:
     # feature -> its compiler/target-feature spelling when it differs from the token
     # (e.g. avx512_vpclmulqdq -> vpclmulqdq, neon -> asimd).
     alternatives: Mapping[str, str]
+    # Extra C++ compiler flags owned by this machine profile. These are full
+    # compiler arguments, not feature-token spellings.
+    cpp_flags: tuple[str, ...] = ()
     # Optional emulator profile used by the after-write verifier to run value
     # tests on hosts that do not support the profile's ISA natively.
     emulator: MachineProfileEmulator | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "alternatives", MappingProxyType(dict(self.alternatives)))
+        object.__setattr__(self, "cpp_flags", tuple(self.cpp_flags))
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,7 +151,7 @@ def load_machine_profiles_checked(path: Path) -> MachineProfileLoadResult:
             fields = _object_fields(entry, path, diagnostics)
             _unknown_fields(
                 fields,
-                {"name", "flags", "alternatives", "emulator"},
+                {"name", "flags", "alternatives", "cpp_flags", "emulator"},
                 path,
                 diagnostics,
                 owner=f"profile entry under {family!r}",
@@ -189,12 +193,20 @@ def load_machine_profiles_checked(path: Path) -> MachineProfileLoadResult:
             )
             alternatives_value = fields.get("alternatives", _JsonObject(()))
             alternatives = _alternatives(name, alternatives_value, path, diagnostics)
+            cpp_flags = _string_list_field(
+                name,
+                fields.get("cpp_flags", ()),
+                "cpp_flags",
+                path,
+                diagnostics,
+            )
             emulator = _emulator(name, fields.get("emulator"), path, diagnostics)
             profiles[name] = MachineProfile(
                 name=name,
                 family=family,
                 features=features,
                 alternatives=alternatives,
+                cpp_flags=cpp_flags,
                 emulator=emulator,
             )
     return MachineProfileLoadResult(
@@ -279,6 +291,27 @@ def _alternatives(
             continue
         alternatives[key] = spelling
     return alternatives
+
+
+def _string_list_field(
+    profile_name: str,
+    value: Any,
+    field_name: str,
+    path: Path,
+    diagnostics: list[Diagnostic],
+) -> tuple[str, ...]:
+    if value == ():
+        return ()
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return tuple(value)
+    diagnostics.append(
+        _diagnostic(
+            path,
+            "TSL-PROFILE-MALFORMED-FIELD",
+            f"machine profile {profile_name!r} {field_name} must be a string list",
+        )
+    )
+    return ()
 
 
 def _emulator(

@@ -109,6 +109,7 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     assert "avx2" in machine_profiles["avx2"].features
     assert "avx2" not in machine_profiles["avx"].features
     assert "avx512f" in machine_profiles["skylake"].features
+    assert machine_profiles["neon"].cpp_flags == ()
 
 
 def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:

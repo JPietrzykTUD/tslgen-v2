@@ -256,6 +256,24 @@ def test_machine_profile_duplicate_json_keys_are_diagnosed(tmp_path: Path) -> No
     assert "TSL-PROFILE-DUPLICATE-KEY" in {d.code for d in result.diagnostics}
 
 
+def test_machine_profile_cpp_flags_are_validated(tmp_path: Path) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{\n'
+        '  "aarch64": [\n'
+        '    {"name": "neon", "flags": "neon", "cpp_flags": []},\n'
+        '    {"name": "bad", "flags": "sve", "cpp_flags": "-march=armv8-a+sve"}\n'
+        '  ]\n'
+        '}\n',
+        encoding="utf-8",
+    )
+
+    result = load_machine_profiles_checked(path)
+
+    assert result.profiles["neon"].cpp_flags == ()
+    assert "TSL-PROFILE-MALFORMED-FIELD" in {d.code for d in result.diagnostics}
+
+
 def test_machine_profile_emulator_metadata_is_validated(tmp_path: Path) -> None:
     path = tmp_path / "machine_profiles.json"
     path.write_text(

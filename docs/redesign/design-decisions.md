@@ -5072,7 +5072,57 @@ Consequences:
   hard-coded to `neon`.
 - Rust NEON value tests for the `add` slice and its dependency closure now
   cross-build for `aarch64-unknown-linux-musl` and run through QEMU.
-- C++ NEON artifacts now render native tags and include `<arm_neon.h>`, but
-  runtime C++ QEMU verification still needs an installed aarch64 C++ sysroot.
+- C++ NEON artifacts render native tags and include `<arm_neon.h>`; runtime
+  C++ QEMU verification is covered by the follow-up toolchain decision in
+  ADR-100.
 - SVE remains intentionally deferred; enabling `arm` does not mean scalable
   vector semantics are modeled.
+
+## ADR-100: C++ Aarch64 Runtime Verification Uses Existing Toolchain Knobs
+
+Context:
+
+C++ NEON profile artifacts can render native `<arm_neon.h>` code, and the
+verifier already carries a typed C++ compiler, target triple, and QEMU
+emulator path. The open question was whether the CLI/API needed more sysroot
+plumbing before C++ NEON value tests could run under QEMU.
+
+Decision:
+
+Do not add a new sysroot flag for this slice. The current development image has
+no clang-compatible aarch64 GNU C++ sysroot: `clang++ --target=aarch64-linux-gnu`
+cannot find standard library headers such as `<array>`, and `<arm_neon.h>`
+transitively needs target libc headers. However, the installed Zig frontend can
+cross-build aarch64 musl C++ binaries with its bundled libc when invoked through
+the existing verifier knobs:
+
+```text
+--cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+```
+
+Keep local Zig cache paths outside the workspace mount when running this gate.
+The verifier remains responsible for after-write build/test execution, and
+machine profile metadata remains free of local compiler/sysroot paths.
+Full C++ compiler flags that are profile-specific, such as future
+`-march=...` arguments, belong to typed machine profile data (`cpp_flags`), not
+to C++ rendering code. The renderer may derive the current x86 `-m...` flags
+from feature tokens, but it forwards full profile-owned C++ flags verbatim.
+
+The C++ verifier now performs a target-specific preflight for profiles that
+declare a C++ target triple. If the local compiler cannot compile a tiny
+standard-library/NEON probe for that target, only that profile is skipped with a
+structured verifier note instead of failing the whole host-buildable C++ gate.
+
+Consequences:
+
+- C++ NEON runtime verification can run today through
+  `qemu-aarch64 -cpu cortex-a76` without adding local-machine-specific profile
+  metadata.
+- Plain clang remains usable only when the environment provides a matching
+  aarch64 C++ sysroot; otherwise the C++ NEON profile is skipped by target
+  preflight in broad host-build verification.
+- AArch64 NEON C++ profiles declare an empty `cpp_flags` list because the
+  target triple selects the baseline AArch64 NEON substrate. Future SVE-style
+  `-march=...` flags should be declared in machine profile data.
+- The ISA-neutral `lane_bitmask_int` helper lives in `tsl_core.hpp`, so ARM
+  profile headers do not depend on x86 traits merely to name integral masks.

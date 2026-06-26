@@ -428,6 +428,7 @@ def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(tmp_path: Path) -> 
     assert report.diagnostics == ()
     assert [command.step for command in seen] == [
         "preflight",
+        "target-preflight",
         "clean",
         "configure",
         "build",
@@ -435,13 +436,59 @@ def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(tmp_path: Path) -> 
         "test",
     ]
     assert seen[0].argv[0] == "clang++"
-    configure = seen[2].argv
+    assert "--target=aarch64-linux-gnu" in seen[1].argv
+    configure = seen[3].argv
     assert "-DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-gnu" in configure
     assert (
         f"-DCMAKE_CROSSCOMPILING_EMULATOR={sys.executable};-cpu;cortex-a76"
         in configure
     )
     assert seen[-1].argv[0] == "ctest"
+
+
+def test_cpp_target_preflight_failure_skips_only_that_profile(tmp_path: Path) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="cpp",
+                root_path="cpp",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="scalar",
+                        file_stem="scalar",
+                    ),
+                    VerifyProfile(
+                        profile_name="neon",
+                        file_stem="neon",
+                        family="aarch64",
+                        cpp_target="aarch64-linux-gnu",
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        if command.step == "target-preflight":
+            return BuildCommandResult(
+                command=command,
+                returncode=1,
+                stderr="fatal error: 'array' file not found",
+            )
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(tmp_path, project, runner)
+
+    assert report.diagnostics == ()
+    assert len(report.skipped) == 1
+    assert report.skipped[0].startswith(
+        "cpp: profile neon target preflight failed with exit code 1"
+    )
+    assert [command.profile_name for command in seen if command.step == "configure"] == [
+        "scalar"
+    ]
 
 
 def test_rust_qemu_value_tests_use_target_and_run_binaries(tmp_path: Path) -> None:
