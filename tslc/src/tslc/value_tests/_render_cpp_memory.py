@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-from tslc.value_tests.literals import cpp_literal, cpp_literal_list, token_truthy
+from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
 from tslc.value_tests.render_cpp_helpers import (
-    append_call_args as _append_call_args,
-    append_vector_inputs as _append_vector_inputs,
     axis_suffix as _axis_suffix,
     cast_literal_list as _cast_literal_list,
     cpp_string_literal as _cpp_string_literal,
-    scalar_expected as _scalar_expected,
-    scalar_result_type as _scalar_result_type,
     uint_literal as _uint_literal,
 )
 

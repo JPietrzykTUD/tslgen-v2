@@ -104,7 +104,6 @@ class Selector:
         selected: list[SelectedImplementation] = []
         warnings: dict[str, Diagnostic] = {}  # keyed by message, so each ambiguity warns once
         for primitive in variants:
-            masked = "mask" in primitive.attributes
             # A non-vector (free-function) primitive (`allocate`/`deallocate`) has no SIMD axis:
             # its type group is a placeholder (`ptr`) that no arith tag matches, and its body is
             # ISA-independent. Iterate its OWN type-group members (so `base::in` resolves) and

@@ -7,7 +7,6 @@ from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests._case_common import ordinary_base_spelling as _ordinary_base_spelling
 from tslc.value_tests.case_helpers import (
     args_match as _args_match,
-    axis_args as _axis_args,
     base_spelling as _base_spelling,
     effective_lanes as _effective_lanes,
     function_name as _function_name,

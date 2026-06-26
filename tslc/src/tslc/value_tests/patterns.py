@@ -7,7 +7,6 @@ from tslc.value_tests._case_core import (
     array_to_vector_case,
     broadcast_case,
     lane_list_case,
-    mask_logic_case,
     mask_result_case,
     mask_to_vector_case,
     reduction_case,

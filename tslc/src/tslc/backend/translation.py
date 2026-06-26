@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from tslc.backend.translation_common import (
-    X86_REGISTER_BITS,
+from tslc.backend.translation_common import X86_REGISTER_BITS
+from tslc.catalog.model import Catalog, Extension
+from tslc.catalog.scalar_types import (
     is_signed,
     is_type_tag,
     normalize_scalar_tag,
     signed_of,
     unsigned_of,
 )
-from tslc.catalog.model import Catalog, Extension
 from tslc.render.model import RenderField, RenderText
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 

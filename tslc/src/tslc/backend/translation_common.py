@@ -4,11 +4,7 @@ from __future__ import annotations
 
 from tslc.catalog.model import Catalog, Extension
 from tslc.catalog.scalar_types import (
-    is_signed,
-    is_type_tag,
     normalize_scalar_tag,
-    signed_of,
-    unsigned_of,
 )
 from tslc.render.model import RenderField, RenderText, TemplateApplication
 
