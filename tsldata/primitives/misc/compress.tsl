@@ -249,21 +249,33 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
       [?i8, ?i16]:
         requires [sve]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-              var<const_infer>(values, call<primitive=to_array[Vec]>(data));
-              var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+              let<type>(Base, type<generation>(base::in));
+              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+              var<const_infer>(values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+              var<const_infer>(result_values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+              intrin<svst1, build>(call<primitive=mask_true[Vec]>(), values, data);
+              loop<backend>(i, 0, lanes, 1) {
+                result_values[i] = cast<static>(Base, 0);
+              }
+              var<const_infer>(all, call<primitive=mask_true[Vec]>());
+              var<const_infer>(indexes, intrin<svindex, build>(cast<static>(Base, 0), cast<static>(Base, 1)));
               var<infer>(out_idx, 0);
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
-                if (mask<test>(mask, i)) {
-                  result[out_idx] = values[i];
+              loop<backend>(i, 0, lanes, 1) {
+                var<const_infer>(lane, intrin<svcmpeq_n, build[suffix=base::in]>(all, indexes, cast<static>(Base, i)));
+                if (intrin<svptest_any>(lane, mask)) {
+                  result_values[out_idx] = values[i];
                   out_idx = out_idx + 1;
                 }
               }
-              complete(call<primitive=from_array[Vec]>(result));
+              var<const_infer>(result, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result_values));
+              std::free(values);
+              std::free(result_values);
+              complete(result);
             """
     [avx2, sse, neon, generic, oneAPIfpga]:
       arith:
