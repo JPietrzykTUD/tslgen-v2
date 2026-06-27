@@ -19,6 +19,22 @@ prim<s:=v> hand(vec):
           reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type<generation>(base::in), intrin<svandv, build>(call<primitive=mask_true[Vec]>(), vec)));"
+      f?:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, raw_memory]
+        implementation:
+          tsil """
+            let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+            let<type>(UVec, type<generation>(vector::as_base(UnsignedT)));
+            var<const_infer>(bits_vec, call<primitive=reinterpret[Vec, UVec]>(vec));
+            var<infer>(bits, cast<static>(UnsignedT, intrin<svandv, build[suffix=UnsignedT]>(call<primitive=mask_true[UVec]>(), bits_vec)));
+            var<infer>(out, cast<static>(type<generation>(base::in), 0));
+            mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &bits), value<generation>(type::size_bytes(type<generation>(base::in))));
+            complete(out);
+          """
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
@@ -278,7 +294,7 @@ prim<s:=v> hand(vec):
             }
             complete(result);
           """
-    [scalar, generic, oneAPIfpga, avx2, sse, neon, sve]:
+    [scalar, generic, oneAPIfpga, avx2, sse, neon]:
       f?:
         requires:
           scalar []
@@ -287,7 +303,6 @@ prim<s:=v> hand(vec):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
-          sve [sve]
         safety:
           internal_unsafe true
           caller_unsafe false

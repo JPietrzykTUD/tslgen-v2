@@ -374,16 +374,21 @@ prim<v:=()> sequence():
       f?:
         requires [sve]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
-              result[i] = cast<static>(type<generation>(base::in), i);
-            }
-            complete(call<primitive=from_array[Vec]>(result));
+            let<type>(IndexBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+            let<type>(IndexVec, type<generation>(vector::as_base(IndexBase)));
+            var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
+              cast<static>(IndexBase, 0),
+              cast<static>(IndexBase, 1)
+            ));
+            complete(intrin<svcvt_, build[infix=base::in, suffix=IndexBase, post=x]>(
+              call<primitive=mask_true[Vec]>(),
+              indexes
+            ));
           """
     [neon, generic, oneAPIfpga]:
       arith:
@@ -449,18 +454,32 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
       f?:
         requires [sve]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-            var<infer>(current, start);
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
-              result[i] = current;
-              current = details::arith_add(current, stepwidth);
-            }
-            complete(call<primitive=from_array[Vec]>(result));
+            let<type>(IndexBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+            let<type>(IndexVec, type<generation>(vector::as_base(IndexBase)));
+            var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
+              cast<static>(IndexBase, 0),
+              cast<static>(IndexBase, 1)
+            ));
+            var<const_infer>(scale, intrin<svcvt_, build[infix=base::in, suffix=IndexBase, post=x]>(
+              call<primitive=mask_true[Vec]>(),
+              indexes
+            ));
+            complete(
+              intrin<svadd, build[post=x]>(
+                call<primitive=mask_true[Vec]>(),
+                intrin<svdup_n, build>(start),
+                intrin<svmul_n, build[post=x]>(
+                  call<primitive=mask_true[Vec]>(),
+                  scale,
+                  stepwidth
+                )
+              )
+            );
           """
     [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
       arith:

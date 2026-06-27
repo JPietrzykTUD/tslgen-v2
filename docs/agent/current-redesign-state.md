@@ -4145,3 +4145,55 @@ Next prompt:
 ```text
 docs/agent/runs/tslc-arm-neon-between-and-full-qemu-prompt.md
 ```
+
+## Completed SVE Sequence Float Runtime-Length Checkpoint
+
+The active ARM per-primitive goal closed the remaining direct SVE C++
+runtime-length skips for scalable float sequence generation and unmasked
+horizontal bitwise AND.
+
+Implemented:
+
+- Replaced the SVE `f32`/`f64` `sequence` fallback array loop with an SVE1
+  `svindex` unsigned index vector converted to the float vector type through
+  `svcvt_*_x`.
+- Replaced the SVE `f32`/`f64` `custom_sequence` fallback array loop with
+  `svindex`, `svcvt_*_x`, `svmul_n_*_x`, `svdup_n_*`, and `svadd_*_x`.
+- Added direct SVE `f32`/`f64` unmasked `hand` bodies by reinterpreting the
+  float vector as the same-width unsigned vector, reducing with `svandv`, and
+  copying the reduced scalar bits back to the float result.
+- Removed `sve` from the old float `hand` generic fallback group so SVE uses
+  the scalable source-owned body instead of requiring a generation-known vector
+  length.
+
+Validation:
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives sequence,custom_sequence,hand --coverage --value-test-warnings --output-root ./tslctmp/sve-sequence-float-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives sequence,custom_sequence,hand --output-root ./tslctmp/sve-sequence-float-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: focused SVE coverage now reports `sequence 30/30`,
+`custom_sequence 30/30`, and `hand 30/30`; the focused SVE C++ qemu checkpoint
+generated `888` specializations and passed CTest. Full SVE C++ coverage now
+reports `4407 emitted / 4495 attempted`, up from `4401`, and the full SVE C++
+qemu gate generated `4407` specializations and passed CTest.
+
+The fast gate remains at the known baseline:
+`1 failed, 263 passed, 82 deselected`, with only the known safety-contract WIP
+failure `test_primitive_corpus_safety_covers_direct_unsafe_facts` remaining.
+
+The remaining full SVE C++ skips are dependency prunes (`mod`, `mod_imm`,
+`mul_imm`, `shift_left`, `shift_right`, and `to_ostream`) plus the known
+unsupported signature families for `from_array`, `to_array`, and `set`.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-pruned-arithmetic-dependencies-prompt.md
+```
