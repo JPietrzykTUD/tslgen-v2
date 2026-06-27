@@ -189,7 +189,7 @@ prim<v:=(v,sImm)> shift_left(data, shift):
         implementation:
           tsil """
               complete(
-                intrin<svlsl_n_{{ ?i? }}_x>(call<primitive=mask_true[Vec]>(), data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift))
+                intrin<svlsl_n, build[suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift))
               );
             """
       f?:
@@ -521,7 +521,7 @@ prim<v:=(v,s)> shift_left(data, shift):
         implementation:
           tsil """
               complete(
-                intrin<svlsl_n_{{ ?i? }}_x>(call<primitive=mask_true[Vec]>(), data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift))
+                intrin<svlsl_n, build[suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift))
               );
             """
       f?:
@@ -1124,13 +1124,13 @@ prim<v:=(v,sImm)> shift_right(data, shift):
                   let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                   let<type>(UVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
-                  var<const_infer>(ures, intrin<svlsr_n_{{ ui? }}_x>(pg, udata, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+                  var<const_infer>(ures, intrin<svlsr_n, build[suffix=base::unsigned_of(base::in), post=x]>(pg, udata, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
                   complete(call<primitive=reinterpret[UVec, Vec]>(ures));
                 } else<compile> {
-                  complete(intrin<svasr_n_{{ ?i? }}_x>(pg, data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+                  complete(intrin<svasr_n, build[suffix=base::in, post=x]>(pg, data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
                 }
               } else<generation> {
-                complete(intrin<svlsr_n_{{ ?i? }}_x>(pg, data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+                complete(intrin<svlsr_n, build[suffix=base::in, post=x]>(pg, data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
               }
             """
       f?:
@@ -1634,19 +1634,19 @@ prim<v:=(v,s)> shift_right(data, shift):
         implementation:
           tsil """
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
-              var<const_infer>(sh, intrin<svdup_n_{{ ui? }}>(cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+              var<const_infer>(sh, intrin<svdup_n, build[suffix=base::unsigned_of(base::in)]>(cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                 if<compile>(!PreserveSign) {
                   let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                   let<type>(UVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
-                  var<const_infer>(ures, intrin<svlsr_{{ ui? }}_x>(pg, udata, sh));
+                  var<const_infer>(ures, intrin<svlsr, build[suffix=base::unsigned_of(base::in), post=x]>(pg, udata, sh));
                   complete(call<primitive=reinterpret[UVec, Vec]>(ures));
                 } else<compile> {
-                  complete(intrin<svasr_{{ ?i? }}_x>(pg, data, sh));
+                  complete(intrin<svasr, build[suffix=base::in, post=x]>(pg, data, sh));
                 }
               } else<generation> {
-                complete(intrin<svlsr_{{ ?i? }}_x>(pg, data, sh));
+                complete(intrin<svlsr, build[suffix=base::in, post=x]>(pg, data, sh));
               }
             """
       f?:
