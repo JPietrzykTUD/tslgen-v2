@@ -97,15 +97,20 @@ class SupportPolicy:
         self, shape: SignatureShape, extension: Extension
     ) -> frozenset[str]:
         unsupported = set(self.unsupported_signature_kinds(shape))
-        if self.uses_scalable_vector(extension):
-            kinds = {shape.result_kind, *shape.param_kinds}
-            unsupported.update(kinds & self.scalable_deferred_signature_kinds)
-            if shape.result_term.is_lane_list_like:
-                unsupported.add(shape.result_kind)
-            unsupported.update(
-                term.kind for term in shape.param_terms if term.is_lane_list_like
-            )
+        unsupported.update(self.deferred_signature_kinds_for_extension(shape, extension))
         return frozenset(unsupported)
+
+    def deferred_signature_kinds_for_extension(
+        self, shape: SignatureShape, extension: Extension
+    ) -> frozenset[str]:
+        if not self.uses_scalable_vector(extension):
+            return frozenset()
+        kinds = {shape.result_kind, *shape.param_kinds}
+        deferred = set(kinds & self.scalable_deferred_signature_kinds)
+        if shape.result_term.is_lane_list_like:
+            deferred.add(shape.result_kind)
+        deferred.update(term.kind for term in shape.param_terms if term.is_lane_list_like)
+        return frozenset(deferred)
 
     def has_immediate_operand(self, shape: SignatureShape) -> bool:
         return self.immediate_kind in shape.param_kinds

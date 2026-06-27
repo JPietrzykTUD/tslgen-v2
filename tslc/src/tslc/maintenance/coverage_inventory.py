@@ -89,6 +89,9 @@ def _category(reason: str) -> str:
         return "unresolved value query"
     if reason.startswith("could not resolve pointer cast"):
         return "unresolved pointer-cast type"
+    if "is policy-deferred for scalable vector extension" in reason:
+        match = re.search(r"signature '([^']+)'", reason)
+        return f"policy-deferred scalable signature {match.group(1) if match else ''}".strip()
     if "uses an unsupported kind" in reason:
         match = re.search(r"signature '([^']+)'", reason)
         return f"unsupported signature kind {match.group(1) if match else ''}".strip()
@@ -139,6 +142,11 @@ _CATEGORY_NOTES = {
     "unsupported signature kind": (
         "Unsupported signature kind: variadic `set` (`v:=s...`) and `to_ostream` "
         "(`o:=(o,v,s)`)."
+    ),
+    "policy-deferred scalable signature": (
+        "Selected scalable-vector slot whose fixed-lane `s[]` or `lanes<s>` "
+        "signature is intentionally deferred until the typed scalable array/"
+        "lane-list contract is designed."
     ),
 }
 

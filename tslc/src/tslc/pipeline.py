@@ -45,6 +45,7 @@ from tslc.value_tests import HarnessPrimitiveNames, discover_harness_primitives
 
 _DEFAULT_BACKENDS = DEFAULT_SUPPORT_POLICY.default_backend_ids
 GenerationMode = Literal["partial", "strict"]
+SkipStatus = Literal["coverage_gap", "policy_deferred"]
 _TYPE_ORDER = {
     tag: index
     for index, tag in enumerate(
@@ -95,6 +96,7 @@ class SkippedEntry:
     extension: str
     type_tag: str
     reason: str
+    status: SkipStatus = "coverage_gap"
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,7 +219,7 @@ class _GenerationSession:
             self._generate_profile(profile_name, profile)
 
         if self.request.mode == "strict" and (
-            self.skipped or has_errors(self.diagnostics)
+            _has_strict_skips(self.skipped) or has_errors(self.diagnostics)
         ):
             return _result_without_artifacts(
                 self.diagnostics, self.coverage, self.skipped
@@ -375,7 +377,7 @@ class _GenerationSession:
             return
         entry = _lowering_skipped_entry(profile_name, backend, primitive, slot, lowered)
         self.skipped.append(entry)
-        if self.request.mode == "strict":
+        if self.request.mode == "strict" and entry.status == "coverage_gap":
             self.diagnostics.extend(
                 _strict_lowering_diagnostics(entry, lowered.diagnostics)
             )
@@ -454,7 +456,18 @@ def _lowering_skipped_entry(
         extension=slot.extension.name,
         type_tag=slot.type_tag,
         reason=next((d.message for d in lowered.diagnostics), "unsupported body"),
+        status=_skip_status(lowered.diagnostics),
     )
+
+
+def _skip_status(diagnostics: tuple[Diagnostic, ...]) -> SkipStatus:
+    if any(d.code == "TSL-LOWER-POLICY-DEFERRED-SIGNATURE" for d in diagnostics):
+        return "policy_deferred"
+    return "coverage_gap"
+
+
+def _has_strict_skips(skipped: list[SkippedEntry]) -> bool:
+    return any(entry.status == "coverage_gap" for entry in skipped)
 
 
 def _strict_lowering_diagnostics(

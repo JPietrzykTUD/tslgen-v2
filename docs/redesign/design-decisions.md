@@ -5681,24 +5681,27 @@ finite authored lane list, while SVE has a runtime lane count.
 
 Decision:
 
-Do not hide these residual SVE skips by editing source bodies or deleting SVE
-implementations. The correct next step is a typed design slice:
+Do not hide these residual SVE cases by editing source bodies or deleting SVE
+implementations. Keep the lowering guard and make the support-policy decision
+typed in coverage:
 
-- decide whether `s[]` is permanently a fixed-lane array signature or whether a
-  separate scalable runtime-buffer/span signature is needed;
-- decide whether `from_array` and `to_array` should be expressed through
-  existing pointer/load/store primitives for scalable vectors rather than the
-  fixed `array_for<Vec>` contract;
-- decide whether `set(v:=(lanes<s>))` is intentionally fixed-lane-only for
-  scalable vectors, or whether it needs a different scalable constructor
-  primitive;
-- make coverage report intentional unsupported scalable signature cases with a
-  typed status only after the source/lowering contract is explicit.
+- `SupportPolicy` exposes the fixed-lane signature kinds that are deferred for
+  scalable vectors;
+- lowering emits `TSL-LOWER-POLICY-DEFERRED-SIGNATURE` when a selected
+  specialization is blocked only by that scalable fixed-lane contract;
+- `SkippedEntry` carries `status="policy_deferred"` for these cases;
+- coverage reports policy-deferred slots separately from true skipped gaps and
+  strict generation treats them as intentional support-policy deferrals, not
+  missing support.
+
+A future design slice may still introduce a separate scalable runtime-buffer or
+span contract, or a different scalable constructor primitive, but it should not
+reuse `array_for<Vec>` or finite `lanes<s>` semantics for sizeless SVE vectors.
 
 Consequences:
 
-- The current SVE C++ full-coverage ceiling remains `4479 emitted / 4509
-  attempted` until the scalable array/lane-list design is resolved.
+- Current SVE C++ supported coverage reports `4479 emitted / 4479 attempted`
+  plus `30 policy-deferred slots`.
 - No renderer, value-test planner, or primitive-body workaround should attempt
   to synthesize `array_for<simd<T, sve>>`.
 - Rust SVE remains unsupported and is not part of this decision.

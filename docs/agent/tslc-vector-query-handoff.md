@@ -4650,3 +4650,69 @@ docs/agent/runs/tslc-arm-sve-scalable-signature-design-prompt.md
 Next action: design the smallest typed treatment for scalable `s[]` and
 `lanes<s>` signatures: source-level unsupported modeling, new scalable
 runtime-buffer/span signatures, or fixed-lane-only classification.
+
+### Latest Active TSLc Handoff: SVE Policy-Deferred Scalable Signatures
+
+The active ARM per-primitive goal now distinguishes true skipped coverage gaps
+from intentional scalable fixed-lane signature deferrals. Rust SVE remains
+unsupported and was not attempted.
+
+Implemented:
+
+1. `SupportPolicy` now exposes
+   `deferred_signature_kinds_for_extension(...)`, so scalable fixed-lane
+   deferrals are typed policy facts instead of being inferred from a generic
+   unsupported-kind set.
+2. `Lowerer` emits `TSL-LOWER-POLICY-DEFERRED-SIGNATURE` when a selected SVE
+   specialization is blocked only by `s[]` or `lanes<s>`.
+3. `SkippedEntry` carries `status="policy_deferred"` for those cases.
+4. Coverage reports policy-deferred slots separately from real skipped gaps,
+   and strict generation ignores policy-deferred skips while still failing on
+   true coverage gaps.
+5. `coverage_inventory` categorizes the new reason as
+   `policy-deferred scalable signature`.
+
+Validation:
+
+```bash
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_support_policy.py tslc/tests/test_coverage.py
+```
+
+Result: `10 passed`.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives from_array,to_array,set --coverage --value-test-warnings --output-root ./tslctmp/sve-residual-signatures-coverage
+```
+
+Result: focused residual SVE coverage reports `588 emitted / 588 attempted`
+plus `30 policy-deferred slots`; `from_array`, `to_array`, and `set` each
+report `20/20 emitted, 10 policy-deferred`.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+```
+
+Result: full SVE C++ coverage reports `4479 emitted / 4479 attempted` plus
+`30 policy-deferred slots`.
+
+```bash
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: the fast gate remains at the known safety-contract baseline:
+`1 failed, 265 passed, 82 deselected`; the only failure is
+`test_primitive_corpus_safety_covers_direct_unsafe_facts`. `git diff --check`
+passed.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-final-coverage-audit-prompt.md
+```
+
+Next action: run a completion audit for the ARM goal: verify NEON C++/Rust and
+SVE C++ generated value tests under qemu, confirm there are no true skipped
+coverage gaps beyond typed policy-deferred scalable signatures, and only then
+decide whether the active goal is complete.

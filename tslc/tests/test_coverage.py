@@ -48,6 +48,54 @@ def test_report_text_is_actionable(data_root: Path, machine_profiles_path: Path)
     assert "skipped because" not in report
 
 
+def test_scalable_fixed_lane_signatures_are_policy_deferred(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["from_array", "to_array", "set"],
+        profiles=["sve"],
+        backends=["cpp"],
+    )
+    by = {row.primitive: row for row in coverage_by_primitive(result)}
+
+    assert by["from_array"].emitted == 20
+    assert by["from_array"].skipped == 0
+    assert by["from_array"].policy_deferred == 10
+    assert by["to_array"].emitted == 20
+    assert by["to_array"].skipped == 0
+    assert by["to_array"].policy_deferred == 10
+    assert by["set"].emitted == 20
+    assert by["set"].skipped == 0
+    assert by["set"].policy_deferred == 10
+    assert {entry.status for entry in result.skipped} == {"policy_deferred"}
+
+    report = format_coverage_report(result)
+    assert "588 emitted / 588 attempted" in report
+    assert "30 policy-deferred slots" in report
+    assert "skipped because" not in report
+    assert "policy-deferred because" in report
+
+
+def test_strict_generation_allows_policy_deferred_scalable_signatures(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["from_array", "to_array", "set"],
+        profiles=["sve"],
+        backends=["cpp"],
+        generation_mode="strict",
+    )
+
+    assert {entry.status for entry in result.skipped} == {"policy_deferred"}
+    assert not has_errors(result.diagnostics)
+    assert result.rendered is not None
+    assert result.artifacts.artifacts
+
+
 def test_strict_generation_succeeds_when_no_support_gaps_remain(
     data_root: Path, machine_profiles_path: Path
 ) -> None:

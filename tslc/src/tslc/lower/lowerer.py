@@ -236,10 +236,21 @@ class Lowerer:
                 f"could not parse signature {selected.primitive.signature!r}",
                 source=_primitive_signature_source(selected),
             )
+        deferred_kinds = self._support.deferred_signature_kinds_for_extension(
+            shape, selected.extension
+        )
         unsupported_kinds = self._support.unsupported_signature_kinds_for_extension(
             shape, selected.extension
         )
         if unsupported_kinds:
+            if unsupported_kinds == deferred_kinds:
+                return _skip(
+                    "TSL-LOWER-POLICY-DEFERRED-SIGNATURE",
+                    f"signature {selected.primitive.signature!r} is policy-deferred for "
+                    f"scalable vector extension {selected.extension.name!r} "
+                    f"(deferred kinds: {', '.join(sorted(deferred_kinds))})",
+                    source=_primitive_signature_source(selected),
+                )
             # A not-yet-supported signature kind (e.g. s[], ptr) is a coverage gap,
             # not a failure — skip the specialization (info), don't fail generation.
             return _skip(

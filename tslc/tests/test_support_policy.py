@@ -7,7 +7,7 @@ from tslc.catalog.signatures import parse_signature
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
-def test_policy_owns_backend_and_signature_support() -> None:
+def test_policy_owns_backend_and_signature_support(catalog: Catalog) -> None:
     policy = DEFAULT_SUPPORT_POLICY
 
     assert policy.default_backend_ids == ("cpp", "rust")
@@ -22,6 +22,13 @@ def test_policy_owns_backend_and_signature_support() -> None:
     assert lane_list_shape.param_terms[0].lane_element_kind == "s"
     assert policy.supports_signature(lane_list_shape)
     assert policy.has_lane_list_parameter(lane_list_shape)
+    sve = catalog.extensions["sve"]
+    assert policy.deferred_signature_kinds_for_extension(lane_list_shape, sve) == (
+        frozenset({"lanes<s>"})
+    )
+    assert policy.unsupported_signature_kinds_for_extension(lane_list_shape, sve) == (
+        frozenset({"lanes<s>"})
+    )
     result_lane_list_shape = parse_signature("lanes<s>:=v")
     assert result_lane_list_shape is not None
     assert not policy.supports_signature(result_lane_list_shape)

@@ -4439,3 +4439,63 @@ Next prompt:
 ```text
 docs/agent/runs/tslc-arm-sve-scalable-signature-design-prompt.md
 ```
+
+## Completed SVE Policy-Deferred Scalable Signatures Checkpoint
+
+The active ARM per-primitive goal now distinguishes true skipped coverage gaps
+from intentionally deferred scalable fixed-lane signatures. Rust SVE remains
+unsupported and was not attempted.
+
+Implemented:
+
+- Added `SupportPolicy.deferred_signature_kinds_for_extension(...)`.
+- Changed lowerer unsupported-signature handling so selected scalable-vector
+  slots blocked only by `s[]` or `lanes<s>` emit
+  `TSL-LOWER-POLICY-DEFERRED-SIGNATURE`.
+- Added `SkippedEntry.status`, with `policy_deferred` for those scalable
+  fixed-lane cases and `coverage_gap` for ordinary skips/prunes.
+- Updated coverage reporting so policy-deferred slots are reported separately
+  from skipped gaps and are not counted as attempted emitted support.
+- Updated strict generation so policy-deferred skips do not fail strict mode,
+  while true coverage gaps still do.
+- Updated `coverage_inventory` categorization for the new deferred signature
+  reason.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_support_policy.py tslc/tests/test_coverage.py
+```
+
+Result: `10 passed`.
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives from_array,to_array,set --coverage --value-test-warnings --output-root ./tslctmp/sve-residual-signatures-coverage
+```
+
+Result: focused residual SVE coverage reports `588 emitted / 588 attempted`
+plus `30 policy-deferred slots`.
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+```
+
+Result: full SVE C++ coverage reports `4479 emitted / 4479 attempted` plus
+`30 policy-deferred slots`.
+
+```text
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: the fast gate remains at the known safety-contract baseline:
+`1 failed, 265 passed, 82 deselected`; the only failure is
+`test_primitive_corpus_safety_covers_direct_unsafe_facts`. `git diff --check`
+passed.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-final-coverage-audit-prompt.md
+```
