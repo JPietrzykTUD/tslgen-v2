@@ -3723,3 +3723,28 @@ The next slice should decide packed SVE mask representation explicitly.
 `integral_mask_type_policy kind "same_as_mask_type"`, do not guess a scalar
 byte layout for packed predicate memory in a renderer; either add a typed
 source/compiler contract or surface a deterministic deferred-support reason.
+
+### Latest Active TSLc Handoff: NEON Direct Comparison + To-Integral Checkpoint
+
+The active ARM per-primitive goal has moved back through NEON:
+
+- direct comparison mask-result primitives (`equal`, `nequal`, `less_than`,
+  `greater_than`, `less_than_or_equal`, `greater_than_or_equal`) now generate,
+  build, and pass C++/Rust value tests under qemu;
+- `to_integral[neon]` now emits and passes C++/Rust value tests under qemu;
+- full NEON coverage now reports `9000 emitted / 9020 attempted`, with only
+  Rust/SVE dependency skips remaining.
+
+The current fast gate baseline is `1 failed, 263 passed, 82 deselected`; the
+known remaining failure is
+`test_primitive_corpus_safety_covers_direct_unsafe_facts`.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-neon-between-and-full-qemu-prompt.md
+```
+
+Next action: run the `between_*` NEON C++/Rust qemu checkpoint. If it passes,
+run the full all-primitive NEON C++/Rust qemu command. Do not claim full NEON
+runtime parity until that full command has actually passed.

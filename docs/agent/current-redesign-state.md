@@ -3444,3 +3444,107 @@ Next prompt:
 ```text
 docs/agent/runs/tslc-arm-neon-after-shift-coverage-prompt.md
 ```
+
+## Completed NEON Direct Comparison + To-Integral Checkpoint
+
+The active ARM per-primitive goal made a NEON C++/Rust checkpoint for direct
+comparison mask-result primitives and the `to_integral` dependency needed by
+C++ differential mask checks.
+
+Implemented:
+
+- Replaced the remaining NEON comparison `vector::transform(...)` source query
+  shape with the already-supported typed `vector::as_base(...)` form for
+  `equal`, `less_than`, `greater_than`, `less_than_or_equal`, and
+  `greater_than_or_equal`.
+- Simplified the NEON `to_integral` body so it no longer depends on the
+  unresolved generation-time query
+  `type::size_bytes(type<generation>(vector::imask))`. NEON declares
+  `mask_width "lanes"`, so the body can loop over `vector::length` directly and
+  build the lane bitset.
+
+Validation:
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --primitives equal,nequal,less_than,greater_than,less_than_or_equal,greater_than_or_equal,between_exclusive,between_inclusive,between_left_inclusive,between_right_inclusive --coverage --value-test-warnings --output-root ./tslctmp/neon-comparison-transform-coverage
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --primitives to_integral --coverage --value-test-warnings --output-root ./tslctmp/neon-to-integral-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --primitives equal,nequal,less_than,greater_than,less_than_or_equal,greater_than_or_equal --output-root ./tslctmp/neon-direct-comparison-transform-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl --rust-target aarch64-unknown-linux-musl --rust-linker /workspaces/tslgen-v99/tslctmp/zig-aarch64-linux-musl-cc
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --primitives to_integral --output-root ./tslctmp/neon-to-integral-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl --rust-target aarch64-unknown-linux-musl --rust-linker /workspaces/tslgen-v99/tslctmp/zig-aarch64-linux-musl-cc
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --coverage --value-test-warnings --output-root ./tslctmp/neon-all-coverage-after-comparison-to-integral
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: focused comparison coverage emitted `3236/3256` slots, with only
+Rust/SVE dependency slots skipped; focused `to_integral` coverage emitted
+`60/60`; the direct comparison C++/Rust qemu checkpoint generated `2816`
+specializations, C++ CTest passed, Rust value tests passed with `420 passed`,
+and `build/test-verified 12 commands`; the standalone `to_integral` C++/Rust
+qemu checkpoint generated `1616` specializations, C++ CTest passed, Rust value
+tests passed with `208 passed`, and `build/test-verified 12 commands`.
+The full NEON coverage inventory now reports `9000 emitted / 9020 attempted`;
+the remaining 20 skips are only dependency attempts where Rust correctly skips
+`extension 'sve' is not supported on rust`.
+
+The fast gate remains at the improved baseline:
+`1 failed, 263 passed, 82 deselected`, with only the known safety-contract WIP
+failure `test_primitive_corpus_safety_covers_direct_unsafe_facts` remaining.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-neon-between-and-full-qemu-prompt.md
+```
+
+## Completed NEON Direct Comparison + To-Integral Checkpoint
+
+The active ARM per-primitive goal made a NEON C++/Rust checkpoint for direct
+comparison mask-result primitives and the `to_integral` dependency needed by
+C++ differential mask checks.
+
+Implemented:
+
+- Replaced the remaining NEON comparison `vector::transform(...)` source query
+  shape with the already-supported typed `vector::as_base(...)` form for
+  `equal`, `less_than`, `greater_than`, `less_than_or_equal`, and
+  `greater_than_or_equal`.
+- Simplified the NEON `to_integral` body so it no longer depends on the
+  unresolved generation-time query
+  `type::size_bytes(type<generation>(vector::imask))`. NEON declares
+  `mask_width "lanes"`, so the body can loop over `vector::length` directly and
+  build the lane bitset.
+
+Validation:
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --primitives equal,nequal,less_than,greater_than,less_than_or_equal,greater_than_or_equal,between_exclusive,between_inclusive,between_left_inclusive,between_right_inclusive --coverage --value-test-warnings --output-root ./tslctmp/neon-comparison-transform-coverage
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --primitives to_integral --coverage --value-test-warnings --output-root ./tslctmp/neon-to-integral-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --primitives equal,nequal,less_than,greater_than,less_than_or_equal,greater_than_or_equal --output-root ./tslctmp/neon-direct-comparison-transform-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl --rust-target aarch64-unknown-linux-musl --rust-linker /workspaces/tslgen-v99/tslctmp/zig-aarch64-linux-musl-cc
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --primitives to_integral --output-root ./tslctmp/neon-to-integral-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl --rust-target aarch64-unknown-linux-musl --rust-linker /workspaces/tslgen-v99/tslctmp/zig-aarch64-linux-musl-cc
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --coverage --value-test-warnings --output-root ./tslctmp/neon-all-coverage-after-comparison-to-integral
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: focused comparison coverage emitted `3236/3256` slots, with only
+Rust/SVE dependency slots skipped; focused `to_integral` coverage emitted
+`60/60`; the direct comparison C++/Rust qemu checkpoint generated `2816`
+specializations, C++ CTest passed, Rust value tests passed with `420 passed`,
+and `build/test-verified 12 commands`; the standalone `to_integral` C++/Rust
+qemu checkpoint generated `1616` specializations, C++ CTest passed, Rust value
+tests passed with `208 passed`, and `build/test-verified 12 commands`.
+The full NEON coverage inventory now reports `9000 emitted / 9020 attempted`;
+the remaining 20 skips are only dependency attempts where Rust correctly skips
+`extension 'sve' is not supported on rust`.
+
+The fast gate remains at the improved baseline:
+`1 failed, 263 passed, 82 deselected`, with only the known safety-contract WIP
+failure `test_primitive_corpus_safety_covers_direct_unsafe_facts` remaining.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-neon-between-and-full-qemu-prompt.md
+```

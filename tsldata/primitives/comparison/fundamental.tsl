@@ -189,7 +189,7 @@ prim<m:=(v,v)> equal(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+            let<type>(MaskVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
             complete(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
                 intrin<vceqq, build>(left, right)
@@ -686,7 +686,7 @@ prim<m:=(v,v)> less_than(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+            let<type>(MaskVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
             complete(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
                 intrin<vcltq, build>(left, right)
@@ -969,7 +969,7 @@ prim<m:=(v,v)> greater_than(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+            let<type>(MaskVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
             complete(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
                 intrin<vcgtq, build>(left, right)
@@ -1181,7 +1181,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+            let<type>(MaskVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
             complete(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
                 intrin<vcleq, build>(left, right)
@@ -1393,7 +1393,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(MaskVec, type<generation>(vector::transform(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+            let<type>(MaskVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
             complete(
               call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
                 intrin<vcgeq, build>(left, right)

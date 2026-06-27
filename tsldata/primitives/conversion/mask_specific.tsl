@@ -189,15 +189,14 @@ prim<im:=m> to_integral(mask):
           reasons []
         implementation:
           tsil """
-               let<type>(ImaskT, type<generation>(vector::imask));
+              let<type>(ImaskT, type<generation>(vector::imask));
               var<infer>(result, cast<static>(ImaskT, 0));
-              var<const_typed>(type<backend>(scalar::size), mask_bits, value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8);
-               loop<backend>(i, 0, value<generation>(vector::length), 1)  {
-                if (i < mask_bits && mask<test>(mask, i)) {
+              loop<backend>(i, 0, value<generation>(vector::length), 1)  {
+                if (mask<test>(mask, i)) {
                   result |= (cast<static>(ImaskT, 1)) << i;
                 }
               }
-               complete(result) ;
+              complete(result) ;
             """
     scalar:
       arith:
