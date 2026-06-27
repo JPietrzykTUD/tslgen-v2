@@ -247,7 +247,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
             );
           """
     sve:
-      ?i?:
+      arith:
         requires [sve]
         safety:
           internal_unsafe true
@@ -392,7 +392,7 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
             );
           """
     sve:
-      ?i?:
+      arith:
         requires [sve]
         safety:
           internal_unsafe true
@@ -537,7 +537,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
             );
           """
     sve:
-      ?i?:
+      arith:
         requires [sve]
         safety:
           internal_unsafe true
@@ -1163,7 +1163,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             );
           """
     sve:
-      ?i?:
+      arith:
         requires [sve]
         safety:
           internal_unsafe false
@@ -1355,6 +1355,27 @@ prim<v:=(v,v)> mod(dividend, divisor):
                   call<primitive=div>(dividend, divisor),
                   divisor
                 )
+              )
+            );
+          """
+      f?:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(QuotientBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+            var<const_infer>(quotient, intrin<svdiv, build[post=x]>(pg, dividend, divisor));
+            var<const_infer>(truncated, intrin<svcvt_, build[infix=QuotientBase, suffix=base::in, post=z]>(pg, quotient));
+            var<const_infer>(truncated_float, intrin<svcvt_, build[infix=base::in, suffix=QuotientBase, post=x]>(pg, truncated));
+            complete(
+              intrin<svsub, build[post=x]>(
+                pg,
+                dividend,
+                intrin<svmul, build[post=x]>(pg, truncated_float, divisor)
               )
             );
           """

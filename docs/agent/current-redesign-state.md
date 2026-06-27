@@ -4197,3 +4197,58 @@ Next prompt:
 ```text
 docs/agent/runs/tslc-arm-sve-pruned-arithmetic-dependencies-prompt.md
 ```
+
+## Completed SVE Arithmetic Dependency Checkpoint
+
+The active ARM per-primitive goal reduced the SVE C++ arithmetic dependency
+prunes for `mod`, `mod_imm`, and `mul_imm`.
+
+Implemented:
+
+- Broadened SVE `mul` unmasked and masked bodies from integer-only selectors
+  to `arith`, using the existing scalable `svmul_*_{x,z,m}` source-owned
+  bodies for `f32` and `f64` as well.
+- Broadened SVE `mul_imm` from integer-only to `arith`, allowing the existing
+  `mul(set1(factor))` composition to emit for `f32` and `f64`.
+- Added direct SVE `f32`/`f64` `mod` using `svdiv`, `svcvt` truncation of the
+  quotient, `svmul`, and `svsub`, so float `mod` and `mod_imm` no longer prune
+  through a missing callee.
+- Confirmed with an ACLE compile probe that direct `svdiv_f32_x` exists while
+  `svdiv_s8_x` and `svdiv_s16_x` do not; remaining small-width integer modulo
+  prunes are intentionally left for a widening/narrowing design instead of an
+  invalid direct intrinsic spelling.
+
+Validation:
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives mod,mod_imm,mul_imm --coverage --value-test-warnings --output-root ./tslctmp/sve-arithmetic-pruned-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives mod,mod_imm,mul_imm --output-root ./tslctmp/sve-arithmetic-pruned-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: focused SVE coverage for `mod,mod_imm,mul_imm` improved from
+`1072 emitted / 1126 attempted` to `1096 emitted / 1136 attempted`;
+`mul` and `mul_imm` now report `90/90`; `mod` reports `78/86`; and
+`mod_imm` reports `78/90`. The remaining focused arithmetic prunes are only
+`si8`, `si16`, `ui8`, and `ui16` modulo forms. Focused SVE C++ qemu generated
+`1326` specializations and passed CTest. Full SVE C++ coverage now reports
+`4431 emitted / 4505 attempted`, and the full SVE C++ qemu gate generated
+`4431` specializations and passed CTest.
+
+The fast gate remains at the known baseline:
+`1 failed, 263 passed, 82 deselected`, with only the known safety-contract WIP
+failure `test_primitive_corpus_safety_covers_direct_unsafe_facts` remaining.
+
+The remaining full SVE C++ skips are dependency prunes (`mod`, `mod_imm`,
+`shift_left`, `shift_right`, and `to_ostream`) plus the known unsupported
+signature families for `from_array`, `to_array`, and `set`.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-float-shift-dependencies-prompt.md
+```
