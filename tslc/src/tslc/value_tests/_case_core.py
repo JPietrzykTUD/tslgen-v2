@@ -17,6 +17,7 @@ from tslc.value_tests.case_helpers import (
     scalar_inputs as _scalar_inputs,
     vector_inputs as _vector_inputs,
 )
+from tslc.value_tests.literals import token_truthy
 from tslc.value_tests.model import ValueTestCasePlan
 
 def generic_golden_case(
@@ -300,6 +301,39 @@ def mask_result_case(
         lanes=lanes,
     )
 
+def masked_mask_result_case(
+    name: str,
+    index: int,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> ValueTestCasePlan | None:
+    base_spelling = _ordinary_base_spelling(case, specs)
+    if (
+        base_spelling is None
+        or case.lanes is None
+        or case.expected_rule is not None
+        or len(case.expected) != case.lanes
+    ):
+        return None
+    if not _args_match(case, specs[0].param_kinds):
+        return None
+    expected_bits = 0
+    for lane, token in enumerate(case.expected):
+        if token_truthy(token):
+            expected_bits |= 1 << lane
+    return _plan(
+        "mask_result",
+        name,
+        index,
+        case,
+        specs,
+        base_spelling,
+        vector_inputs=_vector_inputs(case),
+        mask_inputs=_mask_inputs(case),
+        expected=(str(expected_bits),),
+        lanes=case.lanes,
+    )
+
 def scalar_vector_case(
     name: str,
     index: int,
@@ -364,6 +398,7 @@ __all__ = (
     "compile_only_case",
     "array_to_vector_case",
     "scalar_result_case",
+    "masked_mask_result_case",
     "mask_result_case",
     "scalar_vector_case",
     "immediate_case",

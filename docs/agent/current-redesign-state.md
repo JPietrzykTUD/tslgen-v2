@@ -3354,3 +3354,50 @@ Next prompt:
 ```text
 docs/agent/runs/tslc-arm-sve-packed-mask-representation-planning-prompt.md
 ```
+
+## Completed NEON Masked Comparison Value-Test Checkpoint
+
+The active ARM per-primitive goal made a NEON C++/Rust checkpoint for the
+masked comparison family.
+
+Implemented:
+
+- Added fixed-width `m:=(m,v,v)` masked mask-result value-test planning. The
+  planner converts authored lane-wise expected mask values into an integer
+  bitset and emits the existing `mask_result` case kind for C++ and Rust.
+- Kept scalable SVE masked mask-result planning on its existing path; no
+  renderer or lane-model redesign was introduced.
+- Reordered authored masked comparison tests so the mask input matches the
+  primitive signature for `equal`, `nequal`, `less_than`, `greater_than`,
+  `less_than_or_equal`, and `greater_than_or_equal`.
+- Corrected the `nequal` masked float NaN/inf edge expectation for the active
+  `INFINITY != 0.0` lane.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py::test_planner_emits_fixed_masked_mask_result_cases tslc/tests/test_profile_rendering.py::test_sve_profile_registers_scalable_cpp_simd_types
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --primitives equal,nequal,less_than,greater_than,less_than_or_equal,greater_than_or_equal --coverage --value-test-warnings --output-root ./tslctmp/neon-mask-comparison-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --primitives equal,nequal,less_than,greater_than,less_than_or_equal,greater_than_or_equal --output-root ./tslctmp/neon-mask-comparison-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl --rust-target aarch64-unknown-linux-musl --rust-linker /workspaces/tslgen-v99/tslctmp/zig-aarch64-linux-musl-cc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall passed; focused planner/profile tests passed with
+`2 passed`; NEON comparison coverage generated without value-test unsupported
+case warnings; the full NEON C++/Rust qemu checkpoint generated `2556`
+specializations, C++ CTest passed, Rust value tests passed with `420 passed`,
+and `build/test-verified 12 commands`; diff whitespace was clean.
+
+The fast gate now reports `1 failed, 263 passed, 82 deselected`. The remaining
+failure is the known safety-contract WIP
+`test_primitive_corpus_safety_covers_direct_unsafe_facts`. The two previous
+AVX2 value-test WIP failures now pass because this source-shape fix removed
+their authored-unplanned diagnostics.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-neon-next-primitive-coverage-prompt.md
+```

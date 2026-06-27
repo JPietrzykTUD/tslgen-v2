@@ -109,6 +109,53 @@ def test_planner_uses_source_identity_for_emitted_mask_name() -> None:
     assert cpp_profiles[0].cases[0].kind == "masked"
 
 
+def test_planner_emits_fixed_masked_mask_result_cases() -> None:
+    primitive = Primitive(
+        "equal",
+        "m:=(m,v,v)",
+        ("mask", "left", "right"),
+        ("mask",),
+        (),
+        attributes={"mask": "zero"},
+        tests=(
+            TslTestCase(
+                name="masked_equal",
+                type_tag="si32",
+                tags=("mask", "basic"),
+                lanes=4,
+                inputs=(
+                    TslTestArg("mask", mask_bits="5"),
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("vector", values=("1", "0", "3", "0")),
+                ),
+                expected=("-1", "0", "-1", "0"),
+            ),
+        ),
+    )
+    catalog = _catalog(primitive, *_harness_primitives())
+    spec = _spec(
+        "equal_maskz",
+        "equal",
+        result_kind="m",
+        param_kinds=("m", "v", "v"),
+        mask_policy="zero",
+    )
+    profile = _profile(cpp={"equal_maskz": (spec,)}, rust={"equal_maskz": (spec,)})
+
+    plan = ValueTestPlanner(catalog, _VALUE_TEST_SUPPORTS).plan(_inputs(profile))
+
+    cpp_case = plan.profiles_for("cpp")[0].cases[0]
+    rust_case = plan.profiles_for("rust")[0].cases[0]
+    assert cpp_case.kind == "mask_result"
+    assert rust_case.kind == "mask_result"
+    assert cpp_case.call_name == "equal_maskz"
+    assert cpp_case.param_kinds == ("m", "v", "v")
+    assert cpp_case.mask_inputs == ("5",)
+    assert cpp_case.vector_inputs == (("1", "2", "3", "4"), ("1", "0", "3", "0"))
+    assert cpp_case.expected == ("5",)
+    assert {entry.status for entry in plan.coverage} == {"emitted"}
+
+
 def test_simple_shape_patterns_are_not_ordered_by_first_overload() -> None:
     primitive = Primitive(
         "store",

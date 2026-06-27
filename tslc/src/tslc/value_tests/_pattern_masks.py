@@ -8,6 +8,7 @@ from tslc.catalog.model import Catalog, Primitive
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests._case_core import (
     mask_logic_case,
+    masked_mask_result_case,
     mask_result_case,
     mask_to_vector_case,
 )
@@ -49,15 +50,25 @@ class _MaskedMaskResultPattern(_BasePattern):
         return None
 
     def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
-        return scalable_masked_mask_result_cases(
+        plan = masked_mask_result_case(
             kwargs["emitted_name"],
             kwargs["index"],
             kwargs["case"],
             kwargs["specs"],
-            kwargs["catalog"],
-            kwargs["harness"],
-            kwargs["backend"],
         )
+        plans = [plan] if plan is not None else []
+        plans.extend(
+            scalable_masked_mask_result_cases(
+                kwargs["emitted_name"],
+                kwargs["index"],
+                kwargs["case"],
+                kwargs["specs"],
+                kwargs["catalog"],
+                kwargs["harness"],
+                kwargs["backend"],
+            )
+        )
+        return tuple(plans)
 
 
 class _MaskLogicPattern(_BasePattern):
