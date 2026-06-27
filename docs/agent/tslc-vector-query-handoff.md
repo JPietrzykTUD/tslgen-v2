@@ -4472,3 +4472,66 @@ docs/agent/runs/tslc-arm-sve-low-width-modulo-prompt.md
 Next action: close the SVE C++ low-width `mod` callees (`si8`, `si16`, `ui8`,
 `ui16`) so dependent `mod_imm` forms can emit. Keep Rust SVE out of scope and
 do not add invalid direct SVE intrinsic spellings.
+
+### Latest Active TSLc Handoff: SVE Low-Width Modulo Checkpoint
+
+The active ARM per-primitive goal closed the remaining SVE C++ low-width
+`mod` callees and the dependent `mod_imm` forms. Rust SVE remains unsupported
+and was not attempted.
+
+Implemented:
+
+1. Added an SVE `?i8` / `?i16` `mod` implementation in
+   `tsldata/primitives/arithmetic/complex.tsl`.
+2. Used the existing SVE runtime-buffer pattern: store scalable `dividend` and
+   `divisor` vectors through `svst1`, compute `details::arith_rem` per runtime
+   lane, reload through `svld1`, and free the temporary buffers.
+3. Kept masked `mod` and all `mod_imm` forms on their existing typed
+   compositions; they emit now that the low-width unmasked `mod` callees exist.
+4. Kept the fix source-owned in `tsldata`; no renderer, lane-model, value-test
+   planner, or `tslc/src` semantic changes were made.
+
+Validation:
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives mod,mod_imm --coverage --value-test-warnings --output-root ./tslctmp/sve-low-width-modulo-coverage
+```
+
+Result: focused SVE coverage now reports `mod 90/90` and `mod_imm 90/90`.
+
+```bash
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives mod,mod_imm --output-root ./tslctmp/sve-low-width-modulo-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: focused SVE C++ qemu generated `1260` specializations and passed CTest.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: full SVE C++ coverage improved to `4469 emitted / 4509 attempted`;
+full SVE C++ qemu generated `4469` specializations and passed CTest.
+
+```bash
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall and diff-check passed. The fast gate remains at
+`1 failed, 263 passed, 82 deselected`, with only the known
+`test_primitive_corpus_safety_covers_direct_unsafe_facts` WIP failure.
+
+The remaining full SVE C++ dependency prune is `to_ostream`, which still calls
+`to_array[Vec]`. The other skipped buckets are the known unsupported scalable
+signatures for `from_array`, `to_array`, and `set`.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-to-ostream-prune-prompt.md
+```
+
+Next action: close the SVE C++ `to_ostream` dependency prune without adding a
+general scalable `to_array`. Keep Rust SVE out of scope.

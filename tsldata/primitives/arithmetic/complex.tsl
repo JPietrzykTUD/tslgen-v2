@@ -1340,6 +1340,30 @@ prim<v:=(v,v)> mod(dividend, divisor):
             );
           """
     sve:
+      [?i8, ?i16]:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, type<generation>(base::in));
+            var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+            var<const_infer>(dividends, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+            var<const_infer>(divisors, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+            var<const_infer>(result_values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+            intrin<svst1, build>(call<primitive=mask_true[Vec]>(), dividends, dividend);
+            intrin<svst1, build>(call<primitive=mask_true[Vec]>(), divisors, divisor);
+            loop<backend>(i, 0, lanes, 1) {
+              result_values[i] = details::arith_rem(dividends[i], divisors[i]);
+            }
+            var<const_infer>(result, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result_values));
+            std::free(dividends);
+            std::free(divisors);
+            std::free(result_values);
+            complete(result);
+          """
       idqword:
         requires [sve]
         safety:
