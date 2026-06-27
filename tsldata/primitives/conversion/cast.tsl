@@ -1264,21 +1264,21 @@ prim<v:=v>[cast=convert] cast(data):
               caller_unsafe false
               reasons [intrinsic]
             implementation:
-              tsil "complete(intrin<svcvt, build[infix=ToBase, suffix=base::in, post=z]>(call<primitive=mask_true[Vec]>(), data));"
+              tsil "complete(intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=z]>(call<primitive=mask_true[Vec]>(), data));"
           ?i32:
             safety:
               internal_unsafe true
               caller_unsafe false
               reasons [intrinsic]
             implementation:
-              tsil "complete(intrin<svcvt, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data));"
+              tsil "complete(intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data));"
           ?i64:
             safety:
               internal_unsafe true
               caller_unsafe false
               reasons [intrinsic]
             implementation:
-              tsil "complete(intrin<svcvt, build[infix=ToBase, suffix=base::in, post=z]>(call<primitive=mask_true[Vec]>(), data));"
+              tsil "complete(intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=z]>(call<primitive=mask_true[Vec]>(), data));"
       f64:
         requires [sve]
         ToBase:
@@ -1297,7 +1297,7 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil """
                   svbool_t pg64 = intrin<svptrue_b64>();
-                  auto tmp = intrin<svcvt, build[infix=ToBase, suffix=base::in, post=z]>(pg64, data);
+                  auto tmp = intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=z]>(pg64, data);
                   svbool_t pg32 = intrin<svptrue_b32>();
                   svuint32_t idx = intrin<svindex_u32>(0, 1);
                   svbool_t even = intrin<svcmpeq_n_u32>(pg32, intrin<svand_n_u32_x>(pg32, idx, 1), 0);
@@ -1312,7 +1312,7 @@ prim<v:=v>[cast=convert] cast(data):
               caller_unsafe false
               reasons [intrinsic]
             implementation:
-              tsil "complete(intrin<svcvt, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data));"
+              tsil "complete(intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data));"
       ?i32:
         requires [sve]
         ToBase:
@@ -1345,14 +1345,14 @@ prim<v:=v>[cast=convert] cast(data):
               caller_unsafe false
               reasons [intrinsic]
             implementation:
-              tsil "complete(intrin<svcvt, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data));"
+              tsil "complete(intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data));"
           f64:
             safety:
               internal_unsafe true
               caller_unsafe false
               reasons [intrinsic]
             implementation:
-              tsil "complete(intrin<svcvt, build[infix=ToBase, suffix=base::in, post=z]>(call<primitive=mask_true[Vec]>(), data));"
+              tsil "complete(intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=z]>(call<primitive=mask_true[Vec]>(), data));"
       ?i64:
         requires [sve]
         ToBase:
@@ -1371,7 +1371,7 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil """
                   svbool_t pg64 = intrin<svptrue_b64>();
-                  auto tmp = intrin<svcvt, build[infix=ToBase, suffix=base::in, post=z]>(pg64, data);
+                  auto tmp = intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=z]>(pg64, data);
                   svbool_t pg32 = intrin<svptrue_b32>();
                   svuint32_t idx = intrin<svindex_u32>(0, 1);
                   svbool_t even = intrin<svcmpeq_n_u32>(pg32, intrin<svand_n_u32_x>(pg32, idx, 1), 0);
@@ -1386,7 +1386,7 @@ prim<v:=v>[cast=convert] cast(data):
               caller_unsafe false
               reasons [intrinsic]
             implementation:
-              tsil "complete(intrin<svcvt, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data));"
+              tsil "complete(intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data));"
     scalar:
       arith:
         requires []

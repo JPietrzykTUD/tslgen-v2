@@ -428,7 +428,7 @@ prim<usize:=m> mask_population_count(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b8>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(type<backend>(scalar::size), intrin<svcntp_b8>(call<primitive=mask_true[Vec]>(), mask)));"
       ?i16:
         requires [sve]
         safety:
@@ -436,7 +436,7 @@ prim<usize:=m> mask_population_count(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b16>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(type<backend>(scalar::size), intrin<svcntp_b16>(call<primitive=mask_true[Vec]>(), mask)));"
       ?i32:
         requires [sve]
         safety:
@@ -444,7 +444,7 @@ prim<usize:=m> mask_population_count(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(type<backend>(scalar::size), intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
       ?i64:
         requires [sve]
         safety:
@@ -452,7 +452,7 @@ prim<usize:=m> mask_population_count(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(type<backend>(scalar::size), intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
       f32:
         requires [sve]
         safety:
@@ -460,7 +460,7 @@ prim<usize:=m> mask_population_count(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(type<backend>(scalar::size), intrin<svcntp_b32>(call<primitive=mask_true[Vec]>(), mask)));"
       f64:
         requires [sve]
         safety:
@@ -468,7 +468,7 @@ prim<usize:=m> mask_population_count(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
+          tsil "complete(cast<static>(type<backend>(scalar::size), intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -500,7 +500,7 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
       kind bool
       default true
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, scalar, generic, oneAPIfpga]:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneAPIfpga]:
       ?i?:
         requires:
           avx512 [avx512f]
@@ -509,7 +509,6 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
           avx2 [avx]
           sse [sse]
           neon [neon]
-          sve [sve]
           scalar []
           generic []
           oneAPIfpga [oneAPIfpgaDev]
@@ -533,7 +532,6 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
           avx2 [avx]
           sse [sse]
           neon [neon]
-          sve [sve]
           scalar []
           generic []
           oneAPIfpga [oneAPIfpgaDev]

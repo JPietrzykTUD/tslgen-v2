@@ -88,7 +88,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
             var<const_infer>(indices, call<primitive=sequence[IndexVec]>());
             var<const_infer>(limit, call<primitive=set1[IndexVec]>(cast<static>(IndexBase, active_count)));
             var<const_infer>(store_mask, call<primitive=less_than[IndexVec]>(indices, limit));
-            call<primitive=store[Vec], attrs[aligned=false]>(store_mask, ptr, packed);
+            call<primitive=store[Vec], attrs[aligned=false, mask=pass_through]>(store_mask, ptr, packed);
           """
     [avx2, sse, neon, sve]:
       arith:

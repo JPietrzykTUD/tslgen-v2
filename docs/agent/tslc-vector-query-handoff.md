@@ -3768,3 +3768,74 @@ docs/agent/runs/tslc-arm-sve-full-cpp-qemu-prompt.md
 
 Next action: move to Phase 2 SVE C++ only. Run full SVE C++ coverage, then the
 full SVE C++ qemu gate. Do not attempt Rust SVE.
+
+### Latest Active TSLc Handoff: Full SVE C++ Runtime Green
+
+Phase 2 SVE C++ now builds and passes all currently emitted value tests under
+qemu. Rust SVE remains unsupported and was not attempted.
+
+Implemented:
+
+1. SVE `cast` source bodies now compose ACLE conversion names with the
+   `svcvt_` base, producing spellings such as `svcvt_f32_s32_x` instead of
+   `svcvtf32_s32_x`.
+2. SVE `compress_store` now calls the existing masked `store[Vec]` overload
+   with `attrs[aligned=false, mask=pass_through]`.
+3. SVE `mask_population_count` returns the declared scalar `usize` count type
+   from `svcntp_*`, not `vector::imask`.
+4. SVE is no longer selected for integer-mask bit-position helper bodies
+   (`test_imask`, `insert_imask`, `extract_imask`, `shift_right_imask`) because
+   their implementation semantics require integer bit shifts/or operations,
+   while SVE `imask_type` is the native predicate `svbool_t`.
+
+Validation:
+
+```bash
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives cast --output-root ./tslctmp/sve-cast-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: generated `975` specializations; C++ CTest passed.
+
+```bash
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives compress_store --output-root ./tslctmp/sve-compress-store-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: generated `966` specializations; C++ CTest passed.
+
+```bash
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives test_imask,insert_imask,extract_imask,shift_right_imask --output-root ./tslctmp/sve-imask-bit-helpers-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: generated `842` specializations; C++ CTest passed.
+
+```bash
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: generated `4138` specializations; C++ CTest passed.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+```
+
+Result: `4138 emitted / 4469 attempted`.
+
+```bash
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall and diff-check passed. The fast gate remains at
+`1 failed, 263 passed, 82 deselected`, with only the known
+`test_primitive_corpus_safety_covers_direct_unsafe_facts` WIP failure.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-coverage-gap-prompt.md
+```
+
+Next action: continue SVE C++ coverage closure from the remaining typed gaps.
+Start with the explicit shift selector-template gaps, then conversion/extract
+runtime-length gaps. Keep Rust SVE out of scope.

@@ -3497,6 +3497,71 @@ Next prompt:
 docs/agent/runs/tslc-arm-neon-between-and-full-qemu-prompt.md
 ```
 
+## Current Active Pointer
+
+The current active `tslc` work is the SVE C++ coverage-gap follow-up. The full
+SVE C++ qemu runtime gate is green for currently emitted tests (`4138`
+specializations, CTest passed), and the next prompt is:
+
+```text
+docs/agent/runs/tslc-arm-sve-coverage-gap-prompt.md
+```
+
+The fast gate baseline remains `1 failed, 263 passed, 82 deselected`, with only
+the known `test_primitive_corpus_safety_covers_direct_unsafe_facts` WIP
+failure.
+
+## Current Work State: Full SVE C++ Runtime Green
+
+Phase 2 SVE C++ now generates, builds, and runs all currently emitted value
+tests under qemu. Rust SVE remains unsupported and was not attempted.
+
+Implemented:
+
+- Corrected SVE `cast` intrinsic composition from `svcvt...` to the ACLE
+  `svcvt_...` spelling family by fixing the source `intrin<..., build[...]`
+  base in `tsldata/primitives/conversion/cast.tsl`.
+- Routed the SVE `compress_store` compacted vector through the existing masked
+  `store[Vec]` overload with `mask=pass_through`.
+- Fixed SVE `mask_population_count` to return the declared `usize` scalar
+  count type rather than casting `svcntp_*` to `vector::imask`.
+- Stopped selecting SVE for integer-mask bit-position helper bodies
+  (`test_imask`, `insert_imask`, `extract_imask`, `shift_right_imask`) because
+  SVE declares `integral_mask_type_policy kind "same_as_mask_type"` and these
+  helper bodies require integer shifts/or operations, not `svbool_t`.
+
+Validation:
+
+```text
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives cast --output-root ./tslctmp/sve-cast-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives compress_store --output-root ./tslctmp/sve-compress-store-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives test_imask,insert_imask,extract_imask,shift_right_imask --output-root ./tslctmp/sve-imask-bit-helpers-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: focused `cast` generated `975` specializations and passed CTest;
+focused `compress_store` generated `966` specializations and passed CTest;
+focused integer-mask helper slice generated `842` specializations and passed
+CTest; full SVE C++ qemu generated `4138` specializations, built, and CTest
+passed. Current SVE coverage reports `4138 emitted / 4469 attempted`. The fast
+gate remains at `1 failed, 263 passed, 82 deselected`, with only the known
+safety-contract WIP failure
+`test_primitive_corpus_safety_covers_direct_unsafe_facts`.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-coverage-gap-prompt.md
+```
+
+Next action: continue SVE C++ coverage closure from the remaining typed gaps.
+Start with the explicit shift selector-template gaps, then conversion/extract
+runtime-length gaps. Keep Rust SVE out of scope.
+
 ## Completed Full NEON C++/Rust Runtime Checkpoint
 
 The active ARM per-primitive goal completed the Phase 1 NEON runtime gate:
