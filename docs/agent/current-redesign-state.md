@@ -4352,3 +4352,49 @@ Next prompt:
 ```text
 docs/agent/runs/tslc-arm-sve-to-ostream-prune-prompt.md
 ```
+
+## Completed SVE To-Ostream Dependency Checkpoint
+
+The active ARM per-primitive goal closed the final SVE C++ dependency prune:
+`to_ostream`. Rust SVE remains unsupported and was not attempted.
+
+Implemented:
+
+- Split `sve` out of the shared `to_ostream` body in
+  `tsldata/primitives/io/out.tsl`, because that shared body depends on
+  `to_array[Vec]`, which is intentionally unsupported for scalable SVE vectors.
+- Added a source-owned SVE `to_ostream` body that stores scalable lanes with
+  `svst1`, formats runtime lanes high-lane-first using the same binary/hex/octal
+  / decimal rules as the C++ helper, frees the temporary buffer, and returns
+  the output string.
+
+Validation:
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives to_ostream --coverage --value-test-warnings --output-root ./tslctmp/sve-to-ostream-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives to_ostream --output-root ./tslctmp/sve-to-ostream-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: focused SVE `to_ostream` coverage now reports `20/20`; the focused
+SVE C++ qemu checkpoint generated `818` specializations and passed CTest.
+Full SVE C++ coverage now reports `4479 emitted / 4509 attempted`, and the full
+SVE C++ qemu gate generated `4479` specializations and passed CTest.
+
+Compileall and `git diff --check` passed. The fast gate remains at the known
+baseline: `1 failed, 263 passed, 82 deselected`, with only the known
+`test_primitive_corpus_safety_covers_direct_unsafe_facts` WIP failure.
+
+There are no remaining full SVE C++ dependency prunes. The only skipped buckets
+are the explicit unsupported scalable signatures for `from_array`, `to_array`,
+and `set`.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-residual-scalable-signatures-prompt.md
+```

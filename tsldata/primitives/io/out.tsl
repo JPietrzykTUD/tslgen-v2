@@ -24,13 +24,12 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
     - {tags [basic], type "f64", case {inputs [[1.0, 2.0], 0], expected "0000000000000000000000000000000000000000000000000000000000000010|0000000000000000000000000000000000000000000000000000000000000001|\n"}}
     - {tags [edge], type "f64", case {inputs [[0.0, 255.0], 0], expected "0000000000000000000000000000000000000000000000000000000011111111|0000000000000000000000000000000000000000000000000000000000000000|\n"}}
   impls:
-    [avx512, avx2, sse, sve, generic, oneAPIfpga]:
+    [avx512, avx2, sse, generic, oneAPIfpga]:
       arith:
         requires:
           avx512 [avx512f]
           avx2 [avx]
           sse [sse2]
-          sve [sve]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
         safety:
@@ -41,6 +40,53 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(data));
                io<format>(out, arr, cast<static>(si32, ostream_modifier)) ;
+               complete(out) ;
+            """
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+               let<type>(Base, type<generation>(base::in));
+               var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+               var<const_infer>(values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+               intrin<svst1, build>(call<primitive=mask_true[Vec]>(), values, data);
+               var<const_infer>(modifier, cast<static>(si32, ostream_modifier));
+               var<const_infer>(bits, sizeof(Base) * 8);
+               var<const_infer>(fmt_base, (modifier == 16) ? 16u : (modifier == 8) ? 8u : (modifier == 0) ? 2u : 10u);
+               loop<backend>(lane, 0, lanes, 1) {
+                 var<infer>(value, static_cast<std::uint64_t>(values[lanes - 1 - lane]));
+                 var<infer>(masked, (bits >= 64) ? value : (value & ((static_cast<std::uint64_t>(1) << bits) - 1)));
+                 if (fmt_base == 2u) {
+                   loop<backend>(bit, 0, bits, 1) {
+                     out += ((masked >> (bits - 1 - bit)) & 1u) ? '1' : '0';
+                   }
+                 } else {
+                   char buf[88];
+                   var<infer>(p, 0);
+                   if (masked == 0) {
+                     buf[p] = '0';
+                     p = p + 1;
+                   }
+                   while (masked) {
+                     var<const_infer>(digit, static_cast<unsigned>(masked % fmt_base));
+                     buf[p] = (digit < 10) ? char('0' + digit) : char('a' + digit - 10);
+                     p = p + 1;
+                     masked = masked / fmt_base;
+                   }
+                   while (p) {
+                     p = p - 1;
+                     out += buf[p];
+                   }
+                 }
+                 out += '|';
+               }
+               out += '\n';
+               std::free(values);
                complete(out) ;
             """
     neon:
