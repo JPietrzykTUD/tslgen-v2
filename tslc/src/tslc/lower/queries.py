@@ -427,7 +427,11 @@ class ImaskQuery:
 
     def apply(self, args, context):  # noqa: ANN001
         if context.env.extension.vector_bits == 0:
-            return TypeValue("ui64")
+            if (
+                DEFAULT_SUPPORT_POLICY.register_is_base(context.env.extension)
+                or DEFAULT_SUPPORT_POLICY.uses_sized_vector(context.env.extension)
+            ):
+                return TypeValue("ui64")
         return TextValue(context.env.backend.types.imask_type_spelling())
 
 
@@ -481,6 +485,8 @@ class VectorLengthQuery:
         # for the sized vector or the fixed `vector_bits / type_bits` for a fixed extension.
         if context.env.concrete_lanes is not None:
             return TextValue(str(context.env.concrete_lanes))
+        if DEFAULT_SUPPORT_POLICY.uses_scalable_vector(context.env.extension):
+            return None
         return TextValue(
             DEFAULT_SUPPORT_POLICY.lane_expression(
                 context.env.extension, context.env.type_tag
@@ -613,9 +619,14 @@ class GenericLengthQuery:
         if len(args) != 1 or not isinstance(args[0], VectorValue):
             return None
         value = args[0]
-        return TextValue(
-            str(value.lanes) if value.lanes is not None else value.lane_parameter
-        )
+        if value.lanes is not None:
+            return TextValue(str(value.lanes))
+        if value.lane_parameter is not None:
+            return TextValue(value.lane_parameter)
+        # A scalable vector has no generation-time lane count (its length is a runtime value),
+        # so `generic::length` is unresolvable — mirror `vector::length` and return None, which
+        # the query region handler turns into a clean specialization skip rather than a crash.
+        return None
 
 
 DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (

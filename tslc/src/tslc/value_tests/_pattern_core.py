@@ -11,11 +11,15 @@ from tslc.value_tests._case_conversion import differential_cases, differential_f
 from tslc.value_tests._case_core import (
     generic_golden_case,
     immediate_case,
-    mask_logic_case,
     masked_case,
     scalar_result_case,
     scalar_vector_case,
 )
+from tslc.value_tests._case_scalable import (
+    scalable_golden_cases,
+    scalable_masked_cases,
+)
+from tslc.value_tests._case_scalable_masks import scalable_mask_result_cases
 from tslc.value_tests._pattern_base import _BasePattern, CasePlanBuilder
 from tslc.value_tests.model import (
     HarnessPrimitiveNames,
@@ -53,6 +57,28 @@ class _GenericGoldenPattern(_BasePattern):
         if plan is None:
             return ()
         plans = [plan]
+        plans.extend(
+            scalable_golden_cases(
+                emitted_name,
+                index,
+                case,
+                specs,
+                catalog,
+                harness,
+                backend,
+            )
+        )
+        plans.extend(
+            scalable_mask_result_cases(
+                emitted_name,
+                index,
+                case,
+                specs,
+                catalog,
+                harness,
+                backend,
+            )
+        )
         if backend.supports_differential and harness.round_trip_ready:
             plans.extend(differential_cases(emitted_name, index, case, specs, catalog, harness))
         return tuple(plans)
@@ -102,14 +128,37 @@ class _MaskedPattern(_BasePattern):
                 return primitive
         return None
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(
+        self,
+        *,
+        backend: ValueTestBackendSupport,
+        emitted_name: str,
+        index: int,
+        case: TestCase,
+        specs: tuple[LoweredSpecialization, ...],
+        catalog: Catalog,
+        harness: HarnessPrimitiveNames,
+    ) -> tuple[ValueTestCasePlan, ...]:
         plan = masked_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
+            emitted_name,
+            index,
+            case,
+            specs,
         )
-        return (plan,) if plan is not None else ()
+        plans = [plan] if plan is not None else []
+        plans.extend(
+            scalable_masked_cases(
+                emitted_name,
+                index,
+                case,
+                specs,
+                catalog,
+                harness,
+                backend,
+            )
+        )
+        return tuple(plans)
+
 
 class _VectorConstantPattern(_BasePattern):
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
@@ -198,30 +247,6 @@ class _IndexedScalarPattern(_BasePattern):
         )
         return (plan,) if plan is not None else ()
 
-class _MaskLogicPattern(_BasePattern):
-    def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
-        spec = specs[0]
-        return (
-            spec.result_kind == "m"
-            and len(spec.param_kinds) >= 1
-            and all(kind == "m" for kind in spec.param_kinds)
-            and spec.target is None
-            and spec.mask_policy is None
-            and not spec.axis
-            and spec.immediate is None
-            and not spec.generic_params
-            and not spec.type_params
-        )
-
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
-        plan = mask_logic_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
-        )
-        return (plan,) if plan is not None else ()
-
 class _MaskedScalarVectorPattern(_BasePattern):
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
         spec = specs[0]
@@ -288,7 +313,6 @@ __all__ = (
     "_VectorConstantPattern",
     "_SimpleShapePattern",
     "_IndexedScalarPattern",
-    "_MaskLogicPattern",
     "_MaskedScalarVectorPattern",
     "_ImmediatePattern",
 )

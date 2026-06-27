@@ -44,6 +44,7 @@ _KNOWN_BOOLEAN_VALUES = frozenset({"true", "false"})
 _KNOWN_PRIMITIVE_FIELDS = frozenset(
     {
         "brief_description",
+        "cross_lane",
         "generic_params",
         "impls",
         "operation",
@@ -88,6 +89,10 @@ _KNOWN_EXTENSION_FIELDS = frozenset(
         "size_bits",
         "size_parameter",
         "test_filter",
+        "test_mask_check",
+        "test_mask_from_bits",
+        "test_runtime_lanes",
+        "test_support_headers",
         "test_sizes_bits",
         "unroll_variants",
         "vector_bits",
@@ -216,7 +221,7 @@ def _validate_extension_block(
     mask = fields.get("mask_type_policy")
     _validate_policy_block(
         mask,
-        frozenset({"kind", "width", "cpp_by_lanes", "rust_by_lanes", "cpp"}),
+        frozenset({"kind", "width", "cpp_by_lanes", "rust_by_lanes", "cpp", "rust"}),
         _KNOWN_MASK_POLICY_KINDS,
         "mask_type_policy",
         diagnostics,
@@ -249,6 +254,24 @@ def _validate_extension_block(
                 diagnostics,
                 owner="intrinsic suffix",
             )
+    for backend_map_name in (
+        "test_runtime_lanes",
+        "test_mask_from_bits",
+        "test_mask_check",
+        "test_support_headers",
+    ):
+        backend_map = fields.get(backend_map_name)
+        if backend_map is not None:
+            _diagnose_duplicate_fields(
+                children(backend_map),
+                diagnostics,
+                label=f"{backend_map_name} backend field",
+            )
+            _validate_backend_key_fields(
+                children(backend_map),
+                diagnostics,
+                owner=backend_map_name,
+            )
 
 
 def _validate_policy_block(
@@ -280,6 +303,15 @@ def _validate_primitive(
         owner=f"primitive {declaration.name!r}",
     )
     _diagnose_duplicate_fields(fields, diagnostics, label="primitive field")
+    for cross_lane_field in declaration.fields_by_name("cross_lane"):
+        value = field_text(cross_lane_field.field)
+        if value not in _KNOWN_BOOLEAN_VALUES:
+            _invalid_enum(
+                diagnostics,
+                cross_lane_field.field,
+                f"primitive {declaration.name!r} cross_lane value {value!r}",
+                sorted(_KNOWN_BOOLEAN_VALUES),
+            )
     _validate_attributes(declaration.attributes, diagnostics)
     _validate_generic_params(declaration, diagnostics)
     _validate_immediate_params(declaration, diagnostics)

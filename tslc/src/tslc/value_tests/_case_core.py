@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tslc.catalog.model import TestCase
+from tslc.catalog.scalar_types import scalar_bit_width_or_default
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests._case_common import ordinary_base_spelling as _ordinary_base_spelling
 from tslc.value_tests.case_helpers import (
@@ -45,6 +46,7 @@ def generic_golden_case(
         result_kind=specs[0].result_kind,
         param_kinds=specs[0].param_kinds,
     )
+
 
 def masked_case(
     name: str,
@@ -238,7 +240,9 @@ def scalar_result_case(
     base_spelling = _ordinary_base_spelling(case, specs)
     if base_spelling is None or len(case.expected) != 1:
         return None
-    lanes = _effective_lanes(case)
+    vector_inputs = _vector_inputs(case)
+    mask_inputs = _mask_inputs(case)
+    lanes = _scalar_result_lanes(case, vector_inputs, mask_inputs)
     if not _args_match(case, specs[0].param_kinds):
         return None
     generic_defaults = ()
@@ -251,12 +255,25 @@ def scalar_result_case(
         case,
         specs,
         base_spelling,
-        vector_inputs=_vector_inputs(case),
-        mask_inputs=_mask_inputs(case),
+        vector_inputs=vector_inputs,
+        mask_inputs=mask_inputs,
         scalar_inputs=_scalar_inputs(case),
         lanes=lanes,
         generic_defaults=generic_defaults,
     )
+
+
+def _scalar_result_lanes(
+    case: TestCase,
+    vector_inputs: tuple[tuple[str, ...], ...],
+    mask_inputs: tuple[str, ...],
+) -> int | None:
+    lanes = _effective_lanes(case)
+    if vector_inputs or not mask_inputs or lanes is None:
+        return lanes
+    minimum_generic_lanes = max(1, 128 // scalar_bit_width_or_default(case.type_tag))
+    return max(lanes, minimum_generic_lanes)
+
 
 def mask_result_case(
     name: str,

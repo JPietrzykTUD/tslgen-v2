@@ -4,7 +4,7 @@ This file is the handoff state for Codex tasks. It is intentionally concise and
 must be updated after accepted milestones, accepted documentation corrections,
 or accepted planning passes.
 
-## Active Line: `tslc` (updated 2026-06-25)
+## Active Line: `tslc` (updated 2026-06-26)
 
 The active codebase is **`tslc/`**. The `tslgen/` line documented by the
 milestone history below (M1–M254.x) is the **prior, now-superseded** approach;
@@ -14,7 +14,8 @@ it has not been touched in recent history (the last 20+ commits are entirely
 The authoritative running handoff for the active `tslc` work is
 `docs/agent/tslc-vector-query-handoff.md`. Source-language and architecture
 decisions for `tslc` are recorded in `docs/redesign/design-decisions.md`
-(most recently ADR-095 SDE value-test execution). The
+(most recently ADR-113 C++ SVE unpacked mask store composes existing typed
+primitives and scalable mask-store value-test planning). The
 `## Current Work State` section near the end of this file has been refreshed to
 describe `tslc`; the long milestone history that follows it is retained only as
 the `tslgen` record.
@@ -2424,7 +2425,7 @@ Known follow-ups:
   family in support policy.
 - C++ ARM runtime validation needs a clang-compatible aarch64 C++ sysroot.
 
-Next prompt:
+Next prompt at that point:
 
 ```text
 docs/agent/runs/tslc-native-neon-codegen-review-prompt.md
@@ -2687,10 +2688,10 @@ PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_profile_rendering.py tsl
 
 Result: compileall passed; focused tests passed with `51 passed`.
 
-Next prompt:
+Next prompt at that point:
 
 ```text
-docs/agent/runs/tslc-arm-sve-scalable-vector-planning-prompt.md
+docs/agent/runs/tslc-arm-sve-cpp-scalable-substrate-execution-prompt.md
 ```
 
 ## In-Progress ARM Native Coverage Expansion
@@ -2747,3 +2748,609 @@ Remaining known blocker:
   current selected corpus. The next ARM coverage step should move from NEON
   cleanup to SVE/scalable-vector planning, because scalable ARM semantics are
   still intentionally deferred.
+
+## Completed ARM SVE Scalable-Vector Planning
+
+The SVE planning slice used the new `dev.sh` helpers as the main evidence path.
+
+Findings:
+
+- `./dev.sh explain --primitive add --profile neon --type si32 --backend cpp
+  --extension sve` reports that a NEON profile emits only `generic`, `neon`,
+  and `scalar`; `sve` is not emitted.
+- `./dev.sh explain --primitive add --profile sve --type si32 --backend cpp`
+  reports no `sve` machine profile exists.
+- `./dev.sh dump --stage catalog --primitive add --format text` confirms SVE
+  `add` implementations already exist in the catalog.
+- `./dev.sh dump --stage lowered --primitive add --profile neon --type si64
+  --extension neon --backend cpp --format text` shows the currently covered
+  fixed-width NEON lowering story for comparison.
+- `./dev.sh ratchet` passes the new baseline: `67152 emitted / 67152`
+  slot-variants across `36616` keys, no coverage regressions.
+
+Toolchain evidence:
+
+- C++ SVE probes compile with `/opt/zig/zig c++ -target aarch64-linux-musl`
+  using SVE-capable CPUs such as `-mcpu=a64fx` or `-mcpu=neoverse_v1`.
+- A tiny C++ SVE `svcntw()` binary runs under `/usr/bin/qemu-aarch64` with an
+  SVE-capable CPU.
+- Stable Rust in this environment exposes an `+sve` target feature but not SVE
+  stdarch symbols such as `svbool_t`, `svint32_t`, or `svadd_s32_x`;
+  `tsldata/extensions/extension.tsl` already declares SVE `rust supported
+  false`.
+
+Decision:
+
+Do not enable SVE by pushing it through the fixed-width native-extension path.
+The first implementation slice should be C++-only and should introduce a small
+typed scalable-vector substrate before trying to raise primitive coverage:
+
+1. add an SVE machine profile with profile-owned C++ flags and QEMU metadata;
+2. add explicit C++ scalable-extension support-policy capability;
+3. render C++ `simd<T, sve>` from source-owned `sv*` register and `svbool_t`
+   mask metadata without fixed lane counts;
+4. define one concrete value-test vector-length strategy before running SVE
+   values;
+5. keep Rust SVE unsupported until a supported Rust backend API or separate
+   typed backend strategy exists.
+
+ADR-103 records this decision.
+
+## Completed C++ SVE Scalable-Vector Substrate Slice
+
+The first C++ SVE substrate slice is implemented and validated. It does not
+pretend SVE is fixed-width: scalable extensions are now selectable, but
+fixed-lane facilities that require a concrete `sizeof(register_type)` or lane
+count remain deferred.
+
+Implemented:
+
+- Added an `sve` machine profile with `flags "sve"`, profile-owned
+  `cpp_flags ["-mcpu=a64fx"]`, and QEMU metadata `qemu-aarch64` / `a64fx`.
+- Added explicit scalable-vector support-policy capability and deferred
+  `s[]` / lane-list signatures for scalable extensions.
+- Kept `vector::length` unresolved for scalable vectors instead of returning a
+  fake lane count.
+- Promoted direct native-predicate mask spellings from `mask_type_policy`, so
+  C++ `simd<T, sve>` uses source-owned `sv*` register metadata plus `svbool_t`
+  mask/imask metadata.
+- Added generic literal `post=` intrinsic-build composition for forms such as
+  `intrin<svadd, build[post=x]>`.
+- Added SVE intrinsic compose suffix metadata under
+  `tsldata/extensions/extension.tsl`.
+- Normalized the SVE `mask_true` implementation into ordinary typed source
+  implementation entries, allowing unmasked `add<sve, T>` to close its
+  dependency graph.
+- Kept Rust SVE unsupported.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog.py::test_machine_profiles_loaded tslc/tests/test_generation_conditionals.py::test_mask_policy_promoted_into_extension tslc/tests/test_select_and_lower.py::test_intrin_build_appends_literal_post_fragment tslc/tests/test_profile_rendering.py::test_sve_profile_registers_scalable_cpp_simd_types
+./dev.sh explain --primitive add --profile sve --type si32 --backend cpp --extension sve
+TSLC_BACKENDS=cpp TSLC_OUTPUT_ROOT=/tmp/tslc-sve-add ./dev.sh generate --profiles sve --primitives add
+TSLC_BACKENDS=cpp TSLC_OUTPUT_ROOT=/tmp/tslc-sve-add ./dev.sh build --profiles sve --primitives add --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+TSLC_BACKENDS=cpp TSLC_OUTPUT_ROOT=/tmp/tslc-sve-add ./dev.sh test --profiles sve --primitives add --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+./dev.sh ratchet
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_profile_rendering.py tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py tslc/tests/test_generation_conditionals.py tslc/tests/test_select_and_lower.py
+git diff --check
+```
+
+Result: compileall passed; focused SVE tests passed with `4 passed`; explain
+shows `add<sve, si32>` selected, lowered, emitted, and closed over
+`mask_true<sve, si32>`; generation produced `622` C++ specializations across
+`9` artifacts; build verified `4` commands; test ran CTest through QEMU and
+passed `1/1` tests with `build/test-verified 7 commands`; ratchet reported no
+coverage regressions; broader focused pytest passed with `83 passed`; diff
+whitespace was clean.
+
+Caveat resolved by the next slice:
+
+The generated SVE values target now contains true `tsl::simd<..., tsl::sve>`
+lane value cases for the all-vector `add` family. SVE is still not
+value-complete; masked SVE cases, mask results, memory cases, reductions,
+scalar results, and Rust SVE remain follow-ups.
+
+## Completed C++ SVE Scalable Value-Test Slice
+
+The C++ SVE value-test strategy slice is implemented and validated for the
+first supported shape: authored all-vector value-result cases such as `add`.
+
+Implemented:
+
+- Added extension-owned `test_runtime_lanes` metadata. SVE declares the C++
+  runtime lane-count expression as `svcntb() / sizeof({base_type})`.
+- Extended value-test harness discovery to find pointer load/store helpers by
+  unique typed signatures `v:=cptr` and `void:=(ptr,v)`.
+- Extended test-mode dependency closure to include those harness load/store
+  helpers.
+- Added the `scalable_golden` case kind. The planner emits it only for
+  backends that support that case kind, scalable extensions, value-result
+  all-vector shapes, runtime-lane metadata, and available load/store helpers.
+- Added C++ rendering for `scalable_golden`: runtime-sized buffers are filled
+  from authored lane data, loaded through `tsl::load<Vec, false>`, passed to
+  the primitive under test, stored through `tsl::store<Vec, false>`, and
+  compared through the existing lane equality helper.
+- Kept `array_for<simd<T, sve>>` and fixed `vector::length` out of the SVE
+  value path. Rust SVE remains unsupported.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py::test_harness_discovery_uses_signatures_not_names tslc/tests/test_value_test_planning.py::test_renderers_consume_prebuilt_plans_without_catalog tslc/tests/test_profile_rendering.py::test_sve_profile_registers_scalable_cpp_simd_types
+./dev.sh explain --primitive add --profile sve --type si32 --backend cpp --extension sve
+TSLC_BACKENDS=cpp TSLC_OUTPUT_ROOT=/tmp/tslc-sve-add-values ./dev.sh test --profiles sve --primitives add --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+rg -c 'using Vec = tsl::simd<.*tsl::sve>' /tmp/tslc-sve-add-values/cpp/tests/values_sve.cpp
+./dev.sh ratchet
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_profile_rendering.py tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py tslc/tests/test_generation_conditionals.py tslc/tests/test_select_and_lower.py
+git diff --check
+```
+
+Result: compileall passed; the focused value-test/profile assertions passed
+with `3 passed`; explain shows selected/lowered/emitted SVE `add` and masked
+`add` variants; C++ SVE `add` test generated `842` specializations, ran CTest
+through QEMU, and passed `1/1` value tests with `build/test-verified 7
+commands`; `values_sve.cpp` contains `36` true SVE value cases; ratchet
+reported no coverage regressions (`67152 emitted / 67152`); broader focused
+pytest passed with `98 passed`; diff whitespace was clean.
+
+Review verdict:
+
+The SVE scalable value-test design review accepted the boundary after one
+small revision: planning now asks the backend support table whether
+`scalable_golden` is supported instead of branching on `backend_id == "cpp"`.
+The renderer still consumes already-decided case plans and production
+value-test code has no source-extension-name or C++-ID classifier branches.
+Residual follow-up: broaden typed scalable coverage so masked all-vector and
+mask-result cases become native SVE value checks rather than only generic
+value checks.
+
+Review validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_profile_rendering.py tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py
+TSLC_BACKENDS=cpp TSLC_OUTPUT_ROOT=/tmp/tslc-sve-review ./dev.sh test --profiles sve --primitives add --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+rg -n -m 10 'using Vec = tsl::simd<.*tsl::sve>|svcntb\(\)|tsl::load<Vec, false>|tsl::store<Vec, false>' /tmp/tslc-sve-review/cpp/tests/values_sve.cpp
+./dev.sh ratchet
+git diff --check
+```
+
+Result: compileall passed; required Python subset passed with `50 passed`;
+SVE `add` C++ value tests generated `842` specializations and passed CTest
+through QEMU; generated values file contains the expected SVE runtime-lane,
+load, and store markers; ratchet reported no regressions; diff whitespace was
+clean.
+
+## Completed C++ SVE Masked Value-Test Slice
+
+The masked scalable value-test slice is implemented for value-result
+all-vector shapes such as `add[mask=zero]` and `add[mask=pass_through]`.
+
+Implemented:
+
+- Added extension-owned `test_mask_from_bits` metadata. SVE declares the C++
+  expression
+  `::tsl::test::sve_mask_from_bits<{vec}>({mask_bits}, {authored_lanes}, {lanes})`.
+- Added extension-owned `test_support_headers` metadata. SVE requests
+  `tsl_test_sve.hpp`, a C++ SVE predicate-construction test helper behind
+  `__ARM_FEATURE_SVE`. It builds `svbool_t` masks from authored bits using
+  lane-index vectors and `svcmpeq_n_u*`, without assuming a packed integral
+  predicate representation. The shared `tsl_test_core.hpp` remains
+  profile-independent.
+- Split scalable value-test case planning into
+  `tslc.value_tests._case_scalable`, keeping `_case_core.py` below the module
+  guardrail.
+- Added `scalable_masked` planning and C++ rendering. The planner requires
+  backend case-kind support, scalable extension metadata, typed mask/vector
+  inputs, and load/store harness helpers discovered by signature. The renderer
+  formats only the render-ready plan.
+- Kept `array_for<simd<T, sve>>`, fixed `vector::length`, renderer catalog
+  inspection, and Rust SVE out of the path.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_profile_rendering.py
+./dev.sh explain --primitive add --profile sve --type si32 --backend cpp --extension sve
+./dev.sh dump --stage lowered --primitive add --profile sve --type si32 --backend cpp --extension sve --format text
+TSLC_BACKENDS=cpp TSLC_OUTPUT_ROOT=/tmp/tslc-sve-masked ./dev.sh test --profiles sve --primitives add --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+rg -n -m 30 'sve_mask_from_bits|test_scalable_sve_add_mask|test_scalable_sve_add_maskz|svadd_s32_m|svadd_s32_z' /tmp/tslc-sve-masked/cpp/tests/values_sve.cpp /tmp/tslc-sve-masked/cpp/include/tsl_sve.hpp
+./dev.sh ratchet
+git diff --check
+```
+
+Result: compileall passed; focused value-test/profile tests passed with
+`22 passed`; explain/dump show SVE masked `add` lowering to `svadd_s32_z` and
+`svadd_s32_m`; C++ SVE `add` generated `842` specializations and passed CTest
+through QEMU with `build/test-verified 7 commands`; generated values contain
+native `add_mask`/`add_maskz` scalable SVE tests using `sve_mask_from_bits`;
+ratchet reported no regressions (`67152 emitted / 67152`); diff whitespace was
+clean.
+
+Next prompt at that point:
+
+```text
+docs/agent/runs/tslc-arm-sve-mask-result-value-tests-prompt.md
+```
+
+## Completed C++ SVE Mask-Result Value-Test Slice
+
+The scalable mask-result value-test slice is implemented for unmasked
+all-vector comparison shapes such as `equal`.
+
+Implemented:
+
+- Added extension-owned `test_mask_check` metadata. SVE declares the C++
+  expression
+  `::tsl::test::check_sve_mask_bits<{vec}>({case_name}, {mask}, {expected_bits}, {authored_lanes}, {lanes})`.
+- Extended the SVE-specific C++ test support header with reusable all-lanes and
+  single-lane predicate helpers plus `check_sve_mask_bits`, which compares
+  native `svbool_t` results lane-by-lane with authored expected activity bits.
+- Added `scalable_mask_result` planning and C++ rendering. The planner
+  requires backend case-kind support, result kind `m`, all-vector parameters,
+  scalable extension metadata, runtime lanes, mask-check metadata, and load
+  harness support. The renderer formats only the render-ready plan.
+- Kept predicate comparison out of packed integral-mask assumptions and kept
+  Rust SVE unsupported.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_profile_rendering.py
+./dev.sh explain --primitive equal --profile sve --type si32 --backend cpp --extension sve
+TSLC_BACKENDS=cpp TSLC_OUTPUT_ROOT=/tmp/tslc-sve-mask-result ./dev.sh test --profiles sve --primitives equal --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+rg -n -m 20 'test_scalable_sve_equal_|check_sve_mask_bits|svcmpeq_s32|svcmpeq_f32' /tmp/tslc-sve-mask-result/cpp/tests/values_sve.cpp /tmp/tslc-sve-mask-result/cpp/include/tsl_sve.hpp
+./dev.sh ratchet
+git diff --check
+```
+
+Result: compileall passed; focused value-test/profile tests passed with
+`23 passed`; explain shows `equal<sve, si32>` lowering to `svcmpeq_s32`;
+C++ SVE `equal` generated `842` specializations and passed CTest through QEMU
+with `build/test-verified 7 commands`; generated values contain native
+`test_scalable_sve_equal_*` cases using `check_sve_mask_bits`; ratchet
+reported no regressions (`67152 emitted / 67152`); diff whitespace was clean.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-masked-mask-result-value-tests-prompt.md
+```
+
+## Completed C++ SVE Masked Mask-Result Value-Test Slice
+
+The scalable masked mask-result value-test slice is implemented for comparison
+shapes such as `equal[mask=zero]` with signature `m:=(m,v,v)`.
+
+Implemented:
+
+- Added `scalable_masked_mask_result` planning and C++ rendering. The planner
+  requires backend case-kind support, result kind `m`, exactly one mask
+  parameter, vector parameters, scalable extension metadata, runtime lanes,
+  predicate construction metadata, predicate-check metadata, and load harness
+  support.
+- Reused extension-owned `test_mask_from_bits` and `test_mask_check` metadata,
+  so native SVE predicate construction and comparison remain source/catalog
+  owned rather than renderer inferred.
+- Added a narrow `_MaskedMaskResultPattern` so masked predicate-result cases
+  do not broaden the existing masked value-result pattern.
+- The renderer consumes only `ValueTestCasePlan` fields and formats runtime
+  load/predicate/call/check code. It does not inspect the catalog or branch on
+  source primitive or extension names.
+- Rust SVE remains unsupported.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_profile_rendering.py
+./dev.sh explain --primitive equal --profile sve --type si32 --backend cpp --extension sve
+TSLC_BACKENDS=cpp TSLC_OUTPUT_ROOT=/tmp/tslc-sve-masked-mask-result ./dev.sh test --profiles sve --primitives equal --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+rg -n 'test_scalable_sve_.*equal_mask|check_sve_mask_bits|sve_mask_from_bits|svcmpeq_s32\(mask' /tmp/tslc-sve-masked-mask-result/cpp/tests/values_sve.cpp /tmp/tslc-sve-masked-mask-result/cpp/include/tsl_sve.hpp
+./dev.sh ratchet
+git diff --check
+```
+
+Result: compileall passed; focused value-test/profile tests passed with
+`24 passed`; explain shows `equal<sve, si32> [mask=zero]` lowering to
+`svcmpeq_s32(mask, left, right)`; C++ SVE `equal` generated `842`
+specializations and passed CTest through QEMU with `build/test-verified 7
+commands`; generated values contain native `test_scalable_sve_equal_maskz_*`
+cases using `sve_mask_from_bits`, `equal_maskz<Vec>(mask, v0, v1)`, and
+`check_sve_mask_bits`; ratchet reported no coverage regressions
+(`67152 emitted / 67152`); diff whitespace was clean.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-mask-logic-value-tests-prompt.md
+```
+
+## Completed C++ SVE Mask-Logic Value-Test Slice
+
+The scalable mask-logic value-test slice is implemented for all-mask
+predicate shapes such as `mask_binary_and` with signature `m:=(m,m)`.
+
+Implemented:
+
+- Split scalable C++ value-test renderers into
+  `tslc.value_tests._render_cpp_scalable`, reducing `_render_cpp_core.py` to
+  292 lines and keeping scalable rendering cohesive.
+- Added `scalable_mask_logic` planning and C++ rendering. The planner requires
+  backend case-kind support, result kind `m`, all-mask parameters, scalable
+  extension metadata, runtime lanes, predicate construction metadata, and
+  predicate-check metadata.
+- Added a source-owned SVE-authored `mask_binary_and` value test in
+  `tsldata/primitives/mask/bitwise.tsl`; existing mask-logic tests are
+  explicitly `extension "avx512"` and are not reused for SVE.
+- The renderer consumes render-ready predicate construction expressions for
+  each mask input and a render-ready predicate-check expression for the result.
+  It does not inspect the catalog or branch on primitive/extension names.
+- Rust SVE remains unsupported.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_profile_rendering.py
+./dev.sh explain --primitive mask_binary_and --profile sve --type ui32 --backend cpp --extension sve
+TSLC_BACKENDS=cpp TSLC_OUTPUT_ROOT=/tmp/tslc-sve-mask-logic ./dev.sh test --profiles sve --primitives mask_binary_and --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+rg -n 'test_scalable_sve_.*mask_binary_and|check_sve_mask_bits|sve_mask_from_bits|mask_a & mask_b' /tmp/tslc-sve-mask-logic/cpp/tests/values_sve.cpp /tmp/tslc-sve-mask-logic/cpp/include/tsl_sve.hpp
+./dev.sh ratchet
+git diff --check
+```
+
+Result: compileall passed; focused value-test/profile tests passed with
+`25 passed`; explain shows `mask_binary_and<sve, ui32>` lowering to
+`return mask_a & mask_b;`; C++ SVE `mask_binary_and` generated `782`
+specializations and passed CTest through QEMU with `build/test-verified 7
+commands`; generated values contain native
+`test_scalable_sve_mask_binary_and_*` cases using two `sve_mask_from_bits`
+input predicates, `mask_binary_and<Vec>(m0, m1)`, and `check_sve_mask_bits`;
+ratchet reported no coverage regressions (`67152 emitted / 67152`); diff
+whitespace was clean.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-mask-constant-value-tests-prompt.md
+```
+
+## Completed C++ SVE Mask-Constant Value-Test Slice
+
+The scalable mask-constant value-test slice is implemented for no-input
+predicate shapes such as `mask_false` and `mask_true` with signature `m:=()`.
+
+Implemented:
+
+- Added `scalable_mask_constant` planning and C++ rendering. The planner
+  requires backend case-kind support, result kind `m`, no parameters,
+  scalable extension metadata, runtime lanes, predicate-check metadata, and an
+  authored expected predicate bitset.
+- Added source-owned SVE-authored `mask_false` and `mask_true` value tests in
+  `tsldata/primitives/mask/construct.tsl`; the existing mask-constant cases
+  were authored for other substrates.
+- Split scalable mask planning into
+  `tslc.value_tests._case_scalable_masks` with a tiny shared helper in
+  `_case_scalable_common.py`, keeping `_case_scalable.py` focused on
+  value-result scalable cases and under the module guardrail.
+- The C++ renderer calls the selected primitive and checks the native
+  predicate result through the render-ready `test_mask_check` expression. It
+  does not inspect the catalog or branch on primitive/extension names.
+- Rust SVE remains unsupported.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_profile_rendering.py
+./dev.sh explain --primitive mask_true --profile sve --type ui32 --backend cpp --extension sve
+TSLC_BACKENDS=cpp TSLC_OUTPUT_ROOT=/tmp/tslc-sve-mask-constant ./dev.sh test --profiles sve --primitives mask_true,mask_false --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+rg -n 'test_scalable_sve_.*mask_(true|false)|check_sve_mask_bits|svptrue|svpfalse' /tmp/tslc-sve-mask-constant/cpp/tests/values_sve.cpp /tmp/tslc-sve-mask-constant/cpp/include/tsl_sve.hpp
+./dev.sh ratchet
+git diff --check
+```
+
+Result: compileall passed; focused value-test/profile tests passed with
+`26 passed`; explain shows `mask_true<sve, ui32>` lowering to
+`return svptrue_b32();`; C++ SVE `mask_true,mask_false` generated `782`
+specializations and passed CTest through QEMU with `build/test-verified 7
+commands`; generated values contain native
+`test_scalable_sve_mask_false_*` and `test_scalable_sve_mask_true_*` cases
+using `check_sve_mask_bits`; ratchet reported no coverage regressions
+(`67152 emitted / 67152`); diff whitespace was clean.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-mask-conversion-planning-prompt.md
+```
+
+## Completed C++ SVE Mask-Conversion Value-Test Slice
+
+The scalable mask-conversion slice is implemented for SVE `to_integral`
+(`im:=m`) and `to_mask` (`m:=im`).
+
+Implemented:
+
+- Added SVE source implementations for `to_integral` and `to_mask` as
+  identity conversions. This follows the extension-owned fact
+  `integral_mask_type_policy kind "same_as_mask_type"`: for SVE, `imask_type`
+  is the same native predicate type as `mask_type`.
+- Replaced the old SVE `to_mask` fixed-lane body that depended on
+  `value<generation>(vector::length)`, `to_array`, and `set_zero`.
+- Added SVE-authored value tests for `to_integral` and `to_mask`.
+- Added `scalable_mask_conversion` planning and C++ rendering. The planner
+  requires backend case-kind support, a scalable extension, `imask_policy`
+  equal to `same_as_mask_type`, runtime lanes, predicate construction
+  metadata, and predicate-check metadata.
+- Split mask-specific value-test pattern classes into
+  `tslc.value_tests._pattern_masks`, reducing `_pattern_core.py` to 318 lines
+  and giving future mask slices a focused owner.
+- The renderer constructs the native predicate input from the plan, calls the
+  selected primitive, and checks the native predicate result through the
+  render-ready `test_mask_check` expression.
+- Rust SVE remains unsupported.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_profile_rendering.py
+./dev.sh explain --primitive to_integral --profile sve --type ui32 --backend cpp --extension sve
+./dev.sh explain --primitive to_mask --profile sve --type ui32 --backend cpp --extension sve
+TSLC_BACKENDS=cpp TSLC_OUTPUT_ROOT=/tmp/tslc-sve-mask-conversion ./dev.sh test --profiles sve --primitives to_integral,to_mask --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+rg -n 'test_scalable_sve_to_(integral|mask)|sve_mask_from_bits|check_sve_mask_bits|to_integral<Vec>|to_mask<Vec>' /tmp/tslc-sve-mask-conversion/cpp/tests/values_sve.cpp /tmp/tslc-sve-mask-conversion/cpp/include/tsl_sve.hpp
+./dev.sh ratchet
+git diff --check
+```
+
+Result: compileall passed; focused value-test/profile tests passed with
+`27 passed`; explain shows both SVE conversions lowering to `return mask;`;
+C++ SVE `to_integral,to_mask` generated `792` specializations and passed CTest
+through QEMU with `build/test-verified 7 commands`; the same focused gate was
+rerun after the pattern split and still passed; generated values contain
+native `test_scalable_sve_to_integral_*` and `test_scalable_sve_to_mask_*`
+cases using `sve_mask_from_bits` and `check_sve_mask_bits`; ratchet reported
+no coverage regressions (`67152 emitted / 67152`); diff whitespace was clean.
+
+Next prompt at that point:
+
+```text
+docs/agent/runs/tslc-arm-sve-mask-to-vector-value-tests-prompt.md
+```
+
+## Completed C++ SVE Mask-To-Vector Value-Test Slice
+
+The scalable mask-to-vector slice is implemented for SVE `to_vector`
+(`v:=m`).
+
+Implemented:
+
+- Added an SVE source implementation for `to_vector` that composes existing
+  typed primitives: `mov[mask=zero]` plus `set1` of
+  `value<generation>(mask::lane::all_true)`.
+- Added an SVE-authored `to_vector` value test for a representative predicate
+  bitset and lane count.
+- Replaced the fixed-shape `mask_to_vector_case` pattern entry with a focused
+  `_MaskToVectorPattern` in `tslc.value_tests._pattern_masks`.
+- The pattern still emits the existing fixed/generic mask-to-vector plans, and
+  additionally emits `scalable_masked` plans for scalable extensions when
+  runtime lanes, predicate construction metadata, and load/store harness
+  helpers are available.
+- The renderer continues to consume render-ready `ValueTestCasePlan` values;
+  it does not inspect the catalog or branch on primitive or extension names.
+- Rust SVE remains unsupported.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_profile_rendering.py
+./dev.sh explain --primitive to_vector --profile sve --type ui32 --backend cpp --extension sve
+./dev.sh dump --stage lowered --primitive to_vector --profile sve --type ui32 --backend cpp --extension sve --format text
+TSLC_BACKENDS=cpp TSLC_OUTPUT_ROOT=/tmp/tslc-sve-mask-to-vector ./dev.sh test --profiles sve --primitives to_vector --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+rg -n 'test_scalable_sve_to_vector|sve_mask_from_bits|to_vector<Vec>|mov_maskz|svdup_n|mask_lane_all_true' /tmp/tslc-sve-mask-to-vector/cpp/tests/values_sve.cpp /tmp/tslc-sve-mask-to-vector/cpp/include/tsl_sve.hpp
+./dev.sh ratchet
+git diff --check
+```
+
+Result: compileall passed; focused value-test/profile tests passed with
+`28 passed`; explain and lowered dump show `to_vector<sve, ui32>` selecting the
+SVE body and lowering to `mov_maskz<Vec>(mask, set1<Vec>(mask_lane_all_true))`
+with `mov` and `set1` dependencies emitted; C++ SVE `to_vector` generated
+`820` specializations and passed CTest through QEMU with
+`build/test-verified 7 commands`; generated values contain native
+`test_scalable_sve_to_vector_*` cases using `sve_mask_from_bits`,
+`to_vector<Vec>(mask)`, and `tsl::store<Vec, false>`; ratchet reported no
+coverage regressions (`67152 emitted / 67152`); diff whitespace was clean.
+
+Next evidence sampled:
+
+- `store_mask_repr<sve, ui32>` is selected but currently cannot lower because
+  its SVE body still uses fixed `value<generation>(vector::length)` and
+  `mask<test>` on native predicates.
+- `load_mask_repr<sve, ui32>` has an SVE body and its unpacked path lowers,
+  but the packed path shows the same fixed-lane/runtime predicate tension.
+- `mask_population_count<sve, ui32>` already lowers through native
+  `svcntp_b32`.
+- `lzc_imask` and `tzc` have no SVE implementation bodies.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-mask-representation-memory-prompt.md
+```
+
+## Completed C++ SVE Unpacked Mask-Representation Store Slice
+
+The scalable mask-representation memory slice made the smallest honest
+progress on `store_mask_repr` (`void:=(ptr,m)`): C++ SVE now handles and tests
+the unpacked `packed=false` layout.
+
+Implemented:
+
+- The SVE `store_mask_repr` source body now keeps `packed=true` separate and
+  implements `packed=false` by composing existing typed primitives:
+  `to_vector[MaskVec]` plus `store[MaskVec]`, where `MaskWord` is
+  `base::unsigned_of(base::in)` and the pointer storage layout comes from
+  `param_types`.
+- The unpacked path no longer uses fixed `value<generation>(vector::length)`
+  or `mask<test>` over native SVE predicates.
+- Added an SVE-authored unpacked `store_mask_repr` value test.
+- Added `scalable_mask_store` planning in
+  `tslc.value_tests._case_scalable_memory`. The planner requires backend
+  support, a scalable extension, result `void`, parameters `ptr,m`,
+  `packed=false`, runtime lanes, predicate-construction metadata, and a
+  resolved pointer storage layout.
+- Added C++ scalable mask-store rendering in
+  `tslc.value_tests._render_cpp_scalable`. The renderer formats only
+  render-ready plan data and does not inspect the catalog or branch on
+  primitive or extension names.
+- Rust SVE remains unsupported.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_profile_rendering.py::test_sve_profile_plans_scalable_mask_store_values
+./dev.sh explain --primitive store_mask_repr --profile sve --type ui32 --backend cpp --extension sve
+TSLC_BACKENDS=cpp TSLC_OUTPUT_ROOT=/tmp/tslc-sve-mask-repr ./dev.sh test --profiles sve --primitives store_mask_repr --cpp-compiler "/opt/zig/zig c++" --cpp-target aarch64-linux-musl
+rg -n 'test_scalable_sve_store_mask_repr|sve_mask_from_bits|store_mask_repr<Vec, false, false>|to_vector<tsl::simd<uint32_t, tsl::sve>>|svst1' /tmp/tslc-sve-mask-repr/cpp/tests/values_sve.cpp /tmp/tslc-sve-mask-repr/cpp/include/tsl_sve.hpp
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py tslc/tests/test_profile_rendering.py
+./dev.sh ratchet
+git diff --check
+```
+
+Result: compileall passed; the new focused profile-rendering test passed;
+`explain` shows the `packed=false` aligned and unaligned SVE slots lowering
+through `store<MaskVec>(reinterpret_cast<MaskWord *>(ptr),
+to_vector<MaskVec>(mask))`, while `packed=true` still reports the fixed-lane
+predicate blocker; C++ SVE `store_mask_repr` generated `920`
+specializations and passed CTest through QEMU with `build/test-verified 7
+commands`; generated values contain native
+`test_scalable_sve_store_mask_repr_*` cases using `sve_mask_from_bits`,
+`store_mask_repr<Vec, false, false>`, `to_vector`, and `svst1`; focused
+value-test/profile tests passed with `29 passed`; ratchet reported no
+coverage regressions (`67152 emitted / 67152`); diff whitespace was clean.
+
+Next evidence sampled:
+
+- `store_mask_repr packed=true` still uses fixed `vector::length` and
+  `mask<test>` over native predicates.
+- `load_mask_repr packed=true` has the same fixed-lane/native-predicate
+  tension.
+- SVE declares `integral_mask_type_policy kind "same_as_mask_type"`, so packed
+  predicate load/store should not be guessed as scalar byte storage without an
+  explicit typed contract.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-packed-mask-representation-planning-prompt.md
+```

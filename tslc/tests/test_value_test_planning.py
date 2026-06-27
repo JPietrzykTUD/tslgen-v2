@@ -41,6 +41,8 @@ def test_harness_discovery_uses_signatures_not_names() -> None:
         Primitive("lane_in", "v:=s[]", ("data",), (), ()),
         Primitive("lane_out", "s[]:=v", ("data",), (), ()),
         Primitive("mask_bits", "im:=m", ("mask",), (), ()),
+        Primitive("load", "v:=cptr", ("ptr",), (), ()),
+        Primitive("store", "void:=(ptr,v)", ("ptr", "data"), (), ()),
     )
 
     harness = discover_harness_primitives(catalog)
@@ -48,6 +50,8 @@ def test_harness_discovery_uses_signatures_not_names() -> None:
     assert harness.from_array == "lane_in"
     assert harness.to_array == "lane_out"
     assert harness.to_integral == "mask_bits"
+    assert harness.load == "load"
+    assert harness.store == "store"
     assert harness.diagnostics == ()
 
 
@@ -337,6 +341,32 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
     )
     assert "tsl::plus<Vec>(v0, v1)" in cpp_source
 
+    cpp_scalable_case = ValueTestCasePlan(
+        kind="scalable_golden",
+        function_name="test_scalable_plus",
+        case_name="basic",
+        call_name="plus",
+        type_tag="si32",
+        base_spelling="std::int32_t",
+        lanes=2,
+        vector_inputs=(("1", "2"), ("3", "4")),
+        expected=("4", "6"),
+        result_kind="v",
+        param_kinds=("v", "v"),
+        source_extension="sve",
+        load_name="load",
+        store_name="store",
+        runtime_lanes_expr="svcntb() / sizeof(std::int32_t)",
+    )
+    cpp_scalable_source = render_cpp_values_runner(
+        ValueTestProfilePlan("cpp", "unit-profile", (cpp_scalable_case,))
+    )
+    assert "using Vec = tsl::simd<std::int32_t, tsl::sve>;" in cpp_scalable_source
+    assert "const std::size_t lanes = static_cast<std::size_t>(" in cpp_scalable_source
+    assert "tsl::load<Vec, false>(in0.data())" in cpp_scalable_source
+    assert "tsl::plus<Vec>(v0, v1)" in cpp_scalable_source
+    assert "tsl::store<Vec, false>(actual.data(), result)" in cpp_scalable_source
+
     rust_case = ValueTestCasePlan(
         kind="generic_golden",
         function_name="test_mod",
@@ -566,6 +596,26 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
     )
     assert "let result = set_undef::<Vec>();" in rust_compile_source
     assert "let _ = result;" in rust_compile_source
+
+
+def test_scalable_tiling_is_gated_on_corpus_cross_lane_fact() -> None:
+    # Every scalable tiling kind replicates the authored fixed-length pattern across the runtime
+    # lane count with `i % authored_lanes`; that identity holds only for lane-local ops. The gate
+    # trusts the corpus-declared `cross_lane` fact: the elementwise default (False) is tiling-safe,
+    # a cross-lane op (True) is refused, and an unresolved primitive is refused conservatively.
+    from tslc.value_tests._case_scalable_common import tiling_is_safe
+
+    catalog = _catalog(
+        Primitive("add", "v:=(v,v)", ("a", "b"), (), ()),
+        Primitive("hadd", "v:=(v,v)", ("a", "b"), (), (), cross_lane=True),
+    )
+    elementwise = _spec("add", "add", param_kinds=("v", "v"))
+    cross_lane = _spec("hadd", "hadd", param_kinds=("v", "v"))
+    unknown = _spec("ghost", "ghost", param_kinds=("v", "v"))
+
+    assert tiling_is_safe((elementwise,), catalog) is True
+    assert tiling_is_safe((cross_lane,), catalog) is False
+    assert tiling_is_safe((unknown,), catalog) is False
 
 
 def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog() -> None:
@@ -846,6 +896,7 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
             "patterns.py",
             "_pattern_base.py",
             "_pattern_core.py",
+            "_pattern_masks.py",
             "_pattern_memory.py",
             "_pattern_conversion.py",
         )
@@ -856,6 +907,9 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
             "case_plans.py",
             "_case_common.py",
             "_case_core.py",
+            "_case_scalable.py",
+            "_case_scalable_common.py",
+            "_case_scalable_masks.py",
             "_case_memory.py",
             "_case_conversion.py",
         )
@@ -864,6 +918,7 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
         (value_tests / name).read_text(encoding="utf-8")
         for name in (
             "render_cpp.py",
+            "lane_model.py",
             "_render_cpp_core.py",
             "_render_cpp_memory.py",
             "_render_cpp_conversion.py",
@@ -886,14 +941,19 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
         "case_plans.py",
         "_case_common.py",
         "_case_core.py",
+        "_case_scalable.py",
+        "_case_scalable_common.py",
+        "_case_scalable_masks.py",
         "_case_memory.py",
         "_case_conversion.py",
         "patterns.py",
         "_pattern_base.py",
         "_pattern_core.py",
+        "_pattern_masks.py",
         "_pattern_memory.py",
         "_pattern_conversion.py",
         "render_cpp.py",
+        "lane_model.py",
         "_render_cpp_core.py",
         "_render_cpp_memory.py",
         "_render_cpp_conversion.py",
@@ -902,6 +962,7 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
         "_render_rust_conversion.py",
         "_render_rust_helpers.py",
         "_render_rust_memory.py",
+        "support_headers.py",
     ):
         assert len((value_tests / path).read_text(encoding="utf-8").splitlines()) < 500
     assert "def discover_harness_primitives" not in planner
@@ -974,6 +1035,8 @@ def _harness_primitives() -> tuple[Primitive, ...]:
         Primitive("lane_in", "v:=s[]", ("data",), (), ()),
         Primitive("lane_out", "s[]:=v", ("data",), (), ()),
         Primitive("mask_bits", "im:=m", ("mask",), (), ()),
+        Primitive("load", "v:=cptr", ("ptr",), (), ()),
+        Primitive("store", "void:=(ptr,v)", ("ptr", "data"), (), ()),
     )
 
 

@@ -6,28 +6,6 @@ from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
 
 
-def append_vector_inputs(
-    lines: list[str],
-    case: ValueTestCasePlan,
-    register_type: str,
-    prefix: str,
-) -> list[str]:
-    names: list[str] = []
-    for position, values in enumerate(case.vector_inputs):
-        literals = cpp_literal_list(values, case.type_tag)
-        lines.append(
-            f"  static const {case.base_spelling} in{position}[{case.lanes}] = "
-            f"{{{literals}}};"
-        )
-        lines.append(f"  {register_type} {prefix}{position};")
-        lines.append(
-            f"  for (std::size_t i = 0; i < {case.lanes}; ++i) "
-            f"{prefix}{position}[i] = in{position}[i];"
-        )
-        names.append(f"{prefix}{position}")
-    return names
-
-
 def append_call_args(lines: list[str], case: ValueTestCasePlan) -> list[str]:
     args: list[str] = []
     vector_index = 0
@@ -126,12 +104,50 @@ def axis_suffix(case: ValueTestCasePlan) -> str:
     return "".join(f", {value}" for value in case.axis_args)
 
 
+def scalable_header(case: ValueTestCasePlan) -> list[str]:
+    """Open a scalable (runtime-length) value-test function: SVE-style `Vec` + runtime `lanes`."""
+
+    return [
+        f"int {case.function_name}() {{",
+        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::{case.source_extension}>;",
+        f"  const std::size_t lanes = static_cast<std::size_t>({case.runtime_lanes_expr});",
+    ]
+
+
+def append_runtime_vector_input(
+    lines: list[str], case: ValueTestCasePlan, position: int
+) -> str:
+    """Materialize one vector input into a runtime-length buffer and load it; return its name.
+
+    The authored (fixed-length) pattern is tiled across the runtime lane count with
+    ``i % case.lanes``; this is only sound for lane-local ops — see ``lane_model``.
+    """
+
+    values = case.vector_inputs[position]
+    literals = cpp_literal_list(values, case.type_tag)
+    lines.append(
+        f"  static const {case.base_spelling} authored{position}[{case.lanes}] = "
+        f"{{{literals}}};"
+    )
+    lines.append(f"  std::vector<{case.base_spelling}> in{position}(lanes);")
+    lines.append(
+        f"  for (std::size_t i = 0; i < lanes; ++i) "
+        f"in{position}[i] = authored{position}[i % {case.lanes}];"
+    )
+    lines.append(
+        f"  typename Vec::register_type v{position} = "
+        f"tsl::{case.load_name}<Vec, false>(in{position}.data());"
+    )
+    return f"v{position}"
+
+
 __all__ = (
     "append_call_args",
-    "append_vector_inputs",
+    "append_runtime_vector_input",
     "axis_suffix",
     "cast_literal_list",
     "cpp_string_literal",
+    "scalable_header",
     "scalar_expected",
     "scalar_result_type",
     "uint_literal",

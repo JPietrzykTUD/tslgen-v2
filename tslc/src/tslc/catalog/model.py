@@ -137,6 +137,14 @@ class Primitive:
     # Value-correctness cases authored in the `tests:` block. Consumed by the test-generation
     # render stage (golden anchor against the generic software reference); empty when none.
     tests: tuple["TestCase", ...] = ()
+    # Corpus-declared cross-lane fact: True iff an output lane reads more than its own input
+    # lane (a reduction, shuffle, compress, conflict, iota, gather …). It gates every *scalable*
+    # (runtime-length, e.g. SVE) value-test kind that tiles an authored fixed-length pattern
+    # across the runtime lane count (`expected[i] = authored[i % N]`) — an identity that holds
+    # only for lane-local ops. The common case (elementwise: add, comparisons, mask logic) is
+    # tiling-safe and leaves this at the default False; only the rare cross-lane op must declare
+    # `cross_lane true`, and an op that does is never tiled into a wrong scalable test.
+    cross_lane: bool = False
     source: SourceSpan | None = None
     header_source: SourceSpan | None = None
     signature_source: SourceSpan | None = None
@@ -268,12 +276,16 @@ class MaskPolicy:
     - ``"bool"`` (scalar): the mask is a ``bool``.
     - ``"lane_bitmask"`` (sse/avx2): the mask *is* the vector register (all-ones /
       all-zeros per lane), so ``mask_type = register_type``.
+    - ``"native_predicate"`` (scalable SVE): the mask is one backend-native predicate
+      spelling declared directly by the extension metadata.
     - ``"native_predicate_by_lanes"`` (avx512 and the ``_vl`` variants): the mask is a
       native ``__mmaskN`` predicate keyed by lane count; the per-backend spellings live
       in ``cpp_by_lanes`` / ``rust_by_lanes`` (e.g. ``{8: "__mmask8", 16: "__mmask16"}``).
     """
 
     kind: str = "lane_bitmask"
+    cpp: str | None = None
+    rust: str | None = None
     cpp_by_lanes: Mapping[int, str] = field(default_factory=dict)
     rust_by_lanes: Mapping[int, str] = field(default_factory=dict)
 
@@ -318,6 +330,10 @@ class Extension:
         default_factory=dict
     )  # type tag/group -> backend_id -> register type
     backend_headers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    # backend_id -> whether this extension is emittable for that backend. A backend with no
+    # entry defaults to supported; an explicit ``rust: supported false`` (e.g. SVE, which has
+    # no stable Rust intrinsics) marks the combination a coverage gap, not an error.
+    backend_supported: Mapping[str, bool] = field(default_factory=dict)
     intrinsic_style: str = ""
     inherits: str | None = None  # extension this one borrows impls/metadata from
     lscpu_flags: frozenset[str] = frozenset()  # features that make this extension available
@@ -333,6 +349,10 @@ class Extension:
     # width(s) when a sized extension is itself the subject (modeled now, not yet wired).
     default_test_target: bool = False
     test_filter_exclude_templates: frozenset[str] = frozenset()
+    test_runtime_lanes: Mapping[str, str] = field(default_factory=dict)
+    test_mask_from_bits: Mapping[str, str] = field(default_factory=dict)
+    test_mask_check: Mapping[str, str] = field(default_factory=dict)
+    test_support_headers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     test_sizes_bits: tuple[int, ...] = ()
     # For a sized extension (the generic vector): the concrete total-bit widths it is
     # instantiated/unrolled at, e.g. ``(128, 256, 512)``. Empty means unconstrained. Lets a
@@ -365,6 +385,42 @@ class Extension:
                 }
             ),
         )
+        object.__setattr__(
+            self, "backend_supported", MappingProxyType(dict(self.backend_supported))
+        )
+        object.__setattr__(
+            self,
+            "test_runtime_lanes",
+            MappingProxyType(dict(self.test_runtime_lanes)),
+        )
+        object.__setattr__(
+            self,
+            "test_mask_from_bits",
+            MappingProxyType(dict(self.test_mask_from_bits)),
+        )
+        object.__setattr__(
+            self,
+            "test_mask_check",
+            MappingProxyType(dict(self.test_mask_check)),
+        )
+        object.__setattr__(
+            self,
+            "test_support_headers",
+            MappingProxyType(
+                {
+                    backend: tuple(headers)
+                    for backend, headers in self.test_support_headers.items()
+                }
+            ),
+        )
+
+    def supports_backend(self, backend_id: str) -> bool:
+        """Whether this extension is emittable for ``backend_id`` (default: yes).
+
+        Only an explicit corpus ``<backend>: supported false`` makes it unsupported — e.g. SVE
+        on Rust, which has no stable scalable intrinsics."""
+
+        return self.backend_supported.get(backend_id, True)
 
     def direct_vector_register_type(
         self, backend_id: str, type_tag_or_group: str

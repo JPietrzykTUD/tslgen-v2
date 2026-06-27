@@ -180,15 +180,7 @@ class IntrinLowerer:
                 source=region.source,
             )
             return region.full_text
-        # `post=mask` selects the mask-returning intrinsic on native-predicate
-        # extensions (`_mm512_cmpeq_epi32` -> `_mm512_cmpeq_epi32_mask`); on
-        # lane-bitmask/scalar extensions the compare already yields the mask, so it
-        # stays a no-op.
-        if (
-            selector.get("post") == "mask"
-            and context.env.extension.mask_policy.kind == "native_predicate_by_lanes"
-        ):
-            name = f"{name}_mask"
+        name = self._post_name(selector, name, context)
         # Const-generic immediate bridge: a Rust immediate intrinsic takes the count as a
         # const generic whose type differs across ISAs (avx2 `i32` vs avx512 `u32`), and a
         # single shared const can't satisfy both. When the immediate declares the `literal_match`
@@ -203,6 +195,22 @@ class IntrinLowerer:
         if forward is not None:
             return self._immediate_forward(name, forward, region, context, render)
         return render_sequence((literal_text(f"{name}("), render(region.body), literal_text(")")))
+
+    def _post_name(
+        self, selector: IntrinsicSelector, name: str, context: LoweringSession
+    ) -> str:
+        post = selector.get("post")
+        if post is None:
+            return name
+        # `post=mask` selects the mask-returning intrinsic on native-predicate
+        # extensions (`_mm512_cmpeq_epi32` -> `_mm512_cmpeq_epi32_mask`); on
+        # lane-bitmask/scalar extensions the compare already yields the mask, so it
+        # stays a no-op.
+        if post == "mask":
+            if context.env.extension.mask_policy.kind == "native_predicate_by_lanes":
+                return f"{name}_mask"
+            return name
+        return f"{name}_{post}"
 
     def _immediate_forward(
         self,

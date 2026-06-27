@@ -30,7 +30,6 @@ Run from anywhere in the repo (paths default to the repo's ``tsldata`` and machi
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 from tslc.api import _expand_sources

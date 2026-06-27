@@ -264,6 +264,8 @@ class _GenerationSession:
                     self.inputs.test_harness.from_array,
                     self.inputs.test_harness.to_array,
                     self.inputs.test_harness.to_integral,
+                    self.inputs.test_harness.load,
+                    self.inputs.test_harness.store,
                 )
                 if name is not None
             )

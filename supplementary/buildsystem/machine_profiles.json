@@ -121,6 +121,12 @@
       "alternatives": {
         "neon": "asimd"
       }
+    },
+    {
+      "name": "sve",
+      "flags": "sve",
+      "cpp_flags": ["-mcpu=a64fx"],
+      "emulator": {"kind": "qemu-aarch64", "profile": "a64fx"}
     }
   ]
 }

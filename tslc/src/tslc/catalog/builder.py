@@ -145,6 +145,8 @@ def _build_primitives(
     immediate_params = _immediate_params(declaration, diagnostics)
     generic_params = _generic_params(declaration)
     tests = _test_cases(declaration, diagnostics)
+    cross_lane_fields = declaration.fields_by_name("cross_lane")
+    cross_lane = _bool_field(cross_lane_fields[0].field) if cross_lane_fields else False
 
     def make(attributes: dict[str, str]) -> Primitive:
         return Primitive(
@@ -159,6 +161,7 @@ def _build_primitives(
             generic_params=generic_params,
             result_target=result_target,
             tests=tests,
+            cross_lane=cross_lane,
             source=_source_span(declaration.source),
             header_source=_source_span(declaration.header_source),
             signature_source=_source_span(declaration.signature_source),
@@ -431,6 +434,7 @@ def _resolve_extension_inheritance(
                 ext.vector_register_types,
             ),
             backend_headers=_merge_header_maps(parent.backend_headers, ext.backend_headers),
+            backend_supported={**parent.backend_supported, **ext.backend_supported},
             # mask policy / width fall back to the parent only when this block didn't
             # state its own (every `_vl` block does, so this is just gap-filling).
             vector_bits=ext.vector_bits if ext.vector_bits_kind else parent.vector_bits,
@@ -443,6 +447,13 @@ def _resolve_extension_inheritance(
             # ladder / unroll default unless it states its own.
             size_bits=ext.size_bits or parent.size_bits,
             unroll_variants=ext.unroll_variants or parent.unroll_variants,
+            test_runtime_lanes={**parent.test_runtime_lanes, **ext.test_runtime_lanes},
+            test_mask_from_bits={**parent.test_mask_from_bits, **ext.test_mask_from_bits},
+            test_mask_check={**parent.test_mask_check, **ext.test_mask_check},
+            test_support_headers=_merge_header_maps(
+                parent.test_support_headers,
+                ext.test_support_headers,
+            ),
             mask_policy=ext.mask_policy if ext.mask_policy != MaskPolicy() else parent.mask_policy,
             imask_policy=(
                 ext.imask_policy if ext.imask_policy != ImaskPolicy() else parent.imask_policy
@@ -514,6 +525,7 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
         compose_suffix_by_type=compose_suffix_by_type,
         vector_register_types=_vector_register_types(fields.get("vector_register_types")),
         backend_headers=_backend_headers(fields),
+        backend_supported=_backend_supported(fields),
         inherits=_field_text(fields.get("inherits")),
         lscpu_flags=_list_text_set(fields.get("lscpu_flags")),
         vector_bits=_int_text(fields.get("vector_bits")),
@@ -529,6 +541,10 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
         test_filter_exclude_templates=_list_text_set(
             _child(fields.get("test_filter"), "exclude_templates")
         ),
+        test_runtime_lanes=_backend_text_map(fields.get("test_runtime_lanes")),
+        test_mask_from_bits=_backend_text_map(fields.get("test_mask_from_bits")),
+        test_mask_check=_backend_text_map(fields.get("test_mask_check")),
+        test_support_headers=_backend_list_map(fields.get("test_support_headers")),
         test_sizes_bits=tuple(
             n for n in (_opt_int(t) for t in _list_text(fields.get("test_sizes_bits")))
             if n is not None
@@ -569,6 +585,33 @@ def _backend_headers(fields: dict[str, ParsedTslField]) -> dict[str, tuple[str, 
     return result
 
 
+def _backend_supported(fields: dict[str, ParsedTslField]) -> dict[str, bool]:
+    """Promote each backend block's ``supported`` flag (absent -> supported)."""
+
+    result: dict[str, bool] = {}
+    for backend_id in ("cpp", "rust"):
+        text = _field_text(_child(fields.get(backend_id), "supported"))
+        if text is not None:
+            result[backend_id] = text.lower() == "true"
+    return result
+
+
+def _backend_text_map(field: ParsedTslField | None) -> dict[str, str]:
+    return {
+        child.key.text: text
+        for child in _children(field)
+        if (text := _field_text(child)) is not None
+    }
+
+
+def _backend_list_map(field: ParsedTslField | None) -> dict[str, tuple[str, ...]]:
+    return {
+        child.key.text: values
+        for child in _children(field)
+        if (values := _list_text(child))
+    }
+
+
 def _merge_nested_string_maps(
     parent: Mapping[str, Mapping[str, str]],
     child: Mapping[str, Mapping[str, str]],
@@ -592,13 +635,15 @@ def _merge_header_maps(
 
 
 def _mask_policy(field: ParsedTslField | None) -> MaskPolicy:
-    """Promote a ``mask_type_policy`` block: its ``kind`` plus the per-backend
-    ``cpp_by_lanes`` / ``rust_by_lanes`` (lane-count -> ``__mmaskN``) maps."""
+    """Promote a ``mask_type_policy`` block: its ``kind`` plus direct native-predicate
+    spellings and per-backend lane-count maps."""
 
     if field is None:
         return MaskPolicy()
     return MaskPolicy(
         kind=_field_text(_child(field, "kind")) or "lane_bitmask",
+        cpp=_field_text(_child(field, "cpp")),
+        rust=_field_text(_child(field, "rust")),
         cpp_by_lanes=_int_keyed_map(_child(field, "cpp_by_lanes")),
         rust_by_lanes=_int_keyed_map(_child(field, "rust_by_lanes")),
     )

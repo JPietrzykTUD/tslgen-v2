@@ -397,6 +397,14 @@ extension sve:
   mask_vector_loadable false
   runtime_lanes true
   default_test_target true
+  test_runtime_lanes:
+    cpp "svcntb() / sizeof({base_type})"
+  test_mask_from_bits:
+    cpp "::tsl::test::sve_mask_from_bits<{vec}>({mask_bits}, {authored_lanes}, {lanes})"
+  test_mask_check:
+    cpp "::tsl::test::check_sve_mask_bits<{vec}>({case_name}, {mask}, {expected_bits}, {authored_lanes}, {lanes})"
+  test_support_headers:
+    cpp ["tsl_test_sve.hpp"]
   cpp:
     supported true
     headers ["arm_sve.h"]
@@ -426,6 +434,21 @@ extension sve:
       cpp "svfloat32_t"
     f64:
       cpp "svfloat64_t"
+  intrinsic_compose:
+    prefix:
+      cpp ""
+    suffix:
+      by_type:
+        f32 "f32"
+        f64 "f64"
+        si8 "s8"
+        si16 "s16"
+        si32 "s32"
+        si64 "s64"
+        ui8 "u8"
+        ui16 "u16"
+        ui32 "u32"
+        ui64 "u64"
   mask_type_policy:
     kind "native_predicate"
     cpp "svbool_t"

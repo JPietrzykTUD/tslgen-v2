@@ -236,7 +236,9 @@ class Lowerer:
                 f"could not parse signature {selected.primitive.signature!r}",
                 source=_primitive_signature_source(selected),
             )
-        unsupported_kinds = self._support.unsupported_signature_kinds(shape)
+        unsupported_kinds = self._support.unsupported_signature_kinds_for_extension(
+            shape, selected.extension
+        )
         if unsupported_kinds:
             # A not-yet-supported signature kind (e.g. s[], ptr) is a coverage gap,
             # not a failure — skip the specialization (info), don't fail generation.
@@ -275,6 +277,15 @@ class Lowerer:
             lane_parameter=lane_parameter,
         )
         if register_spelling is None:
+            if not selected.extension.supports_backend(backend.backend_id):
+                # The corpus declares this extension unemittable for this backend (e.g. SVE on
+                # Rust, which has no stable scalable intrinsics): a coverage gap, not a failure.
+                return _skip(
+                    "TSL-LOWER-BACKEND-UNSUPPORTED",
+                    f"extension {selected.extension.isa_name!r} is not supported on "
+                    f"{backend.backend_id}",
+                    source=_implementation_source(selected),
+                )
             return _error(
                 "TSL-LOWER-NO-REGISTER-TYPE",
                 f"no {backend.backend_id} register-type spelling for "

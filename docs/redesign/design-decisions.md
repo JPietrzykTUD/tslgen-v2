@@ -5189,3 +5189,468 @@ Consequences:
 - Future spelling mismatches should first be treated as source-data
   composition issues or typed intrinsic-build capability gaps, not renderer
   tables.
+
+## ADR-103: SVE Needs A Scalable-Vector Substrate Before Primitive Coverage
+
+Context:
+
+Fixed-width NEON now has broad C++/Rust QEMU value-test coverage, so the next
+ARM-native target is SVE. The source corpus already declares an `sve` extension
+with `vector_bits "scalable"`, C++ register spellings such as `svint32_t`,
+`svbool_t` mask metadata, and SVE primitive bodies. The generator still
+explicitly excludes scalable extensions in `SupportPolicy.supports_extension`.
+
+Evidence from the maintenance helpers:
+
+- `./dev.sh explain --primitive add --profile neon --type si32 --backend cpp
+  --extension sve` reports that the NEON profile emits only `generic`, `neon`,
+  and `scalar`; `sve` is not emitted for that profile.
+- `./dev.sh explain --primitive add --profile sve --type si32 --backend cpp`
+  reports there is no `sve` machine profile.
+- `./dev.sh dump --stage catalog --primitive add` confirms SVE source bodies
+  already exist for `add`.
+- `./dev.sh ratchet` passes the current baseline with `67152 emitted / 67152`
+  slot-variants across `36616` keys.
+
+Toolchain probes show C++ SVE is viable in this environment with the existing
+compiler/emulator surface: Zig can compile `<arm_sve.h>` probes for SVE-capable
+AArch64 CPUs such as `a64fx` or `neoverse_v1`, and QEMU can execute a tiny SVE
+binary. Stable Rust in this environment exposes an `+sve` target feature but
+does not expose SVE stdarch vector types/functions such as `svbool_t`,
+`svint32_t`, or `svadd_s32_x`; the source extension currently declares
+`rust supported false`.
+
+Decision:
+
+Do not enable SVE by adding it to the fixed-width native-extension path.
+Scalable vectors need a typed substrate first because current renderers and
+helpers assume a concrete `extension.vector_bits` value when registering
+native `simd`/`SimdVector` types, mask/imask types, array types, alignment, and
+value-test lane counts.
+
+The first implementation slice should be C++-only and should introduce the
+minimal typed scalable-vector facts needed to compile one primitive family,
+starting with `add<sve, si32>`:
+
+- add a machine profile for SVE with profile-owned C++ flags and QEMU metadata;
+- introduce an explicit support-policy capability for C++ scalable extensions
+  instead of reusing the fixed-width or sized-vector paths;
+- render C++ `simd<T, sve>` registrations from source-owned SVE register and
+  mask metadata without computing fixed lane counts;
+- define how `vector::length`, `vector::alignment`, arrays, and value tests are
+  represented for a concrete SVE test vector length before running value tests;
+- keep Rust SVE unsupported until a supported Rust backend API is available or
+  a separate typed backend strategy is designed.
+
+Consequences:
+
+- Primitive-by-primitive SVE work should start only after the scalable C++
+  substrate exists; otherwise every primitive fix would fight the same missing
+  lane/mask/register model.
+- SVE profile flags belong in `machine_profiles.json`, not in C++ render code.
+- Rust parity for SVE is explicitly out of scope for the first SVE slice.
+- The new `dev.sh explain`, `dump`, and `ratchet` helpers are the preferred
+  evidence tools for checking each next ARM coverage step.
+
+## ADR-104: C++ SVE Starts With Build-Verified Scalable Native Registration
+
+Context:
+
+The first SVE implementation slice needed to prove that a scalable native ARM
+extension can be selected, lowered, rendered, built, and executed without being
+modeled as a fixed-width vector. The existing C++ native-registration path was
+close, but it still assumed non-x86 native masks were represented by the vector
+register and that all emitted vector signatures could instantiate
+`array_for<Vec>` via `sizeof(register_type)`. SVE register types are sizeless,
+so `sizeof(svint32_t)` is invalid.
+
+Decision:
+
+Add a narrow C++ SVE substrate rather than a broad scalable-vector model:
+
+- add an `sve` machine profile with profile-owned `-mcpu=a64fx` flags and
+  `qemu-aarch64 -cpu a64fx` metadata;
+- allow scalable extension selection through an explicit support-policy
+  capability;
+- keep `vector::length` unresolved for scalable vectors and defer `s[]` /
+  lane-list signatures for scalable extensions, preventing accidental
+  `array_for<simd<T, sve>>` instantiation;
+- promote direct native-predicate mask spellings such as `svbool_t` from
+  `mask_type_policy`;
+- register C++ `simd<T, sve>` from source-owned `sv*` register metadata and
+  `svbool_t` mask/imask metadata;
+- keep SVE intrinsic spelling source-owned through `intrin<..., build>`:
+  suffix fragments live in `tsldata/extensions/extension.tsl`, and literal
+  `post=x/z/m` fragments append generically in the intrinsic lowerer;
+- normalize the SVE `mask_true` source body to ordinary typed implementation
+  entries so `add<sve, T>` closes its dependency graph.
+
+Consequences:
+
+- `./dev.sh explain --primitive add --profile sve --type si32 --backend cpp
+  --extension sve` shows selected/lowered/emitted SVE `add`, including the
+  `mask_true<sve, si32>` dependency.
+- `dev.sh build/test` can cross-build the C++ SVE profile with Zig and execute
+  the generated CTest target through QEMU.
+- The generated values executable currently does not contain true SVE lane
+  value cases; it exercises generic/scalar cases while the SVE profile smoke
+  target address-takes and compiles many SVE specializations. Real SVE
+  value-test lane strategy remains the next slice.
+- Rust SVE remains unsupported because stable Rust stdarch still lacks the
+  required SVE symbols in this environment.
+
+## ADR-105: C++ SVE Value Tests Use Extension-Owned Runtime Lane Counts
+
+Context:
+
+The C++ SVE substrate could build and run through QEMU, but generated
+`values_sve.cpp` still contained no true `tsl::simd<..., tsl::sve>` lane value
+cases. Existing value-test renderers initialize fixed-width/generic registers
+through `array_for<Vec>` or direct lane indexing, both of which are invalid for
+sizeless SVE registers.
+
+Decision:
+
+Add a narrow C++ scalable value-test path for authored all-vector value cases:
+
+- source extension metadata owns the runtime lane-count expression through
+  `test_runtime_lanes`, with SVE declaring
+  `cpp "svcntb() / sizeof({base_type})"`;
+- value-test harness discovery now also finds pointer load/store helpers by
+  unique signatures `v:=cptr` and `void:=(ptr,v)`;
+- test-mode dependency closure includes those load/store helpers, so a
+  generated scalable value case can use the public TSL load/store surface;
+- the planner emits a render-ready `scalable_golden` case only for backends
+  that declare support for that case kind, scalable extensions, value-result
+  all-vector shapes, runtime-lane metadata, and available load/store helpers;
+- the C++ renderer formats the already-decided plan by filling runtime-sized
+  buffers, loading SVE registers via `tsl::load<Vec, false>`, calling the
+  primitive under test, storing via `tsl::store<Vec, false>`, and comparing the
+  runtime buffer with the existing lane equality helper.
+
+Consequences:
+
+- No fixed `vector::length` or `array_for<simd<T, sve>>` fact is invented for
+  SVE.
+- Renderer code does not inspect the catalog or classify source primitive
+  names; it consumes `source_extension`, load/store names, and the lane-count
+  expression from the plan.
+- The first supported SVE value shape is consumed by the C++ renderer and
+  covers `add`-style all-vector value-result cases. Masked SVE cases, mask
+  results, memory cases, reductions, scalar results, and Rust SVE remain
+  separate follow-ups.
+- `dev.sh test --profiles sve --primitives add --backends cpp` now emits true
+  SVE value cases and runs them through QEMU.
+
+## ADR-106: C++ SVE Masked Value Tests Use Extension-Owned Predicate Construction
+
+Context:
+
+SVE masked value-result primitives such as `add[mask=zero]` and
+`add[mask=pass_through]` lowered and compiled, but generated value tests still
+only exercised fixed-lane/generic mask representations. SVE masks are native
+`svbool_t` predicates, so authored integer mask bits cannot be passed directly
+as `typename Vec::mask_type`.
+
+Decision:
+
+Extend the scalable value-test boundary without making renderers classify SVE:
+
+- source extension metadata owns a backend-specific `test_mask_from_bits`
+  expression. SVE declares the C++ expression that invokes
+  `::tsl::test::sve_mask_from_bits<{vec}>({mask_bits}, {authored_lanes}, {lanes})`;
+- source extension metadata also declares any profile-specific C++ test support
+  headers needed by that expression. SVE requests `tsl_test_sve.hpp`, which
+  implements `sve_mask_from_bits` behind `__ARM_FEATURE_SVE`, constructing
+  `svbool_t` predicates with lane-index vectors and `svcmpeq_n_u*` instead of
+  converting predicates through an integral representation;
+- the planner emits `scalable_masked` only when the backend supports that case
+  kind, the selected extension is scalable, runtime-lane and mask-construction
+  metadata are present, and typed load/store harness helpers are available;
+- the renderer consumes `ValueTestCasePlan.mask_from_bits_expr` and formats
+  runtime-sized load/call/store/compare code. It does not inspect the catalog
+  or branch on extension/primitive names.
+
+Consequences:
+
+- `dev.sh test --profiles sve --primitives add --backends cpp` now emits and
+  runs native scalable SVE value tests for masked `add` forms.
+- `array_for<simd<T, sve>>`, fixed `vector::length`, and packed integral mask
+  assumptions remain out of the scalable SVE value path.
+- Mask-result SVE value tests remain a separate typed slice because comparing
+  native predicates requires a source-owned extraction/comparison boundary.
+- Rust SVE remains unsupported until a Rust backend strategy exists.
+
+## ADR-107: C++ SVE Mask-Result Value Tests Use Extension-Owned Predicate Checks
+
+Context:
+
+Unmasked SVE comparison primitives such as `equal` lower to native predicate
+results (`svbool_t`). The generic/fixed-lane value-test path can compare
+integer mask bitsets, but it cannot inspect a native scalable predicate without
+inventing a packed representation or asking the source/runtime boundary how to
+check predicate activity.
+
+Decision:
+
+Add a narrow scalable mask-result test boundary:
+
+- source extension metadata owns a backend-specific `test_mask_check`
+  expression. SVE declares the C++ expression that invokes
+  `::tsl::test::check_sve_mask_bits<{vec}>({case_name}, {mask}, {expected_bits}, {authored_lanes}, {lanes})`;
+- SVE's profile-specific test support header implements reusable all-lanes and
+  single-lane predicate helpers plus `check_sve_mask_bits`, probing each lane
+  with `svptest_any` rather than converting `svbool_t` through an integral mask;
+- the planner emits `scalable_mask_result` only for backends that support that
+  case kind, scalable extensions, result kind `m`, all-vector parameters,
+  runtime-lane metadata, mask-check metadata, and available load helpers;
+- the renderer consumes `ValueTestCasePlan.mask_check_expr` and formats
+  runtime-sized load/call/check code. It does not inspect the catalog or branch
+  on primitive/extension names.
+
+Consequences:
+
+- `dev.sh test --profiles sve --primitives equal --backends cpp` now emits and
+  runs native scalable SVE value tests for unmasked comparison results.
+- Scalable predicate comparison remains separate from packed integral mask
+  representations.
+- Masked mask-result comparisons (`m:=(m,v,v)`) remain a follow-up because
+  they combine predicate construction and predicate-result checking in one
+  typed case shape.
+- Rust SVE remains unsupported.
+
+## ADR-108: C++ SVE Masked Mask-Result Value Tests Combine Predicate Construction And Checks
+
+Context:
+
+Masked SVE comparison primitives such as `equal[mask=zero]` lower to native
+predicate inputs and native predicate results (`m:=(m,v,v)`). Previous scalable
+value-test slices covered predicate construction for masked value-result cases
+and predicate checking for unmasked comparison results, but not the combined
+shape.
+
+Decision:
+
+Add a narrow scalable masked mask-result test boundary:
+
+- the planner emits `scalable_masked_mask_result` only for backends that support
+  that case kind, scalable extensions, result kind `m`, exactly one mask
+  parameter, vector parameters, runtime-lane metadata, mask-construction
+  metadata, mask-check metadata, and available load helpers;
+- the pattern layer keeps this shape separate from masked value-result
+  planning so value-result semantics do not become a mixed procedural hub;
+- the C++ renderer formats runtime-sized vector loads, uses the plan's native
+  predicate-construction expression for the input mask, calls the selected
+  primitive, and returns the plan's native predicate-check expression;
+- the renderer does not inspect the catalog or branch on primitive/extension
+  names.
+
+Consequences:
+
+- `dev.sh test --profiles sve --primitives equal --backends cpp` now emits and
+  runs native scalable SVE value tests for masked comparison results such as
+  `equal_maskz<Vec>(mask, v0, v1)`.
+- Predicate construction and checking remain source/catalog-owned through
+  extension test metadata.
+- Scalable mask-logic cases (`m:=(m,m)`) remain a follow-up because they need
+  predicate construction for multiple mask inputs and predicate-result checks
+  without vector load helpers.
+- Rust SVE remains unsupported.
+
+## ADR-109: C++ SVE Mask-Logic Value Tests Use Multiple Render-Ready Predicate Inputs
+
+Context:
+
+SVE mask-logic primitives such as `mask_binary_and` lower to native predicate
+operations (`m:=(m,m)`) and already compile for C++ SVE. The fixed/generic
+value-test path compares packed integer masks, but scalable SVE needs to
+construct multiple native `svbool_t` inputs and check a native predicate result
+without fixed `array_for<Vec>` or packed-mask assumptions.
+
+Decision:
+
+Add a narrow scalable mask-logic value-test boundary:
+
+- keep scalable C++ value-test rendering in a focused
+  `tslc.value_tests._render_cpp_scalable` module rather than growing
+  `_render_cpp_core.py`;
+- the planner emits `scalable_mask_logic` only for backends that support that
+  case kind, scalable extensions, result kind `m`, all-mask parameters,
+  runtime-lane metadata, mask-construction metadata, and mask-check metadata;
+- the plan carries one render-ready predicate-construction expression per mask
+  input plus one render-ready predicate-check expression for the result;
+- the C++ renderer formats those already-decided expressions and does not
+  inspect the catalog or branch on primitive/extension names;
+- SVE-authored mask-logic test cases live in `tsldata`, because existing
+  mask-logic tests are explicitly `extension "avx512"` and must not be reused
+  implicitly for SVE.
+
+Consequences:
+
+- `dev.sh test --profiles sve --primitives mask_binary_and --backends cpp` now
+  emits and runs native scalable SVE value tests for mask logic.
+- Predicate construction and checking remain source/catalog-owned through
+  extension test metadata.
+- Scalable mask constants (`m:=()`) remain a follow-up because they need
+  predicate-result checks without input predicate construction.
+- Rust SVE remains unsupported.
+
+## ADR-110: C++ SVE Mask-Constant Value Tests Use Extension-Owned Predicate Checks
+
+Context:
+
+SVE mask-constant primitives such as `mask_false` and `mask_true` lower to
+native predicate results (`m:=()`). They do not have vector or mask inputs, so
+the previous scalable cases for value results, masked value results, comparison
+results, masked comparison results, and mask-logic results did not cover them.
+The fixed/generic path assumes a packed mask representation, which is not the
+right contract for native SVE `svbool_t`.
+
+Decision:
+
+Add a narrow scalable mask-constant value-test boundary:
+
+- SVE-authored mask-constant cases live in `tsldata` and provide expected
+  predicate bits for a concrete authored lane count.
+- The planner emits `scalable_mask_constant` only for backends that support
+  that case kind, scalable extensions, result kind `m`, no parameters,
+  runtime-lane metadata, and mask-check metadata.
+- The plan carries the render-ready predicate-check expression through
+  `ValueTestCasePlan.mask_check_expr`.
+- The C++ renderer calls the selected primitive and formats the already-decided
+  check expression. It does not inspect the catalog or branch on primitive or
+  extension names.
+- Scalable mask planning now lives in
+  `tslc.value_tests._case_scalable_masks`, leaving the vector scalable planner
+  and C++ scalable renderer below the module-size guardrail.
+
+Consequences:
+
+- `dev.sh test --profiles sve --primitives mask_true,mask_false --backends cpp`
+  now emits and runs native scalable SVE value tests for mask constants.
+- Predicate checking remains source/catalog-owned through extension test
+  metadata.
+- Packed integral-mask assumptions and fixed `vector::length` remain out of
+  the scalable SVE value-test path.
+- Rust SVE remains unsupported.
+
+## ADR-111: C++ SVE Mask Conversion Uses Native-Predicate Identity
+
+Context:
+
+The SVE extension declares `integral_mask_type_policy kind "same_as_mask_type"`.
+Therefore `typename Vec::imask_type` is the same native predicate type as
+`typename Vec::mask_type` for `simd<T, sve>`. However `to_integral` had no SVE
+implementation, and `to_mask` still used an older fixed-lane body that tried to
+materialize an array through `vector::length`, `set_zero`, and `to_array`. That
+body cannot be lowered for scalable vectors and also contradicts the extension
+metadata that says no packed integral-mask conversion is needed.
+
+Decision:
+
+For scalable extensions whose integral-mask type is the same as the mask type:
+
+- `to_integral` and `to_mask` are source-level identity conversions;
+- SVE-authored value tests provide predicate bitsets for representative
+  authored lanes;
+- the planner emits `scalable_mask_conversion` only when the backend supports
+  that case kind, the extension is scalable, `imask_policy.kind` is
+  `same_as_mask_type`, and runtime-lane, predicate-construction, and
+  predicate-check metadata are present;
+- the C++ renderer formats the already-decided native predicate input, calls
+  the selected conversion primitive, and checks the result through
+  extension-owned predicate-check metadata;
+- renderers do not inspect the catalog or branch on primitive/extension names.
+
+Consequences:
+
+- `dev.sh test --profiles sve --primitives to_integral,to_mask --backends cpp`
+  now emits and runs native scalable SVE value tests for mask conversions.
+- Packed integral-mask conversion remains out of scope for SVE until an
+  extension declares a real scalar/packed `imask_type`.
+- The next SVE mask gap is `to_vector` (`v:=m`), which currently has no SVE
+  source implementation but can likely be composed from existing typed
+  primitives such as masked `mov`, `set1`, and `mask::lane::all_true`.
+- Rust SVE remains unsupported.
+
+## ADR-112: C++ SVE Mask-To-Vector Uses Typed Primitive Composition
+
+Context:
+
+After SVE mask conversions, `to_vector` (`v:=m`) was the next mask-specific
+gap. `./dev.sh explain --primitive to_vector --profile sve --type ui32
+--backend cpp --extension sve` reported that the primitive had no SVE
+implementation. Existing SVE primitives already provided the necessary typed
+pieces: masked zeroing move (`mov[mask=zero]`), scalar broadcast (`set1`), and
+the generation-time all-true mask lane value.
+
+Decision:
+
+Keep the implementation source-owned and planner-driven:
+
+- add an SVE `to_vector` source implementation that composes
+  `call<primitive=mov, attrs[mask=zero]>` with `call<primitive=set1>` of
+  `value<generation>(mask::lane::all_true)`;
+- add an SVE-authored `to_vector` value test for a representative predicate
+  bitset and authored lane count;
+- move mask-to-vector planning into a focused `_MaskToVectorPattern` in
+  `tslc.value_tests._pattern_masks`;
+- preserve the existing fixed/generic `mask_to_vector_case` path while adding
+  scalable planning through the already-rendered `scalable_masked` case kind
+  when runtime lanes, predicate-construction metadata, and load/store harness
+  helpers are available;
+- keep renderers as formatters of render-ready `ValueTestCasePlan` data.
+
+Consequences:
+
+- `dev.sh test --profiles sve --primitives to_vector --backends cpp` now emits
+  and runs native scalable SVE value tests for mask-to-vector conversion.
+- No compiler-side primitive or extension classifier branch was added for
+  `to_vector` or `sve`.
+- The next sampled SVE gap is mask representation memory, especially
+  `store_mask_repr`, whose SVE body still depends on fixed `vector::length` and
+  `mask<test>` over a native predicate.
+- Rust SVE remains unsupported.
+
+## ADR-113: C++ SVE Unpacked Mask Store Uses Vector Store Composition
+
+Context:
+
+After mask-to-vector coverage, `store_mask_repr` (`void:=(ptr,m)`) was the
+next sampled SVE mask-memory gap. `dev.sh explain --primitive store_mask_repr
+--profile sve --type ui32 --backend cpp --extension sve` selected the SVE body
+but failed to lower all attribute slots because the source used fixed
+`value<generation>(vector::length)` and `mask<test>` on native SVE predicates.
+The existing `load_mask_repr` unpacked path already showed the viable typed
+shape: use the lane-word storage layout and compose through vector/mask
+primitives instead of treating the predicate as a fixed packed integer.
+
+Decision:
+
+For SVE `store_mask_repr` with `packed=false`:
+
+- the source body composes `to_vector[MaskVec]` with `store[MaskVec]`, using
+  `MaskWord = base::unsigned_of(base::in)` and the source-owned `param_types`
+  storage contract;
+- the unpacked path no longer uses fixed `vector::length` or `mask<test>` over
+  a native predicate;
+- the packed path remains deliberately unresolved because SVE declares
+  `integral_mask_type_policy kind "same_as_mask_type"`, so a packed
+  representation of native predicates needs an explicit typed contract rather
+  than guessed byte storage;
+- the value-test planner emits `scalable_mask_store` only for `packed=false`
+  scalable cases with runtime-lane metadata, predicate construction metadata,
+  and resolved pointer storage layout;
+- the C++ renderer formats the render-ready plan and does not inspect the
+  catalog or branch on primitive/extension names.
+
+Consequences:
+
+- `dev.sh test --profiles sve --primitives store_mask_repr --backends cpp` now
+  emits and runs native scalable SVE value tests for unpacked mask storage.
+- Existing compatible unpacked authored tests can also plan scalable SVE cases
+  when the selected SVE specialization and storage layout match, so the planner
+  is not tied to one SVE-only test name.
+- `store_mask_repr packed=true` and `load_mask_repr packed=true` remain the
+  next mask-representation design target.
+- Rust SVE remains unsupported.

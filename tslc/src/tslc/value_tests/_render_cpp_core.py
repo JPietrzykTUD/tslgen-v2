@@ -2,61 +2,18 @@
 
 from __future__ import annotations
 
-from tslc.value_tests.literals import cpp_literal, cpp_literal_list, token_truthy
+from tslc.value_tests.literals import cpp_literal, cpp_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
 from tslc.value_tests.render_cpp_helpers import (
     append_call_args as _append_call_args,
-    append_vector_inputs as _append_vector_inputs,
     scalar_expected as _scalar_expected,
     scalar_result_type as _scalar_result_type,
 )
 
-def _generic_golden(case: ValueTestCasePlan) -> str:
-    lines = [
-        f"int {case.function_name}() {{",
-        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
-    ]
-    arg_names = _append_vector_inputs(lines, case, "typename Vec::register_type", "v")
-    call = f"tsl::{case.call_name}<Vec>({', '.join(arg_names)})"
-    if case.result_kind == "m":
-        bits = ", ".join("1" if token_truthy(v) else "0" for v in case.expected)
-        lines.append(f"  typename Vec::mask_type result = {call};")
-        lines.append(f"  static const int expected[{case.lanes}] = {{{bits}}};")
-        lines.append(
-            f'  return tsl::test::check_mask("{case.case_name}", result, expected, {case.lanes});'
-        )
-    else:
-        expected = cpp_literal_list(case.expected, case.type_tag)
-        lines.append(f"  typename Vec::register_type result = {call};")
-        lines.append(f"  static const {case.base_spelling} expected[{case.lanes}] = {{{expected}}};")
-        lines.append(
-            f'  return tsl::test::check_lanes<{case.base_spelling}>('
-            f'"{case.case_name}", result, expected, {case.lanes});'
-        )
-    lines.append("}")
-    return "\n".join(lines)
+# The golden and masked case shapes (fixed `generic<N>` and scalable SVE alike) are rendered
+# by the shared lane-model renderers in `lane_model`; the renderers below cover the remaining
+# fixed-lane case shapes.
 
-def _masked(case: ValueTestCasePlan) -> str:
-    lines = [
-        f"int {case.function_name}() {{",
-        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
-        f"  typename Vec::mask_type mask = {case.mask_inputs[0]}ull;",
-    ]
-    vector_names = _append_vector_inputs(lines, case, "typename Vec::register_type", "v")
-    next_vector = iter(vector_names)
-    call_args = ["mask" if kind == "m" else next(next_vector) for kind in case.param_kinds]
-    expected = cpp_literal_list(case.expected, case.type_tag)
-    lines.append(f"  static const {case.base_spelling} expected[{case.lanes}] = {{{expected}}};")
-    lines.append(
-        f"  typename Vec::register_type result = "
-        f"tsl::{case.call_name}<Vec>({', '.join(call_args)});"
-    )
-    lines.append(
-        f'  return tsl::test::check_lanes<{case.base_spelling}>('
-        f'"{case.case_name}", result, expected, {case.lanes});'
-    )
-    lines.append("}")
-    return "\n".join(lines)
 
 def _mask_to_vector(case: ValueTestCasePlan) -> str:
     expected = cpp_literal_list(case.expected, case.type_tag)
@@ -204,22 +161,6 @@ def _scalar_result(case: ValueTestCasePlan) -> str:
     lines.append("}")
     return "\n".join(lines)
 
-def _mask_result(case: ValueTestCasePlan) -> str:
-    expected_int = int(case.expected[0])
-    bits = ", ".join("1" if (expected_int >> i) & 1 else "0" for i in range(case.lanes))
-    lines = [
-        f"int {case.function_name}() {{",
-        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
-    ]
-    args = _append_call_args(lines, case)
-    lines.append(
-        f"  typename Vec::mask_type result = tsl::{case.call_name}<Vec>({', '.join(args)});"
-    )
-    lines.append(f"  static const int expected[{case.lanes}] = {{{bits}}};")
-    lines.append(f'  return tsl::test::check_mask("{case.case_name}", result, expected, {case.lanes});')
-    lines.append("}")
-    return "\n".join(lines)
-
 def _lane_list(case: ValueTestCasePlan) -> str:
     literals = cpp_literal_list(case.vector_inputs[0], case.type_tag)
     expected = cpp_literal_list(case.expected, case.type_tag)
@@ -235,26 +176,6 @@ def _lane_list(case: ValueTestCasePlan) -> str:
         f'"{case.case_name}", result, expected, {case.lanes});',
         "}",
     ]
-    return "\n".join(lines)
-
-def _mask_logic(case: ValueTestCasePlan) -> str:
-    expected_int = int(case.expected[0])
-    bits = ", ".join("1" if (expected_int >> i) & 1 else "0" for i in range(case.lanes))
-    lines = [
-        f"int {case.function_name}() {{",
-        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
-    ]
-    arg_names = []
-    for position, mask in enumerate(case.mask_inputs):
-        lines.append(f"  typename Vec::mask_type m{position} = {mask}ull;")
-        arg_names.append(f"m{position}")
-    lines.append(
-        f"  typename Vec::mask_type result = "
-        f"tsl::{case.call_name}<Vec>({', '.join(arg_names)});"
-    )
-    lines.append(f"  static const int expected[{case.lanes}] = {{{bits}}};")
-    lines.append(f'  return tsl::test::check_mask("{case.case_name}", result, expected, {case.lanes});')
-    lines.append("}")
     return "\n".join(lines)
 
 def _reduction(case: ValueTestCasePlan) -> str:
@@ -275,8 +196,6 @@ def _reduction(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 __all__ = (
-    "_generic_golden",
-    "_masked",
     "_mask_to_vector",
     "_immediate",
     "_compile_only",
@@ -285,8 +204,6 @@ __all__ = (
     "_scalar_vector",
     "_vector_to_array",
     "_scalar_result",
-    "_mask_result",
     "_lane_list",
-    "_mask_logic",
     "_reduction",
 )

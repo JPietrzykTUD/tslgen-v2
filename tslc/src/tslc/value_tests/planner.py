@@ -29,6 +29,7 @@ from tslc.value_tests.model import (
     ValueTestProjectPlan,
 )
 from tslc.value_tests.patterns import ValueTestPattern, default_value_test_patterns
+from tslc.value_tests.support_headers import support_headers_for_cases
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +164,7 @@ class ValueTestPlanner:
             backend_id=profile.backend_id,
             profile_name=profile.profile_name,
             cases=tuple(cases),
+            support_headers=support_headers_for_cases(cases, self._catalog, profile.backend_id),
         )
 
     def _pattern_for(self, specs: tuple[LoweredSpecialization, ...]) -> ValueTestPattern | None:

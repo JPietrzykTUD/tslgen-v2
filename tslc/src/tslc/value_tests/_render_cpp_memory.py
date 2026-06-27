@@ -8,6 +8,7 @@ from tslc.value_tests.render_cpp_helpers import (
     axis_suffix as _axis_suffix,
     cast_literal_list as _cast_literal_list,
     cpp_string_literal as _cpp_string_literal,
+    scalable_header as _scalable_header,
     uint_literal as _uint_literal,
 )
 
@@ -313,10 +314,48 @@ def _store(case: ValueTestCasePlan) -> str:
     ]
     return "\n".join(lines)
 
+def _scalable_mask_store(case: ValueTestCasePlan) -> str:
+    if (
+        case.source_extension is None
+        or case.runtime_lanes_expr is None
+        or not case.mask_from_bits_exprs
+        or case.target_base_spelling is None
+        or case.expected_type_tag is None
+    ):
+        raise ValueError(
+            "scalable mask-store C++ value test requires extension, lanes, "
+            "mask input, and storage layout"
+        )
+    storage_type = case.target_base_spelling
+    expected = cpp_literal_list(case.expected, case.expected_type_tag)
+    authored_len = len(case.expected)
+    axis = _axis_suffix(case)
+    lines = _scalable_header(case)
+    lines.extend(
+        [
+            f"  typename Vec::mask_type mask = {case.mask_from_bits_exprs[0]};",
+            f"  static const {storage_type} authored_expected[{authored_len}] = {{{expected}}};",
+            f"  std::vector<{storage_type}> actual({case.buffer_offset} + lanes);",
+            f"  std::vector<{storage_type}> expected({case.buffer_offset} + lanes);",
+            f"  for (std::size_t i = 0; i < {case.buffer_offset}; ++i) "
+            "expected[i] = authored_expected[i];",
+            f"  for (std::size_t i = 0; i < lanes; ++i) expected[{case.buffer_offset} + i] = "
+            f"authored_expected[{case.buffer_offset} + (i % {case.lanes})];",
+            f"  tsl::{case.call_name}<Vec{axis}>("
+            "reinterpret_cast<typename Vec::base_type *>(actual.data() + "
+            f"{case.buffer_offset}), mask);",
+            f'  return tsl::test::check_lanes<{storage_type}>('
+            f'"{case.case_name}", actual.data(), expected.data(), expected.size());',
+            "}",
+        ]
+    )
+    return "\n".join(lines)
+
 __all__ = (
     "_scalar_pointer_load",
     "_mask_pointer_load",
     "_mask_store",
+    "_scalable_mask_store",
     "_masked_pointer_load",
     "_masked_pointer_store",
     "_memory_copy",

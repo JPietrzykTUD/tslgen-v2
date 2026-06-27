@@ -49,15 +49,17 @@ def requires_declared_vector_register(catalog: Catalog, extension_isa: str) -> b
     """Whether a selected vector extension must declare backend register types.
 
     X86 and scalar/generic substrates have established backend-owned register
-    spelling rules. Fixed-width non-x86 native substrates do not; their register
-    types are source-owned extension facts and must be present in
-    ``vector_register_types`` before lowering may emit them.
+    spelling rules. Native non-x86 substrates do not; their register types are
+    source-owned extension facts and must be present in ``vector_register_types``
+    before lowering may emit them.
     """
 
     return any(
         extension.family not in {"x86", "scalar", "generic_like"}
-        and extension.vector_bits_kind == "fixed"
-        and extension.vector_bits > 0
+        and (
+            (extension.vector_bits_kind == "fixed" and extension.vector_bits > 0)
+            or extension.vector_bits_kind == "scalable"
+        )
         for extension in _extensions_for_isa(catalog, extension_isa)
     )
 

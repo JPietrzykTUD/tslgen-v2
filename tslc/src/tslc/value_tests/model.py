@@ -23,6 +23,8 @@ class HarnessPrimitiveNames:
     from_array: str | None
     to_array: str | None
     to_integral: str | None
+    load: str | None = None
+    store: str | None = None
     diagnostics: tuple[Diagnostic, ...] = ()
 
     @property
@@ -60,6 +62,11 @@ class ValueTestCasePlan:
     from_array_name: str | None = None
     to_array_name: str | None = None
     to_integral_name: str | None = None
+    load_name: str | None = None
+    store_name: str | None = None
+    runtime_lanes_expr: str | None = None
+    mask_from_bits_exprs: tuple[str, ...] = ()
+    mask_check_expr: str | None = None
     buffer_offset: int = 0
     buffer_length: int | None = None
     source_offset: int = 0
@@ -114,6 +121,7 @@ class ValueTestProfilePlan:
     backend_id: str
     profile_name: str
     cases: tuple[ValueTestCasePlan, ...]
+    support_headers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

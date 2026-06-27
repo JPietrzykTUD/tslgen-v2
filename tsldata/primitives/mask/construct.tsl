@@ -6,6 +6,7 @@ prim<m:=()>[value=zero] mask_false():
     - {tags [false], extension "avx512", type "ui16", lane_count 32, case {inputs [], expected 0}}
     - {tags [false], extension "avx512", type "ui32", lane_count 16, case {inputs [], expected 0}}
     - {tags [false], extension "avx512", type "ui64", lane_count 8, case {inputs [], expected 0}}
+    - {tags [false], extension "sve", type "ui32", lane_count 16, case {inputs [], expected 0}}
   impls:
     [avx512, avx2_vl, sse_vl]:
       arith:
@@ -71,6 +72,7 @@ prim<m:=()>[value=all] mask_true():
     - {tags [true], extension "avx512", type "ui16", lane_count 32, case {inputs [], expected 4294967295}}
     - {tags [true], extension "avx512", type "ui32", lane_count 16, case {inputs [], expected 65535}}
     - {tags [true], extension "avx512", type "ui64", lane_count 8, case {inputs [], expected 255}}
+    - {tags [true], extension "sve", type "ui32", lane_count 16, case {inputs [], expected 65535}}
   impls:
     [avx512, avx2_vl, sse_vl]:
       arith:
@@ -100,12 +102,54 @@ prim<m:=()>[value=all] mask_true():
         implementation:
           tsil "complete(call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true)));"
     sve:
-      ?i8  {intrinsic "intrin<svptrue_b8>()", requires [sve]}
-      ?i16 {intrinsic "intrin<svptrue_b16>()", requires [sve]}
-      ?i32 {intrinsic "intrin<svptrue_b32>()", requires [sve]}
-      ?i64 {intrinsic "intrin<svptrue_b64>()", requires [sve]}
-      f32 {intrinsic "intrin<svptrue_b32>()", requires [sve]}
-      f64 {intrinsic "intrin<svptrue_b64>()", requires [sve]}
+      ?i8:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svptrue_b8>());"
+      ?i16:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svptrue_b16>());"
+      ?i32:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svptrue_b32>());"
+      ?i64:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svptrue_b64>());"
+      f32:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svptrue_b32>());"
+      f64:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svptrue_b64>());"
     scalar:
       arith:
         requires []

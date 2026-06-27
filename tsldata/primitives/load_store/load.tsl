@@ -579,7 +579,10 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               var<typed>(MaskT, out, intrin<svpfalse_b>());
               var<const_infer>(all, call<primitive=mask_true[Vec]>());
               var<const_infer>(idx, call<primitive=sequence[UVec]>());
-              var<const_infer>(lanes, value<generation>(vector::length));
+              var<const_infer>(
+                lanes,
+                (intrin<svcntb>() / sizeof(type<generation>(base::unsigned_of(type<generation>(base::in)))))
+              );
               var<const_infer>(bytes, cast<reinterpret>(type<backend>(scalar::ui8) const*, ptr));
 
               loop<backend>(lane, 0, lanes, 1) {

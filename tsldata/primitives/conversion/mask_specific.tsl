@@ -2,26 +2,38 @@ prim<im:=m> to_integral(mask):
   brief_description "[Example: sse + si8]: Create mask from the most significant bit of each 8-bit element in \"a\", and store the result in \"dst\"."
   operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[j] := a[i+7]\nENDFOR\ndst[MAX:16] := 0"
   tests:
-    - {tags [basic], extension "avx512", type "ui8", case {inputs [12297829382473034410], expected 12297829382473034410}}
-    - {tags [edge], extension "avx512", type "ui8", case {inputs [18446744073709551615], expected 18446744073709551615}}
-    - {tags [basic], extension "avx512", type "si8", case {inputs [12297829382473034410], expected 12297829382473034410}}
-    - {tags [edge], extension "avx512", type "si8", case {inputs [18446744073709551615], expected 18446744073709551615}}
-    - {tags [basic], extension "avx512", type "ui16", case {inputs [2863311530], expected 2863311530}}
-    - {tags [edge], extension "avx512", type "ui16", case {inputs [4294967295], expected 4294967295}}
-    - {tags [basic], extension "avx512", type "si16", case {inputs [2863311530], expected 2863311530}}
-    - {tags [edge], extension "avx512", type "si16", case {inputs [4294967295], expected 4294967295}}
-    - {tags [basic], extension "avx512", type "ui32", case {inputs [43690], expected 43690}}
-    - {tags [edge], extension "avx512", type "ui32", case {inputs [65535], expected 65535}}
-    - {tags [basic], extension "avx512", type "si32", case {inputs [43690], expected 43690}}
-    - {tags [edge], extension "avx512", type "si32", case {inputs [65535], expected 65535}}
-    - {tags [basic], extension "avx512", type "f32", case {inputs [43690], expected 43690}}
-    - {tags [edge], extension "avx512", type "f32", case {inputs [65535], expected 65535}}
-    - {tags [basic], extension "avx512", type "ui64", case {inputs [170], expected 170}}
-    - {tags [edge], extension "avx512", type "ui64", case {inputs [255], expected 255}}
-    - {tags [basic], extension "avx512", type "si64", case {inputs [170], expected 170}}
-    - {tags [edge], extension "avx512", type "si64", case {inputs [255], expected 255}}
-    - {tags [basic], extension "avx512", type "f64", case {inputs [170], expected 170}}
-    - {tags [edge], extension "avx512", type "f64", case {inputs [255], expected 255}}
+    - {tags [basic], type "ui8", case {inputs [10], expected 10}}
+    - {tags [basic], type "si8", case {inputs [10], expected 10}}
+    - {tags [basic], type "ui16", case {inputs [10], expected 10}}
+    - {tags [basic], type "si16", case {inputs [10], expected 10}}
+    - {tags [basic], type "ui32", case {inputs [10], expected 10}}
+    - {tags [basic], type "si32", case {inputs [10], expected 10}}
+    - {tags [basic], type "f32", case {inputs [10], expected 10}}
+    - {tags [basic], type "ui64", case {inputs [2], expected 2}}
+    - {tags [basic], type "si64", case {inputs [2], expected 2}}
+    - {tags [basic], type "f64", case {inputs [2], expected 2}}
+    - {tags [zero], type "ui32", lane_count 4, case {inputs [0], expected 0}}
+    - {tags [wide, basic], extension "avx512", type "ui8", case {inputs [12297829382473034410], expected 12297829382473034410}}
+    - {tags [wide, edge], extension "avx512", type "ui8", case {inputs [18446744073709551615], expected 18446744073709551615}}
+    - {tags [wide, basic], extension "avx512", type "si8", case {inputs [12297829382473034410], expected 12297829382473034410}}
+    - {tags [wide, edge], extension "avx512", type "si8", case {inputs [18446744073709551615], expected 18446744073709551615}}
+    - {tags [wide, basic], extension "avx512", type "ui16", case {inputs [2863311530], expected 2863311530}}
+    - {tags [wide, edge], extension "avx512", type "ui16", case {inputs [4294967295], expected 4294967295}}
+    - {tags [wide, basic], extension "avx512", type "si16", case {inputs [2863311530], expected 2863311530}}
+    - {tags [wide, edge], extension "avx512", type "si16", case {inputs [4294967295], expected 4294967295}}
+    - {tags [wide, basic], extension "avx512", type "ui32", case {inputs [43690], expected 43690}}
+    - {tags [wide, edge], extension "avx512", type "ui32", case {inputs [65535], expected 65535}}
+    - {tags [wide, basic], extension "avx512", type "si32", case {inputs [43690], expected 43690}}
+    - {tags [wide, edge], extension "avx512", type "si32", case {inputs [65535], expected 65535}}
+    - {tags [wide, basic], extension "avx512", type "f32", case {inputs [43690], expected 43690}}
+    - {tags [wide, edge], extension "avx512", type "f32", case {inputs [65535], expected 65535}}
+    - {tags [wide, basic], extension "avx512", type "ui64", case {inputs [170], expected 170}}
+    - {tags [wide, edge], extension "avx512", type "ui64", case {inputs [255], expected 255}}
+    - {tags [wide, basic], extension "avx512", type "si64", case {inputs [170], expected 170}}
+    - {tags [wide, edge], extension "avx512", type "si64", case {inputs [255], expected 255}}
+    - {tags [wide, basic], extension "avx512", type "f64", case {inputs [170], expected 170}}
+    - {tags [wide, edge], extension "avx512", type "f64", case {inputs [255], expected 255}}
+    - {tags [scalable, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690], expected 43690}}
   impls:
     [avx512, avx2_vl, sse_vl]:
       arith:
@@ -29,6 +41,15 @@ prim<im:=m> to_integral(mask):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(mask);"
+    sve:
+      arith:
+        requires [sve]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -226,6 +247,7 @@ prim<v:=m> to_vector(mask):
     - {tags [edge], type "si16", case {inputs [255], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
     - {tags [basic], type "ui32", case {inputs [10], expected [0, 4294967295, 0, 4294967295]}}
     - {tags [edge], type "ui32", case {inputs [15], expected [4294967295, 4294967295, 4294967295, 4294967295]}}
+    - {tags [basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690], expected [0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
     - {tags [basic], type "si32", case {inputs [10], expected [0, -1, 0, -1]}}
     - {tags [edge], type "si32", case {inputs [15], expected [-1, -1, -1, -1]}}
     - {tags [basic], type "f32", case {inputs [10], expected [0.0, NAN, 0.0, NAN]}}
@@ -281,6 +303,22 @@ prim<v:=m> to_vector(mask):
         requires:
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              complete(
+                call<primitive=mov, attrs[mask=zero]>(
+                  mask,
+                  call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
+                )
+              );
+            """
+    sve:
+      arith:
+        requires [sve]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -362,6 +400,7 @@ prim<m:=im> to_mask(mask):
     - {tags [edge], extension "avx512", type "ui32", lane_count 16, case {inputs [32769], expected 32769}}
     - {tags [basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170], expected 170}}
     - {tags [edge], extension "avx512", type "ui64", lane_count 8, case {inputs [129], expected 129}}
+    - {tags [basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690], expected 43690}}
   impls:
     avx512:
       arith:
@@ -387,23 +426,11 @@ prim<m:=im> to_mask(mask):
       arith:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
-          tsil """
-              let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
-              let<type>(UVec, type<generation>(vector::as_base(UnsignedT)));
-              var<infer>(tmp, call<primitive=to_array[UVec]>(call<primitive=set_zero[UVec]>()));
-              const type<backend>(scalar::size) mask_period = cast<static>(type<backend>(scalar::size), 16 / value<generation>(type::size_bytes(type<generation>(base::in))));
-              loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                const type<backend>(scalar::size) bit_idx = i % mask_period;
-                tmp[i] = cast<static>(UnsignedT, (mask >> bit_idx) & 1);
-              }
-              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
-              var<const_infer>(vec, intrin<svld1, build[suffix=base::unsigned_of(base::in)]>(pg, tmp.as_ptr()));
-              complete(intrin<svcmpne_n, build[suffix=base::unsigned_of(base::in)]>(pg, vec, cast<static>(UnsignedT, 0)));
-            """
+          tsil "complete(mask);"
     avx2:
       ?i8:
         requires [avx, avx2]

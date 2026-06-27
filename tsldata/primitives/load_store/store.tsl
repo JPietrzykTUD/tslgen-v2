@@ -194,6 +194,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
     - {tags [mask, unpacked], attrs [aligned=true, packed=false], type "ui32", offset 0, case {inputs [10], expected [0, 4294967295, 0, 4294967295]}}
     - {tags [mask, unpacked], attrs [aligned=false, packed=false], type "ui32", offset 1, case {inputs [10], expected [0, 0, 4294967295, 0, 4294967295]}}
     - {tags [mask, unpacked], attrs [aligned=true, packed=false], type "f32", offset 0, case {inputs [10], expected [0, 4294967295, 0, 4294967295]}}
+    - {tags [mask, unpacked], extension "sve", attrs [aligned=false, packed=false], type "ui32", lane_count 16, offset 1, case {inputs [10], expected [0, 0, 4294967295, 0, 4294967295, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
   impls:
     scalar:
       arith:
@@ -337,7 +338,11 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
-              var<const_infer>(lanes, value<generation>(vector::length));
+              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              var<const_infer>(all, call<primitive=mask_true[Vec]>());
+              var<const_infer>(idx, call<primitive=sequence[UVec]>());
+              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(UBase)));
               var<const_infer>(nbytes, ((lanes + 7) >> 3));
               var<const_infer>(bytes, cast<reinterpret>(type<backend>(scalar::ui8) *, ptr));
 
@@ -346,7 +351,10 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
               }
 
               loop<backend>(lane, 0, lanes, 1) {
-                if (mask<test>(mask, lane)) {
+                var<const_infer>(one, intrin<svcmpeq_n, build[suffix=base::unsigned_of(base::in)]>(
+                  all, idx, cast<static>(UBase, lane)
+                ));
+                if (intrin<svptest_any>(one, mask)) {
                   *ptr_add_mut(bytes, lane >> 3) =
                     *ptr_add(bytes, lane >> 3) |
                     cast<static>(type<backend>(scalar::ui8), (1 << (lane & 7)));
@@ -354,21 +362,11 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
               }
             } else<generation> {
               let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
-              var<const_infer>(out, cast<reinterpret>(MaskWord *, ptr));
-              var<const_infer>(
-                one_bits,
-                cast<static>(
-                  MaskWord,
-                  cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)
-                )
+              let<type>(MaskVec, type<generation>(vector::as_base(MaskWord)));
+              call<primitive=store[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                cast<reinterpret>(MaskWord *, ptr),
+                call<primitive=to_vector[MaskVec]>(mask)
               );
-              loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                if (mask<test>(mask, i)) {
-                  *ptr_add_mut(out, i) = one_bits;
-                } else {
-                  *ptr_add_mut(out, i) = cast<static>(MaskWord, 0);
-                }
-              }
             }
           """
 prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):

@@ -1,4 +1,5 @@
 prim<v:=v> conflict(data):
+  cross_lane true
   brief_description "[Example: avx512 + si32]: Test each 32-bit element of \"a\" for equality with all other elements in \"a\" closer to the least significant bit. Each element's comparison forms a zero extended bit vector in \"dst\"."
   operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\ti := j*32\n\tFOR k := 0 to j-1\n\t\tm := k*32\n\t\tdst[i+k] := (a[i+31:i] == a[m+31:m]) ? 1 : 0\n\tENDFOR\n\tdst[i+31:i+j] := 0\nENDFOR\ndst[MAX:512] := 0"
   tests:
@@ -113,6 +114,7 @@ prim<v:=v> conflict(data):
               complete(cast<static>(type<generation>(base::in), 0));
             """
 prim<m:=(m,v)> conflict_free(mask, data):
+  cross_lane true
   brief_description "Checks whether all active elements are unique and returns the semantic mask of conflict-free lanes."
   operation ""
   tests:

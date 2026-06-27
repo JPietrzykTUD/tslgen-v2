@@ -58,6 +58,43 @@ def test_type_spellings_normalized(catalog: Catalog) -> None:
     assert catalog.type_spellings["rust"]["u64"] == "u64"
 
 
+def test_to_integral_tests_default_to_unqualified_baseline(catalog: Catalog) -> None:
+    primitive = catalog.primitive("to_integral")
+    assert primitive is not None
+
+    baseline_types = {
+        case.type_tag
+        for case in primitive.tests
+        if case.extension is None and case.tags == ("basic",)
+    }
+    assert baseline_types == {
+        "ui8",
+        "ui16",
+        "ui32",
+        "ui64",
+        "si8",
+        "si16",
+        "si32",
+        "si64",
+        "f32",
+        "f64",
+    }
+    assert any(
+        case.extension is None and case.type_tag == "ui32" and case.tags == ("zero",)
+        for case in primitive.tests
+    )
+    assert all(
+        "wide" in case.tags
+        for case in primitive.tests
+        if case.extension == "avx512"
+    )
+    assert all(
+        "scalable" in case.tags
+        for case in primitive.tests
+        if case.extension == "sve"
+    )
+
+
 def test_bracketed_type_group_membership(catalog: Catalog) -> None:
     # hadd uses explicit type-list selectors like [si32, ui32].
     assert catalog.type_group_contains("[si32, ui32]", "si32")
@@ -110,6 +147,8 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     assert "avx2" not in machine_profiles["avx"].features
     assert "avx512f" in machine_profiles["skylake"].features
     assert machine_profiles["neon"].cpp_flags == ()
+    assert machine_profiles["sve"].features == frozenset({"sve"})
+    assert machine_profiles["sve"].cpp_flags == ("-mcpu=a64fx",)
 
 
 def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:

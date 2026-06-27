@@ -210,6 +210,9 @@ def test_mask_policy_promoted_into_extension(catalog: Catalog) -> None:
     assert avx512.mask_policy.cpp_by_lanes[16] == "__mmask16"
     # avx2_vl is native-predicate despite inheriting the lane-bitmask avx2 block.
     assert catalog.extensions["avx2_vl"].mask_policy.kind == "native_predicate_by_lanes"
+    sve = catalog.extensions["sve"]
+    assert sve.mask_policy.kind == "native_predicate"
+    assert sve.mask_policy.cpp == "svbool_t"
 
 
 def test_post_mask_appends_mask_only_for_native_predicate(catalog: Catalog, machine_profiles) -> None:

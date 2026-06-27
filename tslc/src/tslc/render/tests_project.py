@@ -13,6 +13,16 @@ def cpp_test_artifacts(plan: ValueTestProjectPlan) -> list[Artifact]:
     """C++ value-test sources: the shared helper asset plus one runner per profile."""
 
     artifacts = [text("cpp/include/tsl_test_core.hpp", asset("tsl_test_core.hpp"))]
+    support_headers = sorted(
+        {
+            header
+            for profile in plan.profiles_for("cpp")
+            for header in profile.support_headers
+        }
+    )
+    artifacts.extend(
+        text(f"cpp/include/{header}", asset(header)) for header in support_headers
+    )
     for profile in plan.profiles_for("cpp"):
         source = render_cpp_values_runner(profile)
         artifacts.append(text(f"cpp/tests/values_{slug(profile.profile_name)}.cpp", source))

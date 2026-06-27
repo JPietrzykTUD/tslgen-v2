@@ -40,6 +40,8 @@ class SupportPolicy:
     const_pointer_kinds: frozenset[str]
     mutable_pointer_kinds: frozenset[str]
     sized_vector_bits_kinds: frozenset[str]
+    scalable_vector_bits_kinds: frozenset[str]
+    scalable_deferred_signature_kinds: frozenset[str]
     scalar_register_policy_kind: str
     default_size_parameter_name: str
     target_marker_values: frozenset[str]
@@ -60,9 +62,9 @@ class SupportPolicy:
         return family in self.emitted_extension_families
 
     def supports_extension(self, extension: Extension) -> bool:
-        return (
-            self.supports_extension_family(extension.family)
-            and extension.vector_bits_kind != "scalable"
+        return self.supports_extension_family(extension.family) and (
+            extension.vector_bits_kind not in self.scalable_vector_bits_kinds
+            or self.uses_scalable_vector(extension)
         )
 
     def extension_targets_profile(self, extension_family: str, profile_family: str) -> bool:
@@ -91,6 +93,20 @@ class SupportPolicy:
         kinds = {shape.result_kind, *shape.param_kinds}
         return frozenset(k for k in kinds if k not in self.supported_signature_kinds)
 
+    def unsupported_signature_kinds_for_extension(
+        self, shape: SignatureShape, extension: Extension
+    ) -> frozenset[str]:
+        unsupported = set(self.unsupported_signature_kinds(shape))
+        if self.uses_scalable_vector(extension):
+            kinds = {shape.result_kind, *shape.param_kinds}
+            unsupported.update(kinds & self.scalable_deferred_signature_kinds)
+            if shape.result_term.is_lane_list_like:
+                unsupported.add(shape.result_kind)
+            unsupported.update(
+                term.kind for term in shape.param_terms if term.is_lane_list_like
+            )
+        return frozenset(unsupported)
+
     def has_immediate_operand(self, shape: SignatureShape) -> bool:
         return self.immediate_kind in shape.param_kinds
 
@@ -99,6 +115,9 @@ class SupportPolicy:
 
     def uses_sized_vector(self, extension: Extension) -> bool:
         return extension.vector_bits_kind in self.sized_vector_bits_kinds
+
+    def uses_scalable_vector(self, extension: Extension) -> bool:
+        return extension.vector_bits_kind in self.scalable_vector_bits_kinds
 
     def size_parameter_name(self, extension: Extension) -> str:
         return extension.size_parameter_name or self.default_size_parameter_name
@@ -133,7 +152,7 @@ class SupportPolicy:
         return extension.vector_register_type_policy == self.scalar_register_policy_kind
 
     def lane_count(self, extension: Extension, type_tag: str) -> int | None:
-        if self.uses_sized_vector(extension):
+        if self.uses_sized_vector(extension) or self.uses_scalable_vector(extension):
             return None
         if extension.vector_bits <= 0:
             return 1
@@ -146,7 +165,7 @@ class SupportPolicy:
         return str(lanes)
 
     def vector_alignment_bytes(self, extension: Extension, type_tag: str) -> int:
-        if self.uses_sized_vector(extension):
+        if self.uses_sized_vector(extension) or self.uses_scalable_vector(extension):
             return self.type_bit_width_or_default(type_tag) // 8
         return max(1, extension.vector_bits // 8)
 
@@ -232,18 +251,17 @@ DEFAULT_SUPPORT_POLICY = SupportPolicy(
     pointer_kinds=frozenset({"ptr", "ptr+", "cptr", "cptr+"}),
     const_pointer_kinds=frozenset({"cptr", "cptr+"}),
     mutable_pointer_kinds=frozenset({"ptr", "ptr+"}),
-    # Vector-bits kinds whose lane count is a runtime/symbolic parameter (`LANES`) rather than a
-    # compile-time constant. Only `"sized"` (the generic-like family) is wired into the
-    # sized-vector render/lower paths today. SVE's `"scalable"` kind is declared in the corpus
-    # (`tsldata/extensions/extension.tsl`) but deliberately omitted here: its length is bound to a
-    # hardware-runtime `vscale` rather than a single in-scope `LANES` symbol, so it needs its own
-    # substrate before it can join this set (tracked in `deferred_cases`).
+    # Sized vectors carry a source-visible `LANES` parameter. Scalable vectors are native runtime
+    # length vectors: they can be selected for intrinsic-only C++ bodies, but fixed-lane queries
+    # such as `vector::length` stay unsupported until a typed scalable lane model exists.
     sized_vector_bits_kinds=frozenset({"sized"}),
+    scalable_vector_bits_kinds=frozenset({"scalable"}),
+    scalable_deferred_signature_kinds=frozenset({"s[]", LANE_LIST_KIND}),
     scalar_register_policy_kind="base_type",
     default_size_parameter_name="LANES",
     target_marker_values=frozenset({"==", "*"}),
     deferred_cases=(
-        "scalable-vector extension emission",
+        "scalable-vector fixed-lane queries and value tests",
         "masked gather/scatter forms with vidx parameters",
         "masked reductions that return scalar values",
         "sized-vector extension-dimension representation changes",

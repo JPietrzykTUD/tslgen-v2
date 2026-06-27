@@ -157,7 +157,7 @@ def _cpp_native_registration(
     by_primitive: dict[str, tuple[LoweredSpecialization, ...]],
     extensions: dict[str, Extension],
 ) -> str:
-    """Register non-x86 fixed native extensions from typed register spellings."""
+    """Register non-x86 native extensions from typed register spellings."""
 
     lines: list[str] = []
     emitted = {
@@ -179,7 +179,7 @@ def _cpp_native_registration(
         if register is None:
             continue
         bits = extension.vector_bits
-        mask = register
+        mask = _cpp_mask_type(extension, bits, register, base_type=base)
         imask = _cpp_imask_type(extension, bits, mask, base_type=base)
         lines.append(
             f"template <>\n"
@@ -191,6 +191,21 @@ def _cpp_native_registration(
             f"}};\n\n"
         )
     return "".join(lines)
+
+
+def _cpp_mask_type(
+    extension: Extension,
+    vector_bits: int,
+    register: str,
+    *,
+    base_type: str,
+) -> str:
+    kind = extension.mask_policy.kind
+    if kind == "native_predicate":
+        return extension.mask_policy.cpp or register
+    if kind == "native_predicate_by_lanes":
+        return f"typename detail::native_mask<{vector_bits}, {base_type}>::type"
+    return register
 
 
 def _cpp_imask_type(

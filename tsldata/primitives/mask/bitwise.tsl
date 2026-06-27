@@ -6,6 +6,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
     - {tags [mask, and, basic], extension "avx512", type "ui16", lane_count 32, case {inputs [43690, 52428], expected 34952}}
     - {tags [mask, and, basic], extension "avx512", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 34952}}
     - {tags [mask, and, basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 204], expected 136}}
+    - {tags [mask, and, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 34952}}
   impls:
     [avx512, sve]:
       arith:
