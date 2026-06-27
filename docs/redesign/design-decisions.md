@@ -5357,13 +5357,15 @@ Decision:
 Extend the scalable value-test boundary without making renderers classify SVE:
 
 - source extension metadata owns a backend-specific `test_mask_from_bits`
-  expression. SVE declares the C++ expression that invokes
-  `::tsl::test::sve_mask_from_bits<{vec}>({mask_bits}, {authored_lanes}, {lanes})`;
+  expression. SVE declares the C++ expression that invokes the generic
+  `::tsl::test::mask_from_bits<{vec}>({mask_bits}, {authored_lanes}, {lanes})`
+  test API;
 - source extension metadata also declares any profile-specific C++ test support
   headers needed by that expression. SVE requests `tsl_test_sve.hpp`, which
-  implements `sve_mask_from_bits` behind `__ARM_FEATURE_SVE`, constructing
-  `svbool_t` predicates with lane-index vectors and `svcmpeq_n_u*` instead of
-  converting predicates through an integral representation;
+  specializes the shared mask-bit adapter behind `__ARM_FEATURE_SVE`,
+  constructing `svbool_t` predicates with lane-index vectors and
+  `svcmpeq_n_u*` instead of converting predicates through an integral
+  representation;
 - the planner emits `scalable_masked` only when the backend supports that case
   kind, the selected extension is scalable, runtime-lane and mask-construction
   metadata are present, and typed load/store harness helpers are available;
@@ -5396,11 +5398,13 @@ Decision:
 Add a narrow scalable mask-result test boundary:
 
 - source extension metadata owns a backend-specific `test_mask_check`
-  expression. SVE declares the C++ expression that invokes
-  `::tsl::test::check_sve_mask_bits<{vec}>({case_name}, {mask}, {expected_bits}, {authored_lanes}, {lanes})`;
-- SVE's profile-specific test support header implements reusable all-lanes and
-  single-lane predicate helpers plus `check_sve_mask_bits`, probing each lane
-  with `svptest_any` rather than converting `svbool_t` through an integral mask;
+  expression. SVE declares the C++ expression that invokes the generic
+  `::tsl::test::check_mask_bits<{vec}>({case_name}, {mask}, {expected_bits}, {authored_lanes}, {lanes})`
+  test API;
+- SVE's profile-specific test support header specializes the shared mask-bit
+  adapter with reusable all-lanes and single-lane predicate helpers, probing
+  each lane with `svptest_any` rather than converting `svbool_t` through an
+  integral mask;
 - the planner emits `scalable_mask_result` only for backends that support that
   case kind, scalable extensions, result kind `m`, all-vector parameters,
   runtime-lane metadata, mask-check metadata, and available load helpers;

@@ -400,9 +400,9 @@ extension sve:
   test_runtime_lanes:
     cpp "svcntb() / sizeof({base_type})"
   test_mask_from_bits:
-    cpp "::tsl::test::sve_mask_from_bits<{vec}>({mask_bits}, {authored_lanes}, {lanes})"
+    cpp "::tsl::test::mask_from_bits<{vec}>({mask_bits}, {authored_lanes}, {lanes})"
   test_mask_check:
-    cpp "::tsl::test::check_sve_mask_bits<{vec}>({case_name}, {mask}, {expected_bits}, {authored_lanes}, {lanes})"
+    cpp "::tsl::test::check_mask_bits<{vec}>({case_name}, {mask}, {expected_bits}, {authored_lanes}, {lanes})"
   test_support_headers:
     cpp ["tsl_test_sve.hpp"]
   cpp:

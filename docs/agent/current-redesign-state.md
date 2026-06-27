@@ -2933,13 +2933,14 @@ Implemented:
 
 - Added extension-owned `test_mask_from_bits` metadata. SVE declares the C++
   expression
-  `::tsl::test::sve_mask_from_bits<{vec}>({mask_bits}, {authored_lanes}, {lanes})`.
+  `::tsl::test::mask_from_bits<{vec}>({mask_bits}, {authored_lanes}, {lanes})`.
 - Added extension-owned `test_support_headers` metadata. SVE requests
   `tsl_test_sve.hpp`, a C++ SVE predicate-construction test helper behind
-  `__ARM_FEATURE_SVE`. It builds `svbool_t` masks from authored bits using
-  lane-index vectors and `svcmpeq_n_u*`, without assuming a packed integral
-  predicate representation. The shared `tsl_test_core.hpp` remains
-  profile-independent.
+  `__ARM_FEATURE_SVE`. It specializes the shared mask-bit adapter, building
+  `svbool_t` masks from authored bits using lane-index vectors and
+  `svcmpeq_n_u*`, without assuming a packed integral predicate representation.
+  The shared `tsl_test_core.hpp` exposes only the generic `mask_from_bits` /
+  `check_mask_bits` adapter API and remains profile-independent.
 - Split scalable value-test case planning into
   `tslc.value_tests._case_scalable`, keeping `_case_core.py` below the module
   guardrail.
@@ -2986,10 +2987,11 @@ Implemented:
 
 - Added extension-owned `test_mask_check` metadata. SVE declares the C++
   expression
-  `::tsl::test::check_sve_mask_bits<{vec}>({case_name}, {mask}, {expected_bits}, {authored_lanes}, {lanes})`.
+  `::tsl::test::check_mask_bits<{vec}>({case_name}, {mask}, {expected_bits}, {authored_lanes}, {lanes})`.
 - Extended the SVE-specific C++ test support header with reusable all-lanes and
-  single-lane predicate helpers plus `check_sve_mask_bits`, which compares
-  native `svbool_t` results lane-by-lane with authored expected activity bits.
+  single-lane predicate helpers through the shared mask-bit adapter, which
+  compares native `svbool_t` results lane-by-lane with authored expected
+  activity bits.
 - Added `scalable_mask_result` planning and C++ rendering. The planner
   requires backend case-kind support, result kind `m`, all-vector parameters,
   scalable extension metadata, runtime lanes, mask-check metadata, and load

@@ -175,12 +175,15 @@ def test_sve_profile_registers_scalable_cpp_simd_types(
     assert "using Vec = tsl::simd<int32_t, tsl::sve>;" in values
     assert '#include "tsl_test_sve.hpp"' in values
     assert "svcntb() / sizeof(int32_t)" in values
-    assert "::tsl::test::sve_mask_from_bits<tsl::simd<int32_t, tsl::sve>>" in values
+    assert "::tsl::test::mask_from_bits<tsl::simd<int32_t, tsl::sve>>" in values
     assert "tsl::load<Vec, false>" in values
     assert "tsl::store<Vec, false>" in values
+    assert "sve_mask_from_bits" not in values
+    assert "check_sve_mask_bits" not in values
     assert "sve_mask_from_bits" not in test_core
+    assert "check_sve_mask_bits" not in test_core
     assert "arm_sve.h" not in test_core
-    assert "sve_mask_from_bits" in test_sve
+    assert "mask_bits_adapter<::tsl::simd<Base, ::tsl::sve>>" in test_sve
     assert "#include <arm_sve.h>" in test_sve
 
 
@@ -206,7 +209,7 @@ def test_sve_profile_plans_scalable_mask_result_values(
         for case in profile.cases
     )
     assert "test_scalable_sve_equal_equal_si32_basic" in values
-    assert "::tsl::test::check_sve_mask_bits<tsl::simd<int32_t, tsl::sve>>" in values
+    assert "::tsl::test::check_mask_bits<tsl::simd<int32_t, tsl::sve>>" in values
     assert "typename Vec::mask_type result = tsl::equal<Vec>(v0, v1);" in values
 
 
@@ -232,8 +235,8 @@ def test_sve_profile_plans_scalable_masked_mask_result_values(
         for case in profile.cases
     )
     assert "test_scalable_sve_equal_maskz" in values
-    assert "::tsl::test::sve_mask_from_bits<tsl::simd<int32_t, tsl::sve>>" in values
-    assert "::tsl::test::check_sve_mask_bits<tsl::simd<int32_t, tsl::sve>>" in values
+    assert "::tsl::test::mask_from_bits<tsl::simd<int32_t, tsl::sve>>" in values
+    assert "::tsl::test::check_mask_bits<tsl::simd<int32_t, tsl::sve>>" in values
     assert "typename Vec::mask_type result = tsl::equal_maskz<Vec>(m0, v0, v1);" in values
 
 
@@ -259,8 +262,8 @@ def test_sve_profile_plans_scalable_mask_logic_values(
         for case in profile.cases
     )
     assert "test_scalable_sve_mask_binary_and" in values
-    assert "::tsl::test::sve_mask_from_bits<tsl::simd<uint32_t, tsl::sve>>" in values
-    assert "::tsl::test::check_sve_mask_bits<tsl::simd<uint32_t, tsl::sve>>" in values
+    assert "::tsl::test::mask_from_bits<tsl::simd<uint32_t, tsl::sve>>" in values
+    assert "::tsl::test::check_mask_bits<tsl::simd<uint32_t, tsl::sve>>" in values
     assert "typename Vec::mask_type result = tsl::mask_binary_and<Vec>(m0, m1);" in values
 
 
@@ -287,7 +290,7 @@ def test_sve_profile_plans_scalable_mask_constant_values(
     )
     assert "test_scalable_sve_mask_true" in values
     assert "test_scalable_sve_mask_false" in values
-    assert "::tsl::test::check_sve_mask_bits<tsl::simd<uint32_t, tsl::sve>>" in values
+    assert "::tsl::test::check_mask_bits<tsl::simd<uint32_t, tsl::sve>>" in values
     assert "typename Vec::mask_type result = tsl::mask_true<Vec>();" in values
     assert "typename Vec::mask_type result = tsl::mask_false<Vec>();" in values
 
@@ -315,8 +318,8 @@ def test_sve_profile_plans_scalable_mask_conversion_values(
     )
     assert "test_scalable_sve_to_integral" in values
     assert "test_scalable_sve_to_mask" in values
-    assert "::tsl::test::sve_mask_from_bits<tsl::simd<uint32_t, tsl::sve>>" in values
-    assert "::tsl::test::check_sve_mask_bits<tsl::simd<uint32_t, tsl::sve>>" in values
+    assert "::tsl::test::mask_from_bits<tsl::simd<uint32_t, tsl::sve>>" in values
+    assert "::tsl::test::check_mask_bits<tsl::simd<uint32_t, tsl::sve>>" in values
     assert "typename Vec::mask_type input = " in values
     assert "typename Vec::imask_type input = " in values
     assert "typename Vec::imask_type result = tsl::to_integral<Vec>(input);" in values
@@ -345,7 +348,7 @@ def test_sve_profile_plans_scalable_mask_to_vector_values(
         for case in profile.cases
     )
     assert "test_scalable_sve_to_vector" in values
-    assert "::tsl::test::sve_mask_from_bits<tsl::simd<uint32_t, tsl::sve>>" in values
+    assert "::tsl::test::mask_from_bits<tsl::simd<uint32_t, tsl::sve>>" in values
     assert "typename Vec::register_type result = tsl::to_vector<Vec>(mask);" in values
     assert "tsl::store<Vec, false>(actual.data(), result);" in values
 
@@ -372,7 +375,7 @@ def test_sve_profile_plans_scalable_mask_store_values(
         for case in profile.cases
     )
     assert "test_scalable_sve_store_mask_repr" in values
-    assert "::tsl::test::sve_mask_from_bits<tsl::simd<uint32_t, tsl::sve>>" in values
+    assert "::tsl::test::mask_from_bits<tsl::simd<uint32_t, tsl::sve>>" in values
     assert "std::vector<uint32_t> actual(1 + lanes);" in values
     assert "tsl::store_mask_repr<Vec, false, false>(" in values
     assert "reinterpret_cast<typename Vec::base_type *>(actual.data() + 1), mask);" in values

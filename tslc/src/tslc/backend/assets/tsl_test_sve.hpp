@@ -4,6 +4,7 @@
 
 #if defined(__ARM_FEATURE_SVE)
 
+#include "tsl_sve.hpp"
 #include "tsl_test_core.hpp"
 
 #include <arm_sve.h>
@@ -13,9 +14,11 @@
 
 namespace tsl {
 namespace test {
+namespace detail {
+namespace sve_detail {
 
 template <class Vec>
-inline svbool_t sve_all_predicate() {
+inline svbool_t all_predicate() {
     using Base = typename Vec::base_type;
     if constexpr (sizeof(Base) == 1) {
         return svptrue_b8();
@@ -29,9 +32,9 @@ inline svbool_t sve_all_predicate() {
 }
 
 template <class Vec>
-inline svbool_t sve_lane_predicate(std::size_t lane) {
+inline svbool_t lane_predicate(std::size_t lane) {
     using Base = typename Vec::base_type;
-    const svbool_t all = sve_all_predicate<Vec>();
+    const svbool_t all = all_predicate<Vec>();
     if constexpr (sizeof(Base) == 1) {
         const svuint8_t indexes = svindex_u8(0, 1);
         return svcmpeq_n_u8(all, indexes, static_cast<std::uint8_t>(lane));
@@ -47,38 +50,46 @@ inline svbool_t sve_lane_predicate(std::size_t lane) {
     }
 }
 
-template <class Vec>
-inline typename Vec::mask_type sve_mask_from_bits(std::uint64_t bits,
-                                                  std::size_t authored_lanes,
-                                                  std::size_t lanes) {
-    typename Vec::mask_type result = svpfalse_b();
-    const svbool_t all = sve_all_predicate<Vec>();
-    for (std::size_t i = 0; i < lanes; ++i) {
-        if (((bits >> (i % authored_lanes)) & 1u) == 0) {
-            continue;
-        }
-        result = svorr_b_z(all, result, sve_lane_predicate<Vec>(i));
-    }
-    return result;
-}
+}  // namespace sve_detail
 
-template <class Vec>
-inline int check_sve_mask_bits(const char *name, typename Vec::mask_type mask,
-                               std::uint64_t bits, std::size_t authored_lanes,
-                               std::size_t lanes) {
-    int failures = 0;
-    for (std::size_t i = 0; i < lanes; ++i) {
-        const svbool_t lane = sve_lane_predicate<Vec>(i);
-        const bool got = svptest_any(lane, mask);
-        const bool want = ((bits >> (i % authored_lanes)) & 1u) != 0;
-        if (got != want) {
-            std::fprintf(stderr, "FAIL %s lane %zu: expected %s, got %s\n", name, i,
-                         want ? "set" : "clear", got ? "set" : "clear");
-            ++failures;
+template <class Base>
+struct mask_bits_adapter<::tsl::simd<Base, ::tsl::sve>> {
+    using Vec = ::tsl::simd<Base, ::tsl::sve>;
+
+    static typename Vec::mask_type from_bits(std::uint64_t bits,
+                                             std::size_t authored_lanes,
+                                             std::size_t lanes) {
+        typename Vec::mask_type result = svpfalse_b();
+        const svbool_t all = sve_detail::all_predicate<Vec>();
+        for (std::size_t i = 0; i < lanes; ++i) {
+            if (((bits >> (i % authored_lanes)) & 1u) == 0) {
+                continue;
+            }
+            result = svorr_b_z(all, result, sve_detail::lane_predicate<Vec>(i));
         }
+        return result;
     }
-    return failures;
-}
+
+    static int check(const char *name, typename Vec::mask_type mask,
+                     std::uint64_t bits, std::size_t authored_lanes,
+                     std::size_t lanes) {
+        int failures = 0;
+        for (std::size_t i = 0; i < lanes; ++i) {
+            const svbool_t lane = sve_detail::lane_predicate<Vec>(i);
+            const bool got = svptest_any(lane, mask);
+            const bool want = ((bits >> (i % authored_lanes)) & 1u) != 0;
+            if (got != want) {
+                std::fprintf(stderr, "FAIL %s lane %zu: expected %s, got %s\n",
+                             name, i, want ? "set" : "clear",
+                             got ? "set" : "clear");
+                ++failures;
+            }
+        }
+        return failures;
+    }
+};
+
+}  // namespace detail
 
 }  // namespace test
 }  // namespace tsl

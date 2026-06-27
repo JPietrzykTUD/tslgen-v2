@@ -14,6 +14,32 @@
 namespace tsl {
 namespace test {
 
+namespace detail {
+
+template <class Vec>
+struct mask_bits_adapter;
+
+}  // namespace detail
+
+// Build a backend/profile-specific mask value from a compact lane bitset. The
+// implementation is provided by profile support headers such as
+// `tsl_test_sve.hpp`; the public test API stays extension-agnostic.
+template <class Vec>
+inline typename Vec::mask_type mask_from_bits(std::uint64_t bits,
+                                              std::size_t authored_lanes,
+                                              std::size_t lanes) {
+    return detail::mask_bits_adapter<Vec>::from_bits(bits, authored_lanes, lanes);
+}
+
+// Compare a backend/profile-specific mask value against a compact lane bitset.
+// Profiles with non-integral mask representations specialize the adapter.
+template <class Vec>
+inline int check_mask_bits(const char *name, typename Vec::mask_type mask,
+                           std::uint64_t bits, std::size_t authored_lanes,
+                           std::size_t lanes) {
+    return detail::mask_bits_adapter<Vec>::check(name, mask, bits, authored_lanes, lanes);
+}
+
 // Lane-wise equality. For floating point this is an exact bit compare.
 template <class T>
 inline bool lane_eq(T actual, T expected) {

@@ -1252,13 +1252,15 @@ Implementation notes:
 
 1. Extension metadata now carries backend-specific `test_mask_from_bits`
    expressions. SVE declares a C++ expression that calls
-   `::tsl::test::sve_mask_from_bits<{vec}>(...)`.
+   `::tsl::test::mask_from_bits<{vec}>(...)`.
 2. Extension metadata now carries backend-specific `test_support_headers`.
    SVE requests `tsl_test_sve.hpp`, which owns the SVE ACLE predicate
-   construction behind `__ARM_FEATURE_SVE`. It creates an `svbool_t` from
-   authored mask bits using lane-index vectors and `svcmpeq_n_u*`, without
-   converting predicates back to integers. The shared `tsl_test_core.hpp`
-   remains profile-independent.
+   construction behind `__ARM_FEATURE_SVE`. It specializes the shared
+   mask-bit adapter, creating an `svbool_t` from authored mask bits using
+   lane-index vectors and `svcmpeq_n_u*`, without converting predicates back
+   to integers. The shared `tsl_test_core.hpp` exposes only the generic
+   `mask_from_bits` / `check_mask_bits` adapter API and remains
+   profile-independent.
 3. The planner emits `scalable_masked` only when the backend declares that case
    kind, the selected extension is scalable, runtime-lane and mask-construction
    metadata are present, and load/store harness helpers were discovered by
@@ -1305,11 +1307,11 @@ Implementation notes:
 
 1. Extension metadata now carries backend-specific `test_mask_check`
    expressions. SVE declares a C++ expression that calls
-   `::tsl::test::check_sve_mask_bits<{vec}>(...)`.
+   `::tsl::test::check_mask_bits<{vec}>(...)`.
 2. The SVE-specific C++ test support header now has reusable all-lanes and
-   single-lane predicate helpers. `check_sve_mask_bits` probes each native
-   `svbool_t` lane with `svptest_any` and compares it to authored expected
-   activity bits.
+   single-lane predicate helpers through the shared mask-bit adapter. The
+   adapter specialization probes each native `svbool_t` lane with
+   `svptest_any` and compares it to authored expected activity bits.
 3. The planner emits `scalable_mask_result` only when the backend declares that
    case kind, the result kind is `m`, parameters are all vectors, the selected
    extension is scalable, runtime-lane and mask-check metadata are present, and
