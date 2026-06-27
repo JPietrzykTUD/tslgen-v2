@@ -2122,7 +2122,40 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
                   var<const_infer>(chunk, cast<reinterpret>(type<generation>(register::generic(ChunkVec)), intrin<_mm512_cvtpd_ps>(data)));
                   complete(call<primitive=insert[ChunkVec, OutVec, index]>(call<primitive=set_zero[OutVec]>(), chunk));
                 """
-    [avx512, avx2, sse, neon, sve, generic, oneAPIfpga, scalar]:
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsl """
+              let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
+              let<type>(InBase, type<generation>(base::in));
+              let<type>(OutBase, type<generation>(base::generic(OutVec)));
+              var<const_infer>(in_lanes, (intrin<svcntb>() / sizeof(InBase)));
+              var<const_infer>(out_lanes, (intrin<svcntb>() / sizeof(OutBase)));
+              var<const_infer>(in_values, static_cast<InBase *>(std::malloc(in_lanes * sizeof(InBase))));
+              var<const_infer>(out_values, static_cast<OutBase *>(std::malloc(out_lanes * sizeof(OutBase))));
+
+              intrin<svst1, build>(call<primitive=mask_true[Vec]>(), in_values, data);
+
+              loop<backend>(i, 0, out_lanes, 1) {
+                out_values[i] = cast<static>(OutBase, 0);
+              }
+
+              var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * in_lanes);
+              loop<backend>(i, 0, in_lanes, 1) {
+                out_values[start + i] = cast<saturating>(OutBase, in_values[i]);
+              }
+
+              var<const_infer>(result, intrin<svld1, build[suffix=ToBase]>(call<primitive=mask_true[OutVec]>(), out_values));
+              std::free(in_values);
+              std::free(out_values);
+              complete(result);
+            """
+    [avx512, avx2, sse, neon, generic, oneAPIfpga, scalar]:
       arith:
         # Monomorphize the sized (generic) software body over `size_bits` (see convert_up) so the
         # width-changed output is a concrete `generic<N>`; fixed-width extensions ignore it.
@@ -2132,7 +2165,6 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
-          sve [sve]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
           scalar []

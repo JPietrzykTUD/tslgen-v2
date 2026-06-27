@@ -4020,3 +4020,67 @@ docs/agent/runs/tslc-arm-sve-convert-down-scalable-narrowing-prompt.md
 Next action: design and implement correct SVE1 `convert_down` scalable
 narrowing. Keep Rust SVE out of scope and do not use SVE2 narrowing under the
 current `requires [sve]` profile.
+
+### Latest Active TSLc Handoff: SVE Convert-Down Runtime-Buffer Checkpoint
+
+The SVE representation-change follow-up closed the emitted `convert_down`
+runtime-length gaps. Rust SVE remains unsupported and was not attempted.
+
+Implemented:
+
+1. Added an SVE-specific `convert_down` fallback in
+   `tsldata/primitives/conversion/repr_change.tsl`.
+2. Avoided SVE2-only `svqxtn*` narrowing under the current `requires [sve]`
+   profile. A local compile probe showed those ACLE intrinsics require SVE2 or
+   SME with the installed Zig/ACLE headers.
+3. Used an SVE1-valid runtime-buffer body: store the scalable source register
+   with `svst1`, saturating-cast lanes into a runtime output buffer, then load
+   the output window with `svld1` using the target base suffix.
+4. Removed SVE from the fixed-lane generic fallback that still depends on
+   `value<generation>(vector::length)`.
+5. Kept the fix source-owned in `tsldata`; no renderer, lane-model, helper
+   header, or `tslc/src` semantic changes were made.
+
+Validation:
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives convert_down --coverage --value-test-warnings --output-root ./tslctmp/sve-convert-down-coverage
+```
+
+Result: focused SVE `convert_down` coverage emitted `65/65` slots. The old
+`13` skips from unresolved `value<generation>(vector::length)` are gone.
+
+```bash
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives convert_down --output-root ./tslctmp/sve-convert-down-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: focused SVE C++ qemu generated `827` specializations and passed CTest.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: full SVE C++ coverage improved to `4182 emitted / 4469 attempted`;
+full SVE C++ qemu generated `4182` specializations and passed CTest.
+
+```bash
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall and diff-check passed. The fast gate remains at
+`1 failed, 263 passed, 82 deselected`, with only the known
+`test_primitive_corpus_safety_covers_direct_unsafe_facts` WIP failure.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-load-convert-up-runtime-length-prompt.md
+```
+
+Next action: close the remaining full-SVE `generic::length(OutVec)` skip in
+`load_convert_up<f32>`. Keep Rust SVE out of scope and preserve the
+profile-specific SVE test helper boundary: `tsl_test_core.hpp` should expose
+only generic adapter APIs, while SVE ACLE helpers stay in `tsl_test_sve.hpp`.
