@@ -3655,6 +3655,56 @@ Next action: continue SVE C++ coverage closure from the remaining
 `convert_up` / `convert_down` `generic::length(OutVec)` gaps. Keep Rust SVE
 out of scope.
 
+## Current Work State: SVE Convert-Up Runtime-Length Checkpoint
+
+The SVE representation-change follow-up closed the emitted `convert_up`
+runtime-length gaps. SVE C++ remains runtime-green for all currently emitted
+value tests, and Rust SVE remains unsupported and was not attempted.
+
+Implemented:
+
+- Replaced SVE `convert_up` fallback bodies that used
+  `generic::length(OutVec)` and array round-trips with direct scalable SVE
+  unpack bodies.
+- Used `svunpklo` / `svunpkhi` ACLE widening steps plus
+  `svreinterpret_<to>_<from>` where sizeless SVE register types need typed
+  reinterpretation.
+- Forwarded recursive `@self` window indexes as compile-time selector
+  arguments rather than runtime `sImm` operands.
+- Kept the fix entirely in `tsldata/primitives/conversion/repr_change.tsl`;
+  no renderer, lane-model, or `tslc/src` semantic changes were made.
+
+Validation:
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives convert_up,convert_down --coverage --value-test-warnings --output-root ./tslctmp/sve-repr-change-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives convert_up,convert_down --output-root ./tslctmp/sve-repr-change-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: focused SVE representation-change coverage emitted `936/1003` slots.
+`convert_up` now emits `135/135`; `convert_down` remains `52/65`, with `13`
+skipped slots due to unresolved `value<generation>(vector::length)`. Focused
+SVE C++ qemu generated `1166` specializations and passed CTest. Full SVE C++
+coverage improved to `4169 emitted / 4469 attempted`; full SVE C++ qemu
+generated `4169` specializations and passed CTest. Compileall and diff-check
+passed. The fast gate remains at `1 failed, 263 passed, 82 deselected`, with
+only the known safety-contract WIP failure.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-convert-down-scalable-narrowing-prompt.md
+```
+
+Next action: design and implement correct SVE1 `convert_down` scalable
+narrowing. Keep Rust SVE out of scope and do not use SVE2 narrowing under the
+current `requires [sve]` profile.
+
 ## Completed Full NEON C++/Rust Runtime Checkpoint
 
 The active ARM per-primitive goal completed the Phase 1 NEON runtime gate:

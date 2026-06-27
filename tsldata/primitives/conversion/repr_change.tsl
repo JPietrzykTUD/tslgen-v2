@@ -1308,71 +1308,129 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      complete(call<primitive=cast[Vec, ToBase]>(data));
-                    }
-                    1 => {
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        complete(intrin<svunpkhi_s16>(data));
+                        let<type>(StepBase, type<backend>(scalar::si16));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpklo_s16>(data)));
                       } else {
-                        let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
-                        let<type>(UVec, type<generation>(vector::as_base(UBase)));
-                        var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
-                        complete(intrin<svunpkhi_u16>(udata));
+                        let<type>(StepBase, type<backend>(scalar::ui16));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpklo_u16>(data)));
                       }
                     }
                     _ => {
-                      let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
-                      let<type>(To, type<generation>(base::generic(OutVec)));
-                      var<const_infer>(values, call<primitive=to_array[Vec]>(data));
-                      var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
-                      loop<backend>(i, 0, value<generation>(generic::length(OutVec)), 1) {
-                        result[i] = cast<static>(To, values[start + i]);
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        let<type>(StepBase, type<backend>(scalar::si16));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpkhi_s16>(data)));
+                      } else {
+                        let<type>(StepBase, type<backend>(scalar::ui16));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpkhi_u16>(data)));
                       }
-                      complete(call<primitive=from_array[OutVec]>(result));
                     }
                   }
                 """
           ?i32:
             safety:
-              internal_unsafe false
+              internal_unsafe true
               caller_unsafe false
-              reasons []
+              reasons [intrinsic]
             implementation:
               tsil """
-                  if<compile>(index == 0) {
-                    complete(call<primitive=cast[Vec, ToBase]>(data));
-                  } else {
-                    let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
-                    let<type>(To, type<generation>(base::generic(OutVec)));
-                    var<const_infer>(values, call<primitive=to_array[Vec]>(data));
-                    var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                    var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
-                    loop<backend>(i, 0, value<generation>(generic::length(OutVec)), 1) {
-                      result[i] = cast<static>(To, values[start + i]);
+                  if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::si16))));
+                    switch<compile>(index) {
+                      0 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpklo_s16>(data)));
+                      }
+                      1 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 1]>(intrin<svunpklo_s16>(data)));
+                      }
+                      2 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpkhi_s16>(data)));
+                      }
+                      _ => {
+                        complete(call<primitive=@self[StepVec, ToBase, 1]>(intrin<svunpkhi_s16>(data)));
+                      }
                     }
-                    complete(call<primitive=from_array[OutVec]>(result));
+                  } else {
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::ui16))));
+                    switch<compile>(index) {
+                      0 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpklo_u16>(data)));
+                      }
+                      1 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 1]>(intrin<svunpklo_u16>(data)));
+                      }
+                      2 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpkhi_u16>(data)));
+                      }
+                      _ => {
+                        complete(call<primitive=@self[StepVec, ToBase, 1]>(intrin<svunpkhi_u16>(data)));
+                      }
+                    }
                   }
                 """
           ?i64:
             safety:
-              internal_unsafe false
+              internal_unsafe true
               caller_unsafe false
-              reasons []
+              reasons [intrinsic]
             implementation:
               tsil """
-                  if<compile>(index == 0) {
-                    complete(call<primitive=cast[Vec, ToBase]>(data));
-                  } else {
-                    let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
-                    let<type>(To, type<generation>(base::generic(OutVec)));
-                    var<const_infer>(values, call<primitive=to_array[Vec]>(data));
-                    var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                    var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
-                    loop<backend>(i, 0, value<generation>(generic::length(OutVec)), 1) {
-                      result[i] = cast<static>(To, values[start + i]);
+                  if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::si16))));
+                    switch<compile>(index) {
+                      0 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpklo_s16>(data)));
+                      }
+                      1 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 1]>(intrin<svunpklo_s16>(data)));
+                      }
+                      2 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 2]>(intrin<svunpklo_s16>(data)));
+                      }
+                      3 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 3]>(intrin<svunpklo_s16>(data)));
+                      }
+                      4 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpkhi_s16>(data)));
+                      }
+                      5 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 1]>(intrin<svunpkhi_s16>(data)));
+                      }
+                      6 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 2]>(intrin<svunpkhi_s16>(data)));
+                      }
+                      _ => {
+                        complete(call<primitive=@self[StepVec, ToBase, 3]>(intrin<svunpkhi_s16>(data)));
+                      }
                     }
-                    complete(call<primitive=from_array[OutVec]>(result));
+                  } else {
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::ui16))));
+                    switch<compile>(index) {
+                      0 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpklo_u16>(data)));
+                      }
+                      1 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 1]>(intrin<svunpklo_u16>(data)));
+                      }
+                      2 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 2]>(intrin<svunpklo_u16>(data)));
+                      }
+                      3 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 3]>(intrin<svunpklo_u16>(data)));
+                      }
+                      4 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpkhi_u16>(data)));
+                      }
+                      5 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 1]>(intrin<svunpkhi_u16>(data)));
+                      }
+                      6 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 2]>(intrin<svunpkhi_u16>(data)));
+                      }
+                      _ => {
+                        complete(call<primitive=@self[StepVec, ToBase, 3]>(intrin<svunpkhi_u16>(data)));
+                      }
+                    }
                   }
                 """
       ?i16:
@@ -1387,50 +1445,73 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      complete(call<primitive=cast[Vec, ToBase]>(data));
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        let<type>(StepBase, type<backend>(scalar::si32));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpklo_s32>(data)));
+                      } else {
+                        let<type>(StepBase, type<backend>(scalar::ui32));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpklo_u32>(data)));
+                      }
                     }
                     1 => {
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        complete(intrin<svunpkhi_s32>(data));
+                        let<type>(StepBase, type<backend>(scalar::si32));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpkhi_s32>(data)));
                       } else {
-                        let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
-                        let<type>(UVec, type<generation>(vector::as_base(UBase)));
-                        var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
-                        complete(intrin<svunpkhi_u32>(udata));
+                        let<type>(StepBase, type<backend>(scalar::ui32));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpkhi_u32>(data)));
                       }
                     }
                     _ => {
-                      let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
-                      let<type>(To, type<generation>(base::generic(OutVec)));
-                      var<const_infer>(values, call<primitive=to_array[Vec]>(data));
-                      var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
-                      loop<backend>(i, 0, value<generation>(generic::length(OutVec)), 1) {
-                        result[i] = cast<static>(To, values[start + i]);
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        let<type>(StepBase, type<backend>(scalar::si32));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpkhi_s32>(data)));
+                      } else {
+                        let<type>(StepBase, type<backend>(scalar::ui32));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpkhi_u32>(data)));
                       }
-                      complete(call<primitive=from_array[OutVec]>(result));
                     }
                   }
                 """
           ?i64:
             safety:
-              internal_unsafe false
+              internal_unsafe true
               caller_unsafe false
-              reasons []
+              reasons [intrinsic]
             implementation:
               tsil """
-                  if<compile>(index == 0) {
-                    complete(call<primitive=cast[Vec, ToBase]>(data));
-                  } else {
-                    let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
-                    let<type>(To, type<generation>(base::generic(OutVec)));
-                    var<const_infer>(values, call<primitive=to_array[Vec]>(data));
-                    var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                    var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
-                    loop<backend>(i, 0, value<generation>(generic::length(OutVec)), 1) {
-                      result[i] = cast<static>(To, values[start + i]);
+                  if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::si32))));
+                    switch<compile>(index) {
+                      0 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpklo_s32>(data)));
+                      }
+                      1 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 1]>(intrin<svunpklo_s32>(data)));
+                      }
+                      2 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpkhi_s32>(data)));
+                      }
+                      _ => {
+                        complete(call<primitive=@self[StepVec, ToBase, 1]>(intrin<svunpkhi_s32>(data)));
+                      }
                     }
-                    complete(call<primitive=from_array[OutVec]>(result));
+                  } else {
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::ui32))));
+                    switch<compile>(index) {
+                      0 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpklo_u32>(data)));
+                      }
+                      1 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 1]>(intrin<svunpklo_u32>(data)));
+                      }
+                      2 => {
+                        complete(call<primitive=@self[StepVec, ToBase, 0]>(intrin<svunpkhi_u32>(data)));
+                      }
+                      _ => {
+                        complete(call<primitive=@self[StepVec, ToBase, 1]>(intrin<svunpkhi_u32>(data)));
+                      }
+                    }
                   }
                 """
       ?i32:
@@ -1445,28 +1526,31 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               tsil """
                   switch<compile>(index) {
                     0 => {
-                      complete(call<primitive=cast[Vec, ToBase]>(data));
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        let<type>(StepBase, type<backend>(scalar::si64));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpklo_s64>(data)));
+                      } else {
+                        let<type>(StepBase, type<backend>(scalar::ui64));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpklo_u64>(data)));
+                      }
                     }
                     1 => {
                       if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                        complete(intrin<svunpkhi_s64>(data));
+                        let<type>(StepBase, type<backend>(scalar::si64));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpkhi_s64>(data)));
                       } else {
-                        let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
-                        let<type>(UVec, type<generation>(vector::as_base(UBase)));
-                        var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
-                        complete(intrin<svunpkhi_u64>(udata));
+                        let<type>(StepBase, type<backend>(scalar::ui64));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpkhi_u64>(data)));
                       }
                     }
                     _ => {
-                      let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
-                      let<type>(To, type<generation>(base::generic(OutVec)));
-                      var<const_infer>(values, call<primitive=to_array[Vec]>(data));
-                      var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                      var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
-                      loop<backend>(i, 0, value<generation>(generic::length(OutVec)), 1) {
-                        result[i] = cast<static>(To, values[start + i]);
+                      if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+                        let<type>(StepBase, type<backend>(scalar::si64));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpkhi_s64>(data)));
+                      } else {
+                        let<type>(StepBase, type<backend>(scalar::ui64));
+                        complete(intrin<svreinterpret, build[infix=ToBase, infix_sep="_", suffix=StepBase]>(intrin<svunpkhi_u64>(data)));
                       }
-                      complete(call<primitive=from_array[OutVec]>(result));
                     }
                   }
                 """
@@ -1475,23 +1559,25 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         ToBase:
           f64:
             safety:
-              internal_unsafe false
+              internal_unsafe true
               caller_unsafe false
-              reasons []
+              reasons [intrinsic]
             implementation:
               tsil """
-                  if<compile>(index == 0) {
-                    complete(call<primitive=cast[Vec, ToBase]>(data));
-                  } else {
-                    let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
-                    let<type>(To, type<generation>(base::generic(OutVec)));
-                    var<const_infer>(values, call<primitive=to_array[Vec]>(data));
-                    var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                    var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
-                    loop<backend>(i, 0, value<generation>(generic::length(OutVec)), 1) {
-                      result[i] = cast<static>(To, values[start + i]);
+                  switch<compile>(index) {
+                    0 => {
+                      complete(call<primitive=cast[Vec, ToBase]>(data));
                     }
-                    complete(call<primitive=from_array[OutVec]>(result));
+                    _ => {
+                      let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
+                      let<type>(OutBase, type<generation>(base::generic(OutVec)));
+                      auto out_lanes = (intrin<svcntb>() / sizeof(OutBase));
+                      svbool_t pg32 = intrin<svptrue_b32>();
+                      svuint32_t indexes = intrin<svindex_u32>(0, 1);
+                      svbool_t high = intrin<svcmpge_n_u32>(pg32, indexes, cast<static>(type<backend>(scalar::ui32), out_lanes));
+                      auto packed = intrin<svcompact, build[suffix=base::in]>(high, data);
+                      complete(call<primitive=cast[Vec, ToBase]>(packed));
+                    }
                   }
                 """
       ?i32:
@@ -1499,23 +1585,25 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         ToBase:
           f64:
             safety:
-              internal_unsafe false
+              internal_unsafe true
               caller_unsafe false
-              reasons []
+              reasons [intrinsic]
             implementation:
               tsil """
-                  if<compile>(index == 0) {
-                    complete(call<primitive=cast[Vec, ToBase]>(data));
-                  } else {
-                    let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
-                    let<type>(To, type<generation>(base::generic(OutVec)));
-                    var<const_infer>(values, call<primitive=to_array[Vec]>(data));
-                    var<infer>(result, call<primitive=to_array[OutVec]>(call<primitive=set_zero[OutVec]>()));
-                    var<const_infer>(start, cast<static>(type<backend>(scalar::size), index) * value<generation>(generic::length(OutVec)));
-                    loop<backend>(i, 0, value<generation>(generic::length(OutVec)), 1) {
-                      result[i] = cast<static>(To, values[start + i]);
+                  switch<compile>(index) {
+                    0 => {
+                      complete(call<primitive=cast[Vec, ToBase]>(data));
                     }
-                    complete(call<primitive=from_array[OutVec]>(result));
+                    _ => {
+                      let<type>(OutVec, type<generation>(vector::window_base(ToBase)));
+                      let<type>(OutBase, type<generation>(base::generic(OutVec)));
+                      auto out_lanes = (intrin<svcntb>() / sizeof(OutBase));
+                      svbool_t pg32 = intrin<svptrue_b32>();
+                      svuint32_t indexes = intrin<svindex_u32>(0, 1);
+                      svbool_t high = intrin<svcmpge_n_u32>(pg32, indexes, cast<static>(type<backend>(scalar::ui32), out_lanes));
+                      auto packed = intrin<svcompact, build[suffix=base::in]>(high, data);
+                      complete(call<primitive=cast[Vec, ToBase]>(packed));
+                    }
                   }
                 """
     [avx512, avx2, sse, neon, generic, oneAPIfpga, scalar]:
