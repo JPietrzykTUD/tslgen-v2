@@ -1302,7 +1302,9 @@ prim<v:=v>[cast=convert] cast(data):
                   svuint32_t idx = intrin<svindex_u32>(0, 1);
                   svbool_t even = intrin<svcmpeq_n_u32>(pg32, intrin<svand_n_u32_x>(pg32, idx, 1), 0);
                   auto packed = intrin<svcompact, build[suffix=ToBase]>(even, tmp);
-                  auto out_lanes = value<generation>(generic::runtime_length(ToType));
+                  let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
+                  let<type>(OutBase, type<generation>(base::generic(OutVec)));
+                  auto out_lanes = (intrin<svcntb>() / sizeof(OutBase));
                   svbool_t out_pg = intrin<svwhilelt_b32>(cast<static>( type<backend>(scalar::size) , 0), out_lanes);
                    complete(intrin<svsel>(out_pg, packed, intrin<svdup, build[suffix=ToBase]>(0))) ;
                 """
@@ -1376,7 +1378,9 @@ prim<v:=v>[cast=convert] cast(data):
                   svuint32_t idx = intrin<svindex_u32>(0, 1);
                   svbool_t even = intrin<svcmpeq_n_u32>(pg32, intrin<svand_n_u32_x>(pg32, idx, 1), 0);
                   auto packed = intrin<svcompact, build[suffix=ToBase]>(even, tmp);
-                  auto out_lanes = value<generation>(generic::runtime_length(ToType));
+                  let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
+                  let<type>(OutBase, type<generation>(base::generic(OutVec)));
+                  auto out_lanes = (intrin<svcntb>() / sizeof(OutBase));
                   svbool_t out_pg = intrin<svwhilelt_b32>(cast<static>( type<backend>(scalar::size) , 0), out_lanes);
                   complete(intrin<svsel>(out_pg, packed, intrin<svdup, build[suffix=ToBase]>(0))) ;
                 """

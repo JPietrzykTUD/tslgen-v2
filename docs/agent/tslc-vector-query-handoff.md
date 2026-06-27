@@ -3839,6 +3839,66 @@ docs/agent/runs/tslc-arm-sve-conversion-extract-gap-prompt.md
 Next action: continue SVE C++ coverage closure from the conversion/extract
 runtime-length gaps. Keep Rust SVE out of scope.
 
+### Latest Active TSLc Handoff: SVE Cast Runtime-Length Coverage Checkpoint
+
+The SVE conversion/extract coverage follow-up made a focused `cast`
+checkpoint and kept the full SVE C++ runtime gate green. Rust SVE remains
+unsupported and was not attempted.
+
+Implemented:
+
+1. Replaced the two remaining SVE `cast` bodies that used
+   `value<generation>(generic::runtime_length(ToType))`.
+2. The bodies now derive `OutVec` / `OutBase` through existing typed
+   `let<type>` queries and use the runtime scalable lane count expression
+   `svcntb() / sizeof(OutBase)`.
+3. Kept the fix entirely in `tsldata/primitives/conversion/cast.tsl`; no
+   renderer, lane-model, or compiler semantic changes were made.
+
+Validation:
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives cast --coverage --value-test-warnings --output-root ./tslctmp/sve-cast-coverage
+```
+
+Result: focused SVE `cast` coverage improved from `213/241` to `217/241`; the
+`generic::runtime_length(ToType)` skip reason is gone.
+
+```bash
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives cast --output-root ./tslctmp/sve-cast-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: generated `979` specializations; C++ CTest passed.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: full SVE coverage improved from `4138 emitted / 4469 attempted` to
+`4142 emitted / 4469 attempted`; full SVE C++ qemu generated `4142`
+specializations and passed CTest.
+
+```bash
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall and diff-check passed. The fast gate remains at
+`1 failed, 263 passed, 82 deselected`, with only the known
+`test_primitive_corpus_safety_covers_direct_unsafe_facts` WIP failure.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-repr-change-runtime-length-gap-prompt.md
+```
+
+Next action: continue SVE C++ coverage closure from the remaining
+`convert_up` / `convert_down` `generic::length(OutVec)` gaps. Keep Rust SVE
+out of scope.
+
 ### Latest Active TSLc Handoff: SVE Shift Selector Cleanup
 
 The SVE shift coverage cleanup removed the remaining old intrinsic selector
