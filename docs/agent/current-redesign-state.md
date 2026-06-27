@@ -3401,3 +3401,44 @@ Next prompt:
 ```text
 docs/agent/runs/tslc-arm-neon-next-primitive-coverage-prompt.md
 ```
+
+## Completed NEON Shift Value-Test Checkpoint
+
+The active ARM per-primitive goal made a NEON C++/Rust checkpoint for
+`shift_left` and `shift_right`.
+
+Implemented:
+
+- Migrated NEON shift source bodies from old intrinsic selector templates such
+  as `intrin<vshlq_{{ ?i? }}>` to the unified
+  `intrin<name, build[suffix=...]>` syntax.
+- Replaced NEON immediate right-shift `_n` intrinsics with the vector-shift
+  formulation using a negative signed shift vector. This keeps shift `0`
+  valid for generated smoke wrappers because `vshrq_n_*` rejects zero
+  immediates.
+- Rewrote signed shift negation as signed subtraction from zero so generated
+  Rust casts before negating unsigned shift values.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --primitives shift_left,shift_right --coverage --value-test-warnings --output-root ./tslctmp/neon-shift-coverage-final
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --primitives shift_left,shift_right --output-root ./tslctmp/neon-shift-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl --rust-target aarch64-unknown-linux-musl --rust-linker /workspaces/tslgen-v99/tslctmp/zig-aarch64-linux-musl-cc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall passed; focused shift coverage shows `shift_left 240/240`
+and `shift_right 180/180` emitted, with only Rust/SVE dependency slots skipped;
+the full NEON C++/Rust qemu checkpoint generated `2076` specializations, C++
+CTest passed, Rust value tests passed with `258 passed`, and
+`build/test-verified 12 commands`; diff whitespace was clean. The fast gate
+remains at the improved baseline: `1 failed, 263 passed, 82 deselected`, with
+only the known safety-contract WIP failure remaining.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-neon-after-shift-coverage-prompt.md
+```
