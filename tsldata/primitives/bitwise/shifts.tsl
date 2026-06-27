@@ -195,20 +195,19 @@ prim<v:=(v,sImm)> shift_left(data, shift):
       f?:
         requires [sve]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
-              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              complete(
-                call<primitive=from_array[Vec]>(
-                  call<primitive=@self[GenericVec, shift]>(
-                    generic_data
-                  )
-                )
-              );
+              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+              var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+              var<const_infer>(ures, intrin<svlsl_n, build[suffix=UBase, post=x]>(
+                pg, udata, cast<static>(UBase, shift)
+              ));
+              complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
   brief_description "[Example: avx512 + si16]: Shift packed 16-bit integers in \"a\" left by \"imm8\" while shifting in zeros, and store the results in \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
@@ -527,21 +526,19 @@ prim<v:=(v,s)> shift_left(data, shift):
       f?:
         requires [sve]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
-              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              complete(
-                call<primitive=from_array[Vec]>(
-                  call<primitive=@self[GenericVec]>(
-                    generic_data,
-                    shift
-                  )
-                )
-              );
+              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+              var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+              var<const_infer>(ures, intrin<svlsl_n, build[suffix=UBase, post=x]>(
+                pg, udata, cast<static>(UBase, shift)
+              ));
+              complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(v,v)> shift_left(data, shift):
   brief_description "[Example: avx2 + si16]: Shift packed 16-bit integers in \"a\" left by the amount specified by the corresponding element in \"count\" while shifting in zeros, and store the results in \"dst\"."
@@ -726,22 +723,18 @@ prim<v:=(v,v)> shift_left(data, shift):
       f?:
         requires [sve]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
-              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
-              complete(
-                call<primitive=from_array[Vec]>(
-                  call<primitive=@self[GenericVec]>(
-                    generic_data,
-                    generic_shift
-                  )
-                )
-              );
+              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+              var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+              var<const_infer>(shift_u, call<primitive=reinterpret[Vec, UVec]>(shift));
+              var<const_infer>(ures, intrin<svlsl, build[suffix=UBase, post=x]>(pg, udata, shift_u));
+              complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(v,sImm)> shift_right(data, shift):
   brief_description "[Example: avx512 + ui16]: Shift packed 16-bit integers in \"a\" right by \"imm8\" while shifting in zeros, and store the results in \"dst\"."
@@ -1136,20 +1129,29 @@ prim<v:=(v,sImm)> shift_right(data, shift):
       f?:
         requires [sve]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
-              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              complete(
-                call<primitive=from_array[Vec]>(
-                  call<primitive=@self[GenericVec, shift, PreserveSign]>(
-                    generic_data
-                  )
-                )
-              );
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              if<compile>(!PreserveSign) {
+                let<type>(UVec, type<generation>(vector::as_base(UBase)));
+                var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+                var<const_infer>(ures, intrin<svlsr_n, build[suffix=UBase, post=x]>(
+                  pg, udata, cast<static>(UBase, shift)
+                ));
+                complete(call<primitive=reinterpret[UVec, Vec]>(ures));
+              } else<compile> {
+                let<type>(SBase, type<generation>(base::signed_of(type<generation>(base::in))));
+                let<type>(SVec, type<generation>(vector::as_base(SBase)));
+                var<const_infer>(sdata, call<primitive=reinterpret[Vec, SVec]>(data));
+                var<const_infer>(sres, intrin<svasr_n, build[suffix=SBase, post=x]>(
+                  pg, sdata, cast<static>(UBase, shift)
+                ));
+                complete(call<primitive=reinterpret[SVec, Vec]>(sres));
+              }
             """
 prim<v:=(v,s)> shift_right(data, shift):
   brief_description "[Example: avx512 + si16]: Shift packed 16-bit integers in \"a\" right by a scalar shift count while shifting in sign or zeros depending on type, and store the results in \"dst\"."
@@ -1652,21 +1654,18 @@ prim<v:=(v,s)> shift_right(data, shift):
       f?:
         requires [sve]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
-              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              complete(
-                call<primitive=from_array[Vec]>(
-                  call<primitive=@self[GenericVec, PreserveSign]>(
-                    generic_data,
-                    shift
-                  )
-                )
-              );
+              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+              var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+              var<const_infer>(sh, intrin<svdup_n, build[suffix=UBase]>(cast<static>(UBase, shift)));
+              var<const_infer>(ures, intrin<svlsr, build[suffix=UBase, post=x]>(pg, udata, sh));
+              complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(v,v)> shift_right(data, shift):
   brief_description "[Example: avx2 + ui32]: Shift packed 32-bit integers in \"a\" right by the amount specified by the corresponding element in \"count\" while shifting in zeros, and store the results in \"dst\"."
@@ -1945,20 +1944,16 @@ prim<v:=(v,v)> shift_right(data, shift):
       f?:
         requires [sve]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
-              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
-              complete(
-                call<primitive=from_array[Vec]>(
-                  call<primitive=@self[GenericVec, PreserveSign]>(
-                    generic_data,
-                    generic_shift
-                  )
-                )
-              );
+              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+              var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+              var<const_infer>(shift_u, call<primitive=reinterpret[Vec, UVec]>(shift));
+              var<const_infer>(ures, intrin<svlsr, build[suffix=UBase, post=x]>(pg, udata, shift_u));
+              complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """

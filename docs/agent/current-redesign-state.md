@@ -4252,3 +4252,55 @@ Next prompt:
 ```text
 docs/agent/runs/tslc-arm-sve-float-shift-dependencies-prompt.md
 ```
+
+## Completed SVE Float Shift Dependency Checkpoint
+
+The active ARM per-primitive goal closed the SVE C++ float `shift_left` and
+`shift_right` dependency prunes. Rust SVE remains unsupported and was not
+attempted.
+
+Implemented:
+
+- Replaced the SVE `f32`/`f64` `shift_left` immediate, scalar-count, and
+  vector-count bodies with direct SVE bitwise shifts over same-width unsigned
+  vectors, then reinterpreted the result back to the float vector type.
+- Replaced the SVE `f32`/`f64` `shift_right` scalar-count and vector-count
+  bodies with direct logical SVE shifts over same-width unsigned vectors.
+- Replaced the SVE `f32`/`f64` `shift_right` immediate body with direct
+  logical or arithmetic SVE shifts according to the existing `PreserveSign`
+  generic parameter.
+- Let the masked immediate `shift_left` forms emit through their existing typed
+  composition once the unmasked immediate float forms were generated.
+
+Validation:
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives shift_left,shift_right --coverage --value-test-warnings --output-root ./tslctmp/sve-float-shift-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives shift_left,shift_right --output-root ./tslctmp/sve-float-shift-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: focused SVE shift coverage improved from `764 emitted / 798 attempted`
+to `778 emitted / 798 attempted`; `shift_left` now reports `120/120` and
+`shift_right` now reports `90/90`. Focused SVE C++ qemu generated `1008`
+specializations and passed CTest. Full SVE C++ coverage now reports
+`4445 emitted / 4505 attempted`, and the full SVE C++ qemu gate generated
+`4445` specializations and passed CTest.
+
+Compileall and `git diff --check` passed. The fast gate remains at the known
+baseline: `1 failed, 263 passed, 82 deselected`, with only the known
+`test_primitive_corpus_safety_covers_direct_unsafe_facts` WIP failure.
+
+The remaining full SVE C++ skips are dependency prunes (`mod`, `mod_imm`, and
+`to_ostream`) plus the known unsupported signature families for `from_array`,
+`to_array`, and `set`.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-low-width-modulo-prompt.md
+```

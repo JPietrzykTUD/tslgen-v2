@@ -4338,7 +4338,6 @@ Next action: close the SVE C++ `expand_load`, `gather`, and `scatter`
 the work source-owned unless a tiny typed support boundary is genuinely
 required.
 
-
 ### Latest Active TSLc Handoff: SVE Random-Access Runtime-Length Checkpoint
 
 The SVE random-access follow-up closed the direct `expand_load`, `gather`,
@@ -4403,3 +4402,73 @@ docs/agent/runs/tslc-arm-sve-sequence-float-runtime-length-prompt.md
 Next action: close the SVE C++ `sequence`, `custom_sequence`, and `hand`
 floating-point runtime-length gaps. Keep Rust SVE out of scope and keep the
 work source-owned unless a tiny typed support boundary is genuinely required.
+
+### Latest Active TSLc Handoff: SVE Float Shift Dependency Checkpoint
+
+The active ARM per-primitive goal closed the SVE C++ float `shift_left` and
+`shift_right` dependency prunes. Rust SVE remains unsupported and was not
+attempted.
+
+Implemented:
+
+1. Replaced the SVE `f32`/`f64` `shift_left` immediate, scalar-count, and
+   vector-count generic array fallbacks with direct SVE bitwise shifts over
+   same-width unsigned vectors, followed by reinterpret back to `Vec`.
+2. Replaced the SVE `f32`/`f64` `shift_right` scalar-count and vector-count
+   generic array fallbacks with direct logical SVE shifts over same-width
+   unsigned vectors.
+3. Replaced the SVE `f32`/`f64` `shift_right` immediate fallback with direct
+   logical or arithmetic SVE shifts according to the existing `PreserveSign`
+   generic parameter.
+4. Let masked immediate `shift_left` forms emit through their existing typed
+   composition once the unmasked immediate float forms were generated.
+5. Kept the fix source-owned in `tsldata/primitives/bitwise/shifts.tsl`; no
+   renderer, lane-model, value-test planner, or `tslc/src` semantic changes
+   were made.
+
+Validation:
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives shift_left,shift_right --coverage --value-test-warnings --output-root ./tslctmp/sve-float-shift-coverage
+```
+
+Result: focused SVE coverage now reports `shift_left 120/120` and
+`shift_right 90/90`.
+
+```bash
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives shift_left,shift_right --output-root ./tslctmp/sve-float-shift-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: focused SVE C++ qemu generated `1008` specializations and passed CTest.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: full SVE C++ coverage improved to `4445 emitted / 4505 attempted`;
+full SVE C++ qemu generated `4445` specializations and passed CTest.
+
+```bash
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall and diff-check passed. The fast gate remains at
+`1 failed, 263 passed, 82 deselected`, with only the known
+`test_primitive_corpus_safety_covers_direct_unsafe_facts` WIP failure.
+
+The remaining full SVE C++ skips are dependency prunes for `mod`, `mod_imm`,
+and `to_ostream`, plus the known unsupported scalable signatures for
+`from_array`, `to_array`, and `set`.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-low-width-modulo-prompt.md
+```
+
+Next action: close the SVE C++ low-width `mod` callees (`si8`, `si16`, `ui8`,
+`ui16`) so dependent `mod_imm` forms can emit. Keep Rust SVE out of scope and
+do not add invalid direct SVE intrinsic spellings.
