@@ -109,37 +109,35 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
       ?i?:
         requires [sve]
         ToBase:
-          "==":
-            safety:
-              internal_unsafe false
-              caller_unsafe false
-              reasons []
-            implementation:
-              tsil "complete(data);"
-          "*":
+          arith:
             safety:
               internal_unsafe true
               caller_unsafe false
               reasons [intrinsic]
             implementation:
-              tsil "complete(intrin<svreinterpret, build[infix=to_type_suffix, suffix=base::in]>(data));"
+              tsil """
+                  if<generation>(type::is_same(type<generation>(base::in), ToBase)) {
+                    complete(data);
+                  } else {
+                    complete(intrin<svreinterpret_, build[infix=to_type_suffix, suffix=base::in]>(data));
+                  }
+                """
       f?:
         requires [sve]
         ToBase:
-          "==":
-            safety:
-              internal_unsafe false
-              caller_unsafe false
-              reasons []
-            implementation:
-              tsil "complete(data);"
-          "*":
+          arith:
             safety:
               internal_unsafe true
               caller_unsafe false
               reasons [intrinsic]
             implementation:
-              tsil "complete(intrin<svreinterpret, build[infix=to_type_suffix, suffix=base::in]>(data));"
+              tsil """
+                  if<generation>(type::is_same(type<generation>(base::in), ToBase)) {
+                    complete(data);
+                  } else {
+                    complete(intrin<svreinterpret_, build[infix=to_type_suffix, suffix=base::in]>(data));
+                  }
+                """
     [generic, oneAPIfpga, scalar]:
       arith:
         requires:
@@ -1167,12 +1165,14 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                    complete(intrin<svunpklo_s16>(data));
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::si16))));
+                    complete(call<primitive=reinterpret[StepVec, ToBase]>(intrin<svunpklo_s16>(data)));
                   } else {
                     let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
                     let<type>(UVec, type<generation>(vector::as_base(UBase)));
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::ui16))));
                     var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
-                    complete(intrin<svunpklo_u16>(udata));
+                    complete(call<primitive=reinterpret[StepVec, ToBase]>(intrin<svunpklo_u16>(udata)));
                   }
                 """
           ?i32:
@@ -1222,12 +1222,14 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                    complete(intrin<svunpklo_s32>(data));
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::si32))));
+                    complete(call<primitive=reinterpret[StepVec, ToBase]>(intrin<svunpklo_s32>(data)));
                   } else {
                     let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
                     let<type>(UVec, type<generation>(vector::as_base(UBase)));
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::ui32))));
                     var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
-                    complete(intrin<svunpklo_u32>(udata));
+                    complete(call<primitive=reinterpret[StepVec, ToBase]>(intrin<svunpklo_u32>(udata)));
                   }
                 """
           ?i64:
@@ -1333,12 +1335,14 @@ prim<v:=v>[cast=convert] cast(data):
             implementation:
               tsil """
                   if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                    complete(intrin<svunpklo_s64>(data));
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::si64))));
+                    complete(call<primitive=reinterpret[StepVec, ToBase]>(intrin<svunpklo_s64>(data)));
                   } else {
                     let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
                     let<type>(UVec, type<generation>(vector::as_base(UBase)));
+                    let<type>(StepVec, type<generation>(vector::as_base(type<backend>(scalar::ui64))));
                     var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
-                    complete(intrin<svunpklo_u64>(udata));
+                    complete(call<primitive=reinterpret[StepVec, ToBase]>(intrin<svunpklo_u64>(udata)));
                   }
                 """
           f32:

@@ -3497,14 +3497,81 @@ Next prompt:
 docs/agent/runs/tslc-arm-neon-between-and-full-qemu-prompt.md
 ```
 
-## Current Active Pointer
+## Active TSLc Pointer
 
-The current active `tslc` work is the SVE C++ conversion/extract coverage-gap
-follow-up. The full SVE C++ qemu runtime gate is green for currently emitted
-tests (`4138` specializations, CTest passed), and the next prompt is:
+Latest active checkpoint: SVE `cast` / `reinterpret` closure. Focused SVE
+`cast` coverage emits `241/241`; full SVE C++ coverage is now
+`4337 emitted / 4495 attempted`; full SVE C++ qemu generated `4337`
+specializations and passed CTest. The fast gate remains at
+`1 failed, 263 passed, 82 deselected`, with only the known safety-contract WIP
+failure.
+
+Active next prompt:
 
 ```text
-docs/agent/runs/tslc-arm-sve-conversion-extract-gap-prompt.md
+docs/agent/runs/tslc-arm-sve-compress-runtime-length-prompt.md
+```
+
+Next action: target the remaining SVE C++ `compress` / `compress_store`
+runtime-length skips. Keep Rust SVE out of scope.
+
+## Current Work State: SVE Cast/Reinterpret Checkpoint
+
+The active ARM per-primitive goal closed the remaining SVE C++ `cast`
+coverage gap. Rust SVE remains unsupported and was not attempted.
+
+Implemented:
+
+- Changed the SVE `reinterpret` target selectors in
+  `tsldata/primitives/conversion/cast.tsl` from marker-only `"=="` / `"*"`
+  buckets to concrete arithmetic target groups, with a generation-time
+  identity branch for `base::in == ToBase`.
+- Fixed the SVE ACLE reinterpret spelling to use the `svreinterpret_...`
+  intrinsic family.
+- Wrapped SVE integer widening temporaries through `reinterpret[StepVec,
+  ToBase]` so signed/unsigned target variants return the selected target
+  register type instead of relying on a hidden same-signed result.
+- Kept the fix source-owned in `tsldata`; no renderer, lane-model, helper
+  header, or `tslc/src` semantic changes were made.
+
+Validation:
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives cast --coverage --value-test-warnings --output-root ./tslctmp/sve-cast-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives cast --output-root ./tslctmp/sve-cast-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: focused SVE `cast` coverage now emits `241/241` slots; focused SVE
+C++ qemu generated `1039` specializations and passed CTest. Full SVE C++
+coverage improved to `4337 emitted / 4495 attempted`; full SVE C++ qemu
+generated `4337` specializations and passed CTest. Compileall and diff-check
+passed. The fast gate remains at `1 failed, 263 passed, 82 deselected`, with
+only the known safety-contract WIP failure.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-compress-runtime-length-prompt.md
+```
+
+Next action: target the remaining SVE C++ `compress` / `compress_store`
+runtime-length skips. Keep Rust SVE out of scope and preserve the finalized
+value-test renderer architecture.
+
+## Current Active Pointer
+
+The current active `tslc` work is the SVE C++ runtime-length coverage
+follow-up for `compress` / `compress_store`. The full SVE C++ qemu runtime
+gate is green for currently emitted tests (`4337` specializations, CTest
+passed), and the next prompt is:
+
+```text
+docs/agent/runs/tslc-arm-sve-compress-runtime-length-prompt.md
 ```
 
 The fast gate baseline remains `1 failed, 263 passed, 82 deselected`, with only
