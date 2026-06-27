@@ -4337,3 +4337,69 @@ Next action: close the SVE C++ `expand_load`, `gather`, and `scatter`
 `value<generation>(vector::length)` gaps. Keep Rust SVE out of scope and keep
 the work source-owned unless a tiny typed support boundary is genuinely
 required.
+
+
+### Latest Active TSLc Handoff: SVE Random-Access Runtime-Length Checkpoint
+
+The SVE random-access follow-up closed the direct `expand_load`, `gather`,
+`scatter`, and dependent `extract_value` runtime-length gaps. Rust SVE remains
+unsupported and was not attempted.
+
+Implemented:
+
+1. Added SVE-specific runtime-buffer bodies for unmasked `gather` and
+   `scatter` in `tsldata/primitives/load_store/rnd_access.tsl`.
+2. Added an SVE-specific runtime-buffer body for `expand_load` in
+   `tsldata/primitives/load_store/pack_expand.tsl`. The lane-probe vector uses
+   an unsigned integer same-width `IndexVec`, avoiding invalid floating-point
+   `svindex` forms.
+3. Replaced SVE `extract_value`'s `to_array[Vec]` dependency with a local
+   runtime-buffer store/read/free body in `tsldata/primitives/load_store/array.tsl`.
+4. Kept the fixes source-owned in `tsldata`; no renderer, lane-model, helper
+   header, or `tslc/src` semantic changes were made.
+
+Validation:
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives expand_load,gather,scatter,extract_value --coverage --value-test-warnings --output-root ./tslctmp/sve-random-access-coverage
+```
+
+Result: focused SVE coverage now reports `expand_load 30/30`,
+`gather 30/30`, `scatter 28/28`, and `extract_value 30/30`.
+
+```bash
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives expand_load,gather,scatter,extract_value --output-root ./tslctmp/sve-random-access-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: focused SVE C++ qemu generated `916` specializations and passed CTest.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: full SVE C++ coverage improved to `4401 emitted / 4495 attempted`;
+full SVE C++ qemu generated `4401` specializations and passed CTest.
+
+```bash
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall and diff-check passed. The fast gate remains at
+`1 failed, 263 passed, 82 deselected`, with only the known
+`test_primitive_corpus_safety_covers_direct_unsafe_facts` WIP failure.
+
+Remaining direct `value<generation>(vector::length)` SVE skips are:
+`sequence`, `custom_sequence`, and unmasked `hand`, each for `f32`/`f64`.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-sequence-float-runtime-length-prompt.md
+```
+
+Next action: close the SVE C++ `sequence`, `custom_sequence`, and `hand`
+floating-point runtime-length gaps. Keep Rust SVE out of scope and keep the
+work source-owned unless a tiny typed support boundary is genuinely required.

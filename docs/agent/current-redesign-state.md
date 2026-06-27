@@ -3497,6 +3497,54 @@ Next prompt:
 docs/agent/runs/tslc-arm-neon-between-and-full-qemu-prompt.md
 ```
 
+## Current Work State: SVE Random-Access Runtime-Length Checkpoint
+
+The active ARM per-primitive goal is in Phase 2: SVE C++ coverage only. Rust
+SVE remains unsupported and must not be attempted.
+
+The latest slice closed the SVE random-access runtime-length cluster:
+
+- `expand_load` now has an SVE runtime-buffer body using runtime lane count and
+  an unsigned same-width index vector for lane predicates;
+- unmasked `gather` and `scatter` now have SVE runtime-buffer bodies that spill
+  the free `IndicesType` register through `typename IndicesType::base_type`;
+- SVE `extract_value` no longer depends on `to_array[Vec]` and reads through a
+  local runtime buffer;
+- no `tslc/src` compiler or renderer changes were made.
+
+Validation:
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives expand_load,gather,scatter,extract_value --coverage --value-test-warnings --output-root ./tslctmp/sve-random-access-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives expand_load,gather,scatter,extract_value --output-root ./tslctmp/sve-random-access-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: focused coverage reports `expand_load 30/30`, `gather 30/30`,
+`scatter 28/28`, and `extract_value 30/30`; focused SVE qemu generated `916`
+specializations and passed CTest; full SVE coverage improved to
+`4401 emitted / 4495 attempted`; full SVE qemu generated `4401`
+specializations and passed CTest. Compileall and diff-check passed. The fast
+gate remains at `1 failed, 263 passed, 82 deselected`, with only the known
+safety-contract WIP failure.
+
+Remaining direct `value<generation>(vector::length)` SVE skips are
+`sequence`, `custom_sequence`, and unmasked `hand`, each for `f32`/`f64`.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-sequence-float-runtime-length-prompt.md
+```
+
+Next action: close the SVE C++ `sequence`, `custom_sequence`, and `hand`
+floating-point runtime-length gaps. Keep Rust SVE out of scope and keep the
+work source-owned unless a tiny typed support boundary is genuinely required.
+
 ## Active TSLc Pointer
 
 Latest active checkpoint: SVE `conflict` / `conflict_free` runtime closure.

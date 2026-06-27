@@ -414,7 +414,33 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
               }
             }
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneAPIfpga]:
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, type<generation>(base::in));
+            var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+            var<const_infer>(idx_array, static_cast<typename IndicesType::base_type *>(std::malloc(lanes * sizeof(typename IndicesType::base_type))));
+            var<const_infer>(result, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+            intrin<svst1>(
+              call<primitive=mask_true[IndicesType]>(),
+              idx_array,
+              index
+            );
+            loop<backend>(i, 0, lanes, 1) {
+              result[i] = *(cast<reinterpret>(Base const *, ptr_add(cast<reinterpret>(type<backend>(scalar::ui8) const *, base_ptr), idx_offset(idx_array[i], scale))));
+            }
+            var<const_infer>(loaded, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result));
+            std::free(idx_array);
+            std::free(result);
+            complete(loaded);
+          """
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -423,7 +449,6 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
           sse [sse2]
           sse_vl [sse2]
           neon [neon]
-          sve [sve]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
         safety:
@@ -1023,7 +1048,32 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
               }
             }
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneAPIfpga]:
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, type<generation>(base::in));
+            var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+            var<const_infer>(val_array, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+            var<const_infer>(idx_array, static_cast<typename IndicesType::base_type *>(std::malloc(lanes * sizeof(typename IndicesType::base_type))));
+            intrin<svst1, build>(call<primitive=mask_true[Vec]>(), val_array, a);
+            intrin<svst1>(
+              call<primitive=mask_true[IndicesType]>(),
+              idx_array,
+              index
+            );
+            loop<backend>(i, 0, lanes, 1) {
+              *(cast<reinterpret>(Base *, ptr_add_mut(cast<reinterpret>(type<backend>(scalar::ui8) *, base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
+            }
+            std::free(val_array);
+            std::free(idx_array);
+          """
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1032,7 +1082,6 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           sse [sse2]
           sse_vl [sse2]
           neon [neon]
-          sve [sve]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
         safety:
