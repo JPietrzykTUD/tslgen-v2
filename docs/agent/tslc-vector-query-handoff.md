@@ -3748,3 +3748,23 @@ docs/agent/runs/tslc-arm-neon-between-and-full-qemu-prompt.md
 Next action: run the `between_*` NEON C++/Rust qemu checkpoint. If it passes,
 run the full all-primitive NEON C++/Rust qemu command. Do not claim full NEON
 runtime parity until that full command has actually passed.
+
+### Latest Active TSLc Handoff: Full NEON C++/Rust Runtime Green
+
+Phase 1 NEON is now runtime-green for C++ and Rust:
+
+- `between_*` generated `2576` specializations, C++ CTest passed, and Rust
+  qemu value tests passed with `312 passed`;
+- full all-primitive NEON generated `9000` specializations, C++ CTest passed,
+  and Rust qemu value tests passed with `1144 passed`;
+- the fast gate remains at `1 failed, 263 passed, 82 deselected`, with only the
+  known safety-contract WIP failure.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-full-cpp-qemu-prompt.md
+```
+
+Next action: move to Phase 2 SVE C++ only. Run full SVE C++ coverage, then the
+full SVE C++ qemu gate. Do not attempt Rust SVE.

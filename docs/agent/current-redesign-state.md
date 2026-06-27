@@ -3497,6 +3497,84 @@ Next prompt:
 docs/agent/runs/tslc-arm-neon-between-and-full-qemu-prompt.md
 ```
 
+## Completed Full NEON C++/Rust Runtime Checkpoint
+
+The active ARM per-primitive goal completed the Phase 1 NEON runtime gate:
+all currently generated NEON C++ and Rust value tests build and pass under
+qemu.
+
+Implemented:
+
+- Corrected the authored `between_inclusive` masked `f32` basic test: lane 3
+  has mask bit set and `-4.5` is inside the inclusive interval
+  `[-5.0, -4.0]`, so the expected mask lane is set (`NAN`) rather than clear
+  (`0.0`).
+
+Validation:
+
+```text
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --primitives between_exclusive,between_inclusive,between_left_inclusive,between_right_inclusive --output-root ./tslctmp/neon-between-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl --rust-target aarch64-unknown-linux-musl --rust-linker /workspaces/tslgen-v99/tslctmp/zig-aarch64-linux-musl-cc
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --output-root ./tslctmp/neon-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl --rust-target aarch64-unknown-linux-musl --rust-linker /workspaces/tslgen-v99/tslctmp/zig-aarch64-linux-musl-cc
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: the focused `between_*` C++/Rust qemu checkpoint generated `2576`
+specializations, C++ CTest passed, Rust value tests passed with `312 passed`,
+and `build/test-verified 12 commands`; the full all-primitive NEON C++/Rust
+qemu gate generated `9000` specializations, C++ CTest passed, Rust value tests
+passed with `1144 passed`, and `build/test-verified 12 commands`.
+
+The fast gate remains at the improved baseline:
+`1 failed, 263 passed, 82 deselected`, with only the known safety-contract WIP
+failure `test_primitive_corpus_safety_covers_direct_unsafe_facts` remaining.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-full-cpp-qemu-prompt.md
+```
+
+## Completed Full NEON C++/Rust Runtime Checkpoint
+
+The active ARM per-primitive goal completed the Phase 1 NEON runtime gate:
+all currently generated NEON C++ and Rust value tests build and pass under
+qemu.
+
+Implemented:
+
+- Corrected the authored `between_inclusive` masked `f32` basic test: lane 3
+  has mask bit set and `-4.5` is inside the inclusive interval
+  `[-5.0, -4.0]`, so the expected mask lane is set (`NAN`) rather than clear
+  (`0.0`).
+
+Validation:
+
+```text
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --primitives between_exclusive,between_inclusive,between_left_inclusive,between_right_inclusive --output-root ./tslctmp/neon-between-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl --rust-target aarch64-unknown-linux-musl --rust-linker /workspaces/tslgen-v99/tslctmp/zig-aarch64-linux-musl-cc
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --output-root ./tslctmp/neon-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl --rust-target aarch64-unknown-linux-musl --rust-linker /workspaces/tslgen-v99/tslctmp/zig-aarch64-linux-musl-cc
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: the focused `between_*` C++/Rust qemu checkpoint generated `2576`
+specializations, C++ CTest passed, Rust value tests passed with `312 passed`,
+and `build/test-verified 12 commands`; the full all-primitive NEON C++/Rust
+qemu gate generated `9000` specializations, C++ CTest passed, Rust value tests
+passed with `1144 passed`, and `build/test-verified 12 commands`.
+
+The fast gate remains at the improved baseline:
+`1 failed, 263 passed, 82 deselected`, with only the known safety-contract WIP
+failure `test_primitive_corpus_safety_covers_direct_unsafe_facts` remaining.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-full-cpp-qemu-prompt.md
+```
+
 ## Completed NEON Direct Comparison + To-Integral Checkpoint
 
 The active ARM per-primitive goal made a NEON C++/Rust checkpoint for direct
