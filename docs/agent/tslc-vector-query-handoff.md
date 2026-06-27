@@ -4084,3 +4084,60 @@ Next action: close the remaining full-SVE `generic::length(OutVec)` skip in
 `load_convert_up<f32>`. Keep Rust SVE out of scope and preserve the
 profile-specific SVE test helper boundary: `tsl_test_core.hpp` should expose
 only generic adapter APIs, while SVE ACLE helpers stay in `tsl_test_sve.hpp`.
+
+### Latest Active TSLc Handoff: SVE Load-Convert-Up F32 Checkpoint
+
+The SVE load-convert follow-up closed the last `load_convert_up` coverage gap.
+Rust SVE remains unsupported and was not attempted.
+
+Implemented:
+
+1. Added an SVE-specific `f32 -> f64` `load_convert_up` body in
+   `tsldata/primitives/load_store/pack_expand.tsl`.
+2. The body loads source `float` lanes with `svld1_f32` and converts the low
+   window to `double` lanes with `svcvt_f64_f32_x`, using the same unified
+   `intrin<..., build[...]>` style as the existing SVE conversion source.
+3. Kept the fix source-owned in `tsldata`; no renderer, lane-model, helper
+   header, or `tslc/src` semantic changes were made.
+
+Validation:
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives load_convert_up --coverage --value-test-warnings --output-root ./tslctmp/sve-load-convert-up-coverage
+```
+
+Result: focused SVE `load_convert_up` coverage now emits `39/39` slots.
+
+```bash
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives load_convert_up --output-root ./tslctmp/sve-load-convert-up-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: focused SVE C++ qemu generated `801` specializations and passed CTest.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: full SVE C++ coverage improved to `4183 emitted / 4469 attempted`;
+full SVE C++ qemu generated `4183` specializations and passed CTest.
+
+```bash
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall and diff-check passed. The fast gate remains at
+`1 failed, 263 passed, 82 deselected`, with only the known
+`test_primitive_corpus_safety_covers_direct_unsafe_facts` WIP failure.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-cast-remaining-coverage-prompt.md
+```
+
+Next action: continue the SVE C++ conversion-family closure with the remaining
+`cast` coverage gaps. Keep Rust SVE out of scope and preserve the finalized
+value-test renderer architecture.

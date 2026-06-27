@@ -3754,6 +3754,50 @@ Next action: close the remaining full-SVE `generic::length(OutVec)` skip in
 `load_convert_up<f32>`. Keep Rust SVE out of scope and preserve the
 profile-specific SVE test-helper boundary.
 
+## Current Work State: SVE Load-Convert-Up F32 Checkpoint
+
+The active ARM per-primitive goal closed the final SVE C++ `load_convert_up`
+coverage gap. Rust SVE remains unsupported and was not attempted.
+
+Implemented:
+
+- Added an SVE-specific `f32 -> f64` `load_convert_up` body in
+  `tsldata/primitives/load_store/pack_expand.tsl`.
+- The body loads source `float` lanes with `svld1_f32` and converts the low
+  window to `double` lanes with `svcvt_f64_f32_x`.
+- Kept the change source-owned in `tsldata`; no renderer, lane-model, helper
+  header, or `tslc/src` semantic changes were made.
+
+Validation:
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives load_convert_up --coverage --value-test-warnings --output-root ./tslctmp/sve-load-convert-up-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives load_convert_up --output-root ./tslctmp/sve-load-convert-up-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: focused SVE `load_convert_up` coverage now emits `39/39` slots;
+focused SVE C++ qemu generated `801` specializations and passed CTest. Full
+SVE C++ coverage improved to `4183 emitted / 4469 attempted`; full SVE C++
+qemu generated `4183` specializations and passed CTest. Compileall and
+diff-check passed. The fast gate remains at
+`1 failed, 263 passed, 82 deselected`, with only the known safety-contract WIP
+failure.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-cast-remaining-coverage-prompt.md
+```
+
+Next action: continue the SVE C++ conversion-family closure with the remaining
+`cast` coverage gaps. Keep Rust SVE out of scope and preserve the finalized
+value-test renderer architecture.
+
 ## Completed Full NEON C++/Rust Runtime Checkpoint
 
 The active ARM per-primitive goal completed the Phase 1 NEON runtime gate:

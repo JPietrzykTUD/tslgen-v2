@@ -765,6 +765,20 @@ prim<v:=cptr+> load_convert_up(ptr):
                    let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
                    complete(intrin<svld1uw, build[suffix=ToBase]>(call<primitive=mask_true[OutVec]>(), ptr));
                 """
+      f32:
+        requires [sve]
+        ToBase:
+          f64:
+            safety:
+              internal_unsafe true
+              caller_unsafe true
+              reasons [intrinsic, raw_pointer]
+            implementation:
+              tsil """
+                   let<type>(OutVec, type<generation>(vector::as_base(ToBase)));
+                   var<const_infer>(loaded, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), ptr));
+                   complete(intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[OutVec]>(), loaded));
+                """
     [sse, sse_vl, neon, sve, generic, oneAPIfpga, scalar]:
       arith:
         requires:
