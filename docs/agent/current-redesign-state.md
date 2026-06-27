@@ -3499,21 +3499,72 @@ docs/agent/runs/tslc-arm-neon-between-and-full-qemu-prompt.md
 
 ## Active TSLc Pointer
 
-Latest active checkpoint: SVE `compress` / `compress_store` low-width runtime
-closure. Focused SVE `compress,compress_store` coverage emits both primitives
-at `30/30`; full SVE C++ coverage is now `4345 emitted / 4495 attempted`; full
-SVE C++ qemu generated `4345` specializations and passed CTest. The fast gate
+Latest active checkpoint: SVE `conflict` / `conflict_free` runtime closure.
+Focused SVE `conflict,conflict_free` coverage emits both primitives at
+`24/24`; full SVE C++ coverage is now `4361 emitted / 4495 attempted`; full
+SVE C++ qemu generated `4361` specializations and passed CTest. The fast gate
 remains at `1 failed, 263 passed, 82 deselected`, with only the known
 safety-contract WIP failure.
 
 Active next prompt:
 
 ```text
-docs/agent/runs/tslc-arm-sve-conflict-runtime-length-prompt.md
+docs/agent/runs/tslc-arm-sve-random-access-runtime-length-prompt.md
 ```
 
-Next action: target the remaining SVE C++ `conflict` / `conflict_free`
-runtime-length skips. Keep Rust SVE out of scope.
+Next action: target the remaining SVE C++ random-access runtime-length skips
+in `expand_load`, `gather`, and `scatter`. Keep Rust SVE out of scope.
+
+## Current Work State: SVE Conflict Runtime-Length Checkpoint
+
+The active ARM per-primitive goal closed the SVE C++ `conflict` and
+`conflict_free` coverage gaps. Rust SVE remains unsupported and was not
+attempted.
+
+Implemented:
+
+- Added an SVE-specific `conflict` runtime-buffer body in
+  `tsldata/primitives/misc/conflict.tsl`.
+- The body stores scalable vector lanes with `svst1`, computes each lane's
+  conflict bitset with runtime loops and a base-width bit limit, reloads the
+  result with `svld1`, and returns the vector.
+- Removed SVE from the fixed-lane generic fallback that still depends on
+  `value<generation>(vector::length)`.
+- `conflict_free` now emits through its existing typed composition once its
+  `conflict` dependency is generated.
+- Kept the change source-owned in `tsldata`; no renderer, lane-model, helper
+  header, or `tslc/src` semantic changes were made.
+
+Validation:
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives conflict,conflict_free --coverage --value-test-warnings --output-root ./tslctmp/sve-conflict-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives conflict,conflict_free --output-root ./tslctmp/sve-conflict-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: focused SVE coverage now reports `conflict 24/24` and
+`conflict_free 24/24`; focused SVE C++ qemu generated `936` specializations
+and passed CTest. Full SVE C++ coverage improved to
+`4361 emitted / 4495 attempted`; full SVE C++ qemu generated `4361`
+specializations and passed CTest. Compileall and diff-check passed. The fast
+gate remains at `1 failed, 263 passed, 82 deselected`, with only the known
+safety-contract WIP failure.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-random-access-runtime-length-prompt.md
+```
+
+Next action: target the remaining SVE C++ `expand_load`, `gather`, and
+`scatter` `value<generation>(vector::length)` gaps. Keep Rust SVE out of scope
+and keep the work source-owned unless a tiny typed support boundary is
+genuinely required.
 
 ## Current Work State: SVE Compress Runtime-Length Checkpoint
 

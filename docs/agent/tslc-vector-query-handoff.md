@@ -4271,3 +4271,69 @@ Next action: close the SVE C++ `conflict` / `conflict_free`
 `value<generation>(vector::length)` gaps. Keep Rust SVE out of scope and keep
 the work source-owned unless a tiny typed support boundary is genuinely
 required.
+
+
+### Latest Active TSLc Handoff: SVE Conflict Runtime-Length Checkpoint
+
+The SVE conflict follow-up closed the direct `conflict` runtime-length gaps
+and the dependent `conflict_free` pruned gaps. Rust SVE remains unsupported and
+was not attempted.
+
+Implemented:
+
+1. Added an SVE-specific `conflict` runtime-buffer body in
+   `tsldata/primitives/misc/conflict.tsl`.
+2. The body stores scalable vector lanes with `svst1`, computes each lane's
+   conflict bitset with runtime loops and a base-width bit limit, reloads the
+   result with `svld1`, and returns the vector.
+3. Removed SVE from the fixed-lane generic fallback that still depends on
+   `value<generation>(vector::length)`.
+4. Let `conflict_free` emit through its existing typed composition once
+   `conflict` is generated.
+5. Kept the fix source-owned in `tsldata`; no renderer, lane-model, helper
+   header, or `tslc/src` semantic changes were made.
+
+Validation:
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives conflict,conflict_free --coverage --value-test-warnings --output-root ./tslctmp/sve-conflict-coverage
+```
+
+Result: focused SVE coverage now reports `conflict 24/24` and
+`conflict_free 24/24`.
+
+```bash
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives conflict,conflict_free --output-root ./tslctmp/sve-conflict-checkpoint --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: focused SVE C++ qemu generated `936` specializations and passed
+CTest.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-full-coverage
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-full-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: full SVE C++ coverage improved to `4361 emitted / 4495 attempted`;
+full SVE C++ qemu generated `4361` specializations and passed CTest.
+
+```bash
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall and diff-check passed. The fast gate remains at
+`1 failed, 263 passed, 82 deselected`, with only the known
+`test_primitive_corpus_safety_covers_direct_unsafe_facts` WIP failure.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-random-access-runtime-length-prompt.md
+```
+
+Next action: close the SVE C++ `expand_load`, `gather`, and `scatter`
+`value<generation>(vector::length)` gaps. Keep Rust SVE out of scope and keep
+the work source-owned unless a tiny typed support boundary is genuinely
+required.

@@ -69,7 +69,38 @@ prim<v:=v> conflict(data):
                 )
               );
             """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneAPIfpga]:
+    sve:
+      ?i?:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+              let<type>(Base, type<generation>(base::in));
+              let<type>(ConflictT, type<backend>(scalar::size));
+              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+              var<const_infer>(bit_limit, (sizeof(Base) * 8));
+              var<const_infer>(values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+              var<const_infer>(result_values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+              intrin<svst1, build>(call<primitive=mask_true[Vec]>(), values, data);
+              result_values[0] = cast<static>(Base, 0);
+              loop<backend>(idx, 1, lanes, 1) {
+                var<infer>(conflict, cast<static>(ConflictT, 0));
+                loop<backend>(cur, 0, idx, 1) {
+                  if ((cur < bit_limit) && (values[idx] == values[cur])) {
+                    conflict |= (cast<static>(ConflictT, 1)) << cur;
+                  }
+                }
+                result_values[idx] = cast<static>(Base, conflict);
+              }
+              var<const_infer>(result, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result_values));
+              std::free(values);
+              std::free(result_values);
+              complete(result);
+            """
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
       ?i?:
         requires:
           avx512 [avx512f]
@@ -78,7 +109,6 @@ prim<v:=v> conflict(data):
           sse [sse2]
           sse_vl [sse2]
           neon [neon]
-          sve [sve]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
         safety:
