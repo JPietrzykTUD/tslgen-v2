@@ -4599,3 +4599,54 @@ docs/agent/runs/tslc-arm-sve-residual-scalable-signatures-prompt.md
 Next action: inspect the residual scalable signatures and either implement a
 source-owned fix, model them as intentionally unsupported with typed evidence,
 or stop and report the exact architecture change needed. Do not fake coverage.
+
+### Latest Active TSLc Handoff: SVE Residual Scalable Signatures Audit
+
+The active ARM per-primitive goal reached a typed architecture boundary for the
+last SVE C++ coverage skips. Rust SVE remains unsupported and was not
+attempted.
+
+Investigated:
+
+1. `from_array` (`v:=s[]`) selects the SVE body in
+   `tsldata/primitives/load_store/array.tsl`, but lowering skips before body
+   lowering with `TSL-LOWER-UNSUPPORTED-KIND`.
+2. `to_array` (`s[]:=v`) selects the SVE body in
+   `tsldata/primitives/load_store/array.tsl`, but lowering skips before body
+   lowering with the same unsupported-signature diagnostic.
+3. `set` (`v:=(lanes<s>)`) selects the shared `neon/sve/generic/oneAPIfpga`
+   body in `tsldata/primitives/load_store/construct.tsl`, but lowering skips
+   before body lowering because `lanes<s>` is deferred for scalable vectors.
+4. `SupportPolicy` deliberately lists `s[]` and `lanes<s>` in
+   `scalable_deferred_signature_kinds`; this is not a missing primitive body.
+5. C++ `s[]` currently maps to `array_for<Vec>`, which is derived from
+   `sizeof(Vec::register_type)`. That contract is invalid for SVE's sizeless
+   register types.
+
+Validation:
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives from_array,to_array,set --coverage --value-test-warnings --output-root ./tslctmp/sve-residual-signatures-coverage
+```
+
+Result: focused residual coverage is unchanged and explicit:
+`588 emitted / 618 attempted`; `from_array`, `to_array`, and `set` each emit
+`20/30` and skip the ten SVE type slots. The three skip reasons are exactly the
+unsupported scalable signatures `v:=s[]`, `s[]:=v`, and `v:=(lanes<s>)`.
+
+Decision:
+
+Do not fake SVE completeness by deleting source implementations, relaxing the
+policy guard, or synthesizing `array_for<simd<T, sve>>`. ADR-114 records the
+boundary. The next slice must decide the typed scalable array/lane-list
+contract before implementation.
+
+Active next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-scalable-signature-design-prompt.md
+```
+
+Next action: design the smallest typed treatment for scalable `s[]` and
+`lanes<s>` signatures: source-level unsupported modeling, new scalable
+runtime-buffer/span signatures, or fixed-lane-only classification.

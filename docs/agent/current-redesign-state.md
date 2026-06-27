@@ -4398,3 +4398,44 @@ Next prompt:
 ```text
 docs/agent/runs/tslc-arm-sve-residual-scalable-signatures-prompt.md
 ```
+
+## Completed SVE Residual Scalable Signatures Audit
+
+The active ARM per-primitive goal reached the typed scalable-signature boundary
+for the final SVE C++ skips. Rust SVE remains unsupported and was not attempted.
+
+Investigated:
+
+- `from_array` (`v:=s[]`) selects an SVE source body but lowering rejects the
+  signature before body lowering with `TSL-LOWER-UNSUPPORTED-KIND`.
+- `to_array` (`s[]:=v`) selects an SVE source body but lowering rejects the
+  signature before body lowering with `TSL-LOWER-UNSUPPORTED-KIND`.
+- `set` (`v:=(lanes<s>)`) selects the shared `neon/sve/generic/oneAPIfpga`
+  body but lowering rejects the scalable lane-list signature before body
+  lowering.
+- `SupportPolicy` deliberately lists `s[]` and `lanes<s>` in
+  `scalable_deferred_signature_kinds`.
+- C++ `s[]` currently lowers to `array_for<Vec>`, whose length is derived from
+  `sizeof(Vec::register_type)`. That contract is invalid for sizeless SVE
+  register types.
+
+Validation:
+
+```text
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --primitives from_array,to_array,set --coverage --value-test-warnings --output-root ./tslctmp/sve-residual-signatures-coverage
+```
+
+Result: focused residual coverage remains explicit at
+`588 emitted / 618 attempted`; `from_array`, `to_array`, and `set` each emit
+`20/30` and skip the ten SVE type slots. The skip reasons are the unsupported
+scalable signatures `v:=s[]`, `s[]:=v`, and `v:=(lanes<s>)`.
+
+ADR-114 records the decision not to fake coverage by deleting source
+implementations, relaxing the support-policy guard, or synthesizing
+`array_for<simd<T, sve>>`.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-arm-sve-scalable-signature-design-prompt.md
+```

@@ -5658,3 +5658,47 @@ Consequences:
 - `store_mask_repr packed=true` and `load_mask_repr packed=true` remain the
   next mask-representation design target.
 - Rust SVE remains unsupported.
+
+## ADR-114: SVE Fixed-Lane Array And Lane-List Signatures Remain A Typed Design Boundary
+
+Context:
+
+After the SVE `to_ostream` dependency prune was closed, full SVE C++ coverage
+had no remaining dependency-prune buckets. The only skipped slots were selected
+specializations whose primitive signatures are fixed-lane array or lane-list
+forms:
+
+- `from_array`: `v:=s[]`
+- `to_array`: `s[]:=v`
+- `set`: `v:=(lanes<s>)`
+
+The source corpus contains SVE bodies for these primitives, but lowering rejects
+the signatures before body lowering through
+`SupportPolicy.unsupported_signature_kinds_for_extension(...)`. This is
+intentional: `s[]` currently maps to `array_for<Vec>`, which is derived from
+`sizeof(Vec::register_type)`, and SVE registers are sizeless. `lanes<s>` is a
+finite authored lane list, while SVE has a runtime lane count.
+
+Decision:
+
+Do not hide these residual SVE skips by editing source bodies or deleting SVE
+implementations. The correct next step is a typed design slice:
+
+- decide whether `s[]` is permanently a fixed-lane array signature or whether a
+  separate scalable runtime-buffer/span signature is needed;
+- decide whether `from_array` and `to_array` should be expressed through
+  existing pointer/load/store primitives for scalable vectors rather than the
+  fixed `array_for<Vec>` contract;
+- decide whether `set(v:=(lanes<s>))` is intentionally fixed-lane-only for
+  scalable vectors, or whether it needs a different scalable constructor
+  primitive;
+- make coverage report intentional unsupported scalable signature cases with a
+  typed status only after the source/lowering contract is explicit.
+
+Consequences:
+
+- The current SVE C++ full-coverage ceiling remains `4479 emitted / 4509
+  attempted` until the scalable array/lane-list design is resolved.
+- No renderer, value-test planner, or primitive-body workaround should attempt
+  to synthesize `array_for<simd<T, sve>>`.
+- Rust SVE remains unsupported and is not part of this decision.
