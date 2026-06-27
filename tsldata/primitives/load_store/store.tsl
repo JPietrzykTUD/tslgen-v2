@@ -415,9 +415,18 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
     - {tags [scalar, edge], attrs [aligned=false], type "f64", offset 1, case {inputs [4294967295], expected [0, 4294967295, 0]}}
   # avx512 omits this to avoid duplicates when scalar equals mask.
   impls:
-    [avx2,sse,neon,scalar,generic,oneAPIfpga,sve]:
+    [avx2,sse,neon,scalar,generic,oneAPIfpga]:
       arith:
         requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil "*ptr = scalar;"
+    sve:
+      arith:
+        requires [sve]
         safety:
           internal_unsafe true
           caller_unsafe true

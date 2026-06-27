@@ -4716,3 +4716,57 @@ Next action: run a completion audit for the ARM goal: verify NEON C++/Rust and
 SVE C++ generated value tests under qemu, confirm there are no true skipped
 coverage gaps beyond typed policy-deferred scalable signatures, and only then
 decide whether the active goal is complete.
+
+### Latest Active TSLc Handoff: ARM Final Coverage Audit Complete
+
+The active ARM per-primitive coverage goal is complete under the agreed support
+boundary. NEON now has full C++ and Rust generated value-test coverage under
+qemu. SVE has full C++ generated value-test coverage under qemu, with only the
+typed fixed-lane scalable signatures counted as `policy_deferred`. Rust SVE
+remains unsupported and was not attempted.
+
+Implemented during the audit:
+
+1. Split scalar `store`'s `sve` implementation out of the shared
+   `avx2/sse/neon/scalar/generic/oneAPIfpga` body.
+2. Added `requires [sve]` to that SVE scalar-store implementation so the NEON
+   Rust profile does not select an unsupported SVE slot.
+
+Validation:
+
+```bash
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src ZIG_GLOBAL_CACHE_DIR=/tmp/zig-global-cache-tslc ZIG_LOCAL_CACHE_DIR=/tmp/zig-local-cache-tslc python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --profiles neon --backends cpp,rust --output-root ./tslctmp/neon-final-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: NEON generated `8980` specializations across `17` artifacts; C++ CTest
+passed under qemu; Rust ran under qemu with `1144 passed`; the CLI reported
+`build/test-verified 12 commands`.
+
+```bash
+PATH=/opt/zig:$PATH PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --output-root ./tslctmp/sve-final-qemu --test --value-test-warnings --qemu-aarch64 /usr/bin/qemu-aarch64 --cpp-compiler "zig c++" --cpp-target aarch64-linux-musl
+```
+
+Result: SVE C++ generated `4479` specializations across `10` artifacts; CTest
+passed under qemu; the CLI reported `build/test-verified 7 commands`.
+
+```bash
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles neon --coverage --value-test-warnings --output-root ./tslctmp/neon-final-coverage
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles sve --coverage --value-test-warnings --output-root ./tslctmp/sve-final-coverage
+```
+
+Result: NEON coverage reports `8980 emitted / 8980 attempted slots`; SVE C++
+coverage reports `4479 emitted / 4479 attempted slots` plus exactly
+`30 policy-deferred slots` for `from_array` (`v:=s[]`), `to_array` (`s[]:=v`),
+and `set` (`v:=(lanes<s>)`).
+
+```bash
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall and `git diff --check` passed. The fast gate remains at the
+known safety-contract baseline: `1 failed, 265 passed, 82 deselected`; the
+only failure is `test_primitive_corpus_safety_covers_direct_unsafe_facts`.
+
+Stop condition: no next run prompt is required for this ARM coverage goal.
