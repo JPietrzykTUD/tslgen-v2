@@ -1,4 +1,4 @@
-"""Assemble the generated C++ and Rust project tree."""
+"""Assemble generated backend project trees."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from tslc.catalog.model import Catalog, Extension
 from tslc.diagnostics import Diagnostic
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact, ArtifactSet
-from tslc.output.verify import VerifyBackend, VerifyProject
+from tslc.output.verify_model import VerifyBackend, VerifyProject
 from tslc.render.backend_drivers import render_backend_drivers, value_test_supports
 from tslc.render.emitted_names import finalize_emitted_names
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
@@ -21,26 +21,39 @@ from tslc.value_tests import (
     ValueTestProjectPlan,
 )
 
+_EMPTY_SPECIALIZATIONS: Mapping[str, tuple[LoweredSpecialization, ...]] = MappingProxyType(
+    {}
+)
+
 
 @dataclass(frozen=True, slots=True)
 class ProfileRender:
     profile: MachineProfile
-    # primitive name -> its specializations (one backend each)
-    cpp: Mapping[str, tuple[LoweredSpecialization, ...]]
-    rust: Mapping[str, tuple[LoweredSpecialization, ...]]
+    # backend id -> primitive name -> its specializations
+    specializations_by_backend: Mapping[
+        str, Mapping[str, tuple[LoweredSpecialization, ...]]
+    ]
     # isa_name -> the extension block this profile actually selected for that ISA tag
     # (so registrations know whether `avx2` here is lane-bitmask `avx2` or native
     # `avx2_vl`). Per (profile, isa) exactly one block is selected, so this is 1:1.
     extensions: Mapping[str, Extension] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "cpp", _freeze_specializations(self.cpp))
-        object.__setattr__(self, "rust", _freeze_specializations(self.rust))
+        object.__setattr__(
+            self,
+            "specializations_by_backend",
+            _freeze_backend_specializations(self.specializations_by_backend),
+        )
         object.__setattr__(
             self,
             "extensions",
             MappingProxyType(dict(sorted(self.extensions.items()))),
         )
+
+    def specializations(
+        self, backend_id: str
+    ) -> Mapping[str, tuple[LoweredSpecialization, ...]]:
+        return self.specializations_by_backend.get(backend_id, _EMPTY_SPECIALIZATIONS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,8 +77,10 @@ def render_project(
     ordered = tuple(
         replace(
             profile_render,
-            cpp=finalize_emitted_names(profile_render.cpp, immediate_split_names),
-            rust=finalize_emitted_names(profile_render.rust, immediate_split_names),
+            specializations_by_backend=_finalize_backend_names(
+                profile_render.specializations_by_backend,
+                immediate_split_names,
+            ),
         )
         for profile_render in sorted(profiles, key=lambda p: p.profile.name)
     )
@@ -120,6 +135,27 @@ def _freeze_specializations(
     return MappingProxyType(
         {name: tuple(specs) for name, specs in sorted(mapping.items())}
     )
+
+
+def _freeze_backend_specializations(
+    mapping: Mapping[str, Mapping[str, tuple[LoweredSpecialization, ...]]],
+) -> Mapping[str, Mapping[str, tuple[LoweredSpecialization, ...]]]:
+    return MappingProxyType(
+        {
+            backend_id: _freeze_specializations(by_primitive)
+            for backend_id, by_primitive in sorted(mapping.items())
+        }
+    )
+
+
+def _finalize_backend_names(
+    mapping: Mapping[str, Mapping[str, tuple[LoweredSpecialization, ...]]],
+    immediate_split_names: frozenset[str],
+) -> Mapping[str, Mapping[str, tuple[LoweredSpecialization, ...]]]:
+    return {
+        backend_id: finalize_emitted_names(by_primitive, immediate_split_names)
+        for backend_id, by_primitive in mapping.items()
+    }
 
 
 __all__ = ["ProfileRender", "RenderedProject", "render_project"]

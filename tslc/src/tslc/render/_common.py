@@ -54,7 +54,9 @@ def text(logical_path: str, content: str) -> Artifact:
     return Artifact(logical_path=logical_path, content=content, media_type=media)
 
 
-def used_exts(by_primitive: dict[str, tuple[LoweredSpecialization, ...]]) -> list[str]:
+def used_exts(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+) -> list[str]:
     exts: set[str] = set()
     for specs in by_primitive.values():
         exts.update(spec.extension_name for spec in specs)
@@ -65,7 +67,7 @@ def used_exts(by_primitive: dict[str, tuple[LoweredSpecialization, ...]]) -> lis
 
 
 def used_pairs(
-    by_primitive: dict[str, tuple[LoweredSpecialization, ...]],
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
 ) -> list[tuple[str, str]]:
     pairs: set[tuple[str, str]] = set()
     for specs in by_primitive.values():
@@ -80,7 +82,7 @@ def used_pairs(
 
 
 def used_type_specs(
-    by_primitive: dict[str, tuple[LoweredSpecialization, ...]],
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
 ) -> list[tuple[str, str, str]]:
     """Used ``(extension, type_tag, base_spelling)`` triples, including targets."""
 

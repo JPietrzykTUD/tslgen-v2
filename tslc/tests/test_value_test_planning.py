@@ -42,15 +42,14 @@ def test_profile_render_freezes_backend_mappings() -> None:
     source_cpp: dict[str, tuple[LoweredSpecialization, ...]] = {}
     profile = ProfileRender(
         profile=MachineProfile("unit", "generic", frozenset(), {}),
-        cpp=source_cpp,
-        rust={},
+        specializations_by_backend={"cpp": source_cpp, "rust": {}},
     )
 
     source_cpp["late"] = ()
 
-    assert "late" not in profile.cpp
+    assert "late" not in profile.specializations("cpp")
     with pytest.raises(TypeError):
-        profile.cpp["late"] = ()  # type: ignore[index]
+        profile.specializations("cpp")["late"] = ()  # type: ignore[index]
 
 
 def test_harness_discovery_uses_signatures_not_names() -> None:
@@ -212,7 +211,11 @@ def test_simple_shape_patterns_are_not_ordered_by_first_overload() -> None:
         _catalog(primitive, *_harness_primitives()),
         (CPP_VALUE_TEST_SUPPORT,),
     ).plan(
-        (ValueTestBackendProfileInput("cpp", "unit", profile.cpp),)
+        (
+            ValueTestBackendProfileInput(
+                "cpp", "unit", profile.specializations("cpp")
+            ),
+        )
     )
 
     assert plan.diagnostics == ()
@@ -1111,15 +1114,18 @@ def _profile(
 ) -> ProfileRender:
     return ProfileRender(
         profile=MachineProfile("unit", "generic", frozenset(), {}),
-        cpp=cpp or {},
-        rust=rust or {},
+        specializations_by_backend={"cpp": cpp or {}, "rust": rust or {}},
     )
 
 
 def _inputs(profile: ProfileRender) -> tuple[ValueTestBackendProfileInput, ...]:
     return (
-        ValueTestBackendProfileInput("cpp", profile.profile.name, profile.cpp),
-        ValueTestBackendProfileInput("rust", profile.profile.name, profile.rust),
+        ValueTestBackendProfileInput(
+            "cpp", profile.profile.name, profile.specializations("cpp")
+        ),
+        ValueTestBackendProfileInput(
+            "rust", profile.profile.name, profile.specializations("rust")
+        ),
     )
 
 

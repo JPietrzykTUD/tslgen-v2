@@ -63,7 +63,7 @@ AfterCommand = Callable[
 
 
 @dataclass(frozen=True, slots=True)
-class _VerifyBackendDriver:
+class VerifyBackendDriver:
     backend_id: str
     required_tools: tuple[str, ...]
     prepare_backend: PrepareBackend
@@ -117,8 +117,11 @@ def verify_generated_project(
     )
 
     for backend in project.backends:
-        driver = _VERIFY_BACKEND_DRIVERS.get(backend.backend_id)
-        if driver is None:
+        try:
+            from tslc.backend.registry import backend_capability
+
+            driver = backend_capability(backend.backend_id).verify_driver()
+        except ValueError:
             skipped.append(f"{backend.backend_id}: unsupported backend verification")
             continue
         missing = _missing_tool(driver)
@@ -279,29 +282,7 @@ def _after_rust_command(
             break
 
 
-_VERIFY_BACKEND_DRIVERS: dict[str, _VerifyBackendDriver] = {
-    "cpp": _VerifyBackendDriver(
-        backend_id="cpp",
-        required_tools=("cmake",),
-        prepare_backend=_prepare_cpp_backend,
-        command_groups=lambda root, backend, config: _cpp_command_groups(
-            root, backend, config
-        ),
-        after_successful_command=_after_noop_command,
-    ),
-    "rust": _VerifyBackendDriver(
-        backend_id="rust",
-        required_tools=("cargo",),
-        prepare_backend=_prepare_rust_backend,
-        command_groups=lambda root, backend, config: _rust_command_groups(
-            root, backend, config
-        ),
-        after_successful_command=_after_rust_command,
-    ),
-}
-
-
-def _missing_tool(driver: _VerifyBackendDriver) -> str | None:
+def _missing_tool(driver: VerifyBackendDriver) -> str | None:
     for tool in driver.required_tools:
         if _missing_executable(tool) is not None:
             return tool

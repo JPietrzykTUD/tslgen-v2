@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from tslc.backend.cpp import CppBackend
@@ -11,7 +12,7 @@ from tslc.catalog.model import Extension
 from tslc.catalog.signatures import is_free_function_signature
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 from tslc.output.artifacts import Artifact
-from tslc.output.verify import VerifyEmulator, VerifyProfile
+from tslc.output.verify_model import VerifyEmulator, VerifyProfile
 from tslc.render._common import (
     asset,
     feature_spelling,
@@ -39,7 +40,8 @@ def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
         text("cpp/.clang-format", asset(".clang-format")),
     ]
     for profile_render in profiles:
-        emitted_exts = used_exts(profile_render.cpp)
+        by_primitive = profile_render.specializations("cpp")
+        emitted_exts = used_exts(by_primitive)
         x86_exts = [e for e in emitted_exts if e in X86_REGISTER_BITS]
         includes = _cpp_includes(emitted_exts, profile_render.extensions)
         registrations = "".join(
@@ -47,17 +49,17 @@ def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
             for ext in x86_exts
         )
         registrations += _cpp_native_registration(
-            profile_render.cpp, profile_render.extensions
+            by_primitive, profile_render.extensions
         )
         # All declarations (impl primary templates + wrappers) precede all
         # specialization bodies, so any body may call any primitive's wrapper.
         declarations = "\n\n".join(
-            backend.render_declarations(name, profile_render.cpp[name])
-            for name in sorted(profile_render.cpp)
+            backend.render_declarations(name, by_primitive[name])
+            for name in sorted(by_primitive)
         )
         definitions = "\n\n".join(
-            backend.render_definitions(name, profile_render.cpp[name])
-            for name in sorted(profile_render.cpp)
+            backend.render_definitions(name, by_primitive[name])
+            for name in sorted(by_primitive)
         )
         bodies = declarations + "\n\n" + definitions
         content = fill_asset(
@@ -115,7 +117,7 @@ def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
     )
 
 
-def _cpp_includes(emitted_exts: list[str], extensions: dict[str, Extension]) -> str:
+def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) -> str:
     lines = ['#include "tsl_core.hpp"']
     if any(ext in X86_REGISTER_BITS for ext in emitted_exts):
         lines.append('#include "tsl_x86_traits.hpp"')
@@ -154,8 +156,8 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
 
 
 def _cpp_native_registration(
-    by_primitive: dict[str, tuple[LoweredSpecialization, ...]],
-    extensions: dict[str, Extension],
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    extensions: Mapping[str, Extension],
 ) -> str:
     """Register non-x86 native extensions from typed register spellings."""
 
@@ -241,8 +243,9 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
     # fully compiled (with the profile's ISA flags), not merely parsed.
     lines = ["#include <tsl.hpp>", "", "namespace {"]
     index = 0
-    for name in sorted(profile_render.cpp):
-        specs = profile_render.cpp[name]
+    by_primitive = profile_render.specializations("cpp")
+    for name in sorted(by_primitive):
+        specs = by_primitive[name]
         first = specs[0]
         if is_free_function_signature(first.result_kind, first.param_kinds):
             # A free function (`allocate`/`deallocate`) is not a template — address-take it

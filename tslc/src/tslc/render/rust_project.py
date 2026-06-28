@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from tslc.backend.rust import RustBackend, rust_register_type
@@ -10,7 +11,7 @@ from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
-from tslc.output.verify import VerifyEmulator, VerifyProfile
+from tslc.output.verify_model import VerifyEmulator, VerifyProfile
 from tslc.render._common import (
     asset,
     feature_spelling,
@@ -45,15 +46,16 @@ def rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
         text("rust/rustfmt.toml", asset("rustfmt.toml")),
     ]
     for profile_render in profiles:
-        registrations = _rust_registrations(profile_render.rust, profile_render.extensions)
+        by_primitive = profile_render.specializations("rust")
+        registrations = _rust_registrations(by_primitive, profile_render.extensions)
         bodies = "\n\n".join(
-            backend.render_primitive(name, profile_render.rust[name])
-            for name in sorted(profile_render.rust)
+            backend.render_primitive(name, by_primitive[name])
+            for name in sorted(by_primitive)
         )
         # Arch modules are imported for intrinsic constants left verbatim in bodies.
         # Intrinsics themselves stay fully qualified by lowering.
         arch_use = _rust_arch_use(
-            used_exts(profile_render.rust), profile_render.extensions
+            used_exts(by_primitive), profile_render.extensions
         )
         content = fill_asset(
             "rust_profile_module.rs.tmpl",
@@ -101,7 +103,7 @@ def rust_linker(profile: MachineProfile) -> str | None:
     return "rust-lld" if profile.family == "aarch64" else None
 
 
-def _rust_arch_use(emitted_exts: list[str], extensions: dict[str, Extension]) -> str:
+def _rust_arch_use(emitted_exts: list[str], extensions: Mapping[str, Extension]) -> str:
     modules = {
         module
         for ext in emitted_exts
@@ -128,8 +130,8 @@ def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
 
 
 def _rust_registrations(
-    by_primitive: dict[str, tuple[LoweredSpecialization, ...]],
-    extensions: dict[str, Extension],
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    extensions: Mapping[str, Extension],
 ) -> str:
     """Rust extension tag structs + SimdVector impls for the used (ext, type) pairs."""
 
@@ -173,7 +175,7 @@ def _rust_registrations(
 
 
 def _has_rust_registers(
-    by_primitive: dict[str, tuple[LoweredSpecialization, ...]],
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     ext: str,
     extension: Extension | None,
 ) -> bool:

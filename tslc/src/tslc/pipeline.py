@@ -13,7 +13,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import backend_capabilities
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import (
@@ -201,6 +201,7 @@ class _GenerationSession:
         self.inputs = inputs
         self.selector = Selector()
         self.lowerer = Lowerer()
+        self.backends = backend_capabilities(request.backends)
         self.type_tags = _sorted_type_tags(request.type_tags)
         self.diagnostics = diagnostics
         self.coverage: list[CoverageEntry] = []
@@ -293,8 +294,12 @@ class _GenerationSession:
         self.profile_renders.append(
             ProfileRender(
                 profile=effective_profile,
-                cpp=_finalize(grouped.get("cpp", {})),
-                rust=_finalize(grouped.get("rust", {})),
+                specializations_by_backend={
+                    capability.backend_id: _finalize(
+                        grouped.get(capability.backend_id, {})
+                    )
+                    for capability in self.backends
+                },
                 extensions=selected_extensions,
             )
         )
@@ -329,8 +334,9 @@ class _GenerationSession:
                 catalog,
             )
             slot_lowered = False
-            for backend in self.request.backends:
-                dialect = create_backend_dialect(catalog, backend)
+            for capability in self.backends:
+                backend = capability.backend_id
+                dialect = capability.create_dialect(catalog)
                 lowered = self.lowerer.lower(
                     slot,
                     catalog,
