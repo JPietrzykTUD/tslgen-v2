@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.translation import X86_REGISTER_BITS
-from tslc.catalog.signatures import is_free_function_signature
 from tslc.lower.lowerer import (
     LoweredSpecialization,
     effective_param_types,
@@ -24,7 +23,10 @@ class RustBackend:
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
     ) -> str:
         shape = specializations[0]
-        if is_free_function_signature(shape.result_kind, shape.param_kinds):
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            shape.result_kind,
+            shape.param_kinds,
+        ):
             # A non-vector primitive (`allocate`/`deallocate`): a plain `pub fn` in the module,
             # not a `SimdVector`-bound trait/impl/wrapper.
             return _free_function(shape)
@@ -326,15 +328,7 @@ def _free_kind_type(kind: str, base_spelling: str) -> str:
     """A free function's kind -> concrete Rust type (no `Self` projection). Pointer spellings
     carry their own mutability; `usize` is a size; `void` is unit."""
 
-    if kind == "void":
-        return "()"
-    if kind == "usize":
-        return "usize"
-    if DEFAULT_SUPPORT_POLICY.is_const_pointer_kind(kind):
-        if base_spelling.startswith("*mut "):
-            return "*const " + base_spelling[len("*mut ") :]
-        return f"*const {base_spelling}"
-    return base_spelling
+    return DEFAULT_SUPPORT_POLICY.rust_free_type(kind, base_type=base_spelling)
 
 
 def _trait_name(primitive_name: str) -> str:
@@ -422,24 +416,12 @@ def _rust_concrete(spec: LoweredSpecialization, kind: str) -> str:
     """Concrete (non-associated) type for an overloaded impl's `for`/params: the impl is
     written for a concrete arg type, so associated-type projections won't do."""
 
-    base = spec.base_type_spelling
-    if kind == "v":
-        return spec.register_spelling
-    if DEFAULT_SUPPORT_POLICY.is_const_pointer_kind(kind):
-        return f"*const {base}"
-    if DEFAULT_SUPPORT_POLICY.is_mutable_pointer_kind(kind):
-        return f"*mut {base}"
-    if DEFAULT_SUPPORT_POLICY.is_borrowed_parameter_kind(kind):
-        return _rust_concrete_array(spec)
-    if kind == "void":
-        return "()"
-    if kind == "m":  # not reached by current overloads (store/shift vary in v/s)
-        return spec.register_spelling
-    if kind == "im":  # not reached by current overloads (to_integral is single-param)
-        return spec.register_spelling
-    if kind == "usize":  # a count type; not reached by current overloads
-        return "usize"
-    return base  # s
+    return DEFAULT_SUPPORT_POLICY.rust_concrete_type(
+        kind,
+        base_type=spec.base_type_spelling,
+        register_type=spec.register_spelling,
+        array_type=_rust_concrete_array(spec),
+    )
 
 
 def _rust_concrete_param(spec: LoweredSpecialization, kind: str) -> str:
@@ -465,31 +447,11 @@ def _vector_type(spec: LoweredSpecialization) -> str:
 
 
 def _kind_type(kind: str, owner: str) -> str:
-    if DEFAULT_SUPPORT_POLICY.is_const_pointer_kind(kind):
-        return f"*const {owner}::BaseType"
-    if DEFAULT_SUPPORT_POLICY.is_mutable_pointer_kind(kind):
-        return f"*mut {owner}::BaseType"
-    if kind == "void":
-        return "()"
-    if kind in ("s[]", DEFAULT_SUPPORT_POLICY.lane_list_kind):
-        return f"{owner}::Array"
-    if kind == "usize":  # a fixed count type, not a vector projection
-        return "usize"
-    if kind == "o":  # a text-buffer stream; `out` is the only reference param, so the
-        return "&mut String"  # returned `&mut String` lifetime elides to it
-    suffix = {
-        "v": "RegisterType",
-        "s": "BaseType",
-        "m": "MaskType",
-        "im": "ImaskType",
-    }[kind]
-    return f"{owner}::{suffix}"
+    return DEFAULT_SUPPORT_POLICY.rust_owner_type(kind, owner=owner)
 
 
 def _param_kind_type(kind: str, owner: str) -> str:
-    if DEFAULT_SUPPORT_POLICY.is_borrowed_parameter_kind(kind):
-        return f"&{owner}::Array"
-    return _kind_type(kind, owner)
+    return DEFAULT_SUPPORT_POLICY.rust_param_type(kind, owner=owner)
 
 
 def _params(

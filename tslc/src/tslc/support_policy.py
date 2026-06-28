@@ -17,30 +17,65 @@ from tslc.catalog.scalar_types import (
     scalar_bit_width,
     scalar_bit_width_or_default,
 )
-from tslc.catalog.signatures import LANE_LIST_KIND, SignatureShape
+from tslc.catalog.signature_kinds import (
+    DEFAULT_SIGNATURE_KINDS,
+    SignatureKindCatalog,
+)
+from tslc.catalog.signatures import SignatureShape
 from tslc.catalog.target_families import TargetFamilyCatalog
 
 
 @dataclass(frozen=True, slots=True)
 class SupportPolicy:
     backend_ids: frozenset[str]
-    supported_signature_kinds: frozenset[str]
-    maskable_result_kinds: frozenset[str]
-    mask_deferred_param_kinds: frozenset[str]
+    signature_kinds: SignatureKindCatalog
     mask_suffixes: tuple[tuple[str, str], ...]
-    immediate_kind: str
-    lane_list_kind: str
-    index_vector_kind: str
-    pointer_kinds: frozenset[str]
-    const_pointer_kinds: frozenset[str]
-    mutable_pointer_kinds: frozenset[str]
     sized_vector_bits_kinds: frozenset[str]
     scalable_vector_bits_kinds: frozenset[str]
-    scalable_deferred_signature_kinds: frozenset[str]
     scalar_register_policy_kind: str
     default_size_parameter_name: str
     target_marker_values: frozenset[str]
     deferred_cases: tuple[str, ...]
+
+    @property
+    def supported_signature_kinds(self) -> frozenset[str]:
+        return self.signature_kinds.supported_kinds
+
+    @property
+    def maskable_result_kinds(self) -> frozenset[str]:
+        return self.signature_kinds.maskable_result_kinds
+
+    @property
+    def mask_deferred_param_kinds(self) -> frozenset[str]:
+        return self.signature_kinds.mask_deferred_param_kinds
+
+    @property
+    def immediate_kind(self) -> str:
+        return self.signature_kinds.immediate_kind
+
+    @property
+    def lane_list_kind(self) -> str:
+        return self.signature_kinds.lane_list_kind
+
+    @property
+    def index_vector_kind(self) -> str:
+        return self.signature_kinds.index_vector_kind
+
+    @property
+    def pointer_kinds(self) -> frozenset[str]:
+        return self.signature_kinds.pointer_kinds
+
+    @property
+    def const_pointer_kinds(self) -> frozenset[str]:
+        return self.signature_kinds.const_pointer_kinds
+
+    @property
+    def mutable_pointer_kinds(self) -> frozenset[str]:
+        return self.signature_kinds.mutable_pointer_kinds
+
+    @property
+    def scalable_deferred_signature_kinds(self) -> frozenset[str]:
+        return self.signature_kinds.scalable_deferred_kinds
 
     @property
     def default_backend_ids(self) -> tuple[str, ...]:
@@ -94,7 +129,7 @@ class SupportPolicy:
 
     def unsupported_signature_kinds(self, shape: SignatureShape) -> frozenset[str]:
         kinds = {shape.result_kind, *shape.param_kinds}
-        return frozenset(k for k in kinds if k not in self.supported_signature_kinds)
+        return self.signature_kinds.unsupported_kinds(kinds)
 
     def unsupported_signature_kinds_for_extension(
         self, shape: SignatureShape, extension: Extension
@@ -181,13 +216,68 @@ class SupportPolicy:
         return any(kind in self.pointer_kinds for kind in shape.param_kinds)
 
     def is_const_pointer_kind(self, kind: str) -> bool:
-        return kind in self.const_pointer_kinds
+        return self.signature_kinds.is_const_pointer(kind)
 
     def is_mutable_pointer_kind(self, kind: str) -> bool:
-        return kind in self.mutable_pointer_kinds
+        return self.signature_kinds.is_mutable_pointer(kind)
 
     def is_borrowed_parameter_kind(self, kind: str) -> bool:
-        return kind in {"s[]", self.lane_list_kind}
+        return self.signature_kinds.is_borrowed_parameter(kind)
+
+    def signature_kind_requires_vector_axis(self, kind: str) -> bool:
+        return self.signature_kinds.requires_vector_axis(kind)
+
+    def is_free_function_signature(
+        self,
+        result_kind: str,
+        param_kinds: tuple[str, ...],
+    ) -> bool:
+        return self.signature_kinds.is_free_function_signature(
+            result_kind,
+            param_kinds,
+        )
+
+    def shape_is_free_function(self, shape: SignatureShape) -> bool:
+        return self.is_free_function_signature(shape.result_kind, shape.param_kinds)
+
+    def overload_identity_token(self, kind: str, *, register_is_base: bool) -> str:
+        return self.signature_kinds.overload_identity_token(
+            kind,
+            register_is_base=register_is_base,
+        )
+
+    def cpp_result_type(self, kind: str) -> str:
+        return self.signature_kinds.cpp_result_type(kind)
+
+    def cpp_param_type(self, kind: str, *, index_type: str | None = None) -> str:
+        return self.signature_kinds.cpp_param_type(kind, index_type=index_type)
+
+    def cpp_free_type(self, kind: str, *, base_type: str) -> str:
+        return self.signature_kinds.cpp_free_type(kind, base_type=base_type)
+
+    def rust_owner_type(self, kind: str, *, owner: str) -> str:
+        return self.signature_kinds.rust_owner_type(kind, owner=owner)
+
+    def rust_param_type(self, kind: str, *, owner: str) -> str:
+        return self.signature_kinds.rust_param_type(kind, owner=owner)
+
+    def rust_free_type(self, kind: str, *, base_type: str) -> str:
+        return self.signature_kinds.rust_free_type(kind, base_type=base_type)
+
+    def rust_concrete_type(
+        self,
+        kind: str,
+        *,
+        base_type: str,
+        register_type: str,
+        array_type: str,
+    ) -> str:
+        return self.signature_kinds.rust_concrete_type(
+            kind,
+            base_type=base_type,
+            register_type=register_type,
+            array_type=array_type,
+        )
 
     def is_maskable_signature(self, shape: SignatureShape) -> bool:
         return (
@@ -229,41 +319,13 @@ class SupportPolicy:
 
 DEFAULT_SUPPORT_POLICY = SupportPolicy(
     backend_ids=frozenset(registered_backend_ids()),
-    supported_signature_kinds=frozenset(
-        {
-            "v",
-            "s",
-            "m",
-            "im",
-            "usize",
-            "sImm",
-            "ptr",
-            "ptr+",
-            "cptr",
-            "cptr+",
-            "void",
-            "s[]",
-            LANE_LIST_KIND,
-            "vt",
-            "vidx",
-            "o",
-        }
-    ),
-    maskable_result_kinds=frozenset({"v", "m", "im", "void"}),
-    mask_deferred_param_kinds=frozenset({"vidx"}),
+    signature_kinds=DEFAULT_SIGNATURE_KINDS,
     mask_suffixes=(("pass_through", "_mask"), ("zero", "_maskz")),
-    immediate_kind="sImm",
-    lane_list_kind=LANE_LIST_KIND,
-    index_vector_kind="vidx",
-    pointer_kinds=frozenset({"ptr", "ptr+", "cptr", "cptr+"}),
-    const_pointer_kinds=frozenset({"cptr", "cptr+"}),
-    mutable_pointer_kinds=frozenset({"ptr", "ptr+"}),
     # Sized vectors carry a source-visible `LANES` parameter. Scalable vectors are native runtime
     # length vectors: they can be selected for intrinsic-only C++ bodies, but fixed-lane queries
     # such as `vector::length` stay unsupported until a typed scalable lane model exists.
     sized_vector_bits_kinds=frozenset({"sized"}),
     scalable_vector_bits_kinds=frozenset({"scalable"}),
-    scalable_deferred_signature_kinds=frozenset({"s[]", LANE_LIST_KIND}),
     scalar_register_policy_kind="base_type",
     default_size_parameter_name="LANES",
     target_marker_values=frozenset({"==", "*"}),

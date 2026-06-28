@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from tslc.catalog.signatures import is_free_function_signature
 from tslc.lower.lowerer import (
     LoweredSpecialization,
     effective_param_types,
@@ -33,7 +32,10 @@ class CppBackend:
         other primitive's wrapper (``::tsl::set1<Vec>(...)``) regardless of order."""
 
         shape = specializations[0]  # all share the same signature shape + axis keys
-        if is_free_function_signature(shape.result_kind, shape.param_kinds):
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            shape.result_kind,
+            shape.param_kinds,
+        ):
             # A non-vector primitive: a plain prototype (the definition follows in
             # render_definitions), so a free function can still call any wrapper.
             return _free_function(shape, define=False)
@@ -64,7 +66,10 @@ class CppBackend:
         emits one `apply` per signature in that group, resolved by C++ overloading."""
 
         shape = specializations[0]
-        if is_free_function_signature(shape.result_kind, shape.param_kinds):
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            shape.result_kind,
+            shape.param_kinds,
+        ):
             return _free_function(shape, define=True)
         groups: dict[tuple, list[LoweredSpecialization]] = {}
         order: list[tuple] = []
@@ -217,13 +222,7 @@ def _free_kind_type(kind: str, base_spelling: str) -> str:
     """A free function's kind -> concrete type (no `Vec` projection). Pointer spellings
     carry their own mutability; `usize` is a size; `void` is no value."""
 
-    if kind == "void":
-        return "void"
-    if kind == "usize":
-        return "std::size_t"
-    if DEFAULT_SUPPORT_POLICY.is_const_pointer_kind(kind):
-        return f"const {base_spelling}"
-    return base_spelling
+    return DEFAULT_SUPPORT_POLICY.cpp_free_type(kind, base_type=base_spelling)
 
 
 def _vector_type(spec: LoweredSpecialization) -> str:
@@ -249,37 +248,8 @@ def _apply_result_type(spec: LoweredSpecialization) -> str:
 
 
 def _result_type(kind: str) -> str:
-    return {
-        "v": "typename Vec::register_type",
-        "s": "typename Vec::base_type",
-        "m": "typename Vec::mask_type",
-        "im": "typename Vec::imask_type",
-        "usize": "std::size_t",
-        "void": "void",
-        "s[]": "typename ::tsl::array_for<Vec>::type",
-        "o": "std::string &",  # a text-buffer stream (the `o` kind)
-    }[kind]
+    return DEFAULT_SUPPORT_POLICY.cpp_result_type(kind)
 
 
 def _param_type(kind: str, index_type: str | None = None) -> str:
-    if kind == "v":
-        return "typename tsl::reg_param<Vec>::type"
-    if kind == "vt":  # a target-axis vector param (`insert`'s `orig`) — the ToVec register
-        return "typename tsl::reg_param<ToVec>::type"
-    if kind == DEFAULT_SUPPORT_POLICY.index_vector_kind:
-        return f"typename tsl::reg_param<{index_type}>::type"
-    if kind == "m":
-        return "typename Vec::mask_type"
-    if kind == "im":
-        return "typename Vec::imask_type"
-    if kind == "usize":
-        return "std::size_t"
-    if kind == "o":  # a text-buffer stream
-        return "std::string &"
-    if DEFAULT_SUPPORT_POLICY.is_const_pointer_kind(kind):
-        return "typename Vec::base_type const *"
-    if DEFAULT_SUPPORT_POLICY.is_mutable_pointer_kind(kind):
-        return "typename Vec::base_type *"
-    if kind in ("s[]", DEFAULT_SUPPORT_POLICY.lane_list_kind):
-        return "typename ::tsl::array_param<Vec>::type"
-    return "typename Vec::base_type"
+    return DEFAULT_SUPPORT_POLICY.cpp_param_type(kind, index_type=index_type)

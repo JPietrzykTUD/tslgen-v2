@@ -4629,3 +4629,48 @@ Result: all listed validation passed. The fast non-build gate reports
 
 Stop condition: this design cleanup is complete. No next run prompt is required
 for this user-directed slice.
+
+## Completed Signature Kind Capability Cleanup
+
+The `tslc` primitive signature kind mechanics now have a typed central
+capability record instead of scattered per-stage maps.
+
+Implemented:
+
+- Added `SignatureKindCapability` and `SignatureKindCatalog` with compiler-owned
+  facts for supported kind tokens, pointer/borrow categories, maskability,
+  scalable deferrals, SIMD-axis/free-function classification, overload identity,
+  and C++/Rust type projections.
+- Added construction-time validation for duplicate signature-kind capabilities
+  and ambiguous singleton roles, plus loud failures for missing projection
+  context values.
+- Reworked `SupportPolicy` to derive supported/pointer/borrowed/maskable kind
+  sets and projection helpers from the signature kind catalog.
+- Moved free-function classification out of the signature parser and into
+  `SupportPolicy`/`SignatureKindCatalog`.
+- Replaced lowerer overload-identity kind switching with a signature capability
+  lookup.
+- Replaced C++ and Rust private kind projection maps with calls through
+  `SupportPolicy`.
+- Added typed `SimpleValueTestShapeCapability` records for simple value-test
+  shape rows, validating their kind tokens against the same capability catalog.
+- Recorded ADR-116 in `docs/redesign/design-decisions.md`.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src
+python -m pytest tslc/tests/test_support_policy.py tslc/tests/test_masks_and_calls.py tslc/tests/test_value_test_planning.py -q
+python -m pytest tslc/tests/test_profile_rendering.py tslc/tests/test_build_verify_config.py tslc/tests/test_render_model.py tslc/tests/test_select_and_lower.py -q
+python -m pytest tslc/tests/test_support_policy.py tslc/tests/test_masks_and_calls.py tslc/tests/test_value_test_planning.py tslc/tests/test_profile_rendering.py -q
+python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+python -m pytest tslc/tests/test_build_verify.py::test_generated_profiles_build -q
+git diff --check
+```
+
+Result: all listed validation passed. The fast non-build gate reports
+`283 passed, 82 deselected`; the focused generated-profile build test reports
+`1 passed`.
+
+Stop condition: this design cleanup is complete. No next run prompt is required
+for this user-directed slice.

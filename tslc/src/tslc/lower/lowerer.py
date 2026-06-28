@@ -874,28 +874,13 @@ def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
     """A per-position type token for overload dedup. `v` and `s` map to the same token
     where register_type == base_type (scalar/generic), so colliding overloads merge."""
 
-    def token(kind: str) -> str:
-        if kind == "v":
-            return "base" if spec.register_is_base else "register"
-        if kind == "vt":  # a target-axis vector param (`insert`'s `orig`) — the ToVec register
-            return "target_register"
-        if kind == DEFAULT_SUPPORT_POLICY.index_vector_kind:
-            return "index_register"
-        if kind == "m":
-            return "mask"
-        if kind in DEFAULT_SUPPORT_POLICY.pointer_kinds:
-            return (
-                "const_ptr"
-                if DEFAULT_SUPPORT_POLICY.is_const_pointer_kind(kind)
-                else "ptr"
-            )
-        if kind == "s[]":
-            return "array"
-        if kind == DEFAULT_SUPPORT_POLICY.lane_list_kind:
-            return "lane_list"
-        return "base"  # s
-
-    return tuple(token(kind) for kind in spec.param_kinds)
+    return tuple(
+        DEFAULT_SUPPORT_POLICY.overload_identity_token(
+            kind,
+            register_is_base=spec.register_is_base,
+        )
+        for kind in spec.param_kinds
+    )
 
 
 def _find_region(segments: tuple[Segment, ...] | None, keyword: str) -> Region | None:

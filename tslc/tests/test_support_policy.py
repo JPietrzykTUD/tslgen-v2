@@ -10,6 +10,10 @@ from tslc.backend.registry import (
     registered_backend_ids,
 )
 from tslc.catalog.model import Catalog, RESULT_DIM_BASE, RESULT_DIM_EXTENSION
+from tslc.catalog.signature_kinds import (
+    SignatureKindCapability,
+    SignatureKindCatalog,
+)
 from tslc.catalog.signatures import parse_signature
 from tslc.render.backend_drivers import render_backend_drivers
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
@@ -82,6 +86,83 @@ def test_policy_owns_mask_forms() -> None:
     assert policy.mask_split_base("add_maskz") == "add"
     assert policy.is_maskable_signature(add_shape)
     assert not policy.is_maskable_signature(gather_shape)
+
+
+def test_signature_kind_capabilities_single_source_projection_rules() -> None:
+    policy = DEFAULT_SUPPORT_POLICY
+
+    assert policy.supported_signature_kinds >= {
+        "v",
+        "s",
+        "m",
+        "im",
+        "usize",
+        "sImm",
+        "ptr",
+        "cptr",
+        "void",
+        "s[]",
+        policy.lane_list_kind,
+        "vt",
+        "vidx",
+        "o",
+    }
+    assert policy.pointer_kinds == frozenset({"ptr", "ptr+", "cptr", "cptr+"})
+    assert policy.scalable_deferred_signature_kinds == frozenset(
+        {"s[]", policy.lane_list_kind}
+    )
+    assert not policy.signature_kind_requires_vector_axis("ptr")
+    assert policy.signature_kind_requires_vector_axis("s")
+    assert policy.is_free_function_signature("ptr", ("usize",))
+    assert not policy.is_free_function_signature("void", ("ptr", "s", "s"))
+    assert policy.overload_identity_token("v", register_is_base=True) == "base"
+    assert policy.overload_identity_token("v", register_is_base=False) == "register"
+    assert policy.overload_identity_token("vidx", register_is_base=False) == (
+        "index_register"
+    )
+    assert policy.cpp_result_type("m") == "typename Vec::mask_type"
+    assert policy.cpp_param_type("vidx", index_type="IndicesType") == (
+        "typename tsl::reg_param<IndicesType>::type"
+    )
+    assert policy.rust_owner_type("o", owner="S") == "&mut String"
+    assert policy.rust_param_type("s[]", owner="S") == "&S::Array"
+    assert (
+        policy.rust_concrete_type(
+            "ptr",
+            base_type="i32",
+            register_type="__m128i",
+            array_type="[i32; 4]",
+        )
+        == "*mut i32"
+    )
+    with pytest.raises(ValueError, match="requires index_type"):
+        policy.cpp_param_type("vidx")
+
+
+def test_signature_kind_catalog_rejects_ambiguous_capabilities() -> None:
+    required = (
+        SignatureKindCapability("sImm", immediate_operand=True),
+        SignatureKindCapability("lanes<s>", lane_list=True),
+        SignatureKindCapability("vidx", index_vector=True),
+    )
+    with pytest.raises(ValueError, match="duplicate signature kind"):
+        SignatureKindCatalog(
+            (
+                *required,
+                SignatureKindCapability("x"),
+                SignatureKindCapability("x"),
+            )
+        )
+
+    with pytest.raises(ValueError, match="expected exactly one signature kind"):
+        SignatureKindCatalog(
+            (
+                SignatureKindCapability("sImm", immediate_operand=True),
+                SignatureKindCapability("lanes<s>", lane_list=True),
+                SignatureKindCapability("vidx1", index_vector=True),
+                SignatureKindCapability("vidx2", index_vector=True),
+            )
+        )
 
 
 def test_target_family_catalog_drives_extension_profile_routing(catalog: Catalog) -> None:

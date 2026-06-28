@@ -9,7 +9,6 @@ from tslc.backend.cpp import CppBackend
 from tslc.backend.translation import X86_REGISTER_BITS
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
-from tslc.catalog.signatures import is_free_function_signature
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyEmulator, VerifyProfile
@@ -247,7 +246,10 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
     for name in sorted(by_primitive):
         specs = by_primitive[name]
         first = specs[0]
-        if is_free_function_signature(first.result_kind, first.param_kinds):
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            first.result_kind,
+            first.param_kinds,
+        ):
             # A free function (`allocate`/`deallocate`) is not a template — address-take it
             # directly (once), so its body is compiled under the profile's flags.
             lines.append(f"auto* _tsl_use_{index} = &tsl::{name};")

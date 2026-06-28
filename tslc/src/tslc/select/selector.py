@@ -154,7 +154,9 @@ class Selector:
             # ISA-independent. Iterate its OWN type-group members (so `base::in` resolves) and
             # emit a single slot — the free-function render emits one `tsl::name(...)`.
             shape = parse_signature(primitive.signature)
-            free_function = shape is not None and shape.is_free_function
+            free_function = (
+                shape is not None and self.support.shape_is_free_function(shape)
+            )
             primitive_type_tags = (
                 tuple(
                     sorted(

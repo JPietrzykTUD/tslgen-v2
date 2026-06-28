@@ -5750,3 +5750,58 @@ Consequences:
   declare that a profile family may request `sde` or `qemu-aarch64`, but the
   verifier still owns how those tools are invoked and which CLI options
   configure them.
+
+## ADR-116: Signature Kind Mechanics Use Typed Capabilities
+
+Context:
+
+Primitive signature kind behavior had drift-prone copies across the prototype:
+`SupportPolicy` listed supported and maskable kinds, lowering mapped parameter
+kinds to overload identity tokens, C++ and Rust each kept private kind-to-type
+projection tables, and simple value-test patterns repeated kind spellings in an
+ordered shape table. Adding a new primitive shape therefore required edits in
+several unrelated locations before the compiler could even give coherent
+diagnostics.
+
+Decision:
+
+Keep signature kind behavior as compiler policy, not source data, but centralize
+it in typed immutable capability records:
+
+- `SignatureKindCapability` owns the supported kind token, pointer/borrow
+  classification, maskability/deferred flags, SIMD-axis/free-function
+  classification, overload identity token, and C++/Rust type projection
+  templates;
+- `SignatureKindCatalog` exposes stable lookup methods consumed by
+  `SupportPolicy`, lowering overload deduplication, selection, smoke rendering,
+  and backend renderers;
+- `SupportPolicy` remains the public policy facade, delegating kind questions to
+  the catalog so existing stages do not import backend or lowering internals;
+- simple value-test shape entries are now typed
+  `SimpleValueTestShapeCapability` records that validate their kind tokens
+  against the same signature kind catalog before producing ordered patterns.
+
+The catalog validates duplicate kind tokens and ambiguous singleton roles such
+as the immediate operand, lane-list parameter, and index-vector parameter at
+construction time. Projection templates also fail with a clear error when a
+required rendering context value is missing, rather than formatting a placeholder
+as `None` into generated source.
+
+Whole-signature value-test semantics remain shape-specific. A new kind can be
+made compiler-recognized, projected by C++/Rust, classified for masks/pointers,
+classified as axisless or vector-axis-bearing, and assigned overload identity in
+one capability entry; adding value-test coverage for a new whole shape may still
+require a shape-specific planner.
+
+Consequences:
+
+- The old C++ and Rust private result/parameter projection dictionaries are
+  gone; backend helpers delegate to `SupportPolicy`.
+- `effective_param_types(...)` no longer carries a local kind switch.
+- Supported, pointer, borrowed, maskable, and scalable-deferred kind sets are
+  derived from the signature kind catalog.
+- Free-function classification no longer lives in the signature parser; it is
+  derived from signature-kind capabilities through `SupportPolicy`.
+- The extension point is still deliberately narrow: signature kind semantics are
+  Python/compiler behavior, while source data controls which primitives use
+  those kinds.
