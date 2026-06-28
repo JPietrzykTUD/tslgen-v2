@@ -282,6 +282,30 @@ def _after_rust_command(
             break
 
 
+def cpp_verify_driver() -> VerifyBackendDriver:
+    return VerifyBackendDriver(
+        backend_id="cpp",
+        required_tools=("cmake",),
+        prepare_backend=_prepare_cpp_backend,
+        command_groups=lambda root, backend, config: _cpp_command_groups(
+            root, backend, config
+        ),
+        after_successful_command=_after_noop_command,
+    )
+
+
+def rust_verify_driver() -> VerifyBackendDriver:
+    return VerifyBackendDriver(
+        backend_id="rust",
+        required_tools=("cargo",),
+        prepare_backend=_prepare_rust_backend,
+        command_groups=lambda root, backend, config: _rust_command_groups(
+            root, backend, config
+        ),
+        after_successful_command=_after_rust_command,
+    )
+
+
 def _missing_tool(driver: VerifyBackendDriver) -> str | None:
     for tool in driver.required_tools:
         if _missing_executable(tool) is not None:
