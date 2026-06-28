@@ -118,6 +118,13 @@ def test_backend_loop_unroll_selector_captures_block() -> None:
     assert _joined(region.block) == "x = i;"
 
 
+def test_loop_without_block_keeps_optional_block_absent() -> None:
+    region = scan("loop<backend>(i, 0, 4, 1)")[0]
+    assert isinstance(region, Region)
+    assert region.keyword == "loop"
+    assert region.block is None
+
+
 def test_if_generation_else_if_chain_nests() -> None:
     body = "if<generation>(a) { x = 1; } else<generation> { if<generation>(b) { x = 2; } else<generation> { x = 3; } }"
     region = scan(body)[0]

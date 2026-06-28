@@ -38,14 +38,11 @@ KEYWORDS: frozenset[str] = frozenset(
         "io",  # io<write>(buffer, array, modifier) -> a text-stream write (to_ostream)
         "if",  # block-bearing: if<generation>(cond) { ... } else<generation> { ... }
         "assume_aligned",  # assume_aligned<N>(ptr) -> aligned-pointer hint
-        # Recognized so a loop body is flagged unsupported and skips cleanly, rather than
-        # leaking through as raw text; the lowerer (native for-loop translation) is a later
-        # slice. Its trailing `{ ... }` block is not yet captured (only `if` is block-bearing).
+        # Block-bearing backend/generation loop; the lowerer validates selectors
+        # and translates accepted native/generation loop forms.
         "loop",
-        # Recognized so a `switch<compile>(scale) { … }` (gather/scatter's native scale dispatch)
-        # is flagged unsupported and the whole specialization skips cleanly, rather than leaking as
-        # raw text. Its lowerer (a multi-arm constexpr sibling of `if<compile>`) is a later slice;
-        # the trailing `{ … }` block is not captured yet, but a skipped spec is dropped whole.
+        # Multi-arm compile-time dispatch. The scanner captures arms lexically;
+        # the lowerer validates selector meaning and renders accepted forms.
         "switch",
     }
 )

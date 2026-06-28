@@ -51,7 +51,18 @@ class SourceLoader:
                 )
                 continue
 
-            text = resolved.read_text(encoding="utf-8")
+            try:
+                text = resolved.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as exc:
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        code="TSL-SOURCE-READ-FAILED",
+                        message=f"source path {resolved} could not be read as UTF-8: {exc}",
+                        location=SourceLocation(resolved, 1, 1),
+                    )
+                )
+                continue
             documents.append(
                 SourceDocument(
                     path=resolved,

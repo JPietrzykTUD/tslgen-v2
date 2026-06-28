@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
 
 from tslc.lower.lowerer import LoweredSpecialization
@@ -9,7 +10,7 @@ from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
 def finalize_emitted_names(
-    by_name: dict[str, tuple[LoweredSpecialization, ...]],
+    by_name: Mapping[str, tuple[LoweredSpecialization, ...]],
     immediate_split_names: frozenset[str],
 ) -> dict[str, tuple[LoweredSpecialization, ...]]:
     """Apply emitted-name splits that depend on the final overload set."""
@@ -18,7 +19,7 @@ def finalize_emitted_names(
 
 
 def _split_masked(
-    by_name: dict[str, tuple[LoweredSpecialization, ...]],
+    by_name: Mapping[str, tuple[LoweredSpecialization, ...]],
 ) -> dict[str, tuple[LoweredSpecialization, ...]]:
     """Split a name with more than one mask-policy form into emitted mask names."""
 

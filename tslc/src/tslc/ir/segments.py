@@ -7,9 +7,10 @@ where each segment is either:
 - :class:`RawText` — target-language source, passed through verbatim; or
 - :class:`Region` — a recognized TSIL keyword island whose selector (``<...>``)
   is kept as raw text and whose argument payload (``(...)``) is itself a
-  recursively-scanned ``tuple[Segment, ...]``. When a region appears in a
-  statement stream and is followed by a source ``;``, the scanner consumes that
-  terminator and records it on the region instead of leaking it as raw text.
+  recursively-scanned ``tuple[Segment, ...]``. Block-bearing regions may also
+  carry a brace-delimited ``block``. When a region appears in a statement stream
+  and is followed by a source ``;``, the scanner consumes that terminator and
+  records it on the region instead of leaking it as raw text.
 
 The lowerer translates regions and passes raw text through.
 """
@@ -36,11 +37,11 @@ class Region:
     source: SourceSpan | None = None
     has_statement_terminator: bool = False
     # Brace-delimited trailing block(s), for block-bearing keywords like
-    # ``if<generation>(cond) { ... } else<generation> { ... }``. Empty/None for
+    # ``if<generation>(cond) { ... } else<generation> { ... }``. None for
     # ordinary ``keyword<sel>(args)`` regions. ``else_block`` holds either the
     # plain ``else`` statements or, for an ``else if`` chain, a single nested
     # ``if`` region.
-    block: tuple["Segment", ...] = ()
+    block: tuple["Segment", ...] | None = None
     else_block: tuple["Segment", ...] | None = None
     # Arms of a ``switch<compile>(sel) { label => { body } … _ => { body } }`` region: each is
     # (label, body-segments); ``_`` is the default. The lowerer emits a compile-time multi-way

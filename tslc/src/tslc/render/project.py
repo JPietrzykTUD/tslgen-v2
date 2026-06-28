@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from types import MappingProxyType
 
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, Extension
@@ -29,12 +31,21 @@ from tslc.value_tests.render_rust import RUST_VALUE_TEST_SUPPORT
 class ProfileRender:
     profile: MachineProfile
     # primitive name -> its specializations (one backend each)
-    cpp: dict[str, tuple[LoweredSpecialization, ...]]
-    rust: dict[str, tuple[LoweredSpecialization, ...]]
+    cpp: Mapping[str, tuple[LoweredSpecialization, ...]]
+    rust: Mapping[str, tuple[LoweredSpecialization, ...]]
     # isa_name -> the extension block this profile actually selected for that ISA tag
     # (so registrations know whether `avx2` here is lane-bitmask `avx2` or native
     # `avx2_vl`). Per (profile, isa) exactly one block is selected, so this is 1:1.
-    extensions: dict[str, Extension] = field(default_factory=dict)
+    extensions: Mapping[str, Extension] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "cpp", _freeze_specializations(self.cpp))
+        object.__setattr__(self, "rust", _freeze_specializations(self.rust))
+        object.__setattr__(
+            self,
+            "extensions",
+            MappingProxyType(dict(sorted(self.extensions.items()))),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,6 +141,14 @@ def _value_test_inputs(
                 ValueTestBackendProfileInput("rust", profile.profile.name, profile.rust)
             )
     return tuple(inputs)
+
+
+def _freeze_specializations(
+    mapping: Mapping[str, tuple[LoweredSpecialization, ...]],
+) -> Mapping[str, tuple[LoweredSpecialization, ...]]:
+    return MappingProxyType(
+        {name: tuple(specs) for name, specs in sorted(mapping.items())}
+    )
 
 
 __all__ = ["ProfileRender", "RenderedProject", "render_project"]

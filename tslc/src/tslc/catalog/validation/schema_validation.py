@@ -452,6 +452,7 @@ def _validate_test_case(
     item: ParsedTslMapValue,
     diagnostics: list[Diagnostic],
 ) -> None:
+    _diagnose_duplicate_fields(item.entries, diagnostics, label="test field")
     entries = {entry.key.text: entry for entry in item.entries}
     case_id = field_text(entries.get("id"))
     owner = (
@@ -509,11 +510,17 @@ def _validate_test_case(
         )
     case = entries.get("case")
     if case is not None:
+        case_children = children(case)
         _validate_known_fields(
-            children(case),
+            case_children,
             frozenset({"inputs", "expected"}),
             diagnostics,
             owner=f"{owner} case",
+        )
+        _diagnose_duplicate_fields(
+            case_children,
+            diagnostics,
+            label=f"{owner} case field",
         )
         for required in ("inputs", "expected"):
             if child(case, required) is None:

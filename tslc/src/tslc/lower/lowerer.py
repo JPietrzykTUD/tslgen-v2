@@ -749,9 +749,11 @@ def _type_param_bounds(
 
 
 def _type_param_bound_names(
-    segments: tuple[Segment, ...],
+    segments: tuple[Segment, ...] | None,
     type_param_name: str,
 ) -> frozenset[str]:
+    if segments is None:
+        return frozenset()
     names: set[str] = set()
     for segment in segments:
         if not isinstance(segment, Region):
@@ -896,11 +898,13 @@ def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
     return tuple(token(kind) for kind in spec.param_kinds)
 
 
-def _find_region(segments: tuple[Segment, ...], keyword: str) -> Region | None:
+def _find_region(segments: tuple[Segment, ...] | None, keyword: str) -> Region | None:
     """Find a region by keyword, descending into ``if`` branch blocks and ``switch`` arms so an
     ``complete`` guarded by ``if<generation>`` / inside a ``switch<compile>`` arm still counts
     as present (every arm returns, so finding it in any arm is sufficient)."""
 
+    if segments is None:
+        return None
     for segment in segments:
         if isinstance(segment, Region):
             if segment.keyword == keyword:

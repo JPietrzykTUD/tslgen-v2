@@ -174,6 +174,24 @@ def test_unknown_test_field_is_diagnosed() -> None:
     assert "TSL-CATALOG-UNKNOWN-TEST-FIELD" in codes
 
 
+def test_duplicate_test_fields_are_diagnosed() -> None:
+    codes = _diagnostics(
+        "  tests:\n"
+        '    - {tags [basic], tags [edge], type "si32", '
+        "case {inputs [[1]], expected [1]}}\n"
+    )
+    assert "TSL-CATALOG-DUPLICATE-FIELD" in codes
+
+
+def test_duplicate_test_case_fields_are_diagnosed() -> None:
+    codes = _diagnostics(
+        "  tests:\n"
+        '    - {tags [basic], type "si32", '
+        "case {inputs [[1]], inputs [[2]], expected [1]}}\n"
+    )
+    assert "TSL-CATALOG-DUPLICATE-FIELD" in codes
+
+
 def test_missing_required_test_field_is_diagnosed() -> None:
     codes = _diagnostics(
         '  tests:\n    - {type "si32", case {inputs [[1]], expected [1]}}\n'
