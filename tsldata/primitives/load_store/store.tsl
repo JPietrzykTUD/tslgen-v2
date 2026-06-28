@@ -334,7 +334,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [raw_pointer]
+          reasons [raw_pointer, intrinsic]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {

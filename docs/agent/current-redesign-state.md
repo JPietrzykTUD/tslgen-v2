@@ -4553,3 +4553,37 @@ only failure is `test_primitive_corpus_safety_covers_direct_unsafe_facts`.
 
 Stop condition: the active ARM coverage goal has current completion evidence.
 No next run prompt is required for this goal.
+
+## Completed Safety Contract Baseline Cleanup
+
+The previous fast-gate baseline included one known WIP failure:
+`test_primitive_corpus_safety_covers_direct_unsafe_facts`. That baseline is now
+superseded.
+
+Implemented:
+
+- Added the missing `intrinsic` safety reason to the SVE
+  `store_mask_repr` implementation in `tsldata/primitives/load_store/store.tsl`.
+  The body calls `intrin<svcntb>()`, so the implementation already had the
+  correct `internal_unsafe true` shape but was missing the `intrinsic` reason
+  beside `raw_pointer`.
+
+Validation:
+
+```text
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_safety_contract.py::test_primitive_corpus_safety_covers_direct_unsafe_facts
+```
+
+Result: `1 passed`.
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall and `git diff --check` passed; the fast non-build gate is
+now green with `266 passed, 82 deselected`.
+
+Stop condition: no next run prompt is required for this safety annotation
+cleanup.

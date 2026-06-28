@@ -8,18 +8,7 @@ concrete findings, and follow-up recommendations.
 
 Review whether the current `tslc` implementation, tests, and active handoff
 state remain aligned with the project's main design principles after the recent
-changes around:
-
-- value-test planning and rendering;
-- support policy and support-policy views;
-- catalog/profile validation;
-- typed render values;
-- lane-list `set`;
-- TSIL statement terminators;
-- unified `intrin<..., build[...]>(...)`;
-- comma-separated `call<...>` selectors;
-- `loop<backend>` / `loop<backend, unroll>`;
-- the latest design follow-up cleanup.
+changes.
 
 Focus on the active `tslc/` codebase and `tsldata/` source corpus. Treat older
 `tslgen` milestone history as historical evidence only unless it is explicitly
@@ -27,17 +16,7 @@ referenced by the active `tslc` handoff.
 
 ## Required Reading
 
-Read these first:
-
-- `PLANS.md`
-- `docs/agent/current-redesign-state.md`
-- `docs/agent/tslc-vector-query-handoff.md`
-- `docs/agent/review-checklist.md`
-- `docs/redesign/design-decisions.md` sections for the current `tslc` ADRs,
-  especially ADR-075 through ADR-084
-- `docs/redesign/behavioral-spec.md` current `tslc` behavior sections
-
-Then inspect the implementation areas most relevant to the recent changes:
+Inspect the implementation areas most relevant to the recent changes:
 
 - `tslc/src/tslc/pipeline.py`
 - `tslc/src/tslc/catalog/validation/`

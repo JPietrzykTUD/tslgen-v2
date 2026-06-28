@@ -4770,3 +4770,36 @@ known safety-contract baseline: `1 failed, 265 passed, 82 deselected`; the
 only failure is `test_primitive_corpus_safety_covers_direct_unsafe_facts`.
 
 Stop condition: no next run prompt is required for this ARM coverage goal.
+
+### Latest Active TSLc Handoff: Safety Contract Baseline Cleanup
+
+The previous fast-gate baseline included one known WIP failure:
+`test_primitive_corpus_safety_covers_direct_unsafe_facts`. That baseline is now
+superseded.
+
+Implemented:
+
+1. Added the missing `intrinsic` safety reason to the SVE
+   `store_mask_repr` implementation in `tsldata/primitives/load_store/store.tsl`.
+2. Kept the existing `raw_pointer` reason, because the primitive still writes
+   through a pointer parameter.
+
+Validation:
+
+```bash
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_safety_contract.py::test_primitive_corpus_safety_covers_direct_unsafe_facts
+```
+
+Result: `1 passed`.
+
+```bash
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall and `git diff --check` passed; the fast non-build gate is
+now green with `266 passed, 82 deselected`.
+
+Stop condition: no next run prompt is required for this safety annotation
+cleanup.
