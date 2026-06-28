@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.model import RESULT_DIM_BASE, Extension
 from tslc.catalog.scalar_types import (
     same_scalar_width,
@@ -225,7 +226,7 @@ class SupportPolicy:
 
 
 DEFAULT_SUPPORT_POLICY = SupportPolicy(
-    backend_ids=frozenset({"cpp", "rust"}),
+    backend_ids=frozenset(registered_backend_ids()),
     emitted_extension_families=frozenset({"scalar", "x86", "arm", "generic_like"}),
     supported_signature_kinds=frozenset(
         {

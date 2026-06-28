@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
+from tslc.backend.registry import create_backend_dialect, registered_backend_ids
 from tslc.catalog.model import Catalog, RESULT_DIM_BASE, RESULT_DIM_EXTENSION
 from tslc.catalog.signatures import parse_signature
+from tslc.render.backend_drivers import render_backend_drivers
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
@@ -35,6 +39,18 @@ def test_policy_owns_backend_and_signature_support(catalog: Catalog) -> None:
     assert policy.unsupported_signature_kinds(parse_signature("opaque:=v")) == frozenset(
         {"opaque"}
     )
+
+
+def test_backend_registries_agree_with_support_policy(catalog: Catalog) -> None:
+    assert registered_backend_ids() == DEFAULT_SUPPORT_POLICY.default_backend_ids
+    assert tuple(
+        driver.backend_id
+        for driver in render_backend_drivers(DEFAULT_SUPPORT_POLICY.default_backend_ids)
+    ) == DEFAULT_SUPPORT_POLICY.default_backend_ids
+    assert create_backend_dialect(catalog, "cpp").backend_id == "cpp"
+    assert create_backend_dialect(catalog, "rust").backend_id == "rust"
+    with pytest.raises(ValueError, match="unsupported backend"):
+        create_backend_dialect(catalog, "c17")
 
 
 def test_policy_owns_mask_forms() -> None:

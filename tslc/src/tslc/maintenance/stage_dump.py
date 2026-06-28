@@ -31,6 +31,7 @@ import sys
 from pathlib import Path
 
 from tslc.api import _ARITH_TYPE_TAGS, _expand_sources
+from tslc.backend.registry import registered_backend_ids
 from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.model import Catalog, Extension, Primitive
 from tslc.ir.scan import scan
@@ -51,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--stage", required=True, choices=_STAGES)
     parser.add_argument("--primitive", default=None, help="restrict to this primitive name")
     parser.add_argument("--profile", default=None, help="machine profile (selection/lowered)")
-    parser.add_argument("--backend", default="cpp", choices=("cpp", "rust"))
+    parser.add_argument("--backend", default="cpp", choices=registered_backend_ids())
     parser.add_argument("--type", default=None, dest="type_tag", help="restrict to this type tag")
     parser.add_argument("--extension", default=None, help="restrict to this simd<> extension tag")
     parser.add_argument("--format", default="text", choices=("text", "json"))

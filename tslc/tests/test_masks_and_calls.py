@@ -143,6 +143,37 @@ def test_dependency_extraction_resolves_queries_without_backend_dialect(
     )
 
 
+def test_dependency_extraction_uses_shared_query_functions(catalog: Catalog) -> None:
+    body = """
+      let<type>(
+        SourceVec,
+        type<generation>(
+          select(
+            type::is_same(type<generation>(base::in), si32),
+            vector::as_extension(scalar),
+            vector::as_extension(avx2)
+          )
+        )
+      );
+      call<primitive=@self[SourceVec]>(left, right);
+    """
+
+    dependencies = extract_call_dependencies_from_segments(
+        scan(body),
+        "add",
+        "avx2",
+        "si32",
+        None,
+        None,
+        None,
+        catalog,
+    )
+
+    assert dependencies == frozenset(
+        {CallDependency("add", None, VectorIdentity("si32", "scalar"))}
+    )
+
+
 def test_primitive_corpus_uses_comma_separated_call_attrs(data_root: Path) -> None:
     stale: list[str] = []
     pattern = re.compile(r"call<[^>\n]*[^,]\s+attrs\[")

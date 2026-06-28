@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from tslc.backend.translation_common import X86_REGISTER_BITS
-from tslc.catalog.model import Catalog, Extension
+from tslc.catalog.model import Extension
 from tslc.catalog.scalar_types import (
     is_signed,
     is_type_tag,
@@ -14,7 +14,7 @@ from tslc.catalog.scalar_types import (
     unsigned_of,
 )
 from tslc.render.model import RenderField, RenderText
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
+from tslc.backend.registry import create_backend_dialect
 
 
 class BackendTypeDialect(Protocol):
@@ -98,20 +98,6 @@ class BackendDialect(Protocol):
     intrinsics: BackendIntrinsicDialect
     templates: BackendTemplateDialect
     syntax: BackendSyntaxDialect
-
-
-def create_backend_dialect(catalog: Catalog, backend_id: str) -> BackendDialect:
-    if not DEFAULT_SUPPORT_POLICY.supports_backend(backend_id):
-        raise ValueError(f"unsupported backend {backend_id!r}")
-    if backend_id == "cpp":
-        from tslc.backend.cpp_translation import CppBackendDialect
-
-        return CppBackendDialect(catalog)
-    if backend_id == "rust":
-        from tslc.backend.rust_translation import RustBackendDialect
-
-        return RustBackendDialect(catalog)
-    raise ValueError(f"unsupported backend {backend_id!r}")
 
 
 __all__ = [

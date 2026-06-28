@@ -186,6 +186,75 @@ def test_malformed_requires_shape_is_diagnosed() -> None:
     assert "flag list" in diagnostic.message
 
 
+def test_malformed_call_body_region_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "language rust:\n"
+        '  s32 {type "i32"}\n'
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "call<primitive=set_zero trailing>(data);"\n'
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-CALL-SELECTOR")
+    assert "malformed call selector" in diagnostic.message
+
+
+def test_malformed_let_body_region_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "language rust:\n"
+        '  s32 {type "i32"}\n'
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "let<type>(AliasOnly); complete(data);"\n'
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-LET")
+    assert "let<type>(Name, type-expression)" in diagnostic.message
+
+
+def test_malformed_intrin_body_region_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "language rust:\n"
+        '  s32 {type "i32"}\n'
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(intrin<add, suffix=epi32>(data));"\n'
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-INTRIN-SELECTOR")
+    assert "build" in diagnostic.message
+
+
 @pytest.mark.parametrize(
     ("signature", "code"),
     [

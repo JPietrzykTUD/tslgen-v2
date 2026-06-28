@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
     Catalog,
@@ -34,6 +36,21 @@ from tslc.value_tests.render_rust import (
 )
 
 _VALUE_TEST_SUPPORTS = (CPP_VALUE_TEST_SUPPORT, RUST_VALUE_TEST_SUPPORT)
+
+
+def test_profile_render_freezes_backend_mappings() -> None:
+    source_cpp: dict[str, tuple[LoweredSpecialization, ...]] = {}
+    profile = ProfileRender(
+        profile=MachineProfile("unit", "generic", frozenset(), {}),
+        cpp=source_cpp,
+        rust={},
+    )
+
+    source_cpp["late"] = ()
+
+    assert "late" not in profile.cpp
+    with pytest.raises(TypeError):
+        profile.cpp["late"] = ()  # type: ignore[index]
 
 
 def test_harness_discovery_uses_signatures_not_names() -> None:

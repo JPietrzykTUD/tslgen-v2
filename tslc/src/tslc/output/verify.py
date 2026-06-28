@@ -6,7 +6,7 @@ driven by a small, explicit project description instead of a heavy render model.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import hashlib
 import json
 import os
@@ -15,142 +15,60 @@ import shlex
 import shutil
 import subprocess
 import tempfile
-from collections.abc import Sequence
-from typing import Protocol
+from collections.abc import Callable, Mapping
 
 from tslc.diagnostics import Diagnostic
+from tslc.output.verify_model import (
+    BuildCommand,
+    BuildCommandEnvironment,
+    BuildCommandResult,
+    BuildCommandRunner,
+    BuildVerificationReport,
+    BuildVerifierConfig,
+    VerifyBackend,
+    VerifyEmulator,
+    VerifyProfile,
+    VerifyProject,
+    _normalize_compiler_executable,
+)
+
+
+PrepareBackend = Callable[
+    [
+        Path,
+        VerifyBackend,
+        BuildVerifierConfig,
+        BuildCommandRunner,
+        list[BuildCommandResult],
+        list[Diagnostic],
+        list[str],
+    ],
+    VerifyBackend | None,
+]
+CommandGroups = Callable[
+    [Path, VerifyBackend, BuildVerifierConfig],
+    tuple[tuple[BuildCommand, ...], ...],
+]
+AfterCommand = Callable[
+    [
+        BuildCommandResult,
+        Mapping[str, VerifyProfile],
+        BuildVerifierConfig,
+        BuildCommandRunner,
+        list[BuildCommandResult],
+        list[Diagnostic],
+    ],
+    None,
+]
 
 
 @dataclass(frozen=True, slots=True)
-class VerifyEmulator:
-    kind: str  # "sde" | "qemu-aarch64"
-    profile: str
-    args: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class VerifyProfile:
-    profile_name: str
-    file_stem: str
-    family: str = "generic"
-    # C++ extra compile flags (e.g. ("-mavx2", "-mavx")); Rust target features (e.g. ("+avx2",)).
-    cpp_flags: tuple[str, ...] = ()
-    cpp_target: str | None = None
-    rust_target_features: tuple[str, ...] = ()
-    rust_target: str | None = None
-    rust_linker: str | None = None
-    # Optional emulator profile used to run value tests for this profile.
-    emulator: VerifyEmulator | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class VerifyBackend:
-    backend_id: str  # "cpp" | "rust"
-    root_path: str  # relative to output root, e.g. "cpp"
-    profiles: tuple[VerifyProfile, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class VerifyProject:
-    backends: tuple[VerifyBackend, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class BuildVerifierConfig:
-    """Optional toolchain configuration for after-write verification."""
-
-    # None means: use the ambient CXX setting when present, otherwise try `c++`.
-    # A tuple pins the compiler command, e.g. ("/usr/bin/c++",) or ("zig", "c++").
-    cpp_compiler: tuple[str, ...] | None = None
-    # None means: use the ambient RUSTC setting when present, otherwise try `rustc`.
-    # Cargo expects RUSTC to name the compiler executable; use RUSTFLAGS for flags.
-    rust_compiler: str | None = None
-    # Build + run the generated value-correctness tests (the `tsl_values` binary under ctest).
-    # OFF by default: the ordinary build-verify only compiles the library substrate
-    # (`tsl_smoke`), so adding value testing to the standard gate does not double every
-    # project's build cost. The dedicated value-test gate opts in.
-    run_value_tests: bool = False
-    # Optional Intel SDE executable. Profiles opt in with VerifyProfile.emulator.
-    sde_path: str | None = None
-    # Optional QEMU user-mode executable for aarch64 profile value tests.
-    qemu_aarch64_path: str | None = None
-    # Optional target overrides. Profile-derived targets are used when unset.
-    cpp_target: str | None = None
-    rust_target: str | None = None
-    rust_linker: str | None = None
-
-    @classmethod
-    def create(
-        cls,
-        *,
-        cpp_compiler: str | Sequence[str] | None = None,
-        rust_compiler: str | None = None,
-        run_value_tests: bool = False,
-        sde_path: str | None = None,
-        qemu_aarch64_path: str | None = None,
-        cpp_target: str | None = None,
-        rust_target: str | None = None,
-        rust_linker: str | None = None,
-    ) -> "BuildVerifierConfig":
-        normalized_sde_path = _normalize_compiler_executable(sde_path)
-        normalized_qemu_aarch64_path = _normalize_compiler_executable(qemu_aarch64_path)
-        normalized_cpp_compiler = _normalize_compiler_command(cpp_compiler)
-        if normalized_cpp_compiler is None and normalized_sde_path is not None and run_value_tests:
-            # SDE profile tests execute binaries for low-ISA chips. An ambient CXX
-            # such as `zig c++` can inject runtime helpers that use newer
-            # instructions than the requested chip, so pin the verifier default
-            # unless the caller explicitly chose a compiler.
-            normalized_cpp_compiler = ("c++",)
-        return cls(
-            cpp_compiler=normalized_cpp_compiler,
-            rust_compiler=_normalize_compiler_executable(rust_compiler),
-            run_value_tests=run_value_tests,
-            sde_path=normalized_sde_path,
-            qemu_aarch64_path=normalized_qemu_aarch64_path,
-            cpp_target=_normalize_compiler_executable(cpp_target),
-            rust_target=_normalize_compiler_executable(rust_target),
-            rust_linker=_normalize_compiler_executable(rust_linker),
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class BuildCommandEnvironment:
-    key: str
-    value: str
-
-
-@dataclass(frozen=True, slots=True)
-class BuildCommand:
+class _VerifyBackendDriver:
     backend_id: str
-    profile_name: str
-    step: str
-    argv: tuple[str, ...]
-    cwd: Path
-    env: tuple[BuildCommandEnvironment, ...] = ()
-    # Diagnostic severity if this command fails. Configure/build failures are hard errors;
-    # value-test failures are reported as warnings (report-then-promote) so a not-yet-correct
-    # path surfaces without failing the build gate during scale-up.
-    severity_on_failure: str = "error"
-
-
-@dataclass(frozen=True, slots=True)
-class BuildCommandResult:
-    command: BuildCommand
-    returncode: int
-    stdout: str = ""
-    stderr: str = ""
-
-
-@dataclass(frozen=True, slots=True)
-class BuildVerificationReport:
-    commands: tuple[BuildCommandResult, ...]
-    diagnostics: tuple[Diagnostic, ...]
-    skipped: tuple[str, ...] = field(default=())
-
-
-class BuildCommandRunner(Protocol):
-    def __call__(self, command: BuildCommand) -> BuildCommandResult:
-        """Run one build-verification command."""
+    required_tools: tuple[str, ...]
+    prepare_backend: PrepareBackend
+    command_groups: CommandGroups
+    after_successful_command: AfterCommand
 
 
 def run_subprocess_build_command(command: BuildCommand) -> BuildCommandResult:
@@ -196,10 +114,14 @@ def verify_generated_project(
             commands=(),
             diagnostics=(emulator_missing,),
             skipped=(),
-        )
+    )
 
     for backend in project.backends:
-        missing = _missing_tool(backend.backend_id)
+        driver = _VERIFY_BACKEND_DRIVERS.get(backend.backend_id)
+        if driver is None:
+            skipped.append(f"{backend.backend_id}: unsupported backend verification")
+            continue
+        missing = _missing_tool(driver)
         if missing is not None:
             skipped.append(f"{backend.backend_id}: {missing} not found")
             continue
@@ -207,87 +129,35 @@ def verify_generated_project(
         skipped.extend(profile_skips)
         if not backend.profiles:
             continue
-        profiles_by_name = {profile.profile_name: profile for profile in backend.profiles}
-        if backend.backend_id == "cpp":
-            compiler = _effective_cpp_compiler(config, backend)
-            missing_compiler = _missing_executable(compiler[0])
-            if missing_compiler is not None:
-                skipped.append(f"cpp: C++ compiler {missing_compiler} not found")
-                continue
-            preflight = _cpp_preflight_command(root, backend, compiler)
-            if isinstance(preflight, Diagnostic):
-                diagnostics.append(preflight)
-                continue
-            result = runner(preflight)
-            results.append(result)
-            if result.returncode != 0:
-                skipped.append(_cpp_preflight_skip(result))
-                continue
-            target_profiles: list[VerifyProfile] = []
-            for profile in backend.profiles:
-                target_preflight = _cpp_target_preflight_command(
-                    root,
-                    backend,
-                    profile,
-                    config,
-                    compiler,
-                )
-                if target_preflight is None:
-                    target_profiles.append(profile)
-                    continue
-                if isinstance(target_preflight, Diagnostic):
-                    diagnostics.append(target_preflight)
-                    continue
-                result = runner(target_preflight)
-                results.append(result)
-                if result.returncode != 0:
-                    skipped.append(_cpp_target_preflight_skip(result))
-                    continue
-                target_profiles.append(profile)
-            backend = VerifyBackend(
-                backend_id=backend.backend_id,
-                root_path=backend.root_path,
-                profiles=tuple(target_profiles),
-            )
-            profiles_by_name = {profile.profile_name: profile for profile in backend.profiles}
-            if not backend.profiles:
-                continue
-        if backend.backend_id == "rust":
-            compiler = _effective_rust_compiler(config)
-            missing_compiler = _missing_executable(compiler)
-            if missing_compiler is not None:
-                skipped.append(f"rust: Rust compiler {missing_compiler} not found")
-                continue
-            preflight = _rust_preflight_command(root, backend, compiler)
-            if isinstance(preflight, Diagnostic):
-                diagnostics.append(preflight)
-                continue
-            result = runner(preflight)
-            results.append(result)
-            if result.returncode != 0:
-                skipped.append(_rust_preflight_skip(result))
-                continue
-        for group in _command_groups(root, backend, config):
+        prepared = driver.prepare_backend(
+            root,
+            backend,
+            config,
+            runner,
+            results,
+            diagnostics,
+            skipped,
+        )
+        if prepared is None or not prepared.profiles:
+            continue
+        profiles_by_name = {
+            profile.profile_name: profile for profile in prepared.profiles
+        }
+        for group in driver.command_groups(root, prepared, config):
             for command in group:
                 result = runner(command)
                 results.append(result)
                 if result.returncode != 0:
                     diagnostics.append(_command_diagnostic(result))
                     break
-                if command.backend_id == "rust" and command.step == "build-tests":
-                    profile = profiles_by_name[command.profile_name]
-                    followups, followup_diagnostics = _rust_emulated_test_commands(
-                        result,
-                        profile,
-                        config,
-                    )
-                    diagnostics.extend(followup_diagnostics)
-                    for followup in followups:
-                        followup_result = runner(followup)
-                        results.append(followup_result)
-                        if followup_result.returncode != 0:
-                            diagnostics.append(_command_diagnostic(followup_result))
-                            break
+                driver.after_successful_command(
+                    result,
+                    profiles_by_name,
+                    config,
+                    runner,
+                    results,
+                    diagnostics,
+                )
 
     return BuildVerificationReport(
         commands=tuple(results),
@@ -296,9 +166,143 @@ def verify_generated_project(
     )
 
 
-def _missing_tool(backend_id: str) -> str | None:
-    needed = {"cpp": ("cmake",), "rust": ("cargo",)}.get(backend_id, ())
-    for tool in needed:
+def _prepare_cpp_backend(
+    root: Path,
+    backend: VerifyBackend,
+    config: BuildVerifierConfig,
+    runner: BuildCommandRunner,
+    results: list[BuildCommandResult],
+    diagnostics: list[Diagnostic],
+    skipped: list[str],
+) -> VerifyBackend | None:
+    compiler = _effective_cpp_compiler(config, backend)
+    missing_compiler = _missing_executable(compiler[0])
+    if missing_compiler is not None:
+        skipped.append(f"cpp: C++ compiler {missing_compiler} not found")
+        return None
+    preflight = _cpp_preflight_command(root, backend, compiler)
+    if isinstance(preflight, Diagnostic):
+        diagnostics.append(preflight)
+        return None
+    result = runner(preflight)
+    results.append(result)
+    if result.returncode != 0:
+        skipped.append(_cpp_preflight_skip(result))
+        return None
+    target_profiles: list[VerifyProfile] = []
+    for profile in backend.profiles:
+        target_preflight = _cpp_target_preflight_command(
+            root,
+            backend,
+            profile,
+            config,
+            compiler,
+        )
+        if target_preflight is None:
+            target_profiles.append(profile)
+            continue
+        if isinstance(target_preflight, Diagnostic):
+            diagnostics.append(target_preflight)
+            continue
+        result = runner(target_preflight)
+        results.append(result)
+        if result.returncode != 0:
+            skipped.append(_cpp_target_preflight_skip(result))
+            continue
+        target_profiles.append(profile)
+    return VerifyBackend(
+        backend_id=backend.backend_id,
+        root_path=backend.root_path,
+        profiles=tuple(target_profiles),
+    )
+
+
+def _prepare_rust_backend(
+    root: Path,
+    backend: VerifyBackend,
+    config: BuildVerifierConfig,
+    runner: BuildCommandRunner,
+    results: list[BuildCommandResult],
+    diagnostics: list[Diagnostic],
+    skipped: list[str],
+) -> VerifyBackend | None:
+    compiler = _effective_rust_compiler(config)
+    missing_compiler = _missing_executable(compiler)
+    if missing_compiler is not None:
+        skipped.append(f"rust: Rust compiler {missing_compiler} not found")
+        return None
+    preflight = _rust_preflight_command(root, backend, compiler)
+    if isinstance(preflight, Diagnostic):
+        diagnostics.append(preflight)
+        return None
+    result = runner(preflight)
+    results.append(result)
+    if result.returncode != 0:
+        skipped.append(_rust_preflight_skip(result))
+        return None
+    return backend
+
+
+def _after_noop_command(
+    result: BuildCommandResult,
+    profiles_by_name: Mapping[str, VerifyProfile],
+    config: BuildVerifierConfig,
+    runner: BuildCommandRunner,
+    results: list[BuildCommandResult],
+    diagnostics: list[Diagnostic],
+) -> None:
+    del result, profiles_by_name, config, runner, results, diagnostics
+
+
+def _after_rust_command(
+    result: BuildCommandResult,
+    profiles_by_name: Mapping[str, VerifyProfile],
+    config: BuildVerifierConfig,
+    runner: BuildCommandRunner,
+    results: list[BuildCommandResult],
+    diagnostics: list[Diagnostic],
+) -> None:
+    if result.command.step != "build-tests":
+        return
+    profile = profiles_by_name[result.command.profile_name]
+    followups, followup_diagnostics = _rust_emulated_test_commands(
+        result,
+        profile,
+        config,
+    )
+    diagnostics.extend(followup_diagnostics)
+    for followup in followups:
+        followup_result = runner(followup)
+        results.append(followup_result)
+        if followup_result.returncode != 0:
+            diagnostics.append(_command_diagnostic(followup_result))
+            break
+
+
+_VERIFY_BACKEND_DRIVERS: dict[str, _VerifyBackendDriver] = {
+    "cpp": _VerifyBackendDriver(
+        backend_id="cpp",
+        required_tools=("cmake",),
+        prepare_backend=_prepare_cpp_backend,
+        command_groups=lambda root, backend, config: _cpp_command_groups(
+            root, backend, config
+        ),
+        after_successful_command=_after_noop_command,
+    ),
+    "rust": _VerifyBackendDriver(
+        backend_id="rust",
+        required_tools=("cargo",),
+        prepare_backend=_prepare_rust_backend,
+        command_groups=lambda root, backend, config: _rust_command_groups(
+            root, backend, config
+        ),
+        after_successful_command=_after_rust_command,
+    ),
+}
+
+
+def _missing_tool(driver: _VerifyBackendDriver) -> str | None:
+    for tool in driver.required_tools:
         if _missing_executable(tool) is not None:
             return tool
     return None
@@ -372,18 +376,6 @@ def _configured_emulator_kinds(config: BuildVerifierConfig) -> frozenset[str]:
     if config.qemu_aarch64_path is not None:
         configured.add("qemu-aarch64")
     return frozenset(configured)
-
-
-def _command_groups(
-    root: Path,
-    backend: VerifyBackend,
-    config: BuildVerifierConfig,
-) -> tuple[tuple[BuildCommand, ...], ...]:
-    if backend.backend_id == "cpp":
-        return _cpp_command_groups(root, backend, config)
-    if backend.backend_id == "rust":
-        return _rust_command_groups(root, backend, config)
-    return ()
 
 
 def _cpp_command_groups(
@@ -690,23 +682,6 @@ def _rust_environment(
 
 def _cargo_target_env(target: str) -> str:
     return target.upper().replace("-", "_")
-
-
-def _normalize_compiler_command(compiler: str | Sequence[str] | None) -> tuple[str, ...] | None:
-    if compiler is None:
-        return None
-    if isinstance(compiler, str):
-        normalized = tuple(shlex.split(compiler))
-    else:
-        normalized = tuple(str(part) for part in compiler)
-    return normalized or None
-
-
-def _normalize_compiler_executable(compiler: str | None) -> str | None:
-    if compiler is None:
-        return None
-    normalized = compiler.strip()
-    return normalized or None
 
 
 def _effective_cpp_compiler(

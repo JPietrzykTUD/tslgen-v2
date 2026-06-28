@@ -688,61 +688,77 @@ class QueryEvaluator:
         function = self._functions.get(term.head)
         if function is not None:
             return function.apply(tuple(evaluated_args), context)
+        if not term.args:
+            return self.resolve_leaf(term.head, context)
+        return None
+
+    def resolve_leaf(self, head: str, context: LoweringSession) -> QueryValue | None:
+        """Resolve a bare no-argument query leaf.
+
+        The default resolver is the lowering-time source vocabulary. Dependency
+        extraction can reuse the same recursive evaluator and query functions
+        with a smaller context, so backend-owned leaves degrade cleanly when no
+        backend dialect is present.
+        """
+
         # A representation-change target alias (the declaration's alias, plus the current
         # `ToType` synonym) -> the target base type tag, so `register::generic(ToType)` and
         # sibling queries resolve against the target.
-        if not term.args:
-            target_type_symbol = context.scope.resolve_target_type_symbol(term.head)
-            if target_type_symbol is not None:
-                return TypeValue(target_type_symbol)
+        target_type_symbol = context.scope.resolve_target_type_symbol(head)
+        if target_type_symbol is not None:
+            return TypeValue(target_type_symbol)
         # A representation-change extension target alias (`ToExtension`) names another vector
         # extension/ISA. It stays textual until consumed by `vector::as_extension`.
-        if not term.args:
-            extension_symbol = context.scope.resolve_extension_symbol(term.head)
-            if extension_symbol is not None:
-                return TextValue(extension_symbol)
+        extension_symbol = context.scope.resolve_extension_symbol(head)
+        if extension_symbol is not None:
+            return TextValue(extension_symbol)
         # A `let<type>` alias whose value is a source type tag (`AliasBase`) -> that type.
-        if not term.args:
-            type_symbol = context.scope.resolve_type_symbol(term.head)
-            if type_symbol is not None:
-                return TypeValue(type_symbol)
+        type_symbol = context.scope.resolve_type_symbol(head)
+        if type_symbol is not None:
+            return TypeValue(type_symbol)
         # A `let<type>` vector alias (`OutVec`) -> its structured VectorValue, so a query arg that
         # names it (`generic::length(OutVec)` / `base::generic(OutVec)`) resolves to the vector.
-        if not term.args:
-            vector_alias = context.scope.resolve_vector_alias(term.head)
-            if vector_alias is not None:
-                return vector_alias
+        vector_alias = context.scope.resolve_vector_alias(head)
+        if vector_alias is not None:
+            return vector_alias
         # A `let<type>` alias whose value is a backend type spelling (`CountT` ->
         # `std::size_t` / `usize`, `MaskT` -> current mask type) stays typed so casts and
         # templates can render it in the active backend context.
-        if not term.args:
-            type_alias = context.scope.resolve_type_alias(term.head)
-            if type_alias is not None:
-                return TextValue(type_alias)
+        type_alias = context.scope.resolve_type_alias(head)
+        if type_alias is not None:
+            return TextValue(type_alias)
         # A bare leaf that names a concrete type tag resolves to itself.
-        if not term.args and is_type_tag(term.head):
-            return TypeValue(term.head)
+        if is_type_tag(head):
+            return TypeValue(head)
         # Named scalar width tags stay semantic (`scalar::ui64` -> `TypeValue("ui64")`) so type
         # queries compose uniformly. Non-width scalar names such as `scalar::size` resolve to the
         # backend spelling because they are target-language type aliases, not source type tags.
-        if not term.args and term.head.startswith("scalar::"):
-            scalar_tag = term.head[len("scalar::") :]
+        if head.startswith("scalar::"):
+            scalar_tag = head[len("scalar::") :]
             if is_type_tag(scalar_tag):
                 return TypeValue(scalar_tag)
-            spelling = context.env.backend.types.scalar_spelling(scalar_tag)
+            backend = getattr(context.env, "backend", None)
+            types = getattr(backend, "types", None)
+            if types is None:
+                return TextValue(scalar_tag)
+            spelling = types.scalar_spelling(scalar_tag)
             return TextValue(spelling) if spelling is not None else None
         # Backend-scoped value leaves (currently x86 immediate-control constants) are spelled
         # by backend translation templates. The namespace remains source-level; the emitted text
         # still comes from the active backend dialect.
-        if not term.args and term.head.startswith("x86::"):
-            key = f"value_{term.head[len('x86::') :]}"
-            spelling = context.env.backend.templates.template(key)
+        if head.startswith("x86::"):
+            backend = getattr(context.env, "backend", None)
+            templates = getattr(backend, "templates", None)
+            if templates is None:
+                return None
+            key = f"value_{head[len('x86::') :]}"
+            spelling = templates.template(key)
             return TextValue(spelling) if spelling is not None else None
         # A bare quoted string literal (e.g. a named suffix policy) is text.
-        if not term.args and len(term.head) >= 2 and term.head[0] == '"' == term.head[-1]:
-            return TextValue(term.head[1:-1])
+        if len(head) >= 2 and head[0] == '"' == head[-1]:
+            return TextValue(head[1:-1])
         # A bare identifier (e.g. an attribute name `aligned`) is text. `?`-bearing
         # tokens like `si?` don't match, so the avx512 set1 quirk is unaffected.
-        if not term.args and _IDENTIFIER.match(term.head):
-            return TextValue(term.head)
+        if _IDENTIFIER.match(head):
+            return TextValue(head)
         return None

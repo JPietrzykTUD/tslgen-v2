@@ -19,6 +19,14 @@ class FormatReport:
     notes: tuple[str, ...]  # skip/failure notes (tool missing, formatter error)
 
 
+@dataclass(frozen=True, slots=True)
+class _FormatBackendDriver:
+    backend_id: str
+    label: str
+    patterns: tuple[str, ...]
+    args: tuple[str, ...]
+
+
 def format_generated(
     output_root: str | Path,
     backends: tuple[str, ...],
@@ -29,12 +37,24 @@ def format_generated(
     root = Path(output_root)
     formatted: list[str] = []
     notes: list[str] = []
-    if "cpp" in backends:
-        cpp_files = sorted(root.glob("cpp/**/*.hpp")) + sorted(root.glob("cpp/**/*.cpp"))
-        _run("cpp", clang_format, ["-i"], cpp_files, formatted, notes)
-    if "rust" in backends:
-        rust_files = sorted(root.glob("rust/**/*.rs"))
-        _run("rust", rustfmt, ["--edition", "2021"], rust_files, formatted, notes)
+    tools = {"cpp": clang_format, "rust": rustfmt}
+    requested = set(backends)
+    for driver in _FORMAT_BACKEND_DRIVERS:
+        if driver.backend_id not in requested:
+            continue
+        files = [
+            path
+            for pattern in driver.patterns
+            for path in sorted(root.glob(pattern))
+        ]
+        _run(
+            driver.label,
+            tools[driver.backend_id],
+            list(driver.args),
+            files,
+            formatted,
+            notes,
+        )
     return FormatReport(formatted=tuple(formatted), notes=tuple(notes))
 
 
@@ -64,3 +84,19 @@ def _run(
         notes.append(f"{tool} failed on {label}; left unformatted{detail}")
         return
     formatted.append(f"{label}:{len(files)} files")
+
+
+_FORMAT_BACKEND_DRIVERS: tuple[_FormatBackendDriver, ...] = (
+    _FormatBackendDriver(
+        backend_id="cpp",
+        label="cpp",
+        patterns=("cpp/**/*.hpp", "cpp/**/*.cpp"),
+        args=("-i",),
+    ),
+    _FormatBackendDriver(
+        backend_id="rust",
+        label="rust",
+        patterns=("rust/**/*.rs",),
+        args=("--edition", "2021"),
+    ),
+)

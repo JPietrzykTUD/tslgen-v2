@@ -23,12 +23,11 @@ from tslc.catalog.model import (
     ParamTypeRule,
     Primitive,
     RequirementClause,
-    TestArg,
-    TestCase,
 )
 from tslc.catalog.signatures import SignatureShape, parse_signature
-from tslc.catalog.test_cases import derive_test_case_name, infer_test_lane_count
+from tslc.catalog.test_promotion import build_test_cases
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedBlockDeclaration,
@@ -36,7 +35,6 @@ from tslc.syntax.ast import (
     ParsedPrimitiveDeclaration,
     ParsedRequiresValue,
     ParsedTslSourceSpan,
-    ParsedTslAttributeListValue,
     ParsedTslField,
     ParsedTslListValue,
     ParsedTslMapValue,
@@ -144,7 +142,7 @@ def _build_primitives(
     param_type_rules = _param_type_rules(declaration)
     immediate_params = _immediate_params(declaration, diagnostics)
     generic_params = _generic_params(declaration)
-    tests = _test_cases(declaration, diagnostics)
+    tests = build_test_cases(declaration, diagnostics)
     cross_lane_fields = declaration.fields_by_name("cross_lane")
     cross_lane = _bool_field(cross_lane_fields[0].field) if cross_lane_fields else False
 
@@ -578,7 +576,7 @@ def _backend_headers(fields: dict[str, ParsedTslField]) -> dict[str, tuple[str, 
     """Promote backend-owned extension include/import metadata."""
 
     result: dict[str, tuple[str, ...]] = {}
-    for backend_id in ("cpp", "rust"):
+    for backend_id in DEFAULT_SUPPORT_POLICY.default_backend_ids:
         headers = _list_text(_child(fields.get(backend_id), "headers"))
         if headers:
             result[backend_id] = headers
@@ -589,7 +587,7 @@ def _backend_supported(fields: dict[str, ParsedTslField]) -> dict[str, bool]:
     """Promote each backend block's ``supported`` flag (absent -> supported)."""
 
     result: dict[str, bool] = {}
-    for backend_id in ("cpp", "rust"):
+    for backend_id in DEFAULT_SUPPORT_POLICY.default_backend_ids:
         text = _field_text(_child(fields.get(backend_id), "supported"))
         if text is not None:
             result[backend_id] = text.lower() == "true"
@@ -665,172 +663,6 @@ def _generic_params(declaration: ParsedPrimitiveDeclaration) -> tuple[GenericPar
         )
         for entry in _children(fields[0].field)
     )
-
-
-def _test_cases(
-    declaration: ParsedPrimitiveDeclaration,
-    diagnostics: list[Diagnostic],
-) -> tuple[TestCase, ...]:
-    """The value-correctness cases from a `tests:` block.
-
-    Each list item is an inline ``{...}`` map. Numeric literals are kept as raw tokens so float
-    specials (``INFINITY``/``-0.0``) and exact-width integers survive to emit time. An ``inputs``
-    item that is itself a list is a per-lane vector arg; a bare scalar is a mask bitmask arg."""
-
-    fields = declaration.fields_by_name("tests")
-    if not fields:
-        return ()
-    value = fields[0].field.value
-    if not isinstance(value, ParsedTslListValue):
-        return ()
-    cases: list[TestCase] = []
-    for item in value.items:
-        if not isinstance(item, ParsedTslMapValue):
-            continue
-        entries = {entry.key.text: entry for entry in item.entries}
-        case_field = entries.get("case")
-        tags = _tag_list(entries.get("tags"))
-        case_id = _field_text(entries.get("id"))
-        shape = parse_signature(declaration.signature)
-        inputs = _test_inputs(_child(case_field, "inputs"), shape)
-        expected = _expected_tokens(_child(case_field, "expected"))
-        attrs = _attr_map(entries.get("attrs"))
-        explicit_lane_count = _opt_int(_field_text(entries.get("lane_count")))
-        to_type = _field_text(entries.get("to_type"))
-        to_extension = _field_text(entries.get("to_extension"))
-        index = _opt_int(_field_text(entries.get("index")))
-        lanes = infer_test_lane_count(
-            shape=parse_signature(declaration.signature),
-            inputs=inputs,
-            expected=expected,
-            explicit_lane_count=explicit_lane_count,
-            has_target_axis=to_type is not None or to_extension is not None,
-        )
-        name = derive_test_case_name(
-            primitive_name=declaration.name,
-            type_tag=_field_text(entries.get("type")) or "",
-            tags=tags,
-            case_id=case_id,
-            extension=_field_text(entries.get("extension")),
-            to_type=to_type,
-            to_extension=to_extension,
-            index=index,
-            attrs=attrs,
-        )
-        cases.append(
-            TestCase(
-                name=name,
-                type_tag=_field_text(entries.get("type")) or "",
-                tags=tags,
-                id=case_id,
-                inputs=inputs,
-                expected=expected,
-                role=_field_text(entries.get("role")) or "value",
-                lanes=lanes,
-                extension=_field_text(entries.get("extension")),
-                expected_rule=_field_text(entries.get("expected_rule")),
-                to_type=to_type,
-                to_extension=to_extension,
-                index=index,
-                offset=_opt_int(_field_text(entries.get("offset"))),
-                src_offset=_opt_int(_field_text(entries.get("src_offset"))),
-                dst_offset=_opt_int(_field_text(entries.get("dst_offset"))),
-                scale=_opt_int(_field_text(entries.get("scale"))),
-                alignment=_opt_int(_field_text(entries.get("alignment"))),
-                attrs=attrs,
-                source=_source_span(item.source),
-            )
-        )
-    _diagnose_duplicate_test_names(declaration.name, cases, diagnostics)
-    return tuple(cases)
-
-
-def _test_inputs(
-    field: ParsedTslField | None,
-    shape: SignatureShape | None,
-) -> tuple[TestArg, ...]:
-    if field is None or not isinstance(field.value, ParsedTslListValue):
-        return ()
-    args: list[TestArg] = []
-    param_kinds = shape.param_kinds if shape is not None else ()
-    if param_kinds in {("ptr+",), ("cptr+",)}:
-        flat_values = tuple(
-            item.text for item in field.value.items if isinstance(item, ParsedTslScalarValue)
-        )
-        if len(flat_values) == len(field.value.items):
-            return (TestArg(kind="vector", values=flat_values),)
-    scalar_position = 0
-    for item in field.value.items:
-        if isinstance(item, ParsedTslListValue):
-            args.append(
-                TestArg(
-                    kind="vector",
-                    values=tuple(
-                        x.text for x in item.items if isinstance(x, ParsedTslScalarValue)
-                    ),
-                )
-            )
-            scalar_position += 1
-        elif isinstance(item, ParsedTslScalarValue):
-            param_kind = _test_param_kind(param_kinds, scalar_position)
-            if param_kind in {"m", "im"}:
-                args.append(TestArg(kind="mask", mask_bits=item.text))
-            else:
-                args.append(TestArg(kind="scalar", scalar=item.text))
-            scalar_position += 1
-    return tuple(args)
-
-
-def _test_param_kind(param_kinds: tuple[str, ...], position: int) -> str | None:
-    if not param_kinds:
-        return None
-    if len(param_kinds) == 1 and param_kinds[0].startswith("lanes<"):
-        return param_kinds[0]
-    return param_kinds[min(position, len(param_kinds) - 1)]
-
-
-def _tag_list(field: ParsedTslField | None) -> tuple[str, ...]:
-    if field is None or not isinstance(field.value, ParsedTslListValue):
-        return ()
-    return tuple(item.text for item in field.value.items if isinstance(item, ParsedTslScalarValue))
-
-
-def _attr_map(field: ParsedTslField | None) -> dict[str, str]:
-    if field is None or not isinstance(field.value, ParsedTslAttributeListValue):
-        return {}
-    return {
-        attribute.key.text: (
-            attribute.value.text
-            if isinstance(attribute.value, ParsedTslScalarValue)
-            else ""
-        )
-        for attribute in field.value.attributes
-    }
-
-
-def _diagnose_duplicate_test_names(
-    primitive_name: str,
-    cases: list[TestCase],
-    diagnostics: list[Diagnostic],
-) -> None:
-    seen: dict[str, SourceSpan | None] = {}
-    duplicates: set[str] = set()
-    for case in cases:
-        if case.name in seen:
-            duplicates.add(case.name)
-        seen[case.name] = case.source
-    for name in sorted(duplicates):
-        diagnostics.append(
-            diagnostic_at(
-                severity="error",
-                code="TSL-CATALOG-TEST-DUPLICATE-NAME",
-                message=(
-                    f"primitive {primitive_name!r}: duplicate derived test name {name!r}; "
-                    "add an `id` field to disambiguate"
-                ),
-                source=seen[name],
-            )
-        )
 
 
 def _opt_int(text: str | None) -> int | None:
@@ -1038,14 +870,6 @@ def _list_text(field: ParsedTslField | None) -> tuple[str, ...]:
     return tuple(
         item.text for item in field.value.items if isinstance(item, ParsedTslScalarValue)
     )
-
-
-def _expected_tokens(field: ParsedTslField | None) -> tuple[str, ...]:
-    """A test case's ``expected`` as a token tuple: a per-lane/buffer list, or a single token
-    for a scalar-result (reduction) case (``expected 36``) wrapped into a 1-tuple."""
-    if field is not None and isinstance(field.value, ParsedTslScalarValue):
-        return (field.value.text,)
-    return _list_text(field)
 
 
 def _list_text_set(field: ParsedTslField | None) -> frozenset[str]:

@@ -33,6 +33,7 @@ import argparse
 from pathlib import Path
 
 from tslc.api import _expand_sources
+from tslc.backend.registry import registered_backend_ids
 from tslc.backend.translation import create_backend_dialect
 from tslc.ir.scan import scan
 from tslc.maintenance._segments_view import format_segment_tree
@@ -75,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--primitive", required=True, help="primitive name, e.g. add")
     parser.add_argument("--profile", required=True, help="machine profile name, e.g. avx2")
     parser.add_argument("--type", required=True, dest="type_tag", help="scalar type tag, e.g. si32")
-    parser.add_argument("--backend", default="cpp", choices=("cpp", "rust"))
+    parser.add_argument("--backend", default="cpp", choices=registered_backend_ids())
     parser.add_argument(
         "--extension",
         default=None,

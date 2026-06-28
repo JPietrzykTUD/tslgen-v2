@@ -10,18 +10,64 @@ spellings or interpret intrinsics.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
 from tslc.catalog.model import Catalog, Extension
-from tslc.catalog.scalar_types import is_type_tag, signed_of, unsigned_of
 from tslc.diagnostics import SourceSpan
 from tslc.ir.scan import scan
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower._text import split_top_level
 from tslc.lower.calls import parse_call_selector
-from tslc.lower.context import VectorValue
-from tslc.lower.queries import QueryParser, QueryTerm, QueryValue, TextValue, TypeValue
+from tslc.lower.context import LoweringScope, VectorValue
+from tslc.lower.queries import (
+    AsBaseQuery,
+    AsExtensionQuery,
+    AttributeQuery,
+    BaseGenericQuery,
+    BaseInQuery,
+    GenericLengthQuery,
+    IsSameQuery,
+    IsSignedQuery,
+    QueryEvaluator,
+    QueryFunction,
+    QueryValue,
+    SelectQuery,
+    SignedOfQuery,
+    SizeBytesQuery,
+    TypeQuery,
+    TypeValue,
+    UnsignedOfQuery,
+    ValueQuery,
+    VectorAlignmentQuery,
+    VectorAsQuery,
+    VectorLengthQuery,
+    WindowBaseQuery,
+)
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
+
+
+_DEPENDENCY_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
+    BaseInQuery(),
+    SignedOfQuery(),
+    UnsignedOfQuery(),
+    TypeQuery(),
+    ValueQuery(),
+    SelectQuery(),
+    IsSameQuery(),
+    SizeBytesQuery(),
+    IsSignedQuery(),
+    AttributeQuery(),
+    VectorAlignmentQuery(),
+    VectorLengthQuery(),
+    AsExtensionQuery(),
+    AsBaseQuery(),
+    WindowBaseQuery(),
+    VectorAsQuery(),
+    BaseGenericQuery(),
+    GenericLengthQuery(),
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +82,50 @@ class CallDependency:
     mask_policy: str | None
     source: VectorIdentity
     target: VectorIdentity | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _DependencyBackendCapabilities:
+    """Backend-neutral capabilities needed by shared query functions."""
+
+    supports_sized_vector_lane_expressions: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class _DependencyQueryEnv:
+    catalog: Catalog
+    extension: Extension
+    type_tag: str
+    attributes: Mapping[str, str] = field(default_factory=dict)
+    concrete_lanes: int | None = None
+    backend: _DependencyBackendCapabilities = field(
+        default_factory=_DependencyBackendCapabilities
+    )
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "attributes",
+            MappingProxyType(dict(sorted(self.attributes.items()))),
+        )
+
+    def lane_symbol(self) -> str:
+        if self.concrete_lanes is not None:
+            return str(self.concrete_lanes)
+        return DEFAULT_SUPPORT_POLICY.size_parameter_name(self.extension)
+
+
+@dataclass(frozen=True, slots=True)
+class _DependencyEffects:
+    def skip(self, *_args: object, **_kwargs: object) -> None:
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class _DependencyQueryContext:
+    env: _DependencyQueryEnv
+    scope: LoweringScope
+    effects: _DependencyEffects = field(default_factory=_DependencyEffects)
 
 
 def extract_call_dependencies(
@@ -84,6 +174,7 @@ def extract_call_dependencies_from_segments(
         catalog=catalog,
         current_primitive=current_primitive,
         current=VectorIdentity(current_type_tag, current_extension),
+        extension=_extension_for_isa(catalog, current_extension),
         target_alias=target_alias,
         target_base=target_base,
         target_extension=target_extension,
@@ -97,13 +188,22 @@ class _DependencyResolver:
     catalog: Catalog
     current_primitive: str
     current: VectorIdentity
+    extension: Extension | None
     target_alias: str | None
     target_base: str | None
     target_extension: str | None
-    parser: QueryParser = field(default_factory=QueryParser)
-    vector_aliases: dict[str, VectorValue] = field(default_factory=dict)
-    type_symbols: dict[str, str] = field(default_factory=dict)
+    evaluator: QueryEvaluator = field(
+        default_factory=lambda: QueryEvaluator(functions=_DEPENDENCY_QUERY_FUNCTIONS)
+    )
+    scope: LoweringScope = field(default_factory=LoweringScope)
     calls: set[CallDependency] = field(default_factory=set)
+
+    def __post_init__(self) -> None:
+        if self.target_alias is not None and self.target_base is not None:
+            self.scope.bind_target_type_symbol(self.target_alias, self.target_base)
+            self.scope.bind_target_type_symbol("ToType", self.target_base)
+        if self.target_alias is not None and self.target_extension is not None:
+            self.scope.bind_extension_symbol(self.target_alias, self.target_extension)
 
     def visit(self, segments: tuple[Segment, ...] | None) -> None:
         if segments is None:
@@ -134,9 +234,9 @@ class _DependencyResolver:
         name, expr = terms[0].strip(), terms[1].strip()
         value = self._evaluate(expr)
         if isinstance(value, VectorValue):
-            self.vector_aliases[name] = value
+            self.scope.vector_aliases[name] = value
         elif isinstance(value, TypeValue):
-            self.type_symbols[name] = value.type_tag
+            self.scope.bind_type_symbol(name, value.type_tag)
 
     def _call_dependency(self, region: Region) -> CallDependency | None:
         parsed = parse_call_selector(region.selector_text)
@@ -201,115 +301,17 @@ class _DependencyResolver:
         return None
 
     def _evaluate(self, expr: str) -> QueryValue | None:
-        term = self.parser.parse(expr)
-        if term is None:
+        if self.extension is None:
             return None
-        return self._evaluate_term(term)
-
-    def _evaluate_term(self, term: QueryTerm) -> QueryValue | None:
-        args: list[QueryValue] = []
-        for arg in term.args:
-            value = self._evaluate_term(arg)
-            if value is None:
-                return None
-            args.append(value)
-        evaluated_args = tuple(args)
-
-        if term.head in ("type", "value"):
-            return evaluated_args[0] if len(evaluated_args) == 1 else None
-        if term.head == "base::in":
-            return TypeValue(self.current.base_tag) if not evaluated_args else None
-        if term.head == "base::signed_of":
-            if len(evaluated_args) == 1 and isinstance(evaluated_args[0], TypeValue):
-                return TypeValue(signed_of(evaluated_args[0].type_tag))
-            return None
-        if term.head == "base::unsigned_of":
-            if len(evaluated_args) == 1 and isinstance(evaluated_args[0], TypeValue):
-                return TypeValue(unsigned_of(evaluated_args[0].type_tag))
-            return None
-        if term.head == "vector::as_extension":
-            if len(evaluated_args) == 1 and isinstance(evaluated_args[0], TextValue):
-                extension_isa = self._resolve_extension_isa(evaluated_args[0].as_text())
-                return (
-                    self._vector_value(self.current.base_tag, extension_isa)
-                    if extension_isa is not None
-                    else None
-                )
-            return None
-        if term.head in ("vector::as_base", "vector::window_base"):
-            if len(evaluated_args) == 1 and isinstance(evaluated_args[0], TypeValue):
-                return self._vector_value(
-                    evaluated_args[0].type_tag,
-                    self.current.extension_isa,
-                )
-            return None
-        if term.head == "vector::as":
-            if (
-                len(evaluated_args) == 2
-                and isinstance(evaluated_args[0], TextValue)
-                and isinstance(evaluated_args[1], TypeValue)
-            ):
-                extension_isa = self._resolve_extension_isa(evaluated_args[0].as_text())
-                return (
-                    self._vector_value(evaluated_args[1].type_tag, extension_isa)
-                    if extension_isa is not None
-                    else None
-                )
-            return None
-        if term.head == "base::generic":
-            if len(evaluated_args) == 1 and isinstance(evaluated_args[0], VectorValue):
-                return TypeValue(evaluated_args[0].base_tag)
-            return None
-        if evaluated_args:
-            return None
-
-        target_type_symbol = self._target_type_symbol(term.head)
-        if target_type_symbol is not None:
-            return TypeValue(target_type_symbol)
-        target_extension_symbol = self._target_extension_symbol(term.head)
-        if target_extension_symbol is not None:
-            return TextValue(target_extension_symbol)
-        type_symbol = self.type_symbols.get(term.head)
-        if type_symbol is not None:
-            return TypeValue(type_symbol)
-        vector_alias = self.vector_aliases.get(term.head)
-        if vector_alias is not None:
-            return vector_alias
-        if is_type_tag(term.head):
-            return TypeValue(term.head)
-        if term.head.startswith("scalar::"):
-            scalar_tag = term.head[len("scalar::") :]
-            if is_type_tag(scalar_tag):
-                return TypeValue(scalar_tag)
-            return TextValue(scalar_tag)
-        if len(term.head) >= 2 and term.head[0] == '"' == term.head[-1]:
-            return TextValue(term.head[1:-1])
-        return TextValue(term.head)
-
-    def _target_type_symbol(self, name: str) -> str | None:
-        if self.target_base is None or self.target_alias is None:
-            return None
-        return self.target_base if name in (self.target_alias, "ToType") else None
-
-    def _target_extension_symbol(self, name: str) -> str | None:
-        if self.target_extension is None or self.target_alias is None:
-            return None
-        return self.target_extension if name == self.target_alias else None
-
-    def _vector_value(self, base_tag: str, extension_isa: str) -> VectorValue | None:
-        extension = _extension_for_isa(self.catalog, extension_isa)
-        if extension is None:
-            return None
-        uses_sized_vector = DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
-        return VectorValue(
-            base_tag=base_tag,
-            extension_isa=extension.isa_name,
-            lanes=DEFAULT_SUPPORT_POLICY.lane_count(extension, base_tag),
-            uses_sized_vector=uses_sized_vector,
-            lane_parameter=(
-                DEFAULT_SUPPORT_POLICY.size_parameter_name(extension)
-                if uses_sized_vector
-                else None
+        return self.evaluator.evaluate(
+            expr,
+            _DependencyQueryContext(
+                env=_DependencyQueryEnv(
+                    catalog=self.catalog,
+                    extension=self.extension,
+                    type_tag=self.current.base_tag,
+                ),
+                scope=self.scope,
             ),
         )
 

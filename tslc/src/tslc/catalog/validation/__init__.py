@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from tslc.catalog.model import Catalog
+from tslc.catalog.validation.body_validation import validate_body_regions
 from tslc.catalog.validation.invariants import (
     validate_backend_type_spellings,
     validate_extension_inheritance,
@@ -41,4 +42,5 @@ def validate_catalog(
     validate_backend_type_spellings(catalog, backends, diagnostics, parsed)
     if parsed is not None:
         validate_parsed_documents(parsed, diagnostics)
+        validate_body_regions(parsed, diagnostics)
     return sort_diagnostics(diagnostics)
