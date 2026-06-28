@@ -151,6 +151,25 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     assert machine_profiles["sve"].cpp_flags == ("-mcpu=a64fx",)
 
 
+def test_target_families_promoted(catalog: Catalog) -> None:
+    families = catalog.target_families
+
+    assert families.known_extension_families >= {
+        "scalar",
+        "generic_like",
+        "x86",
+        "arm",
+        "cuda",
+    }
+    assert families.universal_extension_families == frozenset({"scalar", "generic_like"})
+    assert families.profile_families["x86"].extension_families == frozenset({"x86"})
+    assert families.profile_families["aarch64"].extension_families == frozenset({"arm"})
+    assert families.profile_families["x86"].emulator_kinds == frozenset({"sde"})
+    assert families.profile_families["aarch64"].emulator_kinds == frozenset(
+        {"qemu-aarch64"}
+    )
+
+
 def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:
     add = catalog.primitive("add")
     assert add is not None
@@ -173,6 +192,10 @@ def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:
         avx2.compose_suffix_by_type["si32"] = "bad"  # type: ignore[index]
     with pytest.raises(TypeError):
         avx512.mask_policy.cpp_by_lanes[16] = "bad"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        catalog.target_families.profile_families["new"] = (  # type: ignore[index]
+            catalog.target_families.profile_families["x86"]
+        )
 
 
 def test_machine_profile_mappings_are_read_only(machine_profiles) -> None:

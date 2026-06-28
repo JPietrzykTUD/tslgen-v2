@@ -314,7 +314,10 @@ def _load_inputs(
 
     profiles: Mapping[str, MachineProfile] = {}
     if machine_profiles_path is not None:
-        profile_result = load_machine_profiles_checked(Path(machine_profiles_path))
+        profile_result = load_machine_profiles_checked(
+            Path(machine_profiles_path),
+            catalog_result.catalog.target_families,
+        )
         diagnostics.extend(profile_result.diagnostics)
         profiles = profile_result.profiles
     return (

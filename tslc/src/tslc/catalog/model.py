@@ -13,6 +13,7 @@ from types import MappingProxyType
 from typing import NewType, TypeVar
 
 from tslc.diagnostics import SourceSpan
+from tslc.catalog.target_families import TargetFamilyCatalog
 
 TypeTag = NewType("TypeTag", str)
 BackendId = NewType("BackendId", str)
@@ -442,6 +443,7 @@ class Catalog:
     type_spellings: Mapping[str, Mapping[str, str]]
     # backend_id -> translation-template key (e.g. "complete", "loop_backend") -> template
     translations: Mapping[str, Mapping[str, str]]
+    target_families: TargetFamilyCatalog = field(default_factory=TargetFamilyCatalog)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "type_groups", _freeze_mapping(self.type_groups))

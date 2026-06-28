@@ -15,9 +15,11 @@ from tslc.catalog.validation.source_spans import (
     source_span,
 )
 from tslc.diagnostics import Diagnostic, diagnostic_at
+from tslc.catalog.target_families import TargetFamilyCatalog
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedBlockDeclaration,
+    ParsedFieldDeclaration,
     ParsedImplementationSelectorEntry,
     ParsedPrimitiveDeclaration,
     ParsedTslAttribute,
@@ -27,10 +29,6 @@ from tslc.syntax.ast import (
     ParsedTslScalarValue,
 )
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
-
-_KNOWN_EXTENSION_FAMILIES = frozenset(
-    {"scalar", "x86", "generic_like", "arm", "cuda", ""}
-)
 _KNOWN_MASK_POLICY_KINDS = frozenset(
     {"bool", "lane_bitmask", "native_predicate", "native_predicate_by_lanes"}
 )
@@ -101,30 +99,48 @@ _KNOWN_EXTENSION_FIELDS = frozenset(
         "vendor",
     }
 )
+_KNOWN_TARGET_FAMILIES_FIELDS = frozenset(
+    {"known_extension_families", "universal_extension_families", "profile_families"}
+)
+_KNOWN_PROFILE_FAMILY_FIELDS = frozenset({"extension_families", "emulator_kinds"})
 
 
 def validate_parsed_documents(
     parsed: OuterTslParseResult,
     diagnostics: list[Diagnostic],
+    target_families: TargetFamilyCatalog = TargetFamilyCatalog(),
 ) -> None:
     type_group_fields: list[ParsedTslField] = []
     named_blocks: dict[tuple[str, str], ParsedBlockDeclaration] = {}
+    target_family_fields: list[ParsedTslField] = []
 
     for document in parsed.documents:
         for declaration in document.declarations:
             if isinstance(declaration, ParsedBlockDeclaration):
                 _validate_named_block_duplicates(declaration, named_blocks, diagnostics)
-                _validate_block(declaration, diagnostics)
+                _validate_block(declaration, diagnostics, target_families)
                 if declaration.kind == "types":
                     type_group_fields.extend(declaration.fields)
             elif isinstance(declaration, ParsedPrimitiveDeclaration):
                 _validate_primitive(declaration, diagnostics)
+            elif (
+                isinstance(declaration, ParsedFieldDeclaration)
+                and declaration.field.key.text == "target_families"
+            ):
+                target_family_fields.append(declaration.field)
+                _validate_target_families(declaration.field, diagnostics)
 
     _diagnose_duplicate_fields(
         type_group_fields,
         diagnostics,
         code="TSL-CATALOG-DUPLICATE-TYPE-GROUP",
         label="type group",
+    )
+    _diagnose_duplicate_fields(
+        target_family_fields,
+        diagnostics,
+        code="TSL-CATALOG-DUPLICATE-TARGET-FAMILIES",
+        label="target_families declaration",
     )
 
 
@@ -160,6 +176,7 @@ def _validate_named_block_duplicates(
 def _validate_block(
     declaration: ParsedBlockDeclaration,
     diagnostics: list[Diagnostic],
+    target_families: TargetFamilyCatalog,
 ) -> None:
     if declaration.kind == "extension":
         _validate_known_fields(
@@ -169,7 +186,7 @@ def _validate_block(
             owner=f"extension {declaration.name or '<unnamed>'}",
         )
         _diagnose_duplicate_fields(declaration.fields, diagnostics, label="extension field")
-        _validate_extension_block(declaration, diagnostics)
+        _validate_extension_block(declaration, diagnostics, target_families)
     elif declaration.kind == "types":
         for field in declaration.fields:
             _validate_known_fields(
@@ -204,18 +221,81 @@ def _validate_block(
         )
 
 
+def _validate_target_families(
+    field: ParsedTslField,
+    diagnostics: list[Diagnostic],
+) -> None:
+    target_fields = children(field)
+    _validate_known_fields(
+        target_fields,
+        _KNOWN_TARGET_FAMILIES_FIELDS,
+        diagnostics,
+        owner="target_families",
+    )
+    _diagnose_duplicate_fields(target_fields, diagnostics, label="target_families field")
+    for list_name in ("known_extension_families", "universal_extension_families"):
+        list_field = child(field, list_name)
+        if list_field is not None and not _is_scalar_list(list_field):
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-TARGET-FAMILIES-MALFORMED-LIST",
+                    message=f"target_families {list_name!r} must be a scalar list",
+                    source=source_span(list_field.source),
+                )
+            )
+
+    profiles = child(field, "profile_families")
+    _diagnose_duplicate_fields(
+        children(profiles),
+        diagnostics,
+        label="profile family",
+    )
+    for profile in children(profiles):
+        _validate_known_fields(
+            children(profile),
+            _KNOWN_PROFILE_FAMILY_FIELDS,
+            diagnostics,
+            owner=f"profile family {profile.key.text!r}",
+        )
+        _diagnose_duplicate_fields(
+            children(profile),
+            diagnostics,
+            label=f"profile family {profile.key.text!r} field",
+        )
+        for list_name in ("extension_families", "emulator_kinds"):
+            list_field = child(profile, list_name)
+            if list_field is not None and not _is_scalar_list(list_field):
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-TARGET-FAMILIES-MALFORMED-LIST",
+                        message=(
+                            f"profile family {profile.key.text!r} {list_name!r} "
+                            "must be a scalar list"
+                        ),
+                        source=source_span(list_field.source),
+                    )
+                )
+
+
 def _validate_extension_block(
     declaration: ParsedBlockDeclaration,
     diagnostics: list[Diagnostic],
+    target_families: TargetFamilyCatalog,
 ) -> None:
     fields = {field.key.text: field for field in declaration.fields}
     family = field_text(fields.get("family")) or ""
-    if family not in _KNOWN_EXTENSION_FAMILIES:
+    if (
+        family
+        and target_families.known_extension_families
+        and family not in target_families.known_extension_families
+    ):
         _invalid_enum(
             diagnostics,
             fields.get("family"),
             f"extension family {family!r}",
-            sorted(_KNOWN_EXTENSION_FAMILIES - {""}),
+            sorted(target_families.known_extension_families),
         )
 
     mask = fields.get("mask_type_policy")
@@ -548,6 +628,13 @@ def _test_lane_count(field: ParsedTslField | None) -> int | None:
 def _is_non_empty_scalar_list(field: ParsedTslField) -> bool:
     value = field.value
     return isinstance(value, ParsedTslListValue) and any(
+        isinstance(item, ParsedTslScalarValue) for item in value.items
+    )
+
+
+def _is_scalar_list(field: ParsedTslField) -> bool:
+    value = field.value
+    return isinstance(value, ParsedTslListValue) and all(
         isinstance(item, ParsedTslScalarValue) for item in value.items
     )
 

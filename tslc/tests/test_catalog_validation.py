@@ -8,6 +8,7 @@ import pytest
 
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import load_machine_profiles_checked
+from tslc.catalog.target_families import ProfileFamilyCapability, TargetFamilyCatalog
 from tslc.catalog.validation import validate_catalog
 from tslc.diagnostics import SourceLocation
 from tslc.sources import SourceDocument
@@ -21,6 +22,26 @@ def _diagnostics(text: str, *, backends: tuple[str, ...] = ("cpp", "rust")):
     result = CatalogBuilder().build(parsed)
     assert result.catalog is not None
     return (*result.diagnostics, *validate_catalog(result.catalog, parsed, required_backends=backends))
+
+
+def _target_family_catalog() -> TargetFamilyCatalog:
+    return TargetFamilyCatalog(
+        known_extension_families=frozenset({"scalar", "generic_like", "x86", "arm", "cuda"}),
+        universal_extension_families=frozenset({"scalar", "generic_like"}),
+        profile_families={
+            "generic": ProfileFamilyCapability("generic"),
+            "x86": ProfileFamilyCapability(
+                "x86",
+                frozenset({"x86"}),
+                emulator_kinds=frozenset({"sde"}),
+            ),
+            "aarch64": ProfileFamilyCapability(
+                "aarch64",
+                frozenset({"arm"}),
+                emulator_kinds=frozenset({"qemu-aarch64"}),
+            ),
+        },
+    )
 
 
 def _base_source(extra: str = "") -> str:
@@ -76,6 +97,12 @@ def test_unknown_fields_are_diagnosed() -> None:
 
 def test_invalid_enum_like_values_are_diagnosed() -> None:
     diagnostics = _diagnostics(
+        "target_families:\n"
+        "  known_extension_families [scalar]\n"
+        "  universal_extension_families [scalar]\n"
+        "  profile_families:\n"
+        "    generic:\n"
+        "      extension_families []\n"
         "types:\n"
         "  ints {types [si32]}\n"
         "extension scalar:\n"
@@ -98,6 +125,72 @@ def test_invalid_enum_like_values_are_diagnosed() -> None:
     messages = [d.message for d in diagnostics if d.code == "TSL-CATALOG-INVALID-ENUM"]
     assert any("family" in message for message in messages)
     assert any("mask_type_policy" in message for message in messages)
+
+
+def test_target_family_data_makes_new_extension_family_additive() -> None:
+    diagnostics = _diagnostics(
+        "target_families:\n"
+        "  known_extension_families [scalar, rvv]\n"
+        "  universal_extension_families [scalar]\n"
+        "  profile_families:\n"
+        "    generic:\n"
+        "      extension_families []\n"
+        "    riscv:\n"
+        "      extension_families [rvv]\n"
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "extension rvv:\n"
+        '  extension_name "rvv"\n'
+        '  family "rvv"\n'
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "language rust:\n"
+        '  s32 {type "i32"}\n'
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+    )
+
+    assert "TSL-CATALOG-INVALID-ENUM" not in {d.code for d in diagnostics}
+
+
+def test_target_family_typos_are_still_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        "target_families:\n"
+        "  known_extension_families [scalar, rvv]\n"
+        "  universal_extension_families [scalar]\n"
+        "  profile_families:\n"
+        "    generic:\n"
+        "      extension_families []\n"
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "extension typo:\n"
+        '  extension_name "typo"\n'
+        '  family "risc-v"\n'
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "language rust:\n"
+        '  s32 {type "i32"}\n'
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-CATALOG-INVALID-ENUM")
+    assert "extension family 'risc-v'" in diagnostic.message
+    assert "rvv" in diagnostic.message
 
 
 def test_missing_backend_spellings_are_diagnosed() -> None:
@@ -302,7 +395,7 @@ def test_machine_profile_validation_reports_shape_errors(tmp_path: Path) -> None
         encoding="utf-8",
     )
 
-    result = load_machine_profiles_checked(path)
+    result = load_machine_profiles_checked(path, _target_family_catalog())
 
     codes = {diagnostic.code for diagnostic in result.diagnostics}
     assert {
@@ -320,7 +413,7 @@ def test_machine_profile_duplicate_json_keys_are_diagnosed(tmp_path: Path) -> No
         encoding="utf-8",
     )
 
-    result = load_machine_profiles_checked(path)
+    result = load_machine_profiles_checked(path, _target_family_catalog())
 
     assert "TSL-PROFILE-DUPLICATE-KEY" in {d.code for d in result.diagnostics}
 
@@ -356,9 +449,30 @@ def test_machine_profile_emulator_metadata_is_validated(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    result = load_machine_profiles_checked(path)
+    result = load_machine_profiles_checked(path, _target_family_catalog())
 
     assert result.profiles["avx2"].emulator is not None
     assert result.profiles["avx2"].emulator.kind == "sde"
     assert result.profiles["avx2"].emulator.profile == "hsw"
     assert "TSL-PROFILE-MALFORMED-EMULATOR" in {d.code for d in result.diagnostics}
+
+
+def test_machine_profile_emulator_kinds_come_from_target_families(tmp_path: Path) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{\n'
+        '  "x86": [\n'
+        '    {"name": "bad", "flags": "sse", '
+        '"emulator": {"kind": "qemu-aarch64", "profile": "cortex-a76"}}\n'
+        '  ]\n'
+        '}\n',
+        encoding="utf-8",
+    )
+
+    result = load_machine_profiles_checked(path, _target_family_catalog())
+
+    diagnostic = next(
+        d for d in result.diagnostics if d.code == "TSL-PROFILE-UNSUPPORTED-EMULATOR"
+    )
+    assert "declared for family 'x86'" in diagnostic.message
+    assert "sde" in diagnostic.message

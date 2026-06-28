@@ -41,6 +41,6 @@ def validate_catalog(
     validate_extension_inheritance(catalog, diagnostics, parsed)
     validate_backend_type_spellings(catalog, backends, diagnostics, parsed)
     if parsed is not None:
-        validate_parsed_documents(parsed, diagnostics)
+        validate_parsed_documents(parsed, diagnostics, catalog.target_families)
         validate_body_regions(parsed, diagnostics)
     return sort_diagnostics(diagnostics)

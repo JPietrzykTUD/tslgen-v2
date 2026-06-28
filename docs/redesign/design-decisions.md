@@ -5705,3 +5705,48 @@ Consequences:
 - No renderer, value-test planner, or primitive-body workaround should attempt
   to synthesize `array_for<simd<T, sve>>`.
 - Rust SVE remains unsupported and is not part of this decision.
+
+## ADR-115: Target Family Routing Is Catalog Data
+
+Context:
+
+The prototype had accumulated closed-world Python constants for extension and
+profile families. `schema_validation.py` accepted only a fixed set of extension
+families, `support_policy.py` hard-coded which extension families were emitted
+for which machine-profile families, and `machine_profiles.py` accepted only
+fixed profile families and emulator kinds. That gave useful diagnostics, but
+adding a new ISA family required compiler edits before source data could even
+describe it.
+
+Decision:
+
+Concrete family names and profile-family routing now live in
+`tsldata/detail/target_families.tsl` and are promoted into typed immutable
+catalog facts:
+
+- `known_extension_families` lists source-visible extension families, including
+  families that are known but not emitted by the current prototype;
+- `universal_extension_families` lists extension families routed to every
+  profile family;
+- `profile_families` maps a machine-profile family to the extension families it
+  hosts and the emulator kinds that family may request.
+
+Compiler code owns only the mechanics. `SupportPolicy` evaluates whether a
+family is emitted and whether an extension family targets a profile family by
+consulting the catalog's typed target-family facts. Parsed-source validation
+uses the same catalog facts for extension-family diagnostics. Machine-profile
+loading accepts a `TargetFamilyCatalog` so profile families and emulator kinds
+are validated against source-owned declarations instead of Python literals.
+
+Consequences:
+
+- Adding a new extension/profile family such as `rvv`/`riscv` is source-data
+  additive: declare it in `target_families.tsl`, add extensions/profiles, and
+  then add backend support where real semantics are required.
+- Unknown family typos still produce source-located diagnostics.
+- Known but non-emitted source families, such as `cuda`, can remain valid
+  catalog data without being routed into generated profiles.
+- Actual verifier/emulator execution remains backend/Python behavior. Data can
+  declare that a profile family may request `sde` or `qemu-aarch64`, but the
+  verifier still owns how those tools are invoked and which CLI options
+  configure them.

@@ -84,6 +84,27 @@ def test_policy_owns_mask_forms() -> None:
     assert not policy.is_maskable_signature(gather_shape)
 
 
+def test_target_family_catalog_drives_extension_profile_routing(catalog: Catalog) -> None:
+    policy = DEFAULT_SUPPORT_POLICY
+    target_families = catalog.target_families
+
+    assert target_families.known_extension_families >= {
+        "scalar",
+        "generic_like",
+        "x86",
+        "arm",
+        "cuda",
+    }
+    assert policy.supports_extension_family("arm", target_families)
+    assert not policy.supports_extension_family("cuda", target_families)
+    assert policy.extension_targets_profile("scalar", "aarch64", target_families)
+    assert policy.extension_targets_profile("generic_like", "x86", target_families)
+    assert policy.extension_targets_profile("x86", "x86", target_families)
+    assert policy.extension_targets_profile("arm", "aarch64", target_families)
+    assert not policy.extension_targets_profile("x86", "aarch64", target_families)
+    assert not policy.extension_targets_profile("arm", "generic", target_families)
+
+
 def test_policy_does_not_support_transition_variadic_shape() -> None:
     policy = DEFAULT_SUPPORT_POLICY
     set_shape = parse_signature("v:=s...")

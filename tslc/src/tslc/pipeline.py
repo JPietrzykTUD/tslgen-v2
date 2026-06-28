@@ -173,7 +173,10 @@ def _load_inputs(request: GenerationRequest) -> tuple[_PipelineInputs | None, li
     test_harness = discover_harness_primitives(catalog)
     if request.test_harness:
         diagnostics.extend(test_harness.diagnostics)
-    profile_result = load_machine_profiles_checked(request.machine_profiles_path)
+    profile_result = load_machine_profiles_checked(
+        request.machine_profiles_path,
+        catalog.target_families,
+    )
     diagnostics.extend(profile_result.diagnostics)
     if has_errors(diagnostics):
         return None, diagnostics

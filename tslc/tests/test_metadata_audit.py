@@ -139,4 +139,17 @@ def _requires_source() -> str:
         "          reasons []\n"
         "        implementation:\n"
         '          tsil "complete(call<primitive=callee>(data));"\n'
+        "target_families:\n"
+        "  known_extension_families [scalar, generic_like, x86, arm]\n"
+        "  universal_extension_families [scalar, generic_like]\n"
+        "  profile_families:\n"
+        "    generic:\n"
+        "      extension_families []\n"
+        "      emulator_kinds []\n"
+        "    x86:\n"
+        "      extension_families [x86]\n"
+        "      emulator_kinds [sde]\n"
+        "    aarch64:\n"
+        "      extension_families [arm]\n"
+        '      emulator_kinds ["qemu-aarch64"]\n'
     )

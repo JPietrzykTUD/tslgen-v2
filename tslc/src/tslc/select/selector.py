@@ -236,15 +236,19 @@ class Selector:
 
         emit: list[str] = []
         for name, ext in catalog.extensions.items():
-            if not self.support.supports_extension(ext):
+            if not self.support.supports_extension(ext, catalog.target_families):
                 # Unsupported extension substrates stay source-visible but are not generated in
                 # this slice. Concrete bodies still self-gate via `requires`, so they drop on a
                 # profile lacking the flags.
                 continue
-            if not self.support.extension_targets_profile(ext.family, profile.family):
-                # An ISA-specific extension only emits for a profile of its own ISA: an
-                # ISA-independent `requires []` body (the scalar-store) would otherwise leak its
-                # `simd<T, avx2>` registration onto an aarch64/generic profile that can't use it.
+            if not self.support.extension_targets_profile(
+                ext.family,
+                profile.family,
+                catalog.target_families,
+            ):
+                # Family routing is catalog-owned. This prevents an ISA-independent
+                # `requires []` body (the scalar-store) from registering an extension substrate
+                # on a profile family that did not declare it.
                 continue
             if name in superseded:
                 continue

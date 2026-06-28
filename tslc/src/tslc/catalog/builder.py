@@ -25,12 +25,17 @@ from tslc.catalog.model import (
     RequirementClause,
 )
 from tslc.catalog.signatures import SignatureShape, parse_signature
+from tslc.catalog.target_families import (
+    ProfileFamilyCapability,
+    TargetFamilyCatalog,
+)
 from tslc.catalog.test_promotion import build_test_cases
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.syntax.ast import (
     OuterTslParseResult,
     ParsedBlockDeclaration,
+    ParsedFieldDeclaration,
     ParsedImplementationSelectorEntry,
     ParsedPrimitiveDeclaration,
     ParsedRequiresValue,
@@ -56,6 +61,7 @@ class CatalogBuilder:
         type_spellings: dict[str, dict[str, str]] = {}
         translations: dict[str, dict[str, str]] = {}
         diagnostics: list[Diagnostic] = []
+        target_family_fields: list[ParsedTslField] = []
 
         # A `requires:` map may be keyed by extension name (``avx2 [avx, avx2]``);
         # know the extension names up front so those keys aren't mistaken for
@@ -85,6 +91,11 @@ class CatalogBuilder:
                         type_spellings[declaration.name] = _build_type_spellings(declaration)
                     elif declaration.kind == "translation" and declaration.name:
                         translations[declaration.name] = _build_translations(declaration)
+                elif (
+                    isinstance(declaration, ParsedFieldDeclaration)
+                    and declaration.field.key.text == "target_families"
+                ):
+                    target_family_fields.append(declaration.field)
 
         extensions = _resolve_extension_inheritance(extensions)
         catalog = Catalog(
@@ -93,6 +104,7 @@ class CatalogBuilder:
             extensions=extensions,
             type_spellings=type_spellings,
             translations=translations,
+            target_families=_build_target_families(target_family_fields),
         )
         return CatalogBuildResult(catalog=catalog, diagnostics=tuple(diagnostics))
 
@@ -490,6 +502,28 @@ def _build_translations(declaration: ParsedBlockDeclaration) -> dict[str, str]:
         if text is not None:
             templates[field.key.text] = text
     return templates
+
+
+def _build_target_families(fields: list[ParsedTslField]) -> TargetFamilyCatalog:
+    known: set[str] = set()
+    universal: set[str] = set()
+    profiles: dict[str, ProfileFamilyCapability] = {}
+    for field in fields:
+        known.update(_list_text(_child(field, "known_extension_families")))
+        universal.update(_list_text(_child(field, "universal_extension_families")))
+        profile_families = _child(field, "profile_families")
+        for entry in _children(profile_families):
+            profiles[entry.key.text] = ProfileFamilyCapability(
+                name=entry.key.text,
+                extension_families=_list_text_set(_child(entry, "extension_families")),
+                emulator_kinds=_list_text_set(_child(entry, "emulator_kinds")),
+                source=_source_span(entry.source),
+            )
+    return TargetFamilyCatalog(
+        known_extension_families=frozenset(known),
+        universal_extension_families=frozenset(universal),
+        profile_families=profiles,
+    )
 
 
 def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:

@@ -6,10 +6,19 @@ import pytest
 
 from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.model import Catalog, Extension, Implementation, Primitive
+from tslc.catalog.target_families import ProfileFamilyCapability, TargetFamilyCatalog
 from tslc.lower.lowerer import Lowerer
 from tslc.select.selector import SelectedImplementation, Selector
 
 _TYPES = ("si32", "ui32", "f32", "f64")
+
+
+def _scalar_target_families() -> TargetFamilyCatalog:
+    return TargetFamilyCatalog(
+        known_extension_families=frozenset({"scalar"}),
+        universal_extension_families=frozenset({"scalar"}),
+        profile_families={"generic": ProfileFamilyCapability("generic")},
+    )
 
 
 def _slots(catalog, profile, primitive):
@@ -37,8 +46,8 @@ def test_unknown_primitive_is_error(catalog: Catalog, machine_profiles) -> None:
 
 def test_profile_reachability(catalog: Catalog, machine_profiles) -> None:
     # scalar profile: the scalar extension plus the always-available `generic` portable vector
-    # (a base extension with no feature flags). tslc registers `simd<>` for the scalar, x86,
-    # and generic_like families; `arm`/`cuda`/fpga extensions are still not emitted.
+    # (a base extension with no feature flags). Target-family data routes scalar/generic_like to
+    # every profile while keeping ISA-specific and non-emitted families out.
     scalar = {s.extension.name for s in _slots(catalog, machine_profiles["scalar"], "add")}
     assert scalar == {"scalar", "generic"}
 
@@ -563,6 +572,7 @@ def test_ambiguous_specificity_warns(machine_profiles) -> None:
         extensions={"scalar": ext},
         type_spellings={},
         translations={},
+        target_families=_scalar_target_families(),
     )
     result = Selector().select_profile(catalog, machine_profiles["scalar"], "amb", ("si32",))
     assert [d.code for d in result.diagnostics] == ["TSL-SELECT-AMBIGUOUS-SPECIFICITY"]
@@ -592,6 +602,7 @@ def test_nested_specificity_does_not_warn(machine_profiles) -> None:
         extensions={"scalar": ext},
         type_spellings={},
         translations={},
+        target_families=_scalar_target_families(),
     )
     result = Selector().select_profile(catalog, machine_profiles["scalar"], "amb2", ("si32",))
     assert result.diagnostics == ()

@@ -14,8 +14,26 @@ from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
 
 
+_TARGET_FAMILIES = (
+    "\n"
+    "target_families:\n"
+    "  known_extension_families [scalar, x86]\n"
+    "  universal_extension_families [scalar]\n"
+    "  profile_families:\n"
+    "    generic:\n"
+    "      extension_families []\n"
+    "    x86:\n"
+    "      extension_families [x86]\n"
+)
+
+
 def _build(text: str, path: Path = Path("diagnostic_fixture.tsl")) -> CatalogBuildResult:
-    document = SourceDocument(path=path, text=text, digest="d", kind="tsl")
+    document = SourceDocument(
+        path=path,
+        text=text + _TARGET_FAMILIES,
+        digest="d",
+        kind="tsl",
+    )
     parsed = TslParser().parse((document,))
     assert parsed.diagnostics == (), parsed.diagnostics
     return CatalogBuilder().build(parsed)

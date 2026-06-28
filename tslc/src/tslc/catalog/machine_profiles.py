@@ -16,6 +16,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
+from tslc.catalog.target_families import TargetFamilyCatalog
 from tslc.diagnostics import Diagnostic, SourceLocation, sort_diagnostics
 
 # Sentinel used by the generic/scalar profile to mean "no SIMD features".
@@ -31,7 +32,7 @@ class MachineProfileEmulator:
     profile should use when tests cannot run natively.
     """
 
-    kind: str  # "sde" | "qemu-aarch64"
+    kind: str
     profile: str
     args: tuple[str, ...] = ()
 
@@ -39,7 +40,7 @@ class MachineProfileEmulator:
 @dataclass(frozen=True, slots=True)
 class MachineProfile:
     name: str
-    family: str  # "generic" | "x86" | "aarch64"
+    family: str
     features: frozenset[str]
     # feature -> its compiler/target-feature spelling when it differs from the token
     # (e.g. avx512_vpclmulqdq -> vpclmulqdq, neon -> asimd).
@@ -67,13 +68,19 @@ class _JsonObject:
     pairs: tuple[tuple[str, Any], ...]
 
 
-def load_machine_profiles(path: Path) -> Mapping[str, MachineProfile]:
+def load_machine_profiles(
+    path: Path,
+    target_families: TargetFamilyCatalog | None = None,
+) -> Mapping[str, MachineProfile]:
     """Load every machine profile, keyed by name. The filesystem-read boundary."""
 
-    return load_machine_profiles_checked(path).profiles
+    return load_machine_profiles_checked(path, target_families).profiles
 
 
-def load_machine_profiles_checked(path: Path) -> MachineProfileLoadResult:
+def load_machine_profiles_checked(
+    path: Path,
+    target_families: TargetFamilyCatalog | None = None,
+) -> MachineProfileLoadResult:
     """Load machine profiles with structural validation diagnostics."""
 
     diagnostics: list[Diagnostic] = []
@@ -121,12 +128,19 @@ def load_machine_profiles_checked(path: Path) -> MachineProfileLoadResult:
     profiles: dict[str, MachineProfile] = {}
     _seen_names(data.pairs, "TSL-PROFILE-DUPLICATE-FAMILY", path, diagnostics)
     for family, entries in data.pairs:
-        if family not in {"generic", "x86", "aarch64"}:
+        if (
+            target_families is not None
+            and target_families.profile_family_names
+            and not target_families.supports_profile_family(family)
+        ):
             diagnostics.append(
                 _diagnostic(
                     path,
                     "TSL-PROFILE-INVALID-FAMILY",
-                    f"machine profile family {family!r} is not supported",
+                    (
+                        f"machine profile family {family!r} is not declared in "
+                        "target_families"
+                    ),
                 )
             )
         if not isinstance(entries, list):
@@ -200,7 +214,14 @@ def load_machine_profiles_checked(path: Path) -> MachineProfileLoadResult:
                 path,
                 diagnostics,
             )
-            emulator = _emulator(name, fields.get("emulator"), path, diagnostics)
+            emulator = _emulator(
+                name,
+                family,
+                fields.get("emulator"),
+                target_families,
+                path,
+                diagnostics,
+            )
             profiles[name] = MachineProfile(
                 name=name,
                 family=family,
@@ -316,7 +337,9 @@ def _string_list_field(
 
 def _emulator(
     profile_name: str,
+    family: str,
     value: Any,
+    target_families: TargetFamilyCatalog | None,
     path: Path,
     diagnostics: list[Diagnostic],
 ) -> MachineProfileEmulator | None:
@@ -350,14 +373,26 @@ def _emulator(
         )
         return None
     kind = kind_value.strip()
-    if kind not in {"sde", "qemu-aarch64"}:
-        diagnostics.append(
-            _diagnostic(
-                path,
-                "TSL-PROFILE-UNSUPPORTED-EMULATOR",
-                f"machine profile {profile_name!r} emulator kind {kind!r} is not supported",
+    allowed = (
+        target_families.emulator_kinds_for_profile_family(family)
+        if target_families is not None and target_families.supports_profile_family(family)
+        else frozenset()
+    )
+    if allowed or (
+        target_families is not None and target_families.supports_profile_family(family)
+    ):
+        if kind not in allowed:
+            expected = ", ".join(sorted(allowed)) if allowed else "no emulator"
+            diagnostics.append(
+                _diagnostic(
+                    path,
+                    "TSL-PROFILE-UNSUPPORTED-EMULATOR",
+                    (
+                        f"machine profile {profile_name!r} emulator kind {kind!r} is not "
+                        f"declared for family {family!r}; expected {expected}"
+                    ),
+                )
             )
-        )
     profile_value = fields.get("profile")
     if not isinstance(profile_value, str) or not profile_value.strip():
         diagnostics.append(

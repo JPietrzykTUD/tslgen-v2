@@ -4587,3 +4587,45 @@ now green with `266 passed, 82 deselected`.
 
 Stop condition: no next run prompt is required for this safety annotation
 cleanup.
+
+## Completed Target Family Routing Catalog Cleanup
+
+The `tslc` target-family routing decision is now locked in as catalog data.
+
+Implemented:
+
+- Added `tsldata/detail/target_families.tsl` with known extension families,
+  universal extension families, profile-family routing, and profile-family
+  emulator kinds.
+- Added typed immutable `TargetFamilyCatalog` and
+  `ProfileFamilyCapability` values.
+- Promoted `target_families:` declarations through `CatalogBuilder` into
+  `Catalog.target_families`.
+- Replaced support-policy Python family constants with catalog-driven routing
+  in `SupportPolicy` and `Selector`.
+- Validated extension families, target-family declaration shape, machine
+  profile families, and machine profile emulator kinds against the typed
+  target-family catalog.
+- Updated metadata audit and the main generation pipeline to pass catalog
+  target-family facts into machine-profile loading.
+- Recorded ADR-115 in `docs/redesign/design-decisions.md`.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src
+python -m pytest tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py tslc/tests/test_support_policy.py tslc/tests/test_select_and_lower.py -q
+python -m pytest tslc/tests/test_profile_rendering.py tslc/tests/test_value_test_planning.py tslc/tests/test_build_verify_config.py -q
+python -m pytest tslc/tests/test_determinism.py tslc/tests/test_cli.py tslc/tests/test_support_policy_views.py -q
+python -m pytest tslc/tests/test_diagnostic_provenance.py tslc/tests/test_metadata_audit.py -q
+python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+python -m pytest tslc/tests/test_build_verify.py::test_generated_profiles_build -q
+git diff --check
+```
+
+Result: all listed validation passed. The fast non-build gate reports
+`282 passed, 82 deselected`; the focused generated-profile build test reports
+`1 passed`.
+
+Stop condition: this design cleanup is complete. No next run prompt is required
+for this user-directed slice.

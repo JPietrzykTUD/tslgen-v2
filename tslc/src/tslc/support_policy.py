@@ -18,18 +18,12 @@ from tslc.catalog.scalar_types import (
     scalar_bit_width_or_default,
 )
 from tslc.catalog.signatures import LANE_LIST_KIND, SignatureShape
-
-# Extension families that are ISA-portable — emitted for every profile regardless of its ISA.
-_UNIVERSAL_EXTENSION_FAMILIES = frozenset({"scalar", "generic_like"})
-# Machine-profile ISA family -> the one ISA-specific extension family it hosts. A profile family
-# absent here (e.g. "generic") hosts only the universal families above.
-_PROFILE_ISA_EXTENSION_FAMILY = {"x86": "x86", "aarch64": "arm"}
+from tslc.catalog.target_families import TargetFamilyCatalog
 
 
 @dataclass(frozen=True, slots=True)
 class SupportPolicy:
     backend_ids: frozenset[str]
-    emitted_extension_families: frozenset[str]
     supported_signature_kinds: frozenset[str]
     maskable_result_kinds: frozenset[str]
     mask_deferred_param_kinds: frozenset[str]
@@ -59,25 +53,33 @@ class SupportPolicy:
         backends = sorted(self.backend_ids)
         return " or ".join(backends)
 
-    def supports_extension_family(self, family: str) -> bool:
-        return family in self.emitted_extension_families
+    def supports_extension_family(
+        self,
+        family: str,
+        target_families: TargetFamilyCatalog,
+    ) -> bool:
+        return target_families.supports_extension_family(family)
 
-    def supports_extension(self, extension: Extension) -> bool:
-        return self.supports_extension_family(extension.family) and (
+    def supports_extension(
+        self,
+        extension: Extension,
+        target_families: TargetFamilyCatalog,
+    ) -> bool:
+        return self.supports_extension_family(extension.family, target_families) and (
             extension.vector_bits_kind not in self.scalable_vector_bits_kinds
             or self.uses_scalable_vector(extension)
         )
 
-    def extension_targets_profile(self, extension_family: str, profile_family: str) -> bool:
+    def extension_targets_profile(
+        self,
+        extension_family: str,
+        profile_family: str,
+        target_families: TargetFamilyCatalog,
+    ) -> bool:
         """Whether an extension of ``extension_family`` belongs in a project built for a profile of
-        ``profile_family``. ISA-portable families (`scalar`/`generic_like`) emit on every profile;
-        an ISA-specific family emits only on a profile of its own ISA. So an aarch64 profile never
-        registers the `x86` substrate and vice-versa — e.g. the ISA-independent ``requires []``
-        scalar-store body, keyed to every extension, no longer leaks its `simd<T, avx2>`
-        registration onto a neon profile."""
-        if extension_family in _UNIVERSAL_EXTENSION_FAMILIES:
-            return True
-        return extension_family == _PROFILE_ISA_EXTENSION_FAMILY.get(profile_family)
+        ``profile_family``. The concrete family names come from source data; this method only
+        applies the routing rule carried by the typed catalog."""
+        return target_families.extension_targets_profile(extension_family, profile_family)
 
     def supports_signature(self, shape: SignatureShape) -> bool:
         return (
@@ -227,7 +229,6 @@ class SupportPolicy:
 
 DEFAULT_SUPPORT_POLICY = SupportPolicy(
     backend_ids=frozenset(registered_backend_ids()),
-    emitted_extension_families=frozenset({"scalar", "x86", "arm", "generic_like"}),
     supported_signature_kinds=frozenset(
         {
             "v",
