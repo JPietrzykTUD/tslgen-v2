@@ -29,6 +29,7 @@ from tslc.catalog.model import (
 from tslc.catalog.scalar_types import scalar_bit_width_or_default
 from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at, sort_diagnostics
+from tslc.documentation import PrimitiveDocumentation, primitive_documentation
 from tslc.ir.scan import scan
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower.calls import parse_call_selector
@@ -121,6 +122,7 @@ class LoweredSpecialization:
     # dependency pruning.
     required_features: frozenset[str] = frozenset()
     safety: ImplementationSafety = field(default_factory=ImplementationSafety)
+    documentation: PrimitiveDocumentation = field(default_factory=PrimitiveDocumentation)
 
     @property
     def body_text(self) -> str:
@@ -434,6 +436,11 @@ class Lowerer:
             lane_list_params=tuple(context.env.lane_list_params.values()),
             required_features=selected.required_features,
             safety=safety,
+            documentation=primitive_documentation(
+                brief=selected.primitive.brief_description,
+                detailed=selected.primitive.detailed_description,
+                semantics=selected.primitive.semantics,
+            ),
         )
         return LoweringResult(
             specialization=specialization,

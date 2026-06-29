@@ -44,7 +44,7 @@ RUN set -eux; \
 
 RUN /opt/venv/bin/pip install --no-cache-dir \
     prompt_toolkit \
-    lark jinja2 mkdocs-material \
+    lark jinja2 mkdocs-material sphinx\
     numpy xxhash cyclopts networkx psutil \
     pytest mypy ruff black build \
     "mkdocstrings[python]" \

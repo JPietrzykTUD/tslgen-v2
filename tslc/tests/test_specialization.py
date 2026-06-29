@@ -46,6 +46,19 @@ def test_cpp_specialization_structure(data_root: Path, machine_profiles_path: Pa
     assert "struct add_impl<tsl::simd<int32_t, tsl::sse>>" in avx2
     assert "return _mm_add_epi32(left, right);" in avx2
     assert "inline typename Vec::register_type add(" in avx2
+    assert "@brief [Example: sse + si8]: Add packed 8-bit integers" in avx2
+    assert "@par Semantics" in avx2
+    assert "@par API" in avx2
+    assert "- Template parameters: Vec selects the SIMD vector type" in avx2
+    assert "- Returns: SIMD register (typename Vec::register_type)" in avx2
+    assert "- Parameters: left: SIMD register; right: SIMD register" in avx2
+    assert "@par Specialization" in avx2
+    assert "- Extension: avx2" in avx2
+    assert "- Element type: int32_t" in avx2
+    assert "- Register type: __m256i" in avx2
+    assert "- Context:" not in avx2
+    assert "- Result kind:" not in avx2
+    assert "- Parameter kinds:" not in avx2
     # hadd is scalar-returning (s:=v) and picks the f64 body.
     assert "inline typename Vec::base_type hadd(" in avx2
     assert "struct hadd_impl<tsl::simd<double, tsl::avx2>>" in avx2
@@ -59,6 +72,19 @@ def test_rust_specialization_structure(data_root: Path, machine_profiles_path: P
     assert "unsafe { return core::arch::x86_64::_mm256_add_epi32(left, right); }" in avx2
     assert "impl AddImpl for Simd<i32, Sse> {" in avx2
     assert "pub fn add<S: AddImpl>(" in avx2
+    assert '/// [Example: sse + si8]: Add packed 8-bit integers' in avx2
+    assert "/// # Semantics" in avx2
+    assert "/// # API" in avx2
+    assert "/// - Type parameters: S selects the SIMD vector type" in avx2
+    assert "/// - Returns: SIMD register (S::RegisterType)" in avx2
+    assert "/// - Parameters: left: SIMD register; right: SIMD register" in avx2
+    assert "/// # Specialization" in avx2
+    assert "/// - Extension: avx2" in avx2
+    assert "/// - Element type: i32" in avx2
+    assert "/// - Register type: core::arch::x86_64::__m256i" in avx2
+    assert "/// - Context:" not in avx2
+    assert "/// - Result kind:" not in avx2
+    assert "/// - Parameter kinds:" not in avx2
 
 
 def test_avx_profile_falls_back_to_sse_for_integers(

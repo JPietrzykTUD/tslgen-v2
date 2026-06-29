@@ -5189,3 +5189,56 @@ Next prompt:
 ```text
 docs/agent/runs/tslc-primitive-docs-corpus-review-prompt.md
 ```
+
+## Completed Inline Documentation Generation
+
+Generated C++ and Rust APIs now include inline documentation from typed
+documentation values instead of renderer-local catalog inspection.
+
+Implemented:
+
+- Added `tslc.documentation` for `PrimitiveDocumentation`,
+  `DocumentationBlock`, safety fact formatting, and Doxygen/rustdoc comment
+  rendering.
+- Lowering now carries primitive `brief_description`, `detailed_description`,
+  and `semantics` metadata on each `LoweredSpecialization`.
+- C++ emits Doxygen comments on wrappers, specialization `apply(...)` methods,
+  and public declarations. Generic wrapper documentation uses an `API` section
+  for template parameters, return value, and runtime parameters. Concrete
+  specialization documentation uses a `Specialization` section with readable
+  signature labels and concrete backend register spellings where available.
+- Rust emits rustdoc comments on dispatch traits, impl blocks, wrappers, and
+  free functions using the same documentation boundary.
+- Recorded ADR-128.
+
+Design boundary:
+
+- `semantics` is rendered as documentation-only text and is not parsed,
+  evaluated, or used for compiler behavior.
+- Renderers format `DocumentationBlock` values and already-lowered facts; they
+  do not inspect the catalog or classify primitives.
+- Generic wrapper docs avoid borrowing concrete facts from the first selected
+  specialization.
+- Generated docs avoid compiler-internal rows such as `Context`, `Backend`,
+  `Result kind`, and `Parameter kinds`.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_specialization.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_lane_lists.py tslc/tests/test_safety_contract.py::test_rust_backend_formats_caller_unsafe_contract tslc/tests/test_catalog_validation.py
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives add --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles avx2 --output-root ./tslctmp/doc-inline-smoke
+git diff --check
+```
+
+Result: compileall passed; focused specialization tests report `7 passed`;
+adjacent lane-list/safety/catalog tests report `39 passed`; the add AVX2
+C++/Rust documentation generation smoke produced `1760 specializations across
+17 artifacts` and formatted both backends; `git diff --check` passed.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-inline-documentation-generation-review-prompt.md
+```

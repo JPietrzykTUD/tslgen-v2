@@ -6246,3 +6246,44 @@ Consequences:
 - Specialization docs can combine authored primitive text with lowered
   backend/type/safety/requirement facts later, without making lowering
   responsible for documentation prose.
+
+## ADR-128: Inline API Documentation Is Rendered From Lowered Facts
+
+Context:
+
+The primitive corpus now carries `brief_description`,
+`detailed_description`, and `semantics` as catalog metadata. Generated C++ and
+Rust APIs need inline documentation, but documentation rendering must not turn
+renderers into catalog inspectors or make the raw `semantics` text executable
+compiler behavior.
+
+Decision:
+
+Carry source-authored primitive documentation through lowering as
+`PrimitiveDocumentation` on each `LoweredSpecialization`. Build
+renderer-ready `DocumentationBlock` values from that metadata plus already
+lowered facts such as extension, element type, concrete register spelling where
+available, required features, attributes, immediates, target-vector facts, and
+safety. Signature kind tokens are rendered through documentation labels such as
+"SIMD register", "scalar value", "lane array", and "mutable element pointer"
+rather than exposing raw source kind codes like `v`, `s`, or `ptr`.
+
+C++ renders those blocks as Doxygen comments. Rust renders them as rustdoc
+comments. Wrapper/dispatch documentation has an `API` section for template or
+type parameters, return value, and function parameters. Concrete
+impl/apply/free-function documentation has a `Specialization` section for the
+selected extension, element/register types, requirements, attributes, and
+safety. The authored `semantics` field is normalized for indentation and
+rendered as a code block, but it remains documentation-only text.
+
+Consequences:
+
+- Documentation generation has one typed value boundary shared by C++ and Rust.
+- Renderers format already-decided facts; they do not scan the catalog,
+  rediscover primitive semantics, or interpret `semantics`.
+- Generic wrapper docs avoid misleading readers with the first concrete
+  specialization's extension or type.
+- Generated comments avoid compiler-internal rows such as "Context", "Backend",
+  "Result kind", and "Parameter kinds".
+- A future external documentation artifact can reuse the same documentation
+  values without adding a new source parser or catalog lookup path.

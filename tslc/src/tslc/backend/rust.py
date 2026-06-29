@@ -8,6 +8,14 @@ from tslc.backend.target_capability import (
     rust_extension_tag,
     rust_register_type,
 )
+from tslc.documentation import (
+    DocumentationBlock,
+    documentation_block,
+    parameter_summary,
+    render_rust_doc,
+    result_summary,
+    safety_fact,
+)
 from tslc.lower.lowerer import (
     LoweredSpecialization,
     effective_param_types,
@@ -65,8 +73,12 @@ class RustBackend:
         gp_decl = "".join(f", const {name}: {typ}" for name, typ, _ in shape.generic_params)
         gp_names = [name for name, _, _ in shape.generic_params]
         fixed_trait = "".join(f", {n}: {_param_kind_type(k, 'S')}" for n, k in fixed)
+        doc = _rust_doc(
+            shape, context="Rust overload dispatch trait", concrete=False
+        )
         trait = (
-            f"pub trait {arg_trait}<S: SimdVector{axis_decl}{gp_decl}> {{\n"
+            (f"{doc}\n" if doc else "")
+            + f"pub trait {arg_trait}<S: SimdVector{axis_decl}{gp_decl}> {{\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply(self{fixed_trait}) -> {ret};\n"
             f"}}"
         )
@@ -121,8 +133,10 @@ class RustBackend:
                     current_imask=f"<{vec} as SimdVector>::ImaskType",
                 )
             )
+            doc = _rust_doc(spec, context="Rust specialization")
             impls.append(
-                f"{impl_prefix} {arg_trait}{trait_args} for {self_ty} {{\n"
+                (f"{doc}\n" if doc else "")
+                + f"{impl_prefix} {arg_trait}{trait_args} for {self_ty} {{\n"
                 f"    {_unsafe_prefix(caller_unsafe)}fn apply(self{fixed_impl}) -> {ret_impl} {{\n"
                 f"        {bind}{body}\n"
                 f"    }}\n"
@@ -142,8 +156,10 @@ class RustBackend:
         call = _unsafe_call(call, caller_unsafe)
         unsafe_prefix = _unsafe_prefix(caller_unsafe)
         ret_type = _kind_type(shape.result_kind, "S")
+        doc = _rust_doc(shape, context="Rust wrapper", concrete=False)
         wrapper = (
-            f"pub {unsafe_prefix}fn {primitive_name}"
+            (f"{doc}\n" if doc else "")
+            + f"pub {unsafe_prefix}fn {primitive_name}"
             f"<S: SimdVector, {axis_wrap}{gp_wrap}"
             f"V: {arg_trait}<S{axis_args}{gp_args}>>"
             f"({wrap_params}) -> {ret_type} {{\n"
@@ -180,8 +196,10 @@ class RustBackend:
             f"pub trait {_trait_name(primitive_name)}{generics}: "
             f"SimdVector{_index_where(shape)}"
         )
+        doc = _rust_doc(shape, context="Rust dispatch trait", concrete=False)
         return (
-            f"{trait_header} {{\n"
+            (f"{doc}\n" if doc else "")
+            + f"{trait_header} {{\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret};\n"
             f"}}"
         )
@@ -232,8 +250,10 @@ class RustBackend:
                 current_imask=f"<{key} as SimdVector>::ImaskType",
             )
         )
+        doc = _rust_doc(spec, context="Rust specialization")
         return (
-            f"impl{impl_generics} {_trait_name(spec.primitive_name)}{trait_args} for {key}"
+            (f"{doc}\n" if doc else "")
+            + f"impl{impl_generics} {_trait_name(spec.primitive_name)}{trait_args} for {key}"
             f"{_index_where(spec, impl_register=impl_register)} {{\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret} {{\n"
             f"        {body}\n"
@@ -281,8 +301,10 @@ class RustBackend:
         trait_args = f"<{', '.join(targs)}>" if targs else ""
         decls = "".join(f", {d}" for d in decl_list)
         call = _unsafe_call(call, caller_unsafe)
+        doc = _rust_doc(shape, context="Rust wrapper", concrete=False)
         return (
-            f"pub {_unsafe_prefix(caller_unsafe)}fn {rust_raw_identifier(primitive_name)}"
+            (f"{doc}\n" if doc else "")
+            + f"pub {_unsafe_prefix(caller_unsafe)}fn {rust_raw_identifier(primitive_name)}"
             f"<S: {_trait_name(primitive_name)}{trait_args}{decls}>"
             f"({params}) -> {ret}{_index_where(shape)} {{\n"
             f"    {call}\n"
@@ -306,11 +328,112 @@ def _free_function(spec: LoweredSpecialization) -> str:
     )
     unsafe_prefix = _unsafe_prefix(spec.safety.caller_unsafe)
     function_name = rust_raw_identifier(spec.primitive_name)
+    doc = _rust_doc(spec, context="Rust free function")
     return (
-        f"pub {unsafe_prefix}fn {function_name}({params}){ret_clause} {{\n"
+        (f"{doc}\n" if doc else "")
+        + f"pub {unsafe_prefix}fn {function_name}({params}){ret_clause} {{\n"
         f"    {spec.body_text}\n"
         f"}}"
     )
+
+
+def _rust_doc(
+    spec: LoweredSpecialization, *, context: str, concrete: bool = True
+) -> str:
+    return render_rust_doc(_doc_block(spec, context=context, concrete=concrete))
+
+
+def _doc_block(
+    spec: LoweredSpecialization, *, context: str, concrete: bool
+) -> DocumentationBlock:
+    if not concrete:
+        return documentation_block(
+            spec.documentation,
+            facts=(
+                ("Type parameters", _rust_type_parameter_summary(spec)),
+                ("Returns", _rust_result_summary(spec, concrete=False)),
+                ("Parameters", _runtime_parameter_summary(spec)),
+            ),
+            facts_title="API",
+        )
+    facts = [
+        ("Extension", spec.extension_name),
+        ("Element type", spec.base_type_spelling),
+        ("Register type", spec.register_spelling),
+        ("Returns", _rust_result_summary(spec, concrete=True)),
+        ("Parameters", _runtime_parameter_summary(spec)),
+    ]
+    if spec.target is not None:
+        facts.extend(
+            [
+                ("Target vector", spec.target.vector_spelling),
+                ("Target register", spec.target.register_spelling),
+            ]
+        )
+    if spec.axis:
+        facts.append(
+            ("Attributes", ", ".join(f"{key}={value}" for key, value in spec.axis))
+        )
+    if spec.immediate is not None:
+        facts.append(("Immediate", f"{spec.immediate[0]}: {spec.immediate[1]}"))
+    if spec.required_features:
+        facts.append(
+            ("Required CPU features", ", ".join(sorted(spec.required_features)))
+        )
+    else:
+        facts.append(("Required CPU features", "none"))
+    facts.append(("Safety", safety_fact(spec.safety)))
+    return documentation_block(
+        spec.documentation,
+        facts=tuple(facts),
+        facts_title="Specialization",
+    )
+
+
+def _runtime_parameter_summary(spec: LoweredSpecialization) -> str:
+    params = tuple(
+        (name, kind)
+        for name, kind in zip(spec.param_names, spec.param_kinds)
+        if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
+    )
+    return parameter_summary(
+        tuple(name for name, _kind in params),
+        tuple(kind for _name, kind in params),
+    )
+
+
+def _rust_type_parameter_summary(spec: LoweredSpecialization) -> str:
+    params = ["S selects the SIMD vector type"]
+    if spec.target is not None:
+        params.append("T selects the target SIMD vector type")
+    params.extend(
+        f"{name} selects an additional SIMD vector type"
+        for name, _ in spec.type_params
+    )
+    params.extend(f"{_axis_name(key)} selects `{key}`" for key, _ in spec.axis)
+    if spec.immediate is not None:
+        params.append(f"{spec.immediate[0]} is a compile-time immediate")
+    params.extend(
+        f"{name} selects `{name}`"
+        for name, _typ, _default in spec.generic_params
+    )
+    return "; ".join(params)
+
+
+def _rust_result_summary(spec: LoweredSpecialization, *, concrete: bool) -> str:
+    if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+        spec.result_kind,
+        spec.param_kinds,
+    ):
+        return result_summary(
+            spec.result_kind,
+            _free_kind_type(spec.result_kind, spec.base_type_spelling),
+        )
+    if concrete:
+        return result_summary(spec.result_kind, _rust_concrete_result(spec))
+    if spec.target is not None:
+        return result_summary(spec.result_kind, "T::RegisterType")
+    return result_summary(spec.result_kind, _kind_type(spec.result_kind, "S"))
 
 
 def _any_caller_unsafe(specs: tuple[LoweredSpecialization, ...]) -> bool:

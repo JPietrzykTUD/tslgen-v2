@@ -2,6 +2,15 @@
 
 from __future__ import annotations
 
+from tslc.backend.target_capability import x86_register_bits
+from tslc.documentation import (
+    DocumentationBlock,
+    documentation_block,
+    parameter_summary,
+    render_cpp_doc,
+    result_summary,
+    safety_fact,
+)
 from tslc.lower.lowerer import (
     LoweredSpecialization,
     effective_param_types,
@@ -134,7 +143,10 @@ class CppBackend:
                 for name, kind in zip(spec.param_names, spec.param_kinds)
                 if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
             )
+            doc = _cpp_doc(spec, context="C++ specialization", indent="    ")
+            prefix = f"{doc}\n" if doc else ""
             applies.append(
+                f"{prefix}"
                 f"    static inline {_apply_result_type(spec)} apply({params}) {{\n"
                 f"        {spec.body_text}\n"
                 f"    }}"
@@ -192,8 +204,11 @@ class CppBackend:
         )
         # The wrapper's result projects through the caller-bound `ToVec` param.
         result_type = "typename ToVec::register_type" if has_target else _result_type(shape.result_kind)
+        doc = _cpp_doc(shape, context="C++ wrapper", concrete=False)
+        prefix = f"{doc}\n" if doc else ""
         return (
-            f"template <{', '.join(template_params)}>\n"
+            prefix
+            + f"template <{', '.join(template_params)}>\n"
             f"inline {result_type} {primitive_name}({params}) {{\n"
             f"    return {primitive_name}_impl<{impl_args}>::apply({names});\n"
             f"}}"
@@ -213,9 +228,171 @@ def _free_function(spec: LoweredSpecialization, *, define: bool) -> str:
         f"inline {_free_kind_type(spec.result_kind, spec.base_type_spelling)} "
         f"{spec.primitive_name}({params})"
     )
+    doc = _cpp_doc(spec, context="C++ free function")
     if not define:
-        return f"{signature};"
+        prefix = f"{doc}\n" if doc else ""
+        return f"{prefix}{signature};"
     return f"{signature} {{\n    {spec.body_text}\n}}"
+
+
+def _cpp_doc(
+    spec: LoweredSpecialization,
+    *,
+    context: str,
+    indent: str = "",
+    concrete: bool = True,
+) -> str:
+    return render_cpp_doc(
+        _doc_block(spec, context=context, concrete=concrete), indent=indent
+    )
+
+
+def _doc_block(
+    spec: LoweredSpecialization, *, context: str, concrete: bool
+) -> DocumentationBlock:
+    if not concrete:
+        return documentation_block(
+            spec.documentation,
+            facts=(
+                ("Template parameters", _cpp_template_summary(spec)),
+                ("Returns", _cpp_result_summary(spec, concrete=False)),
+                ("Parameters", _runtime_parameter_summary(spec)),
+            ),
+            facts_title="API",
+        )
+    facts = [
+        ("Extension", spec.extension_name),
+        ("Element type", spec.base_type_spelling),
+        ("Register type", _cpp_register_doc(spec)),
+        ("Returns", _cpp_result_summary(spec, concrete=True)),
+        ("Parameters", _runtime_parameter_summary(spec)),
+    ]
+    if spec.target is not None:
+        facts.extend(
+            [
+                ("Target vector", spec.target.vector_spelling),
+                ("Target register", _cpp_target_register_doc(spec)),
+            ]
+        )
+    if spec.axis:
+        facts.append(
+            ("Attributes", ", ".join(f"{key}={value}" for key, value in spec.axis))
+        )
+    if spec.immediate is not None:
+        facts.append(("Immediate", f"{spec.immediate[0]}: {spec.immediate[1]}"))
+    if spec.required_features:
+        facts.append(
+            ("Required CPU features", ", ".join(sorted(spec.required_features)))
+        )
+    else:
+        facts.append(("Required CPU features", "none"))
+    facts.append(("Safety", safety_fact(spec.safety)))
+    return documentation_block(
+        spec.documentation,
+        facts=tuple(facts),
+        facts_title="Specialization",
+    )
+
+
+def _runtime_parameter_summary(spec: LoweredSpecialization) -> str:
+    params = tuple(
+        (name, kind)
+        for name, kind in zip(spec.param_names, spec.param_kinds)
+        if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
+    )
+    return parameter_summary(
+        tuple(name for name, _kind in params),
+        tuple(kind for _name, kind in params),
+    )
+
+
+def _cpp_template_summary(spec: LoweredSpecialization) -> str:
+    params = ["Vec selects the SIMD vector type"]
+    if spec.target is not None:
+        params.append("ToVec selects the target SIMD vector type")
+    params.extend(
+        f"{name} selects an additional SIMD vector type"
+        for name, _ in spec.type_params
+    )
+    params.extend(f"{_axis_name(key)} selects `{key}`" for key, _ in spec.axis)
+    if spec.immediate is not None:
+        params.append(f"{spec.immediate[0]} is a compile-time immediate")
+    params.extend(
+        f"{name} selects `{name}`"
+        for name, _typ, _default in spec.generic_params
+    )
+    return "; ".join(params)
+
+
+def _cpp_result_summary(spec: LoweredSpecialization, *, concrete: bool) -> str:
+    if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+        spec.result_kind,
+        spec.param_kinds,
+    ):
+        return result_summary(
+            spec.result_kind,
+            _free_kind_type(spec.result_kind, spec.base_type_spelling),
+        )
+    if concrete:
+        return result_summary(spec.result_kind, _cpp_concrete_result_type(spec))
+    if spec.target is not None:
+        return result_summary(spec.result_kind, "typename ToVec::register_type")
+    return result_summary(spec.result_kind, _result_type(spec.result_kind))
+
+
+def _cpp_concrete_result_type(spec: LoweredSpecialization) -> str:
+    if spec.target is not None:
+        return _cpp_target_register_doc(spec)
+    if spec.result_kind == "v":
+        return _cpp_register_doc(spec)
+    return _apply_result_type(spec)
+
+
+def _cpp_register_doc(spec: LoweredSpecialization) -> str:
+    return _cpp_native_register_doc(
+        extension_name=spec.extension_name,
+        base_spelling=spec.base_type_spelling,
+        uses_sized_vector=spec.uses_sized_vector,
+        lane_parameter=spec.lane_parameter,
+        register_is_base=spec.register_is_base,
+        fallback=spec.register_spelling,
+    )
+
+
+def _cpp_target_register_doc(spec: LoweredSpecialization) -> str:
+    if spec.target is None:
+        return ""
+    return _cpp_native_register_doc(
+        extension_name=spec.target.extension_isa,
+        base_spelling=spec.target.base_spelling,
+        uses_sized_vector=spec.target.uses_sized_vector,
+        lane_parameter=spec.target.lane_parameter or spec.lane_parameter,
+        register_is_base=False,
+        fallback=spec.target.register_spelling,
+    )
+
+
+def _cpp_native_register_doc(
+    *,
+    extension_name: str,
+    base_spelling: str,
+    uses_sized_vector: bool,
+    lane_parameter: str | None,
+    register_is_base: bool,
+    fallback: str,
+) -> str:
+    if uses_sized_vector:
+        return f"::tsl::array_type<{base_spelling}, {lane_parameter}>"
+    bits = x86_register_bits(extension_name)
+    if bits is not None:
+        if base_spelling == "float":
+            return f"__m{bits}"
+        if base_spelling == "double":
+            return f"__m{bits}d"
+        return f"__m{bits}i"
+    if register_is_base:
+        return base_spelling
+    return fallback
 
 
 def _free_kind_type(kind: str, base_spelling: str) -> str:
