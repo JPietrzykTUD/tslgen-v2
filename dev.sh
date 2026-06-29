@@ -12,21 +12,26 @@ Modes:
   ./${self} generate   generate + format the C++/Rust project               (no compiler needed)
   ./${self} build      generate + build-verify both backends                [default]
   ./${self} test       generate + build + run the value tests (SDE / qemu-aarch64 when present)
+  ./${self} document   generate + format + build C++/Rust API docs
   ./${self} explain    diagnose ONE primitive/profile/backend/ext/type slot (no compiler needed)
   ./${self} ratchet    coverage regression gate vs the committed baseline   (no compiler needed)
   ./${self} dump       dump one pipeline stage (catalog/segments/selection/lowered) (no compiler)
 
 Extra flags pass through after the mode, e.g.:
+  ./${self} document --profiles avx2 --primitives add
   ./${self} test    --profiles skylake --primitives add,convert_up
   ./${self} explain --primitive add --profile avx2 --type si32 --backend cpp
   ./${self} ratchet --update
   ./${self} dump    --stage segments --primitive add
 
-generate/build/test drive \`python -m tslc.cli\`; explain/ratchet/dump drive the
-\`tslc.maintenance\` tools directly and need no toolchain.
+generate/build/test/document drive \`python -m tslc.cli\`; explain/ratchet/dump
+drive the \`tslc.maintenance\` tools directly and need no toolchain.
 
 Env knobs (build/test only): TSLC_OUTPUT_ROOT TSLC_SOURCES TSLC_MACHINE_PROFILES
   TSLC_BACKENDS TSLC_SDE TSLC_QEMU_AARCH64 TSLC_VERIFY_JOBS
+Env knobs (document or TSLC_DOCUMENT=1): TSLC_DOXYGEN TSLC_SPHINX_BUILD TSLC_CARGO
+  TSLC_NPM
+  TSLC_DOCUMENT_PROJECT
 
 The Python unit-test suite is a separate gate: run \`pytest tslc/tests\`.
 EOF
@@ -35,19 +40,46 @@ EOF
 mode="build"
 if (( $# > 0 )); then
   case "$1" in
-    generate|build|test|explain|ratchet|dump) mode="$1"; shift ;;
+    generate|build|test|document|explain|ratchet|dump) mode="$1"; shift ;;
     -h|--help|help) usage; exit 0 ;;
-    *) echo "usage: $0 [generate|build|test|explain|ratchet|dump] [extra flags...]" >&2; exit 2 ;;
+    *) echo "usage: $0 [generate|build|test|document|explain|ratchet|dump] [extra flags...]" >&2; exit 2 ;;
   esac
 fi
 extra_args=("$@")
+
+effective_cli_value() {
+  local flag="$1"
+  local value="$2"
+  local i arg
+  for (( i = 0; i < ${#extra_args[@]}; i++ )); do
+    arg="${extra_args[$i]}"
+    case "$arg" in
+      "$flag")
+        if (( i + 1 < ${#extra_args[@]} )); then
+          value="${extra_args[$((i + 1))]}"
+        fi
+        ;;
+      "$flag"=*)
+        value="${arg#${flag}=}"
+        ;;
+    esac
+  done
+  printf '%s\n' "$value"
+}
 
 output_root="${TSLC_OUTPUT_ROOT:-./tslctmp/verify}"
 sources="${TSLC_SOURCES:-tsldata}"
 machine_profiles="${TSLC_MACHINE_PROFILES:-supplementary/buildsystem/machine_profiles.json}"
 backends="${TSLC_BACKENDS:-cpp,rust}"
+effective_output_root="$(effective_cli_value --output-root "$output_root")"
+document_backends="$(effective_cli_value --backends "$backends")"
 sde="${TSLC_SDE:-/opt/intel-sde/sde64}"
 qemu="${TSLC_QEMU_AARCH64:-/usr/bin/qemu-aarch64}"
+doxygen="${TSLC_DOXYGEN:-doxygen}"
+sphinx_build="${TSLC_SPHINX_BUILD:-sphinx-build}"
+cargo_doc="${TSLC_CARGO:-cargo}"
+npm_doc="${TSLC_NPM:-npm}"
+document_project="${TSLC_DOCUMENT_PROJECT:-TSL Generated API}"
 
 export PYTHONPATH="tslc/src${PYTHONPATH:+:$PYTHONPATH}"
 
@@ -73,7 +105,7 @@ fi
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$CMAKE_BUILD_PARALLEL_LEVEL}"
 
 # Fail fast with a clear message if a compiling mode has no working toolchain.
-if [[ "$mode" != "generate" ]]; then
+if [[ "$mode" == "build" || "$mode" == "test" ]]; then
   python - <<'PY'
 from __future__ import annotations
 
@@ -142,6 +174,16 @@ case "$mode" in
 esac
 (( ${#extra_args[@]} )) && cli+=( "${extra_args[@]}" )
 
-echo "tslc ${mode} -> ${output_root}"
+echo "tslc ${mode} -> ${effective_output_root}"
 "${cli[@]}"
+if [[ "$mode" == "document" || "${TSLC_DOCUMENT:-0}" == "1" || "${TSLC_DOCUMENT:-}" == "true" ]]; then
+  python -m tslc.maintenance.documentation \
+    --output-root "$effective_output_root" \
+    --backends "$document_backends" \
+    --project-name "$document_project" \
+    --doxygen "$doxygen" \
+    --sphinx-build "$sphinx_build" \
+    --cargo "$cargo_doc" \
+    --npm "$npm_doc"
+fi
 echo "${self} ${mode}: OK"

@@ -13,6 +13,7 @@ from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact, ArtifactSet
 from tslc.output.verify_model import VerifyBackend, VerifyProject
 from tslc.render.backend_drivers import render_backend_drivers, value_test_supports
+from tslc.render.documentation_project import documentation_artifacts
 from tslc.render.emitted_names import finalize_emitted_names
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.value_tests import (
@@ -98,6 +99,7 @@ def render_project(
         artifacts.extend(driver.project_artifacts(ordered))
         artifacts.extend(driver.test_artifacts(test_plan))
         verify_backends.append(driver.verify_backend(ordered))
+    artifacts.extend(documentation_artifacts(ordered))
     test_diagnostics = tuple(
         diagnostic
         for diagnostic in test_plan.diagnostics

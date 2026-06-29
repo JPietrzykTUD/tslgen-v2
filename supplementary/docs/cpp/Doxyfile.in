@@ -1,0 +1,15 @@
+PROJECT_NAME           = "@PROJECT_NAME@"
+PROJECT_BRIEF          = "Generated C++ SIMD API"
+OUTPUT_DIRECTORY       = "@OUTPUT_DIR@"
+INPUT                  = "@INPUT_DIR@"
+RECURSIVE              = YES
+FILE_PATTERNS          = *.hpp
+GENERATE_HTML          = NO
+GENERATE_XML           = YES
+XML_OUTPUT             = xml
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+MARKDOWN_SUPPORT       = YES
+JAVADOC_AUTOBRIEF      = NO
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO

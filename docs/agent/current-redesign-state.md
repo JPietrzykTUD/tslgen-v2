@@ -5242,3 +5242,220 @@ Next prompt:
 ```text
 docs/agent/runs/tslc-inline-documentation-generation-review-prompt.md
 ```
+
+## Completed Documentation Site Maintenance Tooling
+
+Generated project documentation can now be built after generation and
+formatting, without making docs generation part of the compiler pipeline.
+
+Implemented:
+
+- Added `tslc.maintenance.documentation`.
+  - C++ writes a Doxyfile into `<output>/cpp/docs`, runs Doxygen, and keeps
+    Doxygen XML under `<output>/cpp/docs/doxygen/xml`.
+  - Rust runs `cargo doc --no-deps` with target output under
+    `<output>/rust/docs/target`.
+  - A unified Sphinx site is built under `<output>/docs/site`; Breathe renders
+    the C++ API from Doxygen XML, and Rustdoc is copied under
+    `<output>/docs/site/rust` with a stable landing redirect.
+  - The tool reports exact external commands and output directories.
+- Added source-controlled documentation assets under `supplementary/docs`:
+  a C++ Doxyfile template plus unified Sphinx/Breathe templates and CSS.
+- Added `./dev.sh document`, which runs generation, the existing default
+  formatting, and documentation generation.
+- Added opt-in documentation generation for `./dev.sh build` and `./dev.sh
+  test` via `TSLC_DOCUMENT=1`; docs are not required by default for build/test.
+- Added documentation-tool tests that use fake Doxygen, Sphinx, and Cargo
+  executables.
+- Recorded ADR-129.
+
+Design boundary:
+
+- Documentation site generation is after-write maintenance output tooling, not a
+  parsing, validation, selection, lowering, or rendering stage.
+- Build/test still include formatting through the CLI default `--format`
+  behavior; documentation generation remains opt-in for those modes until the
+  external toolchain cost is proven stable.
+- Documentation assets live under `supplementary/docs` and do not encode
+  primitive or backend semantics.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_maintenance_documentation.py
+bash -n dev.sh
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives add --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles avx2 --output-root ./tslctmp/doc-breathe-smoke
+PYTHONPATH=tslc/src python -m tslc.maintenance.documentation --output-root ./tslctmp/doc-breathe-smoke --backends cpp,rust
+./dev.sh document --primitives add --profiles avx2 --backends cpp,rust --output-root ./tslctmp/dev-doc-breathe-smoke
+git diff --check
+```
+
+Result: compileall passed; documentation maintenance tests report `2 passed`;
+`dev.sh` shell syntax passed; the add AVX2 C++/Rust generation smoke produced
+`1760 specializations across 17 artifacts`; live Doxygen, Cargo rustdoc, and
+Sphinx/Breathe documentation generation passed and produced
+`./tslctmp/doc-breathe-smoke/docs/site`; the site contains the C++ Breathe page
+and Rustdoc under `docs/site/rust`; `./dev.sh document` with real
+Doxygen/Sphinx/Cargo tools passed for `--backends cpp,rust` and a relative
+`--output-root`, proving those extra CLI overrides are honored; `git diff
+--check` passed.
+
+Implemented C++ documentation facade correction:
+
+The C++ Doxygen input is now a compact documentation facade, not the full
+generated implementation header set. The C++ renderer emits
+`<output>/cpp/docs/input/tsl_api_docs.hpp` containing:
+
+1. public primitive declaration stubs;
+2. every selected concrete specialization as a documented declaration/stub;
+3. specialization facts such as extension, concrete backend types, requirements,
+   and safety;
+4. no implementation bodies and no includes of the generated profile headers.
+
+This preserves complete documentation coverage while keeping Doxygen away from
+large implementation headers. The facade is rendered from typed render/lowered
+documentation data; `tslc.maintenance.documentation` remains an after-write
+tool that only runs Doxygen/Sphinx/Rustdoc and now requires the facade.
+
+Implementation notes:
+
+- `CppBackend` can render public documentation declarations and doc-only
+  specialization stubs without implementation bodies.
+- `cpp_artifacts(...)` writes `cpp/docs/input/tsl_api_docs.hpp`.
+- `tslc.maintenance.documentation` writes a Doxyfile whose `INPUT` is the
+  facade header, not `cpp/include`.
+- Documentation tests assert fake Doxygen sees the facade input.
+- Specialization tests assert the facade includes public API stubs and concrete
+  specialization facts, while excluding generated implementation bodies and
+  profile-header includes.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_maintenance_documentation.py tslc/tests/test_specialization.py::test_artifact_layout tslc/tests/test_specialization.py::test_cpp_documentation_facade_contains_api_and_specialization_stubs
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives add --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles avx2 --output-root ./tslctmp/doc-facade-smoke
+PYTHONPATH=tslc/src python -m tslc.maintenance.documentation --output-root ./tslctmp/doc-facade-smoke --backends cpp,rust
+./dev.sh document --primitives add --profiles avx2 --backends cpp,rust --output-root ./tslctmp/dev-doc-facade-smoke
+```
+
+Result: compileall passed; focused tests reported `4 passed`; add/AVX2
+generation produced `1760 specializations across 18 artifacts`; live
+Doxygen/Rustdoc/Sphinx generation passed; `./dev.sh document` passed and the
+generated Doxyfile input was
+`cpp/docs/input/tsl_api_docs.hpp`.
+
+Full-corpus observation:
+
+`./dev.sh document --backends cpp --output-root ./tslctmp/dev-doc-facade-full-cpp-slim`
+was interrupted during the documentation stage after proving that generation
+completed (`115948 specializations across 65 artifacts`) and that Doxygen input
+was the facade. The slim facade was about `94M`, while `cpp/include` was about
+`168M`; Doxygen XML had already grown to about `524M`. This confirms the
+facade removes implementation-header parsing, but complete all-specialization
+documentation is still a large Sphinx/Breathe workload. Treat full-corpus site
+scaling/partitioning as a follow-up, not as a regression of the facade boundary.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-cpp-documentation-facade-review-prompt.md
+```
+
+## Completed React/Vite Specialization Explorer
+
+Generated projects now include compact specialization data under
+`docs/specializations`, and documentation site generation builds/copies a
+React/Vite browser into `docs/site/specializations`.
+
+Implemented:
+
+- `tslc.render.documentation_project` emits only `specializations.json` from
+  typed `ProfileRender` and `LoweredSpecialization` values.
+- `tslc.render.project` appends that documentation data artifact to every
+  generated project.
+- `tslc.maintenance.documentation` adds a Sphinx `specializations` page and
+  runs npm to build the React app from
+  `supplementary/docs/site/specializations/react`, then copies the static
+  bundle plus `specializations.json` into the built site.
+- The C++ Doxygen facade is now API declarations only; full per-specialization
+  exploration lives in the React explorer rather than Doxygen stubs.
+
+Design boundary:
+
+- The explorer consumes already-lowered facts: primitive documentation,
+  profile/backend/extension/type facts, concrete register spelling,
+  requirements, and safety. The emitted JSON uses a compact schema with string
+  tables, interned feature/safety sets, and grouped rows with counts.
+- React code formats and filters records only. It must not rediscover primitive
+  semantics, extension semantics, or support policy.
+- The explorer follows the `docReact/` interaction shape: collapsed filter rail
+  by default, primitive accordion rows, and the 3D support matrix rendered
+  inside the selected primitive row instead of below the full primitive list.
+- Primitive rows are true toggles: clicking an expanded primitive collapses it.
+  The matrix row axis groups emitted specializations by profile plus display
+  width (`scalar`, `generic lanes`, `128-bit`, `256-bit`, `512-bit`,
+  `scalable`) while concrete emitted extensions remain visible in drilldown
+  details.
+- With the current Vite/esbuild JSX setup, `App.jsx` imports the React default
+  binding explicitly. The built bundle must not contain an unbound
+  `React.createElement` reference; that previously made
+  `/specializations/index.html` render as a blank page.
+- The output is a static Vite bundle plus JSON and can be served by GitHub Pages
+  from the generated `docs/site` tree.
+- React source lives under `supplementary/docs/site/specializations/react`, not
+  under backend assets.
+- External documentation tools run with `LC_ALL=C.UTF-8` and `LANG=C.UTF-8`
+  from `tslc.maintenance.documentation` so Sphinx and other tools do not
+  inherit unsupported caller locale settings.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_maintenance_documentation.py tslc/tests/test_specialization.py::test_artifact_layout tslc/tests/test_specialization.py::test_cpp_documentation_facade_contains_api_declarations_only tslc/tests/test_specialization.py::test_specialization_explorer_data_contains_all_selected_specializations
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --primitives add --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp,rust --profiles avx2 --output-root ./tslctmp/doc-explorer-smoke
+PYTHONPATH=tslc/src python -m tslc.maintenance.documentation --output-root ./tslctmp/doc-explorer-smoke --backends cpp,rust
+npm --prefix supplementary/docs/site/specializations/react ci --no-audit --no-fund
+npm --prefix supplementary/docs/site/specializations/react run build
+./dev.sh document --primitives add --profiles avx2 --backends cpp,rust --output-root ./tslctmp/dev-doc-explorer-smoke
+LC_ALL=definitely_not_a_real_locale LANG=also_not_a_real_locale ./dev.sh document --primitives add --profiles avx2 --backends cpp,rust --output-root ./tslctmp/locale-doc-smoke
+PYTHONPATH=tslc/src python -m tslc.maintenance.documentation --output-root ./tslctmp/verify --backends cpp,rust
+python - <<'PY'
+from pathlib import Path
+bundle = ''.join(path.read_text(encoding='utf-8') for path in Path('tslctmp/verify/docs/site/specializations/assets').glob('*.js'))
+assert 'SIMD Support Matrix Explorer' in bundle
+assert '3D support matrix' in bundle
+assert 'matrixTargetKey' in bundle
+assert 'getSupportValue' not in bundle
+assert 'React.createElement' not in bundle
+print('bundle-ok')
+PY
+./dev.sh document
+bash -n dev.sh
+```
+
+Result: compileall passed; focused documentation/specialization tests reported
+`6 passed`; add/AVX2 generation produced `1760 specializations across 19
+artifacts`; live Doxygen/Rustdoc/Sphinx documentation passed; `dev.sh document`
+passed and copied the explorer into
+`./tslctmp/dev-doc-explorer-smoke/docs/site/specializations`; invalid-locale
+`dev.sh document` smoke passed; the full default
+`./dev.sh document` generated `230554` specializations across `92` artifacts
+and completed Doxygen, rustdoc, Sphinx, specialization explorer copy, and Rust
+doc copy successfully. A post-fix documentation rebuild for `./tslctmp/verify`
+copied the corrected React bundle, and a bundle scan found no unbound
+`React.createElement` token. A later UI correction rebuilt the same site with
+the prototype-style accordion/matrix layout and confirmed the bundle contains
+the matrix heading without dummy support helpers. A follow-up correction made
+primitive rows actually collapsible and changed matrix rows from raw
+`profile / extension` to grouped `profile / display width` targets. The full
+default `specializations.json` is `4396475`
+bytes (`4.2M`) while representing all `230554` specializations.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-specialization-explorer-review-prompt.md
+```

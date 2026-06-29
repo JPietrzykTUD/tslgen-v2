@@ -74,6 +74,9 @@ def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
         artifacts.append(text(f"cpp/tests/smoke_{profile_slug}.cpp", _cpp_smoke(profile_render)))
 
     artifacts.append(text("cpp/include/tsl.hpp", _cpp_dispatch(profiles)))
+    artifacts.append(
+        text("cpp/docs/input/tsl_api_docs.hpp", _cpp_documentation_facade(profiles))
+    )
     artifacts.append(text("cpp/CMakeLists.txt", _cpp_cmakelists(profiles)))
     return artifacts
 
@@ -239,6 +242,36 @@ def _cpp_dispatch(profiles: tuple[ProfileRender, ...]) -> str:
     lines.append('#  error "No supported TSL profile selected"')
     lines.append("#endif")
     return "\n".join(lines) + "\n"
+
+
+def _cpp_documentation_facade(profiles: tuple[ProfileRender, ...]) -> str:
+    backend = CppBackend()
+    api_declarations: list[str] = []
+    seen_api: set[str] = set()
+    for profile_render in profiles:
+        by_primitive = profile_render.specializations("cpp")
+        for name in sorted(by_primitive):
+            declaration = backend.render_documentation_api_declaration(
+                name, by_primitive[name]
+            )
+            if declaration not in seen_api:
+                api_declarations.append(declaration)
+                seen_api.add(declaration)
+    sections = [
+        "\n".join(
+            (
+                "#pragma once",
+                "",
+                "// Documentation-only facade. This file is intentionally not part of",
+                "// the generated C++ implementation surface.",
+                "",
+                "namespace tsl {",
+            )
+        ),
+        *api_declarations,
+        "}  // namespace tsl",
+    ]
+    return "\n\n".join(section.rstrip() for section in sections if section.strip()) + "\n"
 
 
 def _cpp_smoke(profile_render: ProfileRender) -> str:

@@ -6287,3 +6287,121 @@ Consequences:
   "Result kind", and "Parameter kinds".
 - A future external documentation artifact can reuse the same documentation
   values without adding a new source parser or catalog lookup path.
+
+## ADR-129: Documentation Site Generation Is Maintenance Output Tooling
+
+Context:
+
+Inline C++ Doxygen and Rust rustdoc comments are now emitted in generated API
+artifacts. The next step is a documentation-build command that produces browsable
+C++ and Rust documentation from an already generated project. That command must
+not become another compiler pipeline stage or introduce heavyweight documentation
+dependencies into every build/test workflow by default.
+
+Decision:
+
+Add `tslc.maintenance.documentation` as an after-write maintenance tool. It
+operates on a written generated project under an output root:
+
+- C++ docs copy a source-controlled Doxyfile into `<output>/cpp/docs` and keep
+  generated XML under `<output>/cpp/docs/doxygen/xml`;
+- Rust docs run `cargo doc --no-deps` with the target directory under
+  `<output>/rust/docs/target`;
+- a unified Sphinx site is generated under `<output>/docs/site`, using Breathe
+  over the Doxygen XML for C++ and copying Rustdoc under
+  `<output>/docs/site/rust`;
+- the tool reports the exact external commands and output directories.
+
+`./dev.sh document` runs the existing generator, keeps the existing default
+formatting step, and then runs the documentation maintenance tool. `./dev.sh
+build` and `./dev.sh test` continue to include formatting through the CLI's
+default `--format` behavior; documentation generation is opt-in for those modes
+via `TSLC_DOCUMENT=1`.
+
+Consequences:
+
+- Documentation site generation has a clear side-effect boundary after artifact
+  writing and formatting.
+- Build/test correctness gates do not require Doxygen, Sphinx, or Rustdoc unless
+  explicitly requested.
+- Documentation look-and-feel assets live under `supplementary/docs`, not inside
+  renderers or generated source semantics.
+- The external site remains documentation output: it consumes already-emitted
+  inline docs and generated project files, and does not re-open catalog
+  semantics or TSIL source bodies.
+
+Implemented C++ facade correction:
+
+The C++ Doxygen input is a compact documentation facade, not the full generated
+implementation header set. Full-profile generated headers are large,
+template-heavy implementation artifacts and are the wrong input shape for
+documentation. The C++ renderer emits
+`<output>/cpp/docs/input/tsl_api_docs.hpp`, and Doxygen points at that file
+instead.
+
+That facade contains public primitive API declaration stubs with authored
+primitive documentation and readable signature facts. It deliberately does not
+contain every concrete specialization as a C++ declaration: full-corpus
+specialization stubs made Doxygen/Sphinx output too large for routine use.
+Per-specialization facts belong in the static specialization explorer described
+in ADR-130.
+
+The facade is generated from typed render/lowered documentation data. The
+maintenance tool still only runs Doxygen, Sphinx/Breathe, and Rustdoc over
+already-written artifacts; it does not scrape generated headers or reconstruct
+catalog semantics.
+
+## ADR-130: Per-Specialization Docs Use Static Explorer Data
+
+Context:
+
+The C++ documentation facade proved the right Doxygen input boundary, but
+encoding every selected concrete specialization as a Doxygen-visible C++ stub
+made full-corpus documentation too heavy. Users still need to explore the
+complete specialization matrix by primitive, profile, extension, element type,
+requirements, and safety.
+
+Decision:
+
+Emit a documentation-only specialization explorer data file under
+`<output>/docs/specializations`. The renderer writes:
+
+- `specializations.json`, a deterministic typed data file derived from
+  `ProfileRender` and `LoweredSpecialization` records;
+- a React/Vite documentation app under
+  `supplementary/docs/site/specializations/react` that decodes that JSON and
+  displays the specialization matrix in the browser;
+- a Sphinx page that links to the explorer and copies the built React app into
+  `<output>/docs/site/specializations`.
+
+The JSON contains already-lowered display facts such as primitive/source
+primitive, profile, backend, extension, element type, concrete register type,
+requirements, safety, and documentation text. It uses a compact schema with
+string tables, interned feature/safety sets, and grouped rows with counts, so
+the full default generated documentation keeps the explorer data around a few
+megabytes instead of hundreds. It does not scrape generated headers, reparse
+TSIL, or classify primitive names.
+
+C++ Doxygen now documents the API declaration surface only. Rustdoc continues
+to document the generated Rust API. `tslc.maintenance.documentation` builds the
+React app with npm during documentation generation, then copies the static
+bundle plus `specializations.json` into the Sphinx site. The specialization
+explorer is the complete per-specialization browsing surface for both backends.
+
+Consequences:
+
+- The full specialization matrix is available without asking Doxygen/Breathe to
+  parse or render thousands of C++ specialization stubs.
+- The explorer is React-authored but static and GitHub Pages-friendly after the
+  Vite build: the generated site can be served directly from
+  `<output>/docs/site`.
+- Documentation rendering keeps the semantic boundary: typed render facts feed
+  a JSON/view artifact; React code formats those facts and does not encode
+  primitive or extension semantics.
+- Per-specialization data is intentionally display-oriented. If future docs
+  need deeper axes such as immediates, target vectors, or generic/type
+  parameters, they should be added to the compact schema deliberately rather
+  than restoring a large repeated object per specialization.
+- React/Vite is documentation-site tooling, not compiler logic. Normal
+  generation/build/test do not require npm unless documentation generation is
+  requested.

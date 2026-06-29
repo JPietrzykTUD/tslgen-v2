@@ -6,8 +6,8 @@ ARG ZIG_ARCH=x86_64-linux
 RUN apt-get update -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     sudo \
-    build-essential gdb cmake clang clang-format ninja-build \
-    git curl xz-utils unzip pkg-config ca-certificates \
+    build-essential gdb cmake clang clang-format ninja-build doxygen \
+    git curl xz-utils unzip pkg-config ca-certificates nodejs npm \
     python3 python3-pip python3-venv \
     qemu-user qemu-user-binfmt && \
     python3 -m venv /opt/venv && \
@@ -44,7 +44,7 @@ RUN set -eux; \
 
 RUN /opt/venv/bin/pip install --no-cache-dir \
     prompt_toolkit \
-    lark jinja2 mkdocs-material sphinx\
+    lark jinja2 mkdocs-material sphinx breathe \
     numpy xxhash cyclopts networkx psutil \
     pytest mypy ruff black build \
     "mkdocstrings[python]" \

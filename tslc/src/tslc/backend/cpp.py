@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from tslc.backend.target_capability import x86_register_bits
 from tslc.documentation import (
     DocumentationBlock,
@@ -97,6 +99,25 @@ class CppBackend:
             groups[key].append(spec)
         return "\n\n".join(self._specialization(groups[key]) for key in order)
 
+    def render_documentation_api_declaration(
+        self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
+    ) -> str:
+        """Render the public C++ API as a documentation-only declaration."""
+
+        shape = specializations[0]
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            shape.result_kind,
+            shape.param_kinds,
+        ):
+            return _free_function(shape, define=False)
+        return self._wrapper_declaration(primitive_name, specializations)
+
+    def documentation_register_type(self, spec: LoweredSpecialization) -> str:
+        return _cpp_register_doc(spec)
+
+    def documentation_target_register_type(self, spec: LoweredSpecialization) -> str:
+        return _cpp_target_register_doc(spec)
+
     def _specialization(self, group: list[LoweredSpecialization]) -> str:
         first = group[0]
         # A sized vector is parameterized by its lane parameter, so it emits as a partial
@@ -166,53 +187,98 @@ class CppBackend:
     def _wrapper(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
     ) -> str:
-        shape = specializations[0]
-        # Positions whose parameter kind differs across signatures are the overload's
-        # dispatch points: they become generic template params so C++ resolves the call.
-        varying = varying_positions(specializations)
-        immediate_params = (
-            [f"{shape.immediate[1]} {shape.immediate[0]}"] if shape.immediate is not None else []
-        )
-        has_target = shape.target is not None
-        index_type = shape.type_params[0][0] if shape.type_params else None
-        template_params = (
-            ["class Vec"]
-            + (["class ToVec"] if has_target else [])
-            + [f"class {name}" for name, _ in shape.type_params]
-            + [f"bool {_axis_name(k)} = false" for k, _ in shape.axis]
-            + immediate_params
-            + [f"{typ} {name} = {default}" for name, typ, default in shape.generic_params]
-            + [f"class Arg{i}" for i in varying]
-        )
-        params = ", ".join(
-            (f"Arg{i} {name}" if i in varying else f"{_param_type(kind, index_type)} {name}")
-            for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
-            if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
-        )
-        names = ", ".join(
-            name
-            for name, kind in zip(shape.param_names, shape.param_kinds)
-            if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
-        )
-        impl_args = (
-            "Vec"
-            + (", ToVec" if has_target else "")
-            + "".join(f", {name}" for name, _ in shape.type_params)
-            + "".join(f", {_axis_name(k)}" for k, _ in shape.axis)
-            + (f", {shape.immediate[0]}" if shape.immediate is not None else "")
-            + "".join(f", {name}" for name, _, _ in shape.generic_params)
-        )
-        # The wrapper's result projects through the caller-bound `ToVec` param.
-        result_type = "typename ToVec::register_type" if has_target else _result_type(shape.result_kind)
-        doc = _cpp_doc(shape, context="C++ wrapper", concrete=False)
+        signature = _wrapper_signature(specializations)
+        doc = _cpp_doc(specializations[0], context="C++ wrapper", concrete=False)
         prefix = f"{doc}\n" if doc else ""
         return (
             prefix
-            + f"template <{', '.join(template_params)}>\n"
-            f"inline {result_type} {primitive_name}({params}) {{\n"
-            f"    return {primitive_name}_impl<{impl_args}>::apply({names});\n"
+            + f"template <{', '.join(signature.template_params)}>\n"
+            f"inline {signature.result_type} {primitive_name}({signature.params}) {{\n"
+            f"    return {primitive_name}_impl<{signature.impl_args}>::apply("
+            f"{signature.argument_names});\n"
             f"}}"
         )
+
+    def _wrapper_declaration(
+        self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
+    ) -> str:
+        signature = _wrapper_signature(specializations)
+        doc = _cpp_doc(specializations[0], context="C++ wrapper", concrete=False)
+        prefix = f"{doc}\n" if doc else ""
+        return (
+            prefix
+            + f"template <{', '.join(signature.template_params)}>\n"
+            f"{signature.result_type} {primitive_name}({signature.params});"
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class _WrapperSignature:
+    template_params: tuple[str, ...]
+    params: str
+    argument_names: str
+    impl_args: str
+    result_type: str
+
+
+def _wrapper_signature(
+    specializations: tuple[LoweredSpecialization, ...],
+) -> _WrapperSignature:
+    shape = specializations[0]
+    # Positions whose parameter kind differs across signatures are the overload's
+    # dispatch points: they become generic template params so C++ resolves the call.
+    varying = varying_positions(specializations)
+    immediate_params = (
+        [f"{shape.immediate[1]} {shape.immediate[0]}"]
+        if shape.immediate is not None
+        else []
+    )
+    has_target = shape.target is not None
+    index_type = shape.type_params[0][0] if shape.type_params else None
+    template_params = (
+        ["class Vec"]
+        + (["class ToVec"] if has_target else [])
+        + [f"class {name}" for name, _ in shape.type_params]
+        + [f"bool {_axis_name(k)} = false" for k, _ in shape.axis]
+        + immediate_params
+        + [f"{typ} {name} = {default}" for name, typ, default in shape.generic_params]
+        + [f"class Arg{i}" for i in varying]
+    )
+    params = ", ".join(
+        (
+            f"Arg{i} {name}"
+            if i in varying
+            else f"{_param_type(kind, index_type)} {name}"
+        )
+        for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
+        if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
+    )
+    names = ", ".join(
+        name
+        for name, kind in zip(shape.param_names, shape.param_kinds)
+        if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
+    )
+    impl_args = (
+        "Vec"
+        + (", ToVec" if has_target else "")
+        + "".join(f", {name}" for name, _ in shape.type_params)
+        + "".join(f", {_axis_name(k)}" for k, _ in shape.axis)
+        + (f", {shape.immediate[0]}" if shape.immediate is not None else "")
+        + "".join(f", {name}" for name, _, _ in shape.generic_params)
+    )
+    # The wrapper's result projects through the caller-bound `ToVec` param.
+    result_type = (
+        "typename ToVec::register_type"
+        if has_target
+        else _result_type(shape.result_kind)
+    )
+    return _WrapperSignature(
+        template_params=tuple(template_params),
+        params=params,
+        argument_names=names,
+        impl_args=impl_args,
+        result_type=result_type,
+    )
 
 
 def _free_function(spec: LoweredSpecialization, *, define: bool) -> str:
@@ -248,7 +314,10 @@ def _cpp_doc(
 
 
 def _doc_block(
-    spec: LoweredSpecialization, *, context: str, concrete: bool
+    spec: LoweredSpecialization,
+    *,
+    context: str,
+    concrete: bool,
 ) -> DocumentationBlock:
     if not concrete:
         return documentation_block(
