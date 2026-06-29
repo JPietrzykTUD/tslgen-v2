@@ -1,5 +1,16 @@
 prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
   brief_description "[Example: avx2 + si32]: Gather 32-bit integers from memory using 32-bit indices. 32-bit elements are loaded from addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\"). Gathered elements are merged into \"dst\". \"scale\" should be 1, 2, 4 or 8."
+  detailed_description """
+    Loads vector lanes from non-contiguous memory addresses computed from a base
+    pointer, an index vector, and an immediate byte scale.
+    """
+  semantics """
+    input: const pointer base_ptr, index register index, immediate scale
+    for each lane i:
+      address = base_ptr + index[i] * scale bytes
+      result[i] = load element at address
+    return result
+    """
   operation "[Example: avx2 + si32]: FOR j := 0 to 7\n\ti := j*32\n\tm := j*32\n\taddr := base_addr + SignExtend64(vindex[m+31:m]) * ZeroExtend64(scale) * 8\n\tdst[i+31:i] := MEM[addr+31:addr]\nENDFOR\ndst[MAX:256] := 0"
   generic_params:
     IndicesType {kind simd_type}
@@ -485,6 +496,20 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
           """
 prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, source, scale):
   brief_description "[Example: avx512 + si32]: Gather 32-bit integers from memory using 32-bit indices. 32-bit elements are loaded from addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\"). Gathered elements are merged into \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set). \"scale\" should be 1, 2, 4 or 8."
+  detailed_description """
+    Loads mask-selected lanes from non-contiguous memory addresses and preserves
+    inactive lanes from the source vector.
+    """
+  semantics """
+    input: mask mask, const pointer base_ptr, index register index, register source, immediate scale
+    for each lane i:
+      if mask[i] is active:
+        address = base_ptr + index[i] * scale bytes
+        result[i] = load element at address
+      else:
+        result[i] = source[i]
+    return result
+    """
   operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\ti := j*32\n\tm := j*32\n\tIF k[j]\n\t\taddr := base_addr + SignExtend64(vindex[m+31:m]) * ZeroExtend64(scale) * 8\n\t\tdst[i+31:i] := MEM[addr+31:addr]\n\tELSE\n\t\tdst[i+31:i] := src[i+31:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   generic_params:
     IndicesType {kind simd_type}
@@ -793,6 +818,16 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
           """
 prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
   brief_description "[Example: avx512 + si32]: Scatter 32-bit integers from \"a\" into memory using 32-bit indices. 32-bit elements are stored at addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\"). \"scale\" should be 1, 2, 4 or 8."
+  detailed_description """
+    Stores vector lanes to non-contiguous memory addresses computed from a base
+    pointer, an index vector, and an immediate byte scale.
+    """
+  semantics """
+    input: pointer base_ptr, index register index, register a, immediate scale
+    for each lane i in increasing lane order:
+      address = base_ptr + index[i] * scale bytes
+      store a[i] at address
+    """
   operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\ti := j*32\n\tm := j*32\n\taddr := base_addr + SignExtend64(vindex[m+31:m]) * ZeroExtend64(scale) * 8\n\tMEM[addr+31:addr] := a[i+31:i]\nENDFOR"
   generic_params:
     IndicesType {kind simd_type}
@@ -1117,6 +1152,17 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           """
 prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, scale):
   brief_description "[Example: avx512 + si32]: Scatter 32-bit integers from \"a\" into memory using 32-bit indices. 32-bit elements are stored at addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\") subject to mask \"k\" (elements are not stored when the corresponding mask bit is not set). \"scale\" should be 1, 2, 4 or 8."
+  detailed_description """
+    Stores mask-selected vector lanes to non-contiguous memory addresses.
+    Inactive mask lanes do not write to memory.
+    """
+  semantics """
+    input: mask mask, pointer base_ptr, index register index, register a, immediate scale
+    for each lane i in increasing lane order:
+      if mask[i] is active:
+        address = base_ptr + index[i] * scale bytes
+        store a[i] at address
+    """
   operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\ti := j*32\n\tm := j*32\n\tIF k[j]\n\t\taddr := base_addr + SignExtend64(vindex[m+31:m]) * ZeroExtend64(scale) * 8\n\t\tMEM[addr+31:addr] := a[i+31:i]\n\tFI\nENDFOR"
   generic_params:
     IndicesType {kind simd_type}

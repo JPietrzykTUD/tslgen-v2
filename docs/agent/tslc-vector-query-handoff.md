@@ -4837,3 +4837,53 @@ reports `293 passed, 84 deselected`; `git diff --check` passed.
 Stop condition: no next run prompt is required for this metadata admission
 slice. The next documentation-generation slice can consume the new `Primitive`
 metadata.
+
+### Latest Active TSLc Handoff: Primitive Documentation Corpus Sweep Complete
+
+The primitive documentation corpus sweep is complete. Every primitive
+declaration under `tsldata/primitives` now has `detailed_description` and
+`semantics`. `semantics` remains raw documentation-only pseudocode and must not
+be interpreted as TSIL or compiler semantics.
+
+Completed coverage:
+
+- arithmetic: `fundamental.tsl`, `select.tsl`, `complex.tsl`,
+  `horizontal.tsl`
+- bitwise: `bit_ops.tsl`, `shifts.tsl`, `bit_counts.tsl`,
+  `horizontal.tsl`
+- comparison: `fundamental.tsl`, `range.tsl`, `special.tsl`
+- conversion: `cast.tsl`, `mask_specific.tsl`, `repr_change.tsl`
+- load/store: `array.tsl`, `construct.tsl`, `load.tsl`,
+  `pack_expand.tsl`, `rnd_access.tsl`, `sequence.tsl`, `store.tsl`
+- mask: `bitwise.tsl`, `construct.tsl`, `special.tsl`
+- memory: `allocation.tsl`, `copy.tsl`
+- misc/io: `blend.tsl`, `compress.tsl`, `conflict.tsl`, `out.tsl`
+
+Corpus style for this sweep: keep `detailed_description` and `semantics` as
+readable indented multiline fields. Documentation rendering should normalize
+common indentation later; the source data should remain pleasant to read.
+
+Current inventory:
+
+```text
+140 primitive declarations total
+140 declarations with detailed_description
+140 declarations with semantics
+```
+
+Validation:
+
+```bash
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog_validation.py
+PYTHONPATH=tslc/src python -m tslc.cli --sources tsldata --machine-profiles supplementary/buildsystem/machine_profiles.json --backends cpp --profiles scalar --coverage --output-root ./tslctmp/doc-metadata-smoke
+git diff --check
+```
+
+Result: focused catalog validation reports `23 passed`; scalar C++ coverage
+smoke reports `3117 emitted / 3117 attempted`; `git diff --check` passed.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-primitive-docs-corpus-review-prompt.md
+```

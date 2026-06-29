@@ -1,6 +1,14 @@
 prim<v:=()> sequence():
   cross_lane true
   brief_description "Creates a sequence [0..SIMD-Reg-Element-Count]."
+  detailed_description """
+    Constructs a vector whose lanes contain their zero-based lane indexes.
+    """
+  semantics """
+    for each lane i:
+      result[i] = i
+    return result
+    """
   operation ""
   tests:
     - {tags [basic], type "ui32", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
@@ -421,6 +429,16 @@ prim<v:=()> sequence():
 prim<v:=(s,s)> custom_sequence(start, stepwidth):
   cross_lane true
   brief_description "Creates a sequence with start and stepwidth."
+  detailed_description """
+    Constructs an arithmetic lane sequence beginning at `start` and increasing
+    by `stepwidth` for each subsequent lane.
+    """
+  semantics """
+    input: scalar start, scalar stepwidth
+    for each lane i:
+      result[i] = start + i * stepwidth
+    return result
+    """
   operation ""
   tests:
     - {tags [basic], type "ui32", case {inputs [5, 3], expected [5, 8, 11, 14, 17, 20, 23, 26]}}

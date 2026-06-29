@@ -1,5 +1,15 @@
 prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
   brief_description "[Example: sse + si8]: Store 128-bits of integer data from \"a\" into memory."
+  detailed_description """
+    Stores one full vector register to contiguous memory. The `aligned`
+    attribute selects whether the pointer is promised to satisfy the selected
+    vector alignment.
+    """
+  semantics """
+    input: pointer ptr, register data, attribute aligned
+    for each lane i:
+      ptr[i] = data[i]
+    """
   operation "[Example: sse + si8]: MEM[mem_addr+127:mem_addr] := a[127:0]"
   tests:
     - {tags [basic], attrs [aligned=false], type "ui32", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
@@ -149,6 +159,23 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
       "if packed=true" "type<generation>(vector::imask) *"
       "if packed=false" "type<generation>(base::unsigned_of(type<generation>(base::in))) *"
   brief_description "Stores a mask to aligned memory."
+  detailed_description """
+    Stores a mask value to memory. With `packed=true`, memory receives the
+    compact integral mask representation. With `packed=false`, memory receives
+    one unsigned lane word per vector lane, with all bits set for active lanes
+    and zero for inactive lanes.
+    """
+  semantics """
+    input: pointer ptr, mask mask, attribute packed, attribute aligned
+    if packed is true:
+      ptr[0] = integral_bits(mask)
+    else:
+      for each lane i:
+        if mask[i] is active:
+          ptr[i] = all_bits_set
+        else:
+          ptr[i] = 0
+    """
   operation ""
   tests:
     - {tags [mask, basic], attrs [aligned=true, packed=true], type "ui8", offset 0, case {inputs [12297829382473034410], expected [12297829382473034410, 0, 0]}}
@@ -371,6 +398,15 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
           """
 prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
   brief_description "Stores a scalar mask to aligned memory."
+  detailed_description """
+    Stores one scalar value to memory. The `aligned` attribute selects whether
+    the pointer is promised to satisfy the scalar storage alignment expected by
+    the selected implementation.
+    """
+  semantics """
+    input: pointer ptr, scalar scalar, attribute aligned
+    ptr[0] = scalar
+    """
   operation ""
   tests:
     - {tags [scalar, basic], attrs [aligned=true], type "ui8", offset 0, case {inputs [5], expected [5, 0, 0]}}
@@ -436,6 +472,17 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
 
 prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
   brief_description "[Example: avx512 + si8]: Store packed 8-bit integers from \"a\" into memory using writemask \"k\".\n\t\"mem_addr\" does not need to be aligned on any particular boundary."
+  detailed_description """
+    Stores mask-selected vector lanes to contiguous memory and leaves inactive
+    memory lanes unchanged. The `aligned` attribute selects whether the pointer
+    is promised to satisfy the selected vector alignment.
+    """
+  semantics """
+    input: mask mask, pointer ptr, register data, attribute aligned
+    for each lane i:
+      if mask[i] is active:
+        ptr[i] = data[i]
+    """
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tMEM[mem_addr+i+7:mem_addr+i] := a[i+7:i]\n\tFI\nENDFOR"
   tests:
     - {tags [store, basic], type "ui8", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 43690], expected [0, 1, 0, 3, 0, 5, 0, 7, 0, 9, 0, 11, 0, 13, 0, 15]}}

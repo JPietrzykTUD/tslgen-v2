@@ -1,5 +1,16 @@
 prim<s[]:=v> to_array(a):
   brief_description "Stores SIMD register to array."
+  detailed_description """
+    Materializes the lanes of a vector register into an array-like value in
+    increasing lane order. The returned array has one element per lane of the
+    selected vector type.
+    """
+  semantics """
+    input: register a
+    for each lane i:
+      result[i] = a[i]
+    return result
+    """
   operation ""
   tests:
     - {tags [basic], type "ui32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
@@ -184,6 +195,16 @@ prim<s[]:=v> to_array(a):
             """
 prim<v:=s[]> from_array(data):
   brief_description "Loads SIMD register from array."
+  detailed_description """
+    Constructs a vector register from an array-like value in increasing lane
+    order. Each vector lane receives the element with the same lane index.
+    """
+  semantics """
+    input: array data
+    for each lane i:
+      result[i] = data[i]
+    return result
+    """
   operation ""
   tests:
     - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
@@ -239,6 +260,14 @@ prim<v:=s[]> from_array(data):
           """
 prim<s:=v[idx]> extract_value(a):
   brief_description "Extracts a value at a given index."
+  detailed_description """
+    Extracts one scalar lane from a vector register. The lane index is a
+    generation-time immediate selected by the specialization.
+    """
+  semantics """
+    input: register a, immediate Index
+    return a[Index]
+    """
   operation ""
   generic_params:
     Index {kind int, default 0}

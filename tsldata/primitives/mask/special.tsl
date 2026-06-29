@@ -1,5 +1,13 @@
 prim<im:=(im,im)> test_imask(mask, position):
   brief_description "Tests whether a specific mask bit is set."
+  detailed_description """
+    Extracts the bit at a runtime position from an integral mask value and
+    returns it as an integral truth value.
+    """
+  semantics """
+    input: integral mask mask, scalar position
+    return (mask >> position) & 1
+    """
   operation ""
   tests:
     - {tags [basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170, 1], expected 1}}
@@ -31,6 +39,14 @@ prim<im:=(im,im)> test_imask(mask, position):
           tsil "complete(cast<static>(type<generation>(vector::imask), (mask >> position) & cast<static>(type<generation>(vector::imask), 1)));"
 prim<im:=(im,im,im)> insert_imask(mask_a, mask_b, position):
   brief_description "Merges two masks at a runtime position."
+  detailed_description """
+    Combines one integral mask with another integral mask shifted left by a
+    runtime position.
+    """
+  semantics """
+    input: integral mask mask_a, integral mask mask_b, scalar position
+    return mask_a | (mask_b << position)
+    """
   operation ""
   tests:
     - {tags [basic], extension "avx512", type "ui8", lane_count 64, case {inputs [15, 3, 4], expected 63}}
@@ -62,6 +78,14 @@ prim<im:=(im,im,im)> insert_imask(mask_a, mask_b, position):
           tsil "complete(mask_a | (mask_b << position));"
 prim<im:=(im,im)> extract_imask(mask, position):
   brief_description "Extracts a sub-mask by shifting at a runtime position."
+  detailed_description """
+    Shifts an integral mask right by a runtime position, making the selected
+    bit range start at bit zero.
+    """
+  semantics """
+    input: integral mask mask, scalar position
+    return mask >> position
+    """
   operation ""
   tests:
     - {tags [basic], extension "avx512", type "ui8", lane_count 64, case {inputs [176, 4], expected 11}}

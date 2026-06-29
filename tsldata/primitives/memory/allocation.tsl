@@ -1,5 +1,15 @@
 prim<ptr:=(usize)> allocate(count_bytes):
   brief_description "Allocates (unaligned) contiguous memory."
+  detailed_description """
+    Allocates a contiguous byte region with the backend's default allocation
+    alignment. The returned pointer is suitable for later deallocation through
+    the matching memory helper.
+    """
+  semantics """
+    input: scalar count_bytes
+    result = allocate count_bytes bytes
+    return result
+    """
   operation ""
   tests:
     - {tags [u8, basic], type "ptr", lane_count 4, case {inputs [64], expected true}}
@@ -31,6 +41,16 @@ prim<ptr:=(usize)> allocate(count_bytes):
             """
 prim<ptr:=(usize,usize)> allocate_aligned(count_bytes, alignment):
   brief_description "Allocates aligned contiguous memory."
+  detailed_description """
+    Allocates a contiguous byte region whose base address satisfies the
+    requested alignment. The returned pointer is suitable for later deallocation
+    through the matching memory helper.
+    """
+  semantics """
+    input: scalar count_bytes, scalar alignment
+    result = allocate count_bytes bytes aligned to alignment
+    return result
+    """
   operation ""
   tests:
     - {tags [u8, basic], type "ptr", lane_count 4, case {inputs [64, 32], expected true}}
@@ -64,6 +84,15 @@ prim<ptr:=(usize,usize)> allocate_aligned(count_bytes, alignment):
             """
 prim<void:=(ptr)> deallocate(ptr):
   brief_description "Deallocates (possibly aligned) contiguous memory."
+  detailed_description """
+    Releases a memory region previously returned by the allocation helpers.
+    After deallocation, the pointer must not be used for further loads or
+    stores.
+    """
+  semantics """
+    input: pointer ptr
+    deallocate ptr
+    """
   operation ""
   tests:
     - {tags [u8, basic], type "ptr", lane_count 4, case {inputs [64], expected true}}

@@ -1,6 +1,18 @@
 description "Bit manipulation primitives (partial conversion)."
 prim<v:=(v,v)> binary_and(left, right):
   brief_description "[Example: sse + si8]: Compute the bitwise AND of 128 bits (representing integer data) in \"a\" and \"b\", and store the result in \"dst\"."
+  detailed_description """
+    Computes the bitwise AND of the corresponding lane bit patterns from two
+    vector registers. Each output lane depends only on the matching lanes of
+    `left` and `right`. Floating-point lanes are treated by their underlying bit
+    representation, not by numeric floating-point comparison or arithmetic.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = left[i] & right[i]
+    return result
+    """
   operation "[Example: sse + si8]: dst[127:0] := (a[127:0] AND b[127:0])"
   tests:
     - {tags [basic], type "ui32", case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [983055, 50529027, 286331153, 33818120, 0, 0, 1431655765, 16843009]}}
@@ -203,6 +215,18 @@ prim<v:=(v,v)> binary_and(left, right):
 
 prim<v:=(v,v)> binary_andnot(left, right):
   brief_description "[Example: sse + si8]: Compute the bitwise AND-NOT of 128 bits in \"left\" and \"right\", and store the result in \"dst\"."
+  detailed_description """
+    Computes the bitwise AND of the complement of `left` and the corresponding
+    bit pattern from `right`. Operand order is significant: the left operand is
+    inverted before the AND operation. Floating-point lanes are treated by their
+    underlying bit representation.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = (~left[i]) & right[i]
+    return result
+    """
   operation "[Example: sse + si8]: dst[127:0] := ((NOT left[127:0]) AND right[127:0])"
   tests:
     - {tags [basic], type "ui32", case {inputs [[0, 0, 0, 0, 0, 0, 0, 0], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
@@ -385,6 +409,18 @@ prim<v:=(v,v)> binary_andnot(left, right):
 
 prim<v:=(v,v)> binary_or(left, right):
   brief_description "[Example: sse + si8]: Compute the bitwise OR of 128 bits (representing integer data) in \"a\" and \"b\", and store the result in \"dst\"."
+  detailed_description """
+    Computes the bitwise OR of the corresponding lane bit patterns from two
+    vector registers. Each output lane depends only on the matching lanes of
+    `left` and `right`. Floating-point lanes are treated by their underlying bit
+    representation.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = left[i] | right[i]
+    return result
+    """
   operation "[Example: sse + si8]: dst[127:0] := (a[127:0] OR b[127:0])"
   tests:
     - {tags [basic], type "ui32", case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [268374015, 1061109567, 1431655765, 524246911, 2147483647, 1, 2147483647, 252645135]}}
@@ -587,6 +623,18 @@ prim<v:=(v,v)> binary_or(left, right):
 
 prim<v:=(v,v)> binary_xor(left, right):
   brief_description "[Example: sse + si8]: Compute the bitwise XOR of 128 bits (representing integer data) in \"a\" and \"b\", and store the result in \"dst\"."
+  detailed_description """
+    Computes the bitwise exclusive OR of the corresponding lane bit patterns from
+    two vector registers. Each output lane depends only on the matching lanes of
+    `left` and `right`. Floating-point lanes are treated by their underlying bit
+    representation.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = left[i] ^ right[i]
+    return result
+    """
   operation "[Example: sse + si8]: dst[127:0] := (a[127:0] XOR b[127:0])"
   tests:
     - {tags [basic], type "ui32", case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [267390960, 1010580540, 1145324612, 490428791, 2147483647, 1, 715827882, 235802126]}}
@@ -789,6 +837,17 @@ prim<v:=(v,v)> binary_xor(left, right):
 
 prim<v:=v> inv(data):
   brief_description "Bitwise inversion of vector register."
+  detailed_description """
+    Computes the bitwise complement of each lane bit pattern in a vector
+    register. Floating-point lanes are treated by their underlying bit
+    representation.
+    """
+  semantics """
+    input: register data
+    for each lane i:
+      result[i] = ~data[i]
+    return result
+    """
   operation "[Example: sse + si8]: dst[127:0] := (NOT data[127:0])"
   tests:
     - {tags [basic], type "ui32", case {inputs [[0, 1, 2, 3, 4294967295, 2863311530, 1431655765, 2147483648]], expected [4294967295, 4294967294, 4294967293, 4294967292, 0, 1431655765, 2863311530, 2147483647]}}
@@ -838,6 +897,20 @@ prim<v:=v> inv(data):
 
 prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
   brief_description "Masked bitwise AND with zeroing."
+  detailed_description """
+    Computes bitwise AND for lanes enabled by the mask. Disabled lanes are set
+    to zero. Floating-point lanes are treated by their underlying bit
+    representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] & right[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "For each lane: if mask bit is set, compute left AND right; otherwise write zero."
   tests:
     - {tags [binary, and, maskz, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 2, 0, 4, 0, 2, 0, 0]}}
@@ -986,6 +1059,20 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
   brief_description "Masked bitwise AND with pass-through from left."
+  detailed_description """
+    Computes bitwise AND for lanes enabled by the mask. Disabled lanes keep the
+    corresponding lane from `left`. Floating-point lanes are treated by their
+    underlying bit representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] & right[i]
+      else:
+        result[i] = left[i]
+    return result
+    """
   operation "For each lane: if mask bit is set, compute left AND right; otherwise keep left."
   tests:
     - {tags [binary, and, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 2, 3, 4, 5, 2, 7, 0]}}
@@ -1136,6 +1223,21 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
 
 prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
   brief_description "Masked bitwise AND-NOT with zeroing."
+  detailed_description """
+    Computes `(~left) & right` for lanes enabled by the mask. Disabled lanes are
+    set to zero. Operand order is significant: the left operand is inverted
+    before the AND operation. Floating-point lanes are treated by their
+    underlying bit representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = (~left[i]) & right[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "For each lane: if mask bit is set, compute (NOT left) AND right; otherwise write zero."
   tests:
     - {tags [binary, andnot, maskz, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 5, 0, 1, 0, 1, 0, 1]}}
@@ -1284,6 +1386,21 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
   brief_description "Masked bitwise AND-NOT with pass-through from left."
+  detailed_description """
+    Computes `(~left) & right` for lanes enabled by the mask. Disabled lanes keep
+    the corresponding lane from `left`. Operand order is significant: the left
+    operand is inverted before the AND operation. Floating-point lanes are
+    treated by their underlying bit representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = (~left[i]) & right[i]
+      else:
+        result[i] = left[i]
+    return result
+    """
   operation "For each lane: if mask bit is set, compute (NOT left) AND right; otherwise keep left."
   tests:
     - {tags [binary, andnot, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 5, 3, 1, 5, 1, 7, 1]}}
@@ -1404,6 +1521,20 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
 
 prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
   brief_description "Masked bitwise OR with zeroing."
+  detailed_description """
+    Computes bitwise OR for lanes enabled by the mask. Disabled lanes are set to
+    zero. Floating-point lanes are treated by their underlying bit
+    representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] | right[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "For each lane: if mask bit is set, compute left OR right; otherwise write zero."
   tests:
     - {tags [binary, or, maskz, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 7, 0, 5, 0, 7, 0, 9]}}
@@ -1552,6 +1683,20 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
   brief_description "Masked bitwise OR with pass-through from left."
+  detailed_description """
+    Computes bitwise OR for lanes enabled by the mask. Disabled lanes keep the
+    corresponding lane from `left`. Floating-point lanes are treated by their
+    underlying bit representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] | right[i]
+      else:
+        result[i] = left[i]
+    return result
+    """
   operation "For each lane: if mask bit is set, compute left OR right; otherwise keep left."
   tests:
     - {tags [binary, or, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 7, 3, 5, 5, 7, 7, 9]}}
@@ -1702,6 +1847,20 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
 
 prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
   brief_description "Masked bitwise XOR with zeroing."
+  detailed_description """
+    Computes bitwise exclusive OR for lanes enabled by the mask. Disabled lanes
+    are set to zero. Floating-point lanes are treated by their underlying bit
+    representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] ^ right[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "For each lane: if mask bit is set, compute left XOR right; otherwise write zero."
   tests:
     - {tags [binary, xor, maskz, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 5, 0, 1, 0, 5, 0, 9]}}
@@ -1850,6 +2009,20 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
   brief_description "Masked bitwise XOR with pass-through from left."
+  detailed_description """
+    Computes bitwise exclusive OR for lanes enabled by the mask. Disabled lanes
+    keep the corresponding lane from `left`. Floating-point lanes are treated by
+    their underlying bit representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] ^ right[i]
+      else:
+        result[i] = left[i]
+    return result
+    """
   operation "For each lane: if mask bit is set, compute left XOR right; otherwise keep left."
   tests:
     - {tags [binary, xor, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 5, 3, 1, 5, 5, 7, 9]}}
@@ -2000,6 +2173,20 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
 
 prim<v:=(m,v)>[mask=zero] inv(mask, data):
   brief_description "Masked bitwise inversion with zeroing."
+  detailed_description """
+    Computes the bitwise complement for lanes enabled by the mask. Disabled lanes
+    are set to zero. Floating-point lanes are treated by their underlying bit
+    representation.
+    """
+  semantics """
+    input: mask mask, register data
+    for each lane i:
+      if mask[i] is active:
+        result[i] = ~data[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "For each lane: if mask bit is set, compute NOT data; otherwise write zero."
   tests:
     - {tags [maskz, basic], type "ui32", case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 4294967294, 0, 4294967292, 0, 4294967290, 0, 4294967288]}}
@@ -2168,6 +2355,20 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
 
 prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
   brief_description "Masked bitwise inversion with pass-through from input."
+  detailed_description """
+    Computes the bitwise complement for lanes enabled by the mask. Disabled lanes
+    keep the corresponding lane from `data`. Floating-point lanes are treated by
+    their underlying bit representation.
+    """
+  semantics """
+    input: mask mask, register data
+    for each lane i:
+      if mask[i] is active:
+        result[i] = ~data[i]
+      else:
+        result[i] = data[i]
+    return result
+    """
   operation "For each lane: if mask bit is set, compute NOT data; otherwise keep data."
   tests:
     - {tags [mask, basic], type "ui32", case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 4294967294, 2, 4294967292, 4, 4294967290, 6, 4294967288]}}

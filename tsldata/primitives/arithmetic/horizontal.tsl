@@ -1,6 +1,18 @@
 description "Horizontal arithmetic operations"
 prim<s:=v> hadd(vec):
   brief_description "Reduces the elements to their sum."
+  detailed_description """
+    Adds all lanes of the vector and returns the scalar reduction result.
+    Overflow, floating-point rounding, and the exact reduction association
+    follow the selected backend implementation and lane type.
+    """
+  semantics """
+    input: register vec
+    result = 0
+    for each lane i:
+      result = arithmetic_add(result, vec[i])
+    return result
+    """
   operation ""
   tests:
     - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 36}}
@@ -220,6 +232,19 @@ prim<s:=v> hadd(vec):
 
 prim<s:=v> hmax(vec):
   brief_description "Reduces the elements to their maximum."
+  detailed_description """
+    Compares all lanes of the vector and returns the greatest lane value as a
+    scalar. Floating-point unordered cases and signed-zero behavior follow the
+    selected backend implementation.
+    """
+  semantics """
+    input: register vec
+    result = vec[0]
+    for each lane i after lane 0:
+      if vec[i] > result:
+        result = vec[i]
+    return result
+    """
   operation ""
   tests:
     - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 8}}
@@ -386,6 +411,19 @@ prim<s:=v> hmax(vec):
 
 prim<s:=v> hmin(vec):
   brief_description "Reduces the elements to their minimum."
+  detailed_description """
+    Compares all lanes of the vector and returns the smallest lane value as a
+    scalar. Floating-point unordered cases and signed-zero behavior follow the
+    selected backend implementation.
+    """
+  semantics """
+    input: register vec
+    result = vec[0]
+    for each lane i after lane 0:
+      if vec[i] < result:
+        result = vec[i]
+    return result
+    """
   operation ""
   tests:
     - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected 1}}
@@ -552,6 +590,20 @@ prim<s:=v> hmin(vec):
 
 prim<s:=(m,v)> hadd(mask, vec):
   brief_description "Reduces the active elements to their sum."
+  detailed_description """
+    Adds only the mask-selected vector lanes and returns the scalar reduction
+    result. Inactive lanes contribute zero. If the mask selects no lanes, the
+    result is zero. Overflow, floating-point rounding, and reduction association
+    follow the selected backend implementation and lane type.
+    """
+  semantics """
+    input: mask mask, register vec
+    result = 0
+    for each lane i:
+      if mask[i] is active:
+        result = arithmetic_add(result, vec[i])
+    return result
+    """
   operation ""
   tests:
     - {tags [mask, basic], type "si32", lane_count 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected 36}}
@@ -643,6 +695,25 @@ prim<s:=(m,v)> hadd(mask, vec):
 
 prim<s:=(m,v)> hmax(mask, vec):
   brief_description "Reduces the active elements to their maximum."
+  detailed_description """
+    Compares only the mask-selected vector lanes and returns the greatest active
+    lane value as a scalar. If the mask selects no lanes, the result is zero.
+    Floating-point unordered cases and signed-zero behavior follow the selected
+    backend implementation.
+    """
+  semantics """
+    input: mask mask, register vec
+    found = false
+    result = 0
+    for each lane i:
+      if mask[i] is active:
+        if found is false:
+          result = vec[i]
+          found = true
+        else if vec[i] > result:
+          result = vec[i]
+    return result
+    """
   operation ""
   tests:
     - {tags [mask, basic], type "si32", lane_count 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected 8}}
@@ -759,6 +830,25 @@ prim<s:=(m,v)> hmax(mask, vec):
 
 prim<s:=(m,v)> hmin(mask, vec):
   brief_description "Reduces the active elements to their minimum."
+  detailed_description """
+    Compares only the mask-selected vector lanes and returns the smallest active
+    lane value as a scalar. If the mask selects no lanes, the result is zero.
+    Floating-point unordered cases and signed-zero behavior follow the selected
+    backend implementation.
+    """
+  semantics """
+    input: mask mask, register vec
+    found = false
+    result = 0
+    for each lane i:
+      if mask[i] is active:
+        if found is false:
+          result = vec[i]
+          found = true
+        else if vec[i] < result:
+          result = vec[i]
+    return result
+    """
   operation ""
   tests:
     - {tags [mask, basic], type "si32", lane_count 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected 1}}

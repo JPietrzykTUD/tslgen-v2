@@ -1,6 +1,19 @@
 prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
   cross_lane true
   brief_description "[Example: avx512 + si8]: Contiguously store the active 8-bit integers in \"a\" (those with their respective bit set in writemask \"k\") to unaligned memory at \"base_addr\"."
+  detailed_description """
+    Packs mask-selected lanes from the source vector toward the beginning of the
+    output memory region. Lanes whose mask bit is inactive are skipped and do
+    not reserve memory slots.
+    """
+  semantics """
+    input: mask m, pointer ptr, register a
+    out_idx = 0
+    for each lane i:
+      if m[i] is active:
+        ptr[out_idx] = a[i]
+        out_idx = out_idx + 1
+    """
   operation "[Example: avx512 + si8]: size := 8\nm := base_addr\nFOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tMEM[m+size-1:m] := a[i+7:i]\n\t\tm := m + size\n\tFI\nENDFOR"
   tests:
     - {tags [store, zero], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
@@ -172,6 +185,22 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
 prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
   cross_lane true
   brief_description "Loads contiguous data using a mask."
+  detailed_description """
+    Expands compact memory data into mask-selected lanes of a vector. Active
+    lanes consume the next contiguous memory value, while inactive lanes become
+    zero.
+    """
+  semantics """
+    input: mask m, const pointer ptr
+    in_idx = 0
+    for each lane i:
+      if m[i] is active:
+        result[i] = ptr[in_idx]
+        in_idx = in_idx + 1
+      else:
+        result[i] = 0
+    return result
+    """
   operation ""
   tests:
     - {tags [load, zero], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
@@ -339,6 +368,16 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
             """
 prim<v:=cptr+> load_convert_up(ptr):
   brief_description "Loads and widens elements."
+  detailed_description """
+    Loads a narrower source vector from memory and widens its lanes into the
+    selected destination vector type.
+    """
+  semantics """
+    input: const pointer ptr, target base type ToBase
+    for each destination lane i:
+      result[i] = cast_to_ToBase(ptr[i])
+    return result
+    """
   operation ""
   return_type:
     base: ToBase

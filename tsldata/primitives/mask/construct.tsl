@@ -1,5 +1,13 @@
 prim<m:=()>[value=zero] mask_false():
   brief_description "Creates a mask with all lanes inactive."
+  detailed_description """
+    Constructs a mask value in which every lane is inactive.
+    """
+  semantics """
+    for each lane i:
+      result[i] = inactive
+    return result
+    """
   operation ""
   tests:
     - {tags [false], extension "avx512", type "ui8", lane_count 64, case {inputs [], expected 0}}
@@ -66,6 +74,14 @@ prim<m:=()>[value=zero] mask_false():
           tsil "complete(mask<zero>());"
 prim<m:=()>[value=all] mask_true():
   brief_description "Creates a mask with all lanes active."
+  detailed_description """
+    Constructs a mask value in which every lane is active.
+    """
+  semantics """
+    for each lane i:
+      result[i] = active
+    return result
+    """
   operation ""
   tests:
     - {tags [true], extension "avx512", type "ui8", lane_count 64, case {inputs [], expected 18446744073709551615}}

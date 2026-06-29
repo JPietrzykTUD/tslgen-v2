@@ -1,6 +1,20 @@
 description "Shift operations"
 prim<v:=(v,sImm)> shift_left(data, shift):
   brief_description "[Example: avx512 + si16]: Shift packed 16-bit integers in \"a\" left by \"imm8\" while shifting in zeros, and store the results in \"dst\"."
+  detailed_description """
+    Shifts each lane left by the compile-time scalar immediate `shift`. Vacated
+    low-order bits are filled with zero. If the shift count is greater than or
+    equal to the lane bit width, the result lane is zero.
+    """
+  semantics """
+    input: register data, scalar shift
+    for each lane i:
+      if shift < lane_bit_width:
+        result[i] = data[i] << shift
+      else:
+        result[i] = 0
+    return result
+    """
   operation "[Example: avx512 + si16]: FOR j := 0 to 31\n\ti := j*16\n\tIF imm8[7:0] > 15\n\t\tdst[i+15:i] := 0\n\tELSE\n\t\tdst[i+15:i] := ZeroExtend16(a[i+15:i] << imm8[7:0])\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   params:
     shift:
@@ -211,6 +225,24 @@ prim<v:=(v,sImm)> shift_left(data, shift):
             """
 prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
   brief_description "[Example: avx512 + si16]: Shift packed 16-bit integers in \"a\" left by \"imm8\" while shifting in zeros, and store the results in \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
+  detailed_description """
+    Shifts lanes enabled by the mask left by the compile-time scalar immediate
+    `shift`. Disabled lanes keep the corresponding lane from `data`. Vacated
+    low-order bits are filled with zero. If the shift count is greater than or
+    equal to the lane bit width, enabled result lanes are zero.
+    """
+  semantics """
+    input: mask mask, register data, scalar shift
+    for each lane i:
+      if mask[i] is active:
+        if shift < lane_bit_width:
+          result[i] = data[i] << shift
+        else:
+          result[i] = 0
+      else:
+        result[i] = data[i]
+    return result
+    """
   operation "[Example: avx512 + si16]: FOR j := 0 to 31\n\ti := j*16\n\tIF k[j]\n\t\tIF imm8[7:0] > 15\n\t\t\tdst[i+15:i] := 0\n\t\tELSE\n\t\t\tdst[i+15:i] := ZeroExtend16(a[i+15:i] << imm8[7:0])\n\t\tFI\n\tELSE\n\t\tdst[i+15:i] := src[i+15:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   params:
     shift:
@@ -339,6 +371,21 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
             """
 prim<v:=(v,s)> shift_left(data, shift):
   brief_description "[Example: avx512 + si16]: Shift packed 16-bit integers in \"a\" left by the amount specified by the corresponding element in \"count\" while shifting in zeros, and store the results in \"dst\"."
+  detailed_description """
+    Shifts each lane left by the runtime scalar count `shift`. The same count is
+    applied to every lane. Vacated low-order bits are filled with zero. If the
+    shift count is greater than or equal to the lane bit width, the result lane
+    is zero.
+    """
+  semantics """
+    input: register data, scalar shift
+    for each lane i:
+      if shift < lane_bit_width:
+        result[i] = data[i] << shift
+      else:
+        result[i] = 0
+    return result
+    """
   operation "[Example: avx512 + si16]: FOR j := 0 to 31\n\ti := j*16\n\tIF count[i+15:i] < 16\n\t\tdst[i+15:i] := ZeroExtend16(a[i+15:i] << count[i+15:i])\n\tELSE\n\t\tdst[i+15:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
     - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
@@ -542,6 +589,20 @@ prim<v:=(v,s)> shift_left(data, shift):
             """
 prim<v:=(v,v)> shift_left(data, shift):
   brief_description "[Example: avx2 + si16]: Shift packed 16-bit integers in \"a\" left by the amount specified by the corresponding element in \"count\" while shifting in zeros, and store the results in \"dst\"."
+  detailed_description """
+    Shifts each lane left by the corresponding lane count from `shift`. Vacated
+    low-order bits are filled with zero. If a lane's shift count is greater than
+    or equal to the lane bit width, that result lane is zero.
+    """
+  semantics """
+    input: register data, register shift
+    for each lane i:
+      if shift[i] < lane_bit_width:
+        result[i] = data[i] << shift[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "[Example: avx2 + si16]: FOR j := 0 to 15\n\ti := j*16\n\tIF count[i+15:i] < 16\n\t\tdst[i+15:i] := ZeroExtend16(a[i+15:i] << count[i+15:i])\n\tELSE\n\t\tdst[i+15:i] := 0\n\tFI\nENDFOR\ndst[MAX:256] := 0"
   tests:
     - {tags [vector, basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [0, 1, 2, 3, 4, 5, 6, 7]], expected [1, 4, 12, 32, 80, 192, 448, 1024]}}
@@ -738,6 +799,25 @@ prim<v:=(v,v)> shift_left(data, shift):
             """
 prim<v:=(v,sImm)> shift_right(data, shift):
   brief_description "[Example: avx512 + ui16]: Shift packed 16-bit integers in \"a\" right by \"imm8\" while shifting in zeros, and store the results in \"dst\"."
+  detailed_description """
+    Shifts each lane right by the compile-time scalar immediate `shift`.
+    `PreserveSign` controls whether right shifts preserve the sign bit or fill
+    with zeros where the selected implementation supports that distinction.
+    Large shift counts follow the source-selected `PreserveSign`, lane type, and
+    backend policy.
+    """
+  semantics """
+    input: register data, scalar shift, bool PreserveSign
+    for each lane i:
+      if shift < lane_bit_width:
+        if PreserveSign:
+          result[i] = sign_preserving_right_shift(data[i], shift)
+        else:
+          result[i] = zero_filling_right_shift(data[i], shift)
+      else:
+        result[i] = large_right_shift_value(data[i], PreserveSign)
+    return result
+    """
   operation "[Example: avx512 + ui16]: FOR j := 0 to 31\n\ti := j*16\n\tIF imm8[7:0] > 15\n\t\tdst[i+15:i] := 0\n\tELSE\n\t\tdst[i+15:i] := ZeroExtend16(a[i+15:i] >> imm8[7:0])\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   generic_params:
     PreserveSign:
@@ -1155,6 +1235,25 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
 prim<v:=(v,s)> shift_right(data, shift):
   brief_description "[Example: avx512 + si16]: Shift packed 16-bit integers in \"a\" right by a scalar shift count while shifting in sign or zeros depending on type, and store the results in \"dst\"."
+  detailed_description """
+    Shifts each lane right by the runtime scalar count `shift`. The same count is
+    applied to every lane. `PreserveSign` controls whether right shifts preserve
+    the sign bit or fill with zeros where the selected implementation supports
+    that distinction. Large shift counts follow the source-selected
+    `PreserveSign`, lane type, and backend policy.
+    """
+  semantics """
+    input: register data, scalar shift, bool PreserveSign
+    for each lane i:
+      if shift < lane_bit_width:
+        if PreserveSign:
+          result[i] = sign_preserving_right_shift(data[i], shift)
+        else:
+          result[i] = zero_filling_right_shift(data[i], shift)
+      else:
+        result[i] = large_right_shift_value(data[i], PreserveSign)
+    return result
+    """
   operation "[Example: avx512 + si16]: FOR j := 0 to 31\n\ti := j*16\n\tIF shift > 15\n\t\tdst[i+15:i] := 0 or -1 depending on sign\n\tELSE\n\t\tdst[i+15:i] := ShiftRight(a[i+15:i], shift)\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   generic_params:
     PreserveSign:
@@ -1669,6 +1768,25 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
 prim<v:=(v,v)> shift_right(data, shift):
   brief_description "[Example: avx2 + ui32]: Shift packed 32-bit integers in \"a\" right by the amount specified by the corresponding element in \"count\" while shifting in zeros, and store the results in \"dst\"."
+  detailed_description """
+    Shifts each lane right by the corresponding lane count from `shift`.
+    `PreserveSign` controls whether right shifts preserve the sign bit or fill
+    with zeros where the selected implementation supports that distinction.
+    Large shift counts follow the source-selected `PreserveSign`, lane type, and
+    backend policy.
+    """
+  semantics """
+    input: register data, register shift, bool PreserveSign
+    for each lane i:
+      if shift[i] < lane_bit_width:
+        if PreserveSign:
+          result[i] = sign_preserving_right_shift(data[i], shift[i])
+        else:
+          result[i] = zero_filling_right_shift(data[i], shift[i])
+      else:
+        result[i] = large_right_shift_value(data[i], PreserveSign)
+    return result
+    """
   operation "[Example: avx2 + ui32]: FOR j := 0 to 7\n\ti := j*32\n\tIF count[i+31:i] < 32\n\t\tdst[i+31:i] := ZeroExtend32(a[i+31:i] >> count[i+31:i])\n\tELSE\n\t\tdst[i+31:i] := 0\n\tFI\nENDFOR\ndst[MAX:256] := 0"
   generic_params:
     PreserveSign:

@@ -1,5 +1,15 @@
 prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
   brief_description "Bitwise AND on masks."
+  detailed_description """
+    Computes the lane-wise conjunction of two mask values. A lane is active in
+    the result only when it is active in both input masks.
+    """
+  semantics """
+    input: mask mask_a, mask mask_b
+    for each lane i:
+      result[i] = mask_a[i] is active and mask_b[i] is active
+    return result
+    """
   operation ""
   tests:
     - {tags [mask, and, basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170, 204], expected 136}}
@@ -95,6 +105,16 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
             """
 prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
   brief_description "Bitwise OR on masks."
+  detailed_description """
+    Computes the lane-wise disjunction of two mask values. A lane is active in
+    the result when it is active in either input mask.
+    """
+  semantics """
+    input: mask mask_a, mask mask_b
+    for each lane i:
+      result[i] = mask_a[i] is active or mask_b[i] is active
+    return result
+    """
   operation ""
   tests:
     - {tags [mask, or, basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170, 204], expected 238}}
@@ -189,6 +209,16 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
             """
 prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
   brief_description "Bitwise XOR on masks."
+  detailed_description """
+    Computes the lane-wise exclusive-or of two mask values. A lane is active in
+    the result when exactly one input mask has that lane active.
+    """
+  semantics """
+    input: mask mask_a, mask mask_b
+    for each lane i:
+      result[i] = mask_a[i] active state differs from mask_b[i]
+    return result
+    """
   operation ""
   tests:
     - {tags [mask, xor, basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170, 204], expected 102}}
@@ -283,6 +313,15 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
             """
 prim<m:=m> mask_binary_not(mask):
   brief_description "Bitwise NOT on masks."
+  detailed_description """
+    Inverts the active state of each lane in a mask value.
+    """
+  semantics """
+    input: mask mask
+    for each lane i:
+      result[i] = not mask[i]
+    return result
+    """
   operation ""
   tests:
     - {tags [mask, not, basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170], expected 18446744073709551445}}
@@ -381,6 +420,18 @@ prim<m:=m> mask_binary_not(mask):
             """
 prim<usize:=m> mask_population_count(mask):
   brief_description "Counts bits set in a mask scalar."
+  detailed_description """
+    Counts the number of active lanes in a mask value and returns that count as
+    a scalar size value.
+    """
+  semantics """
+    input: mask mask
+    count = 0
+    for each lane i:
+      if mask[i] is active:
+        count = count + 1
+    return count
+    """
   operation ""
   tests:
     - {tags [mask, popcnt, basic], extension "avx512", type "ui8", expected_rule "popcnt", lane_count 64, case {inputs [12297829382473034410], expected 32}}
@@ -491,6 +542,18 @@ prim<usize:=m> mask_population_count(mask):
             """
 prim<im:=(im,s)> shift_right_imask(data, shift):
   brief_description "Arithmetic shift of an imask to the right by n bits."
+  detailed_description """
+    Shifts an integral mask value right by a runtime scalar amount. The
+    `PreserveSign` generic parameter controls whether signed integral masks keep
+    arithmetic right-shift behavior or are first converted to an unsigned mask
+    representation.
+    """
+  semantics """
+    input: integral mask data, scalar shift, generic PreserveSign
+    if integral mask type is signed and PreserveSign is false:
+      return unsigned(data) >> shift
+    return data >> shift
+    """
   operation ""
   tests:
     - {tags [basic], type "ui32", lane_count 16, case {inputs [240, 4], expected 15}}

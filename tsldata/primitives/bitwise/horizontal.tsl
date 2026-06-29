@@ -1,6 +1,19 @@
 description "Bitwise horizontal (reduction) operations"
 prim<s:=v> hand(vec):
   brief_description "Horizontal AND on vector register."
+  detailed_description """
+    Reduces all vector lanes with a bitwise AND and returns the scalar result.
+    Integral lanes use their stored integer bit patterns. Floating-point lanes
+    are reduced by their raw bit representation and the resulting bit pattern is
+    returned as the floating-point scalar type.
+    """
+  semantics """
+    input: register vec
+    result_bits = bit_pattern(vec[0])
+    for each lane i after lane 0:
+      result_bits = result_bits & bit_pattern(vec[i])
+    return scalar_from_bit_pattern(result_bits)
+    """
   operation ""
   tests:
     - {tags [basic], type "ui32", case {inputs [[255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
@@ -325,6 +338,19 @@ prim<s:=v> hand(vec):
 
 prim<s:=v> hor(vec):
   brief_description "Horizontal OR on vector register."
+  detailed_description """
+    Reduces all vector lanes with a bitwise OR and returns the scalar result.
+    Integral lanes use their stored integer bit patterns. Floating-point lanes
+    are reduced by their raw bit representation and the resulting bit pattern is
+    returned as the floating-point scalar type.
+    """
+  semantics """
+    input: register vec
+    result_bits = 0
+    for each lane i:
+      result_bits = result_bits | bit_pattern(vec[i])
+    return scalar_from_bit_pattern(result_bits)
+    """
   operation ""
   tests:
     - {tags [basic], type "ui32", case {inputs [[1, 2, 4, 8, 16, 32, 64, 128]], expected 255}}
@@ -602,6 +628,28 @@ prim<s:=v> hor(vec):
 
 prim<s:=(m,v)> hand(mask, vec):
   brief_description "Reduces the active elements to their bitwise AND."
+  detailed_description """
+    Reduces the mask-selected lanes with a bitwise AND and returns the scalar
+    result. Integral lanes use their stored integer bit patterns. Floating-point
+    lanes are reduced by their raw bit representation and the resulting bit
+    pattern is returned as the floating-point scalar type. If the mask selects
+    no lanes, the result is zero.
+    """
+  semantics """
+    input: mask mask, register vec
+    found = false
+    result_bits = 0
+    for each lane i:
+      if mask[i] is active:
+        if found is false:
+          result_bits = bit_pattern(vec[i])
+          found = true
+        else:
+          result_bits = result_bits & bit_pattern(vec[i])
+    if found is false:
+      return 0
+    return scalar_from_bit_pattern(result_bits)
+    """
   operation ""
   tests:
     - {tags [mask, basic], type "ui32", lane_count 8, case {inputs [255, [255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
@@ -734,6 +782,21 @@ prim<s:=(m,v)> hand(mask, vec):
 
 prim<s:=(m,v)> hor(mask, vec):
   brief_description "Reduces the active elements to their bitwise OR."
+  detailed_description """
+    Reduces the mask-selected lanes with a bitwise OR and returns the scalar
+    result. Integral lanes use their stored integer bit patterns. Floating-point
+    lanes are reduced by their raw bit representation and the resulting bit
+    pattern is returned as the floating-point scalar type. If the mask selects
+    no lanes, the result is zero.
+    """
+  semantics """
+    input: mask mask, register vec
+    result_bits = 0
+    for each lane i:
+      if mask[i] is active:
+        result_bits = result_bits | bit_pattern(vec[i])
+    return scalar_from_bit_pattern(result_bits)
+    """
   operation ""
   tests:
     - {tags [mask, basic], type "ui32", lane_count 8, case {inputs [255, [1, 2, 4, 8, 16, 32, 64, 128]], expected 255}}

@@ -1,6 +1,18 @@
 description "Fundamental arithmetic operations"
 prim<v:=(v,v)> add(left, right):
   brief_description "[Example: sse + si8]: Add packed 8-bit integers in \"a\" and \"b\", and store the results in \"dst\"."
+  detailed_description """
+    Computes lane-wise addition of two vector registers. Each output lane depends
+    only on the corresponding lanes of the input registers. Integer results follow
+    the selected backend and lane type behavior for overflow; floating-point
+    results follow the selected backend floating-point behavior.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = left[i] + right[i]
+    return result
+    """
   operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[i+7:i] := a[i+7:i] + b[i+7:i]\nENDFOR"
   tests:
     - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [9, 9, 9, 9, 9, 9, 9, 9]}}
@@ -144,6 +156,21 @@ prim<v:=(v,v)> add(left, right):
           tsil "complete(intrin<svadd, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
 prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
   brief_description "[Example: avx512 + si8]: Add packed 8-bit integers in \"a\" and \"b\", and store the results in \"dst\" using zeromask \"k\" (elements are zeroed when the corresponding mask bit is not set)."
+  detailed_description """
+    Computes lane-wise addition for lanes enabled by the mask. Disabled lanes are
+    set to zero. Integer results follow the selected backend and lane type behavior
+    for overflow; floating-point results follow the selected backend floating-point
+    behavior.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] + right[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i] + b[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
     - {tags [maskz, basic], type "si32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80]], expected [0, 22, 0, 44, 0, 66, 0, 88]}}
@@ -258,6 +285,22 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
           tsil "complete(intrin<svadd, build[post=z]>(mask, left, right));"
 prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
   brief_description "[Example: avx512 + si8]: Add packed 8-bit integers in \"a\" and \"b\", and store the results in \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
+  detailed_description """
+    Computes lane-wise addition for lanes enabled by the mask. Disabled lanes keep
+    the corresponding lane from the pass-through input, which is `left` for this
+    primitive shape. Integer results follow the selected backend and lane type
+    behavior for overflow; floating-point results follow the selected backend
+    floating-point behavior.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] + right[i]
+      else:
+        result[i] = left[i]
+    return result
+    """
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i] + b[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := src[i+7:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
     - {tags [mask, basic], type "si32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [10, 20, 30, 40, 50, 60, 70, 80]], expected [1, 22, 3, 44, 5, 66, 7, 88]}}
@@ -374,6 +417,18 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
           tsil "complete(intrin<svadd, build[post=m]>(mask, left, right));"
 prim<v:=(v,v)> sub(left, right):
   brief_description "[Example: sse + si8]: Subtract packed 8-bit integers in \"b\" from packed 8-bit integers in \"a\", and store the results in \"dst\"."
+  detailed_description """
+    Computes lane-wise subtraction of two vector registers. Each output lane
+    depends only on the corresponding lanes of the input registers. Integer results
+    follow the selected backend and lane type behavior for overflow; floating-point
+    results follow the selected backend floating-point behavior.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = left[i] - right[i]
+    return result
+    """
   operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[i+7:i] := a[i+7:i] - b[i+7:i]\nENDFOR"
   tests:
     - {tags [basic], type "si32", case {inputs [[9, 8, 7, 6, 5, 4, 3, 2], [1, 2, 3, 4, 5, 6, 7, 8]], expected [8, 6, 4, 2, 0, -2, -4, -6]}}
@@ -517,6 +572,21 @@ prim<v:=(v,v)> sub(left, right):
           tsil "complete(intrin<svsub, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
 prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
   brief_description "[Example: avx512 + si8]: Subtract packed 8-bit integers in \"b\" from packed 8-bit integers in \"a\", and store the results in \"dst\" using zeromask \"k\" (elements are zeroed when the corresponding mask bit is not set)."
+  detailed_description """
+    Computes lane-wise subtraction for lanes enabled by the mask. Disabled lanes
+    are set to zero. Integer results follow the selected backend and lane type
+    behavior for overflow; floating-point results follow the selected backend
+    floating-point behavior.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] - right[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i] - b[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := 0\n\tFI\t\nENDFOR\ndst[MAX:512] := 0"
   tests:
     - {tags [maskz, basic], type "si32", case {inputs [85, [10, 20, 30, 40, 50, 60, 70, 80], [1, 2, 3, 4, 5, 6, 7, 8]], expected [9, 0, 27, 0, 45, 0, 63, 0]}}
@@ -631,6 +701,22 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
           tsil "complete(intrin<svsub, build[post=z]>(mask, left, right));"
 prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
   brief_description "[Example: avx512 + si8]: Subtract packed 8-bit integers in \"b\" from packed 8-bit integers in \"a\", and store the results in \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
+  detailed_description """
+    Computes lane-wise subtraction for lanes enabled by the mask. Disabled lanes
+    keep the corresponding lane from the pass-through input, which is `left` for
+    this primitive shape. Integer results follow the selected backend and lane type
+    behavior for overflow; floating-point results follow the selected backend
+    floating-point behavior.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] - right[i]
+      else:
+        result[i] = left[i]
+    return result
+    """
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i] - b[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := src[i+7:i]\n\tFI\t\nENDFOR\ndst[MAX:512] := 0"
   tests:
     - {tags [mask, basic], type "si32", case {inputs [85, [10, 20, 30, 40, 50, 60, 70, 80], [1, 2, 3, 4, 5, 6, 7, 8]], expected [9, 20, 27, 40, 45, 60, 63, 80]}}
@@ -743,6 +829,21 @@ prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
           tsil "complete(intrin<svsub, build[post=m]>(mask, left, right));"
 prim<v:=(m,v,v,v)>[mask=pass_through] blend_add(mask, left, right, adder):
   brief_description "Blends two registers or adds right and adder depending on mask."
+  detailed_description """
+    Selects between the `left` lane and the lane-wise sum of `right` and `adder`.
+    For lanes enabled by the mask, the result keeps `left`; disabled lanes receive
+    `right + adder`. Integer addition follows the selected backend and lane type
+    behavior for overflow.
+    """
+  semantics """
+    input: mask mask, register left, register right, register adder
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i]
+      else:
+        result[i] = right[i] + adder[i]
+    return result
+    """
   operation ""
   tests:
     - {tags [blend, add, basic], type "ui8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]], expected [11, 2, 31, 4, 51, 6, 71, 8, 91, 10, 111, 12, 131, 14, 151, 16]}}

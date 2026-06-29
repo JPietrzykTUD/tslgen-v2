@@ -1,6 +1,16 @@
 description "Type cast operations"
 prim<v:=v>[cast=reinterpret] reinterpret(data):
   brief_description "[Example: sse + f32]: Cast vector of type __m128 to type __m128i. This intrinsic is only used for compilation and does not generate any instructions, thus it has zero latency."
+  detailed_description """
+    Reinterprets the source register as the target vector type without changing
+    the underlying bits. The lane grouping and target scalar interpretation are
+    determined by the selected target type.
+    """
+  semantics """
+    input: register data
+    bits = register_bit_pattern(data)
+    return register_from_bit_pattern(bits, target_vector_type)
+    """
   operation ""
   return_type:
     base: ToBase
@@ -159,6 +169,23 @@ prim<v:=v>[cast=convert] cast(data):
       i32 -> f32: [1,2,3,4] -> [1.0f, 2.0f, 3.0f, 4.0f]
       i32 -> f64: [1,2,3,4] -> [1.0f, 2.0f]
       f64 -> i32: [1.0f, 2.0f] -> [1, 2, 0, 0]
+    """
+  detailed_description """
+    Converts lanes from the source vector type to the target vector base type.
+    When the target vector has fewer lanes, only the representable leading
+    source lanes are converted. When the target vector has more lanes, remaining
+    lanes are filled according to the selected implementation. Overflow,
+    rounding, saturation, and NaN handling follow the selected backend and type
+    conversion path.
+    """
+  semantics """
+    input: register data
+    for each target lane i:
+      if source lane i exists:
+        result[i] = numeric_convert(data[i], target_base_type)
+      else:
+        result[i] = implementation_defined_fill_value
+    return result
     """
   operation ""
   return_type:

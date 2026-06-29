@@ -1,6 +1,17 @@
 description "Load primitives"
 prim<v:=cptr>[aligned=*] load(ptr):
   brief_description "[Example: sse + si8]: Load 128-bits of integer data from memory into \"dst\". \n\t\"mem_addr\" must be aligned on a 16-byte boundary or a general-protection exception may be generated."
+  detailed_description """
+    Loads one full vector register from contiguous memory. The `aligned`
+    attribute selects whether the pointer is promised to satisfy the selected
+    vector alignment.
+    """
+  semantics """
+    input: const pointer ptr, attribute aligned
+    for each lane i:
+      result[i] = ptr[i]
+    return result
+    """
   operation "[Example: sse + si8]: dst[127:0] := MEM[mem_addr+127:mem_addr]"
   tests:
     - {tags [basic], type "ui32", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
@@ -155,6 +166,20 @@ prim<v:=cptr>[aligned=*] load(ptr):
 
 prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
   brief_description "TODO"
+  detailed_description """
+    Loads mask-selected lanes from contiguous memory and writes zero to inactive
+    lanes. The `aligned` attribute selects whether the pointer is promised to
+    satisfy the selected vector alignment.
+    """
+  semantics """
+    input: mask mask, const pointer ptr, attribute aligned
+    for each lane i:
+      if mask[i] is active:
+        result[i] = ptr[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "TODO"
   tests:
     - {tags [mask, zero, all], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
@@ -299,6 +324,20 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
           """
 prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
   brief_description "Masked load with pass-through semantics: lanes enabled by the mask are loaded from memory, and disabled lanes are taken from data."
+  detailed_description """
+    Loads mask-selected lanes from contiguous memory and preserves inactive
+    lanes from the pass-through vector. The `aligned` attribute selects whether
+    the pointer is promised to satisfy the selected vector alignment.
+    """
+  semantics """
+    input: mask mask, const pointer ptr, register data, attribute aligned
+    for each lane i:
+      if mask[i] is active:
+        result[i] = ptr[i]
+      else:
+        result[i] = data[i]
+    return result
+    """
   operation "TODO"
   tests:
     - {tags [mask, merge, all], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [100, 101, 102, 103, 104, 105, 106, 107], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
@@ -453,6 +492,20 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
       "if packed=true" "type<generation>(vector::imask) const*"
       "if packed=false" "type<generation>(base::unsigned_of(type<generation>(base::in))) const*"
   brief_description "Loads data from memory to a mask."
+  detailed_description """
+    Loads a mask value from memory. With `packed=true`, memory contains the
+    compact integral mask representation. With `packed=false`, memory contains
+    one unsigned lane word per vector lane, where nonzero words become active
+    mask lanes.
+    """
+  semantics """
+    input: const pointer ptr, attribute packed, attribute aligned
+    if packed is true:
+      return mask_from_integral(ptr[0])
+    for each lane i:
+      result[i] = ptr[i] != 0
+    return result
+    """
   operation ""
   tests:
     - {tags [mask, none], attrs [aligned=false, packed=true], type "ui32", offset 1, case {inputs [[0, 0, 0]], expected 0}}
@@ -611,6 +664,14 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
 
 prim<s:=cptr>[aligned=false] load_scalar(ptr):
   brief_description "Loads a scalar mask from memory."
+  detailed_description """
+    Loads one scalar value from memory. This primitive always uses the unaligned
+    pointer form.
+    """
+  semantics """
+    input: const pointer ptr
+    return ptr[0]
+    """
   operation ""
   tests:
     - {tags [scalar, basic], type "ui8", offset 1, case {inputs [[0, 5, 12345]], expected 5}}

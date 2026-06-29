@@ -1,5 +1,19 @@
 prim<im:=m> to_integral(mask):
   brief_description "[Example: sse + si8]: Create mask from the most significant bit of each 8-bit element in \"a\", and store the result in \"dst\"."
+  detailed_description """
+    Converts a mask value to its compact integral mask representation. Each
+    active lane contributes a set bit at that lane's position, and each inactive
+    lane contributes a cleared bit. Bits outside the active lane range follow
+    the selected mask representation.
+    """
+  semantics """
+    input: mask mask
+    result = 0
+    for each lane i:
+      if mask[i] is active:
+        result = result | (1 << i)
+    return result
+    """
   operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[j] := a[i+7]\nENDFOR\ndst[MAX:16] := 0"
   tests:
     - {tags [basic], type "ui8", case {inputs [10], expected 10}}
@@ -234,6 +248,20 @@ prim<im:=m> to_integral(mask):
             """
 prim<v:=m> to_vector(mask):
   brief_description "[Example: avx512 + si8]: Broadcast 8-bit integer \"a\" to all elements of \"dst\" using zeromask \"k\" (elements are zeroed out when the corresponding mask bit is not set)."
+  detailed_description """
+    Expands a mask into a vector whose active lanes contain the lane all-true
+    value and whose inactive lanes contain zero. Floating-point lane types use
+    the bit pattern corresponding to the lane all-true mask value.
+    """
+  semantics """
+    input: mask mask
+    for each lane i:
+      if mask[i] is active:
+        result[i] = mask_lane_all_true
+      else:
+        result[i] = 0
+    return result
+    """
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[7:0]\n\tELSE\n\t\tdst[i+7:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
     - {tags [basic], type "ui8", case {inputs [43690], expected [0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255]}}
@@ -389,6 +417,18 @@ prim<v:=m> to_vector(mask):
             """
 prim<m:=im> to_mask(mask):
   brief_description "Forms a mask type from an integral mask scalar."
+  detailed_description """
+    Converts an integral mask representation into the target mask type. A set
+    bit at lane position `i` activates lane `i`; a cleared bit deactivates that
+    lane. Bits outside the selected vector's lane range are ignored or preserved
+    only as allowed by the selected mask representation.
+    """
+  semantics """
+    input: integral mask
+    for each lane i:
+      result[i] = ((mask >> i) & 1) != 0
+    return mask result
+    """
   operation ""
   tests:
     - {tags [basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170], expected 170}}

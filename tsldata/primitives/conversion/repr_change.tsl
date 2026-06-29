@@ -1,6 +1,18 @@
 description "Operations that change the extension / representation"
 prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
   brief_description "Extracts a smaller SIMD register with the same underlying base type from a larger SIMD register."
+  detailed_description """
+    Selects one same-base chunk from a larger vector register and returns it as
+    the target extension's register type. The immediate `index` chooses the
+    chunk position in units of the target vector's lane count.
+    """
+  semantics """
+    input: register data, immediate index
+    start = index * target_vector_lane_count
+    for each target lane i:
+      result[i] = data[start + i]
+    return result
+    """
   operation ""
   params:
     index:
@@ -248,6 +260,20 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
                 """
 prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
   brief_description "Inserts a smaller SIMD register with the same underlying base type into a larger SIMD register."
+  detailed_description """
+    Replaces one same-base chunk of a larger destination register with the lanes
+    from a smaller source register. The immediate `index` chooses the chunk
+    position in units of the source vector's lane count; all other destination
+    lanes are preserved from `orig`.
+    """
+  semantics """
+    input: register orig, register data, immediate index
+    result = orig
+    start = index * source_vector_lane_count
+    for each source lane i:
+      result[start + i] = data[i]
+    return result
+    """
   operation ""
   params:
     index:
@@ -410,6 +436,19 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
                 """
 prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
   brief_description "Converts one chunk of a SIMD register to a same-width register with larger-base-type lanes."
+  detailed_description """
+    Selects one chunk of source lanes and converts those lanes to a larger
+    target base type, producing a same-width target register with fewer lanes.
+    The immediate `index` chooses the source chunk. Signedness, rounding, and
+    floating-point conversion details follow the selected backend and type path.
+    """
+  semantics """
+    input: register data, immediate index
+    start = index * target_vector_lane_count
+    for each target lane i:
+      result[i] = numeric_convert(data[start + i], target_base_type)
+    return result
+    """
   operation ""
   return_type:
     base: ToBase
@@ -1639,6 +1678,21 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
             """
 prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
   brief_description "Converts one chunk of a same-width SIMD register with larger-base-type lanes into a zero-filled destination register (using saturation)."
+  detailed_description """
+    Converts lanes from a wider source base type to a narrower target base type
+    and writes the converted chunk into a zero-filled destination register. The
+    immediate `index` selects the destination chunk. Saturation, clamping,
+    rounding, and out-of-range behavior follow the selected backend and type
+    conversion path.
+    """
+  semantics """
+    input: register data, immediate index
+    result = zero_filled_target_register
+    start = index * source_vector_lane_count
+    for each source lane i:
+      result[start + i] = narrowing_convert(data[i], target_base_type)
+    return result
+    """
   operation ""
   return_type:
     base: ToBase
