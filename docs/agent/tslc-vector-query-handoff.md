@@ -4803,3 +4803,37 @@ now green with `266 passed, 82 deselected`.
 
 Stop condition: no next run prompt is required for this safety annotation
 cleanup.
+
+### Latest Active TSLc Handoff: Primitive Documentation Metadata Admission
+
+Primitive documentation text is now admitted and promoted as catalog metadata
+for future documentation generation.
+
+Implemented:
+
+1. Added parser/AST recognition for `detailed_description` and `semantics`
+   primitive fields.
+2. Added both fields to primitive schema validation.
+3. Added `brief_description`, `detailed_description`, and `semantics` to the
+   `Primitive` model as raw documentation metadata.
+4. Promoted those fields in `_builder_primitives` without lowering,
+   evaluating, or interpreting them.
+5. Recorded ADR-127.
+
+Validation:
+
+```bash
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog_validation.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py tslc/tests/test_diagnostic_provenance.py tslc/tests/test_catalog_tests.py
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall passed; focused catalog validation reports `23 passed`;
+adjacent catalog/provenance tests report `60 passed`; the broad non-build gate
+reports `293 passed, 84 deselected`; `git diff --check` passed.
+
+Stop condition: no next run prompt is required for this metadata admission
+slice. The next documentation-generation slice can consume the new `Primitive`
+metadata.

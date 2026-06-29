@@ -138,6 +138,11 @@ class Primitive:
     # Value-correctness cases authored in the `tests:` block. Consumed by the test-generation
     # render stage (golden anchor against the generic software reference); empty when none.
     tests: tuple["TestCase", ...] = ()
+    # Human-authored documentation metadata. These fields are carried as raw text for future
+    # documentation rendering; they are not lowered, evaluated, or used as compiler semantics.
+    brief_description: str | None = None
+    detailed_description: str | None = None
+    semantics: str | None = None
     # Corpus-declared cross-lane fact: True iff an output lane reads more than its own input
     # lane (a reduction, shuffle, compress, conflict, iota, gather …). It gates every *scalable*
     # (runtime-length, e.g. SVE) value-test kind that tiles an authored fixed-length pattern

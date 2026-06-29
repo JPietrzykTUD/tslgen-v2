@@ -32,10 +32,12 @@ ParsedTopLevelDeclarationKind = Literal[
 ]
 ParsedPrimitiveFieldKind = Literal[
     "brief_description",
+    "detailed_description",
     "generic_params",
     "impls",
     "operation",
     "return_type",
+    "semantics",
     "simm_type",
     "tests",
     "preserved",

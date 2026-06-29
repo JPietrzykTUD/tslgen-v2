@@ -5105,3 +5105,37 @@ Result: compileall passed; focused selection/lowering/profile tests report
 Stop condition for the active five-slice cleanup after broad validation and
 commit: all requested slices have been split, reviewed for design improvement,
 validated, and committed.
+
+## Completed Primitive Documentation Metadata Admission
+
+Primitive documentation text is now admitted and promoted as catalog metadata
+for future documentation generation.
+
+Implemented:
+
+- Added parser/AST recognition for `detailed_description` and `semantics`
+  primitive fields.
+- Added both fields to primitive schema validation.
+- Added `brief_description`, `detailed_description`, and `semantics` to the
+  `Primitive` model as raw documentation metadata.
+- Promoted those fields in `_builder_primitives` without lowering, evaluating,
+  or interpreting them.
+- Recorded ADR-127.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog_validation.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py tslc/tests/test_diagnostic_provenance.py tslc/tests/test_catalog_tests.py
+PYTHONPATH=tslc/src python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall passed; focused catalog validation reports `23 passed`;
+adjacent catalog/provenance tests report `60 passed`; the broad non-build gate
+reports `293 passed, 84 deselected`; `git diff --check` passed.
+
+Stop condition: no next run prompt is required for this metadata admission
+slice. The next documentation-generation slice can consume the new `Primitive`
+metadata.

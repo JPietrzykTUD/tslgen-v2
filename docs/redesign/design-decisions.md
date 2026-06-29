@@ -6211,3 +6211,38 @@ Consequences:
 - Lowering diagnostic construction is shared without introducing a circular
   dependency between target-vector resolution and `LoweringResult`.
 - Existing target-vector diagnostics and generated behavior are preserved.
+
+## ADR-127: Primitive Documentation Metadata Is Catalog Data
+
+Context:
+
+Documentation generation needs primitive-authored text before any backend
+specialization exists. The corpus already had `brief_description`, and the next
+documentation slice needs longer prose plus a compact pseudocode block for the
+primitive's operation. These fields must not become executable semantics,
+lowering inputs, or backend selection policy.
+
+Decision:
+
+Treat primitive documentation text as catalog metadata:
+
+- `brief_description` is a short human-readable summary;
+- `detailed_description` is longer human-readable prose;
+- `semantics` is raw documentation-only pseudocode, intended for rendered code
+  blocks in generated documentation.
+
+The parser recognizes `detailed_description` and `semantics` as primitive
+fields, schema validation admits them, and catalog promotion carries
+`brief_description`, `detailed_description`, and `semantics` on `Primitive`.
+The strings are not parsed, lowered, evaluated, normalized, or used as compiler
+semantics.
+
+Consequences:
+
+- Future documentation renderers can consume typed `Primitive` metadata instead
+  of reaching back into parsed source documents.
+- The field name `semantics` documents intent, while the raw-string contract
+  prevents it from becoming a hidden DSL in this slice.
+- Specialization docs can combine authored primitive text with lowered
+  backend/type/safety/requirement facts later, without making lowering
+  responsible for documentation prose.

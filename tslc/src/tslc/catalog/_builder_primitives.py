@@ -60,6 +60,9 @@ def _build_primitives(
     immediate_params = _immediate_params(declaration, diagnostics)
     generic_params = _generic_params(declaration)
     tests = build_test_cases(declaration, diagnostics)
+    brief_description = _primitive_field_text(declaration, "brief_description")
+    detailed_description = _primitive_field_text(declaration, "detailed_description")
+    semantics = _primitive_field_text(declaration, "semantics")
     cross_lane_fields = declaration.fields_by_name("cross_lane")
     cross_lane = _bool_field(cross_lane_fields[0].field) if cross_lane_fields else False
 
@@ -76,6 +79,9 @@ def _build_primitives(
             generic_params=generic_params,
             result_target=result_target,
             tests=tests,
+            brief_description=brief_description,
+            detailed_description=detailed_description,
+            semantics=semantics,
             cross_lane=cross_lane,
             source=_source_span(declaration.source),
             header_source=_source_span(declaration.header_source),
@@ -83,6 +89,15 @@ def _build_primitives(
         )
 
     return [make(attrs) for attrs in _expand_wildcards(base_attributes)]
+
+
+def _primitive_field_text(
+    declaration: ParsedPrimitiveDeclaration, name: str
+) -> str | None:
+    fields = declaration.fields_by_name(name)
+    if not fields:
+        return None
+    return _field_text(fields[0].field)
 
 
 

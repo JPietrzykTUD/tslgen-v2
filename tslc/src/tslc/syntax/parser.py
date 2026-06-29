@@ -43,10 +43,12 @@ _GRAMMAR_PACKAGE = "tslc.syntax.grammar"
 _GRAMMAR_FILE = "tsl_data.lark"
 _KNOWN_PRIMITIVE_FIELDS: dict[str, ParsedPrimitiveFieldKind] = {
     "brief_description": "brief_description",
+    "detailed_description": "detailed_description",
     "generic_params": "generic_params",
     "impls": "impls",
     "operation": "operation",
     "return_type": "return_type",
+    "semantics": "semantics",
     "sImm_type": "simm_type",
     "tests": "tests",
 }

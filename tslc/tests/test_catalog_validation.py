@@ -69,6 +69,36 @@ def test_valid_tiny_catalog_has_no_validation_diagnostics() -> None:
     assert _diagnostics(_base_source()) == ()
 
 
+def test_primitive_documentation_fields_are_accepted_and_promoted() -> None:
+    source = _base_source().replace(
+        "  impls:\n",
+        '  brief_description "Identity operation."\n'
+        '  detailed_description "Returns the input unchanged."\n'
+        '  semantics """\n'
+        "input: register data\n"
+        "return data\n"
+        '"""\n'
+        "  impls:\n",
+    )
+    document = SourceDocument(Path("catalog_validation_fixture.tsl"), source, "d", "tsl")
+    parsed = TslParser().parse((document,))
+    assert parsed.diagnostics == (), parsed.diagnostics
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+    diagnostics = (
+        *result.diagnostics,
+        *validate_catalog(result.catalog, parsed, required_backends=("cpp", "rust")),
+    )
+    assert diagnostics == ()
+
+    primitive = result.catalog.primitive("id")
+    assert primitive is not None
+    assert primitive.brief_description == "Identity operation."
+    assert primitive.detailed_description == "Returns the input unchanged."
+    assert "input: register data" in (primitive.semantics or "")
+    assert "return data" in (primitive.semantics or "")
+
+
 def test_duplicate_keys_are_diagnosed() -> None:
     diagnostics = _diagnostics(
         _base_source(

@@ -36,12 +36,14 @@ _KNOWN_PRIMITIVE_FIELDS = frozenset(
     {
         "brief_description",
         "cross_lane",
+        "detailed_description",
         "generic_params",
         "impls",
         "operation",
         "param_types",
         "params",
         "return_type",
+        "semantics",
         "sImm_type",
         "tests",
     }
