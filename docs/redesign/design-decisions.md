@@ -6051,3 +6051,47 @@ Consequences:
   `_query_core` plus the registry entry.
 - The public facade is now small enough to review as evaluator wiring instead
   of a mixed query-language module.
+
+## ADR-123: Parsed Schema Validation Is Split By Source Section
+
+Context:
+
+`tslc.catalog.validation.schema_validation` had grown into a near-thousand-line
+module that mixed document traversal, top-level block dispatch, target-family
+shape checks, extension block policy checks, primitive declaration checks,
+implementation safety/body checks, and primitive test-case checks. The
+diagnostic behavior was coherent, but new source sections would keep lengthening
+one file and make validation changes harder to review.
+
+Decision:
+
+Keep `schema_validation.py` as the public parsed-document validation entry point
+and top-level block dispatcher, while moving section-specific schema rules into
+focused private modules:
+
+- `_schema_common` owns shared diagnostic helpers, duplicate-field detection,
+  backend-key validation, enum diagnostics, scalar-list checks, and common
+  boolean vocabulary;
+- `_schema_target_families` owns `target_families:` declaration validation;
+- `_schema_extensions` owns `extension` field and policy validation;
+- `_schema_primitives` owns primitive declaration field validation and delegates
+  to narrower primitive sub-sections;
+- `_schema_implementation` owns implementation body and safety metadata
+  validation;
+- `_schema_tests` owns primitive `tests:` block and test-case shape validation.
+
+The public entry point still calls `validate_parsed_documents(...)`, and callers
+do not import the private section modules directly.
+
+Consequences:
+
+- The public schema module is now small enough to review as traversal and block
+  dispatch.
+- Source section changes have additive homes: target-family changes in
+  `_schema_target_families`, extension metadata changes in `_schema_extensions`,
+  primitive test changes in `_schema_tests`, and implementation metadata changes
+  in `_schema_implementation`.
+- Existing diagnostic codes and messages are preserved by moving behavior
+  without changing validation semantics.
+- Shared helpers are typed Python functions rather than an unowned utility blob
+  hidden inside the public entry point.

@@ -1,0 +1,150 @@
+"""Schema validation for `extension` blocks."""
+
+from __future__ import annotations
+
+from tslc.catalog.target_families import TargetFamilyCatalog
+from tslc.catalog.validation._schema_common import (
+    diagnose_duplicate_fields,
+    invalid_enum,
+    validate_backend_key_fields,
+    validate_known_fields,
+)
+from tslc.catalog.validation.source_spans import child, children, field_text
+from tslc.diagnostics import Diagnostic
+from tslc.syntax.ast import ParsedBlockDeclaration, ParsedTslField
+
+KNOWN_EXTENSION_FIELDS = frozenset(
+    {
+        "autodetect",
+        "cpp",
+        "default_test_target",
+        "extension_name",
+        "family",
+        "inherits",
+        "integral_mask_type_policy",
+        "intrinsic_compose",
+        "intrinsic_style",
+        "lscpu_flags",
+        "mask_repr",
+        "mask_type_policy",
+        "mask_vector_loadable",
+        "mask_width",
+        "native_sort_order",
+        "runtime_lanes",
+        "rust",
+        "signature_support",
+        "size_bits",
+        "size_parameter",
+        "test_filter",
+        "test_mask_check",
+        "test_mask_from_bits",
+        "test_runtime_lanes",
+        "test_support_headers",
+        "test_sizes_bits",
+        "unroll_variants",
+        "vector_bits",
+        "vector_register_type_policy",
+        "vector_register_types",
+        "vendor",
+    }
+)
+_KNOWN_MASK_POLICY_KINDS = frozenset(
+    {"bool", "lane_bitmask", "native_predicate", "native_predicate_by_lanes"}
+)
+_KNOWN_IMASK_POLICY_KINDS = frozenset(
+    {"lane_bitmask", "same_as_mask_type", "unsigned_scalar"}
+)
+
+
+def validate_extension_block(
+    declaration: ParsedBlockDeclaration,
+    diagnostics: list[Diagnostic],
+    target_families: TargetFamilyCatalog,
+) -> None:
+    fields = {field.key.text: field for field in declaration.fields}
+    family = field_text(fields.get("family")) or ""
+    if (
+        family
+        and target_families.known_extension_families
+        and family not in target_families.known_extension_families
+    ):
+        invalid_enum(
+            diagnostics,
+            fields.get("family"),
+            f"extension family {family!r}",
+            sorted(target_families.known_extension_families),
+        )
+
+    mask = fields.get("mask_type_policy")
+    _validate_policy_block(
+        mask,
+        frozenset({"kind", "width", "cpp_by_lanes", "rust_by_lanes", "cpp", "rust"}),
+        _KNOWN_MASK_POLICY_KINDS,
+        "mask_type_policy",
+        diagnostics,
+    )
+    imask = fields.get("integral_mask_type_policy")
+    _validate_policy_block(
+        imask,
+        frozenset({"kind", "width", "cpp", "rust"}),
+        _KNOWN_IMASK_POLICY_KINDS,
+        "integral_mask_type_policy",
+        diagnostics,
+    )
+
+    compose = fields.get("intrinsic_compose")
+    if compose is not None:
+        validate_known_fields(
+            children(compose),
+            frozenset({"prefix", "suffix"}),
+            diagnostics,
+            owner="intrinsic_compose",
+        )
+        prefix = child(compose, "prefix")
+        if prefix is not None:
+            validate_backend_key_fields(
+                children(prefix), diagnostics, owner="intrinsic prefix"
+            )
+        suffix = child(compose, "suffix")
+        if suffix is not None:
+            validate_known_fields(
+                children(suffix),
+                frozenset({"by_type"}),
+                diagnostics,
+                owner="intrinsic suffix",
+            )
+    for backend_map_name in (
+        "test_runtime_lanes",
+        "test_mask_from_bits",
+        "test_mask_check",
+        "test_support_headers",
+    ):
+        backend_map = fields.get(backend_map_name)
+        if backend_map is not None:
+            diagnose_duplicate_fields(
+                children(backend_map),
+                diagnostics,
+                label=f"{backend_map_name} backend field",
+            )
+            validate_backend_key_fields(
+                children(backend_map),
+                diagnostics,
+                owner=backend_map_name,
+            )
+
+
+def _validate_policy_block(
+    field: ParsedTslField | None,
+    allowed_fields: frozenset[str],
+    allowed_kinds: frozenset[str],
+    owner: str,
+    diagnostics: list[Diagnostic],
+) -> None:
+    if field is None:
+        return
+    validate_known_fields(children(field), allowed_fields, diagnostics, owner=owner)
+    diagnose_duplicate_fields(children(field), diagnostics, label=f"{owner} field")
+    kind_field = child(field, "kind")
+    kind = field_text(kind_field)
+    if kind is not None and kind not in allowed_kinds:
+        invalid_enum(diagnostics, kind_field, f"{owner} kind {kind!r}", sorted(allowed_kinds))

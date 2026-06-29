@@ -4911,3 +4911,52 @@ non-build gate reports `290 passed, 83 deselected`; `git diff --check` passed.
 Next action for the active five-slice cleanup: split
 `catalog/validation/schema_validation.py` by schema section while keeping one
 public validation entry point.
+
+## Completed Parsed Schema Validation Section Split
+
+Parsed-source schema validation now has source-section ownership instead of one
+large mixed `schema_validation.py` module.
+
+Implemented:
+
+- Added `tslc.catalog.validation._schema_common` for shared diagnostic helpers,
+  duplicate-field checks, backend-key validation, enum diagnostics, scalar-list
+  checks, and common boolean vocabulary.
+- Added `tslc.catalog.validation._schema_target_families` for
+  `target_families:` declaration validation.
+- Added `tslc.catalog.validation._schema_extensions` for `extension` block
+  field and policy validation.
+- Added `tslc.catalog.validation._schema_primitives` for primitive declaration
+  field validation and primitive-section delegation.
+- Added `tslc.catalog.validation._schema_implementation` for implementation
+  body and safety metadata validation.
+- Added `tslc.catalog.validation._schema_tests` for primitive `tests:` block
+  and test-case shape validation.
+- Reduced `tslc.catalog.validation.schema_validation` to document traversal,
+  duplicate named-block checks, and top-level block dispatch.
+- Recorded ADR-123 in `docs/redesign/design-decisions.md`.
+
+Design check:
+
+```text
+wc -l tslc/src/tslc/catalog/validation/schema_validation.py tslc/src/tslc/catalog/validation/_schema_common.py tslc/src/tslc/catalog/validation/_schema_target_families.py tslc/src/tslc/catalog/validation/_schema_extensions.py tslc/src/tslc/catalog/validation/_schema_primitives.py tslc/src/tslc/catalog/validation/_schema_implementation.py tslc/src/tslc/catalog/validation/_schema_tests.py
+```
+
+Result: `schema_validation.py` is 148 lines; section modules are 116, 77,
+150, 301, 130, and 176 lines respectively.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src
+python -m pytest tslc/tests/test_catalog_validation.py tslc/tests/test_catalog_tests.py tslc/tests/test_diagnostic_provenance.py -q
+python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall passed; focused schema/catalog/provenance tests report
+`44 passed`; the broad non-build gate reports `290 passed, 83 deselected`;
+`git diff --check` passed.
+
+Next action for the active five-slice cleanup: split
+`catalog/builder.py` by source section/domain object.

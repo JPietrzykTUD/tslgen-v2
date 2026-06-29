@@ -1,0 +1,176 @@
+"""Schema validation for primitive `tests:` blocks."""
+
+from __future__ import annotations
+
+from tslc.catalog.validation._schema_common import (
+    diagnose_duplicate_fields,
+    invalid_enum,
+    is_non_empty_scalar_list,
+    validate_known_fields,
+)
+from tslc.catalog.validation.source_spans import child, children, field_text, source_span
+from tslc.diagnostics import Diagnostic, diagnostic_at
+from tslc.syntax.ast import (
+    ParsedPrimitiveDeclaration,
+    ParsedTslField,
+    ParsedTslListValue,
+    ParsedTslMapValue,
+    ParsedTslScalarValue,
+)
+
+_KNOWN_TEST_FIELDS = frozenset(
+    {
+        "id",
+        "tags",
+        "type",
+        "role",
+        "lane_count",
+        "extension",
+        "expected_rule",
+        "to_type",
+        "to_extension",
+        "index",
+        "offset",
+        "src_offset",
+        "dst_offset",
+        "scale",
+        "alignment",
+        "attrs",
+        "case",
+    }
+)
+_REQUIRED_TEST_FIELDS = ("tags", "type", "case")
+_KNOWN_TEST_ROLES = frozenset({"value", "compile"})
+
+
+def validate_tests(
+    declaration: ParsedPrimitiveDeclaration,
+    diagnostics: list[Diagnostic],
+) -> None:
+    """Validate the internal structure of a `tests:` block."""
+
+    for field in declaration.fields_by_name("tests"):
+        value = field.field.value
+        if not isinstance(value, ParsedTslListValue):
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-TESTS-NOT-LIST",
+                    message=f"primitive {declaration.name!r}: `tests` must be a list of cases",
+                    source=source_span(field.field.source),
+                )
+            )
+            continue
+        for item in value.items:
+            if not isinstance(item, ParsedTslMapValue):
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-TEST-NOT-MAP",
+                        message=(
+                            f"primitive {declaration.name!r}: each test case must be a "
+                            "`{{...}}` map"
+                        ),
+                        source=source_span(item.source),
+                    )
+                )
+                continue
+            _validate_test_case(declaration.name, item, diagnostics)
+
+
+def _validate_test_case(
+    primitive_name: str,
+    item: ParsedTslMapValue,
+    diagnostics: list[Diagnostic],
+) -> None:
+    diagnose_duplicate_fields(item.entries, diagnostics, label="test field")
+    entries = {entry.key.text: entry for entry in item.entries}
+    case_id = field_text(entries.get("id"))
+    owner = (
+        f"primitive {primitive_name!r} test {case_id!r}"
+        if case_id is not None
+        else f"primitive {primitive_name!r} test"
+    )
+    for key, entry in entries.items():
+        if key not in _KNOWN_TEST_FIELDS:
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-UNKNOWN-TEST-FIELD",
+                    message=f"{owner}: unknown field {key!r}",
+                    source=source_span(entry.source),
+                )
+            )
+    for required in _REQUIRED_TEST_FIELDS:
+        if required not in entries:
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-TEST-MISSING-FIELD",
+                    message=f"{owner}: missing required field {required!r}",
+                    source=source_span(item.source),
+                )
+            )
+    tags = entries.get("tags")
+    if tags is not None and not is_non_empty_scalar_list(tags):
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-TEST-BAD-TAGS",
+                message=f"{owner}: `tags` must be a non-empty list",
+                source=source_span(tags.source),
+            )
+        )
+    lanes = _test_lane_count(entries.get("lane_count"))
+    if "lane_count" in entries and lanes is None:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-TEST-BAD-LANE-COUNT",
+                message=f"{owner}: `lane_count` must be a positive integer",
+                source=source_span(entries["lane_count"].source),
+            )
+        )
+    role = field_text(entries.get("role"))
+    if role is not None and role not in _KNOWN_TEST_ROLES:
+        invalid_enum(
+            diagnostics,
+            entries.get("role"),
+            f"test role {role!r}",
+            sorted(_KNOWN_TEST_ROLES),
+        )
+    case = entries.get("case")
+    if case is not None:
+        case_children = children(case)
+        validate_known_fields(
+            case_children,
+            frozenset({"inputs", "expected"}),
+            diagnostics,
+            owner=f"{owner} case",
+        )
+        diagnose_duplicate_fields(
+            case_children,
+            diagnostics,
+            label=f"{owner} case field",
+        )
+        for required in ("inputs", "expected"):
+            if child(case, required) is None:
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-TEST-MISSING-FIELD",
+                        message=f"{owner}: case is missing {required!r}",
+                        source=source_span(case.source),
+                    )
+                )
+
+
+def _test_lane_count(field: ParsedTslField | None) -> int | None:
+    text = field_text(field)
+    if text is None:
+        return None
+    try:
+        lanes = int(text)
+    except ValueError:
+        return None
+    return lanes if lanes > 0 else None
