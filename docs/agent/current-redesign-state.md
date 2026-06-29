@@ -4754,3 +4754,71 @@ profile build smoke reports `1 passed`.
 
 Stop condition: this design cleanup is complete. No next run prompt is required
 for this user-directed slice.
+
+## Completed C++ Value-Test Runner Template Cleanup
+
+The C++ value-test translation-unit shell now lives in a template asset instead
+of a Python string block.
+
+Implemented:
+
+- Added `backend/assets/cpp_value_tests.cpp.tmpl` for the generated C++
+  value-test runner includes, namespace framing, `main`, failure counting, and
+  failure reporting.
+- Reworked `render_cpp_values_runner(...)` to prepare only already-decided
+  fields: support includes, rendered case bodies, and deterministic case calls.
+- Kept value-test planning, case dispatch, helper selection, and case rendering
+  semantics in Python; the template only formats presentation fields.
+- Added a regression guard that keeps `std::fprintf` and the C++ runner shell
+  out of `render_cpp.py`.
+- Recorded ADR-119 in `docs/redesign/design-decisions.md`.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src
+python -m pytest tslc/tests/test_value_test_planning.py tslc/tests/test_profile_rendering.py::test_sve_profile_registers_scalable_cpp_simd_types -q
+python -m pytest tslc/tests/test_build_verify.py::test_generated_profiles_build -q
+```
+
+Result: the focused value-test/template checks pass with `21 passed`.
+The generated-profile build smoke passes with `1 passed`.
+
+Stop condition: this cleanup is complete. No next run prompt is required for
+this user-directed slice.
+
+## Completed Rust Value-Test Renderer Structure Cleanup
+
+Rust value-test rendering now follows the same public/private boundary shape as
+C++ value-test rendering.
+
+Implemented:
+
+- Added `backend/assets/rust_value_tests.rs.tmpl` for the Rust generated values
+  file shell.
+- Added `backend/assets/rust_value_tests_profile.rs.tmpl` for each cfg-gated
+  profile test module shell.
+- Split the remaining core Rust value-test case renderers into
+  `_render_rust_core.py`.
+- Reduced `render_rust.py` to the public values-file renderer, case dispatch
+  helper, and typed renderer capability declaration.
+- Added regression guards that keep Rust generated-file shell text in template
+  assets and out of Python render code.
+- Recorded ADR-120 in `docs/redesign/design-decisions.md`.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src
+python -m pytest tslc/tests/test_value_test_planning.py -q
+python -m pytest tslc/tests/test_profile_rendering.py tslc/tests/test_build_verify.py::test_generated_profiles_build -q
+python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall passed; value-test planning reports `20 passed`; affected
+profile/build checks report `15 passed`; the fast non-build gate reports
+`289 passed, 82 deselected`; `git diff --check` passed.
+
+Stop condition: this cleanup is complete. No next run prompt is required for
+this user-directed slice.

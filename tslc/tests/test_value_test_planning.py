@@ -1048,7 +1048,19 @@ def test_render_tests_project_stays_an_assembler() -> None:
 
 def test_value_test_modules_keep_owned_boundaries() -> None:
     value_tests = Path("tslc/src/tslc/value_tests")
+    cpp_values_template = Path(
+        "tslc/src/tslc/backend/assets/cpp_value_tests.cpp.tmpl"
+    ).read_text(encoding="utf-8")
+    rust_values_template = Path(
+        "tslc/src/tslc/backend/assets/rust_value_tests.rs.tmpl"
+    ).read_text(encoding="utf-8")
+    rust_profile_template = Path(
+        "tslc/src/tslc/backend/assets/rust_value_tests_profile.rs.tmpl"
+    ).read_text(encoding="utf-8")
     planner = Path("tslc/src/tslc/value_tests/planner.py").read_text(encoding="utf-8")
+    render_cpp_entry = Path("tslc/src/tslc/value_tests/render_cpp.py").read_text(
+        encoding="utf-8"
+    )
     patterns = "\n".join(
         (value_tests / name).read_text(encoding="utf-8")
         for name in (
@@ -1088,6 +1100,7 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
         (value_tests / name).read_text(encoding="utf-8")
         for name in (
             "render_rust.py",
+            "_render_rust_core.py",
             "_render_rust_conversion.py",
             "_render_rust_helpers.py",
             "_render_rust_memory.py",
@@ -1118,6 +1131,7 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
         "_render_cpp_conversion.py",
         "_render_cpp_dispatch.py",
         "render_rust.py",
+        "_render_rust_core.py",
         "_render_rust_conversion.py",
         "_render_rust_helpers.py",
         "_render_rust_memory.py",
@@ -1133,6 +1147,17 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
     assert 'extension_name == "scalar"' not in case_plans
     assert "_rust_literal" not in render_cpp
     assert 'backend_id == "rust"' not in render_cpp
+    assert "fill_asset" in render_cpp_entry
+    assert "cpp_value_tests.cpp.tmpl" in render_cpp_entry
+    assert "std::fprintf" not in render_cpp_entry
+    assert "std::fprintf" in cpp_values_template
+    assert "fill_asset" in render_rust
+    assert "rust_value_tests.rs.tmpl" in render_rust
+    assert "rust_value_tests_profile.rs.tmpl" in render_rust
+    assert "#![cfg(feature = \"value_tests\")]" not in render_rust
+    assert "#![cfg(feature = \"value_tests\")]" in rust_values_template
+    assert "tsl_generated::tsl_core" not in render_rust
+    assert "tsl_generated::tsl_core" in rust_profile_template
     assert "Catalog" not in render_rust
     assert "Primitive" not in render_rust
     assert "value_test_warnings=self.request.value_test_warnings" in pipeline

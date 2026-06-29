@@ -1,0 +1,26 @@
+#include <tsl.hpp>
+#include "tsl_test_core.hpp"
+@{support_includes}#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+
+#include <cstdlib>
+#include <string>
+#include <vector>
+
+namespace {
+
+@{body}
+
+}  // namespace
+
+int main() {
+  int failures = 0;
+@{call_lines}
+  if (failures != 0) {
+    std::fprintf(stderr, "%d lane failure(s)\n", failures);
+    return 1;
+  }
+  return 0;
+}

@@ -5891,3 +5891,76 @@ Consequences:
 - Adding a new backend-specific presentation fact now has a single compiler
   owner. Adding a new source-owned native register spelling still belongs in
   the extension catalog.
+
+## ADR-119: C++ Value-Test Runner Shell Uses A Template Asset
+
+Context:
+
+The C++ value-test renderer already produced individual typed case bodies
+through focused renderers, but `render_cpp_values_runner(...)` still assembled
+the surrounding translation unit directly in Python: includes, anonymous
+namespace framing, `main`, failure counting, and diagnostics. That shell was
+presentation-only generated C++ text, so keeping it as a Python string block
+made value-test output less consistent with the existing generated-project
+template boundary.
+
+Decision:
+
+Move the C++ value-test runner shell into
+`backend/assets/cpp_value_tests.cpp.tmpl` and render it through the existing
+`fill_asset(...)` template helper. Python still owns all semantic and
+already-decided render values:
+
+- support header include lines;
+- already-rendered value-test case functions;
+- deterministic calls into each generated test function.
+
+The template does not select cases, inspect profiles, dispatch backend
+renderers, decide helper names, infer includes, or evaluate value-test
+semantics.
+
+Consequences:
+
+- The C++ value-test file shape is centralized with the other generated C++/Rust
+  project shell templates.
+- `render_cpp.py` is now a thin field-preparation boundary around typed case
+  rendering and template filling.
+- A regression guard keeps the C++ runner skeleton out of Python render code.
+
+## ADR-120: Rust Value-Test Rendering Mirrors The C++ Boundary
+
+Context:
+
+After ADR-119, C++ value-test rendering had a small public entry point, a
+template asset for the generated translation-unit shell, and focused modules for
+core, memory, conversion, dispatch, and shared lane-model cases. Rust rendering
+still lagged behind that structure: `render_rust.py` owned the generated
+values-file shell, the renderer capability, and many core case renderers in one
+large module.
+
+Decision:
+
+Bring Rust value-test rendering to the same boundary shape:
+
+- move the generated Rust values-file shell into
+  `backend/assets/rust_value_tests.rs.tmpl`;
+- move the per-profile Rust test module shell into
+  `backend/assets/rust_value_tests_profile.rs.tmpl`;
+- move core Rust case renderers into `_render_rust_core.py`;
+- keep `render_rust.py` as the public entry point and renderer-capability
+  declaration, preparing only already-decided profile modules and case bodies.
+
+The templates format presentation fields only. They do not decide which cases
+exist, dispatch case renderers, infer imports, choose helper names, or inspect
+catalog/profile semantics.
+
+Consequences:
+
+- C++ and Rust value-test rendering now have matching public/private ownership
+  boundaries.
+- Rust value-test file/module skeletons live with the other backend asset
+  templates instead of in Python string assembly.
+- The Rust public renderer module is small enough to review as capability and
+  composition code; case-shape text lives in focused renderer modules.
+- Regression guards keep Rust generated-file shell text out of Python render
+  code.
