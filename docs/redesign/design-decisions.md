@@ -5805,3 +5805,46 @@ Consequences:
 - The extension point is still deliberately narrow: signature kind semantics are
   Python/compiler behavior, while source data controls which primitives use
   those kinds.
+
+## ADR-117: Value-Test Case Plans Validate Kind Requirements
+
+Context:
+
+`ValueTestCasePlan` is a frozen dataclass, but it had become a wide optional
+record keyed by string `kind`. Renderers assumed different field combinations
+for cases such as fixed-lane golden values, stores, conversions, scalable masks,
+pointer lifetime tests, and differential fuzz cases. Those invariants lived in
+renderer indexing conventions rather than in the model, so malformed plans could
+survive planning and fail later as `IndexError`, `None` formatting, or backend
+source mistakes.
+
+Decision:
+
+Keep `ValueTestCasePlan` as one shared frozen plan record for now, because C++
+and Rust renderers still consume the same broad presentation facts, but add a
+small typed constructor/validator layer:
+
+- `ValueTestCaseRequirements` records the required facts for each supported
+  case kind: expected-value arity, required vector/mask/scalar inputs, required
+  optional fields, lane-length checks, non-empty render helper expressions, and
+  fuzz requirements;
+- `ValueTestCasePlan.__post_init__` validates common fields and the per-kind
+  requirements at construction time, including conditional differential helper
+  requirements (`to_array` for value results, `to_integral` for mask results),
+  so direct test fixtures and production builders share the same checks;
+- `ValueTestCasePlan.checked(...)` provides an explicit keyword-only
+  construction hook for shared builders, starting with `case_helpers.plan_case`;
+- validator rules deliberately allow real existing shapes such as zero-argument
+  golden constants and mask-only scalable value results.
+
+Consequences:
+
+- High-risk value-test plans now fail near the builder boundary with messages
+  naming the case kind and missing field.
+- Renderer-supported case kinds are tested against the requirements registry so
+  new renderers cannot bypass model validation accidentally.
+- Renderers still own formatting, but no longer carry the first line of defense
+  for missing required case facts.
+- This is a conservative step toward variant types. If a future case family
+  grows more behavior-specific fields, it can move from a requirement row to a
+  dedicated constructor or dataclass without changing renderer-facing semantics.

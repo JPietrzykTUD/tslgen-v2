@@ -665,6 +665,98 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
     assert "let _ = result;" in rust_compile_source
 
 
+def test_value_test_case_plan_validates_kind_requirements() -> None:
+    zero_arg = ValueTestCasePlan(
+        kind="generic_golden",
+        function_name="test_zero",
+        case_name="zero",
+        call_name="set_zero",
+        type_tag="si32",
+        base_spelling="i32",
+        lanes=4,
+        expected=("0", "0", "0", "0"),
+        result_kind="v",
+        param_kinds=(),
+    )
+    assert zero_arg.vector_inputs == ()
+
+    with pytest.raises(ValueError, match="unsupported value-test case kind"):
+        ValueTestCasePlan(
+            kind="surprise",
+            function_name="test_bad",
+            case_name="bad",
+            call_name="bad",
+            type_tag="si32",
+            base_spelling="i32",
+            lanes=4,
+        )
+
+    with pytest.raises(ValueError, match="requires expected to contain 4 lane values"):
+        ValueTestCasePlan(
+            kind="load",
+            function_name="test_load_bad",
+            case_name="load_bad",
+            call_name="load",
+            type_tag="si32",
+            base_spelling="i32",
+            lanes=4,
+            vector_inputs=(("1", "2", "3", "4"),),
+            expected=("1", "2"),
+        )
+
+    with pytest.raises(ValueError, match="requires runtime_lanes_expr"):
+        ValueTestCasePlan(
+            kind="scalable_mask_result",
+            function_name="test_scalable_bad",
+            case_name="scalable_bad",
+            call_name="equal",
+            type_tag="si32",
+            base_spelling="i32",
+            lanes=4,
+            vector_inputs=(("1", "2", "3", "4"),),
+            expected=("1", "0", "1", "0"),
+            result_kind="m",
+            param_kinds=("v",),
+            source_extension="sve",
+            load_name="load",
+            mask_check_expr="true",
+        )
+
+    with pytest.raises(ValueError, match="requires to_array_name for value results"):
+        ValueTestCasePlan(
+            kind="differential",
+            function_name="test_diff_bad_value",
+            case_name="diff_bad_value",
+            call_name="add",
+            type_tag="si32",
+            base_spelling="i32",
+            lanes=4,
+            vector_inputs=(("1", "2", "3", "4"),),
+            result_kind="v",
+            param_kinds=("v",),
+            hardware_extension="avx2",
+            from_array_name="from_array",
+        )
+
+    with pytest.raises(ValueError, match="requires to_integral_name for mask results"):
+        ValueTestCasePlan(
+            kind="differential_fuzz",
+            function_name="test_diff_bad_mask",
+            case_name="diff_bad_mask",
+            call_name="equal",
+            type_tag="si32",
+            base_spelling="i32",
+            lanes=4,
+            result_kind="m",
+            param_kinds=("v",),
+            hardware_extension="avx2",
+            from_array_name="from_array",
+            to_array_name="to_array",
+            fuzz_seed=1,
+            fuzz_iterations=8,
+        )
+
+
 def test_scalable_tiling_is_gated_on_corpus_cross_lane_fact() -> None:
     # Every scalable tiling kind replicates the authored fixed-length pattern across the runtime
     # lane count with `i % authored_lanes`; that identity holds only for lane-local ops. The gate
@@ -1053,6 +1145,12 @@ def test_cpp_value_test_support_matches_renderer_dispatch() -> None:
 
 def test_rust_value_test_support_matches_renderer_dispatch() -> None:
     assert RUST_VALUE_TEST_SUPPORT.case_kinds == frozenset(RUST_CASE_RENDERERS)
+
+
+def test_value_test_case_requirements_cover_renderer_dispatch() -> None:
+    requirement_kinds = frozenset(ValueTestCasePlan.CASE_REQUIREMENTS)
+    assert CPP_VALUE_TEST_SUPPORT.case_kinds <= requirement_kinds
+    assert RUST_VALUE_TEST_SUPPORT.case_kinds <= requirement_kinds
 
 
 def test_parity_inventory_groups_backend_case_statuses() -> None:

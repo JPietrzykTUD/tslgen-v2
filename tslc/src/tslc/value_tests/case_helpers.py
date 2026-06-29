@@ -34,7 +34,7 @@ def plan_case(
     target_lanes: int | None = None,
     lanes: int | None = None,
 ) -> ValueTestCasePlan:
-    return ValueTestCasePlan(
+    return ValueTestCasePlan.checked(
         kind=kind,
         function_name=function_name(name, index, case),
         case_name=case.name,

@@ -4630,6 +4630,47 @@ Result: all listed validation passed. The fast non-build gate reports
 Stop condition: this design cleanup is complete. No next run prompt is required
 for this user-directed slice.
 
+## Completed Value-Test Case Plan Constructor Validation Cleanup
+
+The `tslc` value-test case plan model now validates case-kind-specific
+requirements at construction time instead of relying on renderer conventions.
+
+Implemented:
+
+- Added typed immutable `ValueTestCaseRequirements` records for supported
+  value-test case kinds.
+- Added `ValueTestCasePlan.__post_init__` validation for common fields,
+  expected-value arity, required vector/mask/scalar inputs, required optional
+  facts, lane-length checks, scalable mask expressions, and differential fuzz
+  requirements.
+- Added conditional differential helper validation: value-result differential
+  cases require `to_array_name`, mask-result differential cases require
+  `to_integral_name`.
+- Added `ValueTestCasePlan.checked(...)` and routed the shared
+  `case_helpers.plan_case` builder through it.
+- Preserved real source-data shapes including zero-argument golden constants and
+  mask-only scalable value-result cases.
+- Added regression tests for unsupported case kinds, missing expected lanes, and
+  missing scalable runtime-lane facts, plus renderer-dispatch coverage for the
+  requirements registry.
+- Recorded ADR-117 in `docs/redesign/design-decisions.md`.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src
+python -m pytest tslc/tests/test_value_test_planning.py tslc/tests/test_profile_rendering.py tslc/tests/test_masks_and_calls.py -q
+python -m pytest tslc/tests/test_build_verify.py::test_generated_profiles_build tslc/tests/test_build_verify.py::test_allocate_family_builds -q
+python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+```
+
+Result: all listed validation passed. The fast non-build gate reports
+`285 passed, 82 deselected`; the focused generated-profile/allocation build
+smoke reports `2 passed`.
+
+Stop condition: this design cleanup is complete. No next run prompt is required
+for this user-directed slice.
+
 ## Completed Signature Kind Capability Cleanup
 
 The `tslc` primitive signature kind mechanics now have a typed central
