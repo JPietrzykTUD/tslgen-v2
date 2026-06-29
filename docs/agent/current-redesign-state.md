@@ -5059,3 +5059,49 @@ deselected`; `git diff --check` passed.
 Next action for the active five-slice cleanup: split `lower/lowerer.py`
 carefully, starting with target-vector resolution if the current code confirms
 that seam.
+
+## Completed Lowerer Target-Vector Split
+
+Target-vector resolution for representation-change primitives now has its own
+lowering owner instead of living inline in `lowerer.py`.
+
+Implemented:
+
+- Added `tslc.lower.target_vectors` for `TargetVector` and
+  `resolve_target_vector(...)`.
+- Split base-dimension, extension-dimension, and sized-vector target resolution
+  into focused helpers inside the target-vector module.
+- Added `tslc.lower._diagnostics` for shared selected-source lookup and
+  lowering diagnostic construction.
+- Updated `Lowerer.lower(...)` to call the target-vector resolver and convert
+  target-resolution diagnostics into `LoweringResult` without introducing a
+  circular import.
+- Added a regression guard that `Lowerer` stays in `tslc.lower.lowerer` while
+  target-vector resolution lives in `tslc.lower.target_vectors`.
+- Recorded ADR-126 in `docs/redesign/design-decisions.md`.
+
+Design check:
+
+```text
+wc -l tslc/src/tslc/lower/lowerer.py tslc/src/tslc/lower/target_vectors.py tslc/src/tslc/lower/_diagnostics.py
+```
+
+Result: `lowerer.py` is 745 lines; target-vector and diagnostic helper modules
+are 249 and 56 lines respectively.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src
+python -m pytest tslc/tests/test_select_and_lower.py tslc/tests/test_specialization.py tslc/tests/test_generation_conditionals.py tslc/tests/test_safety_contract.py tslc/tests/test_profile_rendering.py -q
+python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall passed; focused selection/lowering/profile tests report
+`82 passed`; the broad non-build gate reports `292 passed, 84 deselected`;
+`git diff --check` passed.
+
+Stop condition for the active five-slice cleanup after broad validation and
+commit: all requested slices have been split, reviewed for design improvement,
+validated, and committed.

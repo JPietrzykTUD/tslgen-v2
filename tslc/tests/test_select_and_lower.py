@@ -7,7 +7,9 @@ import pytest
 from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.model import Catalog, Extension, Implementation, Primitive
 from tslc.catalog.target_families import ProfileFamilyCapability, TargetFamilyCatalog
+from tslc.lower import lowerer as lowerer_module
 from tslc.lower.lowerer import Lowerer
+from tslc.lower.target_vectors import TargetVector, resolve_target_vector
 from tslc.select.selector import SelectedImplementation, Selector
 
 _TYPES = ("si32", "ui32", "f32", "f64")
@@ -34,6 +36,13 @@ def _by_key(catalog, profile, primitive):
         for s in _slots(catalog, profile, primitive)
         if s.primitive.attributes.get("mask") is None
     }
+
+
+def test_lowerer_keeps_target_vector_resolution_boundary() -> None:
+    assert lowerer_module.Lowerer.__module__ == "tslc.lower.lowerer"
+    assert lowerer_module.TargetVector is TargetVector
+    assert TargetVector.__module__ == "tslc.lower.target_vectors"
+    assert resolve_target_vector.__module__ == "tslc.lower.target_vectors"
 
 
 def test_unknown_primitive_is_error(catalog: Catalog, machine_profiles) -> None:

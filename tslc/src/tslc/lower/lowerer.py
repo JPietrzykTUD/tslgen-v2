@@ -22,7 +22,6 @@ from types import MappingProxyType
 from tslc.backend.translation import BackendDialect
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
-    RESULT_DIM_BASE,
     Catalog,
     ImmediateParam,
     ImplementationSafety,
@@ -40,8 +39,16 @@ from tslc.lower.context import (
     LoweringScope,
     LoweringSession,
 )
+from tslc.lower._diagnostics import (
+    implementation_body_source as _implementation_body_source,
+    implementation_source as _implementation_source,
+    lowering_error_diagnostic,
+    lowering_skip_diagnostic,
+    primitive_signature_source as _primitive_signature_source,
+)
 from tslc.lower.raw_text import render_raw_text
 from tslc.lower.regions import DEFAULT_REGION_LOWERERS, RegionLowerer, StatementFinalizer
+from tslc.lower.target_vectors import TargetVector, resolve_target_vector
 from tslc.render.model import (
     LoweredBody,
     RenderContext,
@@ -55,26 +62,6 @@ from tslc.render.model import (
 from tslc.select.selector import SelectedImplementation
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
 from tslc.support_policy_views import immediate_split_names, policy_split_names
-
-
-@dataclass(frozen=True, slots=True)
-class TargetVector:
-    """The target of a representation-change primitive (`return_type: base|extension: …`) — the
-    source vector with one dimension replaced. Bundling every spelling of the one concept keeps
-    the pipeline branching on `spec.target is None` instead of juggling correlated nullable
-    fields, and disambiguates the three "spelling" levels by field name."""
-
-    vector_spelling: str  # the full `simd<…>` type — the backend's second type parameter
-    register_spelling: str  # its register type — the `apply` result (C++ `…::register_type`)
-    extension_isa: str  # the target's extension ISA — for `simd<base, ext>` core registration
-    base_tag: str  # the target's source-data base tag — for semantic dependency matching
-    base_spelling: str  # the target's base type spelling — for core registration
-    uses_sized_vector: bool = False
-    lane_parameter: str | None = None
-    # True when the sized lane count was windowed (scaled by the byte ratio) for a width-changing
-    # convert — so a concrete instantiation (the smoke) computes the scaled count from type widths
-    # rather than reusing the source lane count.
-    windowed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -307,11 +294,11 @@ class Lowerer:
         # A representation-change primitive produces a TARGET vector; resolve it (and bind
         # its declared target alias into the scope), or propagate the skip/error it returns.
         scope = LoweringScope()
-        target = _resolve_target_vector(
+        target = resolve_target_vector(
             selected, catalog, backend, base_type_spelling, scope, self._support
         )
-        if isinstance(target, LoweringResult):
-            return target
+        if isinstance(target, Diagnostic):
+            return LoweringResult(specialization=None, diagnostics=(target,))
 
         # Resolve the `sImm` compile-time immediate, if any (operand + forwarding facts).
         resolved_immediate = _resolve_immediate(selected, shape, backend, self._support)
@@ -509,186 +496,6 @@ def _lane_list_param_map(
             lane_expression=lane_expression,
         )
     return result
-
-
-def _resolve_target_vector(
-    selected: SelectedImplementation,
-    catalog: Catalog,
-    backend: BackendDialect,
-    base_type_spelling: str,
-    scope: LoweringScope,
-    support: SupportPolicy = DEFAULT_SUPPORT_POLICY,
-) -> "TargetVector | None | LoweringResult":
-    """Resolve the target of a representation-change primitive and bind its declared target
-    alias into ``scope``.
-
-    A representation-change primitive (`return_type: base|extension: …`) produces a TARGET
-    vector — the source vector with one dimension replaced. Every spelling of it is bundled as
-    one :class:`TargetVector`. Current source bodies also use `ToType` as a target-base synonym,
-    so it is bound to the same value without treating `ToBase` itself as a keyword.
-
-    Returns ``None`` for an ordinary primitive, a :class:`TargetVector` for a representation-change
-    one, or a :class:`LoweringResult` (skip/error) to propagate when the target can't be expressed
-    yet.
-    """
-
-    if selected.primitive.result_target is None or selected.to_target is None:
-        return None
-    dim, alias = selected.primitive.result_target
-    # A sized-vector source carries its lane count as a declared size parameter. A BASE-dim target
-    # can keep that same sized vector while changing the element type; an EXTENSION-dim target
-    # would require a second extension capability, so it stays deferred for this slice.
-    if support.uses_sized_vector(selected.extension):
-        if not support.supports_sized_vector_target_dimension(dim):
-            return _skip(
-                "TSL-LOWER-UNSUPPORTED-TARGET-VECTOR",
-                f"extension-dim representation-change on a sized vector is not "
-                f"supported: {selected.primitive.name!r}",
-                source=_implementation_source(selected),
-            )
-        to_base_spelling = backend.types.scalar_spelling(selected.to_target)
-        if to_base_spelling is None:
-            return _error(
-                "TSL-LOWER-NO-BASE-TYPE",
-                f"no {backend.backend_id} base-type spelling for the target "
-                f"{selected.to_target!r}",
-                source=_implementation_source(selected),
-            )
-        scope.bind_target_type_symbol(alias, selected.to_target)
-        scope.bind_target_type_symbol("ToType", selected.to_target)
-        # A WINDOWING convert (`direction` attribute) keeps the total width constant, so its target
-        # lane count scales by the byte ratio — matching the body's `window_base(ToBase)` output so
-        # the declared target type equals the body's result. Lane-preserving repr-changes
-        # (cast/reinterpret, load_convert_up) keep plain `LANES`. When the slot is MONOMORPHIZED at
-        # a concrete lane count (`unroll_variants`), both spell a concrete integer instead — a
-        # windowing target then gets the scaled count (e.g. i8->i16 at 16 lanes -> 8), which stable
-        # Rust can spell (no const-generic expression). Otherwise the symbolic `LANES` form is kept
-        # (and a width-changing window then skips on Rust via the body query).
-        windowing = "direction" in selected.primitive.attributes
-        if selected.concrete_lanes is not None:
-            lane_parameter = str(
-                support.windowed_lane_count(
-                    selected.type_tag, selected.to_target, selected.concrete_lanes
-                )
-                if windowing
-                else selected.concrete_lanes
-            )
-        else:
-            lane_parameter = (
-                support.windowed_lane_parameter(
-                    selected.extension, selected.type_tag, selected.to_target
-                )
-                if windowing
-                else support.size_parameter_name(selected.extension)
-            )
-        register_spelling = backend.types.target_register_spelling(
-            selected.to_target,
-            selected.extension.isa_name,
-            uses_sized_vector=True,
-            lane_parameter=lane_parameter,
-        )
-        if register_spelling is None:
-            return _error(
-                "TSL-LOWER-NO-REGISTER-TYPE",
-                f"no {backend.backend_id} register-type spelling for target "
-                f"{selected.extension.isa_name!r} / {selected.to_target!r}",
-                source=_implementation_source(selected),
-            )
-        return TargetVector(
-            vector_spelling=backend.types.sized_vector_spelling(
-                to_base_spelling, lane_parameter
-            ),
-            register_spelling=register_spelling,
-            extension_isa=selected.extension.isa_name,
-            base_tag=selected.to_target,
-            base_spelling=to_base_spelling,
-            uses_sized_vector=True,
-            lane_parameter=lane_parameter,
-            windowed=windowing,
-        )
-    if dim == RESULT_DIM_BASE:
-        # base dim: same extension, replace the element type with the target tag.
-        to_base_spelling = backend.types.scalar_spelling(selected.to_target)
-        if to_base_spelling is None:
-            return _error(
-                "TSL-LOWER-NO-BASE-TYPE",
-                f"no {backend.backend_id} base-type spelling for the target "
-                f"{selected.to_target!r}",
-                source=_implementation_source(selected),
-            )
-        scope.bind_target_type_symbol(alias, selected.to_target)
-        scope.bind_target_type_symbol("ToType", selected.to_target)
-        uses_sized_vector = support.uses_sized_vector(selected.extension)
-        lane_parameter = (
-            support.size_parameter_name(selected.extension) if uses_sized_vector else None
-        )
-        register_spelling = backend.types.target_register_spelling(
-            selected.to_target,
-            selected.extension.isa_name,
-            uses_sized_vector=uses_sized_vector,
-            lane_parameter=lane_parameter,
-        )
-        if register_spelling is None:
-            return _error(
-                "TSL-LOWER-NO-REGISTER-TYPE",
-                f"no {backend.backend_id} register-type spelling for target "
-                f"{selected.extension.isa_name!r} / {selected.to_target!r}",
-                source=_implementation_source(selected),
-            )
-        return TargetVector(
-            vector_spelling=(
-                backend.types.sized_vector_spelling(to_base_spelling, lane_parameter)
-                if uses_sized_vector and lane_parameter is not None
-                else backend.types.vector_type_spelling(
-                    to_base_spelling, selected.extension.isa_name
-                )
-            ),
-            register_spelling=register_spelling,
-            extension_isa=selected.extension.isa_name,
-            base_tag=selected.to_target,
-            base_spelling=to_base_spelling,
-            uses_sized_vector=uses_sized_vector,
-            lane_parameter=lane_parameter,
-        )
-    # RESULT_DIM_EXTENSION: another extension, same base type.
-    target_ext = catalog.extensions.get(selected.to_target)
-    target_isa = target_ext.isa_name if target_ext else selected.to_target
-    target_uses_sized_vector = (
-        target_ext is not None and support.uses_sized_vector(target_ext)
-    )
-    lane_count = support.lane_count(selected.extension, selected.type_tag)
-    target_lane_parameter = (
-        str(lane_count)
-        if lane_count is not None
-        else support.size_parameter_name(selected.extension)
-    )
-    scope.bind_extension_symbol(alias, target_isa)
-    register_spelling = backend.types.target_register_spelling(
-        selected.type_tag,
-        target_isa,
-        uses_sized_vector=target_uses_sized_vector,
-        lane_parameter=target_lane_parameter,
-    )
-    if register_spelling is None:
-        return _error(
-            "TSL-LOWER-NO-REGISTER-TYPE",
-            f"no {backend.backend_id} register-type spelling for target "
-            f"{target_isa!r} / {selected.type_tag!r}",
-            source=_implementation_source(selected),
-        )
-    return TargetVector(
-        vector_spelling=(
-            backend.types.sized_vector_spelling(base_type_spelling, target_lane_parameter)
-            if target_uses_sized_vector
-            else backend.types.vector_type_spelling(base_type_spelling, target_isa)
-        ),
-        register_spelling=register_spelling,
-        extension_isa=target_isa,
-        base_tag=selected.type_tag,
-        base_spelling=base_type_spelling,
-        uses_sized_vector=target_uses_sized_vector,
-        lane_parameter=target_lane_parameter if target_uses_sized_vector else None,
-    )
 
 
 def _resolve_immediate(
@@ -922,43 +729,10 @@ def _finish_consumed_statement_terminator(
     return render_sequence((rendered, literal_text(";")))
 
 
-def _primitive_signature_source(selected: SelectedImplementation) -> SourceSpan | None:
-    return (
-        selected.primitive.signature_source
-        or selected.primitive.header_source
-        or selected.primitive.source
-    )
-
-
-def _implementation_source(selected: SelectedImplementation) -> SourceSpan | None:
-    return (
-        selected.implementation.selector_source
-        or selected.implementation.body_source
-        or selected.implementation.source
-        or selected.primitive.source
-    )
-
-
-def _implementation_body_source(selected: SelectedImplementation) -> SourceSpan | None:
-    return (
-        selected.implementation.body_source
-        or selected.implementation.source
-        or selected.implementation.selector_source
-        or selected.primitive.source
-    )
-
-
 def _error(code: str, message: str, *, source: SourceSpan | None = None) -> LoweringResult:
     return LoweringResult(
         specialization=None,
-        diagnostics=(
-            diagnostic_at(
-                severity="error",
-                code=code,
-                message=message,
-                source=source,
-            ),
-        ),
+        diagnostics=(lowering_error_diagnostic(code, message, source=source),),
     )
 
 
@@ -967,12 +741,5 @@ def _skip(code: str, message: str, *, source: SourceSpan | None = None) -> Lower
 
     return LoweringResult(
         specialization=None,
-        diagnostics=(
-            diagnostic_at(
-                severity="info",
-                code=code,
-                message=message,
-                source=source,
-            ),
-        ),
+        diagnostics=(lowering_skip_diagnostic(code, message, source=source),),
     )

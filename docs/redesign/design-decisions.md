@@ -6173,3 +6173,41 @@ Consequences:
   safety-propagation, and feature-propagation changes localized.
 - The split preserves generated behavior and current maintenance imports while
   making the ownership relationship explicit through facade re-exports.
+
+## ADR-126: Target-Vector Resolution Is Split From The Lowerer
+
+Context:
+
+`tslc.lower.lowerer` still mixed the main lowering orchestration with the
+special target-vector rules for representation-change primitives. Those rules
+own a distinct concept: resolving `return_type: base|extension: ...` into the
+target vector spelling, register spelling, target ISA/base identity, sized-vector
+lane parameter, and target alias bindings consumed later by body/query lowering.
+Keeping that logic inline made `Lowerer.lower(...)` harder to review and made
+future target-shape changes look like edits to the entire lowerer.
+
+Decision:
+
+Move target-vector ownership into `tslc.lower.target_vectors`:
+
+- `TargetVector` lives with the resolver that constructs it;
+- `resolve_target_vector(...)` owns base-dimension, extension-dimension, and
+  sized-vector target resolution;
+- the resolver returns either `None`, a `TargetVector`, or a `Diagnostic`,
+  avoiding an import back into `lowerer.py`;
+- shared source-location and lowering diagnostic construction live in
+  `tslc.lower._diagnostics`.
+
+`lowerer.py` remains the public lowering facade and re-exports `TargetVector`
+through its import for existing users, but target-vector behavior no longer
+lives in the lowering orchestrator.
+
+Consequences:
+
+- `Lowerer.lower(...)` is easier to read as orchestration over selected slots,
+  signature policy, body rendering, and specialization assembly.
+- New representation-change target shapes have a focused additive owner instead
+  of broad lowerer edits.
+- Lowering diagnostic construction is shared without introducing a circular
+  dependency between target-vector resolution and `LoweringResult`.
+- Existing target-vector diagnostics and generated behavior are preserved.
