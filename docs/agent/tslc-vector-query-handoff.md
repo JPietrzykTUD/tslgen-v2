@@ -5050,10 +5050,10 @@ Next prompt:
 docs/agent/runs/tslc-cpp-documentation-facade-review-prompt.md
 ```
 
-### Latest Active TSLc Handoff: React/Vite Specialization Explorer
+### Latest Active TSLc Handoff: React/Vite Specialization Inventory Explorer
 
 The generated documentation site now includes a React/Vite specialization
-explorer for the complete selected specialization matrix.
+explorer for the complete emitted specialization inventory.
 
 Implemented:
 
@@ -5061,7 +5061,7 @@ Implemented:
    - Emits `docs/specializations/specializations.json` only.
    - Builds the JSON from typed `ProfileRender` and `LoweredSpecialization`
      records, not from generated header scraping.
-   - Includes primitive documentation, profile/backend/extension/type facts,
+   - Includes primitive documentation, profile/backend/extension/family/type facts,
      concrete register spelling where available, requirements, and safety.
 2. Updated `tslc.render.project` so generated projects always include the
    specialization explorer artifacts beside backend projects.
@@ -5082,13 +5082,18 @@ Design boundary:
 - React assets format and filter already-decided records; they do not classify
   primitives, extensions, or support policy.
 - The explorer follows the `docReact/` interaction shape: collapsed filter rail
-  by default, primitive accordion rows, and the 3D support matrix rendered
-  inside the selected primitive row instead of below the full primitive list.
+  by default and primitive accordion rows.
+- The selected primitive row shows primitive documentation first, then compact
+  summary pills, then an emitted-record inventory. The inventory can group by
+  profile, display width, backend, extension, or safety, and each aggregate row
+  expands to concrete backend/type/register/feature/safety records.
+- The filter rail now exposes requirements, typed extension families, data
+  types, backends, and safety. Raw target/profile-extension toggles are no
+  longer shown, and `ptr` is hidden from the data-type filter because it is not
+  a specialization axis.
 - Primitive rows are true toggles: clicking an expanded primitive collapses it.
-  The matrix row axis groups emitted specializations by profile plus display
-  width (`scalar`, `generic lanes`, `128-bit`, `256-bit`, `512-bit`,
-  `scalable`) while concrete emitted extensions remain visible in drilldown
-  details.
+- The old yes/no/partial-style support matrix was removed. The React app shows
+  emitted records only and does not infer missing support.
 - With the current Vite/esbuild JSX setup, `App.jsx` imports the React default
   binding explicitly. The built bundle must not contain an unbound
   `React.createElement` reference; that previously made
@@ -5118,9 +5123,13 @@ PYTHONPATH=tslc/src python -m tslc.maintenance.documentation --output-root ./tsl
 python - <<'PY'
 from pathlib import Path
 bundle = ''.join(path.read_text(encoding='utf-8') for path in Path('tslctmp/verify/docs/site/specializations/assets').glob('*.js'))
-assert 'SIMD Support Matrix Explorer' in bundle
-assert '3D support matrix' in bundle
-assert 'matrixTargetKey' in bundle
+assert 'SIMD Specialization Inventory' in bundle
+assert 'Specializations' in bundle
+assert 'Requirements' in bundle
+assert 'Families' in bundle
+assert 'displayTargetKey' in bundle
+assert 'SupportMatrix' not in bundle
+assert 'supportMatrix' not in bundle
 assert 'getSupportValue' not in bundle
 assert 'React.createElement' not in bundle
 print('bundle-ok')
@@ -5140,12 +5149,17 @@ and completed Doxygen, rustdoc, Sphinx, specialization explorer copy, and Rust
 doc copy successfully. A post-fix documentation rebuild for `./tslctmp/verify`
 copied the corrected React bundle, and a bundle scan found no unbound
 `React.createElement` token. A later UI correction rebuilt the same site with
-the prototype-style accordion/matrix layout and confirmed the bundle contains
-the matrix heading without dummy support helpers. A follow-up correction made
-primitive rows actually collapsible and changed matrix rows from raw
-`profile / extension` to grouped `profile / display width` targets. The full
-default `specializations.json` is `4396475`
-bytes (`4.2M`) while representing all `230554` specializations.
+the prototype-style accordion layout, then replaced the support matrix with a
+faceted emitted-specialization inventory. Primitive rows are collapsible, and
+the selected row now shows documentation, summary pills, and expandable
+inventory groups without yes/no support inference. The full default
+`specializations.json` is `4396475`
+bytes (`4.2M`) while representing all `230554` specializations. The
+requirements/families filter update passed `npm run build`, compileall, focused
+documentation/specialization tests (`7 passed`), `git diff --check`, add/AVX2
+generation, live Doxygen/Rustdoc/Sphinx documentation, and bundle/data scans
+for schema v3, the family column, new filter labels, and absence of old target
+or matrix helpers.
 
 Next prompt:
 

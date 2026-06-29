@@ -6358,8 +6358,8 @@ Context:
 The C++ documentation facade proved the right Doxygen input boundary, but
 encoding every selected concrete specialization as a Doxygen-visible C++ stub
 made full-corpus documentation too heavy. Users still need to explore the
-complete specialization matrix by primitive, profile, extension, element type,
-requirements, and safety.
+complete emitted specialization inventory by primitive, profile, extension,
+element type, requirements, and safety.
 
 Decision:
 
@@ -6370,28 +6370,34 @@ Emit a documentation-only specialization explorer data file under
   `ProfileRender` and `LoweredSpecialization` records;
 - a React/Vite documentation app under
   `supplementary/docs/site/specializations/react` that decodes that JSON and
-  displays the specialization matrix in the browser;
+  displays a faceted specialization inventory in the browser;
 - a Sphinx page that links to the explorer and copies the built React app into
   `<output>/docs/site/specializations`.
 
 The JSON contains already-lowered display facts such as primitive/source
-primitive, profile, backend, extension, element type, concrete register type,
-requirements, safety, and documentation text. It uses a compact schema with
-string tables, interned feature/safety sets, and grouped rows with counts, so
-the full default generated documentation keeps the explorer data around a few
-megabytes instead of hundreds. It does not scrape generated headers, reparse
-TSIL, or classify primitive names.
+primitive, profile, backend, extension, extension family, element type,
+concrete register type, requirements, safety, and documentation text. It uses a
+compact schema with string tables, interned feature/safety sets, and grouped
+rows with counts, so the full default generated documentation keeps the
+explorer data around a few megabytes instead of hundreds. It does not scrape
+generated headers, reparse TSIL, or classify primitive names.
 
 C++ Doxygen now documents the API declaration surface only. Rustdoc continues
 to document the generated Rust API. `tslc.maintenance.documentation` builds the
 React app with npm during documentation generation, then copies the static
 bundle plus `specializations.json` into the Sphinx site. The specialization
 explorer is the complete per-specialization browsing surface for both backends.
+The UI deliberately avoids a yes/no/partial support matrix: it shows emitted
+records only, grouped by profile, width, backend, extension, or safety, with
+expandable concrete record details. The filter rail exposes requirements,
+typed extension families, specialized data types, backends, and safety. Pointer
+tags are intentionally omitted from the data-type filter because `ptr` is not a
+specialization axis.
 
 Consequences:
 
-- The full specialization matrix is available without asking Doxygen/Breathe to
-  parse or render thousands of C++ specialization stubs.
+- The full emitted specialization inventory is available without asking
+  Doxygen/Breathe to parse or render thousands of C++ specialization stubs.
 - The explorer is React-authored but static and GitHub Pages-friendly after the
   Vite build: the generated site can be served directly from
   `<output>/docs/site`.

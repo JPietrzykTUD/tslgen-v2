@@ -50,6 +50,7 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
                         spec,
                         backend_id=backend_id,
                         profile_name=profile.profile.name,
+                        extension_family=_extension_family(profile, spec),
                         strings=strings,
                         features=features,
                         safeties=safeties,
@@ -57,11 +58,12 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
                     primitive_rows = grouped.setdefault(primitive_id, {})
                     primitive_rows[row] = primitive_rows.get(row, 0) + 1
     payload = {
-        "schema_version": 2,
+        "schema_version": 3,
         "columns": [
             "backend",
             "profile",
             "extension",
+            "family",
             "type_tag",
             "register_type",
             "features",
@@ -127,6 +129,7 @@ def _specialization_row(
     *,
     backend_id: str,
     profile_name: str,
+    extension_family: str,
     strings: _StringTable,
     features: _IndexedTuples,
     safeties: _IndexedTuples,
@@ -145,11 +148,17 @@ def _specialization_row(
         strings.id(backend_id),
         strings.id(profile_name),
         strings.id(spec.extension_name),
+        strings.id(extension_family),
         strings.id(spec.type_tag),
         strings.id(_register_type(spec, backend_id)),
         feature_id,
         safety_id,
     )
+
+
+def _extension_family(profile: ProfileRender, spec: LoweredSpecialization) -> str:
+    extension = profile.extensions.get(spec.extension_name)
+    return extension.family if extension is not None else ""
 
 
 def _register_type(spec: LoweredSpecialization, backend_id: str) -> str:

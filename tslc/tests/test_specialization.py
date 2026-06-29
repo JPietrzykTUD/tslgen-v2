@@ -121,13 +121,14 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     payload = json.loads(by["docs/specializations/specializations.json"])
     records = _decode_specialization_records(payload)
 
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
     assert sum(record["count"] for record in records) == len(result.coverage)
     assert any(
         record["backend"] == "cpp"
         and record["profile"] == "avx2"
         and record["primitive"] == "add"
         and record["extension"] == "avx2"
+        and record["family"] == "x86"
         and record["type_tag"] == "si32"
         and record["register_type"] == "__m256i"
         and record["required_features"] == ["avx", "avx2"]
@@ -145,13 +146,29 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     assert "▾" in app_source
     assert "▸" in app_source
     assert "function PrimitiveList" in app_source
-    assert "<SupportMatrix" in app_source
-    assert app_source.index("<PrimitiveDocumentation") < app_source.index("<SupportMatrix")
-    assert "3D support matrix" in app_source
+    assert "<SpecializationSummary" in app_source
+    assert "<SpecializationInventory" in app_source
+    assert (
+        app_source.index("<PrimitiveDocumentation")
+        < app_source.index("<SpecializationSummary")
+        < app_source.index("<SpecializationInventory")
+    )
+    assert "SIMD Specialization Inventory" in app_source
     assert "function typeLabel" in app_source
     assert "function targetWidthForRecord" in app_source
-    assert "function uniqueMatrixTargets" in app_source
-    assert "record.matrixTargetKey === target.key" in app_source
+    assert "function groupInventory" in app_source
+    assert "function aggregateInventoryRows" in app_source
+    assert "record.displayTargetKey" in app_source
+    assert "enabledRequirements" in app_source
+    assert "enabledFamilies" in app_source
+    assert 'title="Requirements"' in app_source
+    assert 'title="Families"' in app_source
+    assert 'typeTag !== "ptr"' in app_source
+    assert "enabledTargets" not in app_source
+    assert "setEnabledTargets" not in app_source
+    assert "SupportMatrix" not in app_source
+    assert "supportMatrix" not in app_source
+    assert "3D support matrix" not in app_source
     assert "getSupportValue" not in app_source
 
 
@@ -224,11 +241,12 @@ def _decode_specialization_records(payload: dict) -> list[dict]:
                     "backend": strings[row[0]],
                     "profile": strings[row[1]],
                     "extension": strings[row[2]],
-                    "type_tag": strings[row[3]],
-                    "register_type": strings[row[4]],
-                    "required_features": feature_sets[row[5]],
-                    "safety": safeties[row[6]],
-                    "count": row[7] if len(row) > 7 else 1,
+                    "family": strings[row[3]],
+                    "type_tag": strings[row[4]],
+                    "register_type": strings[row[5]],
+                    "required_features": feature_sets[row[6]],
+                    "safety": safeties[row[7]],
+                    "count": row[8] if len(row) > 8 else 1,
                 }
             )
     return records

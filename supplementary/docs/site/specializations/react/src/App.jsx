@@ -1,7 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 const SAFETY_FILTERS = ["safe", "internal_unsafe", "caller_unsafe"];
-const SUPPORT_EMPTY = "\u2014";
+const NO_REQUIREMENT = "__no_requirement__";
+const GROUP_OPTIONS = [
+  ["profile", "Profile"],
+  ["width", "Width"],
+  ["backend", "Backend"],
+  ["extension", "Extension"],
+  ["safety", "Safety"],
+];
 
 function App() {
   const [payload, setPayload] = useState(null);
@@ -9,7 +16,8 @@ function App() {
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedPrimitive, setSelectedPrimitive] = useState(null);
-  const [enabledTargets, setEnabledTargets] = useState(null);
+  const [enabledRequirements, setEnabledRequirements] = useState(null);
+  const [enabledFamilies, setEnabledFamilies] = useState(null);
   const [enabledTypes, setEnabledTypes] = useState(null);
   const [enabledBackends, setEnabledBackends] = useState(null);
   const [enabledSafety, setEnabledSafety] = useState(new Set(SAFETY_FILTERS));
@@ -24,7 +32,8 @@ function App() {
         const decoded = decodePayload(data);
         setPayload(decoded);
         setSelectedPrimitive(decoded.primitives[0]?.name ?? null);
-        setEnabledTargets(new Set(decoded.targets.map((target) => target.key)));
+        setEnabledRequirements(new Set(decoded.requirements));
+        setEnabledFamilies(new Set(decoded.families));
         setEnabledTypes(new Set(decoded.types));
         setEnabledBackends(new Set(decoded.backends));
       })
@@ -38,12 +47,21 @@ function App() {
     () => sortedValues(enabledBackends ?? []),
     [enabledBackends]
   );
-  const visibleTargets = useMemo(
+  const visibleRequirements = useMemo(
     () =>
       payload
-        ? payload.targets.filter((target) => enabledTargets?.has(target.key))
+        ? payload.requirements.filter((requirement) =>
+            enabledRequirements?.has(requirement)
+          )
         : [],
-    [payload, enabledTargets]
+    [payload, enabledRequirements]
+  );
+  const visibleFamilies = useMemo(
+    () =>
+      payload
+        ? payload.families.filter((family) => enabledFamilies?.has(family))
+        : [],
+    [payload, enabledFamilies]
   );
   const visibleTypes = useMemo(
     () =>
@@ -56,15 +74,17 @@ function App() {
     if (!payload) return [];
     return payload.records.filter(
       (record) =>
-        enabledTargets?.has(record.targetKey) &&
-        enabledTypes?.has(record.type_tag) &&
+        recordRequirementsVisible(record, enabledRequirements) &&
+        enabledFamilies?.has(record.family) &&
+        recordTypeVisible(record, enabledTypes) &&
         enabledBackends?.has(record.backend) &&
         enabledSafety.has(safetyKind(record.safety))
     );
   }, [
     enabledBackends,
+    enabledFamilies,
+    enabledRequirements,
     enabledSafety,
-    enabledTargets,
     enabledTypes,
     payload,
   ]);
@@ -83,7 +103,13 @@ function App() {
   if (error) {
     return <div className="page"><div className="errorBox">{error}</div></div>;
   }
-  if (!payload || !enabledTargets || !enabledTypes || !enabledBackends) {
+  if (
+    !payload ||
+    !enabledRequirements ||
+    !enabledFamilies ||
+    !enabledTypes ||
+    !enabledBackends
+  ) {
     return (
       <main className="page">
         <div className="loading">Loading specialization data...</div>
@@ -94,18 +120,18 @@ function App() {
   return (
     <main className="page">
       <header className="pageHeader">
-        <h1>SIMD Support Matrix Explorer</h1>
+        <h1>SIMD Specialization Inventory</h1>
         <p>
           Search primitives globally, then use the collapsible filter rail to
-          control which targets, data types, backends, and safety classes are
-          visible.
+          control which requirements, families, data types, backends, and
+          safety classes are visible.
         </p>
       </header>
 
       <input
         className="searchInput"
         type="search"
-        placeholder="Search primitive, target, type, backend, register, feature..."
+        placeholder="Search primitive, requirement, family, type, backend, register..."
         value={search}
         onChange={(event) => setSearch(event.target.value)}
       />
@@ -120,25 +146,30 @@ function App() {
         <FilterPanel
           filtersOpen={filtersOpen}
           setFiltersOpen={setFiltersOpen}
-          enabledTargets={enabledTargets}
-          setEnabledTargets={setEnabledTargets}
+          enabledRequirements={enabledRequirements}
+          setEnabledRequirements={setEnabledRequirements}
+          enabledFamilies={enabledFamilies}
+          setEnabledFamilies={setEnabledFamilies}
           enabledTypes={enabledTypes}
           setEnabledTypes={setEnabledTypes}
           enabledBackends={enabledBackends}
           setEnabledBackends={setEnabledBackends}
           enabledSafety={enabledSafety}
           setEnabledSafety={setEnabledSafety}
-          targets={payload.targets}
+          requirements={payload.requirements}
+          families={payload.families}
           types={payload.types}
           backends={payload.backends}
-          visibleTargets={visibleTargets}
+          visibleRequirements={visibleRequirements}
+          visibleFamilies={visibleFamilies}
           visibleTypes={visibleTypes}
           visibleBackends={visibleBackends}
         />
 
         <section className="contentPanel">
           <ActiveFilterSummary
-            visibleTargets={visibleTargets}
+            visibleRequirements={visibleRequirements}
+            visibleFamilies={visibleFamilies}
             visibleTypes={visibleTypes}
             visibleBackends={visibleBackends}
             setFiltersOpen={setFiltersOpen}
@@ -150,8 +181,6 @@ function App() {
             filteredRecords={filteredRecords}
             selectedPrimitive={activePrimitive}
             setSelectedPrimitive={setSelectedPrimitive}
-            types={visibleTypes}
-            backends={visibleBackends}
           />
         </section>
       </div>
@@ -162,23 +191,25 @@ function App() {
 function FilterPanel({
   filtersOpen,
   setFiltersOpen,
-  enabledTargets,
-  setEnabledTargets,
+  enabledRequirements,
+  setEnabledRequirements,
+  enabledFamilies,
+  setEnabledFamilies,
   enabledTypes,
   setEnabledTypes,
   enabledBackends,
   setEnabledBackends,
   enabledSafety,
   setEnabledSafety,
-  targets,
+  requirements,
+  families,
   types,
   backends,
-  visibleTargets,
+  visibleRequirements,
+  visibleFamilies,
   visibleTypes,
   visibleBackends,
 }) {
-  const targetsByProfile = groupTargetsByProfile(targets);
-
   return (
     <aside className={filtersOpen ? "filterPanel open" : "filterPanel closed"}>
       {!filtersOpen ? (
@@ -193,7 +224,8 @@ function FilterPanel({
           </button>
 
           <div className="railBadges">
-            <RailBadge label="T" value={visibleTargets.length} />
+            <RailBadge label="R" value={visibleRequirements.length} />
+            <RailBadge label="F" value={visibleFamilies.length} />
             <RailBadge label="D" value={visibleTypes.length} />
             <RailBadge label="B" value={visibleBackends.length} />
           </div>
@@ -216,38 +248,61 @@ function FilterPanel({
           </div>
 
           <FilterSection
-            title="Targets"
+            title="Requirements"
             actions={
               <>
                 <FilterAction
                   onClick={() =>
-                    setEnabledTargets(new Set(targets.map((target) => target.key)))
+                    setEnabledRequirements(new Set(requirements))
                   }
                 >
                   All
                 </FilterAction>
-                <FilterAction onClick={() => setEnabledTargets(new Set())}>
+                <FilterAction onClick={() => setEnabledRequirements(new Set())}>
                   None
                 </FilterAction>
               </>
             }
           >
-            {targetsByProfile.map(([profile, profileTargets]) => (
-              <div className="filterSubsection" key={profile}>
-                <div className="filterSubsectionTitle">{profile}</div>
-                <div className="toggleGroup">
-                  {profileTargets.map((target) => (
-                    <ToggleChip
-                      key={target.key}
-                      active={enabledTargets.has(target.key)}
-                      onClick={() => toggleSetValue(setEnabledTargets, target.key)}
-                    >
-                      {target.extension}
-                    </ToggleChip>
-                  ))}
-                </div>
-              </div>
-            ))}
+            <div className="toggleGroup">
+              {requirements.map((requirement) => (
+                <ToggleChip
+                  key={requirement}
+                  active={enabledRequirements.has(requirement)}
+                  onClick={() =>
+                    toggleSetValue(setEnabledRequirements, requirement)
+                  }
+                >
+                  {requirementLabel(requirement)}
+                </ToggleChip>
+              ))}
+            </div>
+          </FilterSection>
+
+          <FilterSection
+            title="Families"
+            actions={
+              <>
+                <FilterAction onClick={() => setEnabledFamilies(new Set(families))}>
+                  All
+                </FilterAction>
+                <FilterAction onClick={() => setEnabledFamilies(new Set())}>
+                  None
+                </FilterAction>
+              </>
+            }
+          >
+            <div className="toggleGroup">
+              {families.map((family) => (
+                <ToggleChip
+                  key={family}
+                  active={enabledFamilies.has(family)}
+                  onClick={() => toggleSetValue(setEnabledFamilies, family)}
+                >
+                  {familyLabel(family)}
+                </ToggleChip>
+              ))}
+            </div>
           </FilterSection>
 
           <FilterSection
@@ -378,7 +433,8 @@ function FilterSection({ title, children, actions }) {
 }
 
 function ActiveFilterSummary({
-  visibleTargets,
+  visibleRequirements,
+  visibleFamilies,
   visibleTypes,
   visibleBackends,
   setFiltersOpen,
@@ -386,7 +442,8 @@ function ActiveFilterSummary({
   return (
     <div className="activeFilterSummary">
       <span>
-        Showing <strong>{visibleTargets.length}</strong> targets,{" "}
+        Showing <strong>{visibleRequirements.length}</strong> requirements,{" "}
+        <strong>{visibleFamilies.length}</strong> families,{" "}
         <strong>{visibleTypes.length}</strong> data types,{" "}
         <strong>{visibleBackends.length}</strong> backends
       </span>
@@ -408,8 +465,6 @@ function PrimitiveList({
   filteredRecords,
   selectedPrimitive,
   setSelectedPrimitive,
-  types,
-  backends,
 }) {
   return (
     <section className="operationList">
@@ -444,11 +499,8 @@ function PrimitiveList({
                 <div className="operationDetails">
                   {primitive.brief && <p>{primitive.brief}</p>}
                   <PrimitiveDocumentation primitive={primitive} />
-                  <SupportMatrix
-                    records={primitiveRecords}
-                    types={types}
-                    backends={backends}
-                  />
+                  <SpecializationSummary records={primitiveRecords} />
+                  <SpecializationInventory records={primitiveRecords} />
                 </div>
               )}
             </div>
@@ -474,176 +526,258 @@ function PrimitiveDocumentation({ primitive }) {
   );
 }
 
-function SupportMatrix({
-  records,
-  types,
-  backends,
-}) {
-  const [selectedCell, setSelectedCell] = useState(null);
-  const targets = uniqueMatrixTargets(records);
-  const selectedTarget =
-    targets.find((target) => target.key === selectedCell?.targetKey) ??
-    targets[0];
-  const selectedType = types.includes(selectedCell?.typeTag)
-    ? selectedCell.typeTag
-    : types[0];
-  const effectiveCell =
-    selectedTarget && selectedType
-      ? {
-          targetKey: selectedTarget.key,
-          targetLabel: `${selectedTarget.profile} / ${selectedTarget.width}`,
-          typeTag: selectedType,
-        }
-      : null;
+function SpecializationSummary({ records }) {
+  const safetyKinds = sortedValues(new Set(records.map((record) => safetyKind(record.safety))));
+  return (
+    <section className="specializationSummary">
+      <SummaryPill label="Emitted" value={specializationCount(records)} />
+      <SummaryPill label="Backends" value={joinShort(uniqueValues(records, "backend"))} />
+      <SummaryPill label="Families" value={joinShort(uniqueValues(records, "family"))} />
+      <SummaryPill label="Widths" value={joinShort(uniqueValues(records, "displayWidth"))} />
+      <SummaryPill label="Types" value={uniqueValues(records, "type_tag").length} />
+      <SummaryPill label="Safety" value={joinShort(safetyKinds.map(safetyLabel))} />
+    </section>
+  );
+}
 
-  if (targets.length === 0 || types.length === 0) {
+function SummaryPill({ label, value }) {
+  return (
+    <div className="summaryPill">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function SpecializationInventory({ records }) {
+  const [groupBy, setGroupBy] = useState("profile");
+  const [expandedRow, setExpandedRow] = useState(null);
+  const groups = useMemo(() => groupInventory(records, groupBy), [records, groupBy]);
+
+  if (records.length === 0) {
     return (
-      <section className="supportMatrixSection">
-        <div className="emptyMatrix">
-          Enable at least one target and one data type to show the matrix.
+      <section className="specializationInventory">
+        <div className="inventoryEmpty">
+          No emitted specializations match the active filters.
         </div>
       </section>
     );
   }
 
   return (
-    <section className="supportMatrixSection">
-      <div className="matrixToolbar">
+    <section className="specializationInventory">
+      <div className="inventoryToolbar">
         <div>
-          <strong>3D support matrix</strong>
-          <div className="matrixSubtitle">
-            Visible matrix: target x type. Click a cell to inspect backend
-            support.
+          <strong>Specializations</strong>
+          <div className="inventorySubtitle">
+            Grouped emitted records. Expand a row for concrete backend details.
           </div>
+        </div>
+        <div className="segmentedControl" aria-label="Group specializations by">
+          {GROUP_OPTIONS.map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={groupBy === value ? "segmentButton activeSegment" : "segmentButton"}
+              onClick={() => {
+                setGroupBy(value);
+                setExpandedRow(null);
+              }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="supportMatrixWrapper">
-        <table className="supportMatrix">
-          <thead>
-            <tr>
-              <th>Target</th>
-              {types.map((typeTag) => (
-                <th key={typeTag}>{typeLabel(typeTag)}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {targets.map((target) => (
-              <tr key={target.key}>
-                <th>
-                  <span className="targetFamily">{target.profile}</span>
-                  <span className="targetExtension">{target.width}</span>
-                </th>
-                {types.map((typeTag) => {
-                  const support = summarizeCell(records, target, typeTag, backends);
-                  const selected =
-                    effectiveCell?.targetKey === target.key &&
-                    effectiveCell?.typeTag === typeTag;
-                  return (
-                    <td key={`${target.key}:${typeTag}`}>
-                      <button
-                        type="button"
-                        className={
-                          selected
-                            ? `cellButton selectedCell ${support.className}`
-                            : `cellButton ${support.className}`
-                        }
-                        onClick={() =>
-                          setSelectedCell({
-                            targetKey: target.key,
-                            targetLabel: `${target.profile} / ${target.width}`,
-                            typeTag,
-                          })
-                        }
-                      >
-                        {support.label}
-                      </button>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <div className="inventoryGroups">
+        {groups.map((group) => (
+          <section className="inventoryGroup" key={group.key}>
+            <div className="inventoryGroupHeader">
+              <strong>{group.label}</strong>
+              <span>{specializationCount(group.records)} emitted</span>
+            </div>
 
-      <DrilldownPanel
-        records={records}
-        selectedCell={effectiveCell}
-        backends={backends}
-      />
+            {aggregateInventoryRows(group.records, groupBy).map((row) => {
+              const expanded = expandedRow === row.key;
+              return (
+                <div className="inventoryRowGroup" key={row.key}>
+                  <button
+                    type="button"
+                    className="inventoryRow"
+                    onClick={() =>
+                      setExpandedRow((current) => (current === row.key ? null : row.key))
+                    }
+                  >
+                    <span className="inventoryTarget">{row.target}</span>
+                    <span>{row.backendLabel}</span>
+                    <span>{row.typeLabel}</span>
+                    <span>{row.extensionLabel}</span>
+                    <span>{row.safetyLabel}</span>
+                    <strong>{row.count}</strong>
+                    <span className="chevron">{expanded ? "▾" : "▸"}</span>
+                  </button>
+
+                  {expanded && <InventoryDetails records={row.records} />}
+                </div>
+              );
+            })}
+          </section>
+        ))}
+      </div>
     </section>
   );
 }
 
-function DrilldownPanel({ records, selectedCell, backends }) {
-  if (!selectedCell) {
-    return (
-      <aside className="stickyDrilldownPanel">
-        <div className="emptyDrilldown">
-          Select at least one target and one data type.
-        </div>
-      </aside>
-    );
-  }
-  const selectedRecords = records.filter(
-    (record) =>
-      record.matrixTargetKey === selectedCell.targetKey &&
-      record.type_tag === selectedCell.typeTag &&
-      backends.includes(record.backend)
-  );
-
+function InventoryDetails({ records }) {
   return (
-    <section className="stickyDrilldownPanel">
-      <div className="drilldownHeader">
-        <div>
-          <strong>{selectedCell.targetLabel}</strong>
-          <div className="drilldownSubtitle">
-            {selectedCell.typeTag} / {specializationCount(selectedRecords)} emitted
-            specializations
-          </div>
+    <div className="inventoryDetails">
+      {records.slice(0, 80).map((record, index) => (
+        <div
+          className="inventoryDetailRow"
+          key={`${record.backend}:${record.profile}:${record.extension}:${record.type_tag}:${record.register_type}:${index}`}
+        >
+          <span>{record.backend}</span>
+          <span>{record.profile}</span>
+          <span>{record.displayWidth}</span>
+          <span>{record.extension}</span>
+          <span>{familyLabel(record.family)}</span>
+          <span>{typeLabel(record.type_tag)}</span>
+          <span>{record.register_type}</span>
+          <span>{record.required_features.join(", ") || "no features"}</span>
+          <span>{safetySummary(record.safety)}</span>
+          <strong>{record.count}</strong>
         </div>
-      </div>
-
-      {backends.length === 0 ? (
-        <div className="emptyDrilldown">
-          Enable at least one backend to show z-axis details.
-        </div>
-      ) : selectedRecords.length === 0 ? (
-        <div className="emptyDrilldown">No emitted specialization for this cell.</div>
-      ) : (
-        <div className="drilldownGrid">
-          {selectedRecords.slice(0, 24).map((record, index) => (
-            <div
-              className="drilldownItem"
-              key={`${record.backend}:${record.profile}:${record.extension}:${record.type_tag}:${record.register_type}:${record.count}:${index}`}
-            >
-              <div>
-                <strong>{record.backend}</strong>
-                <span>{record.extension}</span>
-                <span>{record.register_type}</span>
-              </div>
-              <div>
-                <span>{record.required_features.join(", ") || "no features"}</span>
-                <span>{safetySummary(record.safety)}</span>
-                <strong>{record.count}</strong>
-              </div>
-            </div>
-          ))}
-          {selectedRecords.length > 24 && (
-            <div className="emptyDrilldown">
-              Showing first 24 of {selectedRecords.length} grouped rows.
-            </div>
-          )}
+      ))}
+      {records.length > 80 && (
+        <div className="inventoryDetailOverflow">
+          Showing first 80 of {records.length} grouped rows.
         </div>
       )}
-    </section>
+    </div>
   );
+}
+
+function groupInventory(records, groupBy) {
+  const groups = new Map();
+  for (const record of records) {
+    const label = inventoryGroupLabel(record, groupBy);
+    const key = `${groupBy}\u0000${label}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        label,
+        rank: inventoryGroupRank(record, groupBy),
+        records: [],
+      });
+    }
+    groups.get(key).records.push(record);
+  }
+  return [...groups.values()].sort((left, right) => {
+    if (left.rank !== right.rank) return left.rank - right.rank;
+    return left.label.localeCompare(right.label);
+  });
+}
+
+function aggregateInventoryRows(records, groupBy) {
+  const grouped = new Map();
+  for (const record of records) {
+    const key = inventoryRowKey(record, groupBy);
+    const row = grouped.get(key) ?? [];
+    row.push(record);
+    grouped.set(key, row);
+  }
+  return [...grouped.entries()]
+    .map(([key, rowRecords]) => {
+      const sorted = sortRecords(rowRecords);
+      const first = sorted[0];
+      const typeCount = uniqueValues(sorted, "type_tag").length;
+      return {
+        key,
+        target: inventoryRowTarget(first, groupBy),
+        backendLabel: joinShort(uniqueValues(sorted, "backend")),
+        typeLabel: `${typeCount} ${typeCount === 1 ? "type" : "types"}`,
+        extensionLabel: joinShort(uniqueValues(sorted, "extension")),
+        safetyLabel: joinShort(
+          sortedValues(new Set(sorted.map((record) => safetyLabel(safetyKind(record.safety)))))
+        ),
+        count: specializationCount(sorted),
+        records: sorted,
+        rank: first.displayRank,
+      };
+    })
+    .sort((left, right) => {
+      if (left.rank !== right.rank) return left.rank - right.rank;
+      if (left.target !== right.target) return left.target.localeCompare(right.target);
+      if (left.backendLabel !== right.backendLabel) {
+        return left.backendLabel.localeCompare(right.backendLabel);
+      }
+      return left.extensionLabel.localeCompare(right.extensionLabel);
+    });
+}
+
+function inventoryGroupLabel(record, groupBy) {
+  if (groupBy === "width") return record.displayWidth;
+  if (groupBy === "backend") return record.backend;
+  if (groupBy === "extension") return record.extension;
+  if (groupBy === "safety") return safetyLabel(safetyKind(record.safety));
+  return record.profile;
+}
+
+function inventoryGroupRank(record, groupBy) {
+  if (groupBy === "width") return record.displayRank;
+  if (groupBy === "safety") return SAFETY_FILTERS.indexOf(safetyKind(record.safety));
+  return 0;
+}
+
+function inventoryRowKey(record, groupBy) {
+  const groupPrefix = `${groupBy}\u0000${inventoryGroupLabel(record, groupBy)}`;
+  if (groupBy === "profile") return `${groupPrefix}\u0000${record.displayTargetKey}`;
+  if (groupBy === "width") return `${groupPrefix}\u0000${record.profile}`;
+  if (groupBy === "backend") {
+    return `${groupPrefix}\u0000${record.profile}\u0000${record.displayWidth}\u0000${record.extension}`;
+  }
+  if (groupBy === "extension") {
+    return `${groupPrefix}\u0000${record.profile}\u0000${record.displayWidth}\u0000${record.backend}`;
+  }
+  if (groupBy === "safety") {
+    return `${groupPrefix}\u0000${record.profile}\u0000${record.displayWidth}\u0000${record.backend}\u0000${record.extension}`;
+  }
+  return `${groupPrefix}\u0000${record.displayTargetKey}`;
+}
+
+function inventoryRowTarget(record, groupBy) {
+  if (groupBy === "profile") return record.displayWidth;
+  if (groupBy === "width") return record.profile;
+  return `${record.profile} / ${record.displayWidth}`;
+}
+
+function sortRecords(records) {
+  return [...records].sort((left, right) => {
+    const leftKey = [
+      left.profile,
+      left.displayRank.toString().padStart(5, "0"),
+      left.displayWidth,
+      left.backend,
+      left.extension,
+      left.type_tag,
+      left.register_type,
+    ].join("\u0000");
+    const rightKey = [
+      right.profile,
+      right.displayRank.toString().padStart(5, "0"),
+      right.displayWidth,
+      right.backend,
+      right.extension,
+      right.type_tag,
+      right.register_type,
+    ].join("\u0000");
+    return leftKey.localeCompare(rightKey);
+  });
 }
 
 function decodePayload(payload) {
-  if (payload.schema_version !== 2) {
+  if (payload.schema_version !== 3) {
     throw new Error(`unsupported specialization schema ${payload.schema_version}`);
   }
 
@@ -673,24 +807,25 @@ function decodePayload(payload) {
     for (const row of rows) {
       const profile = strings[row[1]];
       const extension = strings[row[2]];
+      const family = strings[row[3]] || "unclassified";
       const baseRecord = {
         primitive: strings[primitive],
         backend: strings[row[0]],
         profile,
         extension,
-        targetKey: targetKey(profile, extension),
-        type_tag: strings[row[3]],
-        register_type: strings[row[4]],
-        required_features: featureSets[row[5]],
-        safety: safetyStates[row[6]],
-        count: row[7] ?? 1,
+        family,
+        type_tag: strings[row[4]],
+        register_type: strings[row[5]],
+        required_features: featureSets[row[6]],
+        safety: safetyStates[row[7]],
+        count: row[8] ?? 1,
       };
       const width = targetWidthForRecord(baseRecord);
       records.push({
         ...baseRecord,
-        matrixTargetKey: matrixTargetKey(profile, width.label),
-        matrixWidth: width.label,
-        matrixRank: width.rank,
+        displayTargetKey: displayTargetKey(profile, width.label),
+        displayWidth: width.label,
+        displayRank: width.rank,
       });
     }
   }
@@ -700,79 +835,27 @@ function decodePayload(payload) {
     primitiveByName: new Map(primitives.map((primitive) => [primitive.name, primitive])),
     primitives,
     records,
-    targets: uniqueTargets(records),
-    types: sortedValues(new Set(records.map((record) => record.type_tag))),
+    requirements: uniqueRequirements(records),
+    families: sortedValues(new Set(records.map((record) => record.family))),
+    types: sortedValues(
+      new Set(
+        records
+          .map((record) => record.type_tag)
+          .filter((typeTag) => isSpecializedDataType(typeTag))
+      )
+    ),
   };
 }
 
-function uniqueTargets(records) {
-  const targets = new Map();
+function uniqueRequirements(records) {
+  const requirements = new Set([NO_REQUIREMENT]);
   for (const record of records) {
-    if (!targets.has(record.targetKey)) {
-      targets.set(record.targetKey, {
-        key: record.targetKey,
-        profile: record.profile,
-        extension: record.extension,
-      });
-    }
+    for (const requirement of record.required_features) requirements.add(requirement);
   }
-  return sortedValues(targets.values(), (target) => `${target.profile}/${target.extension}`);
-}
-
-function groupTargetsByProfile(targets) {
-  const groups = new Map();
-  for (const target of targets) {
-    const group = groups.get(target.profile) ?? [];
-    group.push(target);
-    groups.set(target.profile, group);
-  }
-  return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right));
-}
-
-function summarizeCell(records, target, typeTag, backends) {
-  const cellRecords = records.filter(
-    (record) => record.matrixTargetKey === target.key && record.type_tag === typeTag
-  );
-  const supportedBackends = new Set(cellRecords.map((record) => record.backend));
-  if (backends.length === 0) {
-    return { label: SUPPORT_EMPTY, className: "supportNo" };
-  }
-  if (backends.length === 1) {
-    return supportedBackends.has(backends[0])
-      ? { label: "Yes", className: "supportYes" }
-      : { label: SUPPORT_EMPTY, className: "supportNo" };
-  }
-  const visibleSupported = backends.filter((backend) => supportedBackends.has(backend));
-  if (visibleSupported.length === backends.length) {
-    return { label: "All", className: "supportYes" };
-  }
-  if (visibleSupported.length > 0) {
-    return {
-      label: `${visibleSupported.length}/${backends.length}`,
-      className: "supportMixed",
-    };
-  }
-  return { label: SUPPORT_EMPTY, className: "supportNo" };
-}
-
-function uniqueMatrixTargets(records) {
-  const targets = new Map();
-  for (const record of records) {
-    if (!targets.has(record.matrixTargetKey)) {
-      targets.set(record.matrixTargetKey, {
-        key: record.matrixTargetKey,
-        profile: record.profile,
-        width: record.matrixWidth,
-        rank: record.matrixRank,
-      });
-    }
-  }
-  return [...targets.values()].sort((left, right) => {
-    const profileOrder = left.profile.localeCompare(right.profile);
-    if (profileOrder !== 0) return profileOrder;
-    if (left.rank !== right.rank) return left.rank - right.rank;
-    return left.width.localeCompare(right.width);
-  });
+  return [
+    NO_REQUIREMENT,
+    ...sortedValues([...requirements].filter((value) => value !== NO_REQUIREMENT)),
+  ];
 }
 
 function targetWidthForRecord(record) {
@@ -821,14 +904,43 @@ function recordMatchesSearch(record, query) {
     record.backend,
     record.profile,
     record.extension,
+    record.family,
     record.type_tag,
     record.register_type,
+    record.displayWidth,
     record.required_features.join(" "),
     safetySummary(record.safety),
   ]
     .join(" ")
     .toLowerCase()
     .includes(query);
+}
+
+function recordRequirementsVisible(record, enabledRequirements) {
+  if (!enabledRequirements) return false;
+  if (record.required_features.length === 0) {
+    return enabledRequirements.has(NO_REQUIREMENT);
+  }
+  return record.required_features.every((requirement) =>
+    enabledRequirements.has(requirement)
+  );
+}
+
+function recordTypeVisible(record, enabledTypes) {
+  if (!enabledTypes) return false;
+  return !isSpecializedDataType(record.type_tag) || enabledTypes.has(record.type_tag);
+}
+
+function isSpecializedDataType(typeTag) {
+  return typeTag !== "ptr";
+}
+
+function requirementLabel(requirement) {
+  return requirement === NO_REQUIREMENT ? "none" : requirement;
+}
+
+function familyLabel(family) {
+  return family || "unclassified";
 }
 
 function toggleSetValue(setter, value) {
@@ -875,11 +987,19 @@ function sortedValues(values, key = (value) => value) {
   return [...values].sort((left, right) => key(left).localeCompare(key(right)));
 }
 
-function targetKey(profile, extension) {
-  return `${profile}\u0000${extension}`;
+function uniqueValues(records, field) {
+  return sortedValues(
+    new Set(records.map((record) => record[field]).filter((value) => value !== ""))
+  );
 }
 
-function matrixTargetKey(profile, width) {
+function joinShort(values, limit = 3) {
+  if (values.length === 0) return "none";
+  if (values.length <= limit) return values.join(", ");
+  return `${values.slice(0, limit).join(", ")} +${values.length - limit}`;
+}
+
+function displayTargetKey(profile, width) {
   return `${profile}\u0000${width}`;
 }
 

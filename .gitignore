@@ -4,5 +4,7 @@ __pycache__/
 /**/*.egg-info/
 frozen/
 /tslctmp/
+
+# React/Vite documentation explorer local install and build output.
 supplementary/docs/site/specializations/react/node_modules/
 supplementary/docs/site/specializations/react/dist/

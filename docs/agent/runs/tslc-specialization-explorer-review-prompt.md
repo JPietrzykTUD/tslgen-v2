@@ -48,11 +48,21 @@ silent behavior, determinism, maintainability, and extensibility by typed data.
   must not encode support-policy semantics or hard-coded primitive/extension
   classifiers.
 - Does the rendered interaction match the `docReact/` intent: collapsed filter
-  rail, primitive accordion rows, and the support matrix visible inside the
-  selected primitive row?
-- Are primitive rows true toggles, and does the matrix row axis group by
-  profile plus display width instead of exposing every raw emitted extension as
-  its own row?
+  rail and primitive accordion rows?
+- Does the selected primitive row put documentation before specialization
+  browsing, followed by compact summary pills and a faceted emitted-record
+  inventory?
+- Does the filter rail expose requirements, typed extension families, data
+  types, backends, and safety, without reintroducing raw target toggles?
+- Is `ptr` omitted from the data-type filter because it is not a specialization
+  axis?
+- Does extension-family filtering consume the typed family field emitted in the
+  compact docs schema rather than deriving families from extension-name
+  spellings?
+- Does the inventory group by typed display facts such as profile, display
+  width, backend, extension, or safety, with expandable concrete rows?
+- Did the old yes/no/partial support matrix disappear, so the explorer shows
+  emitted records only and does not infer missing support?
 - Does the built bundle avoid unbound runtime globals such as
   `React.createElement`, so `/specializations/index.html` renders rather than
   showing a blank page?
@@ -87,7 +97,7 @@ git diff --check
 Optional static checks:
 
 ```bash
-rg -n 'getSupportValue|matrixTargets|matrixBackends|modernX86TargetKeys|WASM SIMD|Partial|extension_name ==|primitive_name ==|source_primitive ==|tsil|ImplementationBody' tslc/src/tslc/render/documentation_project.py supplementary/docs/site/specializations/react/src
+rg -n 'getSupportValue|matrixTargets|matrixBackends|enabledTargets|SupportMatrix|supportMatrix|modernX86TargetKeys|WASM SIMD|Partial|extension_name ==|primitive_name ==|source_primitive ==|tsil|ImplementationBody' tslc/src/tslc/render/documentation_project.py supplementary/docs/site/specializations/react/src
 rg -n 'INPUT|tsl_api_docs|cpp/include' ./tslctmp/doc-explorer-review-smoke/cpp/docs/doxygen/Doxyfile
 test -f ./tslctmp/doc-explorer-review-smoke/docs/site/specializations/index.html
 find ./tslctmp/doc-explorer-review-smoke/docs/site/specializations/assets -type f
@@ -97,6 +107,8 @@ import json
 from pathlib import Path
 path = Path('./tslctmp/doc-explorer-review-smoke/docs/site/specializations/specializations.json')
 data = json.loads(path.read_text())
+assert data['schema_version'] == 3
+assert 'family' in data['columns']
 print(data['schema_version'], path.stat().st_size)
 PY
 ```
