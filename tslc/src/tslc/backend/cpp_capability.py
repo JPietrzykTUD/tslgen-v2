@@ -10,7 +10,7 @@ from tslc.catalog.model import Catalog
 if TYPE_CHECKING:
     from tslc.backend.cpp_translation import CppBackendDialect
     from tslc.output.artifacts import Artifact
-    from tslc.output.verify import VerifyBackendDriver
+    from tslc.output.verify_drivers import VerifyBackendDriver
     from tslc.output.verify_model import VerifyProfile
     from tslc.render.project import ProfileRender
     from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
@@ -49,7 +49,7 @@ def cpp_value_test_artifacts(plan: ValueTestProjectPlan) -> list[Artifact]:
 
 
 def create_cpp_verify_driver() -> VerifyBackendDriver:
-    from tslc.output.verify import cpp_verify_driver
+    from tslc.output.verify_drivers import cpp_verify_driver
 
     return cpp_verify_driver()
 

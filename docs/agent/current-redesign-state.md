@@ -4822,3 +4822,44 @@ profile/build checks report `15 passed`; the fast non-build gate reports
 
 Stop condition: this cleanup is complete. No next run prompt is required for
 this user-directed slice.
+
+## Completed Verifier Driver Module Split
+
+The after-write build verifier now has a stable driver ownership boundary
+instead of keeping orchestration and backend command planning in one large
+module.
+
+Implemented:
+
+- Added `tslc.output.verify_drivers` as the public typed verifier-driver
+  surface, with `VerifyBackendDriver`, C++/Rust driver factory functions, and
+  small orchestration helper exports.
+- Split C++ verifier command/preflight behavior into
+  `tslc.output._verify_cpp`.
+- Split Rust verifier command/preflight/emulated-test behavior into
+  `tslc.output._verify_rust`.
+- Split shared verifier helper behavior into `tslc.output._verify_common`.
+- Reduced `tslc.output.verify` to the public generated-project verification
+  loop plus generic subprocess environment handling.
+- Updated backend capability modules so verifier-driver factories are imported
+  from `verify_drivers`, not from `verify`.
+- Added a regression guard that backend capabilities return typed verifier
+  drivers whose callbacks no longer live in `tslc.output.verify`.
+- Recorded ADR-121 in `docs/redesign/design-decisions.md`.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src
+python -m pytest tslc/tests/test_build_verify_config.py -q
+python -m pytest tslc/tests/test_profile_rendering.py -q
+python -m pytest tslc/tests/test_build_verify.py -q
+git diff --check
+```
+
+Result: compileall passed; verifier config tests report `18 passed`; profile
+rendering reports `14 passed`; build verifier tests report `53 passed`;
+`git diff --check` passed.
+
+Stop condition: this cleanup is complete. No next run prompt is required for
+this user-directed slice.

@@ -7,6 +7,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+import tslc.output.verify as verify_module
+from tslc.backend.cpp_capability import create_cpp_verify_driver
+from tslc.backend.rust_capability import create_rust_verify_driver
 from tslc.output.verify import (
     BuildCommand,
     BuildCommandResult,
@@ -18,6 +21,21 @@ from tslc.output.verify import (
     run_subprocess_build_command,
     verify_generated_project,
 )
+from tslc.output.verify_drivers import VerifyBackendDriver
+
+
+def test_backend_capabilities_use_public_verify_driver_surface() -> None:
+    cpp_driver = create_cpp_verify_driver()
+    rust_driver = create_rust_verify_driver()
+
+    assert isinstance(cpp_driver, VerifyBackendDriver)
+    assert isinstance(rust_driver, VerifyBackendDriver)
+    assert cpp_driver.backend_id == "cpp"
+    assert rust_driver.backend_id == "rust"
+    assert cpp_driver.prepare_backend.__module__ != verify_module.__name__
+    assert rust_driver.command_groups.__module__ != verify_module.__name__
+    assert not hasattr(verify_module, "cpp_verify_driver")
+    assert not hasattr(verify_module, "rust_verify_driver")
 
 
 def test_cpp_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:

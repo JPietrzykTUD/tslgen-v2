@@ -5964,3 +5964,48 @@ Consequences:
   composition code; case-shape text lives in focused renderer modules.
 - Regression guards keep Rust generated-file shell text out of Python render
   code.
+
+## ADR-121: Verifier Backend Drivers Are Split From Orchestration
+
+Context:
+
+`tslc.output.verify` was approaching monolith size because it owned both the
+public after-write verification loop and the backend-specific C++/Rust command
+drivers. The responsibilities were related but not identical: orchestration
+selects backend capabilities, accumulates command results, and reports
+diagnostics, while backend drivers own toolchain preflight checks, command
+groups, emulator follow-ups, and backend-specific environment setup.
+
+Decision:
+
+Keep `tslc.output.verify` as the public orchestration entry point and move the
+driver surface plus backend command planning behind focused verifier modules:
+
+- `tslc.output.verify_drivers` owns the typed `VerifyBackendDriver` capability
+  record, driver factory functions, and small orchestration helper exports;
+- `tslc.output._verify_cpp` owns C++ preflight, CMake command groups, target
+  preflight, and C++ verifier skip wording;
+- `tslc.output._verify_rust` owns Rust preflight, Cargo command groups, and
+  emulator follow-up execution for Rust test binaries;
+- `tslc.output._verify_common` owns shared verifier facts such as emulator
+  filtering, command-failure diagnostics, compiler/environment resolution, and
+  emulator command prefixes.
+
+Backend capability modules import verifier drivers from `verify_drivers`, not
+from the orchestration module. `verify.py` remains the public facade for
+`verify_generated_project(...)`, `run_subprocess_build_command(...)`, and the
+verification model values exposed with that verifier entry point.
+
+Consequences:
+
+- `verify.py` is now small enough to review as the after-write verification
+  loop rather than a mixed orchestration/driver module.
+- Adding a backend verifier driver has an additive public hook: provide a
+  `VerifyBackendDriver` factory and wire the backend capability to it.
+- C++ and Rust verifier behavior can evolve in separate modules without
+  touching the central verification loop.
+- The split does not change verifier semantics; existing command planning,
+  preflight, emulator skip, and diagnostic behavior are covered by the focused
+  build-verifier tests.
+- Remaining large-module follow-ups still stand for lowering, schema
+  validation, catalog building, pipeline orchestration, and query namespaces.

@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from tslc.catalog.model import Catalog
     from tslc.lower.lowerer import LoweredSpecialization
     from tslc.output.artifacts import Artifact
-    from tslc.output.verify import VerifyBackendDriver
+    from tslc.output.verify_drivers import VerifyBackendDriver
     from tslc.output.verify_model import VerifyBackend, VerifyProfile
     from tslc.render.project import ProfileRender
     from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
