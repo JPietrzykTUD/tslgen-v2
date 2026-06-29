@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tslc.backend.target_capability import rust_extension_tag
 from tslc.value_tests.literals import rust_literal, rust_literal_list
 from tslc.value_tests.model import ValueTestCasePlan
 
@@ -90,12 +91,6 @@ def rust_string_literal(value: str) -> str:
         .replace("\t", "\\t")
     )
     return f'"{escaped}"'
-
-
-def rust_extension_tag(extension: str | None) -> str:
-    if extension is None:
-        return "Generic<1>"
-    return "".join(part.capitalize() for part in extension.split("_"))
 
 
 __all__ = [

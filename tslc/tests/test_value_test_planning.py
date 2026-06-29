@@ -27,10 +27,10 @@ from tslc.value_tests.model import (
     ValueTestCoverageEntry,
     ValueTestProfilePlan,
 )
-from tslc.value_tests._render_cpp_dispatch import CPP_CASE_RENDERERS
+from tslc.value_tests._render_cpp_dispatch import CPP_VALUE_TEST_RENDERER
 from tslc.value_tests.render_cpp import CPP_VALUE_TEST_SUPPORT, render_cpp_values_runner
 from tslc.value_tests.render_rust import (
-    RUST_CASE_RENDERERS,
+    RUST_VALUE_TEST_RENDERER,
     RUST_VALUE_TEST_SUPPORT,
     render_rust_values_file,
 )
@@ -1140,11 +1140,21 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
 
 
 def test_cpp_value_test_support_matches_renderer_dispatch() -> None:
-    assert CPP_VALUE_TEST_SUPPORT.case_kinds == frozenset(CPP_CASE_RENDERERS)
+    assert CPP_VALUE_TEST_SUPPORT.case_kinds == CPP_VALUE_TEST_RENDERER.case_kinds
+    assert CPP_VALUE_TEST_RENDERER.backend_support() == CPP_VALUE_TEST_SUPPORT
+    with pytest.raises(TypeError):
+        CPP_VALUE_TEST_RENDERER.case_renderers["new_case"] = (  # type: ignore[index]
+            lambda case: ""
+        )
 
 
 def test_rust_value_test_support_matches_renderer_dispatch() -> None:
-    assert RUST_VALUE_TEST_SUPPORT.case_kinds == frozenset(RUST_CASE_RENDERERS)
+    assert RUST_VALUE_TEST_SUPPORT.case_kinds == RUST_VALUE_TEST_RENDERER.case_kinds
+    assert RUST_VALUE_TEST_RENDERER.backend_support() == RUST_VALUE_TEST_SUPPORT
+    with pytest.raises(TypeError):
+        RUST_VALUE_TEST_RENDERER.case_renderers["new_case"] = (  # type: ignore[index]
+            lambda case: ""
+        )
 
 
 def test_value_test_case_requirements_cover_renderer_dispatch() -> None:

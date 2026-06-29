@@ -5,8 +5,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
-from tslc.backend.rust import RustBackend, rust_register_type
-from tslc.backend.translation import X86_REGISTER_BITS
+from tslc.backend.rust import RustBackend
+from tslc.backend.target_capability import (
+    is_x86_register_extension,
+    rust_arch_module,
+    rust_extension_tag,
+    rust_register_type,
+    x86_register_bits,
+)
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
 from tslc.lower.lowerer import LoweredSpecialization
@@ -26,15 +32,6 @@ from tslc.render._common import (
 
 if TYPE_CHECKING:
     from tslc.render.project import ProfileRender
-
-_RUST_TAG = {"scalar": "Scalar", "sse": "Sse", "avx2": "Avx2", "avx512": "Avx512"}
-_RUST_ARCH_MODULE = {"x86": "x86_64", "arm": "aarch64"}
-
-
-def _rust_tag(extension_name: str) -> str:
-    return _RUST_TAG.get(
-        extension_name, extension_name[:1].upper() + extension_name[1:]
-    )
 
 
 def rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
@@ -108,7 +105,7 @@ def _rust_arch_use(emitted_exts: list[str], extensions: Mapping[str, Extension])
         module
         for ext in emitted_exts
         if (extension := extensions.get(ext)) is not None
-        if (module := _RUST_ARCH_MODULE.get(extension.family)) is not None
+        if (module := rust_arch_module(extension.family)) is not None
     }
     if not modules:
         return ""
@@ -138,23 +135,25 @@ def _rust_registrations(
     lines: list[str] = []
     for ext in used_exts(by_primitive):
         extension = extensions.get(ext)
-        if ext in X86_REGISTER_BITS or _has_rust_registers(by_primitive, ext, extension):
-            lines.append(f"pub struct {_rust_tag(ext)};")
+        if is_x86_register_extension(ext) or _has_rust_registers(by_primitive, ext, extension):
+            lines.append(f"pub struct {rust_extension_tag(ext)};")
     for ext, base in used_pairs(by_primitive):
-        if ext not in X86_REGISTER_BITS:
+        if not is_x86_register_extension(ext):
             continue
         register = rust_register_type(ext, base)
         mask = _rust_mask_type(extensions.get(ext), base, register)
-        bits = X86_REGISTER_BITS[ext]
+        bits = x86_register_bits(ext)
+        if bits is None:
+            raise ValueError(f"unsupported Rust x86 register extension {ext!r}")
         imask = _rust_imask_type(extensions.get(ext), base, mask, bits)
         array = f"array_type<{base}, {bits // type_bits(base)}, {bits // 8}>"
         lines.append(
-            f"impl SimdVector for Simd<{base}, {_rust_tag(ext)}> {{ "
+            f"impl SimdVector for Simd<{base}, {rust_extension_tag(ext)}> {{ "
             f"type BaseType = {base}; type RegisterType = {register}; "
             f"type MaskType = {mask}; type ImaskType = {imask}; type Array = {array}; }}"
         )
     for ext, type_tag, base in used_type_specs(by_primitive):
-        if ext in X86_REGISTER_BITS:
+        if is_x86_register_extension(ext):
             continue
         extension = extensions.get(ext)
         if extension is None:
@@ -167,7 +166,7 @@ def _rust_registrations(
         imask = _rust_imask_type(extension, base, mask, bits)
         array = f"array_type<{base}, {bits // type_bits(base)}, {bits // 8}>"
         lines.append(
-            f"impl SimdVector for Simd<{base}, {_rust_tag(ext)}> {{ "
+            f"impl SimdVector for Simd<{base}, {rust_extension_tag(ext)}> {{ "
             f"type BaseType = {base}; type RegisterType = {register}; "
             f"type MaskType = {mask}; type ImaskType = {imask}; type Array = {array}; }}"
         )

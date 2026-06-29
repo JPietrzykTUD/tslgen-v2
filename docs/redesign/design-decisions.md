@@ -5848,3 +5848,46 @@ Consequences:
 - This is a conservative step toward variant types. If a future case family
   grows more behavior-specific fields, it can move from a requirement row to a
   dedicated constructor or dataclass without changing renderer-facing semantics.
+
+## ADR-118: Backend Target Presentation Facts Have Typed Owners
+
+Context:
+
+Some backend and target-language facts were starting to drift across the
+prototype. Rust extension tag spelling appeared in lowering, generated-project
+rendering, and value-test conversion rendering. X86 register-width facts and
+C++ helper names were split between backend translation and project rendering.
+Value-test backend support was also hand-built beside renderer dispatch maps,
+so the support declaration could diverge from what the renderer actually knew
+how to render.
+
+Decision:
+
+Keep source-owned ISA facts in the catalog, but move compiler-owned target
+presentation facts into typed immutable capability records:
+
+- `X86RegisterCapability` owns the compiler's built-in x86 register-width facts
+  and the C++ helper trait used to spell those native registers;
+- `RustExtensionTagCapability` owns Rust type-level extension tag spelling;
+- `RustArchModuleCapability` owns Rust `core::arch` module routing by extension
+  family;
+- `ValueTestRendererCapability` owns one backend renderer's case dispatch map
+  and derives its `ValueTestBackendSupport` declaration from that same frozen
+  renderer map.
+
+The split is intentional. Native non-x86 register spellings remain
+source/catalog data from `extension.tsl`; the new target capability module only
+owns backend presentation rules that were already compiler policy.
+
+Consequences:
+
+- Rust lowering, Rust project rendering, and Rust value-test conversion now ask
+  the same helper for extension tag spelling.
+- C++ and Rust project rendering and Rust lowering use the same x86 register
+  capability helpers instead of separate width/helper maps.
+- Value-test renderer support is no longer a separate mirror of the dispatch
+  table. Callers use the typed C++/Rust renderer capability objects directly;
+  there are no parallel exported renderer-map aliases.
+- Adding a new backend-specific presentation fact now has a single compiler
+  owner. Adding a new source-owned native register spelling still belongs in
+  the extension catalog.

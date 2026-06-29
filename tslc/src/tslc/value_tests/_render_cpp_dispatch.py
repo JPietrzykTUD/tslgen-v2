@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from tslc.value_tests.lane_model import (
     render_mask_case,
     render_mask_conversion,
@@ -47,63 +45,63 @@ from tslc.value_tests._render_cpp_memory import (
     _store,
     _stream,
 )
-
-CppCaseRenderer = Callable[[ValueTestCasePlan], str]
+from tslc.value_tests.renderer_capability import ValueTestRendererCapability
 
 # Every value-result case (golden/masked) and every mask-result case (comparison, mask logic,
 # masked comparison, mask constant) — fixed or scalable — shares the lane-model renderers; the
 # lane model picked from the case data supplies the only parts that differ.
-CPP_CASE_RENDERERS: dict[str, CppCaseRenderer] = {
-    "array_to_vector": _array_to_vector,
-    "broadcast": _broadcast,
-    "compile_only": _compile_only,
-    "convert": _convert,
-    "differential": _differential,
-    "differential_fuzz": _differential_fuzz,
-    "extension_extract": _extension_extract,
-    "extension_insert": _extension_insert,
-    "generic_golden": render_value_case,
-    "immediate": _immediate,
-    "indexed_load": _indexed_load,
-    "indexed_store": _indexed_store,
-    "lane_list": _lane_list,
-    "load": _load,
-    "load_convert": _load_convert,
-    "mask_logic": render_mask_case,
-    "mask_pointer_load": _mask_pointer_load,
-    "mask_result": render_mask_case,
-    "mask_store": _mask_store,
-    "mask_to_vector": _mask_to_vector,
-    "masked": render_value_case,
-    "masked_pointer_load": _masked_pointer_load,
-    "masked_pointer_store": _masked_pointer_store,
-    "memory_copy": _memory_copy,
-    "pointer_free": _pointer_free,
-    "pointer_lifetime": _pointer_lifetime,
-    "reduction": _reduction,
-    "repr_cast": _repr_cast,
-    "scalar_pointer_load": _scalar_pointer_load,
-    "scalar_result": _scalar_result,
-    "scalar_vector": _scalar_vector,
-    "scalable_golden": render_value_case,
-    "scalable_mask_constant": render_mask_case,
-    "scalable_mask_conversion": render_mask_conversion,
-    "scalable_mask_logic": render_mask_case,
-    "scalable_mask_result": render_mask_case,
-    "scalable_mask_store": _scalable_mask_store,
-    "scalable_masked_mask_result": render_mask_case,
-    "scalable_masked": render_value_case,
-    "store": _store,
-    "stream": _stream,
-    "vector_to_array": _vector_to_array,
-}
+CPP_VALUE_TEST_RENDERER = ValueTestRendererCapability(
+    backend_id="cpp",
+    supports_differential=True,
+    case_renderers={
+        "array_to_vector": _array_to_vector,
+        "broadcast": _broadcast,
+        "compile_only": _compile_only,
+        "convert": _convert,
+        "differential": _differential,
+        "differential_fuzz": _differential_fuzz,
+        "extension_extract": _extension_extract,
+        "extension_insert": _extension_insert,
+        "generic_golden": render_value_case,
+        "immediate": _immediate,
+        "indexed_load": _indexed_load,
+        "indexed_store": _indexed_store,
+        "lane_list": _lane_list,
+        "load": _load,
+        "load_convert": _load_convert,
+        "mask_logic": render_mask_case,
+        "mask_pointer_load": _mask_pointer_load,
+        "mask_result": render_mask_case,
+        "mask_store": _mask_store,
+        "mask_to_vector": _mask_to_vector,
+        "masked": render_value_case,
+        "masked_pointer_load": _masked_pointer_load,
+        "masked_pointer_store": _masked_pointer_store,
+        "memory_copy": _memory_copy,
+        "pointer_free": _pointer_free,
+        "pointer_lifetime": _pointer_lifetime,
+        "reduction": _reduction,
+        "repr_cast": _repr_cast,
+        "scalar_pointer_load": _scalar_pointer_load,
+        "scalar_result": _scalar_result,
+        "scalar_vector": _scalar_vector,
+        "scalable_golden": render_value_case,
+        "scalable_mask_constant": render_mask_case,
+        "scalable_mask_conversion": render_mask_conversion,
+        "scalable_mask_logic": render_mask_case,
+        "scalable_mask_result": render_mask_case,
+        "scalable_mask_store": _scalable_mask_store,
+        "scalable_masked_mask_result": render_mask_case,
+        "scalable_masked": render_value_case,
+        "store": _store,
+        "stream": _stream,
+        "vector_to_array": _vector_to_array,
+    },
+)
 
 
 def render_cpp_case(case: ValueTestCasePlan) -> str:
-    renderer = CPP_CASE_RENDERERS.get(case.kind)
-    if renderer is None:
-        raise ValueError(f"unsupported C++ value-test case kind {case.kind!r}")
-    return renderer(case)
+    return CPP_VALUE_TEST_RENDERER.render_case(case)
 
 
-__all__ = ("CPP_CASE_RENDERERS", "render_cpp_case")
+__all__ = ("CPP_VALUE_TEST_RENDERER", "render_cpp_case")

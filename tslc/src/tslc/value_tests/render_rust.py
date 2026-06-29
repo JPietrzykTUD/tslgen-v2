@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.render._common import slug
 from tslc.value_tests._render_rust_conversion import (
@@ -35,12 +33,10 @@ from tslc.value_tests._render_rust_memory import (
 )
 from tslc.value_tests.literals import rust_literal, rust_literal_list, token_truthy
 from tslc.value_tests.model import (
-    ValueTestBackendSupport,
     ValueTestCasePlan,
     ValueTestProfilePlan,
 )
-
-RustCaseRenderer = Callable[[ValueTestCasePlan], str]
+from tslc.value_tests.renderer_capability import ValueTestRendererCapability
 
 
 def render_rust_values_file(profiles: tuple[ValueTestProfilePlan, ...]) -> str:
@@ -65,11 +61,7 @@ def render_rust_values_file(profiles: tuple[ValueTestProfilePlan, ...]) -> str:
 
 
 def _render_case(case: ValueTestCasePlan) -> str:
-    try:
-        renderer = RUST_CASE_RENDERERS[case.kind]
-    except KeyError as exc:
-        raise ValueError(f"unsupported Rust value-test case kind {case.kind!r}") from exc
-    return renderer(case)
+    return RUST_VALUE_TEST_RENDERER.render_case(case)
 
 
 def _generic_golden(case: ValueTestCasePlan) -> str:
@@ -406,45 +398,49 @@ def _lane_assert(case: ValueTestCasePlan, lanes: int, result_name: str) -> str:
     )
 
 
-RUST_CASE_RENDERERS: dict[str, RustCaseRenderer] = {
-    "array_to_vector": _array_to_vector,
-    "broadcast": _broadcast,
-    "compile_only": _compile_only,
-    "convert": _convert,
-    "extension_extract": _extension_extract,
-    "extension_insert": _extension_insert,
-    "generic_golden": _generic_golden,
-    "immediate": _immediate,
-    "indexed_load": _indexed_load,
-    "indexed_store": _indexed_store,
-    "lane_list": _lane_list,
-    "load": _load,
-    "load_convert": _load_convert,
-    "mask_logic": _mask_logic,
-    "mask_pointer_load": _mask_pointer_load,
-    "mask_result": _mask_result,
-    "mask_store": _mask_store,
-    "mask_to_vector": _mask_to_vector,
-    "masked": _masked,
-    "masked_pointer_load": _masked_pointer_load,
-    "masked_pointer_store": _masked_pointer_store,
-    "memory_copy": _memory_copy,
-    "pointer_free": _pointer_free,
-    "pointer_lifetime": _pointer_lifetime,
-    "reduction": _reduction,
-    "repr_cast": _repr_cast,
-    "scalar_pointer_load": _scalar_pointer_load,
-    "scalar_result": _scalar_result,
-    "scalar_vector": _scalar_vector,
-    "store": _store,
-    "stream": _stream,
-    "vector_to_array": _vector_to_array,
-}
-
-RUST_VALUE_TEST_SUPPORT = ValueTestBackendSupport(
+RUST_VALUE_TEST_RENDERER = ValueTestRendererCapability(
     backend_id="rust",
-    case_kinds=frozenset(RUST_CASE_RENDERERS),
+    case_renderers={
+        "array_to_vector": _array_to_vector,
+        "broadcast": _broadcast,
+        "compile_only": _compile_only,
+        "convert": _convert,
+        "extension_extract": _extension_extract,
+        "extension_insert": _extension_insert,
+        "generic_golden": _generic_golden,
+        "immediate": _immediate,
+        "indexed_load": _indexed_load,
+        "indexed_store": _indexed_store,
+        "lane_list": _lane_list,
+        "load": _load,
+        "load_convert": _load_convert,
+        "mask_logic": _mask_logic,
+        "mask_pointer_load": _mask_pointer_load,
+        "mask_result": _mask_result,
+        "mask_store": _mask_store,
+        "mask_to_vector": _mask_to_vector,
+        "masked": _masked,
+        "masked_pointer_load": _masked_pointer_load,
+        "masked_pointer_store": _masked_pointer_store,
+        "memory_copy": _memory_copy,
+        "pointer_free": _pointer_free,
+        "pointer_lifetime": _pointer_lifetime,
+        "reduction": _reduction,
+        "repr_cast": _repr_cast,
+        "scalar_pointer_load": _scalar_pointer_load,
+        "scalar_result": _scalar_result,
+        "scalar_vector": _scalar_vector,
+        "store": _store,
+        "stream": _stream,
+        "vector_to_array": _vector_to_array,
+    },
 )
 
+RUST_VALUE_TEST_SUPPORT = RUST_VALUE_TEST_RENDERER.backend_support()
 
-__all__ = ["RUST_CASE_RENDERERS", "RUST_VALUE_TEST_SUPPORT", "render_rust_values_file"]
+
+__all__ = [
+    "RUST_VALUE_TEST_RENDERER",
+    "RUST_VALUE_TEST_SUPPORT",
+    "render_rust_values_file",
+]

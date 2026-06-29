@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from tslc.backend.rust_translation import rust_raw_identifier
-from tslc.backend.translation import X86_REGISTER_BITS
+from tslc.backend.target_capability import (
+    is_x86_register_extension,
+    rust_extension_tag,
+    rust_register_type,
+)
 from tslc.lower.lowerer import (
     LoweredSpecialization,
     effective_param_types,
@@ -11,9 +15,6 @@ from tslc.lower.lowerer import (
 )
 from tslc.render.model import RenderContext
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
-
-# Keyed by ISA name (the emitted tag); `_vl` variants are internal and never emitted.
-_EXT_TAG = {"scalar": "Scalar", "sse": "Sse", "avx2": "Avx2", "avx512": "Avx512"}
 
 
 class RustBackend:
@@ -218,7 +219,7 @@ class RustBackend:
         # intrinsic (which takes a concrete `__m256i`) type-checks; scalar/generic stay opaque.
         impl_register = (
             rust_register_type(spec.extension_name, "i32")
-            if spec.extension_name in X86_REGISTER_BITS
+            if is_x86_register_extension(spec.extension_name)
             else None
         )
         body = spec.body.render(
@@ -386,30 +387,7 @@ def _axis_name(key: str) -> str:
 
 
 def _ext_tag(extension_name: str) -> str:
-    return _EXT_TAG.get(extension_name, extension_name[:1].upper() + extension_name[1:])
-
-
-def rust_register_type(
-    extension_name: str,
-    base: str,
-    *,
-    uses_sized_vector: bool = False,
-    lane_parameter: str | None = None,
-) -> str:
-    """Concrete register type spelling (scalar's register == its base type)."""
-
-    # A sized vector's register is the lane array; the lane parameter is in scope wherever this is
-    # used for a sized-vector impl.
-    if uses_sized_vector:
-        return f"array_type<{base}, {lane_parameter}>"
-    width = X86_REGISTER_BITS.get(extension_name)
-    if width is None:
-        return base
-    if base == "f32":
-        return f"core::arch::x86_64::__m{width}"
-    if base == "f64":
-        return f"core::arch::x86_64::__m{width}d"
-    return f"core::arch::x86_64::__m{width}i"
+    return rust_extension_tag(extension_name)
 
 
 def _rust_concrete(spec: LoweredSpecialization, kind: str) -> str:

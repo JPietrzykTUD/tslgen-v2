@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from tslc.backend import translation_common as common
+from tslc.backend.target_capability import (
+    rust_arch_module,
+    rust_extension_tag,
+    rust_register_type,
+)
 from tslc.catalog.model import Catalog, Extension
 from tslc.render.model import (
     RenderField,
@@ -14,18 +19,6 @@ from tslc.render.model import (
     render_sequence,
     render_text,
 )
-
-_RUST_ARCH_MODULE: dict[str, str] = {
-    "x86": "x86_64",
-    "arm": "aarch64",
-}
-
-_RUST_EXT_TAG: dict[str, str] = {
-    "scalar": "Scalar",
-    "sse": "Sse",
-    "avx2": "Avx2",
-    "avx512": "Avx512",
-}
 
 # Rust reserved words that can occur as a primitive name (e.g. `mod`). Emitting one as a
 # bare value identifier is a syntax error, so it is escaped as a raw identifier (`r#mod`).
@@ -50,7 +43,6 @@ def rust_raw_identifier(name: str) -> str:
     return f"r#{name}" if name in _RUST_KEYWORDS else name
 
 
-
 @dataclass(frozen=True, slots=True)
 class _RustTypes:
     catalog: Catalog
@@ -60,8 +52,7 @@ class _RustTypes:
         return common.scalar_spelling(self.catalog, self.backend_id, type_tag)
 
     def vector_type_spelling(self, base_spelling: str, extension_name: str) -> str:
-        tag = _RUST_EXT_TAG.get(extension_name, extension_name.capitalize())
-        return f"Simd<{base_spelling}, {tag}>"
+        return f"Simd<{base_spelling}, {rust_extension_tag(extension_name)}>"
 
     def sized_vector_spelling(self, base_spelling: str, lanes: int | str) -> str:
         # `lanes` is normally concrete; a sized-vector target of a representation-change uses
@@ -89,14 +80,7 @@ class _RustTypes:
             return declared
         if common.requires_declared_vector_register(self.catalog, extension_isa):
             return None
-        width = common.X86_REGISTER_BITS.get(extension_isa)
-        if width is None:
-            return base
-        if base == "f32":
-            return f"core::arch::x86_64::__m{width}"
-        if base == "f64":
-            return f"core::arch::x86_64::__m{width}d"
-        return f"core::arch::x86_64::__m{width}i"
+        return rust_register_type(extension_isa, base)
 
     def register_type_spelling(self) -> RenderText:
         return RenderPlaceholder("current_register", "Self::RegisterType")
@@ -136,7 +120,7 @@ class _RustIntrinsics:
         )
 
     def qualify_intrinsic(self, extension: Extension, name: str) -> str:
-        module = _RUST_ARCH_MODULE.get(extension.family)
+        module = rust_arch_module(extension.family)
         return f"core::arch::{module}::{name}" if module is not None else name
 
     def render_immediate_intrinsic_call(

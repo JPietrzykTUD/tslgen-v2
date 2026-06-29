@@ -6,7 +6,11 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from tslc.backend.cpp import CppBackend
-from tslc.backend.translation import X86_REGISTER_BITS
+from tslc.backend.target_capability import (
+    cpp_x86_register_helper,
+    is_x86_register_extension,
+    x86_register_bits,
+)
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
@@ -26,8 +30,6 @@ from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 if TYPE_CHECKING:
     from tslc.render.project import ProfileRender
 
-_CPP_REG_HELPER = {128: "reg128", 256: "reg256", 512: "reg512"}
-
 
 def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
     backend = CppBackend()
@@ -41,7 +43,7 @@ def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
     for profile_render in profiles:
         by_primitive = profile_render.specializations("cpp")
         emitted_exts = used_exts(by_primitive)
-        x86_exts = [e for e in emitted_exts if e in X86_REGISTER_BITS]
+        x86_exts = [e for e in emitted_exts if is_x86_register_extension(e)]
         includes = _cpp_includes(emitted_exts, profile_render.extensions)
         registrations = "".join(
             _cpp_registration(ext, profile_render.extensions.get(ext))
@@ -118,7 +120,7 @@ def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
 
 def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) -> str:
     lines = ['#include "tsl_core.hpp"']
-    if any(ext in X86_REGISTER_BITS for ext in emitted_exts):
+    if any(is_x86_register_extension(ext) for ext in emitted_exts):
         lines.append('#include "tsl_x86_traits.hpp"')
     headers = sorted(
         {
@@ -135,8 +137,10 @@ def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) 
 def _cpp_registration(ext: str, extension: Extension | None) -> str:
     """A C++ extension tag + `simd<T, ext>` register/mask-type wiring for one ISA ext."""
 
-    helper = _CPP_REG_HELPER[X86_REGISTER_BITS[ext]]
-    bits = X86_REGISTER_BITS[ext]
+    helper = cpp_x86_register_helper(ext)
+    bits = x86_register_bits(ext)
+    if helper is None or bits is None:
+        raise ValueError(f"unsupported C++ x86 register extension {ext!r}")
     if extension is not None and extension.mask_policy.kind == "native_predicate_by_lanes":
         mask = f"typename detail::native_mask<{extension.vector_bits}, T>::type"
     else:
@@ -164,14 +168,14 @@ def _cpp_native_registration(
     emitted = {
         ext
         for ext, type_tag, _base in used_type_specs(by_primitive)
-        if ext not in X86_REGISTER_BITS
+        if not is_x86_register_extension(ext)
         and (extension := extensions.get(ext)) is not None
         and extension.direct_vector_register_type("cpp", type_tag) is not None
     }
     for ext in sorted(emitted):
         lines.append(f"struct {ext} {{}};\n")
     for ext, type_tag, base in used_type_specs(by_primitive):
-        if ext in X86_REGISTER_BITS:
+        if is_x86_register_extension(ext):
             continue
         extension = extensions.get(ext)
         if extension is None:

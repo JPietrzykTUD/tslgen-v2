@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-from tslc.value_tests._render_cpp_dispatch import CPP_CASE_RENDERERS, render_cpp_case
-from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProfilePlan
+from tslc.value_tests._render_cpp_dispatch import CPP_VALUE_TEST_RENDERER, render_cpp_case
+from tslc.value_tests.model import ValueTestProfilePlan
 
-CPP_VALUE_TEST_SUPPORT = ValueTestBackendSupport(
-    backend_id="cpp",
-    case_kinds=frozenset(CPP_CASE_RENDERERS),
-    supports_differential=True,
-)
+CPP_VALUE_TEST_SUPPORT = CPP_VALUE_TEST_RENDERER.backend_support()
 
 
 def render_cpp_values_runner(profile: ValueTestProfilePlan) -> str:

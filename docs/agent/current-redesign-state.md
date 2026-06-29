@@ -4715,3 +4715,42 @@ Result: all listed validation passed. The fast non-build gate reports
 
 Stop condition: this design cleanup is complete. No next run prompt is required
 for this user-directed slice.
+
+## Completed Backend Target Capability Cleanup
+
+Backend/target presentation facts now have typed owners instead of repeated
+local constants.
+
+Implemented:
+
+- Added typed immutable x86 register, Rust extension-tag, and Rust arch-module
+  capability records in `tslc.backend.target_capability`.
+- Routed Rust lowering, Rust project rendering, Rust value-test conversion
+  rendering, and C++/Rust project x86 registration through the shared target
+  capability helpers.
+- Preserved source ownership for native non-x86 register spellings: those still
+  come from `extension.tsl` catalog metadata.
+- Added typed `ValueTestRendererCapability` so backend value-test support is
+  derived from the same frozen renderer dispatch map that renders cases.
+- Removed the old `CPP_CASE_RENDERERS` and `RUST_CASE_RENDERERS` exported map
+  aliases; callers and tests now use the typed renderer capabilities directly.
+- Recorded ADR-118 in `docs/redesign/design-decisions.md`.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src
+python -m pytest tslc/tests/test_backend_target_capability.py tslc/tests/test_value_test_planning.py::test_cpp_value_test_support_matches_renderer_dispatch tslc/tests/test_value_test_planning.py::test_rust_value_test_support_matches_renderer_dispatch tslc/tests/test_value_test_planning.py::test_value_test_case_requirements_cover_renderer_dispatch -q
+python -m pytest tslc/tests/test_backend_target_capability.py tslc/tests/test_value_test_planning.py tslc/tests/test_profile_rendering.py tslc/tests/test_select_and_lower.py tslc/tests/test_specialization.py tslc/tests/test_generation_conditionals.py -q
+python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+python -m pytest tslc/tests/test_build_verify.py::test_generated_profiles_build -q
+git diff --check
+```
+
+Result: all listed validation passed. The focused capability/dispatch checks
+report `6 passed`; the affected rendering/selection suite reports `92 passed`;
+the fast non-build gate reports `289 passed, 82 deselected`; the generated
+profile build smoke reports `1 passed`.
+
+Stop condition: this design cleanup is complete. No next run prompt is required
+for this user-directed slice.

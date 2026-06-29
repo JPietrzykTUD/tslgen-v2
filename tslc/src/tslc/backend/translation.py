@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from tslc.backend.translation_common import X86_REGISTER_BITS
+from tslc.backend.target_capability import X86_REGISTER_BITS
 from tslc.catalog.model import Extension
 from tslc.catalog.scalar_types import (
     is_signed,

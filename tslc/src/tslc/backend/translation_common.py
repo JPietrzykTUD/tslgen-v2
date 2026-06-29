@@ -7,9 +7,7 @@ from tslc.catalog.scalar_types import (
     normalize_scalar_tag,
 )
 from tslc.render.model import RenderField, RenderText, TemplateApplication
-
-# x86 register width in bits, keyed by ISA name. Shared by backend translation and render.
-X86_REGISTER_BITS = {"sse": 128, "avx2": 256, "avx512": 512}
+from tslc.backend.target_capability import X86_REGISTER_BITS
 
 
 def scalar_spelling(catalog: Catalog, backend_id: str, type_tag: str) -> str | None:
