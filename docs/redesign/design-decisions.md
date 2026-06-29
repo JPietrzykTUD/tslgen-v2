@@ -6135,3 +6135,41 @@ Consequences:
   together.
 - Existing catalog model objects and diagnostics are preserved; this is an
   ownership split, not a catalog behavior change.
+
+## ADR-125: Pipeline Helpers Are Split By Input And Closure Boundaries
+
+Context:
+
+`tslc.pipeline` had become a mixed orchestration module. It owned the public
+generation request/result API, source loading and catalog/profile validation,
+per-profile generation orchestration, dependency pruning, transitive safety and
+feature propagation, result sorting, and facade imports used by maintenance
+tools. The data/control seams were clear enough to split helpers without hiding
+the main generation flow.
+
+Decision:
+
+Keep `pipeline.py` as the public generation facade and per-profile orchestration
+owner, while moving stable helper boundaries into private modules:
+
+- `_pipeline_inputs` owns source loading, parsing, catalog building, catalog
+  validation, machine-profile loading, split-name discovery, and value-test
+  harness discovery behind `_load_inputs(...)`;
+- `_pipeline_closure` owns `_LoweredSlot`, target dependency context,
+  dependency pruning, transitive safety propagation, and required-feature
+  propagation.
+
+`tslc.pipeline` re-exports the existing private helper names that maintenance
+tools and focused tests import today, but their implementations now live with
+the helper boundary they own.
+
+Consequences:
+
+- The public pipeline module is small enough to review as request/result API,
+  generation-mode validation, per-profile orchestration, and result sorting.
+- Input loading remains a side-effect boundary and is separated from selection,
+  lowering, dependency closure, and rendering.
+- Dependency-closure behavior has one owner, making future call-graph,
+  safety-propagation, and feature-propagation changes localized.
+- The split preserves generated behavior and current maintenance imports while
+  making the ownership relationship explicit through facade re-exports.

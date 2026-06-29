@@ -5013,3 +5013,49 @@ deselected`; `git diff --check` passed.
 
 Next action for the active five-slice cleanup: split `pipeline.py`
 orchestration helpers only after inspecting its data/control boundaries.
+
+## Completed Pipeline Helper Boundary Split
+
+The generation pipeline now keeps public orchestration in `pipeline.py` while
+moving stable helper boundaries into focused private modules.
+
+Implemented:
+
+- Added `tslc._pipeline_inputs` for source loading, parsing, catalog building,
+  catalog validation, split-name discovery, value-test harness discovery, and
+  machine-profile loading.
+- Added `tslc._pipeline_closure` for `_LoweredSlot`, target dependency context,
+  dependency pruning, transitive safety propagation, and required-feature
+  propagation.
+- Kept `tslc.pipeline.generate`, request/result dataclasses, per-profile
+  orchestration, render handoff, result sorting, and existing facade exports in
+  the public pipeline module.
+- Added a regression guard that pipeline helper exports are owned by the input
+  and closure modules while `generate` remains in `tslc.pipeline`.
+- Recorded ADR-125 in `docs/redesign/design-decisions.md`.
+
+Design check:
+
+```text
+wc -l tslc/src/tslc/pipeline.py tslc/src/tslc/_pipeline_inputs.py tslc/src/tslc/_pipeline_closure.py
+```
+
+Result: `pipeline.py` is 526 lines; helper modules are 86 and 249 lines
+respectively.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src
+python -m pytest tslc/tests/test_pipeline_structure.py tslc/tests/test_specialization.py tslc/tests/test_safety_contract.py tslc/tests/test_stage_dump.py tslc/tests/test_value_test_planning.py::test_value_test_modules_keep_owned_boundaries -q
+python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall passed; focused pipeline/specialization/safety/stage-dump
+tests report `30 passed`; the broad non-build gate reports `291 passed, 84
+deselected`; `git diff --check` passed.
+
+Next action for the active five-slice cleanup: split `lower/lowerer.py`
+carefully, starting with target-vector resolution if the current code confirms
+that seam.
