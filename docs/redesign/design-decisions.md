@@ -6009,3 +6009,45 @@ Consequences:
   build-verifier tests.
 - Remaining large-module follow-ups still stand for lowering, schema
   validation, catalog building, pipeline orchestration, and query namespaces.
+
+## ADR-122: Query Evaluation Is Split By Namespace Ownership
+
+Context:
+
+`tslc.lower.queries` had grown into a compact but oversized module that owned
+every part of query behavior: typed values, parsing, all query functions,
+vector/register helpers, leaf resolution, default registry construction, and
+recursive evaluation. The internal structure was already clear, but adding a
+new query namespace still meant editing a long mixed file.
+
+Decision:
+
+Keep `tslc.lower.queries` as the public facade and evaluator registry, while
+moving query vocabulary and model ownership into focused private modules:
+
+- `tslc.lower._query_model` owns `TypeValue`, `TextValue`, `BoolValue`,
+  `QueryTerm`, `QueryParser`, `QueryFunction`, and the `QueryValue` union;
+- `tslc.lower._query_core` owns base/type/value/intrinsic/primitive query
+  functions;
+- `tslc.lower._query_vector` owns vector/register/mask/generic query functions
+  plus the vector-value helper logic they share;
+- `tslc.lower._query_leaf` owns no-argument source leaf resolution for scope
+  aliases, scalar leaves, backend value leaves, quoted strings, and bare
+  identifiers.
+
+The public `queries.py` module re-exports the existing public names used by
+region handlers and dependency extraction. `QueryEvaluator` still owns the
+recursive evaluation algorithm and delegates unknown no-argument terms to the
+leaf resolver.
+
+Consequences:
+
+- The default query registry remains in one visible place, but individual query
+  families now have smaller owners.
+- Dependency extraction can continue to import the same public query classes
+  while those classes live in namespace modules.
+- Adding a new vector/register/mask query is localized to `_query_vector` plus
+  the registry entry; adding a core source/type query is localized to
+  `_query_core` plus the registry entry.
+- The public facade is now small enough to review as evaluator wiring instead
+  of a mixed query-language module.

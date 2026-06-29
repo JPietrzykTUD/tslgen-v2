@@ -16,7 +16,13 @@ from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.lower.context import LoweringEnv, LoweringScope, LoweringSession, VectorValue
 from tslc.lower.lowerer import Lowerer
-from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue, TypeValue
+from tslc.lower.queries import (
+    DEFAULT_QUERY_FUNCTIONS,
+    BoolValue,
+    QueryEvaluator,
+    TextValue,
+    TypeValue,
+)
 from tslc.select.selector import Selector
 
 
@@ -43,6 +49,16 @@ def _ctx(catalog, ext_name, type_tag, backend="cpp"):
 
 
 # --- query layer -------------------------------------------------------------
+
+
+def test_query_facade_separates_evaluator_from_namespace_functions() -> None:
+    modules_by_head = {
+        function.head: type(function).__module__ for function in DEFAULT_QUERY_FUNCTIONS
+    }
+
+    assert QueryEvaluator.__module__ == "tslc.lower.queries"
+    assert modules_by_head["type::is_same"] == "tslc.lower._query_core"
+    assert modules_by_head["vector::length"] == "tslc.lower._query_vector"
 
 
 def test_type_is_same_query(catalog: Catalog) -> None:

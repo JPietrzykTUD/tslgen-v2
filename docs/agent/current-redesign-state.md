@@ -4863,3 +4863,51 @@ rendering reports `14 passed`; build verifier tests report `53 passed`;
 
 Stop condition: this cleanup is complete. No next run prompt is required for
 this user-directed slice.
+
+## Completed Query Namespace Module Split
+
+The lower query evaluator now has namespace-oriented ownership instead of one
+large mixed `queries.py` module.
+
+Implemented:
+
+- Added `tslc.lower._query_model` for typed query values, parsed terms, parser,
+  and the query-function protocol.
+- Added `tslc.lower._query_core` for base/type/value/intrinsic/primitive query
+  functions.
+- Added `tslc.lower._query_vector` for vector/register/mask/generic query
+  functions and shared vector-value helper logic.
+- Added `tslc.lower._query_leaf` for no-argument source leaf resolution.
+- Reduced `tslc.lower.queries` to the public evaluator/registry facade while
+  preserving existing imports used by region handlers and dependency analysis.
+- Added a regression guard that core and vector query heads are owned by their
+  namespace modules while `QueryEvaluator` stays in the public facade.
+- Recorded ADR-122 in `docs/redesign/design-decisions.md`.
+
+Design check:
+
+```text
+wc -l tslc/src/tslc/lower/queries.py tslc/src/tslc/lower/_query_model.py tslc/src/tslc/lower/_query_core.py tslc/src/tslc/lower/_query_vector.py tslc/src/tslc/lower/_query_leaf.py
+```
+
+Result: `queries.py` is 155 lines, and the split modules are 73, 154, 294,
+and 63 lines respectively. The largest query namespace owner is below 300
+lines, and new query families have clearer additive homes.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src
+python -m pytest tslc/tests/test_generation_conditionals.py tslc/tests/test_masks_and_calls.py::test_dependency_extraction_resolves_queries_without_backend_dialect tslc/tests/test_masks_and_calls.py::test_dependency_extraction_uses_shared_query_functions -q
+python -m pytest tslc/tests/test_generation_conditionals.py tslc/tests/test_masks_and_calls.py tslc/tests/test_select_and_lower.py tslc/tests/test_diagnostic_provenance.py -q
+python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall passed; focused query/dependency tests report `26 passed`;
+the broader query/lowering/diagnostic gate reports `66 passed`; the broad
+non-build gate reports `290 passed, 83 deselected`; `git diff --check` passed.
+
+Next action for the active five-slice cleanup: split
+`catalog/validation/schema_validation.py` by schema section while keeping one
+public validation entry point.
