@@ -4,8 +4,22 @@ from __future__ import annotations
 
 import pytest
 
+from tslc.catalog import builder as builder_module
+from tslc.catalog._builder_extensions import _build_extension
+from tslc.catalog._builder_implementations import _implementations_from_entries
+from tslc.catalog._builder_primitives import _build_primitives
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
+
+
+def test_catalog_builder_keeps_domain_promotion_boundaries() -> None:
+    assert builder_module.CatalogBuilder.__module__ == "tslc.catalog.builder"
+    assert _build_extension.__module__ == "tslc.catalog._builder_extensions"
+    assert (
+        _implementations_from_entries.__module__
+        == "tslc.catalog._builder_implementations"
+    )
+    assert _build_primitives.__module__ == "tslc.catalog._builder_primitives"
 
 
 def test_type_groups_expand(catalog: Catalog) -> None:

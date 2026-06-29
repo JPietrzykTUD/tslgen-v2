@@ -4960,3 +4960,56 @@ Result: compileall passed; focused schema/catalog/provenance tests report
 
 Next action for the active five-slice cleanup: split
 `catalog/builder.py` by source section/domain object.
+
+## Completed Catalog Builder Promotion Split
+
+Catalog promotion now has domain-object ownership instead of one large mixed
+`builder.py` module.
+
+Implemented:
+
+- Added `tslc.catalog._builder_common` for shared parse-tree accessors,
+  source-span conversion, scalar list/text helpers, and simple boolean-field
+  promotion.
+- Added `tslc.catalog._builder_blocks` for type-group, backend type-spelling,
+  and backend translation block promotion.
+- Added `tslc.catalog._builder_target_families` for `target_families:`
+  capability promotion.
+- Added `tslc.catalog._builder_extensions` for extension block promotion and
+  extension inheritance flattening.
+- Added `tslc.catalog._builder_implementations` for implementation selector,
+  requirement, safety, target-selector, and multi-extension selector promotion.
+- Reduced `tslc.catalog._builder_primitives` to primitive declaration promotion
+  and immediate/generic/attribute metadata, delegating implementation entries
+  to `_builder_implementations`.
+- Reduced `tslc.catalog.builder` to the public parsed-document promotion
+  coordinator and `CatalogBuildResult`/`CatalogBuilder` API.
+- Added a regression guard that the public builder facade and private
+  domain-promotion helpers stay in their owned modules.
+- Recorded ADR-124 in `docs/redesign/design-decisions.md`.
+
+Design check:
+
+```text
+wc -l tslc/src/tslc/catalog/builder.py tslc/src/tslc/catalog/_builder_common.py tslc/src/tslc/catalog/_builder_blocks.py tslc/src/tslc/catalog/_builder_target_families.py tslc/src/tslc/catalog/_builder_extensions.py tslc/src/tslc/catalog/_builder_implementations.py tslc/src/tslc/catalog/_builder_primitives.py
+```
+
+Result: `builder.py` is 92 lines; split modules are 92, 45, 36, 274, 173,
+and 286 lines respectively. No catalog builder promotion owner is over 300
+lines.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src
+python -m pytest tslc/tests/test_catalog.py tslc/tests/test_catalog_tests.py tslc/tests/test_catalog_validation.py tslc/tests/test_diagnostic_provenance.py -q
+python -m pytest -q -p no:cacheprovider -k 'not build' tslc/tests
+git diff --check
+```
+
+Result: compileall passed; focused catalog/builder/schema/provenance tests
+report `59 passed`; the broad non-build gate reports `290 passed, 84
+deselected`; `git diff --check` passed.
+
+Next action for the active five-slice cleanup: split `pipeline.py`
+orchestration helpers only after inspecting its data/control boundaries.

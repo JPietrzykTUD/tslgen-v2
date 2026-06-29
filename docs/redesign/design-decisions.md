@@ -6095,3 +6095,43 @@ Consequences:
   without changing validation semantics.
 - Shared helpers are typed Python functions rather than an unowned utility blob
   hidden inside the public entry point.
+
+## ADR-124: Catalog Builder Promotion Is Split By Domain Ownership
+
+Context:
+
+`tslc.catalog.builder` promoted every parsed source section into catalog domain
+objects in one module: simple type/language/translation blocks, target-family
+capabilities, extension metadata and inheritance, primitive metadata, and
+implementation selector entries. The behavior was mostly coherent, but adding a
+new source section or a new primitive/extension promotion rule meant editing a
+single large file that mixed unrelated catalog ownership.
+
+Decision:
+
+Keep `builder.py` as the public parsed-document promotion coordinator and split
+the actual promotion helpers into focused private catalog modules:
+
+- `_builder_common` owns shared parse-tree accessors and source-span/primitive
+  scalar helpers used by promotion code;
+- `_builder_blocks` owns simple type-group, type-spelling, and translation
+  block promotion;
+- `_builder_target_families` owns `target_families:` capability promotion;
+- `_builder_extensions` owns extension block promotion and extension
+  inheritance flattening;
+- `_builder_implementations` owns implementation selector, requirement, safety,
+  target-selector, and multi-extension selector promotion;
+- `_builder_primitives` owns primitive declaration promotion and delegates
+  implementation-entry promotion to `_builder_implementations`.
+
+Consequences:
+
+- `CatalogBuilder` remains the one public build entry point and keeps file I/O,
+  validation, lowering, and rendering out of catalog promotion.
+- New source sections or domain-object promotion rules have additive homes
+  instead of lengthening one catch-all builder module.
+- Primitive promotion is separated from implementation selector promotion, which
+  reduces the risk that new primitive metadata and selector semantics drift
+  together.
+- Existing catalog model objects and diagnostics are preserved; this is an
+  ownership split, not a catalog behavior change.
