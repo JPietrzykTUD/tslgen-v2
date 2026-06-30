@@ -49,16 +49,17 @@ extension avx512:
         ui64 "epu64"
   mask_type_policy:
     kind "native_predicate_by_lanes"
-    cpp_by_lanes:
-      8 "__mmask8"
-      16 "__mmask16"
-      32 "__mmask32"
-      64 "__mmask64"
-    rust_by_lanes:
-      8 "core::arch::x86_64::__mmask8"
-      16 "core::arch::x86_64::__mmask16"
-      32 "core::arch::x86_64::__mmask32"
-      64 "core::arch::x86_64::__mmask64"
+    backend_spelling_by_lanes:
+      cpp:
+        8 "__mmask8"
+        16 "__mmask16"
+        32 "__mmask32"
+        64 "__mmask64"
+      rust:
+        8 "core::arch::x86_64::__mmask8"
+        16 "core::arch::x86_64::__mmask16"
+        32 "core::arch::x86_64::__mmask32"
+        64 "core::arch::x86_64::__mmask64"
   integral_mask_type_policy:
     kind "same_as_mask_type"
 
@@ -142,14 +143,15 @@ extension avx2_vl:
     generation_support ["avx2", "sse_vl"]
   mask_type_policy:
     kind "native_predicate_by_lanes"
-    cpp_by_lanes:
-      8 "__mmask8"
-      16 "__mmask16"
-      32 "__mmask32"
-    rust_by_lanes:
-      8 "core::arch::x86_64::__mmask8"
-      16 "core::arch::x86_64::__mmask16"
-      32 "core::arch::x86_64::__mmask32"
+    backend_spelling_by_lanes:
+      cpp:
+        8 "__mmask8"
+        16 "__mmask16"
+        32 "__mmask32"
+      rust:
+        8 "core::arch::x86_64::__mmask8"
+        16 "core::arch::x86_64::__mmask16"
+        32 "core::arch::x86_64::__mmask32"
   integral_mask_type_policy:
     kind "same_as_mask_type"
   signature_support:
@@ -237,12 +239,13 @@ extension sse_vl:
     generation_support ["sse"]
   mask_type_policy:
     kind "native_predicate_by_lanes"
-    cpp_by_lanes:
-      8 "__mmask8"
-      16 "__mmask16"
-    rust_by_lanes:
-      8 "core::arch::x86_64::__mmask8"
-      16 "core::arch::x86_64::__mmask16"
+    backend_spelling_by_lanes:
+      cpp:
+        8 "__mmask8"
+        16 "__mmask16"
+      rust:
+        8 "core::arch::x86_64::__mmask8"
+        16 "core::arch::x86_64::__mmask16"
   integral_mask_type_policy:
     kind "same_as_mask_type"
   signature_support:
@@ -451,7 +454,8 @@ extension sve:
         ui64 "u64"
   mask_type_policy:
     kind "native_predicate"
-    cpp "svbool_t"
+    backend_spelling:
+      cpp "svbool_t"
   integral_mask_type_policy:
     kind "same_as_mask_type"
 

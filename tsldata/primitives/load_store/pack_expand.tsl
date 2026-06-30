@@ -63,7 +63,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             intrin<mask_compressstoreu, build[suffix=base::signed_of(base::in)]>(
-              cast<reinterpret>(SignedBase *, ptr),
+              cast<reinterpret, type=ptr>(SignedBase, ptr),
               m,
               a
             );
@@ -253,7 +253,7 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
               intrin<mask_expandloadu, build[suffix=base::signed_of(base::in)]>(
                 call<primitive=set_zero[Vec]>(),
                 m,
-                cast<reinterpret>(SignedBase const *, ptr)
+                cast<reinterpret, type=const_ptr>(SignedBase, ptr)
               )
             );
           """

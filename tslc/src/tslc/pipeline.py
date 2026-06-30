@@ -229,6 +229,9 @@ class _GenerationSession:
                     for capability in self.backends
                 },
                 extensions=selected_extensions,
+                profile_family=self.inputs.catalog.target_families.profile_family(
+                    effective_profile.family
+                ),
             )
         )
 

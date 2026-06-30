@@ -3,18 +3,33 @@
 from __future__ import annotations
 
 from tslc.catalog.validation._schema_common import (
+    KNOWN_BOOLEAN_VALUES,
     diagnose_duplicate_fields,
+    invalid_enum,
     is_scalar_list,
     validate_known_fields,
 )
-from tslc.catalog.validation.source_spans import child, children, source_span
+from tslc.catalog.validation.source_spans import child, children, field_text, source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.ast import ParsedTslField
 
 _KNOWN_TARGET_FAMILIES_FIELDS = frozenset(
     {"known_extension_families", "universal_extension_families", "profile_families"}
 )
-_KNOWN_PROFILE_FAMILY_FIELDS = frozenset({"extension_families", "emulator_kinds"})
+_KNOWN_PROFILE_FAMILY_FIELDS = frozenset(
+    {
+        "cpp_detection",
+        "cpp_feature_flags",
+        "cpp_target",
+        "emulator_kinds",
+        "extension_families",
+        "rust_linker",
+        "rust_target",
+        "rust_target_features",
+        "sort_order",
+    }
+)
+_KNOWN_CPP_DETECTIONS = frozenset({"x86_builtin", "aarch64_hwcaps"})
 
 
 def validate_target_families(
@@ -75,3 +90,25 @@ def validate_target_families(
                         source=source_span(list_field.source),
                     )
                 )
+        for bool_name in ("cpp_feature_flags", "rust_target_features"):
+            bool_field = child(profile, bool_name)
+            value = field_text(bool_field)
+            if bool_field is not None and value not in KNOWN_BOOLEAN_VALUES:
+                invalid_enum(
+                    diagnostics,
+                    bool_field,
+                    f"profile family {profile.key.text!r} {bool_name} {value!r}",
+                    sorted(KNOWN_BOOLEAN_VALUES),
+                )
+        detection = child(profile, "cpp_detection")
+        detection_value = field_text(detection)
+        if detection is not None and detection_value not in _KNOWN_CPP_DETECTIONS:
+            invalid_enum(
+                diagnostics,
+                detection,
+                (
+                    f"profile family {profile.key.text!r} cpp_detection "
+                    f"{detection_value!r}"
+                ),
+                sorted(_KNOWN_CPP_DETECTIONS),
+            )

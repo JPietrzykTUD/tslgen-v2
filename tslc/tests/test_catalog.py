@@ -294,7 +294,7 @@ def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:
     with pytest.raises(TypeError):
         avx2.compose_suffix_by_type["si32"] = "bad"  # type: ignore[index]
     with pytest.raises(TypeError):
-        avx512.mask_policy.cpp_by_lanes[16] = "bad"  # type: ignore[index]
+        avx512.mask_policy.backend_spelling_by_lanes["cpp"][16] = "bad"  # type: ignore[index]
     with pytest.raises(TypeError):
         avx2.metadata.backend["new"] = avx2.metadata.backend["cpp"]  # type: ignore[index]
     with pytest.raises(TypeError):

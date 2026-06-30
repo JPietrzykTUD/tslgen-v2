@@ -45,7 +45,7 @@ prim<s:=v> hand(vec):
             var<const_infer>(bits_vec, call<primitive=reinterpret[Vec, UVec]>(vec));
             var<infer>(bits, cast<static>(UnsignedT, intrin<svandv, build[suffix=UnsignedT]>(call<primitive=mask_true[UVec]>(), bits_vec)));
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &bits), value<generation>(type::size_bytes(type<generation>(base::in))));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &bits), value<generation>(type::size_bytes(type<generation>(base::in))));
             complete(out);
           """
     avx512:
@@ -240,14 +240,14 @@ prim<s:=v> hand(vec):
             let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
-            mem<copy>(cast<reinterpret>(void*, &result), cast<reinterpret>(void const*, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &result), cast<reinterpret, type=const_ptr>(void, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
             loop<backend>(i, 1, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
               result &= bits;
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
             complete(out);
           """
     [avx2_vl, sse_vl]:
@@ -277,14 +277,14 @@ prim<s:=v> hand(vec):
             let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
-            mem<copy>(cast<reinterpret>(void*, &result), cast<reinterpret>(void const*, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &result), cast<reinterpret, type=const_ptr>(void, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
             loop<backend>(i, 1, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
               result &= bits;
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
             complete(out);
           """
     [scalar, generic, oneAPIfpga, neon]:
@@ -325,14 +325,14 @@ prim<s:=v> hand(vec):
             let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
-            mem<copy>(cast<reinterpret>(void*, &result), cast<reinterpret>(void const*, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &result), cast<reinterpret, type=const_ptr>(void, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
             loop<backend>(i, 1, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
               result &= bits;
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
             complete(out);
           """
 
@@ -573,11 +573,11 @@ prim<s:=v> hor(vec):
             var<typed>(UnsignedT, result, cast<static>(UnsignedT, 0));
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
               result |= bits;
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
             complete(out);
           """
     [scalar, generic, oneAPIfpga, neon]:
@@ -615,14 +615,14 @@ prim<s:=v> hor(vec):
             let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
-            mem<copy>(cast<reinterpret>(void*, &result), cast<reinterpret>(void const*, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &result), cast<reinterpret, type=const_ptr>(void, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
             loop<backend>(i, 1, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
               result |= bits;
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
             complete(out);
           """
 
@@ -764,7 +764,7 @@ prim<s:=(m,v)> hand(mask, vec):
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 var<infer>(bits, cast<static>(UnsignedT, 0));
-                mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &values[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+                mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &values[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
                 if (found == 0) {
                   result = bits;
                   found = 1;
@@ -775,7 +775,7 @@ prim<s:=(m,v)> hand(mask, vec):
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
             if (found != 0) {
-              mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
             }
             complete(out);
           """
@@ -886,12 +886,12 @@ prim<s:=(m,v)> hor(mask, vec):
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 var<infer>(bits, cast<static>(UnsignedT, 0));
-                mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &values[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+                mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &values[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
                 result |= bits;
               }
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
             complete(out);
           """
     [avx2_vl, sse_vl]:
@@ -923,11 +923,11 @@ prim<s:=(m,v)> hor(mask, vec):
             var<typed>(UnsignedT, result, cast<static>(UnsignedT, 0));
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
               result |= bits;
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
             complete(out);
           """
     [scalar, generic, oneAPIfpga, neon]:
@@ -971,10 +971,10 @@ prim<s:=(m,v)> hor(mask, vec):
             var<typed>(UnsignedT, result, cast<static>(UnsignedT, 0));
             loop<backend>(i, 0, value<generation>(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
               result |= bits;
             }
             var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret>(void*, &out), cast<reinterpret>(void const*, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
             complete(out);
           """

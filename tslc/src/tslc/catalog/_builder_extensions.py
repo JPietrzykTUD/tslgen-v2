@@ -295,17 +295,17 @@ def _merge_header_maps(
 
 
 def _mask_policy(field: ParsedTslField | None) -> MaskPolicy:
-    """Promote a ``mask_type_policy`` block: its ``kind`` plus direct native-predicate
-    spellings and per-backend lane-count maps."""
+    """Promote a ``mask_type_policy`` block: its ``kind`` plus backend-owned native
+    predicate spellings and lane-count maps."""
 
     if field is None:
         return MaskPolicy()
     return MaskPolicy(
         kind=_field_text(_child(field, "kind")) or "lane_bitmask",
-        cpp=_field_text(_child(field, "cpp")),
-        rust=_field_text(_child(field, "rust")),
-        cpp_by_lanes=_int_keyed_map(_child(field, "cpp_by_lanes")),
-        rust_by_lanes=_int_keyed_map(_child(field, "rust_by_lanes")),
+        backend_spelling=_backend_text_map(_child(field, "backend_spelling")),
+        backend_spelling_by_lanes=_backend_int_map(
+            _child(field, "backend_spelling_by_lanes")
+        ),
     )
 
 
@@ -329,6 +329,15 @@ def _int_keyed_map(field: ParsedTslField | None) -> dict[int, str]:
         if key.isdigit():
             result[int(key)] = _field_text(entry) or ""
     return result
+
+
+
+def _backend_int_map(field: ParsedTslField | None) -> dict[str, dict[int, str]]:
+    return {
+        child.key.text: values
+        for child in _children(field)
+        if (values := _int_keyed_map(child))
+    }
 
 
 

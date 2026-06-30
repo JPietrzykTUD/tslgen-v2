@@ -15,6 +15,7 @@ from tslc.backend.target_capability import (
 )
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
+from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyEmulator, VerifyProfile
@@ -76,28 +77,44 @@ def rust_verify_profiles(profiles: tuple[ProfileRender, ...]) -> tuple[VerifyPro
             profile_name=slug(profile_render.profile.name),
             file_stem=slug(profile_render.profile.name),
             family=profile_render.profile.family,
-            rust_target_features=rust_target_features(profile_render.profile),
-            rust_target=rust_target(profile_render.profile),
-            rust_linker=rust_linker(profile_render.profile),
+            rust_target_features=rust_target_features(
+                profile_render.profile, profile_render.profile_family
+            ),
+            rust_target=rust_target(profile_render.profile, profile_render.profile_family),
+            rust_linker=rust_linker(profile_render.profile, profile_render.profile_family),
             emulator=_verify_emulator(profile_render.profile),
         )
         for profile_render in profiles
     )
 
 
-def rust_target_features(profile: MachineProfile) -> tuple[str, ...]:
+def rust_target_features(
+    profile: MachineProfile,
+    capability: ProfileFamilyCapability | None = None,
+) -> tuple[str, ...]:
+    capability = capability or ProfileFamilyCapability(profile.family)
+    if not capability.rust_target_features:
+        return ()
     return tuple(
         f"+{feature_spelling(feature, profile.alternatives)}"
         for feature in sorted(profile.features)
     )
 
 
-def rust_target(profile: MachineProfile) -> str | None:
-    return "aarch64-unknown-linux-musl" if profile.family == "aarch64" else None
+def rust_target(
+    profile: MachineProfile,
+    capability: ProfileFamilyCapability | None = None,
+) -> str | None:
+    capability = capability or ProfileFamilyCapability(profile.family)
+    return capability.rust_target
 
 
-def rust_linker(profile: MachineProfile) -> str | None:
-    return "rust-lld" if profile.family == "aarch64" else None
+def rust_linker(
+    profile: MachineProfile,
+    capability: ProfileFamilyCapability | None = None,
+) -> str | None:
+    capability = capability or ProfileFamilyCapability(profile.family)
+    return capability.rust_linker
 
 
 def _rust_arch_use(emitted_exts: list[str], extensions: Mapping[str, Extension]) -> str:
@@ -193,7 +210,7 @@ def _rust_mask_type(extension: Extension | None, base_spelling: str, register: s
     if extension is None or extension.mask_policy.kind != "native_predicate_by_lanes":
         return register
     lanes = extension.vector_bits // type_bits(base_spelling)
-    return extension.mask_policy.rust_by_lanes.get(max(8, lanes), register)
+    return extension.mask_policy.spelling_for_lanes("rust", max(8, lanes)) or register
 
 
 def _rust_imask_type(

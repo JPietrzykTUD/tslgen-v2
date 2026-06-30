@@ -99,11 +99,12 @@ def validate_extension_block(
     mask = fields.get("mask_type_policy")
     _validate_policy_block(
         mask,
-        frozenset({"kind", "width", "cpp_by_lanes", "rust_by_lanes", "cpp", "rust"}),
+        frozenset({"kind", "width", "backend_spelling", "backend_spelling_by_lanes"}),
         _KNOWN_MASK_POLICY_KINDS,
         "mask_type_policy",
         diagnostics,
     )
+    _validate_mask_policy_backend_maps(mask, diagnostics)
     imask = fields.get("integral_mask_type_policy")
     _validate_policy_block(
         imask,
@@ -197,3 +198,42 @@ def _validate_policy_block(
     kind = field_text(kind_field)
     if kind is not None and kind not in allowed_kinds:
         invalid_enum(diagnostics, kind_field, f"{owner} kind {kind!r}", sorted(allowed_kinds))
+
+
+def _validate_mask_policy_backend_maps(
+    field: ParsedTslField | None,
+    diagnostics: list[Diagnostic],
+) -> None:
+    if field is None:
+        return
+    spelling = child(field, "backend_spelling")
+    if spelling is not None:
+        diagnose_duplicate_fields(
+            children(spelling),
+            diagnostics,
+            label="mask_type_policy backend_spelling field",
+        )
+        validate_backend_key_fields(
+            children(spelling),
+            diagnostics,
+            owner="mask_type_policy backend_spelling",
+        )
+    by_lanes = child(field, "backend_spelling_by_lanes")
+    if by_lanes is None:
+        return
+    diagnose_duplicate_fields(
+        children(by_lanes),
+        diagnostics,
+        label="mask_type_policy backend_spelling_by_lanes field",
+    )
+    validate_backend_key_fields(
+        children(by_lanes),
+        diagnostics,
+        owner="mask_type_policy backend_spelling_by_lanes",
+    )
+    for backend in children(by_lanes):
+        diagnose_duplicate_fields(
+            children(backend),
+            diagnostics,
+            label=f"mask_type_policy {backend.key.text!r} lane field",
+        )

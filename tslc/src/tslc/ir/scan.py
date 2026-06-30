@@ -15,6 +15,8 @@ expression streams, so their punctuation stays owned by the surrounding source.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from tslc.diagnostics import SourceSpan
 from tslc.ir.region_registry import TSIL_REGION_KEYWORDS, region_body_shape
 from tslc.ir.segments import RawText, Region, Segment
@@ -25,8 +27,60 @@ _IDENT_START = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 _IDENT_CONT = _IDENT_START | frozenset("0123456789")
 
 
+@dataclass(frozen=True, slots=True)
+class MalformedRegion:
+    keyword: str
+    reason: str
+    text: str
+    source: SourceSpan | None = None
+
+
 def scan(text: str, *, source: SourceSpan | None = None) -> tuple[Segment, ...]:
     return tuple(_scan(text, source, text, 0, statement_context=True))
+
+
+def find_malformed_regions(
+    text: str,
+    *,
+    source: SourceSpan | None = None,
+) -> tuple[MalformedRegion, ...]:
+    """Find TSIL keyword islands that look intentional but fail the shared shell shape.
+
+    The scanner keeps raw target text pass-through by design; this companion pass lets catalog
+    validation diagnose misspelled or incomplete TSIL shells before they disappear into RawText.
+    """
+
+    return tuple(_find_malformed_regions(text, source, text, 0))
+
+
+def _find_malformed_regions(
+    text: str,
+    source: SourceSpan | None,
+    root_text: str,
+    base_offset: int,
+) -> list[MalformedRegion]:
+    malformed: list[MalformedRegion] = []
+    n = len(text)
+    i = 0
+    while i < n:
+        ch = text[i]
+        if ch == '"':
+            i = _skip_string(text, i)
+            continue
+        if ch in _IDENT_START and _boundary_before(text, i):
+            keyword, after = _read_ident(text, i)
+            if keyword in KEYWORDS:
+                region, end = _try_malformed_region(
+                    text, i, keyword, after, source, root_text, base_offset
+                )
+                if region is not None:
+                    malformed.append(region)
+                    i = max(end, after)
+                    continue
+            i = after
+            continue
+        i += 1
+    return malformed
 
 
 def _scan(
@@ -309,6 +363,331 @@ def _try_switch_region(
         arms=arms,
     )
     return region, outer_close + 1
+
+
+def _try_malformed_region(
+    text: str,
+    start: int,
+    keyword: str,
+    after_keyword: int,
+    source: SourceSpan | None,
+    root_text: str,
+    base_offset: int,
+) -> tuple[MalformedRegion | None, int]:
+    pos = _skip_ws(text, after_keyword)
+    has_selector = False
+    if pos < len(text) and text[pos] == "<":
+        has_selector = True
+        close = _match_bracket(text, pos, "<", ">")
+        if close is None:
+            return (
+                _malformed_region(
+                    text,
+                    start,
+                    len(text),
+                    keyword,
+                    "unterminated selector",
+                    source,
+                    root_text,
+                    base_offset,
+                ),
+                len(text),
+            )
+        pos = _skip_ws(text, close + 1)
+
+    if pos >= len(text) or text[pos] != "(":
+        if has_selector:
+            end = pos if pos > start else after_keyword
+            return (
+                _malformed_region(
+                    text,
+                    start,
+                    end,
+                    keyword,
+                    "missing argument payload",
+                    source,
+                    root_text,
+                    base_offset,
+                ),
+                max(end, after_keyword),
+            )
+        return None, after_keyword
+
+    close = _match_bracket(text, pos, "(", ")")
+    if close is None:
+        return (
+            _malformed_region(
+                text,
+                start,
+                len(text),
+                keyword,
+                "unterminated argument payload",
+                source,
+                root_text,
+                base_offset,
+            ),
+            len(text),
+        )
+
+    shape = region_body_shape(keyword)
+    if shape == "if_block":
+        return _try_malformed_if_region(
+            text, start, keyword, close + 1, source, root_text, base_offset
+        )
+    if shape == "loop_block":
+        return _try_malformed_loop_region(
+            text, start, keyword, close + 1, source, root_text, base_offset
+        )
+    if shape == "switch_block":
+        return _try_malformed_switch_region(
+            text, start, keyword, close + 1, source, root_text, base_offset
+        )
+    return None, close + 1
+
+
+def _try_malformed_if_region(
+    text: str,
+    start: int,
+    keyword: str,
+    after_condition: int,
+    source: SourceSpan | None,
+    root_text: str,
+    base_offset: int,
+) -> tuple[MalformedRegion | None, int]:
+    pos = _skip_ws(text, after_condition)
+    if pos >= len(text) or text[pos] != "{":
+        return (
+            _malformed_region(
+                text,
+                start,
+                after_condition,
+                keyword,
+                "missing block",
+                source,
+                root_text,
+                base_offset,
+            ),
+            after_condition,
+        )
+    close = _match_bracket(text, pos, "{", "}")
+    if close is None:
+        return (
+            _malformed_region(
+                text,
+                start,
+                len(text),
+                keyword,
+                "unterminated block",
+                source,
+                root_text,
+                base_offset,
+            ),
+            len(text),
+        )
+    end = close + 1
+    after_then = _skip_ws(text, end)
+    if _matches_keyword(text, after_then, "else"):
+        return _try_malformed_else_region(
+            text, start, keyword, after_then + len("else"), source, root_text, base_offset
+        )
+    return None, end
+
+
+def _try_malformed_else_region(
+    text: str,
+    start: int,
+    keyword: str,
+    after_else: int,
+    source: SourceSpan | None,
+    root_text: str,
+    base_offset: int,
+) -> tuple[MalformedRegion | None, int]:
+    pos = _skip_ws(text, after_else)
+    if pos < len(text) and text[pos] == "<":
+        close = _match_bracket(text, pos, "<", ">")
+        if close is None:
+            return (
+                _malformed_region(
+                    text,
+                    start,
+                    len(text),
+                    keyword,
+                    "unterminated else selector",
+                    source,
+                    root_text,
+                    base_offset,
+                ),
+                len(text),
+            )
+        pos = _skip_ws(text, close + 1)
+    if pos >= len(text):
+        return (
+            _malformed_region(
+                text,
+                start,
+                pos,
+                keyword,
+                "missing else block",
+                source,
+                root_text,
+                base_offset,
+            ),
+            pos,
+        )
+    if text[pos] == "{":
+        close = _match_bracket(text, pos, "{", "}")
+        if close is None:
+            return (
+                _malformed_region(
+                    text,
+                    start,
+                    len(text),
+                    keyword,
+                    "unterminated else block",
+                    source,
+                    root_text,
+                    base_offset,
+                ),
+                len(text),
+            )
+        return None, close + 1
+    if _matches_keyword(text, pos, "if"):
+        nested_keyword, nested_after = _read_ident(text, pos)
+        return _try_malformed_region(
+            text,
+            pos,
+            nested_keyword,
+            nested_after,
+            source,
+            root_text,
+            base_offset,
+        )
+    return (
+        _malformed_region(
+            text,
+            start,
+            pos,
+            keyword,
+            "malformed else block",
+            source,
+            root_text,
+            base_offset,
+        ),
+        pos,
+    )
+
+
+def _try_malformed_loop_region(
+    text: str,
+    start: int,
+    keyword: str,
+    after_body: int,
+    source: SourceSpan | None,
+    root_text: str,
+    base_offset: int,
+) -> tuple[MalformedRegion | None, int]:
+    pos = _skip_ws(text, after_body)
+    if pos < len(text) and text[pos] == "{":
+        close = _match_bracket(text, pos, "{", "}")
+        if close is None:
+            return (
+                _malformed_region(
+                    text,
+                    start,
+                    len(text),
+                    keyword,
+                    "unterminated block",
+                    source,
+                    root_text,
+                    base_offset,
+                ),
+                len(text),
+            )
+        return None, close + 1
+    return None, after_body
+
+
+def _try_malformed_switch_region(
+    text: str,
+    start: int,
+    keyword: str,
+    after_selector: int,
+    source: SourceSpan | None,
+    root_text: str,
+    base_offset: int,
+) -> tuple[MalformedRegion | None, int]:
+    pos = _skip_ws(text, after_selector)
+    if pos >= len(text) or text[pos] != "{":
+        return (
+            _malformed_region(
+                text,
+                start,
+                after_selector,
+                keyword,
+                "missing switch block",
+                source,
+                root_text,
+                base_offset,
+            ),
+            after_selector,
+        )
+    outer_close = _match_bracket(text, pos, "{", "}")
+    if outer_close is None:
+        return (
+            _malformed_region(
+                text,
+                start,
+                len(text),
+                keyword,
+                "unterminated switch block",
+                source,
+                root_text,
+                base_offset,
+            ),
+            len(text),
+        )
+    arms = _scan_switch_arms(
+        text[pos + 1 : outer_close], source, root_text, base_offset + pos + 1
+    )
+    if arms is None:
+        return (
+            _malformed_region(
+                text,
+                start,
+                outer_close + 1,
+                keyword,
+                "malformed switch arms",
+                source,
+                root_text,
+                base_offset,
+            ),
+            outer_close + 1,
+        )
+    return None, outer_close + 1
+
+
+def _malformed_region(
+    text: str,
+    start: int,
+    end: int,
+    keyword: str,
+    reason: str,
+    source: SourceSpan | None,
+    root_text: str,
+    base_offset: int,
+) -> MalformedRegion:
+    bounded_end = min(len(text), max(start + len(keyword), end))
+    return MalformedRegion(
+        keyword=keyword,
+        reason=reason,
+        text=text[start:bounded_end],
+        source=_span_for(
+            source,
+            root_text,
+            base_offset + start,
+            base_offset + bounded_end,
+        ),
+    )
 
 
 def _scan_switch_arms(

@@ -156,7 +156,7 @@ prim<s:=s> lzc_scalar(data):
           tsil """
                let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
                var<infer>(bits, cast<static>(UnsignedT, 0));
-               mem<copy>(cast<reinterpret>(void*, &bits), cast<reinterpret>(void const*, &data), value<generation>(type::size_bytes(type<generation>(base::in)))) ;
+               mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data), value<generation>(type::size_bytes(type<generation>(base::in)))) ;
                complete(cast<static>(type<generation>(base::in), details::clz(bits))) ;
             """
     oneAPIfpga:

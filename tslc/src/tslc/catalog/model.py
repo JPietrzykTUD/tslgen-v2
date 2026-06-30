@@ -283,21 +283,33 @@ class MaskPolicy:
     - ``"lane_bitmask"`` (sse/avx2): the mask *is* the vector register (all-ones /
       all-zeros per lane), so ``mask_type = register_type``.
     - ``"native_predicate"`` (scalable SVE): the mask is one backend-native predicate
-      spelling declared directly by the extension metadata.
+      spelling declared directly by backend id.
     - ``"native_predicate_by_lanes"`` (avx512 and the ``_vl`` variants): the mask is a
-      native ``__mmaskN`` predicate keyed by lane count; the per-backend spellings live
-      in ``cpp_by_lanes`` / ``rust_by_lanes`` (e.g. ``{8: "__mmask8", 16: "__mmask16"}``).
+      native predicate keyed by lane count; spellings are backend-keyed so a new backend
+      extends source data without changing this model.
     """
 
     kind: str = "lane_bitmask"
-    cpp: str | None = None
-    rust: str | None = None
-    cpp_by_lanes: Mapping[int, str] = field(default_factory=dict)
-    rust_by_lanes: Mapping[int, str] = field(default_factory=dict)
+    backend_spelling: Mapping[str, str] = field(default_factory=dict)
+    backend_spelling_by_lanes: Mapping[str, Mapping[int, str]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "cpp_by_lanes", _freeze_mapping(self.cpp_by_lanes))
-        object.__setattr__(self, "rust_by_lanes", _freeze_mapping(self.rust_by_lanes))
+        object.__setattr__(
+            self,
+            "backend_spelling",
+            _freeze_mapping(self.backend_spelling),
+        )
+        object.__setattr__(
+            self,
+            "backend_spelling_by_lanes",
+            _freeze_nested_mapping(self.backend_spelling_by_lanes),
+        )
+
+    def spelling(self, backend_id: str) -> str | None:
+        return self.backend_spelling.get(backend_id)
+
+    def spelling_for_lanes(self, backend_id: str, lanes: int) -> str | None:
+        return self.backend_spelling_by_lanes.get(backend_id, {}).get(lanes)
 
 
 @dataclass(frozen=True, slots=True)

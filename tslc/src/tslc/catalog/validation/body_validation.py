@@ -9,10 +9,11 @@ from collections.abc import Callable
 from tslc.catalog.validation.source_spans import source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS, region_shell_validator
-from tslc.ir.scan import scan
+from tslc.ir.scan import find_malformed_regions, scan
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower._text import split_top_level
 from tslc.lower.calls import parse_call_selector
+from tslc.lower.cast_selectors import parse_cast_selector
 from tslc.lower.region_handlers.intrinsics import IntrinsicSelector
 from tslc.syntax.ast import OuterTslParseResult, ParsedImplementationBodyEnvelope
 
@@ -36,7 +37,20 @@ def _validate_envelope(
     envelope: ParsedImplementationBodyEnvelope,
     diagnostics: list[Diagnostic],
 ) -> None:
-    segments = scan(envelope.payload_text, source=source_span(envelope.payload_source))
+    source = source_span(envelope.payload_source)
+    for malformed in find_malformed_regions(envelope.payload_text, source=source):
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-BODY-MALFORMED-REGION",
+                message=(
+                    f"primitive {primitive_name!r}: malformed TSIL region "
+                    f"{malformed.keyword!r}: {malformed.reason}"
+                ),
+                source=malformed.source,
+            )
+        )
+    segments = scan(envelope.payload_text, source=source)
     _validate_segments(primitive_name, segments, diagnostics)
 
 
@@ -144,6 +158,90 @@ def _validate_intrin_region(
     )
 
 
+def _validate_cast_region(
+    primitive_name: str,
+    region: Region,
+    diagnostics: list[Diagnostic],
+) -> None:
+    selector = parse_cast_selector(region.selector_text)
+    if not selector.is_valid:
+        unsupported = (
+            f": unsupported selector terms {selector.unsupported_terms!r}"
+            if selector.unsupported_terms
+            else ""
+        )
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-BODY-BAD-CAST-SELECTOR",
+                message=(
+                    f"primitive {primitive_name!r}: malformed cast selector "
+                    f"{region.selector_text!r}{unsupported}"
+                ),
+                source=region.source,
+            )
+        )
+        return
+
+    args = split_top_level(_segments_text(region.body))
+    if len(args) != 2:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-BODY-BAD-CAST",
+                message=(
+                    f"primitive {primitive_name!r}: cast must be "
+                    "`cast<variant[, type=value|ptr|const_ptr]>(Type, expr)`"
+                ),
+                source=region.source,
+            )
+        )
+        return
+
+    target_type = args[0].strip()
+    if selector.type_kind in {"ptr", "const_ptr"}:
+        if selector.variant != "reinterpret":
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-BODY-BAD-CAST",
+                    message=(
+                        f"primitive {primitive_name!r}: pointer casts must use "
+                        "`cast<reinterpret, type=ptr|const_ptr>(Type, expr)`"
+                    ),
+                    source=region.source,
+                )
+            )
+        if target_type.rstrip().endswith("*"):
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-BODY-BAD-CAST",
+                    message=(
+                        f"primitive {primitive_name!r}: pointer cast type "
+                        "selectors own pointer-ness; omit trailing `*` from the "
+                        "target type"
+                    ),
+                    source=region.source,
+                )
+            )
+        return
+
+    if target_type.rstrip().endswith("*"):
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-BODY-BAD-CAST",
+                message=(
+                    f"primitive {primitive_name!r}: pointer casts must use "
+                    "`cast<reinterpret, type=ptr|const_ptr>(Type, expr)` "
+                    "instead of a trailing `*` target type"
+                ),
+                source=region.source,
+            )
+        )
+
+
 def _segments_text(segments: tuple[Segment, ...]) -> str:
     return "".join(
         segment.text if isinstance(segment, RawText) else segment.full_text
@@ -155,6 +253,7 @@ ShellValidator = Callable[[str, Region, list[Diagnostic]], None]
 
 _SHELL_VALIDATORS: dict[str, ShellValidator] = {
     "call_selector": _validate_call_region,
+    "cast_selector": _validate_cast_region,
     "let_type": _validate_let_region,
     "intrin_selector": _validate_intrin_region,
 }

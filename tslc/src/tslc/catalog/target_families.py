@@ -11,11 +11,18 @@ from tslc.diagnostics import SourceSpan
 
 @dataclass(frozen=True, slots=True)
 class ProfileFamilyCapability:
-    """One machine-profile family and the extension families it can host."""
+    """One machine-profile family and the extension/toolchain behavior it owns."""
 
     name: str
     extension_families: frozenset[str] = frozenset()
     emulator_kinds: frozenset[str] = frozenset()
+    sort_order: int = 100
+    cpp_feature_flags: bool = True
+    cpp_target: str | None = None
+    cpp_detection: str | None = None
+    rust_target_features: bool = True
+    rust_target: str | None = None
+    rust_linker: str | None = None
     source: SourceSpan | None = None
 
 
@@ -70,6 +77,9 @@ class TargetFamilyCatalog:
 
     def supports_profile_family(self, family: str) -> bool:
         return family in self.profile_families
+
+    def profile_family(self, family: str) -> ProfileFamilyCapability | None:
+        return self.profile_families.get(family)
 
     def extension_targets_profile(
         self,

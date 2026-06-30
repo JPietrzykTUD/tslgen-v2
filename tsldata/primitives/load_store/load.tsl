@@ -76,8 +76,8 @@ prim<v:=cptr>[aligned=*] load(ptr):
             if<generation>(value<generation>(primitive::attribute(aligned))) {
               complete(
                 intrin<load, build[suffix=intrin::suffix("stream")]>(
-                  cast<reinterpret>(
-                    type<generation>(vector::register) const *,
+                  cast<reinterpret, type=const_ptr>(
+                    type<generation>(vector::register),
                     assume_aligned<value<generation>(vector::alignment)>(ptr)
                   )
                 )
@@ -85,7 +85,7 @@ prim<v:=cptr>[aligned=*] load(ptr):
             } else<generation> {
               complete(
                 intrin<loadu, build[suffix=intrin::suffix("stream")]>(
-                  cast<reinterpret>(type<generation>(vector::register) const *, ptr)
+                  cast<reinterpret, type=const_ptr>(type<generation>(vector::register), ptr)
                 )
               );
             }
@@ -247,7 +247,7 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
             complete(
               intrin<maskz_loadu, build[suffix=base::signed_of(base::in)]>(
-                mask, cast<reinterpret>(SignedBase const *, ptr)
+                mask, cast<reinterpret, type=const_ptr>(SignedBase, ptr)
               )
             );
           """
@@ -411,7 +411,7 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
               intrin<mask_loadu, build[suffix=base::signed_of(base::in)]>(
                 data,
                 mask,
-                cast<reinterpret>(SignedBase const *, ptr)
+                cast<reinterpret, type=const_ptr>(SignedBase, ptr)
               )
             );
           """
@@ -526,7 +526,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
               complete(
                 call<primitive=to_mask[Vec]>(
-                  cast<static>(type<generation>(vector::imask), *(cast<reinterpret>(MaskWord const*, ptr)))
+                  cast<static>(type<generation>(vector::imask), *(cast<reinterpret, type=const_ptr>(MaskWord, ptr)))
                 )
               );
             }
@@ -547,7 +547,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
             } else<generation> {
               let<type>(MaskT, type<generation>(vector::mask));
               let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
-              var<const_infer>(words, cast<reinterpret>(MaskWord const *, ptr));
+              var<const_infer>(words, cast<reinterpret, type=const_ptr>(MaskWord, ptr));
               var<typed>(MaskT, result, mask<zero>());
               loop<backend>(i, 0, value<generation>(vector::length), 1) {
                 if ((*ptr_add(words, i)) != cast<static>(MaskWord, 0)) {
@@ -570,14 +570,14 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
-              complete(*(cast<reinterpret>(type<generation>(vector::imask) const*, ptr)));
+              complete(*(cast<reinterpret, type=const_ptr>(type<generation>(vector::imask), ptr)));
             } else<generation> {
               let<type>(MaskBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
               let<type>(MaskVec, type<generation>(vector::as_base(MaskBase)));
               complete(
                 call<primitive=nequal[MaskVec]>(
                   call<primitive=load[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
-                    cast<reinterpret>(MaskBase const *, ptr)
+                    cast<reinterpret, type=const_ptr>(MaskBase, ptr)
                   ),
                   call<primitive=set_zero[MaskVec]>()
                 )
@@ -607,7 +607,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
                 loaded_mask,
                 call<primitive=nequal[MaskVec]>(
                   call<primitive=load[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
-                    cast<reinterpret>(MaskBase const *, ptr)
+                    cast<reinterpret, type=const_ptr>(MaskBase, ptr)
                   ),
                   call<primitive=set_zero[MaskVec]>()
                 )
@@ -636,7 +636,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
                 lanes,
                 (intrin<svcntb>() / sizeof(type<generation>(base::unsigned_of(type<generation>(base::in)))))
               );
-              var<const_infer>(bytes, cast<reinterpret>(type<backend>(scalar::ui8) const*, ptr));
+              var<const_infer>(bytes, cast<reinterpret, type=const_ptr>(type<backend>(scalar::ui8), ptr));
 
               loop<backend>(lane, 0, lanes, 1) {
                 var<const_infer>(set, (((*ptr_add(bytes, lane >> 3)) >> (lane & 7)) & 1));
@@ -654,9 +654,9 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
               var<infer>(vec, call<primitive=set_zero[UVec]>());
               if<generation>(value<generation>(primitive::attribute(aligned))) {
-                vec = call<primitive=load[UVec], attrs[aligned=true]>(cast<reinterpret>(UnsignedT const*, ptr));
+                vec = call<primitive=load[UVec], attrs[aligned=true]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
               } else<generation> {
-                vec = call<primitive=load[UVec], attrs[aligned=false]>(cast<reinterpret>(UnsignedT const*, ptr));
+                vec = call<primitive=load[UVec], attrs[aligned=false]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
               }
               complete(intrin<svcmpne_n, build[suffix=base::unsigned_of(base::in)]>(pg, vec, cast<static>(UnsignedT, 0)));
             }

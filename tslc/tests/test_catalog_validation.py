@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from pathlib import Path
 
 import pytest
@@ -191,6 +193,11 @@ def test_target_family_data_makes_new_extension_family_additive() -> None:
         "      extension_families []\n"
         "    riscv:\n"
         "      extension_families [rvv]\n"
+        "      sort_order 30\n"
+        "      cpp_feature_flags false\n"
+        '      cpp_target "riscv64-linux-gnu"\n'
+        "      rust_target_features false\n"
+        '      rust_target "riscv64gc-unknown-linux-gnu"\n'
         "types:\n"
         "  ints {types [si32]}\n"
         "extension scalar:\n"
@@ -400,6 +407,85 @@ def test_malformed_intrin_body_region_is_diagnosed() -> None:
 
     diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-INTRIN-SELECTOR")
     assert "build" in diagnostic.message
+
+
+@pytest.mark.parametrize(
+    ("body", "keyword", "reason"),
+    [
+        ("call<primitive=set_zero(data);", "call", "unterminated selector"),
+        ("call<primitive=set_zero>;", "call", "missing argument payload"),
+        ("call<primitive=set_zero>(data;", "call", "unterminated argument payload"),
+        (
+            "if<generation>(value<generation>(type::is_integral)) complete(data);",
+            "if",
+            "missing block",
+        ),
+        (
+            "switch<compile>(scale) { 1 { complete(data); } }",
+            "switch",
+            "malformed switch arms",
+        ),
+    ],
+)
+def test_malformed_tsil_region_shells_are_diagnosed(
+    body: str, keyword: str, reason: str
+) -> None:
+    diagnostics = _diagnostics(
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "language rust:\n"
+        '  s32 {type "i32"}\n'
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        f'          tsil "{body}"\n'
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-MALFORMED-REGION")
+    assert f"malformed TSIL region '{keyword}'" in diagnostic.message
+    assert reason in diagnostic.message
+    assert diagnostic.location is not None
+
+
+def test_legacy_pointer_cast_shell_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "language rust:\n"
+        '  s32 {type "i32"}\n'
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(cast<reinterpret>(type<generation>(base::in) const *, data));"\n'
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-CAST")
+    assert "cast<reinterpret, type=ptr|const_ptr>" in diagnostic.message
+
+
+def test_primitive_source_uses_explicit_pointer_cast_selectors() -> None:
+    legacy_pointer_cast = re.compile(r"cast<reinterpret>\(\s*[^,]*\*,", re.S)
+    offenders = [
+        str(path)
+        for path in Path("tsldata/primitives").rglob("*.tsl")
+        if legacy_pointer_cast.search(path.read_text(encoding="utf-8"))
+    ]
+
+    assert offenders == []
 
 
 @pytest.mark.parametrize(

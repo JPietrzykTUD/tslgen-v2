@@ -171,8 +171,29 @@ Use `./dev.sh` for generated-project workflows:
 
 ## Extensibility Rules
 
+A project is maintainable when a reader can understand, debug, and safely
+change one behavior by following a small number of clearly owned modules. If
+understanding a behavior requires jumping through many indirect helpers,
+facades, compatibility wrappers, string conventions, or duplicated facts, treat
+that as evidence that ownership is unclear or the boundary is too clever.
+
+Broad refactors are acceptable when they make the next read/debug/change path
+shorter and more local. They are not acceptable when they merely redistribute
+complexity or add vocabulary without reducing the number of concepts a reader
+must hold at once.
+
 A dimension is extensible when a typical new feature mostly adds focused code
 rather than modifying unrelated locations.
+
+Adding the next similar feature should usually mean adding code at an owned
+extension point, not editing scattered classifiers, validators, renderers,
+policy branches, and string special cases. If one feature repeatedly requires
+changes across conceptually unrelated modules, treat that as evidence that an
+extension point is weak, missing, or in the wrong layer.
+
+Broad cross-cutting edits are acceptable when introducing or consolidating a
+typed boundary, but they should reduce the number of places the next similar
+feature must touch.
 
 When adding a backend:
 
@@ -226,6 +247,9 @@ or test gaps.
 ## Working Rules
 
 - Keep each change scoped to one coherent slice.
+- Read `PLANS.md` before substantial planning, implementation, review, or
+  revision work. Tiny documentation or typo-only edits may use it as a
+  lightweight checklist rather than a formal plan.
 - Follow existing local style before introducing new patterns.
 - Do not revert unrelated user changes.
 - Do not add hidden network, hardware, or host-specific test dependencies.

@@ -13,6 +13,7 @@ from tslc.backend.target_capability import (
 )
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
+from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyEmulator, VerifyProfile
@@ -22,6 +23,7 @@ from tslc.render._common import (
     fill_asset,
     slug,
     text,
+    type_bits,
     used_exts,
     used_type_specs,
 )
@@ -87,16 +89,20 @@ def cpp_verify_profiles(profiles: tuple[ProfileRender, ...]) -> tuple[VerifyProf
             profile_name=slug(profile_render.profile.name),
             file_stem=slug(profile_render.profile.name),
             family=profile_render.profile.family,
-            cpp_flags=cpp_flags(profile_render.profile),
-            cpp_target=cpp_target(profile_render.profile),
+            cpp_flags=cpp_flags(profile_render.profile, profile_render.profile_family),
+            cpp_target=cpp_target(profile_render.profile, profile_render.profile_family),
             emulator=_verify_emulator(profile_render.profile),
         )
         for profile_render in profiles
     )
 
 
-def cpp_flags(profile: MachineProfile) -> tuple[str, ...]:
-    if profile.family == "aarch64":
+def cpp_flags(
+    profile: MachineProfile,
+    capability: ProfileFamilyCapability | None = None,
+) -> tuple[str, ...]:
+    capability = capability or ProfileFamilyCapability(profile.family)
+    if not capability.cpp_feature_flags:
         return profile.cpp_flags
     return (
         *(
@@ -107,8 +113,12 @@ def cpp_flags(profile: MachineProfile) -> tuple[str, ...]:
     )
 
 
-def cpp_target(profile: MachineProfile) -> str | None:
-    return "aarch64-linux-gnu" if profile.family == "aarch64" else None
+def cpp_target(
+    profile: MachineProfile,
+    capability: ProfileFamilyCapability | None = None,
+) -> str | None:
+    capability = capability or ProfileFamilyCapability(profile.family)
+    return capability.cpp_target
 
 
 def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
@@ -210,8 +220,12 @@ def _cpp_mask_type(
 ) -> str:
     kind = extension.mask_policy.kind
     if kind == "native_predicate":
-        return extension.mask_policy.cpp or register
+        return extension.mask_policy.spelling("cpp") or register
     if kind == "native_predicate_by_lanes":
+        lanes = vector_bits // type_bits(base_type)
+        concrete = extension.mask_policy.spelling_for_lanes("cpp", max(8, lanes))
+        if concrete is not None:
+            return concrete
         return f"typename detail::native_mask<{vector_bits}, {base_type}>::type"
     return register
 
@@ -424,7 +438,7 @@ def _cpp_profile_targets(profiles: tuple[ProfileRender, ...]) -> str:
                 f"TSL_PROFILE_{profile_slug.upper()})"
             ),
         ]
-        flags = cpp_flags(profile_render.profile)
+        flags = cpp_flags(profile_render.profile, profile_render.profile_family)
         if flags:
             lines.append(
                 f"target_compile_options({target} INTERFACE "
@@ -445,7 +459,7 @@ def _cpp_profile_detection(
         profile_slug = slug(profile.name)
         if profile_slug == fallback_profile and not profile.features:
             continue
-        source = _cpp_profile_detection_source(profile)
+        source = _cpp_profile_detection_source(profile, profile_render.profile_family)
         if source is None:
             continue
         variable = "TSL_CPU_HAS_" + profile_slug.upper()
@@ -469,7 +483,7 @@ def _auto_detection_order(
         sorted(
             profiles,
             key=lambda profile: (
-                _profile_family_rank(profile.profile.family),
+                _profile_family_sort_order(profile),
                 len(profile.profile.features),
                 slug(profile.profile.name),
             ),
@@ -477,22 +491,23 @@ def _auto_detection_order(
     )
 
 
-def _profile_family_rank(family: str) -> int:
-    if family == "generic":
-        return 0
-    if family == "x86":
-        return 1
-    if family == "aarch64":
-        return 2
-    return 3
+def _profile_family_sort_order(profile: ProfileRender) -> int:
+    if profile.profile_family is None:
+        return ProfileFamilyCapability(profile.profile.family).sort_order
+    return profile.profile_family.sort_order
 
 
-def _cpp_profile_detection_source(profile: MachineProfile) -> str | None:
-    if profile.family == "x86":
-        return _x86_profile_detection_source(profile)
-    if profile.family == "aarch64":
-        return _aarch64_profile_detection_source(profile)
-    return None
+def _cpp_profile_detection_source(
+    profile: MachineProfile,
+    capability: ProfileFamilyCapability | None,
+) -> str | None:
+    capability = capability or ProfileFamilyCapability(profile.family)
+    if capability.cpp_detection is None:
+        return None
+    renderer = _CPP_DETECTION_RENDERERS.get(capability.cpp_detection)
+    if renderer is None:
+        return None
+    return renderer(profile)
 
 
 def _x86_profile_detection_source(profile: MachineProfile) -> str:
@@ -545,6 +560,12 @@ def _aarch64_profile_detection_source(profile: MachineProfile) -> str | None:
             )
         )
     return None
+
+
+_CPP_DETECTION_RENDERERS = {
+    "x86_builtin": _x86_profile_detection_source,
+    "aarch64_hwcaps": _aarch64_profile_detection_source,
+}
 
 
 def _cmake_list(values: Sequence[str]) -> str:

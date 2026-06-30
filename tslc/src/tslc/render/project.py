@@ -8,6 +8,7 @@ from types import MappingProxyType
 
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, Extension
+from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.diagnostics import Diagnostic
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact, ArtifactSet
@@ -38,6 +39,7 @@ class ProfileRender:
     # (so registrations know whether `avx2` here is lane-bitmask `avx2` or native
     # `avx2_vl`). Per (profile, isa) exactly one block is selected, so this is 1:1.
     extensions: Mapping[str, Extension] = field(default_factory=dict)
+    profile_family: ProfileFamilyCapability | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(

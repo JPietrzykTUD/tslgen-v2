@@ -6,8 +6,10 @@ from pathlib import Path
 
 from tslc.api import generate_project
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
-from tslc.render.cpp_project import cpp_flags
+from tslc.catalog.target_families import ProfileFamilyCapability
+from tslc.render.cpp_project import cpp_flags, cpp_target
 from tslc.render._common import slug
+from tslc.render.rust_project import rust_linker, rust_target, rust_target_features
 
 
 def _roots(result) -> set[str]:
@@ -71,7 +73,7 @@ def test_feature_flag_spelling(data_root: Path, machine_profiles_path: Path) -> 
     assert '__builtin_cpu_supports("avx2")' in cmake
 
 
-def test_cpp_profile_flags_are_profile_owned() -> None:
+def test_cpp_profile_flags_are_profile_family_owned() -> None:
     profile = MachineProfile(
         name="sve",
         family="aarch64",
@@ -79,8 +81,37 @@ def test_cpp_profile_flags_are_profile_owned() -> None:
         alternatives={},
         cpp_flags=("-march=armv8-a+sve",),
     )
+    capability = ProfileFamilyCapability(
+        "aarch64",
+        cpp_feature_flags=False,
+        cpp_target="aarch64-linux-gnu",
+    )
 
-    assert cpp_flags(profile) == ("-march=armv8-a+sve",)
+    assert cpp_flags(profile, capability) == ("-march=armv8-a+sve",)
+    assert cpp_target(profile, capability) == "aarch64-linux-gnu"
+
+
+def test_rust_profile_toolchain_is_profile_family_owned() -> None:
+    profile = MachineProfile(
+        name="neon",
+        family="aarch64",
+        features=frozenset({"neon"}),
+        alternatives={},
+    )
+    capability = ProfileFamilyCapability(
+        "aarch64",
+        rust_target_features=True,
+        rust_target="aarch64-unknown-linux-musl",
+        rust_linker="rust-lld",
+    )
+
+    assert rust_target_features(profile, capability) == ("+neon",)
+    assert rust_target(profile, capability) == "aarch64-unknown-linux-musl"
+    assert rust_linker(profile, capability) == "rust-lld"
+    assert rust_target_features(
+        profile,
+        ProfileFamilyCapability("generic", rust_target_features=False),
+    ) == ()
 
 
 def test_omitted_profiles_use_all_loaded_profiles(

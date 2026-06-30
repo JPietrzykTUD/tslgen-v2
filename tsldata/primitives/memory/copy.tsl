@@ -37,7 +37,7 @@ prim<void:=(ptr,cptr,s,s)> memory_cp(dst, src, count_bytes, copy_kind):
         implementation:
           tsil """
               var<const_infer>(_copy_kind, copy_kind);
-              mem<copy>(cast<reinterpret>(void *, dst), cast<reinterpret>(void const *, src), count_bytes);
+              mem<copy>(cast<reinterpret, type=ptr>(void, dst), cast<reinterpret, type=const_ptr>(void, src), count_bytes);
             """
       arith:
         requires:
@@ -58,5 +58,5 @@ prim<void:=(ptr,cptr,s,s)> memory_cp(dst, src, count_bytes, copy_kind):
         implementation:
           tsil """
               var<const_infer>(_copy_kind, copy_kind);
-              mem<copy>(cast<reinterpret>(void *, dst), cast<reinterpret>(void const *, src), count_bytes);
+              mem<copy>(cast<reinterpret, type=ptr>(void, dst), cast<reinterpret, type=const_ptr>(void, src), count_bytes);
             """

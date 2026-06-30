@@ -55,10 +55,26 @@ retired.
 
 Use these checks before adding new concepts.
 
+### Maintainability Check
+
+- Can a reader understand, debug, and safely change this behavior by following
+  a small number of clearly owned modules?
+- Does this change shorten the next read/debug/change path, or merely
+  redistribute complexity behind new names?
+- Are helper layers, facades, compatibility wrappers, string conventions, and
+  duplicated facts necessary and locally owned?
+- Would a future maintainer know where this behavior lives without searching
+  unrelated parser, catalog, lowering, backend, render, and verification code?
+
 ### Extension Point Check
 
 - Would adding the next backend, primitive, source field, or TSIL region mostly
   add code in one focused area?
+- If the next similar feature would require edits across scattered classifiers,
+  validators, renderers, policy branches, and string special cases, is there a
+  weak or missing extension point that should be fixed first?
+- If this slice is cross-cutting because it introduces a typed boundary, will it
+  reduce the number of unrelated locations the next similar feature must touch?
 - Are supported cases declared through typed capabilities, descriptors, or
   policies rather than scattered string literals?
 - Are unsupported cases diagnosed before rendering or writing artifacts?
