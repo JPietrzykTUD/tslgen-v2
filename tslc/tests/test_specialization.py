@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from tslc.api import generate_project
 from tslc.diagnostics import has_errors
 
@@ -18,8 +20,21 @@ def _generate(data_root: Path, machine_profiles_path: Path):
     )
 
 
-def test_artifact_layout(data_root: Path, machine_profiles_path: Path) -> None:
-    result = _generate(data_root, machine_profiles_path)
+@pytest.fixture(scope="module")
+def specialization_result(data_root: Path, machine_profiles_path: Path):
+    return _generate(data_root, machine_profiles_path)
+
+
+@pytest.fixture(scope="module")
+def specialization_artifacts(specialization_result) -> dict[str, str]:
+    return {
+        artifact.logical_path: artifact.content
+        for artifact in specialization_result.artifacts.artifacts
+    }
+
+
+def test_artifact_layout(specialization_result) -> None:
+    result = specialization_result
     assert not has_errors(result.diagnostics), result.diagnostics
     paths = {a.logical_path for a in result.artifacts.artifacts}
     # static cores, per-profile headers, top-level dispatch, per-profile smokes.
@@ -41,9 +56,8 @@ def test_artifact_layout(data_root: Path, machine_profiles_path: Path) -> None:
     assert "docs/specializations/styles.css" not in paths
 
 
-def test_cpp_specialization_structure(data_root: Path, machine_profiles_path: Path) -> None:
-    by = {a.logical_path: a.content for a in _generate(data_root, machine_profiles_path).artifacts.artifacts}
-    avx2 = by["cpp/include/tsl_avx2.hpp"]
+def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) -> None:
+    avx2 = specialization_artifacts["cpp/include/tsl_avx2.hpp"]
     # primary template, the avx2 si32 specialization, an sse specialization in the
     # same profile header, and the generic wrapper.
     assert "template <class Vec>\nstruct add_impl;" in avx2
@@ -70,9 +84,8 @@ def test_cpp_specialization_structure(data_root: Path, machine_profiles_path: Pa
     assert "struct hadd_impl<tsl::simd<double, tsl::avx2>>" in avx2
 
 
-def test_rust_specialization_structure(data_root: Path, machine_profiles_path: Path) -> None:
-    by = {a.logical_path: a.content for a in _generate(data_root, machine_profiles_path).artifacts.artifacts}
-    avx2 = by["rust/src/tsl_avx2.rs"]
+def test_rust_specialization_structure(specialization_artifacts: dict[str, str]) -> None:
+    avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
     assert "pub trait AddImpl: SimdVector {" in avx2
     assert "impl AddImpl for Simd<i32, Avx2> {" in avx2
     assert "unsafe { return core::arch::x86_64::_mm256_add_epi32(left, right); }" in avx2
@@ -94,13 +107,9 @@ def test_rust_specialization_structure(data_root: Path, machine_profiles_path: P
 
 
 def test_cpp_documentation_facade_contains_api_declarations_only(
-    data_root: Path, machine_profiles_path: Path
+    specialization_artifacts: dict[str, str],
 ) -> None:
-    by = {
-        a.logical_path: a.content
-        for a in _generate(data_root, machine_profiles_path).artifacts.artifacts
-    }
-    facade = by["cpp/docs/input/tsl_api_docs.hpp"]
+    facade = specialization_artifacts["cpp/docs/input/tsl_api_docs.hpp"]
 
     assert "namespace tsl {" in facade
     assert "template <class Vec>" in facade
@@ -114,15 +123,14 @@ def test_cpp_documentation_facade_contains_api_declarations_only(
 
 
 def test_specialization_explorer_data_contains_all_selected_specializations(
-    data_root: Path, machine_profiles_path: Path
+    specialization_result,
+    specialization_artifacts: dict[str, str],
 ) -> None:
-    result = _generate(data_root, machine_profiles_path)
-    by = {a.logical_path: a.content for a in result.artifacts.artifacts}
-    payload = json.loads(by["docs/specializations/specializations.json"])
+    payload = json.loads(specialization_artifacts["docs/specializations/specializations.json"])
     records = _decode_specialization_records(payload)
 
     assert payload["schema_version"] == 3
-    assert sum(record["count"] for record in records) == len(result.coverage)
+    assert sum(record["count"] for record in records) == len(specialization_result.coverage)
     assert any(
         record["backend"] == "cpp"
         and record["profile"] == "avx2"
@@ -173,10 +181,9 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
 
 
 def test_avx_profile_falls_back_to_sse_for_integers(
-    data_root: Path, machine_profiles_path: Path
+    specialization_artifacts: dict[str, str],
 ) -> None:
-    by = {a.logical_path: a.content for a in _generate(data_root, machine_profiles_path).artifacts.artifacts}
-    avx = by["cpp/include/tsl_avx.hpp"]
+    avx = specialization_artifacts["cpp/include/tsl_avx.hpp"]
     # avx lacks the avx2 flag, so 256-bit integer add is NOT specialized...
     assert "add_impl<tsl::simd<int32_t, tsl::avx2>>" not in avx
     assert "add_impl<tsl::simd<int32_t, tsl::sse>>" in avx
@@ -185,10 +192,9 @@ def test_avx_profile_falls_back_to_sse_for_integers(
 
 
 def test_skylake_uses_vl_and_avx512_not_base(
-    data_root: Path, machine_profiles_path: Path
+    specialization_artifacts: dict[str, str],
 ) -> None:
-    by = {a.logical_path: a.content for a in _generate(data_root, machine_profiles_path).artifacts.artifacts}
-    sky = by["cpp/include/tsl_skylake.hpp"]
+    sky = specialization_artifacts["cpp/include/tsl_skylake.hpp"]
     # avx512vl present -> the avx512vl-aware bodies are selected, but they are
     # emitted under the *ISA* names (avx2/sse), never the internal `_vl` tags.
     assert "_vl" not in sky
@@ -200,18 +206,17 @@ def test_skylake_uses_vl_and_avx512_not_base(
     assert "add_impl<tsl::simd<int32_t, tsl::sse>>" in sky
 
 
-def test_cast_lowers_integer_reductions(data_root: Path, machine_profiles_path: Path) -> None:
-    by = {a.logical_path: a.content for a in _generate(data_root, machine_profiles_path).artifacts.artifacts}
-    sky_cpp = by["cpp/include/tsl_skylake.hpp"]
-    sky_rust = by["rust/src/tsl_skylake.rs"]
+def test_cast_lowers_integer_reductions(specialization_artifacts: dict[str, str]) -> None:
+    sky_cpp = specialization_artifacts["cpp/include/tsl_skylake.hpp"]
+    sky_rust = specialization_artifacts["rust/src/tsl_skylake.rs"]
     # hadd's avx512 integer reduction casts the result to the base type:
     # cast<static>(type<generation>(base::in), intrin<reduce_add, build[...]>(vec)).
     assert "static_cast<int32_t>(_mm512_reduce_add_epi32(vec))" in sky_cpp
     assert "(core::arch::x86_64::_mm512_reduce_add_epi32(vec)) as i32" in sky_rust
 
 
-def test_coverage_counts_specializations(data_root: Path, machine_profiles_path: Path) -> None:
-    result = _generate(data_root, machine_profiles_path)
+def test_coverage_counts_specializations(specialization_result) -> None:
+    result = specialization_result
     keys = {(c.profile, c.extension, c.primitive, c.type_tag) for c in result.coverage}
     assert ("avx2", "avx2", "add", "si32") in keys
     assert ("avx2", "avx2", "hadd", "f64") in keys

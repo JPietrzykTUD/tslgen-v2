@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tslc.api import generate_project
 from tslc.coverage import coverage_by_primitive, format_coverage_report
 from tslc.diagnostics import has_errors
@@ -18,10 +20,15 @@ def _result(data_root: Path, machine_profiles_path: Path):
     )
 
 
+@pytest.fixture(scope="module")
+def representative_coverage_result(data_root: Path, machine_profiles_path: Path):
+    return _result(data_root, machine_profiles_path)
+
+
 def test_coverage_reports_full_emission_when_no_gaps_remain(
-    data_root: Path, machine_profiles_path: Path
+    representative_coverage_result,
 ) -> None:
-    result = _result(data_root, machine_profiles_path)
+    result = representative_coverage_result
     by = {row.primitive: row for row in coverage_by_primitive(result)}
 
     # These primitives used to provide representative support gaps. The current
@@ -41,8 +48,8 @@ def test_coverage_reports_full_emission_when_no_gaps_remain(
     assert not any(d.severity in ("warning", "error") for d in result.diagnostics)
 
 
-def test_report_text_is_actionable(data_root: Path, machine_profiles_path: Path) -> None:
-    report = format_coverage_report(_result(data_root, machine_profiles_path))
+def test_report_text_is_actionable(representative_coverage_result) -> None:
+    report = format_coverage_report(representative_coverage_result)
     assert "add" in report and "emitted" in report
     assert "3464 emitted / 3464 attempted" in report
     assert "skipped because" not in report

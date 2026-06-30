@@ -18,15 +18,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pr-verify:
-    name: PR verification
+  python-test-shards:
+    name: Compute Python test shards
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    timeout-minutes: 30
+    timeout-minutes: 5
+    outputs:
+      python_test_shards: ${{ steps.shards.outputs.python_test_shards }}
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+
+      - name: Compute Python test shards
+        id: shards
+        run: |
+          python_test_shards="$(python3 supplementary/ci/python_test_shards.py)"
+          echo "python_test_shards=${python_test_shards}" >> "$GITHUB_OUTPUT"
+
+  pr-verify:
+    name: PR Python tests (${{ matrix.python_test_shard.name }})
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 30
+    needs:
+      - python-test-shards
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python_test_shard: ${{ fromJson(needs['python-test-shards'].outputs.python_test_shards) }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -49,9 +73,7 @@ jobs:
           mkdir -p tslctmp
           trap "rm -rf tslctmp/pytest" EXIT
           python -m compileall -q tslc/src/tslc
-          python -m pytest -q tslc/tests \
-            --ignore=tslc/tests/test_build_verify.py \
-            --ignore=tslc/tests/test_value_tests.py
+          python -m pytest -q ${{ matrix.python_test_shard.paths }}
 
   ci-image:
     name: Build CI image
@@ -65,7 +87,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Compute image tag
         id: image
@@ -103,7 +125,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -141,7 +163,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Compute generated profile shards
         id: shards
@@ -171,7 +193,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -201,14 +223,21 @@ jobs:
             '
 
   full-python-tests:
-    name: Full Python tests
+    name: Full Python tests (${{ matrix.python_test_shard.name }})
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
     timeout-minutes: 30
+    needs:
+      - python-test-shards
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python_test_shard: ${{ fromJson(needs['python-test-shards'].outputs.python_test_shards) }}
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -231,9 +260,7 @@ jobs:
           mkdir -p tslctmp
           trap "rm -rf tslctmp/pytest" EXIT
           python -m compileall -q tslc/src/tslc
-          python -m pytest -q tslc/tests \
-            --ignore=tslc/tests/test_build_verify.py \
-            --ignore=tslc/tests/test_value_tests.py
+          python -m pytest -q ${{ matrix.python_test_shard.paths }}
 
   full-generated-value-tests:
     name: Generated value tests (${{ matrix.backend }} / ${{ matrix.profile_shard.name }})
@@ -255,7 +282,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -299,7 +326,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Log in to GHCR
         uses: docker/login-action@v3

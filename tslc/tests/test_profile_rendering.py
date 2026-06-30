@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from tslc.api import generate_project
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.target_families import ProfileFamilyCapability
@@ -18,6 +20,36 @@ def _roots(result) -> set[str]:
 
 def _gen(data_root, mp, **kw):
     return generate_project([data_root], machine_profiles_path=mp, **kw)
+
+
+@pytest.fixture(scope="module")
+def sve_value_project(data_root: Path, machine_profiles_path: Path):
+    return _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=[
+            "add",
+            "equal",
+            "mask_binary_and",
+            "mask_false",
+            "mask_true",
+            "store_mask_repr",
+            "to_integral",
+            "to_mask",
+            "to_vector",
+        ],
+        profiles=["sve"],
+        backends=["cpp"],
+        test_harness=True,
+    )
+
+
+@pytest.fixture(scope="module")
+def sve_value_artifacts(sve_value_project) -> dict[str, str]:
+    return {
+        artifact.logical_path: artifact.content
+        for artifact in sve_value_project.artifacts.artifacts
+    }
 
 
 def test_backend_selection_is_honored(data_root: Path, machine_profiles_path: Path) -> None:
@@ -172,19 +204,12 @@ def test_neon_profile_registers_native_simd_types(
 
 
 def test_sve_profile_registers_scalable_cpp_simd_types(
-    data_root: Path,
-    machine_profiles_path: Path,
+    sve_value_project,
+    sve_value_artifacts: dict[str, str],
 ) -> None:
-    result = _gen(
-        data_root,
-        machine_profiles_path,
-        primitives=["add"],
-        profiles=["sve"],
-        backends=["cpp"],
-        test_harness=True,
-    )
+    result = sve_value_project
     assert result.rendered is not None
-    by_path = {artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts}
+    by_path = sve_value_artifacts
 
     cpp = by_path["cpp/include/tsl_sve.hpp"]
     cmake = by_path["cpp/CMakeLists.txt"]
@@ -227,20 +252,12 @@ def test_sve_profile_registers_scalable_cpp_simd_types(
 
 
 def test_sve_profile_plans_scalable_mask_result_values(
-    data_root: Path,
-    machine_profiles_path: Path,
+    sve_value_project,
+    sve_value_artifacts: dict[str, str],
 ) -> None:
-    result = _gen(
-        data_root,
-        machine_profiles_path,
-        primitives=["equal"],
-        profiles=["sve"],
-        backends=["cpp"],
-        test_harness=True,
-    )
+    result = sve_value_project
     assert result.rendered is not None
-    by_path = {artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts}
-    values = by_path["cpp/tests/values_sve.cpp"]
+    values = sve_value_artifacts["cpp/tests/values_sve.cpp"]
 
     assert any(
         case.kind == "scalable_mask_result" and case.source_extension == "sve"
@@ -253,20 +270,12 @@ def test_sve_profile_plans_scalable_mask_result_values(
 
 
 def test_sve_profile_plans_scalable_masked_mask_result_values(
-    data_root: Path,
-    machine_profiles_path: Path,
+    sve_value_project,
+    sve_value_artifacts: dict[str, str],
 ) -> None:
-    result = _gen(
-        data_root,
-        machine_profiles_path,
-        primitives=["equal"],
-        profiles=["sve"],
-        backends=["cpp"],
-        test_harness=True,
-    )
+    result = sve_value_project
     assert result.rendered is not None
-    by_path = {artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts}
-    values = by_path["cpp/tests/values_sve.cpp"]
+    values = sve_value_artifacts["cpp/tests/values_sve.cpp"]
 
     assert any(
         case.kind == "scalable_masked_mask_result" and case.source_extension == "sve"
@@ -280,20 +289,12 @@ def test_sve_profile_plans_scalable_masked_mask_result_values(
 
 
 def test_sve_profile_plans_scalable_mask_logic_values(
-    data_root: Path,
-    machine_profiles_path: Path,
+    sve_value_project,
+    sve_value_artifacts: dict[str, str],
 ) -> None:
-    result = _gen(
-        data_root,
-        machine_profiles_path,
-        primitives=["mask_binary_and"],
-        profiles=["sve"],
-        backends=["cpp"],
-        test_harness=True,
-    )
+    result = sve_value_project
     assert result.rendered is not None
-    by_path = {artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts}
-    values = by_path["cpp/tests/values_sve.cpp"]
+    values = sve_value_artifacts["cpp/tests/values_sve.cpp"]
 
     assert any(
         case.kind == "scalable_mask_logic" and case.source_extension == "sve"
@@ -307,20 +308,12 @@ def test_sve_profile_plans_scalable_mask_logic_values(
 
 
 def test_sve_profile_plans_scalable_mask_constant_values(
-    data_root: Path,
-    machine_profiles_path: Path,
+    sve_value_project,
+    sve_value_artifacts: dict[str, str],
 ) -> None:
-    result = _gen(
-        data_root,
-        machine_profiles_path,
-        primitives=["mask_true", "mask_false"],
-        profiles=["sve"],
-        backends=["cpp"],
-        test_harness=True,
-    )
+    result = sve_value_project
     assert result.rendered is not None
-    by_path = {artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts}
-    values = by_path["cpp/tests/values_sve.cpp"]
+    values = sve_value_artifacts["cpp/tests/values_sve.cpp"]
 
     assert any(
         case.kind == "scalable_mask_constant" and case.source_extension == "sve"
@@ -335,20 +328,12 @@ def test_sve_profile_plans_scalable_mask_constant_values(
 
 
 def test_sve_profile_plans_scalable_mask_conversion_values(
-    data_root: Path,
-    machine_profiles_path: Path,
+    sve_value_project,
+    sve_value_artifacts: dict[str, str],
 ) -> None:
-    result = _gen(
-        data_root,
-        machine_profiles_path,
-        primitives=["to_integral", "to_mask"],
-        profiles=["sve"],
-        backends=["cpp"],
-        test_harness=True,
-    )
+    result = sve_value_project
     assert result.rendered is not None
-    by_path = {artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts}
-    values = by_path["cpp/tests/values_sve.cpp"]
+    values = sve_value_artifacts["cpp/tests/values_sve.cpp"]
 
     assert any(
         case.kind == "scalable_mask_conversion" and case.source_extension == "sve"
@@ -366,20 +351,12 @@ def test_sve_profile_plans_scalable_mask_conversion_values(
 
 
 def test_sve_profile_plans_scalable_mask_to_vector_values(
-    data_root: Path,
-    machine_profiles_path: Path,
+    sve_value_project,
+    sve_value_artifacts: dict[str, str],
 ) -> None:
-    result = _gen(
-        data_root,
-        machine_profiles_path,
-        primitives=["to_vector"],
-        profiles=["sve"],
-        backends=["cpp"],
-        test_harness=True,
-    )
+    result = sve_value_project
     assert result.rendered is not None
-    by_path = {artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts}
-    values = by_path["cpp/tests/values_sve.cpp"]
+    values = sve_value_artifacts["cpp/tests/values_sve.cpp"]
 
     assert any(
         case.kind == "scalable_masked" and case.source_extension == "sve"
@@ -393,20 +370,12 @@ def test_sve_profile_plans_scalable_mask_to_vector_values(
 
 
 def test_sve_profile_plans_scalable_mask_store_values(
-    data_root: Path,
-    machine_profiles_path: Path,
+    sve_value_project,
+    sve_value_artifacts: dict[str, str],
 ) -> None:
-    result = _gen(
-        data_root,
-        machine_profiles_path,
-        primitives=["store_mask_repr"],
-        profiles=["sve"],
-        backends=["cpp"],
-        test_harness=True,
-    )
+    result = sve_value_project
     assert result.rendered is not None
-    by_path = {artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts}
-    values = by_path["cpp/tests/values_sve.cpp"]
+    values = sve_value_artifacts["cpp/tests/values_sve.cpp"]
 
     assert any(
         case.kind == "scalable_mask_store" and case.source_extension == "sve"
