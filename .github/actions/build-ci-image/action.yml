@@ -1,0 +1,23 @@
+name: Build TSLc CI image
+description: Set up Docker Buildx and build the local TSLc CI image.
+
+inputs:
+  image:
+    description: Local Docker image tag to load.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build CI image
+      uses: docker/build-push-action@v6
+      with:
+        context: ${{ github.workspace }}
+        file: ${{ github.workspace }}/.devcontainer/Dockerfile
+        tags: ${{ inputs.image }}
+        load: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max

@@ -31,18 +31,10 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build CI image
-        uses: docker/build-push-action@v6
+        uses: ./.github/actions/build-ci-image
         with:
-          context: .
-          file: .devcontainer/Dockerfile
-          tags: ${{ env.TSLC_CI_IMAGE }}
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          image: ${{ env.TSLC_CI_IMAGE }}
 
       - name: Run Python test suite
         run: |
@@ -50,15 +42,15 @@ jobs:
             -v "$PWD:/workspace" \
             -w /workspace \
             "${TSLC_CI_IMAGE}" \
-            bash -lc 'python -m compileall -q tslc/src/tslc && python -m pytest -q tslc/tests'
-
-      - name: Build-verify focused generated output
-        run: |
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -w /workspace \
-            "${TSLC_CI_IMAGE}" \
-            bash -lc './dev.sh build --primitives add --profiles scalar,avx2 --backends cpp,rust'
+            bash -lc '
+              set -e
+              mkdir -p tslctmp
+              trap "rm -rf tslctmp/pytest" EXIT
+              python -m compileall -q tslc/src/tslc
+              python -m pytest -q tslc/tests \
+                --ignore=tslc/tests/test_build_verify.py \
+                --ignore=tslc/tests/test_value_tests.py
+            '
 
       - name: Generate small consumer-check output
         run: |
@@ -78,11 +70,159 @@ jobs:
             "${TSLC_CI_IMAGE}" \
             bash -lc 'bash supplementary/ci/verify_generated_consumers.sh "${TSLC_CI_OUTPUT}"'
 
-  full-test-and-package:
-    name: Full test and package
+      - name: Clean generated consumer output
+        if: always()
+        run: rm -rf "${TSLC_CI_OUTPUT}"
+
+  profile-shards:
+    name: Compute profile shards
+    runs-on: ubuntu-latest
+    outputs:
+      profile_shards: ${{ steps.shards.outputs.profile_shards }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Compute generated profile shards
+        id: shards
+        run: |
+          profile_shards="$(
+            jq -c -f supplementary/ci/profile_shards.jq \
+              supplementary/buildsystem/machine_profiles.json
+          )"
+          echo "profile_shards=${profile_shards}" >> "$GITHUB_OUTPUT"
+
+  pr-generated-build-tests:
+    name: PR generated build (${{ matrix.profile_shard.name }})
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 90
+    needs:
+      - profile-shards
+
+    strategy:
+      fail-fast: false
+      matrix:
+        profile_shard: ${{ fromJson(needs['profile-shards'].outputs.profile_shards) }}
+
+    env:
+      TSLC_CI_IMAGE: tslc-ci:local
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build CI image
+        uses: ./.github/actions/build-ci-image
+        with:
+          image: ${{ env.TSLC_CI_IMAGE }}
+
+      - name: Build-verify generated output shard
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            -e TSLC_BACKENDS="cpp,rust" \
+            -e TSLC_PROFILES="${{ matrix.profile_shard.profiles }}" \
+            -e TSLC_CI_OUTPUT="./tslctmp/ci-pr-build-${{ matrix.profile_shard.name }}" \
+            "${TSLC_CI_IMAGE}" \
+            bash -lc '
+              set -e
+              trap "rm -rf \"${TSLC_CI_OUTPUT}\" tslctmp/toolchain-preflight tslctmp/zig-local-cache tslctmp/zig-global-cache" EXIT
+              ./dev.sh build \
+                --primitives add \
+                --backends "${TSLC_BACKENDS}" \
+                --profiles "${TSLC_PROFILES}" \
+                --output-root "${TSLC_CI_OUTPUT}"
+            '
+
+  full-python-tests:
+    name: Full Python tests
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
-    timeout-minutes: 180
+    timeout-minutes: 90
+
+    env:
+      TSLC_CI_IMAGE: tslc-ci:local
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build CI image
+        uses: ./.github/actions/build-ci-image
+        with:
+          image: ${{ env.TSLC_CI_IMAGE }}
+
+      - name: Run Python test suite
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            "${TSLC_CI_IMAGE}" \
+            bash -lc '
+              set -e
+              mkdir -p tslctmp
+              trap "rm -rf tslctmp/pytest" EXIT
+              python -m compileall -q tslc/src/tslc
+              python -m pytest -q tslc/tests \
+                --ignore=tslc/tests/test_build_verify.py \
+                --ignore=tslc/tests/test_value_tests.py
+            '
+
+  full-generated-value-tests:
+    name: Generated value tests (${{ matrix.backend }} / ${{ matrix.profile_shard.name }})
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    timeout-minutes: 120
+    needs:
+      - profile-shards
+
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [cpp, rust]
+        profile_shard: ${{ fromJson(needs['profile-shards'].outputs.profile_shards) }}
+
+    env:
+      TSLC_CI_IMAGE: tslc-ci:local
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build CI image
+        uses: ./.github/actions/build-ci-image
+        with:
+          image: ${{ env.TSLC_CI_IMAGE }}
+
+      - name: Run generated value-test shard
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            -e TSLC_BACKENDS="${{ matrix.backend }}" \
+            -e TSLC_PROFILES="${{ matrix.profile_shard.profiles }}" \
+            -e TSLC_CI_OUTPUT="./tslctmp/ci-value-${{ matrix.backend }}-${{ matrix.profile_shard.name }}" \
+            "${TSLC_CI_IMAGE}" \
+            bash -lc '
+              set -e
+              trap "rm -rf \"${TSLC_CI_OUTPUT}\" tslctmp/toolchain-preflight tslctmp/zig-local-cache tslctmp/zig-global-cache" EXIT
+              ./dev.sh test \
+                --backends "${TSLC_BACKENDS}" \
+                --profiles "${TSLC_PROFILES}" \
+                --output-root "${TSLC_CI_OUTPUT}"
+            '
+
+  package-generated-output:
+    name: Package generated output
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    timeout-minutes: 90
+    needs:
+      - full-python-tests
+      - full-generated-value-tests
 
     env:
       TSLC_CI_IMAGE: tslc-ci:local
@@ -92,35 +232,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build CI image
-        uses: docker/build-push-action@v6
+        uses: ./.github/actions/build-ci-image
         with:
-          context: .
-          file: .devcontainer/Dockerfile
-          tags: ${{ env.TSLC_CI_IMAGE }}
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          image: ${{ env.TSLC_CI_IMAGE }}
 
-      - name: Run Python test suite
-        run: |
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -w /workspace \
-            "${TSLC_CI_IMAGE}" \
-            bash -lc 'python -m compileall -q tslc/src/tslc && python -m pytest -q tslc/tests'
-
-      - name: Run full generated value-test gate
+      - name: Generate package output
         run: |
           docker run --rm \
             -v "$PWD:/workspace" \
             -w /workspace \
             -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
             "${TSLC_CI_IMAGE}" \
-            bash -lc './dev.sh test --backends cpp,rust --output-root "${TSLC_CI_OUTPUT}"'
+            bash -lc './dev.sh generate --test --value-test-warnings --backends cpp,rust --output-root "${TSLC_CI_OUTPUT}"'
 
       - name: Verify generated consumer projects
         run: |

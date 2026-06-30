@@ -7,7 +7,7 @@ RUN apt-get update -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     sudo \
     build-essential gdb cmake clang clang-format ninja-build doxygen \
-    git curl xz-utils unzip pkg-config ca-certificates nodejs npm \
+    git curl xz-utils unzip pkg-config ca-certificates nodejs npm jq \
     python3 python3-pip python3-venv \
     qemu-user qemu-user-binfmt && \
     python3 -m venv /opt/venv && \
