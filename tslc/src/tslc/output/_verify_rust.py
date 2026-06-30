@@ -13,6 +13,7 @@ from tslc.output._verify_common import (
     emulator_prefix,
     missing_executable,
     rust_environment,
+    rust_target,
     rust_target_args,
 )
 from tslc.output.verify_drivers import VerifyBackendDriver
@@ -97,15 +98,21 @@ def _rust_command_groups(
     groups: list[tuple[BuildCommand, ...]] = []
     for profile in backend.profiles:
         target_dir = project_root / "target" / profile.file_stem
-        # Value testing adds the opt-in `value_tests` feature (so `cargo test`
-        # compiles+runs the generated value tests); without it `tests/values.rs`
-        # is cfg'd empty. A value-mode failure is reported as a warning
-        # (report-then-promote), like the C++ ctest step.
+        # Build verification still uses `cargo test` so generated test targets
+        # compile. Cross-target builds cannot execute those binaries natively, so
+        # they use --no-run unless value-test mode has an emulator follow-up.
         features = profile.profile_name
         severity = "error"
         step = "test"
         extra_args: tuple[str, ...] = ()
+        if not config.run_value_tests and rust_target(profile, config) is not None:
+            step = "build-tests"
+            extra_args = ("--no-run",)
         if config.run_value_tests:
+            # Value testing adds the opt-in `value_tests` feature (so `cargo test`
+            # compiles+runs the generated value tests); without it `tests/values.rs`
+            # is cfg'd empty. A value-mode failure is reported as a warning
+            # (report-then-promote), like the C++ ctest step.
             features = f"{profile.profile_name},value_tests"
             severity = "warning"
             if emulator_prefix(profile, config):

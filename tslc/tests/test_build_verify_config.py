@@ -161,6 +161,51 @@ def test_rust_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
     assert str(tmp_path / "rust" / "target" / "scalar") in seen[1].argv
 
 
+def test_rust_build_verifier_cross_target_does_not_run_test_binary(
+    tmp_path: Path,
+) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="neon",
+                        file_stem="neon",
+                        family="aarch64",
+                        rust_target_features=("+neon",),
+                        rust_target="aarch64-unknown-linux-musl",
+                        rust_linker="rust-lld",
+                        emulator=VerifyEmulator(kind="qemu-aarch64", profile="cortex-a76"),
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=BuildVerifierConfig.create(rust_compiler=sys.executable),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen] == ["preflight", "build-tests"]
+    assert "--target" in seen[1].argv
+    assert "aarch64-unknown-linux-musl" in seen[1].argv
+    assert "--no-run" in seen[1].argv
+    assert "--message-format=json" not in seen[1].argv
+    env = _env(seen[1])
+    assert env["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER"] == "rust-lld"
+
+
 def test_rust_verifier_skips_after_failed_preflight(
     tmp_path: Path,
     monkeypatch,
