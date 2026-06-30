@@ -11,6 +11,54 @@ Optimize for a maintainable research compiler: typed models, clear ownership,
 small modules, deterministic output, and diagnostics that help a TSL author fix
 input data.
 
+## Design Foundations
+
+`tslc` is a compact compiler, not a framework. It should be easy for an
+experienced Python developer to trace one primitive from source data to emitted
+artifact without learning a private architecture vocabulary first.
+
+The project design rests on these ideas:
+
+- **Compiler pipeline**: `.tsl` sources become parsed syntax, a typed catalog,
+  selected implementations, scanned TSIL segments, lowered specializations,
+  backend output, rendered artifacts, and optional verification.
+- **KISS**: choose the simplest design that preserves the compiler boundary and
+  makes the next similar feature understandable. Keep vertical slices small,
+  names literal, control flow direct, and abstractions justified by behavior.
+- **DRY with judgment**: remove duplicated compiler knowledge, diagnostics,
+  selection rules, lowering behavior, backend rules, and render decisions.
+  Tolerate small local repetition when it keeps unlike concepts independent or
+  avoids premature generalization.
+- **Domain vocabulary over plumbing**: add real concepts such as `Primitive`,
+  `Extension`, `Region`, `BackendDialect`, or `LoweredSpecialization` when they
+  carry behavior or invariants. Avoid request/result/handoff wrapper families
+  whose only job is passing another object along.
+- **Typed objects after parsing**: plain dictionaries are acceptable at I/O,
+  parser, or metadata boundaries. Domain, selection, lowering, backend, and
+  render logic should consume frozen dataclasses, enums, protocols, or other
+  explicit typed values.
+- **Object-oriented ownership where useful**: stateful concepts should own their
+  invariants and behavior. Use small classes or protocols for catalogs,
+  selectors, generators, backend dialects, diagnostic reporters, and artifact
+  writers. Use pure functions for simple stateless transformations.
+- **TSIL is not a target-language AST**: implementation bodies are recursive
+  sequences of raw target text plus recognized TSIL keyword regions. Add typed
+  regions for shared semantics; do not grow ad-hoc C/C++/Rust parsers or raw
+  string rewrite ladders.
+- **Backends format decided semantics**: backend code translates typed lowered
+  values. Templates format render models. They must not decide primitive
+  selection, feature gating, type resolution, dependency closure, or source
+  repair.
+- **Coverage, not fantasy completeness**: unsupported source forms should
+  produce clear skips or diagnostics. Progress is measured by which primitive,
+  extension, type, and backend combinations compile and verify.
+- **Extensibility means additive change**: adding a primitive, TSIL region, or
+  backend capability should mostly add focused source data, typed handlers,
+  backend rules, assets, and tests rather than modify unrelated stages.
+- **Diagnostics are part of the product**: errors and skips should be
+  structured, deterministic, source-located where practical, and written for the
+  TSL author who needs to fix the input.
+
 ## Project Map
 
 ```text

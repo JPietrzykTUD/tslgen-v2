@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design Review"
+  short_description: "Review tslc design drift and extension health."
+  default_prompt: "Use $design-review to review tslc for design drift and weak extension points."
