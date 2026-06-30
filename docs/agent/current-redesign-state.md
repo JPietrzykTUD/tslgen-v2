@@ -92,9 +92,9 @@ models, renderer/templates, an in-memory `ArtifactSet`, manifest-based
 `ArtifactWriter`, and after-write `BuildVerifier`. Generated output uses a
 run-level `generated/` tree with C++ `include/tsl.hpp` plus
 `include/profiles/*.hpp`, Rust `src/lib.rs` plus `src/profiles/*.rs`, explicit
-profile subsets defaulting to `scalar`, reserved `all` for all known profiles,
-presentation-only templates, manifest-preserving cleanup, and verification of
-every generated profile in the selected subset.
+profile subsets defaulting to all loaded machine profiles, reserved `all` for
+all known profiles, presentation-only templates, manifest-preserving cleanup,
+and verification of every generated profile in the selected subset.
 
 M191 added a typed generated-profile selection boundary over the M189 machine
 feature profile catalog, typed C++/Rust generated-project render models,
@@ -5472,4 +5472,135 @@ Next prompt:
 
 ```text
 docs/agent/runs/tslc-specialization-explorer-review-prompt.md
+```
+
+## Completed CMake Includability And Auto Profile Selection
+
+Generated C++ projects are now consumable directly from downstream CMake
+projects. Rust remains consumed through Cargo.
+
+Implemented:
+
+- `cpp/CMakeLists.txt` defines per-profile interface targets
+  `tsl_profile_<profile>` and public aliases such as `tsl::avx2`.
+- `tsl::tsl` is the stable consumer-facing CMake target. It links to the
+  selected generated profile target and carries include directories, C++17,
+  profile compile definitions, and profile compile options through interface
+  target usage requirements.
+- `TSL_PROFILE` is a namespaced CMake cache string with declared choices. An
+  explicit value selects that generated profile; source profile names with
+  invalid target characters, such as hyphens, are accepted through generated
+  aliases.
+- Omitted `TSL_PROFILE` defaults to `auto`. Auto mode uses generated
+  `CheckCXXSourceRuns` CPU probes for supported host families when not
+  cross-compiling, and falls back to `scalar` if probes cannot run.
+- Generated smoke/value-test targets are built by default only when the
+  generated C++ project is configured as the top-level project. A
+  `FetchContent` consumer receives only the interface targets unless it opts
+  into `TSL_BUILD_TESTS`.
+
+Design boundary:
+
+- CMake profile auto-selection chooses among already-generated profiles. It
+  does not select primitive implementations, infer extension semantics, repair
+  profile metadata, or broaden the generated profile subset.
+- The profile-specific compile options still come from typed machine profile
+  render data. The CMake template formats already-decided target usage
+  requirements and generated probe text.
+- The consumer cache variable is `TSL_PROFILE`, not a bare `PROFILE`, to avoid
+  collisions in parent CMake projects.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_profile_rendering.py
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_build_verify.py::test_generated_profiles_build tslc/tests/test_build_verify.py::test_cpp_fetch_content_consumer_builds tslc/tests/test_build_verify.py::test_cpp_auto_profile_configures
+./dev.sh build --primitives add --profiles scalar,avx2 --backends cpp
+git diff --check
+```
+
+Result: compileall passed; profile rendering tests reported `14 passed`;
+generated-profile, `FetchContent`, and auto-profile configure tests reported
+`3 passed`; `dev.sh build` generated `1180` specializations across `14`
+artifacts and build-verified `5` commands; `git diff --check` passed.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-cmake-includability-review-prompt.md
+```
+
+## Completed GitHub CI Split Verification And Packaging Gates
+
+The repository now has split GitHub Actions gates for pull-request verification
+and main/tag/manual artifact packaging. It does not publish releases, GitHub
+Pages, or crates.
+
+Implemented:
+
+- `.github/workflows/ci.yml` runs on pull requests, pushes to `main`, release
+  tags matching `v*`, and manual dispatch.
+- The workflow builds the existing `.devcontainer/Dockerfile` image with
+  Buildx/GHA cache, then runs the project-owned commands inside that image.
+- The PR gate runs `python -m compileall -q tslc/src/tslc` and
+  `python -m pytest -q tslc/tests`.
+- The PR gate runs a focused generated build verification:
+  `./dev.sh build --primitives add --profiles scalar,avx2 --backends cpp,rust`.
+- The PR gate generates a small scalar `add` C++/Rust output only to verify
+  downstream consumer inclusion. It does not package or upload artifacts.
+- The main/tag/manual gate runs the same Python test suite, then runs full
+  generated value-test verification with
+  `./dev.sh test --backends cpp,rust --output-root "${TSLC_CI_OUTPUT}"`.
+- `supplementary/ci/verify_generated_consumers.sh` verifies the generated
+  output from outside the generator:
+  - C++ consumer uses CMake `FetchContent_MakeAvailable` and links `tsl::tsl`;
+  - Rust consumer uses a Cargo path dependency on `tsl_generated` with the
+    `scalar` feature.
+- Only the main/tag/manual gate archives the tested generated output tree and
+  uploads it as an Actions artifact.
+
+Design boundary:
+
+- CI uses existing public commands and generated projects. It does not add a
+  second generator path, does not publish releases, and does not introduce a
+  CMake wrapper for Rust.
+- PR validation is intentionally non-packaging. Uploaded artifacts are produced
+  only after the full generated value-test gate passes on main/tag/manual runs.
+- Consumer checks validate public inclusion surfaces rather than inspecting
+  generated source text.
+- Packaging is an Actions artifact dry run. GitHub Release upload, crate
+  publication, and Pages deployment remain future slices.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+bash -n dev.sh
+bash -n supplementary/ci/verify_generated_consumers.sh
+./dev.sh test --primitives add --profiles scalar --backends cpp,rust --output-root ./tslctmp/ci-test-smoke
+./dev.sh generate --primitives add --profiles scalar --backends cpp,rust --output-root ./tslctmp/ci-consumer-smoke
+bash supplementary/ci/verify_generated_consumers.sh ./tslctmp/ci-consumer-smoke ./tslctmp/ci-consumer-checks
+./dev.sh generate --output-root ./tslctmp/ci-generated
+bash supplementary/ci/verify_generated_consumers.sh ./tslctmp/ci-generated ./tslctmp/ci-full-consumer-checks
+mkdir -p tslctmp/artifacts
+tar -C ./tslctmp/ci-generated -czf ./tslctmp/artifacts/tsl-generated-local.tar.gz .
+test -s ./tslctmp/artifacts/tsl-generated-local.tar.gz
+git diff --check
+```
+
+Result: compileall and shell syntax checks passed; the focused generated test
+smoke produced `880` specializations across `19` artifacts, ran CTest, ran
+Rust smoke/value tests, and reported `build/test-verified 8 commands`. The
+tiny generated C++/Rust consumer tree produced `600` specializations across
+`19` artifacts; the consumer script configured and built the CMake
+`FetchContent` app and ran the Cargo path consumer successfully. The full
+package-candidate generation produced `230554` specializations across `92`
+artifacts, the same consumer checks passed against that full tree, and the
+generated output archived successfully; `git diff --check` passed.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-ci-artifact-packaging-review-prompt.md
 ```

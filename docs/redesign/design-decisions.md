@@ -2695,11 +2695,11 @@ after-write verifier apply the same already-decided values as profile-specific
 `RUSTFLAGS`. This keeps Cargo features responsible only for profile-module
 selection and keeps target-feature decisions out of Rust source templates.
 
-A generation run includes only an explicit selected profile subset. If no
-profile is requested, the subset defaults to `scalar`. The reserved profile
-selection value `all` means all known machine profiles from the machine profile
-catalog and cannot be used as a real profile name. Build configuration selects
-exactly one active profile from the generated subset.
+A generation run includes only the selected profile subset. If no profile is
+requested, the subset defaults to all loaded machine profiles. The reserved
+profile selection value `all` means all known machine profiles from the machine
+profile catalog and cannot be used as a real profile name. Build configuration
+selects exactly one active profile from the generated subset.
 
 `ArtifactSet` is a deterministic in-memory collection of files to write. It
 does not know primitive dependencies, backend semantics, profile selection, or
@@ -2726,8 +2726,9 @@ Consequences:
   this output architecture before execution so that it contributes to a
   build-verifiable render path.
 - Single-profile smoke output is no longer the target shape. The prototype
-  should support an explicit generated profile subset, with `scalar` as the
-  default and `all` as reserved shorthand for all known profiles.
+  should support an explicit generated profile subset, with omitted profiles
+  meaning all loaded machine profiles and `all` as reserved shorthand for all
+  known profiles.
 - Future writer milestones should implement manifest-based cleanup before
   broad generated-output workflows rely on stale-file removal.
 
@@ -6411,3 +6412,97 @@ Consequences:
 - React/Vite is documentation-site tooling, not compiler logic. Normal
   generation/build/test do not require npm unless documentation generation is
   requested.
+
+## ADR-131: Generated C++ Is FetchContent-Consumable
+
+Context:
+
+Generated C++ output needs to be easy to consume from downstream CMake
+projects, including GitHub release artifacts pulled through
+`FetchContent_MakeAvailable`. Rust already has the natural Cargo consumption
+path, so this decision focuses on the generated C++ project boundary.
+
+Decision:
+
+The generated `cpp/CMakeLists.txt` is both the standalone verification project
+and the consumer project. It defines one interface target per generated
+profile, `tsl_profile_<profile>`, plus aliases such as `tsl::avx2`. The stable
+consumer target is `tsl::tsl`, backed by an interface target that links to the
+selected profile target.
+
+Consumers select the active C++ profile with the namespaced cache variable
+`TSL_PROFILE`. `TSL_PROFILE=<profile>` selects a generated profile directly,
+including sanitized aliases for source profile names that are not valid target
+identifiers. If `TSL_PROFILE` is omitted, it defaults to `auto`. Auto mode runs
+generated `CheckCXXSourceRuns` CPU probes for supported host families when not
+cross-compiling, then selects the strongest available detected profile. If
+probes cannot run, CMake falls back to the generated `scalar` profile when it
+exists, otherwise to the first generated profile.
+
+Profile compile definitions, include directories, C++ standard requirements,
+and profile-specific compile options are attached to the profile interface
+targets. Generated smoke/value-test targets are enabled by default only when
+the generated C++ project is configured as the top-level project. A downstream
+`FetchContent` consumer receives only the interface targets unless it opts into
+`TSL_BUILD_TESTS`.
+
+Consequences:
+
+- C++ consumers can use:
+
+  ```cmake
+  include(FetchContent)
+  FetchContent_Declare(tsl SOURCE_DIR path/to/generated/cpp)
+  FetchContent_MakeAvailable(tsl)
+  target_link_libraries(app PRIVATE tsl::tsl)
+  ```
+
+- A namespaced `TSL_PROFILE` cache variable avoids leaking a generic `PROFILE`
+  option into parent CMake projects.
+- Auto profile detection is a generated-project concern, not a compiler
+  semantic rule. It only chooses among profiles that were already generated.
+- Rust remains cargo-consumable and does not need a CMake wrapper in this
+  slice.
+
+## ADR-132: CI Packages Generated Artifacts Before Publishing Releases
+
+Context:
+
+The generated C++ project is now consumable through CMake `FetchContent`, and
+the generated Rust project is consumable through Cargo. The next release path
+needs a GitHub CI workflow that verifies the generator and produces generated
+library artifacts, without prematurely publishing a release or crate.
+
+Decision:
+
+Add a GitHub Actions workflow with two gates. Pull requests run a verification
+gate that builds the repository devcontainer image, runs the Python test suite,
+runs a focused generated build verification, and checks tiny downstream C++ and
+Rust consumers. It does not package or upload artifacts.
+
+Pushes to `main`, release tags, and manual dispatch run the full artifact gate.
+That gate runs the Python test suite, then runs the full generated value-test
+workflow before packaging. The tested output tree is checked through two tiny
+downstream consumer projects:
+
+- a C++ CMake project using `FetchContent_MakeAvailable` and linking
+  `tsl::tsl`;
+- a Rust Cargo project depending on the generated `tsl_generated` crate by
+  path with the `scalar` feature.
+
+After those checks pass, CI archives the tested generated output tree and
+uploads it as a workflow artifact. GitHub Release publishing, crate
+publishing, and GitHub Pages deployment remain separate later slices.
+
+Consequences:
+
+- PR CI stays useful without uploading artifacts. Main/tag/manual CI exercises
+  the full generated value-test gate before uploading generated artifacts.
+- CI exercises the public consumption paths, not only the generator-internal
+  verifier.
+- The workflow uses the existing `.devcontainer/Dockerfile` and `dev.sh`
+  commands, so toolchain setup stays in one place.
+- The consumer checks live in `supplementary/ci/verify_generated_consumers.sh`
+  and can be run locally against any generated output root.
+- Uploading an Actions artifact proves packaging shape without committing to a
+  GitHub Release or crates.io contract too early.

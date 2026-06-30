@@ -196,8 +196,9 @@ C++ exposes `include/tsl.hpp` as the stable public entry point and stores
 profile-specific generated headers under `include/profiles/`. Rust exposes
 `src/lib.rs` as the stable public entry point and stores profile-specific
 generated modules under `src/profiles/`. Generation includes only an explicit
-profile subset, defaults to `scalar`, and reserves `all` as shorthand for all
-known machine profiles.
+profile subset, defaults to all loaded machine profiles when no subset is
+requested, and reserves `all` as explicit shorthand for all known machine
+profiles.
 
 Artifact writing is the only filesystem-writing boundary. It consumes an
 in-memory `ArtifactSet`, writes under the configured output root, rejects

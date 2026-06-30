@@ -1,0 +1,144 @@
+name: TSLc CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tslc-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-verify:
+    name: PR verification
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 90
+
+    env:
+      TSLC_CI_IMAGE: tslc-ci:local
+      TSLC_CI_OUTPUT: ./tslctmp/ci-pr-generated
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build CI image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: .devcontainer/Dockerfile
+          tags: ${{ env.TSLC_CI_IMAGE }}
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Python test suite
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            "${TSLC_CI_IMAGE}" \
+            bash -lc 'python -m compileall -q tslc/src/tslc && python -m pytest -q tslc/tests'
+
+      - name: Build-verify focused generated output
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            "${TSLC_CI_IMAGE}" \
+            bash -lc './dev.sh build --primitives add --profiles scalar,avx2 --backends cpp,rust'
+
+      - name: Generate small consumer-check output
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
+            "${TSLC_CI_IMAGE}" \
+            bash -lc './dev.sh generate --primitives add --profiles scalar --backends cpp,rust --output-root "${TSLC_CI_OUTPUT}"'
+
+      - name: Verify generated consumer projects
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
+            "${TSLC_CI_IMAGE}" \
+            bash -lc 'bash supplementary/ci/verify_generated_consumers.sh "${TSLC_CI_OUTPUT}"'
+
+  full-test-and-package:
+    name: Full test and package
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    timeout-minutes: 180
+
+    env:
+      TSLC_CI_IMAGE: tslc-ci:local
+      TSLC_CI_OUTPUT: ./tslctmp/ci-generated
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build CI image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: .devcontainer/Dockerfile
+          tags: ${{ env.TSLC_CI_IMAGE }}
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Python test suite
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            "${TSLC_CI_IMAGE}" \
+            bash -lc 'python -m compileall -q tslc/src/tslc && python -m pytest -q tslc/tests'
+
+      - name: Run full generated value-test gate
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
+            "${TSLC_CI_IMAGE}" \
+            bash -lc './dev.sh test --backends cpp,rust --output-root "${TSLC_CI_OUTPUT}"'
+
+      - name: Verify generated consumer projects
+        run: |
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
+            "${TSLC_CI_IMAGE}" \
+            bash -lc 'bash supplementary/ci/verify_generated_consumers.sh "${TSLC_CI_OUTPUT}"'
+
+      - name: Package generated output
+        run: |
+          mkdir -p tslctmp/artifacts
+          tar -C "${TSLC_CI_OUTPUT}" -czf "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz" .
+
+      - name: Upload generated artifact package
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsl-generated-${{ github.sha }}
+          path: tslctmp/artifacts/tsl-generated-${{ github.sha }}.tar.gz
+          if-no-files-found: error

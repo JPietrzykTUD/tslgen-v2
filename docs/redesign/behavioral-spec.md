@@ -5253,11 +5253,13 @@ Accepted M191 diagnostic codes include:
 - `TSL-BUILD-VERIFY-COMMAND-FAILED`
 
 The C++ skeleton uses a `TSL_PROFILE` CMake cache string with declared allowed
-values and emits a compile definition for the selected generated profile. It
-does not translate normalized machine features into final compiler-specific
-target-feature options in M191. The Rust skeleton selects exactly one profile
-through generated feature names and emits compile errors if zero or multiple
-profile features are enabled.
+values and emits a compile definition for the selected generated profile.
+`TSL_PROFILE=auto` runs generated CMake CPU probes when the project is not
+cross-compiling, otherwise it falls back to the generated scalar profile if
+available. An explicit `TSL_PROFILE=<profile>` skips probing and selects that
+profile. The Rust skeleton is consumed through Cargo and selects exactly one
+profile through generated feature names, emitting compile errors if zero or
+multiple profile features are enabled.
 
 After-write build verification consumes the written output tree and the typed
 generated-project render model. It configures, builds, and tests every

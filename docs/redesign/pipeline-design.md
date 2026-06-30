@@ -903,8 +903,9 @@ Processing:
 
 - Group render jobs by template/primitive/extension/type.
 - Topologically order selected primitives before rendering.
-- Resolve the explicit generated profile subset, defaulting to `scalar` and
-  treating reserved `all` as all known machine profiles.
+- Resolve the generated profile subset, defaulting to all loaded machine
+  profiles when no subset is requested and treating reserved `all` as explicit
+  shorthand for all known machine profiles.
 - Plan primary declarations.
 - Plan specializations.
 - Plan wrappers or trait methods.

@@ -22,12 +22,12 @@ def test_backend_selection_is_honored(data_root: Path, machine_profiles_path: Pa
     rust_only = _gen(
         data_root, machine_profiles_path, primitives=["add"], profiles=["avx2"], backends=["rust"]
     )
-    assert _roots(rust_only) == {"rust"}
+    assert _roots(rust_only) == {"docs", "rust"}
 
     cpp_only = _gen(
         data_root, machine_profiles_path, primitives=["add"], profiles=["avx2"], backends=["cpp"]
     )
-    assert _roots(cpp_only) == {"cpp"}
+    assert _roots(cpp_only) == {"cpp", "docs"}
     # verify description only covers the requested backend
     assert [b.backend_id for b in cpp_only.rendered.verify.backends] == ["cpp"]
 
@@ -62,6 +62,13 @@ def test_feature_flag_spelling(data_root: Path, machine_profiles_path: Path) -> 
     # the naive (wrong) spellings must not appear
     assert "-mavx512_gfni" not in cmake
     assert "-mavx512_vnni" not in cmake
+    assert 'add_library(tsl::zen4 ALIAS tsl_profile_zen4)' in cmake
+    assert "target_compile_definitions(tsl_profile_zen4 INTERFACE TSL_PROFILE_ZEN4)" in cmake
+    assert 'set(TSL_PROFILE "auto" CACHE STRING' in cmake
+    assert 'add_library(tsl::tsl ALIAS tsl_generated)' in cmake
+    assert "target_link_libraries(tsl_generated INTERFACE tsl_profile_${TSL_SELECTED_PROFILE})" in cmake
+    assert "check_cxx_source_runs" in cmake
+    assert '__builtin_cpu_supports("avx2")' in cmake
 
 
 def test_cpp_profile_flags_are_profile_owned() -> None:
@@ -160,8 +167,9 @@ def test_sve_profile_registers_scalable_cpp_simd_types(
     assert "using mask_type = svbool_t;" in cpp
     assert "using imask_type = svbool_t;" in cpp
     assert "return svadd_s32_x(::tsl::mask_true<Vec>(), left, right);" in cpp
-    assert 'if(TSL_PROFILE STREQUAL "sve")' in cmake
-    assert "target_compile_options(tsl_smoke PRIVATE -mcpu=a64fx)" in cmake
+    assert 'add_library(tsl::sve ALIAS tsl_profile_sve)' in cmake
+    assert "target_compile_definitions(tsl_profile_sve INTERFACE TSL_PROFILE_SVE)" in cmake
+    assert "target_compile_options(tsl_profile_sve INTERFACE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-mcpu=a64fx>)" in cmake
     assert any(
         case.kind == "scalable_golden" and case.source_extension == "sve"
         for profile in result.rendered.value_tests.profiles_for("cpp")

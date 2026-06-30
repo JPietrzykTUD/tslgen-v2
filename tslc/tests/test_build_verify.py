@@ -5,12 +5,23 @@ Skips a backend whose toolchain is unavailable; fails on any build error.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import shutil
+import subprocess
+import textwrap
 
 import pytest
 
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.diagnostics import has_errors
+
+
+def _cmake_env(tmp_path: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    env.setdefault("ZIG_LOCAL_CACHE_DIR", str(tmp_path / "zig-local-cache"))
+    env.setdefault("ZIG_GLOBAL_CACHE_DIR", str(tmp_path / "zig-global-cache"))
+    return env
 
 
 def test_generated_profiles_build(
@@ -34,6 +45,117 @@ def test_generated_profiles_build(
     assert report.diagnostics == (), report.diagnostics
     # configure+build for 4 C++ profiles (8) + cargo test for 4 Rust profiles (4).
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_cpp_fetch_content_consumer_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    if shutil.which("cmake") is None:
+        pytest.skip("cmake not available")
+    if shutil.which("c++") is None:
+        pytest.skip("C++ compiler not available")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add"],
+        profiles=["scalar"],
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    write_report = write_artifacts(result.artifacts, tmp_path / "generated")
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    consumer = tmp_path / "consumer"
+    consumer.mkdir()
+    (consumer / "CMakeLists.txt").write_text(
+        textwrap.dedent(
+            f"""
+            cmake_minimum_required(VERSION 3.20)
+            project(tsl_consumer LANGUAGES CXX)
+
+            include(FetchContent)
+            set(TSL_PROFILE scalar CACHE STRING "TSL profile" FORCE)
+            FetchContent_Declare(tsl SOURCE_DIR "{(tmp_path / "generated" / "cpp").as_posix()}")
+            FetchContent_MakeAvailable(tsl)
+
+            add_executable(consumer main.cpp)
+            target_link_libraries(consumer PRIVATE tsl::tsl)
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    (consumer / "main.cpp").write_text(
+        textwrap.dedent(
+            """
+            #include <cstdint>
+            #include <tsl.hpp>
+
+            int main() {
+              using Vec = tsl::simd<std::int32_t, tsl::scalar>;
+              return tsl::add<Vec>(1, 2) == 3 ? 0 : 1;
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    build = tmp_path / "consumer-build"
+    env = _cmake_env(tmp_path)
+    configure = subprocess.run(
+        ("cmake", "-S", str(consumer), "-B", str(build)),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert configure.returncode == 0, configure.stderr + configure.stdout
+    built = subprocess.run(
+        ("cmake", "--build", str(build), "--target", "consumer"),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert built.returncode == 0, built.stderr + built.stdout
+
+
+def test_cpp_auto_profile_configures(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    if shutil.which("cmake") is None:
+        pytest.skip("cmake not available")
+    if shutil.which("c++") is None:
+        pytest.skip("C++ compiler not available")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add"],
+        profiles=["scalar", "avx2"],
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    write_report = write_artifacts(result.artifacts, tmp_path / "generated")
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    build = tmp_path / "auto-build"
+    configured = subprocess.run(
+        (
+            "cmake",
+            "-S",
+            str(tmp_path / "generated" / "cpp"),
+            "-B",
+            str(build),
+            "-DTSL_BUILD_TESTS=OFF",
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_cmake_env(tmp_path),
+    )
+    output = configured.stderr + configured.stdout
+    assert configured.returncode == 0, output
+    assert "TSL auto-detected profile =" in output
 
 
 def test_scalar_mask_comparison_family_builds(
