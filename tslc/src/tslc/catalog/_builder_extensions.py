@@ -13,21 +13,31 @@ from tslc.catalog._builder_common import (
     _list_text_set,
     _opt_int,
 )
-from tslc.catalog.model import Extension, ImaskPolicy, MaskPolicy
+from tslc.catalog.model import (
+    BackendExtensionMetadata,
+    Extension,
+    ExtensionMetadata,
+    ImaskPolicy,
+    MaskPolicy,
+)
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.syntax.ast import ParsedBlockDeclaration, ParsedTslField
 
 
 def _resolve_extension_inheritance(
     extensions: dict[str, Extension],
+    declared_fields_by_name: Mapping[str, frozenset[str]] | None = None,
 ) -> dict[str, Extension]:
     """Fill each extension's compose metadata/family from its `inherits` ancestors."""
+
+    declared_fields_by_name = declared_fields_by_name or {}
 
     def resolve(name: str, seen: frozenset[str]) -> Extension:
         ext = extensions[name]
         if ext.inherits is None or ext.inherits not in extensions or ext.inherits in seen:
             return ext
         parent = resolve(ext.inherits, seen | {name})
+        declared_fields = declared_fields_by_name.get(name, frozenset())
         return replace(
             ext,
             family=ext.family or parent.family,
@@ -45,16 +55,30 @@ def _resolve_extension_inheritance(
             backend_supported={**parent.backend_supported, **ext.backend_supported},
             # mask policy / width fall back to the parent only when this block didn't
             # state its own (every `_vl` block does, so this is just gap-filling).
-            vector_bits=ext.vector_bits if ext.vector_bits_kind else parent.vector_bits,
-            vector_bits_kind=ext.vector_bits_kind or parent.vector_bits_kind,
-            size_parameter_name=ext.size_parameter_name or parent.size_parameter_name,
+            vector_bits=(
+                ext.vector_bits if "vector_bits" in declared_fields else parent.vector_bits
+            ),
+            vector_bits_kind=(
+                ext.vector_bits_kind
+                if "vector_bits" in declared_fields
+                else parent.vector_bits_kind
+            ),
+            size_parameter_name=(
+                ext.size_parameter_name
+                if "size_parameter" in declared_fields
+                else parent.size_parameter_name
+            ),
             vector_register_type_policy=(
                 ext.vector_register_type_policy or parent.vector_register_type_policy
             ),
             # A sized extension inheriting another (oneAPIfpga inherits generic) shares its size
             # ladder / unroll default unless it states its own.
-            size_bits=ext.size_bits or parent.size_bits,
-            unroll_variants=ext.unroll_variants or parent.unroll_variants,
+            size_bits=ext.size_bits if "size_bits" in declared_fields else parent.size_bits,
+            unroll_variants=(
+                ext.unroll_variants
+                if "unroll_variants" in declared_fields
+                else parent.unroll_variants
+            ),
             test_runtime_lanes={**parent.test_runtime_lanes, **ext.test_runtime_lanes},
             test_mask_from_bits={**parent.test_mask_from_bits, **ext.test_mask_from_bits},
             test_mask_check={**parent.test_mask_check, **ext.test_mask_check},
@@ -62,14 +86,23 @@ def _resolve_extension_inheritance(
                 parent.test_support_headers,
                 ext.test_support_headers,
             ),
-            mask_policy=ext.mask_policy if ext.mask_policy != MaskPolicy() else parent.mask_policy,
+            mask_policy=(
+                ext.mask_policy
+                if "mask_type_policy" in declared_fields
+                else parent.mask_policy
+            ),
             imask_policy=(
-                ext.imask_policy if ext.imask_policy != ImaskPolicy() else parent.imask_policy
+                ext.imask_policy
+                if "integral_mask_type_policy" in declared_fields
+                else parent.imask_policy
             ),
         )
 
     return {name: resolve(name, frozenset()) for name in extensions}
 
+
+def _declared_extension_fields(declaration: ParsedBlockDeclaration) -> frozenset[str]:
+    return frozenset(field.key.text for field in declaration.fields)
 
 
 def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
@@ -114,6 +147,7 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
         ),
         mask_policy=_mask_policy(fields.get("mask_type_policy")),
         imask_policy=_imask_policy(fields.get("integral_mask_type_policy")),
+        metadata=_extension_metadata(fields),
         default_test_target=(_field_text(fields.get("default_test_target")) or "").lower()
         == "true",
         test_filter_exclude_templates=_list_text_set(
@@ -135,7 +169,6 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
     )
 
 
-
 def _vector_register_types(
     field: ParsedTslField | None,
 ) -> dict[str, dict[str, str]]:
@@ -153,7 +186,6 @@ def _vector_register_types(
     return result
 
 
-
 def _backend_headers(fields: dict[str, ParsedTslField]) -> dict[str, tuple[str, ...]]:
     """Promote backend-owned extension include/import metadata."""
 
@@ -165,9 +197,45 @@ def _backend_headers(fields: dict[str, ParsedTslField]) -> dict[str, tuple[str, 
     return result
 
 
+def _extension_metadata(fields: dict[str, ParsedTslField]) -> ExtensionMetadata:
+    return ExtensionMetadata(
+        vendor=_field_text(fields.get("vendor")),
+        native_sort_order=_opt_int(_field_text(fields.get("native_sort_order"))),
+        autodetect=_bool_text(fields.get("autodetect")),
+        mask_repr=_field_text(fields.get("mask_repr")),
+        mask_width=_field_text(fields.get("mask_width")),
+        mask_vector_loadable=_bool_text(fields.get("mask_vector_loadable")),
+        runtime_lanes=_bool_text(fields.get("runtime_lanes")),
+        signature_support_exclude=_list_text(
+            _child(fields.get("signature_support"), "exclude")
+        ),
+        backend=_backend_extension_metadata(fields),
+    )
+
+
+def _backend_extension_metadata(
+    fields: dict[str, ParsedTslField],
+) -> dict[str, BackendExtensionMetadata]:
+    result: dict[str, BackendExtensionMetadata] = {}
+    for backend_id in DEFAULT_SUPPORT_POLICY.default_backend_ids:
+        backend = fields.get(backend_id)
+        if backend is None:
+            continue
+        metadata = BackendExtensionMetadata(
+            headers=_list_text(_child(backend, "headers")),
+            header_guard=_field_text(_child(backend, "header_guard")),
+            test_suite_name=_field_text(_child(backend, "test_suite_name")),
+            test_support_header=_field_text(_child(backend, "test_support_header")),
+            type_name=_field_text(_child(backend, "type_name")),
+            generation_support=_list_text(_child(backend, "generation_support")),
+        )
+        if metadata != BackendExtensionMetadata():
+            result[backend_id] = metadata
+    return result
+
 
 def _backend_supported(fields: dict[str, ParsedTslField]) -> dict[str, bool]:
-    """Promote each backend block's ``supported`` flag (absent -> supported)."""
+    """Promote explicit backend ``supported`` flags."""
 
     result: dict[str, bool] = {}
     for backend_id in DEFAULT_SUPPORT_POLICY.default_backend_ids:
@@ -176,6 +244,12 @@ def _backend_supported(fields: dict[str, ParsedTslField]) -> dict[str, bool]:
             result[backend_id] = text.lower() == "true"
     return result
 
+
+def _bool_text(field: ParsedTslField | None) -> bool | None:
+    text = _field_text(field)
+    if text is None:
+        return None
+    return text.lower() == "true"
 
 
 def _backend_text_map(field: ParsedTslField | None) -> dict[str, str]:
@@ -271,4 +345,3 @@ def _vector_bits_kind(field: ParsedTslField | None) -> str:
     if text.lstrip("-").isdigit():
         return "fixed"
     return text
-

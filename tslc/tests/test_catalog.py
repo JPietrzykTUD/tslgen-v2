@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from tslc.catalog import builder as builder_module
 from tslc.catalog._builder_extensions import _build_extension
 from tslc.catalog._builder_implementations import _implementations_from_entries
 from tslc.catalog._builder_primitives import _build_primitives
+from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
+from tslc.sources import SourceDocument
+from tslc.syntax.parser import TslParser
 
 
 def test_catalog_builder_keeps_domain_promotion_boundaries() -> None:
@@ -155,6 +160,90 @@ def test_extension_inheritance_and_lscpu(catalog: Catalog) -> None:
     assert catalog.extension_chain("avx2_vl") == ("avx2_vl", "avx2")
 
 
+def test_extension_backend_support_is_explicit_and_inherited(catalog: Catalog) -> None:
+    avx2_vl = catalog.extensions["avx2_vl"]
+    sve = catalog.extensions["sve"]
+    rtl = catalog.extensions["oneAPIfpgaRTL"]
+
+    assert avx2_vl.supports_backend("cpp")
+    assert avx2_vl.supports_backend("rust")
+    assert not avx2_vl.supports_backend("zig")
+    assert sve.supports_backend("cpp")
+    assert not sve.supports_backend("rust")
+    assert not rtl.supports_backend("cpp")
+
+
+def test_extension_descriptive_metadata_is_promoted(catalog: Catalog) -> None:
+    avx2 = catalog.extensions["avx2"]
+    neon = catalog.extensions["neon"]
+
+    assert avx2.metadata.vendor == "intel"
+    assert avx2.metadata.native_sort_order == 300
+    assert avx2.metadata.autodetect is True
+    assert avx2.metadata.mask_repr == "lane_bitmask"
+    assert avx2.metadata.mask_width == "lanes"
+    assert avx2.metadata.mask_vector_loadable is False
+    assert avx2.metadata.runtime_lanes is False
+    assert avx2.metadata.signature_support_exclude == (
+        "void:=(ptr,vidx,v,sImm)",
+        "void:=(m,ptr,vidx,v,sImm)",
+    )
+    assert avx2.metadata.backend["cpp"].test_suite_name == "TslAvx2"
+    assert avx2.metadata.backend["cpp"].test_support_header == "tests/avx2_support.hpp"
+    assert avx2.metadata.backend["cpp"].headers == ("immintrin.h",)
+    assert avx2.metadata.backend["rust"].type_name == "Avx2"
+    assert avx2.metadata.backend["rust"].generation_support == ("sse",)
+    assert neon.metadata.backend["cpp"].header_guard == "__ARM_NEON"
+
+
+def test_extension_inheritance_respects_explicit_false_and_empty_overrides() -> None:
+    source = SourceDocument(
+        Path("extension_inheritance_fixture.tsl"),
+        """extension parent:
+  extension_name "parent"
+  family "generic_like"
+  vector_bits "sized"
+  cpp:
+    supported true
+  rust:
+    supported true
+  size_bits [128, 256]
+  unroll_variants true
+  mask_type_policy:
+    kind "native_predicate"
+    cpp "parent_mask"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
+
+extension child:
+  extension_name "child"
+  inherits "parent"
+  rust:
+    supported false
+  size_bits []
+  unroll_variants false
+  mask_type_policy:
+    kind "lane_bitmask"
+  integral_mask_type_policy:
+    kind "lane_bitmask"
+""",
+        "d",
+        "tsl",
+    )
+    parsed = TslParser().parse((source,))
+    assert parsed.diagnostics == ()
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+
+    child = result.catalog.extensions["child"]
+    assert child.supports_backend("cpp")
+    assert not child.supports_backend("rust")
+    assert child.size_bits == ()
+    assert not child.unroll_variants
+    assert child.mask_policy.kind == "lane_bitmask"
+    assert child.imask_policy.kind == "lane_bitmask"
+
+
 def test_machine_profiles_loaded(machine_profiles) -> None:
     assert machine_profiles["scalar"].features == frozenset()
     assert "avx2" in machine_profiles["avx2"].features
@@ -206,6 +295,8 @@ def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:
         avx2.compose_suffix_by_type["si32"] = "bad"  # type: ignore[index]
     with pytest.raises(TypeError):
         avx512.mask_policy.cpp_by_lanes[16] = "bad"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        avx2.metadata.backend["new"] = avx2.metadata.backend["cpp"]  # type: ignore[index]
     with pytest.raises(TypeError):
         catalog.target_families.profile_families["new"] = (  # type: ignore[index]
             catalog.target_families.profile_families["x86"]

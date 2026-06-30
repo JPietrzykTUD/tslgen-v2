@@ -16,36 +16,10 @@ expression streams, so their punctuation stays owned by the surrounding source.
 from __future__ import annotations
 
 from tslc.diagnostics import SourceSpan
+from tslc.ir.region_registry import TSIL_REGION_KEYWORDS, region_body_shape
 from tslc.ir.segments import RawText, Region, Segment
 
-# Keywords that introduce a region. Growth happens by adding entries here (and
-# teaching the lowerer to translate them) — never by adding wrapper families.
-KEYWORDS: frozenset[str] = frozenset(
-    {
-        "complete",
-        "intrin",
-        "op",  # op<NAME>(args) -> a backend-divergent lane operator via an op_<NAME> template
-        "call",
-        "value",
-        "type",
-        "cast",
-        "var",
-        "let",
-        "mask",
-        "mem",  # mem<copy|set|alloc|alloc_aligned|free>(...) -> a mem_* translate template
-        "pack",  # pack<expand|first>(name) -> a variadic scalar pack (set)
-        "lanes",  # lanes<at>(values, N) -> one element of a first-class lane-list parameter
-        "io",  # io<write>(buffer, array, modifier) -> a text-stream write (to_ostream)
-        "if",  # block-bearing: if<generation>(cond) { ... } else<generation> { ... }
-        "assume_aligned",  # assume_aligned<N>(ptr) -> aligned-pointer hint
-        # Block-bearing backend/generation loop; the lowerer validates selectors
-        # and translates accepted native/generation loop forms.
-        "loop",
-        # Multi-arm compile-time dispatch. The scanner captures arms lexically;
-        # the lowerer validates selector meaning and renders accepted forms.
-        "switch",
-    }
-)
+KEYWORDS: frozenset[str] = TSIL_REGION_KEYWORDS
 
 _IDENT_START = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
 _IDENT_CONT = _IDENT_START | frozenset("0123456789")
@@ -156,7 +130,8 @@ def _try_region(
             statement_context=False,
         )
     )
-    if keyword == "if":
+    shape = region_body_shape(keyword)
+    if shape == "if_block":
         # A block-bearing region: capture the `{ ... }` body (and any `else`) too.
         return _try_if_region(
             text,
@@ -168,7 +143,7 @@ def _try_region(
             root_text,
             base_offset,
         )
-    if keyword == "loop":
+    if shape == "loop_block":
         # `loop<backend>(…) { body }` and `loop<backend, unroll>(…) { body }`
         # capture their `{ ... }` block. The lowerer translates them to native loop constructs.
         return _try_loop_region(
@@ -181,7 +156,7 @@ def _try_region(
             root_text,
             base_offset,
         )
-    if keyword == "switch":
+    if shape == "switch_block":
         # `switch<compile>(sel) { label => { body } … }`: capture the arm blocks so the lowerer
         # can emit a compile-time multi-way selection over the selector.
         return _try_switch_region(

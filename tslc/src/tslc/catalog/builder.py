@@ -15,6 +15,7 @@ from tslc.catalog._builder_blocks import (
 )
 from tslc.catalog._builder_extensions import (
     _build_extension,
+    _declared_extension_fields,
     _resolve_extension_inheritance,
 )
 from tslc.catalog._builder_primitives import _build_primitives
@@ -41,6 +42,7 @@ class CatalogBuilder:
         primitives: list[Primitive] = []
         type_groups: dict[str, tuple[str, ...]] = {}
         extensions: dict[str, Extension] = {}
+        extension_declared_fields: dict[str, frozenset[str]] = {}
         type_spellings: dict[str, dict[str, str]] = {}
         translations: dict[str, dict[str, str]] = {}
         diagnostics: list[Diagnostic] = []
@@ -67,6 +69,9 @@ class CatalogBuilder:
                     elif declaration.kind == "extension":
                         extension = _build_extension(declaration)
                         extensions[extension.name] = extension
+                        extension_declared_fields[extension.name] = (
+                            _declared_extension_fields(declaration)
+                        )
                     elif declaration.kind == "language" and declaration.name:
                         type_spellings[declaration.name] = _build_type_spellings(declaration)
                     elif declaration.kind == "translation" and declaration.name:
@@ -77,7 +82,7 @@ class CatalogBuilder:
                 ):
                     target_family_fields.append(declaration.field)
 
-        extensions = _resolve_extension_inheritance(extensions)
+        extensions = _resolve_extension_inheritance(extensions, extension_declared_fields)
         catalog = Catalog(
             primitives=tuple(primitives),
             type_groups=type_groups,

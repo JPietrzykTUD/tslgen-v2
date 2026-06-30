@@ -20,6 +20,7 @@ from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog, ImplementationSafety
+from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, has_errors
 from tslc.ir.scan import scan
@@ -47,18 +48,7 @@ from tslc.syntax.parser import TslParser
 
 SuggestionKind = Literal["safety", "requires"]
 Confidence = Literal["high", "medium", "low"]
-_DEFAULT_TYPES = (
-    "si8",
-    "si16",
-    "si32",
-    "si64",
-    "ui8",
-    "ui16",
-    "ui32",
-    "ui64",
-    "f32",
-    "f64",
-)
+_DEFAULT_TYPES = DEFAULT_SCALAR_TYPE_TAGS
 _DEFAULT_PROFILES = ("scalar", "sse2", "avx", "avx2", "skylake")
 
 

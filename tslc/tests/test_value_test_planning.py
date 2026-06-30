@@ -23,10 +23,13 @@ from tslc.value_tests import (
     discover_harness_primitives,
 )
 from tslc.value_tests.model import (
+    DEFAULT_VALUE_TEST_CASE_CAPABILITIES,
+    DEFAULT_VALUE_TEST_CASE_KINDS,
     ValueTestCasePlan,
     ValueTestCoverageEntry,
     ValueTestProfilePlan,
 )
+from tslc.value_tests.renderer_capability import ValueTestRendererCapability
 from tslc.value_tests._render_cpp_dispatch import CPP_VALUE_TEST_RENDERER
 from tslc.value_tests.render_cpp import CPP_VALUE_TEST_SUPPORT, render_cpp_values_runner
 from tslc.value_tests.render_rust import (
@@ -1183,9 +1186,20 @@ def test_rust_value_test_support_matches_renderer_dispatch() -> None:
 
 
 def test_value_test_case_requirements_cover_renderer_dispatch() -> None:
-    requirement_kinds = frozenset(ValueTestCasePlan.CASE_REQUIREMENTS)
-    assert CPP_VALUE_TEST_SUPPORT.case_kinds <= requirement_kinds
-    assert RUST_VALUE_TEST_SUPPORT.case_kinds <= requirement_kinds
+    assert frozenset(ValueTestCasePlan.CASE_REQUIREMENTS) == DEFAULT_VALUE_TEST_CASE_KINDS
+    assert {
+        capability.kind for capability in DEFAULT_VALUE_TEST_CASE_CAPABILITIES
+    } == DEFAULT_VALUE_TEST_CASE_KINDS
+    assert CPP_VALUE_TEST_SUPPORT.case_kinds <= DEFAULT_VALUE_TEST_CASE_KINDS
+    assert RUST_VALUE_TEST_SUPPORT.case_kinds <= DEFAULT_VALUE_TEST_CASE_KINDS
+
+
+def test_value_test_renderer_rejects_unregistered_case_kind() -> None:
+    with pytest.raises(ValueError, match="unregistered case kind"):
+        ValueTestRendererCapability(
+            backend_id="unit",
+            case_renderers={"not_registered": lambda case: ""},
+        )
 
 
 def test_parity_inventory_groups_backend_case_statuses() -> None:

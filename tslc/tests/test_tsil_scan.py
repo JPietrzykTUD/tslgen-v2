@@ -5,8 +5,28 @@ from __future__ import annotations
 from pathlib import Path
 
 from tslc.diagnostics import SourceSpan
-from tslc.ir.scan import scan
+from tslc.ir.region_registry import (
+    DEFAULT_TSIL_REGION_DESCRIPTORS,
+    TSIL_REGION_KEYWORDS,
+    region_shell_validator,
+)
+from tslc.ir.scan import KEYWORDS, scan
 from tslc.ir.segments import RawText, Region
+from tslc.lower.region_handlers.registry import DEFAULT_REGION_LOWERERS
+
+
+def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:
+    descriptor_keywords = tuple(
+        descriptor.keyword for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS
+    )
+    lowerer_keywords = {lowerer.keyword for lowerer in DEFAULT_REGION_LOWERERS}
+
+    assert len(descriptor_keywords) == len(set(descriptor_keywords))
+    assert KEYWORDS == TSIL_REGION_KEYWORDS
+    assert lowerer_keywords <= TSIL_REGION_KEYWORDS
+    assert TSIL_REGION_KEYWORDS - lowerer_keywords == {"pack"}
+    assert region_shell_validator("call") == "call_selector"
+    assert region_shell_validator("complete") is None
 
 
 def test_raw_text_passes_through() -> None:
@@ -29,6 +49,17 @@ def test_intrin_build_selector_is_raw_and_args_recurse() -> None:
     assert intrinsic.selector_text == "add, build"
     assert intrinsic.body == (RawText("left, right"),)
     assert not intrinsic.has_statement_terminator
+
+
+def test_descriptor_only_keyword_is_still_scanned_as_region() -> None:
+    segments = scan("complete(pack<first>(value));")
+
+    complete = segments[0]
+    assert isinstance(complete, Region)
+    pack = complete.body[0]
+    assert isinstance(pack, Region)
+    assert pack.keyword == "pack"
+    assert pack.selector_text == "first"
 
 
 def test_expression_statement_consumes_source_terminator() -> None:

@@ -552,7 +552,8 @@ def _cmake_list(values: Sequence[str]) -> str:
 
 
 def _cmake_quote(value: str) -> str:
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    escaped = value.translate(str.maketrans({'"': r"\"", "\\": r"\\"}))
+    return '"' + escaped + '"'
 
 
 def _cmake_cxx_flag(flag: str) -> str:

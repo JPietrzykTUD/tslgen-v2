@@ -36,6 +36,12 @@ recognized TSIL keyword island whose inner spans are themselves a recursive
 segment sequence). We do **not** parse C++/Rust expressions. We translate only
 keyword islands.
 
+This deliberately makes the current prototype a C-like-source backend family:
+raw fragments must already be acceptable to each selected backend, and adding a
+backend with substantially different expression syntax is not just a backend
+module addition. Common operators, memory idioms, and control forms should be
+promoted to typed TSIL regions before such a backend relies on them.
+
 ## 5. Hard rules carried over (these were right)
 
 - Typed, immutable domain objects after the parser boundary. No dicts as domain

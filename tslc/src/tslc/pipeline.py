@@ -24,6 +24,7 @@ from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
 from tslc.backend.registry import backend_capabilities
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, Extension
+from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
 from tslc.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
 from tslc.lower.dependencies import (
@@ -41,12 +42,7 @@ from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 _DEFAULT_BACKENDS = DEFAULT_SUPPORT_POLICY.default_backend_ids
 GenerationMode = Literal["partial", "strict"]
 SkipStatus = Literal["coverage_gap", "policy_deferred"]
-_TYPE_ORDER = {
-    tag: index
-    for index, tag in enumerate(
-        ("si8", "si16", "si32", "si64", "ui8", "ui16", "ui32", "ui64", "f32", "f64")
-    )
-}
+_TYPE_ORDER = SCALAR_TYPE_ORDER
 
 
 @dataclass(frozen=True, slots=True)

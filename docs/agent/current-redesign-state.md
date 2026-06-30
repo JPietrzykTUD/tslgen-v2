@@ -5604,3 +5604,63 @@ Next prompt:
 ```text
 docs/agent/runs/tslc-ci-artifact-packaging-review-prompt.md
 ```
+
+## Completed TSLc Maintainability Review Fixes
+
+Implemented the maintainability/design-review fixes for the active `tslc/`
+line.
+
+Implemented:
+
+- Extension backend support is now explicit: missing backend support entries are
+  unsupported, while inherited extension support still comes from parent
+  extension metadata during catalog promotion.
+- Extension inheritance now distinguishes absent fields from explicit
+  false/empty/default-looking overrides for `size_bits`, `unroll_variants`,
+  `mask_type_policy`, `integral_mask_type_policy`, and related inherited fields.
+- Descriptive extension metadata such as `vendor`, `autodetect`,
+  `native_sort_order`, `mask_repr`, `runtime_lanes`, `signature_support`, and
+  backend-specific test/build names is promoted into frozen metadata values
+  instead of being accepted and dropped.
+- Extension backend metadata subfields are schema-validated so typos are reported
+  as catalog diagnostics.
+- TSIL keyword facts are centralized in a neutral `ir` descriptor registry.
+  Scanning derives recognized keywords and block shapes from it, lowerer
+  registration derives supported lowerers from it, and body validation derives
+  shell-validator dispatch from it.
+- Value-test case-kind requirements now flow through typed case capabilities,
+  and backend renderer capabilities reject unregistered case kinds.
+- Verifier-owned Zig caches are placed under the command root
+  `.tslctmp/zig-cache/...` rather than `/tmp`.
+- Default scalar type order is catalog-owned and consumed by API, pipeline, and
+  maintenance tooling.
+- `tslc/CHARTER.md` now documents the current raw-text backend limitation: a
+  backend with substantially different expression syntax needs typed TSIL
+  regions for common raw forms before it can be additive.
+
+Design boundary:
+
+- The changes stay inside `tslc/` catalog promotion/validation, TSIL scanning
+  and lowering registration, value-test planning/render capability contracts,
+  verifier environment setup, and charter documentation.
+- No new primitive semantics, backend intrinsic semantics, generated artifacts,
+  runtime dependency on legacy trees, or broad renderer rewrite was introduced.
+- `pack` remains intentionally scan-recognized but unsupported by lowering,
+  preserving the existing unsupported-region diagnostic path.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py tslc/tests/test_tsil_scan.py tslc/tests/test_value_test_planning.py tslc/tests/test_build_verify_config.py tslc/tests/test_pipeline_structure.py tslc/tests/test_render_model.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_determinism.py tslc/tests/test_safety_contract.py tslc/tests/test_lower_text.py
+git diff --check
+```
+
+Result: compileall passed; the targeted maintainability/regression suite
+reported `178 passed`; `git diff --check` passed.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-maintainability-fixes-review-prompt.md
+```

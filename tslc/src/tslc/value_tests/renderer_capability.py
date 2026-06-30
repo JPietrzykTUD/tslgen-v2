@@ -6,7 +6,11 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from tslc.value_tests.model import ValueTestBackendSupport, ValueTestCasePlan
+from tslc.value_tests.model import (
+    DEFAULT_VALUE_TEST_CASE_KINDS,
+    ValueTestBackendSupport,
+    ValueTestCasePlan,
+)
 
 ValueTestCaseRenderer = Callable[[ValueTestCasePlan], str]
 
@@ -35,6 +39,13 @@ class ValueTestRendererCapability:
                     f"value-test renderer capability {self.backend_id!r} "
                     "contains an empty case kind"
                 )
+        unknown_kinds = set(normalized) - DEFAULT_VALUE_TEST_CASE_KINDS
+        if unknown_kinds:
+            names = ", ".join(repr(kind) for kind in sorted(unknown_kinds))
+            raise ValueError(
+                f"value-test renderer capability {self.backend_id!r} "
+                f"uses unregistered case kind(s) {names}"
+            )
         object.__setattr__(
             self,
             "case_renderers",

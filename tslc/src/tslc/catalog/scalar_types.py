@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +29,11 @@ _SCALAR_TYPE_INFOS: tuple[ScalarTypeInfo, ...] = (
 )
 
 SCALAR_TYPE_INFOS = {info.tag: info for info in _SCALAR_TYPE_INFOS}
+DEFAULT_SCALAR_TYPE_TAGS = tuple(info.tag for info in _SCALAR_TYPE_INFOS)
 KNOWN_SCALAR_TYPE_TAGS = frozenset(SCALAR_TYPE_INFOS)
+SCALAR_TYPE_ORDER = MappingProxyType(
+    {tag: index for index, tag in enumerate(DEFAULT_SCALAR_TYPE_TAGS)}
+)
 
 
 def scalar_type_info(type_tag: str) -> ScalarTypeInfo | None:
@@ -88,8 +93,10 @@ def normalize_scalar_tag(type_tag: str) -> str:
 
 
 __all__ = (
+    "DEFAULT_SCALAR_TYPE_TAGS",
     "KNOWN_SCALAR_TYPE_TAGS",
     "SCALAR_TYPE_INFOS",
+    "SCALAR_TYPE_ORDER",
     "ScalarTypeInfo",
     "is_signed",
     "is_type_tag",

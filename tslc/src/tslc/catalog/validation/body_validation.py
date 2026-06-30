@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import re
 
+from collections.abc import Callable
+
 from tslc.catalog.validation.source_spans import source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
+from tslc.ir.region_registry import region_shell_validator
 from tslc.ir.scan import scan
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower._text import split_top_level
@@ -61,12 +64,12 @@ def _validate_region(
     region: Region,
     diagnostics: list[Diagnostic],
 ) -> None:
-    if region.keyword == "call":
-        _validate_call_region(primitive_name, region, diagnostics)
-    elif region.keyword == "let":
-        _validate_let_region(primitive_name, region, diagnostics)
-    elif region.keyword == "intrin":
-        _validate_intrin_region(primitive_name, region, diagnostics)
+    validator_id = region_shell_validator(region.keyword)
+    if validator_id is None:
+        return
+    validator = _SHELL_VALIDATORS.get(validator_id)
+    if validator is not None:
+        validator(primitive_name, region, diagnostics)
 
 
 def _validate_call_region(
@@ -145,6 +148,15 @@ def _segments_text(segments: tuple[Segment, ...]) -> str:
         segment.text if isinstance(segment, RawText) else segment.full_text
         for segment in segments
     )
+
+
+ShellValidator = Callable[[str, Region, list[Diagnostic]], None]
+
+_SHELL_VALIDATORS: dict[str, ShellValidator] = {
+    "call_selector": _validate_call_region,
+    "let_type": _validate_let_region,
+    "intrin_selector": _validate_intrin_region,
+}
 
 
 __all__ = ("validate_body_regions",)

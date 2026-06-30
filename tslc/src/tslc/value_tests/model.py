@@ -41,6 +41,18 @@ class ValueTestCaseRequirements:
 
 
 @dataclass(frozen=True, slots=True)
+class ValueTestCaseCapability:
+    """Registered value-test case kind and the plan invariants it requires."""
+
+    kind: str
+    requirements: ValueTestCaseRequirements
+
+    def __post_init__(self) -> None:
+        if not self.kind:
+            raise ValueError("value-test case capability requires non-empty kind")
+
+
+@dataclass(frozen=True, slots=True)
 class HarnessPrimitiveNames:
     """Source-owned primitive names used by generated value-test harness code."""
 
@@ -301,7 +313,7 @@ _DIFFERENTIAL_FIELDS = frozenset(
 )
 
 
-ValueTestCasePlan.CASE_REQUIREMENTS = MappingProxyType({
+_VALUE_TEST_CASE_REQUIREMENTS = MappingProxyType({
     "array_to_vector": ValueTestCaseRequirements(
         expected="lanes",
         vector_inputs="one",
@@ -524,6 +536,35 @@ ValueTestCasePlan.CASE_REQUIREMENTS = MappingProxyType({
 })
 
 
+def _case_capabilities(
+    requirements: Mapping[str, ValueTestCaseRequirements],
+) -> tuple[ValueTestCaseCapability, ...]:
+    return tuple(
+        ValueTestCaseCapability(kind, requirement)
+        for kind, requirement in sorted(requirements.items())
+    )
+
+
+def _case_requirements(
+    capabilities: tuple[ValueTestCaseCapability, ...],
+) -> Mapping[str, ValueTestCaseRequirements]:
+    result: dict[str, ValueTestCaseRequirements] = {}
+    for capability in capabilities:
+        if capability.kind in result:
+            raise ValueError(f"duplicate value-test case kind {capability.kind!r}")
+        result[capability.kind] = capability.requirements
+    return MappingProxyType(result)
+
+
+DEFAULT_VALUE_TEST_CASE_CAPABILITIES = _case_capabilities(_VALUE_TEST_CASE_REQUIREMENTS)
+DEFAULT_VALUE_TEST_CASE_KINDS = frozenset(
+    capability.kind for capability in DEFAULT_VALUE_TEST_CASE_CAPABILITIES
+)
+ValueTestCasePlan.CASE_REQUIREMENTS = _case_requirements(
+    DEFAULT_VALUE_TEST_CASE_CAPABILITIES
+)
+
+
 @dataclass(frozen=True, slots=True)
 class ValueTestCoverageEntry:
     """Planning outcome for one authored value-test case or primitive test gap."""
@@ -581,7 +622,10 @@ class ValueTestProjectPlan:
 
 
 __all__ = (
+    "DEFAULT_VALUE_TEST_CASE_CAPABILITIES",
+    "DEFAULT_VALUE_TEST_CASE_KINDS",
     "ValueTestBackendSupport",
+    "ValueTestCaseCapability",
     "ValueTestCoverageEntry",
     "ValueTestCoverageStatus",
     "ValueTestParityEntry",

@@ -1,6 +1,8 @@
 """Value-test planning and rendering boundary."""
 
 from tslc.value_tests.model import (
+    DEFAULT_VALUE_TEST_CASE_CAPABILITIES,
+    DEFAULT_VALUE_TEST_CASE_KINDS,
     HarnessPrimitiveNames,
     ValueTestBackendSupport,
     ValueTestCasePlan,
@@ -15,6 +17,8 @@ from tslc.value_tests.patterns import ValueTestPattern
 from tslc.value_tests.planner import ValueTestBackendProfileInput, ValueTestPlanner
 
 __all__ = (
+    "DEFAULT_VALUE_TEST_CASE_CAPABILITIES",
+    "DEFAULT_VALUE_TEST_CASE_KINDS",
     "HarnessPrimitiveNames",
     "ValueTestBackendProfileInput",
     "ValueTestBackendSupport",

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import sys
-import tempfile
 from pathlib import Path
 
 import tslc.output.verify as verify_module
@@ -264,7 +263,7 @@ def test_subprocess_runner_defaults_zig_cache_under_command_root(
 
     assert result.returncode == 0
     local_cache, global_cache = result.stdout.splitlines()
-    expected_root = Path(tempfile.gettempdir()) / "tslc-zig-cache"
+    expected_root = tmp_path / ".tslctmp" / "zig-cache"
     assert local_cache != "/shared/zig-local"
     assert global_cache != "/shared/zig-global"
     assert Path(local_cache).is_dir()

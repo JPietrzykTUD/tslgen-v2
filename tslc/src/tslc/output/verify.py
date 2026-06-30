@@ -10,7 +10,6 @@ import hashlib
 import os
 from pathlib import Path
 import subprocess
-import tempfile
 
 from tslc.diagnostics import Diagnostic
 from tslc.output.verify_drivers import (
@@ -134,9 +133,8 @@ def verify_generated_project(
 def _subprocess_env(command: BuildCommand) -> dict[str, str] | None:
     environment = dict(os.environ)
     # Zig defaults to ~/.cache/zig, which can be read-only in sandboxed or CI
-    # environments. On this workspace mount, Zig can also fail to discover libc
-    # when its cache is under the generated project tree, so keep verifier-owned
-    # caches in /tmp while still isolating them by command root. ``BuildCommand.env``
+    # environments. Keep verifier-owned caches under the command root so build
+    # verification does not write to /tmp or the user's home directory. ``BuildCommand.env``
     # can override this for a deliberately constructed command.
     zig_local_cache, zig_global_cache = _zig_cache_dirs(command.cwd)
     environment["ZIG_LOCAL_CACHE_DIR"] = str(zig_local_cache)
@@ -148,7 +146,7 @@ def _subprocess_env(command: BuildCommand) -> dict[str, str] | None:
 
 def _zig_cache_dirs(command_root: Path) -> tuple[Path, Path]:
     digest = hashlib.sha256(str(command_root.resolve()).encode("utf-8")).hexdigest()[:16]
-    root = Path(tempfile.gettempdir()) / "tslc-zig-cache" / digest
+    root = command_root.resolve() / ".tslctmp" / "zig-cache" / digest
     local = root / "local"
     global_ = root / "global"
     local.mkdir(parents=True, exist_ok=True)

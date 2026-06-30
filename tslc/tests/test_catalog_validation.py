@@ -125,6 +125,23 @@ def test_unknown_fields_are_diagnosed() -> None:
     assert diagnostic.location == SourceLocation(Path("catalog_validation_fixture.tsl"), 13, 3)
 
 
+def test_unknown_extension_backend_metadata_fields_are_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension generic:\n"
+            '  extension_name "generic"\n'
+            '  family "generic_like"\n'
+            "  cpp:\n"
+            "    supported true\n"
+            '    test_suit_name "typo"\n'
+        )
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-CATALOG-UNKNOWN-FIELD")
+    assert "test_suit_name" in diagnostic.message
+    assert "extension backend cpp" in diagnostic.message
+
+
 def test_invalid_enum_like_values_are_diagnosed() -> None:
     diagnostics = _diagnostics(
         "target_families:\n"

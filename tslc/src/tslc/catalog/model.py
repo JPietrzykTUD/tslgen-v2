@@ -318,6 +318,40 @@ class ImaskPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class BackendExtensionMetadata:
+    """Backend-specific descriptive extension metadata.
+
+    These are source-owned facts preserved for documentation, test naming, or future build
+    tooling. They are intentionally inert for selection/lowering semantics.
+    """
+
+    headers: tuple[str, ...] = ()
+    header_guard: str | None = None
+    test_suite_name: str | None = None
+    test_support_header: str | None = None
+    type_name: str | None = None
+    generation_support: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ExtensionMetadata:
+    """Descriptive extension metadata that is not compiler semantics today."""
+
+    vendor: str | None = None
+    native_sort_order: int | None = None
+    autodetect: bool | None = None
+    mask_repr: str | None = None
+    mask_width: str | None = None
+    mask_vector_loadable: bool | None = None
+    runtime_lanes: bool | None = None
+    signature_support_exclude: tuple[str, ...] = ()
+    backend: Mapping[str, BackendExtensionMetadata] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "backend", _freeze_mapping(self.backend))
+
+
+@dataclass(frozen=True, slots=True)
 class Extension:
     """Hardware target metadata needed for backend translation.
 
@@ -336,9 +370,8 @@ class Extension:
         default_factory=dict
     )  # type tag/group -> backend_id -> register type
     backend_headers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
-    # backend_id -> whether this extension is emittable for that backend. A backend with no
-    # entry defaults to supported; an explicit ``rust: supported false`` (e.g. SVE, which has
-    # no stable Rust intrinsics) marks the combination a coverage gap, not an error.
+    # backend_id -> whether this extension is emittable for that backend. Missing entries are
+    # unsupported; inherited extensions receive parent entries during catalog promotion.
     backend_supported: Mapping[str, bool] = field(default_factory=dict)
     intrinsic_style: str = ""
     inherits: str | None = None  # extension this one borrows impls/metadata from
@@ -349,6 +382,7 @@ class Extension:
     vector_register_type_policy: str = ""
     mask_policy: MaskPolicy = field(default_factory=MaskPolicy)  # how masks are represented
     imask_policy: ImaskPolicy = field(default_factory=ImaskPolicy)  # how integral masks are represented
+    metadata: ExtensionMetadata = field(default_factory=ExtensionMetadata)
     # Test-generation config (corpus-declared). ``default_test_target`` gates whether this
     # extension is exercised as a subject-under-test; ``test_filter_exclude_templates`` drops
     # named primitive templates (e.g. "scatter"); ``test_sizes_bits`` caps the instantiation
@@ -421,12 +455,12 @@ class Extension:
         )
 
     def supports_backend(self, backend_id: str) -> bool:
-        """Whether this extension is emittable for ``backend_id`` (default: yes).
+        """Whether this extension is emittable for ``backend_id``.
 
-        Only an explicit corpus ``<backend>: supported false`` makes it unsupported — e.g. SVE
-        on Rust, which has no stable scalable intrinsics."""
+        Support must come from an explicit source fact, inherited source fact, or typed future
+        capability promotion. Unknown backends are coverage gaps, not implicit support."""
 
-        return self.backend_supported.get(backend_id, True)
+        return self.backend_supported.get(backend_id, False)
 
     def direct_vector_register_type(
         self, backend_id: str, type_tag_or_group: str

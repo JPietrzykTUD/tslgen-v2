@@ -11,6 +11,7 @@ from tslc.catalog.validation._schema_common import (
 )
 from tslc.catalog.validation.source_spans import child, children, field_text
 from tslc.diagnostics import Diagnostic
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.syntax.ast import ParsedBlockDeclaration, ParsedTslField
 
 KNOWN_EXTENSION_FIELDS = frozenset(
@@ -46,6 +47,17 @@ KNOWN_EXTENSION_FIELDS = frozenset(
         "vector_register_type_policy",
         "vector_register_types",
         "vendor",
+    }
+)
+KNOWN_EXTENSION_BACKEND_FIELDS = frozenset(
+    {
+        "generation_support",
+        "header_guard",
+        "headers",
+        "supported",
+        "test_suite_name",
+        "test_support_header",
+        "type_name",
     }
 )
 _KNOWN_MASK_POLICY_KINDS = frozenset(
@@ -113,6 +125,34 @@ def validate_extension_block(
                 diagnostics,
                 owner="intrinsic suffix",
             )
+    signature_support = fields.get("signature_support")
+    if signature_support is not None:
+        validate_known_fields(
+            children(signature_support),
+            frozenset({"exclude"}),
+            diagnostics,
+            owner="signature_support",
+        )
+        diagnose_duplicate_fields(
+            children(signature_support),
+            diagnostics,
+            label="signature_support field",
+        )
+    for backend_id in DEFAULT_SUPPORT_POLICY.default_backend_ids:
+        backend = fields.get(backend_id)
+        if backend is None:
+            continue
+        validate_known_fields(
+            children(backend),
+            KNOWN_EXTENSION_BACKEND_FIELDS,
+            diagnostics,
+            owner=f"extension backend {backend_id}",
+        )
+        diagnose_duplicate_fields(
+            children(backend),
+            diagnostics,
+            label=f"extension backend {backend_id} field",
+        )
     for backend_map_name in (
         "test_runtime_lanes",
         "test_mask_from_bits",

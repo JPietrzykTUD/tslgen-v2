@@ -138,6 +138,7 @@ def test_fixed_non_x86_extension_requires_register_metadata(backend_id: str) -> 
         family="arm",
         compose_prefix={},
         compose_suffix_by_type={},
+        backend_supported={"cpp": True, "rust": True},
         vector_bits=128,
     )
     impl = Implementation(

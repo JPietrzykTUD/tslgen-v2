@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
+from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.output.artifacts import ArtifactSet
 from tslc.output.verify import (
     BuildVerificationReport,
@@ -16,18 +17,7 @@ from tslc.output.writer import ArtifactWriteReport, ArtifactWriter
 from tslc.pipeline import GenerationMode, GenerationRequest, GenerationResult, generate
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
-_ARITH_TYPE_TAGS = (
-    "si8",
-    "si16",
-    "si32",
-    "si64",
-    "ui8",
-    "ui16",
-    "ui32",
-    "ui64",
-    "f32",
-    "f64",
-)
+_ARITH_TYPE_TAGS = DEFAULT_SCALAR_TYPE_TAGS
 
 
 def generate_project(
