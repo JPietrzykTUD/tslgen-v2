@@ -13,7 +13,7 @@ from tslc.catalog.validation._schema_common import (
     validate_known_fields,
 )
 from tslc.catalog.validation._schema_extensions import (
-    KNOWN_EXTENSION_FIELDS,
+    known_extension_fields,
     validate_extension_block,
 )
 from tslc.catalog.validation._schema_primitives import validate_primitive
@@ -105,7 +105,7 @@ def _validate_block(
     if declaration.kind == "extension":
         validate_known_fields(
             declaration.fields,
-            KNOWN_EXTENSION_FIELDS,
+            known_extension_fields(),
             diagnostics,
             owner=f"extension {declaration.name or '<unnamed>'}",
         )

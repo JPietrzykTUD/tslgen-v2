@@ -5664,3 +5664,42 @@ Next prompt:
 ```text
 docs/agent/runs/tslc-maintainability-fixes-review-prompt.md
 ```
+
+## Completed TSLc Maintainability Review Revision
+
+The read-only maintainability-fixes review returned `Needs Revision` for two
+remaining extension-point risks. The focused revision fixed both.
+
+Implemented:
+
+- Extension schema validation now composes allowed top-level extension fields
+  from source metadata fields plus `DEFAULT_SUPPORT_POLICY.default_backend_ids`
+  through `known_extension_fields(...)`. Adding a supported backend no longer
+  requires editing a hardcoded `cpp`/`rust` extension-field list.
+- TSIL body shell validators now fail fast when a descriptor names an unknown
+  validator id. The descriptor registry and body-validation validator map have
+  a focused consistency test.
+
+Design boundary:
+
+- The revision stayed within extension schema validation, TSIL body validation,
+  focused tests, and workflow handoff files.
+- No backend semantics, primitive semantics, TSIL syntax, generated artifacts,
+  or legacy dependencies were introduced.
+
+Validation:
+
+```text
+python -m compileall -q tslc/src/tslc
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py tslc/tests/test_tsil_scan.py tslc/tests/test_value_test_planning.py tslc/tests/test_build_verify_config.py tslc/tests/test_pipeline_structure.py tslc/tests/test_render_model.py tslc/tests/test_select_and_lower.py tslc/tests/test_generation_conditionals.py tslc/tests/test_determinism.py tslc/tests/test_safety_contract.py tslc/tests/test_lower_text.py
+git diff --check
+```
+
+Result: compileall passed; the targeted maintainability/regression suite
+reported `179 passed`; `git diff --check` passed.
+
+Next prompt:
+
+```text
+docs/agent/runs/tslc-maintainability-fixes-focused-rereview-prompt.md
+```

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tslc.catalog.validation.body_validation import _SHELL_VALIDATORS
 from tslc.diagnostics import SourceSpan
 from tslc.ir.region_registry import (
     DEFAULT_TSIL_REGION_DESCRIPTORS,
@@ -27,6 +28,12 @@ def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:
     assert TSIL_REGION_KEYWORDS - lowerer_keywords == {"pack"}
     assert region_shell_validator("call") == "call_selector"
     assert region_shell_validator("complete") is None
+    declared_validators = {
+        descriptor.shell_validator
+        for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS
+        if descriptor.shell_validator is not None
+    }
+    assert declared_validators <= frozenset(_SHELL_VALIDATORS)
 
 
 def test_raw_text_passes_through() -> None:

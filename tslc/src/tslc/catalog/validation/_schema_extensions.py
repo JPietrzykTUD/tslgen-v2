@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from tslc.catalog.target_families import TargetFamilyCatalog
 from tslc.catalog.validation._schema_common import (
     diagnose_duplicate_fields,
@@ -14,10 +16,9 @@ from tslc.diagnostics import Diagnostic
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.syntax.ast import ParsedBlockDeclaration, ParsedTslField
 
-KNOWN_EXTENSION_FIELDS = frozenset(
+EXTENSION_METADATA_FIELDS = frozenset(
     {
         "autodetect",
-        "cpp",
         "default_test_target",
         "extension_name",
         "family",
@@ -32,7 +33,6 @@ KNOWN_EXTENSION_FIELDS = frozenset(
         "mask_width",
         "native_sort_order",
         "runtime_lanes",
-        "rust",
         "signature_support",
         "size_bits",
         "size_parameter",
@@ -48,6 +48,9 @@ KNOWN_EXTENSION_FIELDS = frozenset(
         "vector_register_types",
         "vendor",
     }
+)
+KNOWN_EXTENSION_FIELDS = EXTENSION_METADATA_FIELDS | frozenset(
+    DEFAULT_SUPPORT_POLICY.default_backend_ids
 )
 KNOWN_EXTENSION_BACKEND_FIELDS = frozenset(
     {
@@ -66,6 +69,12 @@ _KNOWN_MASK_POLICY_KINDS = frozenset(
 _KNOWN_IMASK_POLICY_KINDS = frozenset(
     {"lane_bitmask", "same_as_mask_type", "unsigned_scalar"}
 )
+
+
+def known_extension_fields(
+    backend_ids: Iterable[str] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
+) -> frozenset[str]:
+    return EXTENSION_METADATA_FIELDS | frozenset(backend_ids)
 
 
 def validate_extension_block(

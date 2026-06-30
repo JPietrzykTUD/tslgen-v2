@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 from tslc.catalog.validation.source_spans import source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
-from tslc.ir.region_registry import region_shell_validator
+from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS, region_shell_validator
 from tslc.ir.scan import scan
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower._text import split_top_level
@@ -68,8 +68,9 @@ def _validate_region(
     if validator_id is None:
         return
     validator = _SHELL_VALIDATORS.get(validator_id)
-    if validator is not None:
-        validator(primitive_name, region, diagnostics)
+    if validator is None:
+        raise ValueError(f"unknown TSIL shell validator {validator_id!r}")
+    validator(primitive_name, region, diagnostics)
 
 
 def _validate_call_region(
@@ -157,6 +158,21 @@ _SHELL_VALIDATORS: dict[str, ShellValidator] = {
     "let_type": _validate_let_region,
     "intrin_selector": _validate_intrin_region,
 }
+
+
+def _validate_shell_validator_registry() -> None:
+    declared = {
+        descriptor.shell_validator
+        for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS
+        if descriptor.shell_validator is not None
+    }
+    missing = declared - set(_SHELL_VALIDATORS)
+    if missing:
+        names = ", ".join(repr(name) for name in sorted(missing))
+        raise ValueError(f"unknown TSIL shell validator id(s): {names}")
+
+
+_validate_shell_validator_registry()
 
 
 __all__ = ("validate_body_regions",)

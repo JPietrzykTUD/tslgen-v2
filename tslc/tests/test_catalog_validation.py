@@ -10,6 +10,7 @@ from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import load_machine_profiles_checked
 from tslc.catalog.target_families import ProfileFamilyCapability, TargetFamilyCatalog
 from tslc.catalog.validation import validate_catalog
+from tslc.catalog.validation._schema_extensions import known_extension_fields
 from tslc.diagnostics import SourceLocation
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
@@ -140,6 +141,12 @@ def test_unknown_extension_backend_metadata_fields_are_diagnosed() -> None:
     diagnostic = next(d for d in diagnostics if d.code == "TSL-CATALOG-UNKNOWN-FIELD")
     assert "test_suit_name" in diagnostic.message
     assert "extension backend cpp" in diagnostic.message
+
+
+def test_extension_backend_field_names_follow_supported_backends() -> None:
+    assert {"cpp", "rust"} <= known_extension_fields()
+    assert "zig" in known_extension_fields(("zig",))
+    assert "zig" not in known_extension_fields()
 
 
 def test_invalid_enum_like_values_are_diagnosed() -> None:
