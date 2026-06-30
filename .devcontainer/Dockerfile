@@ -43,14 +43,9 @@ RUN set -eux; \
       aarch64-unknown-linux-musl; \
     cargo install --locked cargo-zigbuild
 
-RUN /opt/venv/bin/pip install --no-cache-dir \
-    prompt_toolkit \
-    lark jinja2 mkdocs-material sphinx breathe \
-    numpy xxhash cyclopts networkx psutil \
-    pytest mypy ruff black build \
-    "mkdocstrings[python]" \
-    mkdocs-git-revision-date-localized-plugin
+COPY requirements.txt /tmp/requirements.txt
 
+RUN /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY .devcontainer/download_sde.py /tmp/download_sde.py
 

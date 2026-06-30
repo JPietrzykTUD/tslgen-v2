@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: tslc-ci-${{ github.workflow }}-${{ github.ref }}
@@ -21,36 +22,98 @@ jobs:
     name: PR verification
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            tslc/pyproject.toml
+
+      - name: Install Python test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install --no-deps -e ./tslc
+
+      - name: Run Python test suite
+        run: |
+          set -e
+          mkdir -p tslctmp
+          trap "rm -rf tslctmp/pytest" EXIT
+          python -m compileall -q tslc/src/tslc
+          python -m pytest -q tslc/tests \
+            --ignore=tslc/tests/test_build_verify.py \
+            --ignore=tslc/tests/test_value_tests.py
+
+  ci-image:
+    name: Build CI image
+    runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Compute image tag
+        id: image
+        run: |
+          repo="${GITHUB_REPOSITORY,,}"
+          owner="${repo%%/*}"
+          name="${repo#*/}"
+          echo "image=ghcr.io/${owner}/${name}-tslc-ci:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push CI image
+        uses: ./.github/actions/build-ci-image
+        with:
+          image: ${{ steps.image.outputs.image }}
+          load: "false"
+          push: "true"
+
+  pr-consumer-check:
+    name: PR generated consumer smoke
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 30
+    needs:
+      - ci-image
 
     env:
-      TSLC_CI_IMAGE: tslc-ci:local
+      TSLC_CI_IMAGE: ${{ needs['ci-image'].outputs.image }}
       TSLC_CI_OUTPUT: ./tslctmp/ci-pr-generated
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build CI image
-        uses: ./.github/actions/build-ci-image
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          image: ${{ env.TSLC_CI_IMAGE }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run Python test suite
-        run: |
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -w /workspace \
-            "${TSLC_CI_IMAGE}" \
-            bash -lc '
-              set -e
-              mkdir -p tslctmp
-              trap "rm -rf tslctmp/pytest" EXIT
-              python -m compileall -q tslc/src/tslc
-              python -m pytest -q tslc/tests \
-                --ignore=tslc/tests/test_build_verify.py \
-                --ignore=tslc/tests/test_value_tests.py
-            '
+      - name: Pull CI image
+        run: docker pull "${TSLC_CI_IMAGE}"
 
       - name: Generate small consumer-check output
         run: |
@@ -99,6 +162,7 @@ jobs:
     if: github.event_name == 'pull_request'
     timeout-minutes: 90
     needs:
+      - ci-image
       - profile-shards
 
     strategy:
@@ -107,16 +171,21 @@ jobs:
         profile_shard: ${{ fromJson(needs['profile-shards'].outputs.profile_shards) }}
 
     env:
-      TSLC_CI_IMAGE: tslc-ci:local
+      TSLC_CI_IMAGE: ${{ needs['ci-image'].outputs.image }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build CI image
-        uses: ./.github/actions/build-ci-image
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          image: ${{ env.TSLC_CI_IMAGE }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull CI image
+        run: docker pull "${TSLC_CI_IMAGE}"
 
       - name: Build-verify generated output shard
         run: |
@@ -141,35 +210,36 @@ jobs:
     name: Full Python tests
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
-    timeout-minutes: 90
-
-    env:
-      TSLC_CI_IMAGE: tslc-ci:local
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build CI image
-        uses: ./.github/actions/build-ci-image
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          image: ${{ env.TSLC_CI_IMAGE }}
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            tslc/pyproject.toml
+
+      - name: Install Python test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install --no-deps -e ./tslc
 
       - name: Run Python test suite
         run: |
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -w /workspace \
-            "${TSLC_CI_IMAGE}" \
-            bash -lc '
-              set -e
-              mkdir -p tslctmp
-              trap "rm -rf tslctmp/pytest" EXIT
-              python -m compileall -q tslc/src/tslc
-              python -m pytest -q tslc/tests \
-                --ignore=tslc/tests/test_build_verify.py \
-                --ignore=tslc/tests/test_value_tests.py
-            '
+          set -e
+          mkdir -p tslctmp
+          trap "rm -rf tslctmp/pytest" EXIT
+          python -m compileall -q tslc/src/tslc
+          python -m pytest -q tslc/tests \
+            --ignore=tslc/tests/test_build_verify.py \
+            --ignore=tslc/tests/test_value_tests.py
 
   full-generated-value-tests:
     name: Generated value tests (${{ matrix.backend }} / ${{ matrix.profile_shard.name }})
@@ -177,6 +247,7 @@ jobs:
     if: github.event_name != 'pull_request'
     timeout-minutes: 120
     needs:
+      - ci-image
       - profile-shards
 
     strategy:
@@ -186,16 +257,21 @@ jobs:
         profile_shard: ${{ fromJson(needs['profile-shards'].outputs.profile_shards) }}
 
     env:
-      TSLC_CI_IMAGE: tslc-ci:local
+      TSLC_CI_IMAGE: ${{ needs['ci-image'].outputs.image }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build CI image
-        uses: ./.github/actions/build-ci-image
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          image: ${{ env.TSLC_CI_IMAGE }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull CI image
+        run: docker pull "${TSLC_CI_IMAGE}"
 
       - name: Run generated value-test shard
         run: |
@@ -221,21 +297,27 @@ jobs:
     if: github.event_name != 'pull_request'
     timeout-minutes: 90
     needs:
+      - ci-image
       - full-python-tests
       - full-generated-value-tests
 
     env:
-      TSLC_CI_IMAGE: tslc-ci:local
+      TSLC_CI_IMAGE: ${{ needs['ci-image'].outputs.image }}
       TSLC_CI_OUTPUT: ./tslctmp/ci-generated
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build CI image
-        uses: ./.github/actions/build-ci-image
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          image: ${{ env.TSLC_CI_IMAGE }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull CI image
+        run: docker pull "${TSLC_CI_IMAGE}"
 
       - name: Generate package output
         run: |

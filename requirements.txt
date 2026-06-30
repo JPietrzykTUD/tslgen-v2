@@ -1,0 +1,6 @@
+# Pinned third-party Python dependencies for CI/test, docs, and generated-build image runtime.
+# Keep runtime dependency names in sync with tslc/pyproject.toml.
+lark==1.3.1
+pytest==9.1.1
+sphinx==8.2.3
+breathe==4.36.0
