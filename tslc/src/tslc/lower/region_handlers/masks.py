@@ -1,0 +1,61 @@
+"""Mask TSIL region lowerers."""
+
+from __future__ import annotations
+
+from tslc.ir.segments import Region
+from tslc.lower.context import LoweringSession
+from tslc.lower.region_handlers.common import _split_arg_groups
+from tslc.lower.region_handlers.protocol import RenderBody
+from tslc.render.model import RenderField, RenderText, render_text, trimmed_text
+
+
+class MaskLowerer:
+    """``mask<zero>() / mask<set:1|0>(m,i) / mask<set>(m,i,v) / mask<test>(m,i)`` -> mask-bit
+    ops, lowered per the extension's mask **representation** via a backend translate template
+    keyed by `mask_<op>_<repr>` (so literal/`&mut` differences stay in the translate layer).
+    Currently the integer-bitset repr (`lane_bitmask`, used by the generic vector's emulated
+    masks) is templated; native `__mmask`/register reprs register their own keys later. (Only
+    the emulated/generic bodies use `mask<…>` — native bodies use intrinsics — so the bitset
+    templates are reached only for the generic vector.)"""
+
+    keyword = "mask"
+
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
+        op, _, bit = region.selector_text.strip().partition(":")
+        extension = context.env.extension
+        repr_kind = extension.mask_policy.kind
+        # `lane_bitmask` covers two physical reprs: the generic vector's integer bitset (one bit
+        # per lane) and the sse/avx2 register lane-mask (the mask IS a data register, one
+        # all-ones/all-zeros lane per element). They test differently, so a register-backed
+        # lane mask (a real vector width) gets its own `*_lane_register` key.
+        if repr_kind == "lane_bitmask" and extension.vector_bits > 0:
+            repr_kind = "lane_register"
+        args: list[RenderText] = []
+        for group in _split_arg_groups(region.body):
+            rendered = render(group)
+            if render_text(rendered).strip():
+                args.append(trimmed_text(rendered))
+        if op == "zero":
+            key, fields = f"mask_zero_{repr_kind}", {}
+        elif op == "test" and len(args) == 2:
+            key, fields = f"mask_test_{repr_kind}", {"mask": args[0], "index": args[1]}
+        elif op == "set" and bit == "1" and len(args) == 2:
+            key, fields = f"mask_set_{repr_kind}", {"name": args[0], "index": args[1]}
+        elif op == "set" and bit == "0" and len(args) == 2:
+            key, fields = f"mask_clear_{repr_kind}", {"name": args[0], "index": args[1]}
+        elif op == "set" and not bit and len(args) == 3:
+            key = f"mask_set_to_{repr_kind}"
+            fields = {"name": args[0], "index": args[1], "value": args[2]}
+        else:
+            key, fields = "", {}
+        if not key or context.env.backend.templates.template(key) is None:
+            context.effects.skip(
+                "TSL-LOWER-UNSUPPORTED-MASK",
+                f"unsupported mask<{region.selector_text.strip()}> for {repr_kind!r}: "
+                f"{region.full_text!r}",
+                source=region.source,
+            )
+            return region.full_text
+        return context.env.backend.templates.render_template(key, **fields)

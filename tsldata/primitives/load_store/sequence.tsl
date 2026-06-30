@@ -1,30 +1,43 @@
-prim<v:=sequence> sequence():
+prim<v:=()> sequence():
+  cross_lane true
   brief_description "Creates a sequence [0..SIMD-Reg-Element-Count]."
+  detailed_description """
+    Constructs a vector whose lanes contain their zero-based lane indexes.
+    """
+  semantics """
+    for each lane i:
+      result[i] = i
+    return result
+    """
   operation ""
   tests:
-    - {test_name "sequence_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "sequence_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "sequence_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
-    - {test_name "sequence_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
-    - {test_name "sequence_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
-    - {test_name "sequence_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
-    - {test_name "sequence_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "sequence_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "sequence_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "sequence_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
-    - {test_name "sequence_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 1]}}
-    - {test_name "sequence_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 1]}}
-    - {test_name "sequence_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 1]}}
-    - {test_name "sequence_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [], expected [0, 1]}}
+    - {tags [basic], type "ui32", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [basic], type "si32", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [basic], type "ui8", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+    - {tags [edge], type "ui8", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+    - {tags [basic], type "si8", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+    - {tags [edge], type "si8", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}
+    - {tags [basic], type "ui16", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [edge], type "ui16", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [basic], type "si16", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [edge], type "si16", case {inputs [], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
+    - {tags [basic], type "ui64", case {inputs [], expected [0, 1]}}
+    - {tags [edge], type "ui64", case {inputs [], expected [0, 1]}}
+    - {tags [basic], type "si64", case {inputs [], expected [0, 1]}}
+    - {tags [edge], type "si64", case {inputs [], expected [0, 1]}}
   impls:
     avx512:
       ?i8:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
-            emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            complete(
+              intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 63), cast<static>(IntrinBase, 62), cast<static>(IntrinBase, 61), cast<static>(IntrinBase, 60),
                 cast<static>(IntrinBase, 59), cast<static>(IntrinBase, 58), cast<static>(IntrinBase, 57), cast<static>(IntrinBase, 56),
                 cast<static>(IntrinBase, 55), cast<static>(IntrinBase, 54), cast<static>(IntrinBase, 53), cast<static>(IntrinBase, 52),
@@ -46,11 +59,15 @@ prim<v:=sequence> sequence():
           """
       ?i16:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
-            emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            complete(
+              intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 31), cast<static>(IntrinBase, 30), cast<static>(IntrinBase, 29), cast<static>(IntrinBase, 28),
                 cast<static>(IntrinBase, 27), cast<static>(IntrinBase, 26), cast<static>(IntrinBase, 25), cast<static>(IntrinBase, 24),
                 cast<static>(IntrinBase, 23), cast<static>(IntrinBase, 22), cast<static>(IntrinBase, 21), cast<static>(IntrinBase, 20),
@@ -64,11 +81,15 @@ prim<v:=sequence> sequence():
           """
       ?i32:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
-            emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            complete(
+              intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
                 cast<static>(IntrinBase, 11), cast<static>(IntrinBase, 10), cast<static>(IntrinBase, 9), cast<static>(IntrinBase, 8),
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
@@ -78,11 +99,15 @@ prim<v:=sequence> sequence():
           """
       ?i64:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
-            emit_return(
-              intrin_compose<set, suffix="epi64">(
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            complete(
+              intrin<set, build[suffix="epi64"]>(
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
@@ -90,10 +115,14 @@ prim<v:=sequence> sequence():
           """
       f32:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<set>(
+            complete(
+              intrin<set, build>(
                 cast<static>(type<generation>(base::in), 15), cast<static>(type<generation>(base::in), 14), cast<static>(type<generation>(base::in), 13), cast<static>(type<generation>(base::in), 12),
                 cast<static>(type<generation>(base::in), 11), cast<static>(type<generation>(base::in), 10), cast<static>(type<generation>(base::in), 9), cast<static>(type<generation>(base::in), 8),
                 cast<static>(type<generation>(base::in), 7), cast<static>(type<generation>(base::in), 6), cast<static>(type<generation>(base::in), 5), cast<static>(type<generation>(base::in), 4),
@@ -103,10 +132,14 @@ prim<v:=sequence> sequence():
           """
       f64:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<set>(
+            complete(
+              intrin<set, build>(
                 cast<static>(type<generation>(base::in), 7), cast<static>(type<generation>(base::in), 6), cast<static>(type<generation>(base::in), 5), cast<static>(type<generation>(base::in), 4),
                 cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
@@ -117,11 +150,15 @@ prim<v:=sequence> sequence():
         requires:
           avx2 [avx]
           avx2_vl [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
-            emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            complete(
+              intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 31), cast<static>(IntrinBase, 30), cast<static>(IntrinBase, 29), cast<static>(IntrinBase, 28),
                 cast<static>(IntrinBase, 27), cast<static>(IntrinBase, 26), cast<static>(IntrinBase, 25), cast<static>(IntrinBase, 24),
                 cast<static>(IntrinBase, 23), cast<static>(IntrinBase, 22), cast<static>(IntrinBase, 21), cast<static>(IntrinBase, 20),
@@ -137,11 +174,15 @@ prim<v:=sequence> sequence():
         requires:
           avx2 [avx]
           avx2_vl [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
-            emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            complete(
+              intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
                 cast<static>(IntrinBase, 11), cast<static>(IntrinBase, 10), cast<static>(IntrinBase, 9), cast<static>(IntrinBase, 8),
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
@@ -153,11 +194,15 @@ prim<v:=sequence> sequence():
         requires:
           avx2 [avx]
           avx2_vl [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
-            emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            complete(
+              intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
@@ -167,11 +212,15 @@ prim<v:=sequence> sequence():
         requires:
           avx2 [avx]
           avx2_vl [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
-            emit_return(
-              intrin_compose<set, suffix="epi64x">(
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            complete(
+              intrin<set, build[suffix="epi64x"]>(
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
             );
@@ -180,10 +229,14 @@ prim<v:=sequence> sequence():
         requires:
           avx2 [avx]
           avx2_vl [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<set>(
+            complete(
+              intrin<set, build>(
                 cast<static>(type<generation>(base::in), 7), cast<static>(type<generation>(base::in), 6), cast<static>(type<generation>(base::in), 5), cast<static>(type<generation>(base::in), 4),
                 cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
@@ -193,10 +246,14 @@ prim<v:=sequence> sequence():
         requires:
           avx2 [avx]
           avx2_vl [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<set>(
+            complete(
+              intrin<set, build>(
                 cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
             );
@@ -206,11 +263,15 @@ prim<v:=sequence> sequence():
         requires:
           sse [sse, sse2]
           sse_vl [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
-            emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            complete(
+              intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
                 cast<static>(IntrinBase, 11), cast<static>(IntrinBase, 10), cast<static>(IntrinBase, 9), cast<static>(IntrinBase, 8),
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
@@ -222,11 +283,15 @@ prim<v:=sequence> sequence():
         requires:
           sse [sse, sse2]
           sse_vl [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
-            emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            complete(
+              intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
@@ -236,11 +301,15 @@ prim<v:=sequence> sequence():
         requires:
           sse [sse, sse2]
           sse_vl [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
-            emit_return(
-              intrin_compose<set, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            complete(
+              intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
             );
@@ -249,11 +318,15 @@ prim<v:=sequence> sequence():
         requires:
           sse [sse, sse2]
           sse_vl [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))))
-            emit_return(
-              intrin_compose<set, suffix="epi64x">(
+            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            complete(
+              intrin<set, build[suffix="epi64x"]>(
                 cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
               )
             );
@@ -262,10 +335,14 @@ prim<v:=sequence> sequence():
         requires:
           sse [sse, sse2]
           sse_vl [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<set>(
+            complete(
+              intrin<set, build>(
                 cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
             );
@@ -274,10 +351,14 @@ prim<v:=sequence> sequence():
         requires:
           sse [sse, sse2]
           sse_vl [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<set>(
+            complete(
+              intrin<set, build>(
                 cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
               )
             );
@@ -285,10 +366,14 @@ prim<v:=sequence> sequence():
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svindex>(
+            complete(
+              intrin<svindex, build>(
                 cast<static>(type<generation>(base::in), 0),
                 cast<static>(type<generation>(base::in), 1)
               )
@@ -296,13 +381,22 @@ prim<v:=sequence> sequence():
           """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
-              result[i] = cast<static>(type<generation>(base::in), i);
-            }
-            emit_return(call<primitive=from_array[Vec]>(result));
+            let<type>(IndexBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+            let<type>(IndexVec, type<generation>(vector::as_base(IndexBase)));
+            var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
+              cast<static>(IndexBase, 0),
+              cast<static>(IndexBase, 1)
+            ));
+            complete(intrin<svcvt_, build[infix=base::in, suffix=IndexBase, post=x]>(
+              call<primitive=mask_true[Vec]>(),
+              indexes
+            ));
           """
     [neon, generic, oneAPIfpga]:
       arith:
@@ -310,59 +404,100 @@ prim<v:=sequence> sequence():
           neon [neon]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result[i] = cast<static>(type<generation>(base::in), i);
             }
-            emit_return(call<primitive=from_array[Vec]>(result));
+            complete(call<primitive=from_array[Vec]>(result));
           """
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(base::in), 0));"
+          tsil "complete(cast<static>(type<generation>(base::in), 0));"
 
 prim<v:=(s,s)> custom_sequence(start, stepwidth):
+  cross_lane true
   brief_description "Creates a sequence with start and stepwidth."
+  detailed_description """
+    Constructs an arithmetic lane sequence beginning at `start` and increasing
+    by `stepwidth` for each subsequent lane.
+    """
+  semantics """
+    input: scalar start, scalar stepwidth
+    for each lane i:
+      result[i] = start + i * stepwidth
+    return result
+    """
   operation ""
   tests:
-    - {test_name "custom_sequence_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [5, 3], expected [5, 8, 11, 14, 17, 20, 23, 26]}}
-    - {test_name "custom_sequence_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [-5, 2], expected [-5, -3, -1, 1, 3, 5, 7, 9]}}
-    - {test_name "custom_sequence_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31]}}
-    - {test_name "custom_sequence_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [2, 3], expected [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47]}}
-    - {test_name "custom_sequence_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31]}}
-    - {test_name "custom_sequence_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [-3, -1], expected [-3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16, -17, -18]}}
-    - {test_name "custom_sequence_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15]}}
-    - {test_name "custom_sequence_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [2, 3], expected [2, 5, 8, 11, 14, 17, 20, 23]}}
-    - {test_name "custom_sequence_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15]}}
-    - {test_name "custom_sequence_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [-3, -1], expected [-3, -4, -5, -6, -7, -8, -9, -10]}}
-    - {test_name "custom_sequence_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [1, 2], expected [1, 3]}}
-    - {test_name "custom_sequence_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [2, 3], expected [2, 5]}}
-    - {test_name "custom_sequence_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [1, 2], expected [1, 3]}}
-    - {test_name "custom_sequence_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [-3, -1], expected [-3, -4]}}
+    - {tags [basic], type "ui32", case {inputs [5, 3], expected [5, 8, 11, 14, 17, 20, 23, 26]}}
+    - {tags [edge], type "si32", case {inputs [-5, 2], expected [-5, -3, -1, 1, 3, 5, 7, 9]}}
+    - {tags [basic], type "ui8", case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31]}}
+    - {tags [edge], type "ui8", case {inputs [2, 3], expected [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35, 38, 41, 44, 47]}}
+    - {tags [basic], type "si8", case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31]}}
+    - {tags [edge], type "si8", case {inputs [-3, -1], expected [-3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16, -17, -18]}}
+    - {tags [basic], type "ui16", case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15]}}
+    - {tags [edge], type "ui16", case {inputs [2, 3], expected [2, 5, 8, 11, 14, 17, 20, 23]}}
+    - {tags [basic], type "si16", case {inputs [1, 2], expected [1, 3, 5, 7, 9, 11, 13, 15]}}
+    - {tags [edge], type "si16", case {inputs [-3, -1], expected [-3, -4, -5, -6, -7, -8, -9, -10]}}
+    - {tags [basic], type "ui64", case {inputs [1, 2], expected [1, 3]}}
+    - {tags [edge], type "ui64", case {inputs [2, 3], expected [2, 5]}}
+    - {tags [basic], type "si64", case {inputs [1, 2], expected [1, 3]}}
+    - {tags [edge], type "si64", case {inputs [-3, -1], expected [-3, -4]}}
   impls:
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svindex>(start, stepwidth)
+            complete(
+              intrin<svindex, build>(start, stepwidth)
             );
           """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-            var<infer>(current, start)
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
-              result[i] = current;
-              current = details::arith_add(current, stepwidth);
-            }
-            emit_return(call<primitive=from_array[Vec]>(result));
+            let<type>(IndexBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+            let<type>(IndexVec, type<generation>(vector::as_base(IndexBase)));
+            var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
+              cast<static>(IndexBase, 0),
+              cast<static>(IndexBase, 1)
+            ));
+            var<const_infer>(scale, intrin<svcvt_, build[infix=base::in, suffix=IndexBase, post=x]>(
+              call<primitive=mask_true[Vec]>(),
+              indexes
+            ));
+            complete(
+              intrin<svadd, build[post=x]>(
+                call<primitive=mask_true[Vec]>(),
+                intrin<svdup_n, build>(start),
+                intrin<svmul_n, build[post=x]>(
+                  call<primitive=mask_true[Vec]>(),
+                  scale,
+                  stepwidth
+                )
+              )
+            );
           """
     [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
       arith:
@@ -375,18 +510,29 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
           neon [neon]
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()))
-            var<infer>(current, start)
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+            var<infer>(current, start);
+            loop<backend>(i, 0, value<generation>(vector::length), 1) {
               result[i] = current;
               current = details::arith_add(current, stepwidth);
             }
-            emit_return(call<primitive=from_array[Vec]>(result));
+            complete(call<primitive=from_array[Vec]>(result));
           """
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(start);"
+          tsil """
+            var<infer>(_stepwidth, stepwidth);
+            complete(start);
+          """

@@ -1,65 +1,87 @@
 description "Fundamental comparison operations"
 prim<m:=(v,v)> equal(left, right):
   brief_description "[Example: sse + si8]: Compare packed 8-bit integers in \"a\" and \"b\" for equality, and store the results in \"dst\"."
+  detailed_description """
+    Compares two vectors lane-wise for equality and returns a mask. Each true
+    comparison lane is represented by the target mask true value, and each false
+    lane is represented by the target mask false value. Floating-point unordered
+    cases follow the selected backend comparison predicate.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = left[i] == right[i]
+    return mask result
+    """
   operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[i+7:i] := ( a[i+7:i] == b[i+7:i] ) ? 0xFF : 0\nENDFOR"
   tests:
-    - {test_name "equal_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 0, 3, 0, 5, 0, 7, 0]], expected [4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
-    - {test_name "equal_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 4294967295, 2147483648, 123, 456, 789, 0], [0, 1, 4294967295, 2147483648, 0, 456, 0, 1]], expected [4294967295, 0, 4294967295, 4294967295, 0, 4294967295, 0, 0]}}
-    - {test_name "equal_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -3, -4, 5, 6, 7, 8], [-1, 0, -3, 1, 5, 0, 7, 0]], expected [-1, 0, -1, 0, -1, 0, -1, 0]}}
-    - {test_name "equal_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-2147483648, -2147483647, 0, 1, -1, 123456, -123456, 42], [-2147483648, 0, 0, 2, -1, 0, -123456, 41]], expected [-1, 0, -1, 0, -1, 0, -1, 0]}}
-    - {test_name "equal_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
-    - {test_name "equal_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
-    - {test_name "equal_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
-    - {test_name "equal_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
-    - {test_name "equal_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
-    - {test_name "equal_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
-    - {test_name "equal_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
-    - {test_name "equal_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
-    - {test_name "equal_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [18446744073709551615, 18446744073709551615]}}
-    - {test_name "equal_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [18446744073709551615, 18446744073709551615]}}
-    - {test_name "equal_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [-1, -1]}}
-    - {test_name "equal_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [-1, -1]}}
-    - {test_name "equal_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [NAN, NAN, NAN, NAN]}}
-    - {test_name "equal_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, NAN, NAN, NAN]}}
-    - {test_name "equal_f32_nan_mixed", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 1.0, -2.0, 3.0], [0.0, 1.0, NAN, 3.0]], expected [0.0, NAN, 0.0, NAN]}}
-    - {test_name "equal_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [NAN, NAN]}}
-    - {test_name "equal_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [0.0, NAN]}}
-    - {test_name "equal_f64_nan_mixed", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[NAN, 1.0], [0.0, 1.0]], expected [0.0, NAN]}}
+    - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 0, 3, 0, 5, 0, 7, 0]], expected [4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 0, 4294967295, 2147483648, 123, 456, 789, 0], [0, 1, 4294967295, 2147483648, 0, 456, 0, 1]], expected [4294967295, 0, 4294967295, 4294967295, 0, 4294967295, 0, 0]}}
+    - {tags [basic], type "si32", case {inputs [[-1, -2, -3, -4, 5, 6, 7, 8], [-1, 0, -3, 1, 5, 0, 7, 0]], expected [-1, 0, -1, 0, -1, 0, -1, 0]}}
+    - {tags [edge], type "si32", case {inputs [[-2147483648, -2147483647, 0, 1, -1, 123456, -123456, 42], [-2147483648, 0, 0, 2, -1, 0, -123456, 41]], expected [-1, 0, -1, 0, -1, 0, -1, 0]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [18446744073709551615, 18446744073709551615]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], [0, 1]], expected [18446744073709551615, 18446744073709551615]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [-1, -1]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], [0, -1]], expected [-1, -1]}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [NAN, NAN, NAN, NAN]}}
+    - {tags [edge], type "f32", case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, NAN, NAN, NAN]}}
+    - {tags [nan, mixed], type "f32", case {inputs [[NAN, 1.0, -2.0, 3.0], [0.0, 1.0, NAN, 3.0]], expected [0.0, NAN, 0.0, NAN]}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [NAN, NAN]}}
+    - {tags [edge], type "f64", case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [0.0, NAN]}}
+    - {tags [nan, mixed], type "f64", case {inputs [[NAN, 1.0], [0.0, 1.0]], expected [0.0, NAN]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(left == right);"
+          tsil "complete(left == right);"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            MaskT result = mask<zero>();
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] == right[i]) {
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] == right[i]) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -73,10 +95,14 @@ prim<m:=(v,v)> equal(left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmpeq, post=mask>(left, right)
+            complete(
+              intrin<cmpeq, build[post=mask]>(left, right)
             );
           """
       f?:
@@ -84,30 +110,39 @@ prim<m:=(v,v)> equal(left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmp, post=mask>(left, right, _CMP_EQ_OQ)
+            complete(
+              intrin<cmp, build[post=mask]>(left, right, _CMP_EQ_OQ)
             );
           """
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                cmpeq,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(left, right)
+            complete(
+              intrin<cmpeq, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmp>(left, right, _CMP_EQ_OQ)
+            complete(
+              intrin<cmp, build>(left, right, _CMP_EQ_OQ)
             );
           """
     sse:
@@ -115,39 +150,75 @@ prim<m:=(v,v)> equal(left, right):
         requires:
           [?i8, ?i16, ?i32] [sse2]
           ?i64 [sse4_1]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                cmpeq,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(left, right)
+            complete(
+              intrin<cmpeq, build[suffix=base::signed_of(base::in)]>(left, right)
             );
           """
       f?:
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmpeq>(left, right)
+            complete(
+              intrin<cmpeq, build>(left, right)
             );
-          """    
+          """
+      arith:
+        requires [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+            var<const_infer>(left_values, call<primitive=to_array[Vec]>(left));
+            var<const_infer>(right_values, call<primitive=to_array[Vec]>(right));
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+              if (left_values[i] == right_values[i]) {
+                result[i] = value<generation>(mask::lane::all_true);
+              }
+            }
+            complete(call<primitive=from_array[Vec]>(result));
+          """
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(intrin_compose<vceqq>(left, right));
+            let<type>(MaskVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+            complete(
+              call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
+                intrin<vceqq, build>(left, right)
+              )
+            );
           """
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svcmpeq>(
+            complete(
+              intrin<svcmpeq, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -155,65 +226,87 @@ prim<m:=(v,v)> equal(left, right):
           """
 prim<m:=(v,v)> nequal(left, right):
   brief_description "[Example: avx512 + si8]: Compare packed signed 8-bit integers in \"a\" and \"b\" for not-equal, and store the results in mask vector \"k\"."
+  detailed_description """
+    Compares two vectors lane-wise for inequality and returns a mask. Each true
+    comparison lane is represented by the target mask true value, and each false
+    lane is represented by the target mask false value. Floating-point unordered
+    cases follow the selected backend comparison predicate.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = left[i] != right[i]
+    return mask result
+    """
   operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tk[j] := ( a[i+7:i] != b[i+7:i] ) ? 1 : 0\nENDFOR\nk[MAX:64] := 0"
   tests:
-    - {test_name "nequal_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 0, 3, 0, 5, 0, 7, 0]], expected [0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
-    - {test_name "nequal_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 4294967295, 2147483648, 123, 456, 789, 0], [0, 1, 4294967295, 2147483648, 0, 456, 0, 1]], expected [0, 4294967295, 0, 0, 4294967295, 0, 4294967295, 4294967295]}}
-    - {test_name "nequal_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -3, -4, 5, 6, 7, 8], [-1, 0, -3, 1, 5, 0, 7, 0]], expected [0, -1, 0, -1, 0, -1, 0, -1]}}
-    - {test_name "nequal_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-2147483648, -2147483647, 0, 1, -1, 123456, -123456, 42], [-2147483648, 0, 0, 2, -1, 0, -123456, 41]], expected [0, -1, 0, -1, 0, -1, 0, -1]}}
-    - {test_name "nequal_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "nequal_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "nequal_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "nequal_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "nequal_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "nequal_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "nequal_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "nequal_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "nequal_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
-    - {test_name "nequal_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [0, 0]}}
-    - {test_name "nequal_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
-    - {test_name "nequal_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [0, 0]}}
-    - {test_name "nequal_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 0.0, 0.0, 0.0]}}
-    - {test_name "nequal_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [NAN, 0.0, 0.0, 0.0]}}
-    - {test_name "nequal_f32_nan_mixed", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 1.0, -2.0, 3.0], [0.0, 1.0, NAN, 4.0]], expected [NAN, 0.0, NAN, NAN]}}
-    - {test_name "nequal_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
-    - {test_name "nequal_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [NAN, 0.0]}}
-    - {test_name "nequal_f64_nan_mixed", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[NAN, 1.0], [0.0, 2.0]], expected [NAN, NAN]}}
+    - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 0, 3, 0, 5, 0, 7, 0]], expected [0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 0, 4294967295, 2147483648, 123, 456, 789, 0], [0, 1, 4294967295, 2147483648, 0, 456, 0, 1]], expected [0, 4294967295, 0, 0, 4294967295, 0, 4294967295, 4294967295]}}
+    - {tags [basic], type "si32", case {inputs [[-1, -2, -3, -4, 5, 6, 7, 8], [-1, 0, -3, 1, 5, 0, 7, 0]], expected [0, -1, 0, -1, 0, -1, 0, -1]}}
+    - {tags [edge], type "si32", case {inputs [[-2147483648, -2147483647, 0, 1, -1, 123456, -123456, 42], [-2147483648, 0, 0, 2, -1, 0, -123456, 41]], expected [0, -1, 0, -1, 0, -1, 0, -1]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], [0, 1]], expected [0, 0]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], [0, -1]], expected [0, 0]}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [edge], type "f32", case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [NAN, 0.0, 0.0, 0.0]}}
+    - {tags [nan, mixed], type "f32", case {inputs [[NAN, 1.0, -2.0, 3.0], [0.0, 1.0, NAN, 4.0]], expected [NAN, 0.0, NAN, NAN]}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
+    - {tags [edge], type "f64", case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [NAN, 0.0]}}
+    - {tags [nan, mixed], type "f64", case {inputs [[NAN, 1.0], [0.0, 2.0]], expected [NAN, NAN]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(left != right);"
+          tsil "complete(left != right);"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            MaskT result = mask<zero>();
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] != right[i]) {
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] != right[i]) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -227,10 +320,14 @@ prim<m:=(v,v)> nequal(left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmpneq, post=mask>(left, right)
+            complete(
+              intrin<cmpneq, build[post=mask]>(left, right)
             );
           """
       f?:
@@ -238,18 +335,26 @@ prim<m:=(v,v)> nequal(left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmp, post=mask>(left, right, _CMP_NEQ_UQ)
+            complete(
+              intrin<cmp, build[post=mask]>(left, right, _CMP_NEQ_UQ)
             );
           """
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=binary_andnot>(
                 call<primitive=equal>(left, right),
                 call<primitive=equal>(left, left)
@@ -258,20 +363,28 @@ prim<m:=(v,v)> nequal(left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmp>(left, right, _CMP_NEQ_UQ)
+            complete(
+              intrin<cmp, build>(left, right, _CMP_NEQ_UQ)
             );
           """
     sse:
       ?i?:
         requires:
           [?i8, ?i16, ?i32] [sse2]
-          ?i64 [sse4_1]
+          ?i64 [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=binary_andnot>(
                 call<primitive=equal>(left, right),
                 call<primitive=equal>(left, left)
@@ -282,26 +395,38 @@ prim<m:=(v,v)> nequal(left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmp>(left, right, _CMP_NEQ_UQ)
+            complete(
+              intrin<cmp, build>(left, right, _CMP_NEQ_UQ)
             );
           """
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(call<primitive=inv>(call<primitive=equal>(left, right)));
+            complete(call<primitive=inv>(call<primitive=equal>(left, right)));
           """
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svcmpne>(
+            complete(
+              intrin<svcmpne, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -309,63 +434,85 @@ prim<m:=(v,v)> nequal(left, right):
           """
 prim<m:=(v,v)> less_than(left, right):
   brief_description "[Example: sse + si8]: Compare packed signed 8-bit integers in \"a\" and \"b\" for less-than, and store the results in \"dst\". Note: This intrinsic emits the pcmpgtb instruction with the order of the operands switched."
+  detailed_description """
+    Compares two vectors lane-wise and returns a mask indicating whether the
+    left lane is less than the right lane. Signedness follows the selected lane
+    type. Floating-point unordered cases follow the selected backend comparison
+    predicate.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = left[i] < right[i]
+    return mask result
+    """
   operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[i+7:i] := ( a[i+7:i] < b[i+7:i] ) ? 0xFF : 0\nENDFOR"
   tests:
-    - {test_name "less_than_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 4, 4, 6, 5, 8, 7]], expected [0, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
-    - {test_name "less_than_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 4294967295, 2147483648, 0, 100, 200, 300], [1, 1, 0, 4294967295, 0, 50, 200, 400]], expected [4294967295, 0, 0, 4294967295, 0, 0, 0, 4294967295]}}
-    - {test_name "less_than_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "less_than_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "less_than_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "less_than_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "less_than_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "less_than_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "less_than_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "less_than_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "less_than_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [0, 0, 0, 0]}}
-    - {test_name "less_than_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [0, 0, 0, 0]}}
-    - {test_name "less_than_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
-    - {test_name "less_than_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [0, 0]}}
-    - {test_name "less_than_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
-    - {test_name "less_than_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [0, 0]}}
-    - {test_name "less_than_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 0.0, 0.0, 0.0]}}
-    - {test_name "less_than_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, 0.0, 0.0, 0.0]}}
-    - {test_name "less_than_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
-    - {test_name "less_than_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [0.0, 0.0]}}
+    - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 4, 4, 6, 5, 8, 7]], expected [0, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 1, 4294967295, 2147483648, 0, 100, 200, 300], [1, 1, 0, 4294967295, 0, 50, 200, 400]], expected [4294967295, 0, 0, 4294967295, 0, 0, 0, 4294967295]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [0, 0, 0, 0]}}
+    - {tags [edge], type "si32", case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [0, 0, 0, 0]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], [0, 1]], expected [0, 0]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], [0, -1]], expected [0, 0]}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [edge], type "f32", case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
+    - {tags [edge], type "f64", case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [0.0, 0.0]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(left < right);"
+          tsil "complete(left < right);"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            MaskT result = mask<zero>();
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] < right[i]) {
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] < right[i]) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -379,10 +526,14 @@ prim<m:=(v,v)> less_than(left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmplt, post=mask>(left, right)
+            complete(
+              intrin<cmplt, build[post=mask]>(left, right)
             );
           """
       f?:
@@ -390,106 +541,205 @@ prim<m:=(v,v)> less_than(left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmp, post=mask>(left, right, _CMP_LT_OQ)
+            complete(
+              intrin<cmp, build[post=mask]>(left, right, _CMP_LT_OQ)
             );
           """
     avx2:
       si?:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<cmpgt>(right, left));"
+          tsil "complete(intrin<cmpgt, build>(right, left));"
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmp>(left, right, _CMP_LT_OQ)
+            complete(
+              intrin<cmp, build>(left, right, _CMP_LT_OQ)
             );
           """
       ui?:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)))
             if<generation>(type::is_same(type<generation>(base::in), ui8)) {
-              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
+              var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
+              complete(
+                intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                  call<primitive=binary_xor>(right, sign_bit),
+                  call<primitive=binary_xor>(left, sign_bit)
+                )
+              );
             } else<generation> {
               if<generation>(type::is_same(type<generation>(base::in), ui16)) {
-                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000));
+                var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000)));
+                complete(
+                  intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                    call<primitive=binary_xor>(right, sign_bit),
+                    call<primitive=binary_xor>(left, sign_bit)
+                  )
+                );
               } else<generation> {
                 if<generation>(type::is_same(type<generation>(base::in), ui32)) {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(right, sign_bit),
+                      call<primitive=binary_xor>(left, sign_bit)
+                    )
+                  );
                 } else<generation> {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(right, sign_bit),
+                      call<primitive=binary_xor>(left, sign_bit)
+                    )
+                  );
                 }
               }
             }
-            emit_return(
-              intrin_compose<cmpgt, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
-                call<primitive=binary_xor>(right, sign_bit),
-                call<primitive=binary_xor>(left, sign_bit)
-              )
-            );
           """
     sse:
       [si8, si16, si32]:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<cmplt>(left, right));"
+          tsil "complete(intrin<cmplt, build>(left, right));"
       si64:
         requires [sse4_2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(intrin_compose<cmpgt>(right, left));
+            complete(intrin<cmpgt, build>(right, left));
           """
       f?:
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<cmplt>(left, right));"
+          tsil "complete(intrin<cmplt, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
           ui64              [sse2, sse4_2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)))
             if<generation>(type::is_same(type<generation>(base::in), ui8)) {
-              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
+              var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
+              complete(
+                intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                  call<primitive=binary_xor>(right, sign_bit),
+                  call<primitive=binary_xor>(left, sign_bit)
+                )
+              );
             } else<generation> {
               if<generation>(type::is_same(type<generation>(base::in), ui16)) {
-                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000));
+                var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000)));
+                complete(
+                  intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                    call<primitive=binary_xor>(right, sign_bit),
+                    call<primitive=binary_xor>(left, sign_bit)
+                  )
+                );
               } else<generation> {
                 if<generation>(type::is_same(type<generation>(base::in), ui32)) {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(right, sign_bit),
+                      call<primitive=binary_xor>(left, sign_bit)
+                    )
+                  );
                 } else<generation> {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(right, sign_bit),
+                      call<primitive=binary_xor>(left, sign_bit)
+                    )
+                  );
                 }
               }
             }
-            emit_return(
-              intrin_compose<cmpgt, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
-                call<primitive=binary_xor>(right, sign_bit),
-                call<primitive=binary_xor>(left, sign_bit)
-              )
-            );
+          """
+      arith:
+        requires [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+            var<const_infer>(left_values, call<primitive=to_array[Vec]>(left));
+            var<const_infer>(right_values, call<primitive=to_array[Vec]>(right));
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+              if (left_values[i] < right_values[i]) {
+                result[i] = value<generation>(mask::lane::all_true);
+              }
+            }
+            complete(call<primitive=from_array[Vec]>(result));
           """
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<vcltq>(left, right));"
+          tsil """
+            let<type>(MaskVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+            complete(
+              call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
+                intrin<vcltq, build>(left, right)
+              )
+            );
+          """
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svcmplt>(
+            complete(
+              intrin<svcmplt, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -497,63 +747,85 @@ prim<m:=(v,v)> less_than(left, right):
           """
 prim<m:=(v,v)> greater_than(left, right):
   brief_description "[Example: sse + si8]: Compare packed signed 8-bit integers in \"a\" and \"b\" for greater-than, and store the results in \"dst\"."
+  detailed_description """
+    Compares two vectors lane-wise and returns a mask indicating whether the
+    left lane is greater than the right lane. Signedness follows the selected
+    lane type. Floating-point unordered cases follow the selected backend
+    comparison predicate.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = left[i] > right[i]
+    return mask result
+    """
   operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[i+7:i] := ( a[i+7:i] > b[i+7:i] ) ? 0xFF : 0\nENDFOR"
   tests:
-    - {test_name "greater_than_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 4, 4, 6, 5, 8, 7]], expected [0, 4294967295, 0, 0, 0, 4294967295, 0, 4294967295]}}
-    - {test_name "greater_than_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 4294967295, 2147483648, 0, 100, 200, 300], [1, 1, 0, 4294967295, 0, 50, 200, 400]], expected [0, 0, 4294967295, 0, 0, 4294967295, 0, 0]}}
-    - {test_name "greater_than_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "greater_than_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "greater_than_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "greater_than_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "greater_than_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "greater_than_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "greater_than_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "greater_than_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "greater_than_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [0, 0, 0, 0]}}
-    - {test_name "greater_than_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [0, 0, 0, 0]}}
-    - {test_name "greater_than_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
-    - {test_name "greater_than_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [0, 0]}}
-    - {test_name "greater_than_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
-    - {test_name "greater_than_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [0, 0]}}
-    - {test_name "greater_than_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 0.0, 0.0, 0.0]}}
-    - {test_name "greater_than_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, 0.0, 0.0, 0.0]}}
-    - {test_name "greater_than_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
-    - {test_name "greater_than_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [0.0, 0.0]}}
+    - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 4, 4, 6, 5, 8, 7]], expected [0, 4294967295, 0, 0, 0, 4294967295, 0, 4294967295]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 1, 4294967295, 2147483648, 0, 100, 200, 300], [1, 1, 0, 4294967295, 0, 50, 200, 400]], expected [0, 0, 4294967295, 0, 0, 4294967295, 0, 0]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [0, 0, 0, 0]}}
+    - {tags [edge], type "si32", case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [0, 0, 0, 0]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], [0, 1]], expected [0, 0]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], [0, -1]], expected [0, 0]}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [edge], type "f32", case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
+    - {tags [edge], type "f64", case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [0.0, 0.0]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(left > right);"
+          tsil "complete(left > right);"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            MaskT result = mask<zero>();
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] > right[i]) {
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] > right[i]) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -567,10 +839,14 @@ prim<m:=(v,v)> greater_than(left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmpgt, post=mask>(left, right)
+            complete(
+              intrin<cmpgt, build[post=mask]>(left, right)
             );
           """
       f?:
@@ -578,106 +854,187 @@ prim<m:=(v,v)> greater_than(left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmp, post=mask>(left, right, _CMP_GT_OQ)
+            complete(
+              intrin<cmp, build[post=mask]>(left, right, _CMP_GT_OQ)
             );
           """
     avx2:
       si?:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<cmpgt>(left, right));"
+          tsil "complete(intrin<cmpgt, build>(left, right));"
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmp>(left, right, _CMP_GT_OQ)
+            complete(
+              intrin<cmp, build>(left, right, _CMP_GT_OQ)
             );
           """
       ui?:
         requires [avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)))
             if<generation>(type::is_same(type<generation>(base::in), ui8)) {
-              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
+              var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
+              complete(
+                intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                  call<primitive=binary_xor>(left, sign_bit),
+                  call<primitive=binary_xor>(right, sign_bit)
+                )
+              );
             } else<generation> {
               if<generation>(type::is_same(type<generation>(base::in), ui16)) {
-                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000));
+                var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000)));
+                complete(
+                  intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                    call<primitive=binary_xor>(left, sign_bit),
+                    call<primitive=binary_xor>(right, sign_bit)
+                  )
+                );
               } else<generation> {
                 if<generation>(type::is_same(type<generation>(base::in), ui32)) {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(left, sign_bit),
+                      call<primitive=binary_xor>(right, sign_bit)
+                    )
+                  );
                 } else<generation> {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(left, sign_bit),
+                      call<primitive=binary_xor>(right, sign_bit)
+                    )
+                  );
                 }
               }
             }
-            emit_return(
-              intrin_compose<cmpgt, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
-                call<primitive=binary_xor>(left, sign_bit),
-                call<primitive=binary_xor>(right, sign_bit)
-              )
-            );
           """
     sse:
       [si8, si16, si32]:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<cmpgt>(left, right));"
+          tsil "complete(intrin<cmpgt, build>(left, right));"
       si64:
         requires [sse4_2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(intrin_compose<cmpgt>(left, right));
+            complete(intrin<cmpgt, build>(left, right));
           """
       f?:
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<cmpgt>(left, right));"
+          tsil "complete(intrin<cmpgt, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
           ui64              [sse2, sse4_2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            var<infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)))
             if<generation>(type::is_same(type<generation>(base::in), ui8)) {
-              sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80));
+              var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80)));
+              complete(
+                intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                  call<primitive=binary_xor>(left, sign_bit),
+                  call<primitive=binary_xor>(right, sign_bit)
+                )
+              );
             } else<generation> {
               if<generation>(type::is_same(type<generation>(base::in), ui16)) {
-                sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000));
+                var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000)));
+                complete(
+                  intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                    call<primitive=binary_xor>(left, sign_bit),
+                    call<primitive=binary_xor>(right, sign_bit)
+                  )
+                );
               } else<generation> {
                 if<generation>(type::is_same(type<generation>(base::in), ui32)) {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x80000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(left, sign_bit),
+                      call<primitive=binary_xor>(right, sign_bit)
+                    )
+                  );
                 } else<generation> {
-                  sign_bit = call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000));
+                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), 0x8000000000000000)));
+                  complete(
+                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
+                      call<primitive=binary_xor>(left, sign_bit),
+                      call<primitive=binary_xor>(right, sign_bit)
+                    )
+                  );
                 }
               }
             }
-            emit_return(
-              intrin_compose<cmpgt, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
-                call<primitive=binary_xor>(left, sign_bit),
-                call<primitive=binary_xor>(right, sign_bit)
-              )
-            );
           """
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<vcgtq>(left, right));"
+          tsil """
+            let<type>(MaskVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+            complete(
+              call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
+                intrin<vcgtq, build>(left, right)
+              )
+            );
+          """
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svcmpgt>(
+            complete(
+              intrin<svcmpgt, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -685,63 +1042,85 @@ prim<m:=(v,v)> greater_than(left, right):
           """
 prim<m:=(v,v)> less_than_or_equal(left, right):
   brief_description "[Example: sse + f32]: Compare packed single-precision (32-bit) floating-point elements in \"a\" and \"b\" for less-than-or-equal, and store the results in \"dst\"."
+  detailed_description """
+    Compares two vectors lane-wise and returns a mask indicating whether the
+    left lane is less than or equal to the right lane. Signedness follows the
+    selected lane type. Floating-point unordered cases follow the selected
+    backend comparison predicate.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = left[i] <= right[i]
+    return mask result
+    """
   operation "[Example: sse + f32]: FOR j := 0 to 3\n\ti := j*32\n\tdst[i+31:i] := ( a[i+31:i] <= b[i+31:i] ) ? 0xFFFFFFFF : 0\nENDFOR"
   tests:
-    - {test_name "less_than_or_equal_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 4, 4, 6, 5, 8, 7]], expected [4294967295, 0, 4294967295, 4294967295, 4294967295, 0, 4294967295, 0]}}
-    - {test_name "less_than_or_equal_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 4294967295, 2147483648, 0, 100, 200, 300], [1, 1, 0, 4294967295, 0, 50, 200, 400]], expected [4294967295, 4294967295, 0, 4294967295, 4294967295, 0, 4294967295, 4294967295]}}
-    - {test_name "less_than_or_equal_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
-    - {test_name "less_than_or_equal_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
-    - {test_name "less_than_or_equal_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
-    - {test_name "less_than_or_equal_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
-    - {test_name "less_than_or_equal_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
-    - {test_name "less_than_or_equal_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
-    - {test_name "less_than_or_equal_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
-    - {test_name "less_than_or_equal_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
-    - {test_name "less_than_or_equal_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [-1, -1, -1, -1]}}
-    - {test_name "less_than_or_equal_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [-1, -1, -1, -1]}}
-    - {test_name "less_than_or_equal_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [18446744073709551615, 18446744073709551615]}}
-    - {test_name "less_than_or_equal_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [18446744073709551615, 18446744073709551615]}}
-    - {test_name "less_than_or_equal_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [-1, -1]}}
-    - {test_name "less_than_or_equal_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [-1, -1]}}
-    - {test_name "less_than_or_equal_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [NAN, NAN, NAN, NAN]}}
-    - {test_name "less_than_or_equal_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, NAN, NAN, NAN]}}
-    - {test_name "less_than_or_equal_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [NAN, NAN]}}
-    - {test_name "less_than_or_equal_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [0.0, NAN]}}
+    - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 4, 4, 6, 5, 8, 7]], expected [4294967295, 0, 4294967295, 4294967295, 4294967295, 0, 4294967295, 0]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 1, 4294967295, 2147483648, 0, 100, 200, 300], [1, 1, 0, 4294967295, 0, 50, 200, 400]], expected [4294967295, 4294967295, 0, 4294967295, 4294967295, 0, 4294967295, 4294967295]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [-1, -1, -1, -1]}}
+    - {tags [edge], type "si32", case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [-1, -1, -1, -1]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [18446744073709551615, 18446744073709551615]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], [0, 1]], expected [18446744073709551615, 18446744073709551615]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [-1, -1]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], [0, -1]], expected [-1, -1]}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [NAN, NAN, NAN, NAN]}}
+    - {tags [edge], type "f32", case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, NAN, NAN, NAN]}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [NAN, NAN]}}
+    - {tags [edge], type "f64", case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [0.0, NAN]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(left <= right);"
+          tsil "complete(left <= right);"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            MaskT result = mask<zero>();
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] <= right[i]) {
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] <= right[i]) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -755,10 +1134,14 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmple, post=mask>(left, right)
+            complete(
+              intrin<cmple, build[post=mask]>(left, right)
             );
           """
       f?:
@@ -766,18 +1149,26 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmp, post=mask>(left, right, _CMP_LE_OQ)
+            complete(
+              intrin<cmp, build[post=mask]>(left, right, _CMP_LE_OQ)
             );
           """
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_or>(
                 call<primitive=equal>(left, right),
                 call<primitive=less_than>(left, right)
@@ -786,10 +1177,14 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmp>(left, right, _CMP_LE_OQ)
+            complete(
+              intrin<cmp, build>(left, right, _CMP_LE_OQ)
             );
           """
     sse:
@@ -797,9 +1192,13 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         requires:
           [si8, si16, si32] [sse2]
           si64              [sse4_2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_or>(
                 call<primitive=equal>(left, right),
                 call<primitive=less_than>(left, right)
@@ -810,15 +1209,23 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<cmple>(left, right));"
+          tsil "complete(intrin<cmple, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
           ui64              [sse2, sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_or>(
                 call<primitive=equal>(left, right),
                 call<primitive=less_than>(left, right)
@@ -828,15 +1235,30 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<vcleq>(left, right));"
+          tsil """
+            let<type>(MaskVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+            complete(
+              call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
+                intrin<vcleq, build>(left, right)
+              )
+            );
+          """
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svcmple>(
+            complete(
+              intrin<svcmple, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -844,63 +1266,85 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           """
 prim<m:=(v,v)> greater_than_or_equal(left, right):
   brief_description "[Example: sse + f32]: Compare packed single-precision (32-bit) floating-point elements in \"a\" and \"b\" for greater-than-or-equal, and store the results in \"dst\"."
+  detailed_description """
+    Compares two vectors lane-wise and returns a mask indicating whether the
+    left lane is greater than or equal to the right lane. Signedness follows the
+    selected lane type. Floating-point unordered cases follow the selected
+    backend comparison predicate.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = left[i] >= right[i]
+    return mask result
+    """
   operation "[Example: sse + f32]: FOR j := 0 to 3\n\ti := j*32\n\tdst[i+31:i] := ( a[i+31:i] >= b[i+31:i] ) ? 0xFFFFFFFF : 0\nENDFOR"
   tests:
-    - {test_name "greater_than_or_equal_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 4, 4, 6, 5, 8, 7]], expected [4294967295, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
-    - {test_name "greater_than_or_equal_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 4294967295, 2147483648, 0, 100, 200, 300], [1, 1, 0, 4294967295, 0, 50, 200, 400]], expected [0, 4294967295, 4294967295, 0, 4294967295, 4294967295, 4294967295, 0]}}
-    - {test_name "greater_than_or_equal_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
-    - {test_name "greater_than_or_equal_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
-    - {test_name "greater_than_or_equal_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
-    - {test_name "greater_than_or_equal_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
-    - {test_name "greater_than_or_equal_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
-    - {test_name "greater_than_or_equal_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
-    - {test_name "greater_than_or_equal_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
-    - {test_name "greater_than_or_equal_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
-    - {test_name "greater_than_or_equal_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [-1, -1, -1, -1]}}
-    - {test_name "greater_than_or_equal_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [-1, -1, -1, -1]}}
-    - {test_name "greater_than_or_equal_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [18446744073709551615, 18446744073709551615]}}
-    - {test_name "greater_than_or_equal_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [18446744073709551615, 18446744073709551615]}}
-    - {test_name "greater_than_or_equal_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [-1, -1]}}
-    - {test_name "greater_than_or_equal_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [-1, -1]}}
-    - {test_name "greater_than_or_equal_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [NAN, NAN, NAN, NAN]}}
-    - {test_name "greater_than_or_equal_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, NAN, NAN, NAN]}}
-    - {test_name "greater_than_or_equal_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [NAN, NAN]}}
-    - {test_name "greater_than_or_equal_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [0.0, NAN]}}
+    - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 4, 4, 6, 5, 8, 7]], expected [4294967295, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 1, 4294967295, 2147483648, 0, 100, 200, 300], [1, 1, 0, 4294967295, 0, 50, 200, 400]], expected [0, 4294967295, 4294967295, 0, 4294967295, 4294967295, 4294967295, 0]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [-1, -1, -1, -1]}}
+    - {tags [edge], type "si32", case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [-1, -1, -1, -1]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [18446744073709551615, 18446744073709551615]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], [0, 1]], expected [18446744073709551615, 18446744073709551615]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [-1, -1]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], [0, -1]], expected [-1, -1]}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [NAN, NAN, NAN, NAN]}}
+    - {tags [edge], type "f32", case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, NAN, NAN, NAN]}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [NAN, NAN]}}
+    - {tags [edge], type "f64", case {inputs [[NAN, 0.0], [NAN, 0.0]], expected [0.0, NAN]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(left >= right);"
+          tsil "complete(left >= right);"
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            MaskT result = mask<zero>();
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (left[i] >= right[i]) {
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (left[i] >= right[i]) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -914,10 +1358,14 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmpge, post=mask>(left, right)
+            complete(
+              intrin<cmpge, build[post=mask]>(left, right)
             );
           """
       f?:
@@ -925,18 +1373,26 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmp, post=mask>(left, right, _CMP_GE_OQ)
+            complete(
+              intrin<cmp, build[post=mask]>(left, right, _CMP_GE_OQ)
             );
-          """   
+          """
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_or>(
                 call<primitive=equal>(left, right),
                 call<primitive=greater_than>(left, right)
@@ -945,10 +1401,14 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<cmp>(left, right, _CMP_GE_OQ)
+            complete(
+              intrin<cmp, build>(left, right, _CMP_GE_OQ)
             );
           """
     sse:
@@ -956,9 +1416,13 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         requires:
           [si8, si16, si32] [sse2]
           si64              [sse4_2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_or>(
                 call<primitive=equal>(left, right),
                 call<primitive=greater_than>(left, right)
@@ -969,15 +1433,23 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<cmpge>(left, right));"
+          tsil "complete(intrin<cmpge, build>(left, right));"
       ui?:
         requires:
           [ui8, ui16, ui32] [sse2]
           ui64              [sse2, sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_or>(
                 call<primitive=equal>(left, right),
                 call<primitive=greater_than>(left, right)
@@ -987,15 +1459,30 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<vcgeq>(left, right));"
+          tsil """
+            let<type>(MaskVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+            complete(
+              call<primitive=reinterpret[MaskVec, type<generation>(base::in)]>(
+                intrin<vcgeq, build>(left, right)
+              )
+            );
+          """
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svcmpge>(
+            complete(
+              intrin<svcmpge, build>(
                 call<primitive=mask_true[Vec]>(),
                 left, right
               )
@@ -1004,19 +1491,39 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
 
 prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
   brief_description "Todo"
+  detailed_description """
+    Compares active lanes for equality and clears inactive lanes in the result
+    mask. Each active true comparison lane is represented by the target mask
+    true value, and each inactive or false lane is represented by the target
+    mask false value. Floating-point unordered cases follow the selected
+    backend comparison predicate.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] == right[i]
+      else:
+        result[i] = false
+    return mask result
+    """
   tests:
-    - {test_name "equal_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 0, 3, 0, 5, 0, 7, 0], 85], expected [4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
-    - {test_name "equal_mask_u32_none", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "equal_mask_si32_mixed", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -3, -4, 5, 6, 7, 8], [-1, 0, -3, 1, 5, 0, 7, 0], 240], expected [0, 0, 0, 0, -1, 0, -1, 0]}}
-    - {test_name "equal_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5], 10], expected [0.0, NAN, 0.0, NAN]}}
-    - {test_name "equal_mask_f32_nan_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY], 6], expected [0.0, NAN, NAN, 0.0]}}
+    - {tags [equal, mask, basic], type "ui32", case {inputs [85, [1, 2, 3, 4, 5, 6, 7, 8], [1, 0, 3, 0, 5, 0, 7, 0]], expected [4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
+    - {tags [equal, mask, none], type "ui32", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [equal, mask, mixed], type "si32", case {inputs [240, [-1, -2, -3, -4, 5, 6, 7, 8], [-1, 0, -3, 1, 5, 0, 7, 0]], expected [0, 0, 0, 0, -1, 0, -1, 0]}}
+    - {tags [equal, mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, NAN, 0.0, NAN]}}
+    - {tags [equal, mask, nan, edge], type "f32", case {inputs [6, [NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, NAN, NAN, 0.0]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=equal[Vec]>(left, right)
@@ -1026,38 +1533,44 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            MaskT result = mask<zero>();
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (
-                (left[i] == right[i]) && 
+                (left[i] == right[i]) &&
                 (mask<test>(mask, i))
               ) {
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] == right[i]) &&
                 (mask<test>(mask,i))
               ) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -1071,14 +1584,14 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mask_cmpeq,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
-                post=mask
-              >(mask, left, right)
+            complete(
+              intrin<mask_cmpeq, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1086,10 +1599,14 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_cmp, post=mask>(
+            complete(
+              intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
                 right,
@@ -1100,22 +1617,30 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
-                mask, 
+                mask,
                 call<primitive=equal>(left, right)
               )
             );
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
-                mask, 
+                mask,
                 call<primitive=equal>(left, right)
               )
             );
@@ -1125,11 +1650,15 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         requires:
           [?i8, ?i16, ?i32] [sse2]
           ?i64 [sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
-                mask, 
+                mask,
                 call<primitive=equal>(left, right)
               )
             );
@@ -1138,23 +1667,31 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
-                mask, 
+                mask,
                 call<primitive=equal>(left, right)
               )
             );
-          """    
+          """
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
-                mask, 
+                mask,
                 call<primitive=equal>(left, right)
               )
             );
@@ -1162,10 +1699,14 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svcmpeq>(
+            complete(
+              intrin<svcmpeq, build>(
                 mask,
                 left, right
               )
@@ -1173,20 +1714,40 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           """
 prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
   brief_description "Compare packed elements in \"left\" and \"right\" for inequality only on active lanes of \"mask\", clearing inactive lanes in the result."
+  detailed_description """
+    Compares active lanes for inequality and clears inactive lanes in the result
+    mask. Each active true comparison lane is represented by the target mask
+    true value, and each inactive or false lane is represented by the target
+    mask false value. Floating-point unordered cases follow the selected
+    backend comparison predicate.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] != right[i]
+      else:
+        result[i] = false
+    return mask result
+    """
   operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\tk[j] := ( mask[j] && ( left[j] != right[j] ) ) ? 1 : 0\nENDFOR\nk[MAX:16] := 0"
   tests:
-    - {test_name "nequal_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 0, 3, 0, 5, 0, 7, 0], 170], expected [0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
-    - {test_name "nequal_mask_u32_none", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [0, 0, 0, 0, 0, 0, 0, 0], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "nequal_mask_si32_mixed", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -3, -4, 5, 6, 7, 8], [-1, 0, -3, 1, 5, 0, 7, 0], 170], expected [0, -1, 0, -1, 0, -1, 0, -1]}}
-    - {test_name "nequal_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, 0.0, 3.5, 0.0], 10], expected [0.0, NAN, 0.0, NAN]}}
-    - {test_name "nequal_mask_f32_nan_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 1.0, -0.0, 0.0], 11], expected [NAN, NAN, 0.0, 0.0]}}
+    - {tags [nequal, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [1, 0, 3, 0, 5, 0, 7, 0]], expected [0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
+    - {tags [nequal, mask, none], type "ui32", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], [0, 0, 0, 0, 0, 0, 0, 0]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [nequal, mask, mixed], type "si32", case {inputs [170, [-1, -2, -3, -4, 5, 6, 7, 8], [-1, 0, -3, 1, 5, 0, 7, 0]], expected [0, -1, 0, -1, 0, -1, 0, -1]}}
+    - {tags [nequal, mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, 0.0, 3.5, 0.0]], expected [0.0, NAN, 0.0, NAN]}}
+    - {tags [nequal, mask, nan, edge], type "f32", case {inputs [11, [NAN, 0.0, -0.0, INFINITY], [NAN, 1.0, -0.0, 0.0]], expected [NAN, NAN, 0.0, NAN]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=nequal[Vec]>(left, right)
@@ -1196,12 +1757,15 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            MaskT result = mask<zero>();
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] != right[i]) &&
                 (mask<test>(mask, i))
@@ -1209,25 +1773,28 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] != right[i]) &&
                 (mask<test>(mask, i))
               ) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -1241,14 +1808,14 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mask_cmpneq,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
-                post=mask
-              >(mask, left, right)
+            complete(
+              intrin<mask_cmpneq, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1256,10 +1823,14 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_cmp, post=mask>(
+            complete(
+              intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
                 right,
@@ -1270,9 +1841,13 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=nequal>(left, right)
@@ -1281,9 +1856,13 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=nequal>(left, right)
@@ -1295,9 +1874,13 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         requires:
           [?i8, ?i16, ?i32] [sse2]
           ?i64 [sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=nequal>(left, right)
@@ -1308,9 +1891,13 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=nequal>(left, right)
@@ -1320,9 +1907,13 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=nequal>(left, right)
@@ -1332,10 +1923,14 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svcmpne>(
+            complete(
+              intrin<svcmpne, build>(
                 mask,
                 left, right
               )
@@ -1343,20 +1938,39 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
           """
 prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
   brief_description "Compare packed elements in \"left\" and \"right\" for less-than only on active lanes of \"mask\", clearing inactive lanes in the result."
+  detailed_description """
+    Compares active lanes and marks whether the left lane is less than the
+    right lane, clearing inactive lanes in the result mask. Signedness follows
+    the selected lane type. Floating-point unordered cases follow the selected
+    backend comparison predicate.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] < right[i]
+      else:
+        result[i] = false
+    return mask result
+    """
   operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\tk[j] := ( mask[j] && ( left[j] < right[j] ) ) ? 1 : 0\nENDFOR\nk[MAX:16] := 0"
   tests:
-    - {test_name "less_than_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [0, 3, 3, 5, 4, 7, 7, 9], 170], expected [0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
-    - {test_name "less_than_mask_u32_none", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [9, 9, 9, 9, 9, 9, 9, 9], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "less_than_mask_si32_mixed", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -3, -4, 5, 6, 7, 8], [-2, -1, -3, 1, 4, 7, 7, 9], 170], expected [0, -1, 0, -1, 0, -1, 0, -1]}}
-    - {test_name "less_than_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [0.0, -1.0, 3.5, 0.0], 10], expected [0.0, NAN, 0.0, NAN]}}
-    - {test_name "less_than_mask_f32_nan_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 1.0, -0.0, 0.0], 11], expected [0.0, NAN, 0.0, 0.0]}}
+    - {tags [less, than, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [0, 3, 3, 5, 4, 7, 7, 9]], expected [0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
+    - {tags [less, than, mask, none], type "ui32", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], [9, 9, 9, 9, 9, 9, 9, 9]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [less, than, mask, mixed], type "si32", case {inputs [170, [-1, -2, -3, -4, 5, 6, 7, 8], [-2, -1, -3, 1, 4, 7, 7, 9]], expected [0, -1, 0, -1, 0, -1, 0, -1]}}
+    - {tags [less, than, mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [0.0, -1.0, 3.5, 0.0]], expected [0.0, NAN, 0.0, NAN]}}
+    - {tags [less, than, mask, nan, edge], type "f32", case {inputs [11, [NAN, 0.0, -0.0, INFINITY], [NAN, 1.0, -0.0, 0.0]], expected [0.0, NAN, 0.0, 0.0]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=less_than[Vec]>(left, right)
@@ -1366,12 +1980,15 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            MaskT result = mask<zero>();
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] < right[i]) &&
                 (mask<test>(mask, i))
@@ -1379,25 +1996,28 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] < right[i]) &&
                 (mask<test>(mask, i))
               ) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -1411,14 +2031,14 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mask_cmplt,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
-                post=mask
-              >(mask, left, right)
+            complete(
+              intrin<mask_cmplt, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1426,10 +2046,14 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_cmp, post=mask>(
+            complete(
+              intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
                 right,
@@ -1440,9 +2064,13 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than>(left, right)
@@ -1451,9 +2079,13 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than>(left, right)
@@ -1465,9 +2097,13 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         requires:
           [?i8, ?i16, ?i32] [sse2]
           ?i64 [sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than>(left, right)
@@ -1478,9 +2114,13 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than>(left, right)
@@ -1490,9 +2130,13 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than>(left, right)
@@ -1502,10 +2146,14 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svcmplt>(
+            complete(
+              intrin<svcmplt, build>(
                 mask,
                 left, right
               )
@@ -1513,20 +2161,39 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
           """
 prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
   brief_description "Compare packed elements in \"left\" and \"right\" for greater-than only on active lanes of \"mask\", clearing inactive lanes in the result."
+  detailed_description """
+    Compares active lanes and marks whether the left lane is greater than the
+    right lane, clearing inactive lanes in the result mask. Signedness follows
+    the selected lane type. Floating-point unordered cases follow the selected
+    backend comparison predicate.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] > right[i]
+      else:
+        result[i] = false
+    return mask result
+    """
   operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\tk[j] := ( mask[j] && ( left[j] > right[j] ) ) ? 1 : 0\nENDFOR\nk[MAX:16] := 0"
   tests:
-    - {test_name "greater_than_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 3, 3, 5, 5, 7, 7], 170], expected [0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
-    - {test_name "greater_than_mask_u32_none", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[9, 9, 9, 9, 9, 9, 9, 9], [1, 2, 3, 4, 5, 6, 7, 8], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "greater_than_mask_si32_mixed", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -3, -4, 5, 6, 7, 8], [-1, -3, -3, -5, 5, 5, 7, 7], 170], expected [0, -1, 0, -1, 0, -1, 0, -1]}}
-    - {test_name "greater_than_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -3.0, 3.5, -5.0], 10], expected [0.0, NAN, 0.0, NAN]}}
-    - {test_name "greater_than_mask_f32_nan_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 1.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY], 11], expected [0.0, NAN, 0.0, 0.0]}}
+    - {tags [greater, than, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 3, 3, 5, 5, 7, 7]], expected [0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
+    - {tags [greater, than, mask, none], type "ui32", case {inputs [0, [9, 9, 9, 9, 9, 9, 9, 9], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [greater, than, mask, mixed], type "si32", case {inputs [170, [-1, -2, -3, -4, 5, 6, 7, 8], [-1, -3, -3, -5, 5, 5, 7, 7]], expected [0, -1, 0, -1, 0, -1, 0, -1]}}
+    - {tags [greater, than, mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -3.0, 3.5, -5.0]], expected [0.0, NAN, 0.0, NAN]}}
+    - {tags [greater, than, mask, nan, edge], type "f32", case {inputs [11, [NAN, 1.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, NAN, 0.0, 0.0]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=greater_than[Vec]>(left, right)
@@ -1536,12 +2203,15 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            MaskT result = mask<zero>();
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] > right[i]) &&
                 (mask<test>(mask, i))
@@ -1549,25 +2219,28 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] > right[i]) &&
                 (mask<test>(mask, i))
               ) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -1581,14 +2254,14 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mask_cmpgt,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
-                post=mask
-              >(mask, left, right)
+            complete(
+              intrin<mask_cmpgt, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1596,10 +2269,14 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_cmp, post=mask>(
+            complete(
+              intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
                 right,
@@ -1610,9 +2287,13 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than>(left, right)
@@ -1621,9 +2302,13 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than>(left, right)
@@ -1635,9 +2320,13 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         requires:
           [?i8, ?i16, ?i32] [sse2]
           ?i64 [sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than>(left, right)
@@ -1648,9 +2337,13 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than>(left, right)
@@ -1660,9 +2353,13 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than>(left, right)
@@ -1672,10 +2369,14 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svcmpgt>(
+            complete(
+              intrin<svcmpgt, build>(
                 mask,
                 left, right
               )
@@ -1683,20 +2384,39 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
           """
 prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
   brief_description "Compare packed elements in \"left\" and \"right\" for less-than-or-equal only on active lanes of \"mask\", clearing inactive lanes in the result."
+  detailed_description """
+    Compares active lanes and marks whether the left lane is less than or equal
+    to the right lane, clearing inactive lanes in the result mask. Signedness
+    follows the selected lane type. Floating-point unordered cases follow the
+    selected backend comparison predicate.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] <= right[i]
+      else:
+        result[i] = false
+    return mask result
+    """
   operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\tk[j] := ( mask[j] && ( left[j] <= right[j] ) ) ? 1 : 0\nENDFOR\nk[MAX:16] := 0"
   tests:
-    - {test_name "less_than_or_equal_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 4, 4, 6, 5, 8, 7], 85], expected [4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
-    - {test_name "less_than_or_equal_mask_u32_none", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [9, 9, 9, 9, 9, 9, 9, 9], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "less_than_or_equal_mask_si32_mixed", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -3, -4, 5, 6, 7, 8], [-1, -3, -3, -5, 5, 5, 7, 7], 85], expected [-1, 0, -1, 0, -1, 0, -1, 0]}}
-    - {test_name "less_than_or_equal_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -3.0, 3.5, -5.0], 5], expected [NAN, 0.0, NAN, 0.0]}}
-    - {test_name "less_than_or_equal_mask_f32_nan_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 1.0, -0.0, INFINITY], 14], expected [0.0, NAN, NAN, NAN]}}
+    - {tags [less, than, or, equal, mask, basic], type "ui32", case {inputs [85, [1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 4, 4, 6, 5, 8, 7]], expected [4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
+    - {tags [less, than, or, equal, mask, none], type "ui32", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], [9, 9, 9, 9, 9, 9, 9, 9]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [less, than, or, equal, mask, mixed], type "si32", case {inputs [85, [-1, -2, -3, -4, 5, 6, 7, 8], [-1, -3, -3, -5, 5, 5, 7, 7]], expected [-1, 0, -1, 0, -1, 0, -1, 0]}}
+    - {tags [less, than, or, equal, mask, basic], type "f32", case {inputs [5, [1.0, -2.0, 3.5, -4.5], [1.0, -3.0, 3.5, -5.0]], expected [NAN, 0.0, NAN, 0.0]}}
+    - {tags [less, than, or, equal, mask, nan, edge], type "f32", case {inputs [14, [NAN, 0.0, -0.0, INFINITY], [NAN, 1.0, -0.0, INFINITY]], expected [0.0, NAN, NAN, NAN]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=less_than_or_equal[Vec]>(left, right)
@@ -1706,12 +2426,15 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            MaskT result = mask<zero>();
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] <= right[i]) &&
                 (mask<test>(mask, i))
@@ -1719,25 +2442,28 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] <= right[i]) &&
                 (mask<test>(mask, i))
               ) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -1751,14 +2477,14 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mask_cmple,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
-                post=mask
-              >(mask, left, right)
+            complete(
+              intrin<mask_cmple, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1766,10 +2492,14 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_cmp, post=mask>(
+            complete(
+              intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
                 right,
@@ -1780,9 +2510,13 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than_or_equal>(left, right)
@@ -1791,9 +2525,13 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than_or_equal>(left, right)
@@ -1805,9 +2543,13 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         requires:
           [?i8, ?i16, ?i32] [sse2]
           ?i64 [sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than_or_equal>(left, right)
@@ -1818,9 +2560,13 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than_or_equal>(left, right)
@@ -1830,9 +2576,13 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=less_than_or_equal>(left, right)
@@ -1842,10 +2592,14 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svcmple>(
+            complete(
+              intrin<svcmple, build>(
                 mask,
                 left, right
               )
@@ -1853,20 +2607,39 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
           """
 prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
   brief_description "Compare packed elements in \"left\" and \"right\" for greater-than-or-equal only on active lanes of \"mask\", clearing inactive lanes in the result."
+  detailed_description """
+    Compares active lanes and marks whether the left lane is greater than or
+    equal to the right lane, clearing inactive lanes in the result mask.
+    Signedness follows the selected lane type. Floating-point unordered cases
+    follow the selected backend comparison predicate.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] >= right[i]
+      else:
+        result[i] = false
+    return mask result
+    """
   operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\tk[j] := ( mask[j] && ( left[j] >= right[j] ) ) ? 1 : 0\nENDFOR\nk[MAX:16] := 0"
   tests:
-    - {test_name "greater_than_or_equal_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 3, 3, 5, 5, 7, 7, 9], 85], expected [4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
-    - {test_name "greater_than_or_equal_mask_u32_none", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[9, 9, 9, 9, 9, 9, 9, 9], [1, 2, 3, 4, 5, 6, 7, 8], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "greater_than_or_equal_mask_si32_mixed", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -3, -4, 5, 6, 7, 8], [-1, -1, -3, 1, 5, 7, 7, 9], 85], expected [-1, 0, -1, 0, -1, 0, -1, 0]}}
-    - {test_name "greater_than_or_equal_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -1.0, 3.5, 0.0], 5], expected [NAN, 0.0, NAN, 0.0]}}
-    - {test_name "greater_than_or_equal_mask_f32_nan_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[NAN, 1.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY], 14], expected [0.0, NAN, NAN, NAN]}}
+    - {tags [mask, basic], type "ui32", case {inputs [85, [1, 2, 3, 4, 5, 6, 7, 8], [1, 3, 3, 5, 5, 7, 7, 9]], expected [4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
+    - {tags [mask, none], type "ui32", case {inputs [0, [9, 9, 9, 9, 9, 9, 9, 9], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [mask, mixed], type "si32", case {inputs [85, [-1, -2, -3, -4, 5, 6, 7, 8], [-1, -1, -3, 1, 5, 7, 7, 9]], expected [-1, 0, -1, 0, -1, 0, -1, 0]}}
+    - {tags [mask, basic], type "f32", case {inputs [5, [1.0, -2.0, 3.5, -4.5], [1.0, -1.0, 3.5, 0.0]], expected [NAN, 0.0, NAN, 0.0]}}
+    - {tags [mask, nan, edge], type "f32", case {inputs [14, [NAN, 1.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, NAN, NAN, NAN]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and[Vec]>(
                 mask,
                 call<primitive=greater_than_or_equal[Vec]>(left, right)
@@ -1876,12 +2649,15 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
     generic:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type<generation>(vector::mask))
-            MaskT result = mask<zero>();
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            let<type>(MaskT, type<generation>(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (
                 (left[i] >= right[i]) &&
                 (mask<test>(mask, i))
@@ -1889,25 +2665,28 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
                 mask<set:1>(result, i);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     oneAPIfpga:
       arith:
         requires [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type<generation>(vector::register))
+            let<type>(RegisterT, type<generation>(vector::register));
             RegisterT result{};
             var<const_infer>(true_value, value<generation>(mask::lane::all_true));
             var<const_infer>(false_value, value<generation>(mask::lane::all_false));
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = (
                 (left[i] >= right[i]) &&
                 (mask<test>(mask, i))
               ) ? true_value : false_value;
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -1921,14 +2700,14 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
           sse_vl:
             idqword [sse2, avx512f, avx512vl, avx512dq]
             bword   [sse2, avx512f, avx512vl, avx512bw]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mask_cmpge,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in))))),
-                post=mask
-              >(mask, left, right)
+            complete(
+              intrin<mask_cmpge, build[suffix=base::signed_of(base::in), post=mask]>(mask, left, right)
             );
           """
       f?:
@@ -1936,10 +2715,14 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_cmp, post=mask>(
+            complete(
+              intrin<mask_cmp, build[post=mask]>(
                 mask,
                 left,
                 right,
@@ -1950,9 +2733,13 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
     avx2:
       ?i?:
         requires [avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than_or_equal>(left, right)
@@ -1961,9 +2748,13 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
           """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than_or_equal>(left, right)
@@ -1975,9 +2766,13 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         requires:
           [?i8, ?i16, ?i32] [sse2]
           ?i64 [sse4_1]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than_or_equal>(left, right)
@@ -1988,9 +2783,13 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         requires:
           f32 [sse]
           f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than_or_equal>(left, right)
@@ -2000,9 +2799,13 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mask_binary_and>(
                 mask,
                 call<primitive=greater_than_or_equal>(left, right)
@@ -2012,10 +2815,14 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svcmpge>(
+            complete(
+              intrin<svcmpge, build>(
                 mask,
                 left, right
               )

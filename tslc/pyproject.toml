@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tslc"
+version = "0.1.0a1"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+  "lark>=1.3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["tslc*"]
+
+[tool.setuptools.package-data]
+# `*` does not match dotfiles, so the `.clang-format` asset is listed explicitly — otherwise it
+# would be absent from an installed wheel and `asset(".clang-format")` would fail.
+tslc = ["syntax/grammar/*.lark", "backend/assets/*", "backend/assets/.clang-format"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+# Keep scratch on the workspace (9p host mount), not /tmp (overlay grows the WSL VHDX).
+addopts = "--basetemp=tslctmp/pytest"

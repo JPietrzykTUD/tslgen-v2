@@ -1,72 +1,100 @@
 description "Expensive / complex instructions"
 prim<v:=(v,v)> mul(factor1, factor2):
   brief_description "[Example: sse + si16]: Multiply the packed 16-bit integers in \"a\" and \"b\", producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in \"dst\"."
+  detailed_description """
+    Computes lane-wise multiplication of two vector registers. Each output lane
+    depends only on the corresponding lanes of the input registers. The result is
+    represented in the destination lane type; truncation, overflow, and
+    floating-point behavior follow the selected backend and lane type.
+    """
+  semantics """
+    input: register factor1, register factor2
+    for each lane i:
+      result[i] = factor1[i] * factor2[i]
+    return result
+    """
   operation "[Example: sse + si16]: FOR j := 0 to 7\n\ti := j*16\n\ttmp[31:0] := SignExtend32(a[i+15:i]) * SignExtend32(b[i+15:i])\n\tdst[i+15:i] := tmp[15:0]\nENDFOR"
   tests:
-    - {test_name "mul_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [2, 0, -1, -2, 3, -3, 4, -4]], expected [2, 0, -3, -8, 15, -18, 28, -32]}}
-    - {test_name "mul_i32_zero", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, -1, 0, 2, -2, 0, 3], [5, 0, 7, -8, 0, 9, 0, -10]], expected [0, 0, -7, 0, 0, -18, 0, -30]}}
-    - {test_name "mul_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [2, 3, 4, 5, 6, 7, 8, 9]], expected [2, 6, 12, 20, 30, 42, 56, 72]}}
-    - {test_name "mul_i16_basic", type "si16", lane_set "lanes_i16", lanes 16, case {inputs [[1, -2, 3, -4, 5, -6, 7, -8, 9, -10, 11, -12, 13, -14, 15, -16], [2, 3, 4, 5, 6, 7, 8, 9, -1, -2, -3, -4, -5, -6, -7, -8]], expected [2, -6, 12, -20, 30, -42, 56, -72, -9, 20, -33, 48, -65, 84, -105, 128]}}
-    - {test_name "mul_u16_basic", type "ui16", lane_set "lanes_i16", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 3, 4, 5, 6, 7, 8]], expected [2, 6, 12, 20, 30, 42, 56, 72, 9, 20, 33, 48, 65, 84, 105, 128]}}
-    - {test_name "mul_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225, 0]}}
-    - {test_name "mul_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 1, 4, 4, 9, 16, 25, 0, 1, 1, 4, 4, 9, 16, 25]}}
-    - {test_name "mul_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, -112, -87, -60, -31, 0]}}
-    - {test_name "mul_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 1, 0, 1, 1, 4, 4, 4, 0, 1, 0, 1, 1, 4, 4, 4]}}
-    - {test_name "mul_ui64_basic", extension "avx512", type "ui64", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 4, 9, 16, 25, 36, 49, 64]}}
-    - {test_name "mul_ui64_edge", extension "avx512", type "ui64", case {inputs [[0, 1, 2, 3, 0, 1, 2, 3], [0, 1, 2, 3, 0, 1, 2, 3]], expected [0, 1, 4, 9, 0, 1, 4, 9]}}
-    - {test_name "mul_si64_basic", extension "avx512", type "si64", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], [2, 2, 2, 2, 2, 2, 2, 2]], expected [2, -4, 6, -8, 10, -12, 14, -16]}}
-    - {test_name "mul_si64_edge", extension "avx512", type "si64", case {inputs [[0, -1, 1, 0, -2, 2, 0, -3], [0, -1, 1, 0, -2, 2, 0, -3]], expected [0, 1, 1, 0, 4, 4, 0, 9]}}
-    - {test_name "mul_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, 4.0, 12.25, 20.25]}}
-    - {test_name "mul_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, 0.0, INFINITY, INFINITY]}}
-    - {test_name "mul_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, 4.0]}}
-    - {test_name "mul_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, 0.0]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [2, 0, -1, -2, 3, -3, 4, -4]], expected [2, 0, -3, -8, 15, -18, 28, -32]}}
+    - {tags [zero], type "si32", case {inputs [[0, 1, -1, 0, 2, -2, 0, 3], [5, 0, 7, -8, 0, 9, 0, -10]], expected [0, 0, -7, 0, 0, -18, 0, -30]}}
+    - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [2, 3, 4, 5, 6, 7, 8, 9]], expected [2, 6, 12, 20, 30, 42, 56, 72]}}
+    - {tags [basic], type "si16", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8, 9, -10, 11, -12, 13, -14, 15, -16], [2, 3, 4, 5, 6, 7, 8, 9, -1, -2, -3, -4, -5, -6, -7, -8]], expected [2, -6, 12, -20, 30, -42, 56, -72, -9, 20, -33, 48, -65, 84, -105, 128]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 3, 4, 5, 6, 7, 8]], expected [2, 6, 12, 20, 30, 42, 56, 72, 9, 20, 33, 48, 65, 84, 105, 128]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225, 0]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 1, 4, 4, 9, 16, 25, 0, 1, 1, 4, 4, 9, 16, 25]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, -112, -87, -60, -31, 0]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 1, 0, 1, 1, 4, 4, 4, 0, 1, 0, 1, 1, 4, 4, 4]}}
+    - {tags [basic], extension "avx512", type "ui64", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 4, 9, 16, 25, 36, 49, 64]}}
+    - {tags [edge], extension "avx512", type "ui64", case {inputs [[0, 1, 2, 3, 0, 1, 2, 3], [0, 1, 2, 3, 0, 1, 2, 3]], expected [0, 1, 4, 9, 0, 1, 4, 9]}}
+    - {tags [basic], extension "avx512", type "si64", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], [2, 2, 2, 2, 2, 2, 2, 2]], expected [2, -4, 6, -8, 10, -12, 14, -16]}}
+    - {tags [edge], extension "avx512", type "si64", case {inputs [[0, -1, 1, 0, -2, 2, 0, -3], [0, -1, 1, 0, -2, 2, 0, -3]], expected [0, 1, 1, 0, 4, 4, 0, 9]}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, 4.0, 12.25, 20.25]}}
+    - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, 0.0, INFINITY, INFINITY]}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, 4.0]}}
+    - {tags [edge], type "f64", case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, 0.0]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(details::arith_mul(factor1, factor2));"
+          tsil "complete(op<mul>(factor1, factor2));"
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(factor1[i], factor2[i]);
             }
-            emit_return(result);
+            complete(result);
           """
     avx512:
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<mul>(factor1, factor2));"
+          tsil "complete(intrin<mul, build>(factor1, factor2));"
       [si16, si32, si64]:
-        requires: 
+        requires:
           si16 [avx512bw, avx512f]
           si32 [avx512f]
           si64 [avx512dq, avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, factor2)
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(factor1, factor2)
             );
           """
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
             var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
             var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
-            emit_return(
+            complete(
               call<primitive=from_array[Vec]>(
                 call<primitive=@self[GenericVec]>(generic_factor1, generic_factor2)
               )
@@ -75,49 +103,60 @@ prim<v:=(v,v)> mul(factor1, factor2):
     avx2:
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<mul>(factor1, factor2));"
+          tsil "complete(intrin<mul, build>(factor1, factor2));"
       ?i16:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, factor2)
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(factor1, factor2)
             );
           """
       ?i32:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, factor2)
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(factor1, factor2)
             );
           """
       ?i64:
         requires [avx, avx512dq, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, factor2)
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(factor1, factor2)
             );
           """
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
             var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
             var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
-            emit_return(
+            complete(
               call<primitive=from_array[Vec]>(
                 call<primitive=@self[GenericVec]>(generic_factor1, generic_factor2)
               )
@@ -126,53 +165,68 @@ prim<v:=(v,v)> mul(factor1, factor2):
     sse:
       f32:
         requires [sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<mul>(factor1, factor2));"
+          tsil "complete(intrin<mul, build>(factor1, factor2));"
       f64:
         requires [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<mul>(factor1, factor2));"
+          tsil "complete(intrin<mul, build>(factor1, factor2));"
       ?i16:
         requires [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, factor2)
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(factor1, factor2)
             );
           """
       ?i32:
         requires [sse4_1]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, factor2)
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(factor1, factor2)
             );
           """
       ?i64:
         requires [avx512dq, avx512vl, sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, factor2)
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(factor1, factor2)
             );
           """
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
             var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
             var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
-            emit_return(
+            complete(
               call<primitive=from_array[Vec]>(
                 call<primitive=@self[GenericVec]>(generic_factor1, generic_factor2)
               )
@@ -181,52 +235,87 @@ prim<v:=(v,v)> mul(factor1, factor2):
     neon:
       [si8, si16, si32, ui8, ui16, ui32, f32, f64]:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<vmulq>(factor1, factor2));"
+          tsil "complete(intrin<vmulq, build>(factor1, factor2));"
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
             var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
             var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
-            emit_return(
+            complete(
               call<primitive=from_array[Vec]>(
                 call<primitive=@self[GenericVec]>(generic_factor1, generic_factor2)
               )
             );
           """
     sve:
-      ?i?:
+      arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<svmul, post=x>(call<primitive=mask_true[Vec]>(), factor1, factor2));"
+          tsil "complete(intrin<svmul, build[post=x]>(call<primitive=mask_true[Vec]>(), factor1, factor2));"
 prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
   brief_description "Multiply packed elements and zero inactive lanes."
+  detailed_description """
+    Computes lane-wise multiplication for lanes enabled by the mask. Disabled
+    lanes are set to zero. The result is represented in the destination lane
+    type; truncation, overflow, and floating-point behavior follow the selected
+    backend and lane type.
+    """
+  semantics """
+    input: mask mask, register factor1, register factor2
+    for each lane i:
+      if mask[i] is active:
+        result[i] = factor1[i] * factor2[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation ""
   tests:
-    - {test_name "mul_maskz_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 4.0, 0.0, 20.25]}}
-    - {test_name "mul_maskz_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [0, 0, 0, -8]}}
+    - {tags [maskz, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 4.0, 0.0, 20.25]}}
+    - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [0, 0, 0, -8]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=mul>(factor1, factor2));
+              complete(call<primitive=mul>(factor1, factor2));
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
                 call<primitive=mul>(factor1, factor2)
@@ -239,13 +328,14 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
           avx512  [avx512bw, avx512f]
           avx2_vl [avx2, avx512bw, avx512f, avx512vl]
           sse_vl  [sse2, avx512bw, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                maskz_mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(mask, factor1, factor2)
+            complete(
+              intrin<maskz_mullo, build[suffix=base::signed_of(base::in)]>(mask, factor1, factor2)
             );
           """
       ?i32:
@@ -253,13 +343,14 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse4_1, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                maskz_mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(mask, factor1, factor2)
+            complete(
+              intrin<maskz_mullo, build[suffix=base::signed_of(base::in)]>(mask, factor1, factor2)
             );
           """
       ?i64:
@@ -267,13 +358,14 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
           avx512  [avx512dq, avx512f]
           avx2_vl [avx, avx512dq, avx512vl]
           sse_vl  [sse, avx512dq, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                maskz_mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(mask, factor1, factor2)
+            complete(
+              intrin<maskz_mullo, build[suffix=base::signed_of(base::in)]>(mask, factor1, factor2)
             );
           """
       f?:
@@ -281,17 +373,25 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<maskz_mul>(mask, factor1, factor2));"
+          tsil "complete(intrin<maskz_mul, build>(mask, factor1, factor2));"
       arith:
         requires:
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
                 call<primitive=mul>(factor1, factor2)
@@ -304,10 +404,14 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
           avx2 [avx]
           sse [sse]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
                 call<primitive=mul>(factor1, factor2)
@@ -315,36 +419,63 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
             );
           """
     sve:
-      ?i?:
+      arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<svmul, post=z>(mask, factor1, factor2));"
+          tsil "complete(intrin<svmul, build[post=z]>(mask, factor1, factor2));"
 prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
   brief_description "Multiply packed elements and preserve factor1 in inactive lanes."
+  detailed_description """
+    Computes lane-wise multiplication for lanes enabled by the mask. Disabled
+    lanes keep the corresponding lane from `factor1`. The result is represented
+    in the destination lane type; truncation, overflow, and floating-point
+    behavior follow the selected backend and lane type.
+    """
+  semantics """
+    input: mask mask, register factor1, register factor2
+    for each lane i:
+      if mask[i] is active:
+        result[i] = factor1[i] * factor2[i]
+      else:
+        result[i] = factor1[i]
+    return result
+    """
   operation ""
   tests:
-    - {test_name "mul_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, 4.0, 3.5, 20.25]}}
-    - {test_name "mul_mask_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [1, 0, 3, -8]}}
+    - {tags [mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, 4.0, 3.5, 20.25]}}
+    - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [1, 0, 3, -8]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=mul>(factor1, factor2));
+              complete(call<primitive=mul>(factor1, factor2));
             }
-            emit_return(factor1);
+            complete(factor1);
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 factor1,
                 call<primitive=mul>(factor1, factor2)
@@ -357,13 +488,14 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
           avx512  [avx512bw, avx512f]
           avx2_vl [avx2, avx512bw, avx512f, avx512vl]
           sse_vl  [sse2, avx512bw, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mask_mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, mask, factor1, factor2)
+            complete(
+              intrin<mask_mullo, build[suffix=base::signed_of(base::in)]>(factor1, mask, factor1, factor2)
             );
           """
       ?i32:
@@ -371,13 +503,14 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse4_1, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mask_mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, mask, factor1, factor2)
+            complete(
+              intrin<mask_mullo, build[suffix=base::signed_of(base::in)]>(factor1, mask, factor1, factor2)
             );
           """
       ?i64:
@@ -385,13 +518,14 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
           avx512  [avx512dq, avx512f]
           avx2_vl [avx, avx512dq, avx512vl]
           sse_vl  [sse, avx512dq, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mask_mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(factor1, mask, factor1, factor2)
+            complete(
+              intrin<mask_mullo, build[suffix=base::signed_of(base::in)]>(factor1, mask, factor1, factor2)
             );
           """
       f?:
@@ -399,17 +533,25 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<mask_mul>(factor1, mask, factor1, factor2));"
+          tsil "complete(intrin<mask_mul, build>(factor1, mask, factor1, factor2));"
       arith:
         requires:
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 factor1,
                 call<primitive=mul>(factor1, factor2)
@@ -422,10 +564,14 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
           avx2 [avx]
           sse [sse]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 factor1,
                 call<primitive=mul>(factor1, factor2)
@@ -433,70 +579,117 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
             );
           """
     sve:
-      ?i?:
+      arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<svmul, post=m>(mask, factor1, factor2));"
+          tsil "complete(intrin<svmul, build[post=m]>(mask, factor1, factor2));"
 prim<v:=(v,v)> div(divident, divisor):
   brief_description "[Example: sse + f32]: Divide packed single-precision (32-bit) floating-point elements in \"a\" by packed elements in \"b\", and store the results in \"dst\"."
+  detailed_description """
+    Computes lane-wise division of two vector registers. Each output lane depends
+    only on the corresponding lanes of the input registers. Rounding, exceptional
+    floating-point values, integer quotient behavior, and division-by-zero
+    behavior follow the selected backend and lane type.
+    """
+  semantics """
+    input: register divident, register divisor
+    for each lane i:
+      result[i] = divident[i] / divisor[i]
+    return result
+    """
   operation "[Example: sse + f32]: FOR j := 0 to 3\n\ti := 32*j\n\tdst[i+31:i] := a[i+31:i] / b[i+31:i]\nENDFOR"
   tests:
-    - {test_name "div_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [4.0, -3.0, -5.0, -3.0]}}
-    - {test_name "div_f32_one", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.0, -4.0], [1.0, -2.0, 3.0, -4.0]], expected [1.0, 1.0, 1.0, 1.0]}}
-    - {test_name "div_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[8.0, -9.0], [2.0, 3.0]], expected [4.0, -3.0]}}
-    - {test_name "div_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[8, -9, 10, -12], [2, 3, -2, 4]], expected [4, -3, -5, -3]}}
+    - {tags [basic], type "f32", case {inputs [[8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [4.0, -3.0, -5.0, -3.0]}}
+    - {tags [one], type "f32", case {inputs [[1.0, -2.0, 3.0, -4.0], [1.0, -2.0, 3.0, -4.0]], expected [1.0, 1.0, 1.0, 1.0]}}
+    - {tags [basic], type "f64", case {inputs [[8.0, -9.0], [2.0, 3.0]], expected [4.0, -3.0]}}
+    - {tags [basic], extension "generic", type "si32", case {inputs [[8, -9, 10, -12], [2, 3, -2, 4]], expected [4, -3, -5, -3]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(divident / divisor);"
+          tsil "complete(divident / divisor);"
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(divident[i], divisor[i]);
             }
-            emit_return(result);
+            complete(result);
           """
     avx512:
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<div>(divident, divisor));"
+          tsil "complete(intrin<div, build>(divident, divisor));"
     avx2:
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<div>(divident, divisor));"
+          tsil "complete(intrin<div, build>(divident, divisor));"
     sse:
       f32:
         requires [sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<div>(divident, divisor));"
+          tsil "complete(intrin<div, build>(divident, divisor));"
       f64:
         requires [sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<div>(divident, divisor));"
+          tsil "complete(intrin<div, build>(divident, divisor));"
     neon:
       f?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<vdivq>(divident, divisor));"
+          tsil "complete(intrin<vdivq, build>(divident, divisor));"
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
             var<const_infer>(generic_divident, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divident)));
             var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divisor)));
-            emit_return(
+            complete(
               call<primitive=from_array[Vec]>(
                 call<primitive=@self[GenericVec]>(generic_divident, generic_divisor)
               )
@@ -505,35 +698,62 @@ prim<v:=(v,v)> div(divident, divisor):
     sve:
       idqword:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<svdiv, post=x>(call<primitive=mask_true[Vec]>(), divident, divisor));"
+          tsil "complete(intrin<svdiv, build[post=x]>(call<primitive=mask_true[Vec]>(), divident, divisor));"
 prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
   brief_description "[Example: avx512 + f32]: Divide packed elements in \"a\" by packed elements in \"b\", and store the results in \"dst\" using zeromask \"k\" (elements are zeroed when the corresponding mask bit is not set)."
+  detailed_description """
+    Computes lane-wise division for lanes enabled by the mask. Disabled lanes are
+    set to zero. Rounding, exceptional floating-point values, integer quotient
+    behavior, and division-by-zero behavior follow the selected backend and lane
+    type.
+    """
+  semantics """
+    input: mask mask, register divident, register divisor
+    for each lane i:
+      if mask[i] is active:
+        result[i] = divident[i] / divisor[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "[Example: avx512 + f32]: FOR j := 0 to 15\n\ti := 32*j\n\tIF k[j]\n\t\tdst[i+31:i] := a[i+31:i] / b[i+31:i]\n\tELSE\n\t\tdst[i+31:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
-    - {test_name "div_maskz_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [0.0, -3.0, 0.0, -3.0]}}
-    - {test_name "div_maskz_f32_zero", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [0, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [0.0, 0.0, 0.0, 0.0]}}
-    - {test_name "div_maskz_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [8, -9, 10, -12], [2, 3, -2, 4]], expected [0, -3, 0, -3]}}
+    - {tags [maskz, basic], type "f32", case {inputs [10, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [0.0, -3.0, 0.0, -3.0]}}
+    - {tags [maskz, zero], type "f32", case {inputs [0, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [8, -9, 10, -12], [2, 3, -2, 4]], expected [0, -3, 0, -3]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=div>(divident, divisor));
+              complete(call<primitive=div>(divident, divisor));
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
                 call<primitive=div>(divident, divisor)
@@ -546,8 +766,12 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<maskz_div>(mask, divident, divisor));"
+          tsil "complete(intrin<maskz_div, build>(mask, divident, divisor));"
     [avx2, sse]:
       f?:
         requires:
@@ -556,10 +780,14 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
           sse:
             f32 [sse]
             f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
                 call<primitive=div>(divident, divisor)
@@ -569,10 +797,14 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
                 call<primitive=div>(divident, divisor)
@@ -582,35 +814,62 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
     sve:
       idqword:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<svdiv, post=z>(mask, divident, divisor));"
+          tsil "complete(intrin<svdiv, build[post=z]>(mask, divident, divisor));"
 prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
   brief_description "[Example: avx512 + f32]: Divide packed elements in \"a\" by packed elements in \"b\", and store the results in \"dst\" using writemask \"k\" (elements are copied from \"a\" when the corresponding mask bit is not set)."
+  detailed_description """
+    Computes lane-wise division for lanes enabled by the mask. Disabled lanes
+    keep the corresponding lane from `divident`. Rounding, exceptional
+    floating-point values, integer quotient behavior, and division-by-zero
+    behavior follow the selected backend and lane type.
+    """
+  semantics """
+    input: mask mask, register divident, register divisor
+    for each lane i:
+      if mask[i] is active:
+        result[i] = divident[i] / divisor[i]
+      else:
+        result[i] = divident[i]
+    return result
+    """
   operation "[Example: avx512 + f32]: FOR j := 0 to 15\n\ti := 32*j\n\tIF k[j]\n\t\tdst[i+31:i] := a[i+31:i] / b[i+31:i]\n\tELSE\n\t\tdst[i+31:i] := a[i+31:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
-    - {test_name "div_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [8.0, -3.0, 10.0, -3.0]}}
-    - {test_name "div_mask_f32_zero", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [0, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [8.0, -9.0, 10.0, -12.0]}}
-    - {test_name "div_mask_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [8, -9, 10, -12], [2, 3, -2, 4]], expected [8, -3, 10, -3]}}
+    - {tags [mask, basic], type "f32", case {inputs [10, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [8.0, -3.0, 10.0, -3.0]}}
+    - {tags [mask, zero], type "f32", case {inputs [0, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [8.0, -9.0, 10.0, -12.0]}}
+    - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [8, -9, 10, -12], [2, 3, -2, 4]], expected [8, -3, 10, -3]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=div>(divident, divisor));
+              complete(call<primitive=div>(divident, divisor));
             }
-            emit_return(divident);
+            complete(divident);
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 divident,
                 call<primitive=div>(divident, divisor)
@@ -623,8 +882,12 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
           avx512  [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl  [sse2, avx512f, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<mask_div>(divident, mask, divident, divisor));"
+          tsil "complete(intrin<mask_div, build>(divident, mask, divident, divisor));"
     [avx2, sse]:
       f?:
         requires:
@@ -633,10 +896,14 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
           sse:
             f32 [sse]
             f64 [sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 divident,
                 call<primitive=div>(divident, divisor)
@@ -646,10 +913,14 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 divident,
                 call<primitive=div>(divident, divisor)
@@ -659,44 +930,71 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
     sve:
       idqword:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<svdiv, post=m>(mask, divident, divisor));"
+          tsil "complete(intrin<svdiv, build[post=m]>(mask, divident, divisor));"
 prim<v:=(v,sImm)> mul_imm(data, factor):
   brief_description "[Example: sse + si16]: Multiply the packed 16-bit integers in \"a\" and \"b\", producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in \"dst\"."
+  detailed_description """
+    Multiplies every lane of a vector register by the compile-time scalar
+    immediate `factor`. The result is represented in the destination lane type;
+    truncation, overflow, and floating-point behavior follow the selected
+    backend and lane type.
+    """
+  semantics """
+    input: register data, scalar factor
+    for each lane i:
+      result[i] = data[i] * factor
+    return result
+    """
   operation "[Example: sse + si16]: FOR j := 0 to 7\n\ti := j*16\n\ttmp[31:0] := SignExtend32(a[i+15:i]) * SignExtend32(b[i+15:i])\n\tdst[i+15:i] := tmp[15:0]\nENDFOR"
   tests:
-    - {test_name "mul_imm_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 3], expected [3, 6, 9, 12, 15, 18, 21, 24]}}
-    - {test_name "mul_imm_i32_zero", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, 0, 1, -2, 2, -3, 3, -4], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "mul_imm_i32_neg", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], -2], expected [-2, 4, -6, 8, -10, 12, -14, 16]}}
-    - {test_name "mul_imm_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 5], expected [5, 10, 15, 20, 25, 30, 35, 40]}}
-    - {test_name "mul_imm_ui16_zero", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 3], expected [3, 6, 9, 12, 15, 18, 21, 24]}}
+    - {tags [zero], type "si32", case {inputs [[-1, 0, 1, -2, 2, -3, 3, -4], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [neg], type "si32", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], -2], expected [-2, 4, -6, 8, -10, 12, -14, 16]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 5], expected [5, 10, 15, 20, 25, 30, 35, 40]}}
+    - {tags [zero], type "ui16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(details::arith_mul(data, cast<static>(type<generation>(base::in), factor)));"
+          tsil "complete(details::arith_mul(data, cast<static>(type<generation>(base::in), factor)));"
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = details::arith_mul(data[i], cast<static>(type<generation>(base::in), factor));
             }
-            emit_return(result);
+            complete(result);
           """
     avx512:
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mul>(
+            complete(
+              intrin<mul, build>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -704,13 +1002,14 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i16:
         requires [avx512bw, avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -718,13 +1017,14 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i32:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -732,13 +1032,14 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i64:
         requires [avx512dq, avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -746,9 +1047,13 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mul>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
@@ -758,10 +1063,14 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
     avx2:
       f?:
         requires [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mul>(
+            complete(
+              intrin<mul, build>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -769,13 +1078,14 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i16:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -783,13 +1093,14 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i32:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -797,13 +1108,14 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i64:
         requires [avx, avx512dq, avx512vl]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -811,9 +1123,13 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mul>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
@@ -823,10 +1139,14 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
     sse:
       f32:
         requires [sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mul>(
+            complete(
+              intrin<mul, build>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -834,10 +1154,14 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       f64:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mul>(
+            complete(
+              intrin<mul, build>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -845,13 +1169,14 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i16:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -859,13 +1184,14 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i32:
         requires [sse, sse4_1]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -873,13 +1199,14 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       ?i64:
         requires [avx512dq, avx512vl, sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<
-                mullo,
-                suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))
-              >(
+            complete(
+              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -887,9 +1214,13 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mul>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
@@ -899,10 +1230,14 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
     neon:
       [si8, si16, si32, ui8, ui16, ui32, f32, f64]:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<vmulq>(
+            complete(
+              intrin<vmulq, build>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
               )
@@ -910,9 +1245,13 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mul>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
@@ -920,11 +1259,15 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             );
           """
     sve:
-      ?i?:
+      arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mul>(
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
@@ -933,20 +1276,39 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           """
 prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
   brief_description "Multiply packed elements by a scalar and zero inactive lanes."
+  detailed_description """
+    Multiplies lanes enabled by the mask by the compile-time scalar immediate
+    `factor`. Disabled lanes are set to zero. The result is represented in the
+    destination lane type; truncation, overflow, and floating-point behavior
+    follow the selected backend and lane type.
+    """
+  semantics """
+    input: mask mask, register data, scalar factor
+    for each lane i:
+      if mask[i] is active:
+        result[i] = data[i] * factor
+      else:
+        result[i] = 0
+    return result
+    """
   operation ""
   tests:
-    - {test_name "mul_imm_maskz_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [1, 2, 3, 4], 3], expected [0, 6, 0, 12]}}
-    - {test_name "mul_imm_maskz_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, -2.0, 3.0, -4.0], -2.0], expected [0.0, 4.0, 0.0, 8.0]}}
+    - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [0, 6, 0, 12]}}
+    - {tags [maskz, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.0, -4.0], -2.0], expected [0.0, 4.0, 0.0, 8.0]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(details::arith_mul(data, cast<static>(type<generation>(base::in), factor)));
+              complete(details::arith_mul(data, cast<static>(type<generation>(base::in), factor)));
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
       arith:
@@ -958,10 +1320,14 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
           sse [sse]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mul attrs[mask=zero]>(
+            complete(
+              call<primitive=mul, attrs[mask=zero]>(
                 mask,
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
@@ -970,20 +1336,39 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
           """
 prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
   brief_description "Multiply packed elements by a scalar and preserve data in inactive lanes."
+  detailed_description """
+    Multiplies lanes enabled by the mask by the compile-time scalar immediate
+    `factor`. Disabled lanes keep the corresponding lane from `data`. The result
+    is represented in the destination lane type; truncation, overflow, and
+    floating-point behavior follow the selected backend and lane type.
+    """
+  semantics """
+    input: mask mask, register data, scalar factor
+    for each lane i:
+      if mask[i] is active:
+        result[i] = data[i] * factor
+      else:
+        result[i] = data[i]
+    return result
+    """
   operation ""
   tests:
-    - {test_name "mul_imm_mask_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [1, 2, 3, 4], 3], expected [1, 6, 3, 12]}}
-    - {test_name "mul_imm_mask_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [10, [1.0, -2.0, 3.0, -4.0], -2.0], expected [1.0, 4.0, 3.0, 8.0]}}
+    - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [1, 6, 3, 12]}}
+    - {tags [mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.0, -4.0], -2.0], expected [1.0, 4.0, 3.0, 8.0]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(details::arith_mul(data, cast<static>(type<generation>(base::in), factor)));
+              complete(details::arith_mul(data, cast<static>(type<generation>(base::in), factor)));
             }
-            emit_return(data);
+            complete(data);
           """
     [generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
       arith:
@@ -995,10 +1380,14 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
           sse [sse]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mul attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mul, attrs[mask=pass_through]>(
                 mask,
                 data,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
@@ -1007,30 +1396,46 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
           """
 prim<v:=(v,v)> mod(dividend, divisor):
   brief_description "Computes a modulo for two vectors."
+  detailed_description """
+    Computes the lane-wise remainder of two vector registers. Each output lane
+    depends only on the corresponding lanes of the input registers. The exact
+    remainder sign, floating-point remainder behavior, and division-by-zero
+    behavior follow the selected backend and lane type.
+    """
+  semantics """
+    input: register dividend, register divisor
+    for each lane i:
+      result[i] = dividend[i] % divisor[i]
+    return result
+    """
   operation ""
   tests:
-    - {test_name "mod_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], [3, 4, 5, 2, 3, 2, 3, 2]], expected [1, -1, 3, -1, 0, -1, 1, -1]}}
-    - {test_name "mod_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], [3, 4, 5, 2, 3, 2, 3, 2]], expected [1, 1, 3, 1, 0, 1, 1, 1]}}
-    - {test_name "mod_i16_basic", type "si16", lane_set "lanes_i16", lanes 16, case {inputs [[10, -9, 8, -7, 6, -5, 4, -3, 12, -11, 14, -13, 16, -15, 18, -17], [3, 4, 5, 2, 3, 2, 3, 2, 5, 6, 7, 4, 5, 6, 7, 4]], expected [1, -1, 3, -1, 0, -1, 1, -1, 2, -5, 0, -1, 1, -3, 4, -1]}}
-    - {test_name "mod_u16_basic", type "ui16", lane_set "lanes_i16", lanes 16, case {inputs [[10, 9, 8, 7, 6, 5, 4, 3, 12, 11, 14, 13, 16, 15, 18, 17], [3, 4, 5, 2, 3, 2, 3, 2, 5, 6, 7, 4, 5, 6, 7, 4]], expected [1, 1, 3, 1, 0, 1, 1, 1, 2, 5, 0, 1, 1, 3, 4, 1]}}
-    - {test_name "mod_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "mod_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [1, 1, 255, 254, 2, 3, 4, 5, 1, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "mod_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "mod_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [1, -1, -128, 127, 1, -2, 2, 126, 1, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "mod_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
-    - {test_name "mod_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [1, 1]], expected [0, 0]}}
-    - {test_name "mod_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
-    - {test_name "mod_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [1, -1]], expected [0, 0]}}
+    - {tags [basic], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], [3, 4, 5, 2, 3, 2, 3, 2]], expected [1, -1, 3, -1, 0, -1, 1, -1]}}
+    - {tags [basic], type "ui32", case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], [3, 4, 5, 2, 3, 2, 3, 2]], expected [1, 1, 3, 1, 0, 1, 1, 1]}}
+    - {tags [basic], type "si16", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3, 12, -11, 14, -13, 16, -15, 18, -17], [3, 4, 5, 2, 3, 2, 3, 2, 5, 6, 7, 4, 5, 6, 7, 4]], expected [1, -1, 3, -1, 0, -1, 1, -1, 2, -5, 0, -1, 1, -3, 4, -1]}}
+    - {tags [basic], type "ui16", case {inputs [[10, 9, 8, 7, 6, 5, 4, 3, 12, 11, 14, 13, 16, 15, 18, 17], [3, 4, 5, 2, 3, 2, 3, 2, 5, 6, 7, 4, 5, 6, 7, 4]], expected [1, 1, 3, 1, 0, 1, 1, 1, 2, 5, 0, 1, 1, 3, 4, 1]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [1, 1, 255, 254, 2, 3, 4, 5, 1, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [1, -1, -128, 127, 1, -2, 2, 126, 1, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], [1, 1]], expected [0, 0]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], [1, -1]], expected [0, 0]}}
   impls:
     avx512:
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
             var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(dividend)));
             var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divisor)));
-            emit_return(
+            complete(
               call<primitive=from_array[Vec]>(
                 call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
               )
@@ -1039,12 +1444,16 @@ prim<v:=(v,v)> mod(dividend, divisor):
     avx2:
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
             var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(dividend)));
             var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divisor)));
-            emit_return(
+            complete(
               call<primitive=from_array[Vec]>(
                 call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
               )
@@ -1053,23 +1462,55 @@ prim<v:=(v,v)> mod(dividend, divisor):
     sse:
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
             var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(dividend)));
             var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divisor)));
-            emit_return(
+            complete(
               call<primitive=from_array[Vec]>(
                 call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
               )
             );
           """
     sve:
-      idqword:
+      [?i8, ?i16]:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-            emit_return(
+            let<type>(Base, type<generation>(base::in));
+            var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+            var<const_infer>(dividends, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+            var<const_infer>(divisors, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+            var<const_infer>(result_values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+            intrin<svst1, build>(call<primitive=mask_true[Vec]>(), dividends, dividend);
+            intrin<svst1, build>(call<primitive=mask_true[Vec]>(), divisors, divisor);
+            loop<backend>(i, 0, lanes, 1) {
+              result_values[i] = details::arith_rem(dividends[i], divisors[i]);
+            }
+            var<const_infer>(result, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result_values));
+            std::free(dividends);
+            std::free(divisors);
+            std::free(result_values);
+            complete(result);
+          """
+      idqword:
+        requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
               call<primitive=sub>(
                 dividend,
                 call<primitive=mul>(
@@ -1079,49 +1520,99 @@ prim<v:=(v,v)> mod(dividend, divisor):
               )
             );
           """
+      f?:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(QuotientBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+            var<const_infer>(quotient, intrin<svdiv, build[post=x]>(pg, dividend, divisor));
+            var<const_infer>(truncated, intrin<svcvt_, build[infix=QuotientBase, suffix=base::in, post=z]>(pg, quotient));
+            var<const_infer>(truncated_float, intrin<svcvt_, build[infix=base::in, suffix=QuotientBase, post=x]>(pg, truncated));
+            complete(
+              intrin<svsub, build[post=x]>(
+                pg,
+                dividend,
+                intrin<svmul, build[post=x]>(pg, truncated_float, divisor)
+              )
+            );
+          """
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(details::arith_rem(dividend, divisor));"
+          tsil "complete(details::arith_rem(dividend, divisor));"
     generic:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = details::arith_rem(dividend[i], divisor[i]);
             }
-            emit_return(result);
+            complete(result);
           """
       f?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = details::arith_rem(dividend[i], divisor[i]);
             }
-            emit_return(result);
+            complete(result);
           """
 prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
   brief_description "Compute modulo and zero inactive lanes."
+  detailed_description """
+    Computes the lane-wise remainder for lanes enabled by the mask. Disabled
+    lanes are set to zero. The exact remainder sign, floating-point remainder
+    behavior, and division-by-zero behavior follow the selected backend and lane
+    type.
+    """
+  semantics """
+    input: mask mask, register dividend, register divisor
+    for each lane i:
+      if mask[i] is active:
+        result[i] = dividend[i] % divisor[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation ""
   tests:
-    - {test_name "mod_maskz_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [10, -9, 8, -7], [3, 4, 5, 2]], expected [0, -1, 0, -1]}}
+    - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], [3, 4, 5, 2]], expected [0, -1, 0, -1]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=mod>(dividend, divisor));
+              complete(call<primitive=mod>(dividend, divisor));
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [avx512, avx2, sse, sve, generic]:
       arith:
@@ -1131,10 +1622,14 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 call<primitive=set_zero[Vec]>(),
                 call<primitive=mod>(dividend, divisor)
@@ -1143,19 +1638,38 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
           """
 prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
   brief_description "Compute modulo and preserve dividend in inactive lanes."
+  detailed_description """
+    Computes the lane-wise remainder for lanes enabled by the mask. Disabled
+    lanes keep the corresponding lane from `dividend`. The exact remainder sign,
+    floating-point remainder behavior, and division-by-zero behavior follow the
+    selected backend and lane type.
+    """
+  semantics """
+    input: mask mask, register dividend, register divisor
+    for each lane i:
+      if mask[i] is active:
+        result[i] = dividend[i] % divisor[i]
+      else:
+        result[i] = dividend[i]
+    return result
+    """
   operation ""
   tests:
-    - {test_name "mod_mask_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [10, -9, 8, -7], [3, 4, 5, 2]], expected [10, -1, 8, -1]}}
+    - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], [3, 4, 5, 2]], expected [10, -1, 8, -1]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=mod>(dividend, divisor));
+              complete(call<primitive=mod>(dividend, divisor));
             }
-            emit_return(dividend);
+            complete(dividend);
           """
     [avx512, avx2, sse, sve, generic]:
       arith:
@@ -1165,10 +1679,14 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 dividend,
                 call<primitive=mod>(dividend, divisor)
@@ -1177,12 +1695,24 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
           """
 prim<v:=(v,sImm)> mod_imm(dividend, divisor):
   brief_description "Computes a modulo with a scalar value."
+  detailed_description """
+    Computes the lane-wise remainder of each vector lane divided by the
+    compile-time scalar immediate `divisor`. The exact remainder sign,
+    floating-point remainder behavior, and division-by-zero behavior follow the
+    selected backend and lane type.
+    """
+  semantics """
+    input: register dividend, scalar divisor
+    for each lane i:
+      result[i] = dividend[i] % divisor
+    return result
+    """
   operation ""
   tests:
-    - {test_name "mod_imm_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], 3], expected [1, 0, 2, -1, 0, -2, 1, 0]}}
-    - {test_name "mod_imm_i32_one", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], 1], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "mod_imm_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], 5], expected [0, 4, 3, 2, 1, 0, 4, 3]}}
-    - {test_name "mod_imm_ui16_one", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], 1], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], 3], expected [1, 0, 2, -1, 0, -2, 1, 0]}}
+    - {tags [one], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], 1], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "ui16", case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], 5], expected [0, 4, 3, 2, 1, 0, 4, 3]}}
+    - {tags [one], type "ui16", case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], 1], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
   impls:
     [avx512, avx2, sse, sve]:
       arith:
@@ -1191,9 +1721,13 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
           avx2 [avx]
           sse [sse]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=mod>(
                 dividend,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), divisor))
@@ -1203,46 +1737,75 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(details::arith_rem(dividend, cast<static>(type<generation>(base::in), divisor)));"
+          tsil "complete(details::arith_rem(dividend, cast<static>(type<generation>(base::in), divisor)));"
     generic:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = details::arith_rem(dividend[i], cast<static>(type<generation>(base::in), divisor));
             }
-            emit_return(result);
+            complete(result);
           """
       f?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               result[i] = details::arith_rem(dividend[i], cast<static>(type<generation>(base::in), divisor));
             }
-            emit_return(result);
+            complete(result);
           """
 prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
   brief_description "Compute modulo by a scalar and zero inactive lanes."
+  detailed_description """
+    Computes the lane-wise remainder by the compile-time scalar immediate
+    `divisor` for lanes enabled by the mask. Disabled lanes are set to zero. The
+    exact remainder sign, floating-point remainder behavior, and
+    division-by-zero behavior follow the selected backend and lane type.
+    """
+  semantics """
+    input: mask mask, register dividend, scalar divisor
+    for each lane i:
+      if mask[i] is active:
+        result[i] = dividend[i] % divisor
+      else:
+        result[i] = 0
+    return result
+    """
   operation ""
   tests:
-    - {test_name "mod_imm_maskz_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [10, -9, 8, -7], 3], expected [0, 0, 0, -1]}}
+    - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [0, 0, 0, -1]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(details::arith_rem(dividend, cast<static>(type<generation>(base::in), divisor)));
+              complete(details::arith_rem(dividend, cast<static>(type<generation>(base::in), divisor)));
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [avx512, avx2, sse, sve, generic]:
       arith:
@@ -1252,10 +1815,14 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mod attrs[mask=zero]>(
+            complete(
+              call<primitive=mod, attrs[mask=zero]>(
                 mask,
                 dividend,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), divisor))
@@ -1264,19 +1831,39 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
           """
 prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
   brief_description "Compute modulo by a scalar and preserve dividend in inactive lanes."
+  detailed_description """
+    Computes the lane-wise remainder by the compile-time scalar immediate
+    `divisor` for lanes enabled by the mask. Disabled lanes keep the
+    corresponding lane from `dividend`. The exact remainder sign, floating-point
+    remainder behavior, and division-by-zero behavior follow the selected backend
+    and lane type.
+    """
+  semantics """
+    input: mask mask, register dividend, scalar divisor
+    for each lane i:
+      if mask[i] is active:
+        result[i] = dividend[i] % divisor
+      else:
+        result[i] = dividend[i]
+    return result
+    """
   operation ""
   tests:
-    - {test_name "mod_imm_mask_i32_basic", extension "generic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [10, -9, 8, -7], 3], expected [10, 0, 8, -1]}}
+    - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [10, 0, 8, -1]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(details::arith_rem(dividend, cast<static>(type<generation>(base::in), divisor)));
+              complete(details::arith_rem(dividend, cast<static>(type<generation>(base::in), divisor)));
             }
-            emit_return(dividend);
+            complete(dividend);
           """
     [avx512, avx2, sse, sve, generic]:
       arith:
@@ -1286,10 +1873,14 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mod attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mod, attrs[mask=pass_through]>(
                 mask,
                 dividend,
                 call<primitive=set1>(cast<static>(type<generation>(base::in), divisor))

@@ -1,0 +1,5 @@
+#[test]
+fn smoke_active_profile_is_selected() {{
+    assert!(!{crate_name}::ACTIVE_PROFILE.is_empty());
+}}
+

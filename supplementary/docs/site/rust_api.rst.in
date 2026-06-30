@@ -1,0 +1,6 @@
+Rust API
+========
+
+Rustdoc is generated with ``cargo doc --no-deps`` for the selected Rust output.
+
+`Open the Rust API reference <rust/index.html>`_

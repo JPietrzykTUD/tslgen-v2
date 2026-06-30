@@ -1,0 +1,647 @@
+#!/usr/bin/env python3
+"""Build documentation for an already generated TSLc project.
+
+This is a maintenance/output tool, not a compiler stage. It consumes the
+written generated project, copies documentation assets, and invokes external
+documentation tools:
+
+- C++: Doxygen XML consumed by Breathe inside Sphinx.
+- Rust: ``cargo doc --no-deps``, copied under the same Sphinx site.
+
+Run from the repository with ``tslc/src`` on ``PYTHONPATH``:
+
+    PYTHONPATH=tslc/src python -m tslc.maintenance.documentation \
+      --output-root ./tslctmp/verify --backends cpp,rust
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import shutil
+import subprocess
+import sys
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+
+CommandRunner = Callable[[Sequence[str], Path], subprocess.CompletedProcess[str]]
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentationCommand:
+    backend_id: str
+    step: str
+    argv: tuple[str, ...]
+    cwd: Path
+
+
+@dataclass(frozen=True, slots=True)
+class DocumentationReport:
+    commands: tuple[DocumentationCommand, ...]
+    outputs: tuple[Path, ...]
+    errors: tuple[str, ...]
+
+    @property
+    def ok(self) -> bool:
+        return not self.errors
+
+
+def document_generated(
+    output_root: str | Path,
+    backends: Sequence[str],
+    *,
+    project_name: str = "TSL Generated API",
+    doxygen: str = "doxygen",
+    sphinx_build: str = "sphinx-build",
+    cargo: str = "cargo",
+    npm: str = "npm",
+    dry_run: bool = False,
+    runner: CommandRunner | None = None,
+) -> DocumentationReport:
+    """Build docs for selected backends in an already-written generated project."""
+
+    root = Path(output_root).resolve()
+    requested = tuple(dict.fromkeys(backends))
+    commands: list[DocumentationCommand] = []
+    outputs: list[Path] = []
+    errors: list[str] = []
+    run = runner or _run_subprocess
+
+    unknown = sorted(set(requested) - {"cpp", "rust"})
+    if unknown:
+        errors.append("unsupported documentation backend(s): " + ", ".join(unknown))
+    if not requested:
+        errors.append("no documentation backends requested")
+
+    cpp_xml: Path | None = None
+    rust_doc: Path | None = None
+    if "cpp" in requested:
+        cpp_xml = _document_cpp(
+            root,
+            project_name=project_name,
+            doxygen=doxygen,
+            dry_run=dry_run,
+            runner=run,
+            commands=commands,
+            outputs=outputs,
+            errors=errors,
+        )
+    if "rust" in requested:
+        rust_doc = _document_rust(
+            root,
+            cargo=cargo,
+            dry_run=dry_run,
+            runner=run,
+            commands=commands,
+            outputs=outputs,
+            errors=errors,
+        )
+    if not errors and (cpp_xml is not None or rust_doc is not None):
+        _document_site(
+            root,
+            project_name=project_name,
+            doxygen_xml=cpp_xml,
+            rust_doc=rust_doc,
+            sphinx_build=sphinx_build,
+            npm=npm,
+            dry_run=dry_run,
+            runner=run,
+            commands=commands,
+            outputs=outputs,
+            errors=errors,
+        )
+
+    return DocumentationReport(
+        commands=tuple(commands),
+        outputs=tuple(outputs),
+        errors=tuple(errors),
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="tslc.maintenance.documentation",
+        description="Build generated C++/Rust API documentation.",
+    )
+    parser.add_argument("--output-root", required=True, help="generated project root")
+    parser.add_argument(
+        "--backends",
+        default="cpp,rust",
+        help="comma-separated backends to document",
+    )
+    parser.add_argument(
+        "--project-name",
+        default="TSL Generated API",
+        help="human-readable documentation title",
+    )
+    parser.add_argument("--doxygen", default="doxygen", help="Doxygen executable")
+    parser.add_argument(
+        "--sphinx-build",
+        default="sphinx-build",
+        help="sphinx-build executable",
+    )
+    parser.add_argument("--cargo", default="cargo", help="Cargo executable")
+    parser.add_argument("--npm", default="npm", help="npm executable")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="write assets and print commands without running external tools",
+    )
+    args = parser.parse_args(argv)
+
+    report = document_generated(
+        args.output_root,
+        _split(args.backends),
+        project_name=args.project_name,
+        doxygen=args.doxygen,
+        sphinx_build=args.sphinx_build,
+        cargo=args.cargo,
+        npm=args.npm,
+        dry_run=args.dry_run,
+    )
+    for command in report.commands:
+        print(
+            f"[document] {command.backend_id} {command.step}: "
+            + " ".join(command.argv)
+        )
+    for output in report.outputs:
+        print(f"[document-output] {output}")
+    for error in report.errors:
+        print(f"[document-error] {error}", file=sys.stderr)
+    return 0 if report.ok else 1
+
+
+def _document_cpp(
+    root: Path,
+    *,
+    project_name: str,
+    doxygen: str,
+    dry_run: bool,
+    runner: CommandRunner,
+    commands: list[DocumentationCommand],
+    outputs: list[Path],
+    errors: list[str],
+) -> Path | None:
+    cpp_root = root / "cpp"
+    facade_header = cpp_root / "docs" / "input" / "tsl_api_docs.hpp"
+    docs_root = cpp_root / "docs"
+    doxygen_root = docs_root / "doxygen"
+
+    if not facade_header.is_file():
+        errors.append(f"C++ documentation facade not found: {facade_header}")
+        return None
+
+    doxygen_root.mkdir(parents=True, exist_ok=True)
+    _render_cpp_assets(
+        project_name=project_name,
+        facade_header=facade_header,
+        doxygen_root=doxygen_root,
+    )
+
+    doxygen_command = _command(
+        "cpp",
+        "doxygen",
+        doxygen,
+        (str(doxygen_root / "Doxyfile"),),
+        cwd=cpp_root,
+        dry_run=dry_run,
+        commands=commands,
+        errors=errors,
+    )
+    if doxygen_command is None or not _execute(doxygen_command, runner, dry_run, errors):
+        return None
+
+    doxygen_xml = doxygen_root / "xml"
+    error_count = len(errors)
+    _record_outputs(
+        (doxygen_xml,),
+        dry_run=dry_run,
+        outputs=outputs,
+        errors=errors,
+    )
+    return doxygen_xml if len(errors) == error_count else None
+
+
+def _document_rust(
+    root: Path,
+    *,
+    cargo: str,
+    dry_run: bool,
+    runner: CommandRunner,
+    commands: list[DocumentationCommand],
+    outputs: list[Path],
+    errors: list[str],
+) -> Path | None:
+    rust_root = root / "rust"
+    manifest = rust_root / "Cargo.toml"
+    docs_target = rust_root / "docs" / "target"
+    if not manifest.is_file():
+        errors.append(f"Rust Cargo.toml not found: {manifest}")
+        return None
+    docs_target.mkdir(parents=True, exist_ok=True)
+    cargo_command = _command(
+        "rust",
+        "rustdoc",
+        cargo,
+        ("doc", "--no-deps", "--target-dir", str(docs_target)),
+        cwd=rust_root,
+        dry_run=dry_run,
+        commands=commands,
+        errors=errors,
+    )
+    if cargo_command is None or not _execute(cargo_command, runner, dry_run, errors):
+        return None
+    rust_doc = docs_target / "doc"
+    error_count = len(errors)
+    _record_outputs(
+        (rust_doc,),
+        dry_run=dry_run,
+        outputs=outputs,
+        errors=errors,
+    )
+    return rust_doc if len(errors) == error_count else None
+
+
+def _document_site(
+    root: Path,
+    *,
+    project_name: str,
+    doxygen_xml: Path | None,
+    rust_doc: Path | None,
+    sphinx_build: str,
+    npm: str,
+    dry_run: bool,
+    runner: CommandRunner,
+    commands: list[DocumentationCommand],
+    outputs: list[Path],
+    errors: list[str],
+) -> None:
+    docs_root = root / "docs"
+    sphinx_source = docs_root / "sphinx-src"
+    sphinx_html = docs_root / "site"
+    specializations_source = docs_root / "specializations"
+    specializations_json = specializations_source / "specializations.json"
+    specializations_dist: Path | None = None
+    include_specializations = specializations_json.is_file()
+    if include_specializations:
+        specializations_dist = _document_specializations_app(
+            root,
+            npm=npm,
+            dry_run=dry_run,
+            runner=runner,
+            commands=commands,
+            errors=errors,
+        )
+        if specializations_dist is None:
+            return
+    sphinx_source.mkdir(parents=True, exist_ok=True)
+    (sphinx_source / "_static").mkdir(parents=True, exist_ok=True)
+    _render_site_assets(
+        project_name=project_name,
+        sphinx_source=sphinx_source,
+        doxygen_xml=doxygen_xml,
+        include_rust=rust_doc is not None,
+        include_specializations=include_specializations,
+    )
+
+    sphinx_command = _command(
+        "site",
+        "sphinx",
+        sphinx_build,
+        ("-b", "html", str(sphinx_source), str(sphinx_html)),
+        cwd=root,
+        dry_run=dry_run,
+        commands=commands,
+        errors=errors,
+    )
+    if sphinx_command is None or not _execute(sphinx_command, runner, dry_run, errors):
+        return
+
+    doc_outputs = [sphinx_html]
+    if include_specializations and specializations_dist is not None:
+        specializations_site = sphinx_html / "specializations"
+        if not dry_run:
+            if specializations_site.exists():
+                shutil.rmtree(specializations_site)
+            shutil.copytree(specializations_dist, specializations_site)
+            shutil.copyfile(
+                specializations_json,
+                specializations_site / "specializations.json",
+            )
+        doc_outputs.append(specializations_site)
+    if rust_doc is not None:
+        rust_site = sphinx_html / "rust"
+        if not dry_run:
+            shutil.copytree(rust_doc, rust_site, dirs_exist_ok=True)
+            _ensure_rustdoc_landing(rust_site)
+        doc_outputs.append(rust_site)
+    _record_outputs(
+        tuple(doc_outputs),
+        dry_run=dry_run,
+        outputs=outputs,
+        errors=errors,
+    )
+
+
+def _document_specializations_app(
+    root: Path,
+    *,
+    npm: str,
+    dry_run: bool,
+    runner: CommandRunner,
+    commands: list[DocumentationCommand],
+    errors: list[str],
+) -> Path | None:
+    repo_root = _repo_root(Path(__file__).resolve())
+    react_root = repo_root / "supplementary" / "docs" / "site" / "specializations" / "react"
+    package_lock = react_root / "package-lock.json"
+    if not package_lock.is_file():
+        errors.append(f"React specialization explorer lockfile not found: {package_lock}")
+        return None
+    dist = root / "docs" / "specializations" / "react-dist"
+    dist.mkdir(parents=True, exist_ok=True)
+    install_command = _command(
+        "site",
+        "npm-ci",
+        npm,
+        ("ci", "--no-audit", "--no-fund"),
+        cwd=react_root,
+        dry_run=dry_run,
+        commands=commands,
+        errors=errors,
+    )
+    if install_command is None or not _execute(install_command, runner, dry_run, errors):
+        return None
+    build_command = _command(
+        "site",
+        "npm-build",
+        npm,
+        (
+            "run",
+            "build",
+            "--",
+            "--outDir",
+            str(dist),
+            "--emptyOutDir",
+        ),
+        cwd=react_root,
+        dry_run=dry_run,
+        commands=commands,
+        errors=errors,
+    )
+    if build_command is None or not _execute(build_command, runner, dry_run, errors):
+        return None
+    return dist
+
+
+def _render_cpp_assets(
+    *,
+    project_name: str,
+    facade_header: Path,
+    doxygen_root: Path,
+) -> None:
+    asset_root = (
+        _repo_root(Path(__file__).resolve()) / "supplementary" / "docs" / "cpp"
+    )
+    doxygen_text = _template(
+        asset_root / "Doxyfile.in",
+        _cpp_asset_values(
+            project_name=project_name,
+            facade_header=facade_header,
+            doxygen_root=doxygen_root,
+        ),
+    )
+    (doxygen_root / "Doxyfile").write_text(doxygen_text, encoding="utf-8")
+
+
+def _render_site_assets(
+    *,
+    project_name: str,
+    sphinx_source: Path,
+    doxygen_xml: Path | None,
+    include_rust: bool,
+    include_specializations: bool,
+) -> None:
+    asset_root = (
+        _repo_root(Path(__file__).resolve()) / "supplementary" / "docs" / "site"
+    )
+    values = _site_asset_values(
+        project_name=project_name,
+        doxygen_xml=doxygen_xml,
+        include_rust=include_rust,
+        include_specializations=include_specializations,
+    )
+    (sphinx_source / "conf.py").write_text(
+        _template(asset_root / "conf.py.in", values),
+        encoding="utf-8",
+    )
+    (sphinx_source / "index.rst").write_text(
+        _template(asset_root / "index.rst.in", values),
+        encoding="utf-8",
+    )
+    if doxygen_xml is not None:
+        (sphinx_source / "cpp_api.rst").write_text(
+            _template(asset_root / "cpp_api.rst.in", values),
+            encoding="utf-8",
+        )
+    if include_rust:
+        (sphinx_source / "rust_api.rst").write_text(
+            _template(asset_root / "rust_api.rst.in", values),
+            encoding="utf-8",
+        )
+    if include_specializations:
+        (sphinx_source / "specializations.rst").write_text(
+            _template(asset_root / "specializations.rst.in", values),
+            encoding="utf-8",
+        )
+    shutil.copyfile(
+        asset_root / "_static" / "tslc.css",
+        sphinx_source / "_static" / "tslc.css",
+    )
+
+
+def _cpp_asset_values(
+    *,
+    project_name: str,
+    facade_header: Path,
+    doxygen_root: Path,
+) -> dict[str, str]:
+    return {
+        "PROJECT_NAME": project_name,
+        "TITLE_UNDERLINE": "=" * len(project_name),
+        "INPUT_DIR": str(facade_header.resolve()),
+        "OUTPUT_DIR": str(doxygen_root.resolve()),
+    }
+
+
+def _site_asset_values(
+    *,
+    project_name: str,
+    doxygen_xml: Path | None,
+    include_rust: bool,
+    include_specializations: bool,
+) -> dict[str, str]:
+    entries: list[str] = []
+    if doxygen_xml is not None:
+        entries.append("   cpp_api")
+    if include_rust:
+        entries.append("   rust_api")
+    if include_specializations:
+        entries.append("   specializations")
+    return {
+        "PROJECT_NAME": project_name,
+        "TITLE_UNDERLINE": "=" * len(project_name),
+        "SPHINX_EXTENSIONS": repr(["breathe"] if doxygen_xml is not None else []),
+        "BREATHE_PROJECTS": repr(
+            {"TSL": str(doxygen_xml.resolve())} if doxygen_xml is not None else {}
+        ),
+        "TOCTREE_ENTRIES": "\n".join(entries),
+    }
+
+
+def _ensure_rustdoc_landing(rust_site: Path) -> None:
+    index = rust_site / "index.html"
+    if index.exists():
+        return
+    crate_indexes = sorted(
+        path
+        for path in rust_site.iterdir()
+        if path.is_dir() and (path / "index.html").is_file()
+    )
+    target = f"{crate_indexes[0].name}/index.html" if crate_indexes else "help.html"
+    index.write_text(
+        "\n".join(
+            (
+                "<!doctype html>",
+                "<html>",
+                '<head><meta charset="utf-8">',
+                f'<meta http-equiv="refresh" content="0; url={target}">',
+                "<title>Rust API</title></head>",
+                f'<body><p><a href="{target}">Open Rust API reference</a></p></body>',
+                "</html>",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _command(
+    backend_id: str,
+    step: str,
+    tool: str,
+    args: tuple[str, ...],
+    *,
+    cwd: Path,
+    dry_run: bool,
+    commands: list[DocumentationCommand],
+    errors: list[str],
+) -> DocumentationCommand | None:
+    resolved = tool if dry_run else _resolve_tool(tool)
+    if resolved is None:
+        errors.append(f"{tool} not found; cannot build {backend_id} {step} docs")
+        return None
+    command = DocumentationCommand(
+        backend_id=backend_id,
+        step=step,
+        argv=(resolved, *args),
+        cwd=cwd,
+    )
+    commands.append(command)
+    return command
+
+
+def _execute(
+    command: DocumentationCommand,
+    runner: CommandRunner,
+    dry_run: bool,
+    errors: list[str],
+) -> bool:
+    if dry_run:
+        return True
+    completed = runner(command.argv, command.cwd)
+    if completed.returncode == 0:
+        return True
+    errors.append(
+        f"{command.backend_id} {command.step} failed with exit code "
+        f"{completed.returncode}{_failure_detail(completed)}"
+    )
+    return False
+
+
+def _failure_detail(completed: subprocess.CompletedProcess[str]) -> str:
+    text = (completed.stderr or completed.stdout).strip()
+    if not text:
+        return ""
+    lines = text.splitlines()
+    if len(lines) > 14:
+        lines = [lines[0], "...", *lines[-12:]]
+    return ":\n" + "\n".join(f"  {line}" for line in lines)
+
+
+def _record_outputs(
+    paths: tuple[Path, ...],
+    *,
+    dry_run: bool,
+    outputs: list[Path],
+    errors: list[str],
+) -> None:
+    for path in paths:
+        if dry_run or path.exists():
+            outputs.append(path)
+        else:
+            errors.append(f"expected documentation output was not created: {path}")
+
+
+def _run_subprocess(
+    argv: Sequence[str], cwd: Path
+) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env["LC_ALL"] = "C.UTF-8"
+    env["LANG"] = "C.UTF-8"
+    return subprocess.run(
+        list(argv),
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _template(path: Path, values: dict[str, str]) -> str:
+    text = path.read_text(encoding="utf-8")
+    for key, value in values.items():
+        text = text.replace(f"@{key}@", value)
+    return text
+
+
+def _resolve_tool(tool: str) -> str | None:
+    candidate = Path(tool)
+    if candidate.parent != Path("."):
+        return str(candidate) if candidate.exists() else None
+    return shutil.which(tool)
+
+
+def _split(value: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
+def _repo_root(start: Path) -> Path:
+    for candidate in (start, *start.parents):
+        if (candidate / "tsldata").is_dir() and (candidate / "tslc" / "src").is_dir():
+            return candidate
+    raise RuntimeError(f"could not find repository root from {start}")
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())
+
+
+__all__ = (
+    "DocumentationCommand",
+    "DocumentationReport",
+    "document_generated",
+    "main",
+)

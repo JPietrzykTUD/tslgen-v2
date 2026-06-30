@@ -1,11 +1,20 @@
 prim<m:=()>[value=zero] mask_false():
   brief_description "Creates a mask with all lanes inactive."
+  detailed_description """
+    Constructs a mask value in which every lane is inactive.
+    """
+  semantics """
+    for each lane i:
+      result[i] = inactive
+    return result
+    """
   operation ""
   tests:
-    - {test_name "mask_false_ui8", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [], expected 0}}
-    - {test_name "mask_false_ui16", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [], expected 0}}
-    - {test_name "mask_false_ui32", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [], expected 0}}
-    - {test_name "mask_false_ui64", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [], expected 0}}
+    - {tags [false], extension "avx512", type "ui8", lane_count 64, case {inputs [], expected 0}}
+    - {tags [false], extension "avx512", type "ui16", lane_count 32, case {inputs [], expected 0}}
+    - {tags [false], extension "avx512", type "ui32", lane_count 16, case {inputs [], expected 0}}
+    - {tags [false], extension "avx512", type "ui64", lane_count 8, case {inputs [], expected 0}}
+    - {tags [false], extension "sve", type "ui32", lane_count 16, case {inputs [], expected 0}}
   impls:
     [avx512, avx2_vl, sse_vl]:
       arith:
@@ -13,44 +22,73 @@ prim<m:=()>[value=zero] mask_false():
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(vector::mask), 0));"
+          tsil "complete(cast<static>(type<generation>(vector::mask), 0));"
     [avx2, sse, neon]:
       arith:
         requires:
           avx2 [avx, avx2]
           sse:
-            default [sse, sse2]
+            [si8, ui8, si16, ui16, si32, ui32, f64] [sse, sse2]
             ?i64 [sse, sse2, sse4_1]
             f32 [sse]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(call<primitive=set_zero[Vec]>());"
+          tsil "complete(call<primitive=set_zero[Vec]>());"
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin<svpfalse_b>());"
+          tsil "complete(intrin<svpfalse_b>());"
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(false);"
+          tsil "complete(false);"
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(mask<zero>());"
+          tsil "complete(mask<zero>());"
 prim<m:=()>[value=all] mask_true():
   brief_description "Creates a mask with all lanes active."
+  detailed_description """
+    Constructs a mask value in which every lane is active.
+    """
+  semantics """
+    for each lane i:
+      result[i] = active
+    return result
+    """
   operation ""
   tests:
-    - {test_name "mask_true_ui8", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [], expected 18446744073709551615}}
-    - {test_name "mask_true_ui16", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [], expected 4294967295}}
-    - {test_name "mask_true_ui32", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [], expected 65535}}
-    - {test_name "mask_true_ui64", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [], expected 255}}
+    - {tags [true], extension "avx512", type "ui8", lane_count 64, case {inputs [], expected 18446744073709551615}}
+    - {tags [true], extension "avx512", type "ui16", lane_count 32, case {inputs [], expected 4294967295}}
+    - {tags [true], extension "avx512", type "ui32", lane_count 16, case {inputs [], expected 65535}}
+    - {tags [true], extension "avx512", type "ui64", lane_count 8, case {inputs [], expected 255}}
+    - {tags [true], extension "sve", type "ui32", lane_count 16, case {inputs [], expected 65535}}
   impls:
     [avx512, avx2_vl, sse_vl]:
       arith:
@@ -58,43 +96,100 @@ prim<m:=()>[value=all] mask_true():
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(vector::mask), cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)));"
+          tsil "complete(cast<static>(type<generation>(vector::mask), cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)));"
     [avx2, sse, neon]:
       arith:
         requires:
           avx2 [avx, avx2]
           sse:
-            default [sse, sse2]
+            [si8, ui8, si16, ui16, si32, ui32, f64] [sse, sse2]
             ?i64 [sse, sse2, sse4_1]
             f32 [sse]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true)));"
+          tsil "complete(call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true)));"
     sve:
-      ?i8  {intrinsic "intrin<svptrue_b8>()", requires [sve]}
-      ?i16 {intrinsic "intrin<svptrue_b16>()", requires [sve]}
-      ?i32 {intrinsic "intrin<svptrue_b32>()", requires [sve]}
-      ?i64 {intrinsic "intrin<svptrue_b64>()", requires [sve]}
-      f32 {intrinsic "intrin<svptrue_b32>()", requires [sve]}
-      f64 {intrinsic "intrin<svptrue_b64>()", requires [sve]}
+      ?i8:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svptrue_b8>());"
+      ?i16:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svptrue_b16>());"
+      ?i32:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svptrue_b32>());"
+      ?i64:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svptrue_b64>());"
+      f32:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svptrue_b32>());"
+      f64:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svptrue_b64>());"
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(true);"
+          tsil "complete(true);"
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-              let<type>(MaskT, type<generation>(vector::mask))
-              MaskT result = mask<zero>();
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
+              let<type>(MaskT, type<generation>(vector::mask));
+              var<typed>(MaskT, result, mask<zero>());
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
                 mask<set:1>(result, i);
               }
-              emit_return(result);
+              complete(result);
             """

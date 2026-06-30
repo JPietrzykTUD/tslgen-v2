@@ -136,7 +136,7 @@ template load:
   required_fields ["aligned"]
   optional_fields ["intrinsic", "implementation", "requires", "note"]
 
-template load_mask:
+template load_mask_repr:
   description "Load mask."
   shape "(ptr) -> mask"
   required_fields ["aligned", "packed"]
@@ -274,7 +274,7 @@ template masked_store:
   required_fields ["mask", "aligned"]
   optional_fields ["intrinsic", "implementation", "requires", "note"]
 
-template store_mask:
+template store_mask_repr:
   description "Store mask."
   shape "(ptr, mask) -> void"
   required_fields ["aligned", "packed"]

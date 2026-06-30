@@ -1,73 +1,105 @@
 description "Bit manipulation primitives (partial conversion)."
 prim<v:=(v,v)> binary_and(left, right):
   brief_description "[Example: sse + si8]: Compute the bitwise AND of 128 bits (representing integer data) in \"a\" and \"b\", and store the result in \"dst\"."
+  detailed_description """
+    Computes the bitwise AND of the corresponding lane bit patterns from two
+    vector registers. Each output lane depends only on the matching lanes of
+    `left` and `right`. Floating-point lanes are treated by their underlying bit
+    representation, not by numeric floating-point comparison or arithmetic.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = left[i] & right[i]
+    return result
+    """
   operation "[Example: sse + si8]: dst[127:0] := (a[127:0] AND b[127:0])"
   tests:
-    - {test_name "binary_and_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [983055, 50529027, 286331153, 33818120, 0, 0, 1431655765, 16843009]}}
-    - {test_name "binary_and_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 2147483647, 2147483647, 1, 2], [0, 123, 2147483647, 1, 0, 2147483647, 0, 3]], expected [0, 0, 0, 0, 0, 2147483647, 0, 2]}}
-    - {test_name "binary_and_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, 0, 1, 2147483647, -2147483648, 305419896, -305419897], [-1, 1, -1, 2, 2147483647, -1, -1431655766, 1431655765]], expected [-1, 0, 0, 0, 2147483647, -2147483648, 35652136, 1161888005]}}
-    - {test_name "binary_and_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2147483648, 2147483647, 0, 1, -2, 123456789, -123456789], [0, -1, 0, -1, -1, -1, -1, -1]], expected [0, -2147483648, 0, 0, 1, -2, 123456789, -123456789]}}
-    - {test_name "binary_and_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "binary_and_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
-    - {test_name "binary_and_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "binary_and_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
-    - {test_name "binary_and_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "binary_and_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
-    - {test_name "binary_and_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "binary_and_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
-    - {test_name "binary_and_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
-    - {test_name "binary_and_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [0, 1]}}
-    - {test_name "binary_and_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
-    - {test_name "binary_and_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [0, -1]}}
-    - {test_name "binary_and_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "binary_and_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
-    - {test_name "binary_and_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, -2.0]}}
-    - {test_name "binary_and_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, -0.0]}}
+    - {tags [basic], type "ui32", case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [983055, 50529027, 286331153, 33818120, 0, 0, 1431655765, 16843009]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 0, 0, 0, 2147483647, 2147483647, 1, 2], [0, 123, 2147483647, 1, 0, 2147483647, 0, 3]], expected [0, 0, 0, 0, 0, 2147483647, 0, 2]}}
+    - {tags [basic], type "si32", case {inputs [[-1, -2, 0, 1, 2147483647, -2147483648, 305419896, -305419897], [-1, 1, -1, 2, 2147483647, -1, -1431655766, 1431655765]], expected [-1, 0, 0, 0, 2147483647, -2147483648, 35652136, 1161888005]}}
+    - {tags [edge], type "si32", case {inputs [[-1, -2147483648, 2147483647, 0, 1, -2, 123456789, -123456789], [0, -1, 0, -1, -1, -1, -1, -1]], expected [0, -2147483648, 0, 0, 1, -2, 123456789, -123456789]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], [0, 1]], expected [0, 1]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], [0, -1]], expected [0, -1]}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, -2.0]}}
+    - {tags [edge], type "f64", case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, -0.0]}}
   impls:
     scalar:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(left & right);"
+          tsil "complete(left & right);"
       f?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left));
               var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right));
               var<const_infer>(ures, ua & ub);
-              emit_return(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-              var<init_register>(result)
-              loop<unroll>(value<generation>(vector::length)) 
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              var<init_register>(result);
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               }
-              emit_return(result);
+              complete(result);
             """
     avx512:
       ?i?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(intrin_compose<and, suffix=value<backend>(intrin::suffix("stream"))>(left, right));
+            complete(intrin<and, build[suffix=intrin::suffix("stream")]>(left, right));
           """
       f?:
-        requires [avx512f]
+        requires [avx512f, avx512dq]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              call<primitive=reinterpret[Vec<si64>, Vec]>(
-                intrin_compose<and, suffix=value<backend>(intrin::suffix("stream"))>(
-                  call<primitive=reinterpret[Vec, Vec<si64>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<si64>]>(right)
+            let<type>(BitBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            complete(
+              call<primitive=reinterpret[Vec<BitBase>, Vec]>(
+                intrin<and, build[suffix=intrin::suffix("stream")]>(
+                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(right)
                 )
               )
             );
@@ -76,53 +108,77 @@ prim<v:=(v,v)> binary_and(left, right):
       ?i?:
         requires:
           avx2 [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<and, suffix=value<backend>(intrin::suffix("stream"))>(left, right)
+            complete(
+              intrin<and, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
         requires:
           avx2 [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<and>(left, right)
+            complete(
+              intrin<and, build>(left, right)
             );
           """
     sse:
       ?i?:
         requires:
           sse [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<and, suffix=value<backend>(intrin::suffix("stream"))>(left, right)
+            complete(
+              intrin<and, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
         requires:
           f32 [sse]
           f64 [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<and>(left, right)
+            complete(
+              intrin<and, build>(left, right)
             );
           """
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<vandq>(left, right));"
+          tsil "complete(intrin<vandq, build>(left, right));"
       f?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<vandq, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))>(
+                intrin<vandq, build[suffix=base::unsigned_of(base::in)]>(
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
                 )
@@ -132,15 +188,23 @@ prim<v:=(v,v)> binary_and(left, right):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<svand, post=x>(call<primitive=mask_true[Vec]>(), left, right));"
+          tsil "complete(intrin<svand, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<svand, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=x>(
+                intrin<svand, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -151,109 +215,164 @@ prim<v:=(v,v)> binary_and(left, right):
 
 prim<v:=(v,v)> binary_andnot(left, right):
   brief_description "[Example: sse + si8]: Compute the bitwise AND-NOT of 128 bits in \"left\" and \"right\", and store the result in \"dst\"."
+  detailed_description """
+    Computes the bitwise AND of the complement of `left` and the corresponding
+    bit pattern from `right`. Operand order is significant: the left operand is
+    inverted before the AND operation. Floating-point lanes are treated by their
+    underlying bit representation.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = (~left[i]) & right[i]
+    return result
+    """
   operation "[Example: sse + si8]: dst[127:0] := ((NOT left[127:0]) AND right[127:0])"
   tests:
-    - {test_name "binary_andnot_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "binary_andnot_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[4294967295, 4294967295, 4294967295, 4294967295, 0, 1, 2, 3], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 5, 6, 5, 8]}}
-    - {test_name "binary_andnot_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0], [1, -2, 3, -4, 5, -6, 7, -8]], expected [1, -2, 3, -4, 5, -6, 7, -8]}}
-    - {test_name "binary_andnot_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -1, -1, -1, 0, 1, -2, 3], [1, -2, 3, -4, 5, -6, 7, -8]], expected [0, 0, 0, 0, 5, -6, 1, -8]}}
-    - {test_name "binary_andnot_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, 0.0, 0.0, 0.0], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "binary_andnot_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, 0.0], [1.0, -2.0]], expected [1.0, -2.0]}}
+    - {tags [basic], type "ui32", case {inputs [[0, 0, 0, 0, 0, 0, 0, 0], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "ui32", case {inputs [[4294967295, 4294967295, 4294967295, 4294967295, 0, 1, 2, 3], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 5, 6, 5, 8]}}
+    - {tags [basic], type "si32", case {inputs [[0, 0, 0, 0, 0, 0, 0, 0], [1, -2, 3, -4, 5, -6, 7, -8]], expected [1, -2, 3, -4, 5, -6, 7, -8]}}
+    - {tags [edge], type "si32", case {inputs [[-1, -1, -1, -1, 0, 1, -2, 3], [1, -2, 3, -4, 5, -6, 7, -8]], expected [0, 0, 0, 0, 5, -6, 1, -8]}}
+    - {tags [basic], type "f32", case {inputs [[0.0, 0.0, 0.0, 0.0], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [basic], type "f64", case {inputs [[0.0, 0.0], [1.0, -2.0]], expected [1.0, -2.0]}}
   impls:
     scalar:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return((~left) & right);"
+          tsil "complete(op<bit_negate>(left) & right);"
       f?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left));
             var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right));
-            var<const_infer>(ures, (~ua) & ub);
-            emit_return(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+            var<const_infer>(ures, op<bit_negate>(ua) & ub);
+            complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1)  {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
               result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
             }
-            emit_return(result);
+            complete(result);
           """
     avx512:
       ?i?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(intrin_compose<andnot, suffix=value<backend>(intrin::suffix("stream"))>(left, right));
+            complete(intrin<andnot, build[suffix=intrin::suffix("stream")]>(left, right));
           """
       f?:
-        requires [avx512f]
+        requires [avx512f, avx512dq]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<andnot>(left, right)
+            complete(
+              intrin<andnot, build>(left, right)
             );
           """
     avx2:
       ?i?:
         requires:
           avx2 [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<andnot, suffix=value<backend>(intrin::suffix("stream"))>(left, right)
+            complete(
+              intrin<andnot, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
         requires:
           avx2 [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<andnot>(left, right)
+            complete(
+              intrin<andnot, build>(left, right)
             );
           """
     sse:
       ?i?:
         requires:
           sse [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<andnot, suffix=value<backend>(intrin::suffix("stream"))>(left, right)
+            complete(
+              intrin<andnot, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
         requires:
           f32 [sse]
           f64 [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<andnot>(left, right)
+            complete(
+              intrin<andnot, build>(left, right)
             );
           """
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<vbicq>(right, left));"
+          tsil "complete(intrin<vbicq, build>(right, left));"
       f?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<vbicq, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))>(
+                intrin<vbicq, build[suffix=base::unsigned_of(base::in)]>(
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left)
                 )
@@ -263,15 +382,23 @@ prim<v:=(v,v)> binary_andnot(left, right):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<svbic, post=x>(call<primitive=mask_true[Vec]>(), right, left));"
+          tsil "complete(intrin<svbic, build[post=x]>(call<primitive=mask_true[Vec]>(), right, left));"
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<svbic, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=x>(
+                intrin<svbic, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left)
@@ -282,73 +409,105 @@ prim<v:=(v,v)> binary_andnot(left, right):
 
 prim<v:=(v,v)> binary_or(left, right):
   brief_description "[Example: sse + si8]: Compute the bitwise OR of 128 bits (representing integer data) in \"a\" and \"b\", and store the result in \"dst\"."
+  detailed_description """
+    Computes the bitwise OR of the corresponding lane bit patterns from two
+    vector registers. Each output lane depends only on the matching lanes of
+    `left` and `right`. Floating-point lanes are treated by their underlying bit
+    representation.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = left[i] | right[i]
+    return result
+    """
   operation "[Example: sse + si8]: dst[127:0] := (a[127:0] OR b[127:0])"
   tests:
-    - {test_name "binary_or_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [268374015, 1061109567, 1431655765, 524246911, 2147483647, 1, 2147483647, 252645135]}}
-    - {test_name "binary_or_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 2147483647, 2147483647, 1, 2], [0, 123, 2147483647, 1, 0, 2147483647, 0, 3]], expected [0, 123, 2147483647, 1, 2147483647, 2147483647, 1, 3]}}
-    - {test_name "binary_or_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "binary_or_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
-    - {test_name "binary_or_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "binary_or_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
-    - {test_name "binary_or_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "binary_or_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
-    - {test_name "binary_or_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "binary_or_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
-    - {test_name "binary_or_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [1, 2, 3, 4]}}
-    - {test_name "binary_or_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [0, -1, -2147483648, 2147483647]}}
-    - {test_name "binary_or_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
-    - {test_name "binary_or_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [0, 1]}}
-    - {test_name "binary_or_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
-    - {test_name "binary_or_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [0, -1]}}
-    - {test_name "binary_or_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "binary_or_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
-    - {test_name "binary_or_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, -2.0]}}
-    - {test_name "binary_or_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, -0.0]}}
+    - {tags [basic], type "ui32", case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [268374015, 1061109567, 1431655765, 524246911, 2147483647, 1, 2147483647, 252645135]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 0, 0, 0, 2147483647, 2147483647, 1, 2], [0, 123, 2147483647, 1, 0, 2147483647, 0, 3]], expected [0, 123, 2147483647, 1, 2147483647, 2147483647, 1, 3]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [1, 2, 3, 4]}}
+    - {tags [edge], type "si32", case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [0, -1, -2147483648, 2147483647]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], [0, 1]], expected [0, 1]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [1, 2]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], [0, -1]], expected [0, -1]}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, -2.0]}}
+    - {tags [edge], type "f64", case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, -0.0]}}
   impls:
     scalar:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(left | right);"
+          tsil "complete(left | right);"
       f?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left));
               var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right));
               var<const_infer>(ures, ua | ub);
-              emit_return(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-              var<init_register>(result)
-              loop<unroll>(value<generation>(vector::length)) 
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              var<init_register>(result);
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               }
-              emit_return(result);
+              complete(result);
             """
     avx512:
       ?i?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(intrin_compose<or, suffix=value<backend>(intrin::suffix("stream"))>(left, right));
+            complete(intrin<or, build[suffix=intrin::suffix("stream")]>(left, right));
           """
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              call<primitive=reinterpret[Vec<si64>, Vec]>(
-                intrin_compose<or, suffix=value<backend>(intrin::suffix("stream"))>(
-                  call<primitive=reinterpret[Vec, Vec<si64>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<si64>]>(right)
+            let<type>(BitBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            complete(
+              call<primitive=reinterpret[Vec<BitBase>, Vec]>(
+                intrin<or, build[suffix=intrin::suffix("stream")]>(
+                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(right)
                 )
               )
             );
@@ -357,53 +516,77 @@ prim<v:=(v,v)> binary_or(left, right):
       ?i?:
         requires:
           avx2 [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<or, suffix=value<backend>(intrin::suffix("stream"))>(left, right)
+            complete(
+              intrin<or, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
         requires:
           avx2 [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<or>(left, right)
+            complete(
+              intrin<or, build>(left, right)
             );
           """
     sse:
       ?i?:
         requires:
           sse [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<or, suffix=value<backend>(intrin::suffix("stream"))>(left, right)
+            complete(
+              intrin<or, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
         requires:
           f32 [sse]
           f64 [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<or>(left, right)
+            complete(
+              intrin<or, build>(left, right)
             );
           """
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<vorrq>(left, right));"
+          tsil "complete(intrin<vorrq, build>(left, right));"
       f?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<vorrq, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))>(
+                intrin<vorrq, build[suffix=base::unsigned_of(base::in)]>(
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
                 )
@@ -413,15 +596,23 @@ prim<v:=(v,v)> binary_or(left, right):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<svorr, post=x>(call<primitive=mask_true[Vec]>(), left, right));"
+          tsil "complete(intrin<svorr, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<svorr, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=x>(
+                intrin<svorr, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -432,73 +623,105 @@ prim<v:=(v,v)> binary_or(left, right):
 
 prim<v:=(v,v)> binary_xor(left, right):
   brief_description "[Example: sse + si8]: Compute the bitwise XOR of 128 bits (representing integer data) in \"a\" and \"b\", and store the result in \"dst\"."
+  detailed_description """
+    Computes the bitwise exclusive OR of the corresponding lane bit patterns from
+    two vector registers. Each output lane depends only on the matching lanes of
+    `left` and `right`. Floating-point lanes are treated by their underlying bit
+    representation.
+    """
+  semantics """
+    input: register left, register right
+    for each lane i:
+      result[i] = left[i] ^ right[i]
+    return result
+    """
   operation "[Example: sse + si8]: dst[127:0] := (a[127:0] XOR b[127:0])"
   tests:
-    - {test_name "binary_xor_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [267390960, 1010580540, 1145324612, 490428791, 2147483647, 1, 715827882, 235802126]}}
-    - {test_name "binary_xor_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 0, 0, 0, 2147483647, 2147483647, 1, 2], [0, 123, 2147483647, 1, 0, 2147483647, 0, 3]], expected [0, 123, 2147483647, 1, 2147483647, 0, 1, 1]}}
-    - {test_name "binary_xor_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "binary_xor_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [0, 0, 0, 0]}}
-    - {test_name "binary_xor_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [0, 0, 0, 0]}}
-    - {test_name "binary_xor_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
-    - {test_name "binary_xor_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], [0, 1]], expected [0, 0]}}
-    - {test_name "binary_xor_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
-    - {test_name "binary_xor_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], [0, -1]], expected [0, 0]}}
-    - {test_name "binary_xor_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 0.0, 0.0, 0.0]}}
-    - {test_name "binary_xor_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, 0.0, 0.0, 0.0]}}
-    - {test_name "binary_xor_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
-    - {test_name "binary_xor_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, 0.0]}}
+    - {tags [basic], type "ui32", case {inputs [[252645135, 858993459, 1431655765, 305419896, 0, 1, 2147483647, 16843009], [16711935, 252645135, 286331153, 252645135, 2147483647, 0, 1431655765, 252645135]], expected [267390960, 1010580540, 1145324612, 490428791, 2147483647, 1, 715827882, 235802126]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 0, 0, 0, 2147483647, 2147483647, 1, 2], [0, 123, 2147483647, 1, 0, 2147483647, 0, 3]], expected [0, 123, 2147483647, 1, 2147483647, 0, 1, 1]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], [0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4], [1, 2, 3, 4]], expected [0, 0, 0, 0]}}
+    - {tags [edge], type "si32", case {inputs [[0, -1, -2147483648, 2147483647], [0, -1, -2147483648, 2147483647]], expected [0, 0, 0, 0]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], [0, 1]], expected [0, 0]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], [0, -1]], expected [0, 0]}}
+    - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"], [0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
+    - {tags [edge], type "f64", case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, 0.0]}}
   impls:
     scalar:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(left ^ right);"
+          tsil "complete(left ^ right);"
       f?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left));
               var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right));
               var<const_infer>(ures, ua ^ ub);
-              emit_return(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-              var<init_register>(result)
-              loop<unroll>(value<generation>(vector::length)) 
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              var<init_register>(result);
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               }
-              emit_return(result);
+              complete(result);
             """
     avx512:
       ?i?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(intrin_compose<xor, suffix=value<backend>(intrin::suffix("stream"))>(left, right));
+            complete(intrin<xor, build[suffix=intrin::suffix("stream")]>(left, right));
           """
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              call<primitive=reinterpret[Vec<si64>, Vec]>(
-                intrin_compose<xor, suffix=value<backend>(intrin::suffix("stream"))>(
-                  call<primitive=reinterpret[Vec, Vec<si64>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<si64>]>(right)
+            let<type>(BitBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            complete(
+              call<primitive=reinterpret[Vec<BitBase>, Vec]>(
+                intrin<xor, build[suffix=intrin::suffix("stream")]>(
+                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<BitBase>]>(right)
                 )
               )
             );
@@ -507,53 +730,77 @@ prim<v:=(v,v)> binary_xor(left, right):
       ?i?:
         requires:
           avx2 [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<xor, suffix=value<backend>(intrin::suffix("stream"))>(left, right)
+            complete(
+              intrin<xor, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
         requires:
           avx2 [avx]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<xor>(left, right)
+            complete(
+              intrin<xor, build>(left, right)
             );
           """
     sse:
       ?i?:
         requires:
           sse [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<xor, suffix=value<backend>(intrin::suffix("stream"))>(left, right)
+            complete(
+              intrin<xor, build[suffix=intrin::suffix("stream")]>(left, right)
             );
           """
       f?:
         requires:
           f32 [sse]
           f64 [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<xor>(left, right)
+            complete(
+              intrin<xor, build>(left, right)
             );
           """
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<veorq>(left, right));"
+          tsil "complete(intrin<veorq, build>(left, right));"
       f?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<veorq, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))>(
+                intrin<veorq, build[suffix=base::unsigned_of(base::in)]>(
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
                 )
@@ -563,15 +810,23 @@ prim<v:=(v,v)> binary_xor(left, right):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<sveor, post=x>(call<primitive=mask_true[Vec]>(), left, right));"
+          tsil "complete(intrin<sveor, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<sveor, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=x>(
+                intrin<sveor, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -582,76 +837,118 @@ prim<v:=(v,v)> binary_xor(left, right):
 
 prim<v:=v> inv(data):
   brief_description "Bitwise inversion of vector register."
+  detailed_description """
+    Computes the bitwise complement of each lane bit pattern in a vector
+    register. Floating-point lanes are treated by their underlying bit
+    representation.
+    """
+  semantics """
+    input: register data
+    for each lane i:
+      result[i] = ~data[i]
+    return result
+    """
   operation "[Example: sse + si8]: dst[127:0] := (NOT data[127:0])"
   tests:
-    - {test_name "inv_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4294967295, 2863311530, 1431655765, 2147483648]], expected [4294967295, 4294967294, 4294967293, 4294967292, 0, 1431655765, 2863311530, 2147483647]}}
-    - {test_name "inv_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[305419896, 252645135, 4042322160, 0, 1, 4294967294, 2147483647, 2147483648]], expected [3989547399, 4042322160, 252645135, 4294967295, 4294967294, 1, 2147483648, 2147483647]}}
-    - {test_name "inv_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [254, 253, 252, 251, 250, 249, 248, 247, 246, 245, 244, 243, 242, 241, 240, 239]}}
-    - {test_name "inv_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [255, 254, 0, 1, 253, 252, 251, 250, 255, 254, 0, 1, 253, 252, 251, 250]}}
-    - {test_name "inv_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16, -17]}}
-    - {test_name "inv_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [-1, 0, 127, -128, -2, 1, -3, -127, -1, 0, 127, -128, -2, 1, -3, -127]}}
-    - {test_name "inv_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [65534, 65533, 65532, 65531, 65530, 65529, 65528, 65527]}}
-    - {test_name "inv_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [65535, 65534, 0, 1, 65533, 65532, 65531, 65530]}}
-    - {test_name "inv_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [-2, -3, -4, -5, -6, -7, -8, -9]}}
-    - {test_name "inv_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [-1, 0, 32767, -32768, -2, 1, -3, -32767]}}
-    - {test_name "inv_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4]], expected [-2, -3, -4, -5]}}
-    - {test_name "inv_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647]], expected [-1, 0, 2147483647, -2147483648]}}
-    - {test_name "inv_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [18446744073709551614, 18446744073709551613]}}
-    - {test_name "inv_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1]], expected [18446744073709551615, 18446744073709551614]}}
-    - {test_name "inv_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2]], expected [-2, -3]}}
-    - {test_name "inv_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1]], expected [-1, 0]}}
+    - {tags [basic], type "ui32", case {inputs [[0, 1, 2, 3, 4294967295, 2863311530, 1431655765, 2147483648]], expected [4294967295, 4294967294, 4294967293, 4294967292, 0, 1431655765, 2863311530, 2147483647]}}
+    - {tags [edge], type "ui32", case {inputs [[305419896, 252645135, 4042322160, 0, 1, 4294967294, 2147483647, 2147483648]], expected [3989547399, 4042322160, 252645135, 4294967295, 4294967294, 1, 2147483648, 2147483647]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [254, 253, 252, 251, 250, 249, 248, 247, 246, 245, 244, 243, 242, 241, 240, 239]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [255, 254, 0, 1, 253, 252, 251, 250, 255, 254, 0, 1, 253, 252, 251, 250]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [-2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16, -17]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [-1, 0, 127, -128, -2, 1, -3, -127, -1, 0, 127, -128, -2, 1, -3, -127]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [65534, 65533, 65532, 65531, 65530, 65529, 65528, 65527]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [65535, 65534, 0, 1, 65533, 65532, 65531, 65530]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [-2, -3, -4, -5, -6, -7, -8, -9]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [-1, 0, 32767, -32768, -2, 1, -3, -32767]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4]], expected [-2, -3, -4, -5]}}
+    - {tags [edge], type "si32", case {inputs [[0, -1, -2147483648, 2147483647]], expected [-1, 0, 2147483647, -2147483648]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2]], expected [18446744073709551614, 18446744073709551613]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1]], expected [18446744073709551615, 18446744073709551614]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2]], expected [-2, -3]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1]], expected [-1, 0]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))));"
+          tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))));"
     [generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
           avx512 [avx512f]
-          avx2 [avx2]
+          avx2:
+            ?i? [avx2]
+            f? [avx]
           sse [sse2]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))));"
+          tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))));"
 
 prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
   brief_description "Masked bitwise AND with zeroing."
+  detailed_description """
+    Computes bitwise AND for lanes enabled by the mask. Disabled lanes are set
+    to zero. Floating-point lanes are treated by their underlying bit
+    representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] & right[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "For each lane: if mask bit is set, compute left AND right; otherwise write zero."
   tests:
-    - {test_name "binary_and_maskz_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 2, 0, 4, 0, 2, 0, 0]}}
+    - {tags [binary, and, maskz, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 2, 0, 4, 0, 2, 0, 0]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_and>(left, right));
+              complete(call<primitive=binary_and>(left, right));
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_and[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
                 result[i] = call<primitive=set_zero[type<backend>(vector::as_extension(scalar))]>();
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -659,10 +956,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<maskz_and, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            complete(
+              intrin<maskz_and, build[suffix=base::signed_of(base::in)]>(
                 mask, left, right
               )
             );
@@ -672,10 +973,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
           avx512 [avx512f, avx512bw]
           avx2_vl [avx512f, avx512vl, avx512bw, avx]
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+            complete(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_and>(left, right)
               )
@@ -686,10 +991,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
           avx512 [avx512f, avx512dq]
           avx2_vl [avx512f, avx512vl, avx512dq, avx]
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<maskz_and>(mask, left, right)
+            complete(
+              intrin<maskz_and, build>(mask, left, right)
             );
           """
     [avx2, sse, neon]:
@@ -703,10 +1012,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+            complete(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_and>(left, right)
               )
@@ -715,19 +1028,27 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svand, post=z>(mask, left, right)
+            complete(
+              intrin<svand, build[post=z]>(mask, left, right)
             );
           """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<svand, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=z>(
+                intrin<svand, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -738,37 +1059,58 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
   brief_description "Masked bitwise AND with pass-through from left."
+  detailed_description """
+    Computes bitwise AND for lanes enabled by the mask. Disabled lanes keep the
+    corresponding lane from `left`. Floating-point lanes are treated by their
+    underlying bit representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] & right[i]
+      else:
+        result[i] = left[i]
+    return result
+    """
   operation "For each lane: if mask bit is set, compute left AND right; otherwise keep left."
   tests:
-    - {test_name "binary_and_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 2, 3, 4, 5, 2, 7, 0]}}
+    - {tags [binary, and, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 2, 3, 4, 5, 2, 7, 0]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_and>(left, right));
+              complete(call<primitive=binary_and>(left, right));
             }
-            emit_return(left);
+            complete(left);
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_and[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
                 result[i] = left[i];
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -776,10 +1118,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_and, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            complete(
+              intrin<mask_and, build[suffix=base::signed_of(base::in)]>(
                 left, mask, left, right
               )
             );
@@ -789,10 +1135,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
           avx512 [avx512f, avx512bw]
           avx2_vl [avx512f, avx512vl, avx512bw, avx]
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_and>(left, right)
@@ -804,10 +1154,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
           avx512 [avx512f, avx512dq]
           avx2_vl [avx512f, avx512vl, avx512dq, avx]
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_and>(left, mask, left, right)
+            complete(
+              intrin<mask_and, build>(left, mask, left, right)
             );
           """
     [avx2, sse, neon]:
@@ -821,10 +1175,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_and>(left, right)
@@ -834,19 +1192,27 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svand, post=m>(mask, left, right)
+            complete(
+              intrin<svand, build[post=m]>(mask, left, right)
             );
           """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<svand, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=m>(
+                intrin<svand, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -857,37 +1223,59 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
 
 prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
   brief_description "Masked bitwise AND-NOT with zeroing."
+  detailed_description """
+    Computes `(~left) & right` for lanes enabled by the mask. Disabled lanes are
+    set to zero. Operand order is significant: the left operand is inverted
+    before the AND operation. Floating-point lanes are treated by their
+    underlying bit representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = (~left[i]) & right[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "For each lane: if mask bit is set, compute (NOT left) AND right; otherwise write zero."
   tests:
-    - {test_name "binary_andnot_maskz_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 5, 0, 1, 0, 1, 0, 1]}}
+    - {tags [binary, andnot, maskz, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 5, 0, 1, 0, 1, 0, 1]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_andnot>(left, right));
+              complete(call<primitive=binary_andnot>(left, right));
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_andnot[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
                 result[i] = call<primitive=set_zero[type<backend>(vector::as_extension(scalar))]>();
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -895,10 +1283,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<maskz_andnot, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            complete(
+              intrin<maskz_andnot, build[suffix=base::signed_of(base::in)]>(
                 mask, left, right
               )
             );
@@ -908,10 +1300,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
           avx512 [avx512f, avx512bw]
           avx2_vl [avx512f, avx512vl, avx512bw, avx]
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+            complete(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_andnot>(left, right)
               )
@@ -922,10 +1318,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
           avx512 [avx512f, avx512dq]
           avx2_vl [avx512f, avx512vl, avx512dq, avx]
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<maskz_andnot>(mask, left, right)
+            complete(
+              intrin<maskz_andnot, build>(mask, left, right)
             );
           """
     [avx2, sse, neon]:
@@ -939,10 +1339,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+            complete(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_andnot>(left, right)
               )
@@ -951,19 +1355,27 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svbic, post=z>(mask, right, left)
+            complete(
+              intrin<svbic, build[post=z]>(mask, right, left)
             );
           """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<svbic, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=z>(
+                intrin<svbic, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left)
@@ -974,37 +1386,59 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
   brief_description "Masked bitwise AND-NOT with pass-through from left."
+  detailed_description """
+    Computes `(~left) & right` for lanes enabled by the mask. Disabled lanes keep
+    the corresponding lane from `left`. Operand order is significant: the left
+    operand is inverted before the AND operation. Floating-point lanes are
+    treated by their underlying bit representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = (~left[i]) & right[i]
+      else:
+        result[i] = left[i]
+    return result
+    """
   operation "For each lane: if mask bit is set, compute (NOT left) AND right; otherwise keep left."
   tests:
-    - {test_name "binary_andnot_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 5, 3, 1, 5, 1, 7, 1]}}
+    - {tags [binary, andnot, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 5, 3, 1, 5, 1, 7, 1]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_andnot>(left, right));
+              complete(call<primitive=binary_andnot>(left, right));
             }
-            emit_return(left);
+            complete(left);
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_andnot[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
                 result[i] = left[i];
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -1012,10 +1446,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_andnot, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            complete(
+              intrin<mask_andnot, build[suffix=base::signed_of(base::in)]>(
                 left, mask, left, right
               )
             );
@@ -1025,10 +1463,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
           avx512 [avx512f, avx512bw]
           avx2_vl [avx512f, avx512vl, avx512bw, avx]
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_andnot>(left, right)
@@ -1040,10 +1482,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
           avx512 [avx512f, avx512dq]
           avx2_vl [avx512f, avx512vl, avx512dq, avx]
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_andnot>(left, mask, left, right)
+            complete(
+              intrin<mask_andnot, build>(left, mask, left, right)
             );
           """
     [avx2, sse, neon, sve]:
@@ -1058,10 +1504,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
             f64 [sse, sse2]
           neon [neon]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_andnot>(left, right)
@@ -1071,37 +1521,58 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
 
 prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
   brief_description "Masked bitwise OR with zeroing."
+  detailed_description """
+    Computes bitwise OR for lanes enabled by the mask. Disabled lanes are set to
+    zero. Floating-point lanes are treated by their underlying bit
+    representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] | right[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "For each lane: if mask bit is set, compute left OR right; otherwise write zero."
   tests:
-    - {test_name "binary_or_maskz_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 7, 0, 5, 0, 7, 0, 9]}}
+    - {tags [binary, or, maskz, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 7, 0, 5, 0, 7, 0, 9]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_or>(left, right));
+              complete(call<primitive=binary_or>(left, right));
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_or[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
                 result[i] = call<primitive=set_zero[type<backend>(vector::as_extension(scalar))]>();
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -1109,10 +1580,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<maskz_or, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            complete(
+              intrin<maskz_or, build[suffix=base::signed_of(base::in)]>(
                 mask, left, right
               )
             );
@@ -1122,10 +1597,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
           avx512 [avx512f, avx512bw]
           avx2_vl [avx512f, avx512vl, avx512bw, avx]
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+            complete(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_or>(left, right)
               )
@@ -1136,10 +1615,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
           avx512 [avx512f, avx512dq]
           avx2_vl [avx512f, avx512vl, avx512dq, avx]
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<maskz_or>(mask, left, right)
+            complete(
+              intrin<maskz_or, build>(mask, left, right)
             );
           """
     [avx2, sse, neon]:
@@ -1153,10 +1636,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+            complete(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_or>(left, right)
               )
@@ -1165,19 +1652,27 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svorr, post=z>(mask, left, right)
+            complete(
+              intrin<svorr, build[post=z]>(mask, left, right)
             );
           """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<svorr, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=z>(
+                intrin<svorr, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -1188,37 +1683,58 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
   brief_description "Masked bitwise OR with pass-through from left."
+  detailed_description """
+    Computes bitwise OR for lanes enabled by the mask. Disabled lanes keep the
+    corresponding lane from `left`. Floating-point lanes are treated by their
+    underlying bit representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] | right[i]
+      else:
+        result[i] = left[i]
+    return result
+    """
   operation "For each lane: if mask bit is set, compute left OR right; otherwise keep left."
   tests:
-    - {test_name "binary_or_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 7, 3, 5, 5, 7, 7, 9]}}
+    - {tags [binary, or, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 7, 3, 5, 5, 7, 7, 9]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_or>(left, right));
+              complete(call<primitive=binary_or>(left, right));
             }
-            emit_return(left);
+            complete(left);
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_or[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
                 result[i] = left[i];
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -1226,10 +1742,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_or, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            complete(
+              intrin<mask_or, build[suffix=base::signed_of(base::in)]>(
                 left, mask, left, right
               )
             );
@@ -1239,10 +1759,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
           avx512 [avx512f, avx512bw]
           avx2_vl [avx512f, avx512vl, avx512bw, avx]
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_or>(left, right)
@@ -1254,10 +1778,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
           avx512 [avx512f, avx512dq]
           avx2_vl [avx512f, avx512vl, avx512dq, avx]
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_or>(left, mask, left, right)
+            complete(
+              intrin<mask_or, build>(left, mask, left, right)
             );
           """
     [avx2, sse, neon]:
@@ -1271,10 +1799,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_or>(left, right)
@@ -1284,19 +1816,27 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<svorr, post=m>(mask, left, right)
+            complete(
+              intrin<svorr, build[post=m]>(mask, left, right)
             );
           """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<svorr, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=m>(
+                intrin<svorr, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -1307,37 +1847,58 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
 
 prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
   brief_description "Masked bitwise XOR with zeroing."
+  detailed_description """
+    Computes bitwise exclusive OR for lanes enabled by the mask. Disabled lanes
+    are set to zero. Floating-point lanes are treated by their underlying bit
+    representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] ^ right[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "For each lane: if mask bit is set, compute left XOR right; otherwise write zero."
   tests:
-    - {test_name "binary_xor_maskz_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 5, 0, 1, 0, 5, 0, 9]}}
+    - {tags [binary, xor, maskz, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [0, 5, 0, 1, 0, 5, 0, 9]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_xor>(left, right));
+              complete(call<primitive=binary_xor>(left, right));
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_xor[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
                 result[i] = call<primitive=set_zero[type<backend>(vector::as_extension(scalar))]>();
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -1345,10 +1906,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<maskz_xor, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            complete(
+              intrin<maskz_xor, build[suffix=base::signed_of(base::in)]>(
                 mask, left, right
               )
             );
@@ -1358,10 +1923,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
           avx512 [avx512f, avx512bw]
           avx2_vl [avx512f, avx512vl, avx512bw, avx]
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+            complete(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_xor>(left, right)
               )
@@ -1372,10 +1941,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
           avx512 [avx512f, avx512dq]
           avx2_vl [avx512f, avx512vl, avx512dq, avx]
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<maskz_xor>(mask, left, right)
+            complete(
+              intrin<maskz_xor, build>(mask, left, right)
             );
           """
     [avx2, sse, neon]:
@@ -1389,10 +1962,14 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+            complete(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=binary_xor>(left, right)
               )
@@ -1401,19 +1978,27 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<sveor, post=z>(mask, left, right)
+            complete(
+              intrin<sveor, build[post=z]>(mask, left, right)
             );
           """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<sveor, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=z>(
+                intrin<sveor, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -1424,37 +2009,58 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
 
 prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
   brief_description "Masked bitwise XOR with pass-through from left."
+  detailed_description """
+    Computes bitwise exclusive OR for lanes enabled by the mask. Disabled lanes
+    keep the corresponding lane from `left`. Floating-point lanes are treated by
+    their underlying bit representation.
+    """
+  semantics """
+    input: mask mask, register left, register right
+    for each lane i:
+      if mask[i] is active:
+        result[i] = left[i] ^ right[i]
+      else:
+        result[i] = left[i]
+    return result
+    """
   operation "For each lane: if mask bit is set, compute left XOR right; otherwise keep left."
   tests:
-    - {test_name "binary_xor_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 5, 3, 1, 5, 5, 7, 9]}}
+    - {tags [binary, xor, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [8, 7, 6, 5, 4, 3, 2, 1]], expected [1, 5, 3, 1, 5, 5, 7, 9]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(call<primitive=binary_xor>(left, right));
+              complete(call<primitive=binary_xor>(left, right));
             }
-            emit_return(left);
+            complete(left);
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_xor[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
                 result[i] = left[i];
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -1462,10 +2068,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_xor, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            complete(
+              intrin<mask_xor, build[suffix=base::signed_of(base::in)]>(
                 left, mask, left, right
               )
             );
@@ -1475,10 +2085,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
           avx512 [avx512f, avx512bw]
           avx2_vl [avx512f, avx512vl, avx512bw, avx]
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_xor>(left, right)
@@ -1490,10 +2104,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
           avx512 [avx512f, avx512dq]
           avx2_vl [avx512f, avx512vl, avx512dq, avx]
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_xor>(left, mask, left, right)
+            complete(
+              intrin<mask_xor, build>(left, mask, left, right)
             );
           """
     [avx2, sse, neon]:
@@ -1507,10 +2125,14 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 left,
                 call<primitive=binary_xor>(left, right)
@@ -1520,19 +2142,27 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<sveor, post=m>(mask, left, right)
+            complete(
+              intrin<sveor, build[post=m]>(mask, left, right)
             );
           """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<sveor, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=m>(
+                intrin<sveor, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
@@ -1543,35 +2173,56 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
 
 prim<v:=(m,v)>[mask=zero] inv(mask, data):
   brief_description "Masked bitwise inversion with zeroing."
+  detailed_description """
+    Computes the bitwise complement for lanes enabled by the mask. Disabled lanes
+    are set to zero. Floating-point lanes are treated by their underlying bit
+    representation.
+    """
+  semantics """
+    input: mask mask, register data
+    for each lane i:
+      if mask[i] is active:
+        result[i] = ~data[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "For each lane: if mask bit is set, compute NOT data; otherwise write zero."
   tests:
-    - {test_name "inv_maskz_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 4294967294, 0, 4294967292, 0, 4294967290, 0, 4294967288]}}
+    - {tags [maskz, basic], type "ui32", case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 4294967294, 0, 4294967292, 0, 4294967290, 0, 4294967288]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(
+              complete(
                 call<primitive=binary_xor>(
                   data,
                   call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
                 )
               );
             }
-            emit_return(call<primitive=set_zero[Vec]>());
+            complete(call<primitive=set_zero[Vec]>());
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_xor[type<backend>(vector::as_extension(scalar))]>(
                   data[i],
@@ -1581,7 +2232,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
                 result[i] = call<primitive=set_zero[type<backend>(vector::as_extension(scalar))]>();
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -1589,10 +2240,14 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<maskz_xor, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            complete(
+              intrin<maskz_xor, build[suffix=base::signed_of(base::in)]>(
                 mask,
                 data,
                 call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
@@ -1604,10 +2259,14 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
           avx512 [avx512f, avx512bw]
           avx2_vl [avx512f, avx512vl, avx512bw, avx]
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+            complete(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=inv>(data)
               )
@@ -1618,10 +2277,14 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
           avx512 [avx512f, avx512dq]
           avx2_vl [avx512f, avx512vl, avx512dq, avx]
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<maskz_xor>(
+            complete(
+              intrin<maskz_xor, build>(
                 mask,
                 data,
                 call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
@@ -1639,10 +2302,14 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+            complete(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
                 call<primitive=inv>(data)
               )
@@ -1651,10 +2318,14 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<sveor, post=z>(
+            complete(
+              intrin<sveor, build[post=z]>(
                 mask,
                 data,
                 call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
@@ -1663,11 +2334,15 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
           """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<sveor, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=z>(
+                intrin<sveor, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(
@@ -1680,35 +2355,56 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
 
 prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
   brief_description "Masked bitwise inversion with pass-through from input."
+  detailed_description """
+    Computes the bitwise complement for lanes enabled by the mask. Disabled lanes
+    keep the corresponding lane from `data`. Floating-point lanes are treated by
+    their underlying bit representation.
+    """
+  semantics """
+    input: mask mask, register data
+    for each lane i:
+      if mask[i] is active:
+        result[i] = ~data[i]
+      else:
+        result[i] = data[i]
+    return result
+    """
   operation "For each lane: if mask bit is set, compute NOT data; otherwise keep data."
   tests:
-    - {test_name "inv_mask_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 4294967294, 2, 4294967292, 4, 4294967290, 6, 4294967288]}}
+    - {tags [mask, basic], type "ui32", case {inputs [170, [0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 4294967294, 2, 4294967292, 4, 4294967290, 6, 4294967288]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
             if (mask) {
-              emit_return(
+              complete(
                 call<primitive=binary_xor>(
                   data,
                   call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
                 )
               );
             }
-            emit_return(data);
+            complete(data);
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length))
-            loop<range>(i, 0, value<generation>(vector::length), 1) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_xor[type<backend>(vector::as_extension(scalar))]>(
                   data[i],
@@ -1718,7 +2414,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
                 result[i] = data[i];
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       idqword:
@@ -1726,10 +2422,14 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_xor, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            complete(
+              intrin<mask_xor, build[suffix=base::signed_of(base::in)]>(
                 data,
                 mask,
                 data,
@@ -1742,10 +2442,14 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
           avx512 [avx512f, avx512bw]
           avx2_vl [avx512f, avx512vl, avx512bw, avx]
           sse_vl [avx512f, avx512vl, avx512bw, sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 data,
                 call<primitive=inv>(data)
@@ -1757,10 +2461,14 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
           avx512 [avx512f, avx512dq]
           avx2_vl [avx512f, avx512vl, avx512dq, avx]
           sse_vl [avx512f, avx512vl, avx512dq, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<mask_xor>(
+            complete(
+              intrin<mask_xor, build>(
                 data,
                 mask,
                 data,
@@ -1779,10 +2487,14 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=pass_through]>(
+            complete(
+              call<primitive=mov, attrs[mask=pass_through]>(
                 mask,
                 data,
                 call<primitive=inv>(data)
@@ -1792,10 +2504,14 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin_compose<sveor, post=m>(
+            complete(
+              intrin<sveor, build[post=m]>(
                 mask,
                 data,
                 call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
@@ -1804,11 +2520,15 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
           """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
+            complete(
               call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
-                intrin_compose<sveor, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=m>(
+                intrin<sveor, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data),
                   call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(

@@ -1,0 +1,155 @@
+"""Evaluate the small TSIL generation/backend query language.
+
+Queries are nested ``head(arg)`` forms used inside TSIL bodies and intrinsic
+modifiers. The public module intentionally owns only the evaluator and default
+registry; query vocabularies live in focused namespace modules:
+
+- ``_query_model``: typed values, parsed terms, parser, and function protocol;
+- ``_query_core``: base/type/value/intrinsic/primitive query functions;
+- ``_query_vector``: vector/register/mask/generic query functions;
+- ``_query_leaf``: source-level bare identifier resolution.
+"""
+
+from __future__ import annotations
+
+from tslc.lower._query_core import (
+    AttributeQuery,
+    BaseInQuery,
+    IntrinPrefixQuery,
+    IntrinSuffixQuery,
+    IsSameQuery,
+    IsSignedQuery,
+    SelectQuery,
+    SignedOfQuery,
+    SizeBytesQuery,
+    TypeQuery,
+    UnsignedOfQuery,
+    ValueQuery,
+)
+from tslc.lower._query_leaf import resolve_query_leaf
+from tslc.lower._query_model import (
+    BoolValue,
+    QueryFunction,
+    QueryParser,
+    QueryTerm,
+    QueryValue,
+    TextValue,
+    TypeValue,
+)
+from tslc.lower._query_vector import (
+    AsBaseQuery,
+    AsExtensionQuery,
+    BaseGenericQuery,
+    GenericLengthQuery,
+    ImaskQuery,
+    MaskLaneQuery,
+    MaskQuery,
+    RegisterGenericQuery,
+    RegisterQuery,
+    VectorAlignmentQuery,
+    VectorAsQuery,
+    VectorLengthQuery,
+    WindowBaseQuery,
+)
+from tslc.lower.context import LoweringSession
+
+DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
+    BaseInQuery(),
+    SignedOfQuery(),
+    UnsignedOfQuery(),
+    TypeQuery(),
+    ValueQuery(),
+    SelectQuery(),
+    IntrinPrefixQuery(),
+    IntrinSuffixQuery(),
+    IsSameQuery(),
+    SizeBytesQuery(),
+    IsSignedQuery(),
+    AttributeQuery(),
+    RegisterQuery(),
+    RegisterGenericQuery(),
+    MaskQuery(),
+    ImaskQuery(),
+    MaskLaneQuery("mask::lane::all_true", "mask_lane_all_true"),
+    MaskLaneQuery("mask::lane::all_false", "mask_lane_all_false"),
+    VectorAlignmentQuery(),
+    VectorLengthQuery(),
+    AsExtensionQuery(),
+    AsBaseQuery(),
+    WindowBaseQuery(),
+    VectorAsQuery(),
+    BaseGenericQuery(),
+    GenericLengthQuery(),
+)
+
+
+class QueryEvaluator:
+    def __init__(
+        self,
+        functions: tuple[QueryFunction, ...] = DEFAULT_QUERY_FUNCTIONS,
+        parser: QueryParser | None = None,
+    ) -> None:
+        self._functions = {function.head: function for function in functions}
+        self._parser = parser or QueryParser()
+
+    def evaluate(self, text: str, context: LoweringSession) -> QueryValue | None:
+        term = self._parser.parse(text)
+        if term is None:
+            return None
+        return self.evaluate_term(term, context)
+
+    def evaluate_term(self, term: QueryTerm, context: LoweringSession) -> QueryValue | None:
+        evaluated_args: list[QueryValue] = []
+        for arg in term.args:
+            value = self.evaluate_term(arg, context)
+            if value is None:
+                return None
+            evaluated_args.append(value)
+
+        function = self._functions.get(term.head)
+        if function is not None:
+            return function.apply(tuple(evaluated_args), context)
+        if not term.args:
+            return self.resolve_leaf(term.head, context)
+        return None
+
+    def resolve_leaf(self, head: str, context: LoweringSession) -> QueryValue | None:
+        return resolve_query_leaf(head, context)
+
+
+__all__ = [
+    "AsBaseQuery",
+    "AsExtensionQuery",
+    "AttributeQuery",
+    "BaseGenericQuery",
+    "BaseInQuery",
+    "BoolValue",
+    "DEFAULT_QUERY_FUNCTIONS",
+    "GenericLengthQuery",
+    "ImaskQuery",
+    "IntrinPrefixQuery",
+    "IntrinSuffixQuery",
+    "IsSameQuery",
+    "IsSignedQuery",
+    "MaskLaneQuery",
+    "MaskQuery",
+    "QueryEvaluator",
+    "QueryFunction",
+    "QueryParser",
+    "QueryTerm",
+    "QueryValue",
+    "RegisterGenericQuery",
+    "RegisterQuery",
+    "SelectQuery",
+    "SignedOfQuery",
+    "SizeBytesQuery",
+    "TextValue",
+    "TypeQuery",
+    "TypeValue",
+    "UnsignedOfQuery",
+    "ValueQuery",
+    "VectorAlignmentQuery",
+    "VectorAsQuery",
+    "VectorLengthQuery",
+    "WindowBaseQuery",
+]

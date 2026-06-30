@@ -18,6 +18,27 @@ flags:
   avx3_vpopcntdq {normalized "avx512_vpopcntdq"}
   avx3_4fmaps {normalized "avx512_4fmaps"}
   avx3_4vnniw {normalized "avx512_4vnniw"}
+  avx512f {normalized "avx512f"}
+  avx512cd {normalized "avx512cd"}
+  avx512dq {normalized "avx512dq"}
+  avx512bw {normalized "avx512bw"}
+  avx512vl {normalized "avx512vl"}
+  avx512ifma {normalized "avx512ifma"}
+  avx512vbmi {normalized "avx512vbmi"}
+  avx512_vbmi2 {normalized "avx512_vbmi2"}
+  avx512_bitalg {normalized "avx512_bitalg"}
+  avx512_vpclmulqdq {normalized "avx512_vpclmulqdq"}
+  avx512_gfni {normalized "avx512_gfni"}
+  avx512_vaes {normalized "avx512_vaes"}
+  avx512_vnni {normalized "avx512_vnni"}
+  avx512_bf16 {normalized "avx512_bf16"}
+  avx512_vp2intersect {normalized "avx512_vp2intersect"}
+  avx512_fp16 {normalized "avx512_fp16"}
+  avx512_vpopcntdq {normalized "avx512_vpopcntdq"}
+  avx512_4fmaps {normalized "avx512_4fmaps"}
+  avx512_4vnniw {normalized "avx512_4vnniw"}
+  avx512er {normalized "avx512er"}
+  avx512pf {normalized "avx512pf"}
   avx2 {normalized "avx2"}
   avx {normalized "avx"}
   bmi2 {normalized "bmi2"}

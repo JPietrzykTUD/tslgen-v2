@@ -1,73 +1,101 @@
 description "Shift operations"
 prim<v:=(v,sImm)> shift_left(data, shift):
   brief_description "[Example: avx512 + si16]: Shift packed 16-bit integers in \"a\" left by \"imm8\" while shifting in zeros, and store the results in \"dst\"."
+  detailed_description """
+    Shifts each lane left by the compile-time scalar immediate `shift`. Vacated
+    low-order bits are filled with zero. If the shift count is greater than or
+    equal to the lane bit width, the result lane is zero.
+    """
+  semantics """
+    input: register data, scalar shift
+    for each lane i:
+      if shift < lane_bit_width:
+        result[i] = data[i] << shift
+      else:
+        result[i] = 0
+    return result
+    """
   operation "[Example: avx512 + si16]: FOR j := 0 to 31\n\ti := j*16\n\tIF imm8[7:0] > 15\n\t\tdst[i+15:i] := 0\n\tELSE\n\t\tdst[i+15:i] := ZeroExtend16(a[i+15:i] << imm8[7:0])\n\tFI\nENDFOR\ndst[MAX:512] := 0"
-  sImm_type:
-    default ui32
-    dispatch rust_const_match
-    override:
-      tsil:
-        [sse,sse_vl,avx2,avx2_vl] si32
+  params:
+    shift:
+      type ui32
+      value_range "0..base_bit_width(data)"
+      dispatch:
+        rust literal_match
   tests:
-    - {test_name "shift_left_imm_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_imm_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 5], expected [0, 32, 64, 96, 128, 160, 192, 224]}}
-    - {test_name "shift_left_imm_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
-    - {test_name "shift_left_imm_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 64, 192, 128, 128, 192, 0, 64, 0, 64, 192, 128, 128, 192, 0, 64]}}
-    - {test_name "shift_left_imm_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
-    - {test_name "shift_left_imm_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -64, 0, -64, 64, -128, -128, -128, 0, -64, 0, -64, 64, -128, -128, -128]}}
-    - {test_name "shift_left_imm_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_imm_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 16384, 49152, 32768, 32768, 49152, 0, 16384]}}
-    - {test_name "shift_left_imm_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_imm_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -16384, 0, -16384, 16384, -32768, -32768, -32768]}}
-    - {test_name "shift_left_imm_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], 1], expected [2, 4, 6, 8]}}
-    - {test_name "shift_left_imm_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], 30], expected [0, -1073741824, 0, -1073741824]}}
-    - {test_name "shift_left_imm_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [2, 4]}}
-    - {test_name "shift_left_imm_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], 62], expected [0, 4611686018427387904]}}
-    - {test_name "shift_left_imm_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [2, 4]}}
-    - {test_name "shift_left_imm_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], 62], expected [0, -4611686018427387904]}}
+    - {tags [imm, basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [imm, edge], type "ui32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 5], expected [0, 32, 64, 96, 128, 160, 192, 224]}}
+    - {tags [imm, basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
+    - {tags [imm, edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 64, 192, 128, 128, 192, 0, 64, 0, 64, 192, 128, 128, 192, 0, 64]}}
+    - {tags [imm, basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
+    - {tags [imm, edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -64, 0, -64, 64, -128, -128, -128, 0, -64, 0, -64, 64, -128, -128, -128]}}
+    - {tags [imm, basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [imm, edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 16384, 49152, 32768, 32768, 49152, 0, 16384]}}
+    - {tags [imm, basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [imm, edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -16384, 0, -16384, 16384, -32768, -32768, -32768]}}
+    - {tags [imm, basic], type "si32", case {inputs [[1, 2, 3, 4], 1], expected [2, 4, 6, 8]}}
+    - {tags [imm, edge], type "si32", case {inputs [[0, -1, -2147483648, 2147483647], 30], expected [0, -1073741824, 0, -1073741824]}}
+    - {tags [imm, basic], type "ui64", case {inputs [[1, 2], 1], expected [2, 4]}}
+    - {tags [imm, edge], type "ui64", case {inputs [[0, 1], 62], expected [0, 4611686018427387904]}}
+    - {tags [imm, basic], type "si64", case {inputs [[1, 2], 1], expected [2, 4]}}
+    - {tags [imm, edge], type "si64", case {inputs [[0, -1], 62], expected [0, -4611686018427387904]}}
   impls:
     scalar:
-      ?i?:
+      arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(data << shift);"
-      f?:
-        requires []
-        implementation:
+          # Shift the bit pattern via the same-width unsigned type: a signed-negative left shift is
+          # UB in C++ (and the vector path already does this), so the scalar path must too. Covers
+          # signed, unsigned, and (bit-pattern) float alike.
           tsil """
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
               var<const_infer>(ures, ua << cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift));
-              emit_return(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-              var<init_register>(result)
-              loop<unroll>(value<generation>(vector::length)) 
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              var<init_register>(result);
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), shift]>(data[i]);
               }
-              emit_return(result);
-            """      
+              complete(result);
+            """
     avx512:
       [?i16, ?i32, ?i64]:
         requires:
           ?i16 [avx512bw, avx512f]
           ?i32 [avx512f]
           ?i64 [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<slli, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(data, shift));"
+          tsil "complete(intrin<slli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, shift]>(
                     generic_data
@@ -78,15 +106,23 @@ prim<v:=(v,sImm)> shift_left(data, shift):
     avx2:
       [?i16, ?i32, ?i64]:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<slli, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(data, shift));"
+          tsil "complete(intrin<slli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, shift]>(
                     generic_data
@@ -97,15 +133,23 @@ prim<v:=(v,sImm)> shift_left(data, shift):
     sse:
       [?i16, ?i32, ?i64]:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<slli, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(data, shift));"
+          tsil "complete(intrin<slli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, shift]>(
                     generic_data
@@ -116,24 +160,32 @@ prim<v:=(v,sImm)> shift_left(data, shift):
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin<vshlq_{{ ?i? }}>(
-                data, 
-                intrin<vdupq_n_{{ si? }}>(
-                  cast<static>({{ si? }}, shift)
+            complete(
+              intrin<vshlq, build[suffix=base::in]>(
+                data,
+                intrin<vdupq_n, build[suffix=base::signed_of(base::in)]>(
+                  cast<static>(type<generation>(base::signed_of(base::in)), shift)
                 )
               )
             );
           """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, shift]>(
                     generic_data
@@ -144,174 +196,247 @@ prim<v:=(v,sImm)> shift_left(data, shift):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-              emit_return(
-                intrin<svlsl_n_{{ ?i? }}_x>(call<primitive=mask_true[Vec]>(), data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift))
+              complete(
+                intrin<svlsl_n, build[suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift))
               );
             """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
-              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
-                call<primitive=from_array[Vec]>(
-                  call<primitive=@self[GenericVec, shift]>(
-                    generic_data
-                  )
-                )
-              );
+              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+              var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+              var<const_infer>(ures, intrin<svlsl_n, build[suffix=UBase, post=x]>(
+                pg, udata, cast<static>(UBase, shift)
+              ));
+              complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
   brief_description "[Example: avx512 + si16]: Shift packed 16-bit integers in \"a\" left by \"imm8\" while shifting in zeros, and store the results in \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
+  detailed_description """
+    Shifts lanes enabled by the mask left by the compile-time scalar immediate
+    `shift`. Disabled lanes keep the corresponding lane from `data`. Vacated
+    low-order bits are filled with zero. If the shift count is greater than or
+    equal to the lane bit width, enabled result lanes are zero.
+    """
+  semantics """
+    input: mask mask, register data, scalar shift
+    for each lane i:
+      if mask[i] is active:
+        if shift < lane_bit_width:
+          result[i] = data[i] << shift
+        else:
+          result[i] = 0
+      else:
+        result[i] = data[i]
+    return result
+    """
   operation "[Example: avx512 + si16]: FOR j := 0 to 31\n\ti := j*16\n\tIF k[j]\n\t\tIF imm8[7:0] > 15\n\t\t\tdst[i+15:i] := 0\n\t\tELSE\n\t\t\tdst[i+15:i] := ZeroExtend16(a[i+15:i] << imm8[7:0])\n\t\tFI\n\tELSE\n\t\tdst[i+15:i] := src[i+15:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
-  sImm_type:
-    default ui32
-    dispatch rust_const_match
-    override:
-      tsil:
-        [sse,sse_vl,avx2,avx2_vl] si32
+  params:
+    shift:
+      type ui32
+      value_range "0..base_bit_width(data)"
+      dispatch:
+        rust literal_match
   tests:
-    - {test_name "shift_left_mask_passthrough_imm_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 4, 3, 8, 5, 12, 7, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_u32_zero", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "shift_left_mask_passthrough_imm_u32_all", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 4, 3, 8, 5, 12, 7, 16, 9, 20, 11, 24, 13, 28, 15, 32]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui8_zero", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui8_all", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
-    - {test_name "shift_left_mask_passthrough_imm_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 4, 3, 8, 5, 12, 7, 16, 9, 20, 11, 24, 13, 28, 15, 32]}}
-    - {test_name "shift_left_mask_passthrough_imm_si8_zero", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_si8_all", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 4, 3, 8, 5, 12, 7, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui16_zero", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui16_all", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 4, 3, 8, 5, 12, 7, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_si16_zero", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "shift_left_mask_passthrough_imm_si16_all", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_mask_passthrough_imm_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [10, [1, 2, 3, 4], 1], expected [1, 4, 3, 8]}}
-    - {test_name "shift_left_mask_passthrough_imm_si32_zero", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [0, [1, 2, 3, 4], 1], expected [1, 2, 3, 4]}}
-    - {test_name "shift_left_mask_passthrough_imm_si32_all", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [15, [1, 2, 3, 4], 1], expected [2, 4, 6, 8]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [2, [1, 2], 1], expected [1, 4]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui64_zero", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [0, [1, 2], 1], expected [1, 2]}}
-    - {test_name "shift_left_mask_passthrough_imm_ui64_all", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [3, [1, 2], 1], expected [2, 4]}}
-    - {test_name "shift_left_mask_passthrough_imm_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [2, [1, 2], 1], expected [1, 4]}}
-    - {test_name "shift_left_mask_passthrough_imm_si64_zero", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [0, [1, 2], 1], expected [1, 2]}}
-    - {test_name "shift_left_mask_passthrough_imm_si64_all", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [3, [1, 2], 1], expected [2, 4]}}
+    - {tags [mask, passthrough, imm, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 4, 3, 8, 5, 12, 7, 16]}}
+    - {tags [mask, passthrough, imm, zero], type "ui32", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [mask, passthrough, imm, all], type "ui32", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [mask, passthrough, imm, basic], type "ui8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 4, 3, 8, 5, 12, 7, 16, 9, 20, 11, 24, 13, 28, 15, 32]}}
+    - {tags [mask, passthrough, imm, zero], type "ui8", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [mask, passthrough, imm, all], type "ui8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
+    - {tags [mask, passthrough, imm, basic], type "si8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 4, 3, 8, 5, 12, 7, 16, 9, 20, 11, 24, 13, 28, 15, 32]}}
+    - {tags [mask, passthrough, imm, zero], type "si8", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [mask, passthrough, imm, all], type "si8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
+    - {tags [mask, passthrough, imm, basic], type "ui16", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 4, 3, 8, 5, 12, 7, 16]}}
+    - {tags [mask, passthrough, imm, zero], type "ui16", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [mask, passthrough, imm, all], type "ui16", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [mask, passthrough, imm, basic], type "si16", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 4, 3, 8, 5, 12, 7, 16]}}
+    - {tags [mask, passthrough, imm, zero], type "si16", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [mask, passthrough, imm, all], type "si16", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [mask, passthrough, imm, basic], type "si32", case {inputs [10, [1, 2, 3, 4], 1], expected [1, 4, 3, 8]}}
+    - {tags [mask, passthrough, imm, zero], type "si32", case {inputs [0, [1, 2, 3, 4], 1], expected [1, 2, 3, 4]}}
+    - {tags [mask, passthrough, imm, all], type "si32", case {inputs [15, [1, 2, 3, 4], 1], expected [2, 4, 6, 8]}}
+    - {tags [mask, passthrough, imm, basic], type "ui64", case {inputs [2, [1, 2], 1], expected [1, 4]}}
+    - {tags [mask, passthrough, imm, zero], type "ui64", case {inputs [0, [1, 2], 1], expected [1, 2]}}
+    - {tags [mask, passthrough, imm, all], type "ui64", case {inputs [3, [1, 2], 1], expected [2, 4]}}
+    - {tags [mask, passthrough, imm, basic], type "si64", case {inputs [2, [1, 2], 1], expected [1, 4]}}
+    - {tags [mask, passthrough, imm, zero], type "si64", case {inputs [0, [1, 2], 1], expected [1, 2]}}
+    - {tags [mask, passthrough, imm, all], type "si64", case {inputs [3, [1, 2], 1], expected [2, 4]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
-              emit_return(call<primitive=blend>(mask, data, shifted));
+              complete(call<primitive=blend>(mask, data, shifted));
             """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-              var<init_register>(result)
-              loop<unroll>(value<generation>(vector::length))
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
-                if (details::mask_test<Vec>(mask, i)) {
+              var<init_register>(result);
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
+                if (mask<test>(mask, i)) {
                   result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), shift]>(data[i]);
                 } else {
                   result[i] = data[i];
                 }
               }
-              emit_return(result);
+              complete(result);
             """
     avx512:
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
-              emit_return(call<primitive=blend>(mask, data, shifted));
+              complete(call<primitive=blend>(mask, data, shifted));
             """
     avx2:
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
-              emit_return(call<primitive=blend>(mask, data, shifted));
+              complete(call<primitive=blend>(mask, data, shifted));
             """
     sse:
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
-              emit_return(call<primitive=blend>(mask, data, shifted));
+              complete(call<primitive=blend>(mask, data, shifted));
             """
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
-              emit_return(call<primitive=blend>(mask, data, shifted));
+              complete(call<primitive=blend>(mask, data, shifted));
             """
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
-              emit_return(call<primitive=blend>(mask, data, shifted));
+              complete(call<primitive=blend>(mask, data, shifted));
             """
 prim<v:=(v,s)> shift_left(data, shift):
   brief_description "[Example: avx512 + si16]: Shift packed 16-bit integers in \"a\" left by the amount specified by the corresponding element in \"count\" while shifting in zeros, and store the results in \"dst\"."
+  detailed_description """
+    Shifts each lane left by the runtime scalar count `shift`. The same count is
+    applied to every lane. Vacated low-order bits are filled with zero. If the
+    shift count is greater than or equal to the lane bit width, the result lane
+    is zero.
+    """
+  semantics """
+    input: register data, scalar shift
+    for each lane i:
+      if shift < lane_bit_width:
+        result[i] = data[i] << shift
+      else:
+        result[i] = 0
+    return result
+    """
   operation "[Example: avx512 + si16]: FOR j := 0 to 31\n\ti := j*16\n\tIF count[i+15:i] < 16\n\t\tdst[i+15:i] := ZeroExtend16(a[i+15:i] << count[i+15:i])\n\tELSE\n\t\tdst[i+15:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
-    - {test_name "shift_left_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 5], expected [0, 32, 64, 96, 128, 160, 192, 224]}}
-    - {test_name "shift_left_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
-    - {test_name "shift_left_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 64, 192, 128, 128, 192, 0, 64, 0, 64, 192, 128, 128, 192, 0, 64]}}
-    - {test_name "shift_left_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
-    - {test_name "shift_left_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -64, 0, -64, 64, -128, -128, -128, 0, -64, 0, -64, 64, -128, -128, -128]}}
-    - {test_name "shift_left_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 16384, 49152, 32768, 32768, 49152, 0, 16384]}}
-    - {test_name "shift_left_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
-    - {test_name "shift_left_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -16384, 0, -16384, 16384, -32768, -32768, -32768]}}
-    - {test_name "shift_left_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[1, 2, 3, 4], 1], expected [2, 4, 6, 8]}}
-    - {test_name "shift_left_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, case {inputs [[0, -1, -2147483648, 2147483647], 30], expected [0, -1073741824, 0, -1073741824]}}
-    - {test_name "shift_left_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [2, 4]}}
-    - {test_name "shift_left_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], 62], expected [0, 4611686018427387904]}}
-    - {test_name "shift_left_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [2, 4]}}
-    - {test_name "shift_left_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], 62], expected [0, -4611686018427387904]}}
+    - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 5], expected [0, 32, 64, 96, 128, 160, 192, 224]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 64, 192, 128, 128, 192, 0, 64, 0, 64, 192, 128, 128, 192, 0, 64]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -64, 0, -64, 64, -128, -128, -128, 0, -64, 0, -64, 64, -128, -128, -128]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 16384, 49152, 32768, 32768, 49152, 0, 16384]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [2, 4, 6, 8, 10, 12, 14, 16]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -16384, 0, -16384, 16384, -32768, -32768, -32768]}}
+    - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4], 1], expected [2, 4, 6, 8]}}
+    - {tags [edge], type "si32", case {inputs [[0, -1, -2147483648, 2147483647], 30], expected [0, -1073741824, 0, -1073741824]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], 1], expected [2, 4]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], 62], expected [0, 4611686018427387904]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], 1], expected [2, 4]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], 62], expected [0, -4611686018427387904]}}
   impls:
     scalar:
-      ?i?:
+      arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(data << shift);"
-      f?:
-        requires []
-        implementation:
+          # Shift the bit pattern via the same-width unsigned type: a signed-negative left shift is
+          # UB in C++ (and the vector path already does this), so the scalar path must too. Covers
+          # signed, unsigned, and (bit-pattern) float alike.
           tsil """
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
               var<const_infer>(ures, ua << cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift));
-              emit_return(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-              var<init_register>(result)
-              loop<unroll>(value<generation>(vector::length)) 
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              var<init_register>(result);
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(data[i], shift);
               }
-              emit_return(result);
+              complete(result);
             """
     avx512:
       [?i16, ?i32, ?i64]:
@@ -319,15 +444,23 @@ prim<v:=(v,s)> shift_left(data, shift):
           ?i16 [avx512bw, avx512f]
           ?i32 [avx512f]
           ?i64 [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<sllv, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(data, call<primitive=set1>(shift)));"
+          tsil "complete(intrin<sllv, build[suffix=base::signed_of(base::in)]>(data, call<primitive=set1>(shift)));"
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec]>(
                     generic_data,
@@ -342,15 +475,23 @@ prim<v:=(v,s)> shift_left(data, shift):
           ?i16 [avx, avx512bw, avx512vl]
           ?i32 [avx, avx2]
           ?i64 [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<sllv, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(data, call<primitive=set1>(shift)));"
+          tsil "complete(intrin<sllv, build[suffix=base::signed_of(base::in)]>(data, call<primitive=set1>(shift)));"
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                 call<primitive=@self[GenericVec]>(
                     generic_data,
@@ -362,11 +503,15 @@ prim<v:=(v,s)> shift_left(data, shift):
     sse:
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec]>(
                     generic_data,
@@ -378,24 +523,32 @@ prim<v:=(v,s)> shift_left(data, shift):
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-            emit_return(
-              intrin<vshlq_{{ ?i? }}>(
-                data, 
-                intrin<vdupq_n_{{ si? }}>(
-                  cast<static>({{ si? }}, shift)
+            complete(
+              intrin<vshlq, build[suffix=base::in]>(
+                data,
+                intrin<vdupq_n, build[suffix=base::signed_of(base::in)]>(
+                  cast<static>(type<generation>(base::signed_of(base::in)), shift)
                 )
               )
             );
           """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec]>(
                     generic_data,
@@ -407,60 +560,86 @@ prim<v:=(v,s)> shift_left(data, shift):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-              emit_return(
-                intrin<svlsl_n_{{ ?i? }}_x>(call<primitive=mask_true[Vec]>(), data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift))
+              complete(
+                intrin<svlsl_n, build[suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift))
               );
             """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
-              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
-                call<primitive=from_array[Vec]>(
-                  call<primitive=@self[GenericVec]>(
-                    generic_data, 
-                    shift
-                  )
-                )
-              );
+              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+              var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+              var<const_infer>(ures, intrin<svlsl_n, build[suffix=UBase, post=x]>(
+                pg, udata, cast<static>(UBase, shift)
+              ));
+              complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(v,v)> shift_left(data, shift):
   brief_description "[Example: avx2 + si16]: Shift packed 16-bit integers in \"a\" left by the amount specified by the corresponding element in \"count\" while shifting in zeros, and store the results in \"dst\"."
+  detailed_description """
+    Shifts each lane left by the corresponding lane count from `shift`. Vacated
+    low-order bits are filled with zero. If a lane's shift count is greater than
+    or equal to the lane bit width, that result lane is zero.
+    """
+  semantics """
+    input: register data, register shift
+    for each lane i:
+      if shift[i] < lane_bit_width:
+        result[i] = data[i] << shift[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "[Example: avx2 + si16]: FOR j := 0 to 15\n\ti := j*16\n\tIF count[i+15:i] < 16\n\t\tdst[i+15:i] := ZeroExtend16(a[i+15:i] << count[i+15:i])\n\tELSE\n\t\tdst[i+15:i] := 0\n\tFI\nENDFOR\ndst[MAX:256] := 0"
   tests:
-    - {test_name "shift_left_vector_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [0, 1, 2, 3, 4, 5, 6, 7]], expected [1, 4, 12, 32, 80, 192, 448, 1024]}}
-    - {test_name "shift_left_vector_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 3, 4, 0, 1, 2, 3], [31, 30, 29, 28, 0, 1, 2, 3]], expected [2147483648, 2147483648, 1610612736, 1073741824, 0, 2, 8, 24]}}
+    - {tags [vector, basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [0, 1, 2, 3, 4, 5, 6, 7]], expected [1, 4, 12, 32, 80, 192, 448, 1024]}}
+    - {tags [vector, edge], type "ui32", case {inputs [[1, 2, 3, 4, 0, 1, 2, 3], [31, 30, 29, 28, 0, 1, 2, 3]], expected [2147483648, 2147483648, 1610612736, 1073741824, 0, 2, 8, 24]}}
   impls:
     scalar:
-      ?i?:
+      arith:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(data << shift);"
-      f?:
-        requires []
-        implementation:
+          # Shift the bit pattern via the same-width unsigned type: a signed-negative left shift is
+          # UB in C++ (and the vector path already does this), so the scalar path must too. Covers
+          # signed, unsigned, and (bit-pattern) float alike.
           tsil """
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
               var<const_infer>(ures, ua << cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift));
-              emit_return(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-              var<init_register>(result)
-              loop<unroll>(value<generation>(vector::length)) 
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              var<init_register>(result);
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(data[i], shift[i]);
               }
-              emit_return(result);
+              complete(result);
             """
     avx512:
       [?i16, ?i32, ?i64]:
@@ -468,16 +647,24 @@ prim<v:=(v,v)> shift_left(data, shift):
           ?i16 [avx512bw, avx512f]
           ?i32 [avx512f]
           ?i64 [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<sllv, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(data, shift));"
+          tsil "complete(intrin<sllv, build[suffix=base::signed_of(base::in)]>(data, shift));"
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec]>(
                     generic_data,
@@ -492,16 +679,24 @@ prim<v:=(v,v)> shift_left(data, shift):
           ?i16 [avx, avx512bw, avx512vl]
           ?i32 [avx, avx2]
           ?i64 [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<sllv, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(data, shift));"
+          tsil "complete(intrin<sllv, build[suffix=base::signed_of(base::in)]>(data, shift));"
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                 call<primitive=@self[GenericVec]>(
                     generic_data,
@@ -513,12 +708,16 @@ prim<v:=(v,v)> shift_left(data, shift):
     sse:
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec]>(
                     generic_data,
@@ -530,30 +729,38 @@ prim<v:=(v,v)> shift_left(data, shift):
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
-                emit_return(
-                  intrin<vshlq_{{ ?i? }}>(data, shift)
+                complete(
+                  intrin<vshlq, build[suffix=base::in]>(data, shift)
                 );
               } else<generation> {
-                var<const_infer>(shift_u, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(shift));
-                emit_return(
-                  intrin<vshlq_{{ ?i? }}>(
+                var<const_infer>(shift_s, call<primitive=reinterpret[Vec, Vec<type<generation>(base::signed_of(type<generation>(base::in)))>]>(shift));
+                complete(
+                  intrin<vshlq, build[suffix=base::in]>(
                     data,
-                    shift_u
+                    shift_s
                   )
                 );
               }
             """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec]>(
                     generic_data, generic_shift
@@ -564,88 +771,119 @@ prim<v:=(v,v)> shift_left(data, shift):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-               var<const_infer>(pg, call<primitive=mask_true[Vec]>()) 
+               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
                var<const_infer>(shift_u, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(shift));
-               emit_return(intrin_compose<svlsl, post=x>(pg, data, shift_u));
+               complete(intrin<svlsl, build[post=x]>(pg, data, shift_u));
             """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
-              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
-              emit_return(
-                call<primitive=from_array[Vec]>(
-                  call<primitive=@self[GenericVec]>(
-                    generic_data,
-                    generic_shift
-                  )
-                )
-              );
+              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+              var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+              var<const_infer>(shift_u, call<primitive=reinterpret[Vec, UVec]>(shift));
+              var<const_infer>(ures, intrin<svlsl, build[suffix=UBase, post=x]>(pg, udata, shift_u));
+              complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(v,sImm)> shift_right(data, shift):
   brief_description "[Example: avx512 + ui16]: Shift packed 16-bit integers in \"a\" right by \"imm8\" while shifting in zeros, and store the results in \"dst\"."
+  detailed_description """
+    Shifts each lane right by the compile-time scalar immediate `shift`.
+    `PreserveSign` controls whether right shifts preserve the sign bit or fill
+    with zeros where the selected implementation supports that distinction.
+    Large shift counts follow the source-selected `PreserveSign`, lane type, and
+    backend policy.
+    """
+  semantics """
+    input: register data, scalar shift, bool PreserveSign
+    for each lane i:
+      if shift < lane_bit_width:
+        if PreserveSign:
+          result[i] = sign_preserving_right_shift(data[i], shift)
+        else:
+          result[i] = zero_filling_right_shift(data[i], shift)
+      else:
+        result[i] = large_right_shift_value(data[i], PreserveSign)
+    return result
+    """
   operation "[Example: avx512 + ui16]: FOR j := 0 to 31\n\ti := j*16\n\tIF imm8[7:0] > 15\n\t\tdst[i+15:i] := 0\n\tELSE\n\t\tdst[i+15:i] := ZeroExtend16(a[i+15:i] >> imm8[7:0])\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   generic_params:
     PreserveSign:
       kind bool
       default true
-  sImm_type:
-    default ui32
-    dispatch rust_const_match
-    override:
-      tsil:
-        [sse,sse_vl,avx2,avx2_vl] si32
+  params:
+    shift:
+      type ui32
+      value_range "0..base_bit_width(data)"
+      dispatch:
+        rust literal_match
   tests:
-    - {test_name "shift_right_imm_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4, 8, 16, 32], 1], expected [0, 0, 1, 1, 2, 4, 8, 16]}}
-    - {test_name "shift_right_imm_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 32, 64, 96, 128, 256, 512, 1024], 5], expected [0, 1, 2, 3, 4, 8, 16, 32]}}
-    - {test_name "shift_right_imm_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -4, -8, 1, 2, 3, 4], 1], expected [-1, -1, -2, -4, 0, 1, 1, 2]}}
-    - {test_name "shift_right_imm_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-2147483648, -1073741824, -1, 0, 1, 2, 4, 8], 2], expected [-536870912, -268435456, -1, 0, 0, 0, 1, 2]}}
-    - {test_name "shift_right_imm_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
-    - {test_name "shift_right_imm_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0]}}
-    - {test_name "shift_right_imm_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
-    - {test_name "shift_right_imm_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -1, -2, 1, 0, -1, 0, 1, 0, -1, -2, 1, 0, -1, 0, 1]}}
-    - {test_name "shift_right_imm_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
-    - {test_name "shift_right_imm_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 0, 3, 3, 0, 0, 0, 0]}}
-    - {test_name "shift_right_imm_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
-    - {test_name "shift_right_imm_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -1, -2, 1, 0, -1, 0, 1]}}
-    - {test_name "shift_right_imm_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [0, 1]}}
-    - {test_name "shift_right_imm_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], 62], expected [0, 0]}}
-    - {test_name "shift_right_imm_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [0, 1]}}
-    - {test_name "shift_right_imm_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], 62], expected [0, -1]}}
+    - {tags [imm, basic], type "ui32", case {inputs [[0, 1, 2, 3, 4, 8, 16, 32], 1], expected [0, 0, 1, 1, 2, 4, 8, 16]}}
+    - {tags [imm, edge], type "ui32", case {inputs [[0, 32, 64, 96, 128, 256, 512, 1024], 5], expected [0, 1, 2, 3, 4, 8, 16, 32]}}
+    - {tags [imm, basic], type "si32", case {inputs [[-1, -2, -4, -8, 1, 2, 3, 4], 1], expected [-1, -1, -2, -4, 0, 1, 1, 2]}}
+    - {tags [imm, edge], type "si32", case {inputs [[-2147483648, -1073741824, -1, 0, 1, 2, 4, 8], 2], expected [-536870912, -268435456, -1, 0, 0, 0, 1, 2]}}
+    - {tags [imm, basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
+    - {tags [imm, edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0]}}
+    - {tags [imm, basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
+    - {tags [imm, edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -1, -2, 1, 0, -1, 0, 1, 0, -1, -2, 1, 0, -1, 0, 1]}}
+    - {tags [imm, basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
+    - {tags [imm, edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 0, 3, 3, 0, 0, 0, 0]}}
+    - {tags [imm, basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
+    - {tags [imm, edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -1, -2, 1, 0, -1, 0, 1]}}
+    - {tags [imm, basic], type "ui64", case {inputs [[1, 2], 1], expected [0, 1]}}
+    - {tags [imm, edge], type "ui64", case {inputs [[0, 1], 62], expected [0, 0]}}
+    - {tags [imm, basic], type "si64", case {inputs [[1, 2], 1], expected [0, 1]}}
+    - {tags [imm, edge], type "si64", case {inputs [[0, -1], 62], expected [0, -1]}}
   impls:
     scalar:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                   var<const_infer>(result, cast<static>(UnsignedT, data) >> cast<static>(UnsignedT, shift));
-                  emit_return(cast<static>(type<generation>(base::in), result));
+                  complete(cast<static>(type<generation>(base::in), result));
                 } else<compile> {
-                  emit_return(data >> shift);
+                  complete(data >> shift);
                 }
               } else<generation> {
-                emit_return(data >> shift);
+                complete(data >> shift);
               }
             """
       f?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
                 var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
                 var<const_infer>(ures, ua >> cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift));
-                emit_return(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+                complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
               } else<compile> {
                 var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::signed_of(type<generation>(base::in)))>]>(data));
                 var<const_infer>(ures, ua >> cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), shift));
-                emit_return(call<primitive=reinterpret[Vec<type<generation>(base::signed_of(type<generation>(base::in)))>, Vec]>(ures));
+                complete(call<primitive=reinterpret[Vec<type<generation>(base::signed_of(type<generation>(base::in)))>, Vec]>(ures));
               }
             """
     [generic, oneAPIfpga]:
@@ -653,14 +891,17 @@ prim<v:=(v,sImm)> shift_right(data, shift):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-              var<init_register>(result)
-              loop<unroll>(value<generation>(vector::length)) 
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              var<init_register>(result);
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), shift, PreserveSign]>(data[i]);
               }
-              emit_return(result);
+              complete(result);
             """
     avx512:
       [ui16, ui32, ui64]:
@@ -668,31 +909,43 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           ui16 [avx512bw, avx512f]
           ui32 [avx512f]
           ui64 [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<srli, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(data, shift));"
+          tsil "complete(intrin<srli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       [si16, si32, si64]:
         requires:
           si16 [avx512bw, avx512f]
           si32 [avx512f]
           si64 [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
-                var<const_infer>(ures, intrin_compose<srli, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(udata, shift));
-                emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
+                var<const_infer>(ures, intrin<srli, build[suffix=base::signed_of(base::in)]>(udata, shift));
+                complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                emit_return(intrin_compose<srai>(data, shift));
+                complete(intrin<srai, build>(data, shift));
               }
             """
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, shift, PreserveSign]>(
                     generic_data
@@ -702,11 +955,15 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, shift, PreserveSign]>(
                     generic_data
@@ -717,28 +974,40 @@ prim<v:=(v,sImm)> shift_right(data, shift):
     avx2:
       [ui16, ui32, ui64]:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<srli, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(data, shift));"
+          tsil "complete(intrin<srli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       [si16, si32]:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
-                var<const_infer>(ures, intrin_compose<srli, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(udata, shift));
-                emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
+                var<const_infer>(ures, intrin<srli, build[suffix=base::signed_of(base::in)]>(udata, shift));
+                complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                emit_return(intrin_compose<srai>(data, shift));
+                complete(intrin<srai, build>(data, shift));
               }
             """
       si64:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, shift, PreserveSign]>(
                     generic_data
@@ -748,11 +1017,15 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, shift, PreserveSign]>(
                     generic_data
@@ -762,11 +1035,15 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, shift, PreserveSign]>(
                     generic_data
@@ -777,28 +1054,40 @@ prim<v:=(v,sImm)> shift_right(data, shift):
     sse:
       [ui16, ui32, ui64]:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin_compose<srli, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(data, shift));"
+          tsil "complete(intrin<srli, build[suffix=base::signed_of(base::in)]>(data, shift));"
       [si16, si32]:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
-                var<const_infer>(ures, intrin_compose<srli, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(udata, shift));
-                emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
+                var<const_infer>(ures, intrin<srli, build[suffix=base::signed_of(base::in)]>(udata, shift));
+                complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                emit_return(intrin_compose<srai>(data, shift));
+                complete(intrin<srai, build>(data, shift));
               }
             """
       si64:
         requires [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, shift, PreserveSign]>(
                     generic_data
@@ -808,11 +1097,15 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
       f?:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, shift, PreserveSign]>(
                     generic_data
@@ -822,11 +1115,15 @@ prim<v:=(v,sImm)> shift_right(data, shift):
             """
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, shift, PreserveSign]>(
                     generic_data
@@ -837,27 +1134,47 @@ prim<v:=(v,sImm)> shift_right(data, shift):
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
             if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
+                let<type>(SignedVec, type<generation>(vector::as_base(SignedT)));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
-                emit_return(intrin<vshrq_n_{{ ui? }}>(udata, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+                var<const_infer>(shift_s, (cast<static>(SignedT, 0) - cast<static>(SignedT, shift)));
+                var<const_infer>(sh, call<primitive=set1[SignedVec]>(shift_s));
+                var<const_infer>(ures, intrin<vshlq, build[suffix=base::unsigned_of(base::in)]>(udata, sh));
+                complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                emit_return(intrin<vshrq_n_{{ ?i? }}>(data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+                let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
+                var<const_infer>(shift_s, (cast<static>(SignedT, 0) - cast<static>(SignedT, shift)));
+                var<const_infer>(sh, call<primitive=set1[Vec]>(shift_s));
+                complete(intrin<vshlq, build[suffix=base::in]>(data, sh));
               }
             } else<generation> {
-              emit_return(intrin<vshrq_n_{{ ?i? }}>(data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+              let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
+              let<type>(SignedVec, type<generation>(vector::as_base(SignedT)));
+              var<const_infer>(shift_s, (cast<static>(SignedT, 0) - cast<static>(SignedT, shift)));
+              var<const_infer>(sh, call<primitive=set1[SignedVec]>(shift_s));
+              complete(intrin<vshlq, build[suffix=base::in]>(data, sh));
             }
           """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, shift, PreserveSign]>(
                     generic_data
@@ -868,160 +1185,235 @@ prim<v:=(v,sImm)> shift_right(data, shift):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-              var<const_infer>(pg, call<primitive=mask_true[Vec]>())
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
-                  let<type>(UVec, type<generation>(vector::transform_extension(type<generation>(base::unsigned_of(type<generation>(base::in))))))
+                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                  let<type>(UVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
-                  var<const_infer>(ures, intrin<svlsr_n_{{ ui? }}_x>(pg, udata, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
-                  emit_return(call<primitive=reinterpret[UVec, Vec]>(ures));
+                  var<const_infer>(ures, intrin<svlsr_n, build[suffix=base::unsigned_of(base::in), post=x]>(pg, udata, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+                  complete(call<primitive=reinterpret[UVec, Vec]>(ures));
                 } else<compile> {
-                  emit_return(intrin<svasr_n_{{ ?i? }}_x>(pg, data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+                  complete(intrin<svasr_n, build[suffix=base::in, post=x]>(pg, data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
                 }
               } else<generation> {
-                emit_return(intrin<svlsr_n_{{ ?i? }}_x>(pg, data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+                complete(intrin<svlsr_n, build[suffix=base::in, post=x]>(pg, data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
               }
             """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
-              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
-                call<primitive=from_array[Vec]>(
-                  call<primitive=@self[GenericVec, shift, PreserveSign]>(
-                    generic_data
-                  )
-                )
-              );
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              if<compile>(!PreserveSign) {
+                let<type>(UVec, type<generation>(vector::as_base(UBase)));
+                var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+                var<const_infer>(ures, intrin<svlsr_n, build[suffix=UBase, post=x]>(
+                  pg, udata, cast<static>(UBase, shift)
+                ));
+                complete(call<primitive=reinterpret[UVec, Vec]>(ures));
+              } else<compile> {
+                let<type>(SBase, type<generation>(base::signed_of(type<generation>(base::in))));
+                let<type>(SVec, type<generation>(vector::as_base(SBase)));
+                var<const_infer>(sdata, call<primitive=reinterpret[Vec, SVec]>(data));
+                var<const_infer>(sres, intrin<svasr_n, build[suffix=SBase, post=x]>(
+                  pg, sdata, cast<static>(UBase, shift)
+                ));
+                complete(call<primitive=reinterpret[SVec, Vec]>(sres));
+              }
             """
 prim<v:=(v,s)> shift_right(data, shift):
   brief_description "[Example: avx512 + si16]: Shift packed 16-bit integers in \"a\" right by a scalar shift count while shifting in sign or zeros depending on type, and store the results in \"dst\"."
+  detailed_description """
+    Shifts each lane right by the runtime scalar count `shift`. The same count is
+    applied to every lane. `PreserveSign` controls whether right shifts preserve
+    the sign bit or fill with zeros where the selected implementation supports
+    that distinction. Large shift counts follow the source-selected
+    `PreserveSign`, lane type, and backend policy.
+    """
+  semantics """
+    input: register data, scalar shift, bool PreserveSign
+    for each lane i:
+      if shift < lane_bit_width:
+        if PreserveSign:
+          result[i] = sign_preserving_right_shift(data[i], shift)
+        else:
+          result[i] = zero_filling_right_shift(data[i], shift)
+      else:
+        result[i] = large_right_shift_value(data[i], PreserveSign)
+    return result
+    """
   operation "[Example: avx512 + si16]: FOR j := 0 to 31\n\ti := j*16\n\tIF shift > 15\n\t\tdst[i+15:i] := 0 or -1 depending on sign\n\tELSE\n\t\tdst[i+15:i] := ShiftRight(a[i+15:i], shift)\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   generic_params:
     PreserveSign:
       kind bool
       default true
   tests:
-    - {test_name "shift_right_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 1, 2, 3, 4, 8, 16, 32], 1], expected [0, 0, 1, 1, 2, 4, 8, 16]}}
-    - {test_name "shift_right_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[0, 32, 64, 96, 128, 256, 512, 1024], 5], expected [0, 1, 2, 3, 4, 8, 16, 32]}}
-    - {test_name "shift_right_i32_basic", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-1, -2, -4, -8, 1, 2, 3, 4], 1], expected [-1, -1, -2, -4, 0, 1, 1, 2]}}
-    - {test_name "shift_right_i32_edge", type "si32", lane_set "lanes_i32", lanes 8, case {inputs [[-2147483648, -1073741824, -1, 0, 1, 2, 4, 8], 2], expected [-536870912, -268435456, -1, 0, 0, 0, 1, 2]}}
-    - {test_name "shift_right_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
-    - {test_name "shift_right_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0]}}
-    - {test_name "shift_right_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
-    - {test_name "shift_right_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -1, -2, 1, 0, -1, 0, 1, 0, -1, -2, 1, 0, -1, 0, 1]}}
-    - {test_name "shift_right_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
-    - {test_name "shift_right_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 0, 3, 3, 0, 0, 0, 0]}}
-    - {test_name "shift_right_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
-    - {test_name "shift_right_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -1, -2, 1, 0, -1, 0, 1]}}
-    - {test_name "shift_right_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [0, 1]}}
-    - {test_name "shift_right_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, case {inputs [[0, 1], 62], expected [0, 0]}}
-    - {test_name "shift_right_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[1, 2], 1], expected [0, 1]}}
-    - {test_name "shift_right_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, case {inputs [[0, -1], 62], expected [0, -1]}}
+    - {tags [basic], type "ui32", case {inputs [[0, 1, 2, 3, 4, 8, 16, 32], 1], expected [0, 0, 1, 1, 2, 4, 8, 16]}}
+    - {tags [edge], type "ui32", case {inputs [[0, 32, 64, 96, 128, 256, 512, 1024], 5], expected [0, 1, 2, 3, 4, 8, 16, 32]}}
+    - {tags [basic], type "si32", case {inputs [[-1, -2, -4, -8, 1, 2, 3, 4], 1], expected [-1, -1, -2, -4, 0, 1, 1, 2]}}
+    - {tags [edge], type "si32", case {inputs [[-2147483648, -1073741824, -1, 0, 1, 2, 4, 8], 2], expected [-536870912, -268435456, -1, 0, 0, 0, 1, 2]}}
+    - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
+    - {tags [edge], type "ui8", case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5], 6], expected [0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0]}}
+    - {tags [basic], type "si8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 1], expected [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8]}}
+    - {tags [edge], type "si8", case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126], 6], expected [0, -1, -2, 1, 0, -1, 0, 1, 0, -1, -2, 1, 0, -1, 0, 1]}}
+    - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
+    - {tags [edge], type "ui16", case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5], 14], expected [0, 0, 3, 3, 0, 0, 0, 0]}}
+    - {tags [basic], type "si16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [0, 1, 1, 2, 2, 3, 3, 4]}}
+    - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], 14], expected [0, -1, -2, 1, 0, -1, 0, 1]}}
+    - {tags [basic], type "ui64", case {inputs [[1, 2], 1], expected [0, 1]}}
+    - {tags [edge], type "ui64", case {inputs [[0, 1], 62], expected [0, 0]}}
+    - {tags [basic], type "si64", case {inputs [[1, 2], 1], expected [0, 1]}}
+    - {tags [edge], type "si64", case {inputs [[0, -1], 62], expected [0, -1]}}
   impls:
     scalar:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                   var<const_infer>(result, cast<static>(UnsignedT, data) >> cast<static>(UnsignedT, shift));
-                  emit_return(cast<static>(type<generation>(base::in), result));
+                  complete(cast<static>(type<generation>(base::in), result));
                 } else<compile> {
-                  emit_return(data >> shift);
+                  complete(data >> shift);
                 }
               } else<generation> {
-                emit_return(data >> shift);
+                complete(data >> shift);
               }
             """
       f?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
               var<const_infer>(ures, ua >> cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift));
-              emit_return(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-              var<init_register>(result)
-              loop<unroll>(value<generation>(vector::length)) 
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              var<init_register>(result);
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), PreserveSign]>(data[i], shift);
               }
-              emit_return(result);
+              complete(result);
             """
     avx512:
       ui16:
         requires [avx512bw, avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin<_mm512_srl_epi16>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
+          tsil "complete(intrin<_mm512_srl_epi16>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       ui32:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin<_mm512_srl_epi32>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
+          tsil "complete(intrin<_mm512_srl_epi32>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       ui64:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin<_mm512_srl_epi64>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
+          tsil "complete(intrin<_mm512_srl_epi64>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       si16:
         requires [avx512bw, avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<_mm512_srl_epi16>(udata, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
-                emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
+                complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                emit_return(intrin<_mm512_sra_epi16>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
+                complete(intrin<_mm512_sra_epi16>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
               }
             """
       si32:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<_mm512_srl_epi32>(udata, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
-                emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
+                complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                emit_return(intrin<_mm512_sra_epi32>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
+                complete(intrin<_mm512_sra_epi32>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
               }
             """
       si64:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<_mm512_srl_epi64>(udata, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
-                emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
+                complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                emit_return(intrin<_mm512_sra_epi64>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
+                complete(intrin<_mm512_sra_epi64>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
               }
             """
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, PreserveSign]>(
                     generic_data,
@@ -1032,11 +1424,15 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, PreserveSign]>(
                     generic_data,
@@ -1048,49 +1444,73 @@ prim<v:=(v,s)> shift_right(data, shift):
     avx2:
       ui16:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin<_mm256_srl_epi16>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
+          tsil "complete(intrin<_mm256_srl_epi16>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       ui32:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin<_mm256_srl_epi32>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
+          tsil "complete(intrin<_mm256_srl_epi32>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       ui64:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin<_mm256_srl_epi64>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
+          tsil "complete(intrin<_mm256_srl_epi64>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       si16:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<_mm256_srl_epi16>(udata, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
-                emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
+                complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                emit_return(intrin<_mm256_sra_epi16>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
+                complete(intrin<_mm256_sra_epi16>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
               }
             """
       si32:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<_mm256_srl_epi32>(udata, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
-                emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
+                complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                emit_return(intrin<_mm256_sra_epi32>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
+                complete(intrin<_mm256_sra_epi32>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
               }
             """
       si64:
         requires [avx, avx2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, PreserveSign]>(
                     generic_data,
@@ -1101,11 +1521,15 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       f?:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, PreserveSign]>(
                     generic_data,
@@ -1116,11 +1540,15 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, PreserveSign]>(
                     generic_data,
@@ -1132,49 +1560,73 @@ prim<v:=(v,s)> shift_right(data, shift):
     sse:
       ui16:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin<_mm_srl_epi16>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
+          tsil "complete(intrin<_mm_srl_epi16>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       ui32:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin<_mm_srl_epi32>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
+          tsil "complete(intrin<_mm_srl_epi32>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       ui64:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
-          tsil "emit_return(intrin<_mm_srl_epi64>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
+          tsil "complete(intrin<_mm_srl_epi64>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));"
       si16:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<_mm_srl_epi16>(udata, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
-                emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
+                complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                emit_return(intrin<_mm_sra_epi16>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
+                complete(intrin<_mm_sra_epi16>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
               }
             """
       si32:
         requires [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<_mm_srl_epi32>(udata, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
-                emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
+                complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                emit_return(intrin<_mm_sra_epi32>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
+                complete(intrin<_mm_sra_epi32>(data, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
               }
             """
       si64:
         requires [sse, sse2]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, PreserveSign]>(
                     generic_data,
@@ -1185,11 +1637,15 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       f?:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, PreserveSign]>(
                     generic_data,
@@ -1200,11 +1656,15 @@ prim<v:=(v,s)> shift_right(data, shift):
             """
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, PreserveSign]>(
                     generic_data,
@@ -1216,34 +1676,47 @@ prim<v:=(v,s)> shift_right(data, shift):
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                  let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
+                  let<type>(SignedVec, type<generation>(vector::as_base(SignedT)));
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
-                  var<const_infer>(shift_s, cast<static>(si32, -shift));
-                  var<const_infer>(sh, call<primitive=set1[Vec]>(shift_s));
-                  var<const_infer>(ures, intrin<vshlq_{{ ui? }}>(udata, sh));
-                  emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
+                  var<const_infer>(shift_s, (cast<static>(SignedT, 0) - cast<static>(SignedT, shift)));
+                  var<const_infer>(sh, call<primitive=set1[SignedVec]>(shift_s));
+                  var<const_infer>(ures, intrin<vshlq, build[suffix=base::unsigned_of(base::in)]>(udata, sh));
+                  complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
                 } else<compile> {
-                  var<const_infer>(shift_s, cast<static>(si32, -shift));
+                  let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
+                  var<const_infer>(shift_s, (cast<static>(SignedT, 0) - cast<static>(SignedT, shift)));
                   var<const_infer>(sh, call<primitive=set1[Vec]>(shift_s));
-                  emit_return(intrin<vshlq_{{ ?i? }}>(data, sh));
+                  complete(intrin<vshlq, build[suffix=base::in]>(data, sh));
                 }
               } else<generation> {
-                var<const_infer>(shift_s, cast<static>(si32, -shift));
-                var<const_infer>(sh, call<primitive=set1[Vec]>(shift_s));
-                emit_return(intrin<vshlq_{{ ?i? }}>(data, sh));
+                let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
+                let<type>(SignedVec, type<generation>(vector::as_base(SignedT)));
+                var<const_infer>(shift_s, (cast<static>(SignedT, 0) - cast<static>(SignedT, shift)));
+                var<const_infer>(sh, call<primitive=set1[SignedVec]>(shift_s));
+                complete(intrin<vshlq, build[suffix=base::in]>(data, sh));
               }
             """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, PreserveSign]>(
                     generic_data,
@@ -1255,128 +1728,175 @@ prim<v:=(v,s)> shift_right(data, shift):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-              var<const_infer>(pg, call<primitive=mask_true[Vec]>())
-              var<const_infer>(sh, intrin<svdup_n_{{ ui? }}>(cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)))
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+              var<const_infer>(sh, intrin<svdup_n, build[suffix=base::unsigned_of(base::in)]>(cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
-                  let<type>(UVec, type<generation>(vector::transform_extension(type<generation>(base::unsigned_of(type<generation>(base::in))))))
+                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                  let<type>(UVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
-                  var<const_infer>(ures, intrin<svlsr_{{ ui? }}_x>(pg, udata, sh));
-                  emit_return(call<primitive=reinterpret[UVec, Vec]>(ures));
+                  var<const_infer>(ures, intrin<svlsr, build[suffix=base::unsigned_of(base::in), post=x]>(pg, udata, sh));
+                  complete(call<primitive=reinterpret[UVec, Vec]>(ures));
                 } else<compile> {
-                  emit_return(intrin<svasr_{{ ?i? }}_x>(pg, data, sh));  
+                  complete(intrin<svasr, build[suffix=base::in, post=x]>(pg, data, sh));
                 }
               } else<generation> {
-                emit_return(intrin<svlsr_{{ ?i? }}_x>(pg, data, sh));
+                complete(intrin<svlsr, build[suffix=base::in, post=x]>(pg, data, sh));
               }
             """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
-              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              emit_return(
-                call<primitive=from_array[Vec]>(
-                  call<primitive=@self[GenericVec, PreserveSign]>(
-                    generic_data,
-                    shift
-                  )
-                )
-              );
+              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+              var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+              var<const_infer>(sh, intrin<svdup_n, build[suffix=UBase]>(cast<static>(UBase, shift)));
+              var<const_infer>(ures, intrin<svlsr, build[suffix=UBase, post=x]>(pg, udata, sh));
+              complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """
 prim<v:=(v,v)> shift_right(data, shift):
   brief_description "[Example: avx2 + ui32]: Shift packed 32-bit integers in \"a\" right by the amount specified by the corresponding element in \"count\" while shifting in zeros, and store the results in \"dst\"."
+  detailed_description """
+    Shifts each lane right by the corresponding lane count from `shift`.
+    `PreserveSign` controls whether right shifts preserve the sign bit or fill
+    with zeros where the selected implementation supports that distinction.
+    Large shift counts follow the source-selected `PreserveSign`, lane type, and
+    backend policy.
+    """
+  semantics """
+    input: register data, register shift, bool PreserveSign
+    for each lane i:
+      if shift[i] < lane_bit_width:
+        if PreserveSign:
+          result[i] = sign_preserving_right_shift(data[i], shift[i])
+        else:
+          result[i] = zero_filling_right_shift(data[i], shift[i])
+      else:
+        result[i] = large_right_shift_value(data[i], PreserveSign)
+    return result
+    """
   operation "[Example: avx2 + ui32]: FOR j := 0 to 7\n\ti := j*32\n\tIF count[i+31:i] < 32\n\t\tdst[i+31:i] := ZeroExtend32(a[i+31:i] >> count[i+31:i])\n\tELSE\n\t\tdst[i+31:i] := 0\n\tFI\nENDFOR\ndst[MAX:256] := 0"
   generic_params:
     PreserveSign:
       kind bool
       default true
   tests:
-    - {test_name "shift_right_vector_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[1, 2, 4, 8, 16, 32, 64, 128], [0, 1, 2, 3, 4, 5, 6, 7]], expected [1, 1, 1, 1, 1, 1, 1, 1]}}
-    - {test_name "shift_right_vector_u32_edge", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[2147483648, 2147483647, 1073741824, 536870912, 0, 1, 2, 3], [31, 30, 29, 28, 0, 1, 2, 3]], expected [1, 1, 2, 2, 0, 0, 0, 0]}}
+    - {tags [vector, basic], type "ui32", case {inputs [[1, 2, 4, 8, 16, 32, 64, 128], [0, 1, 2, 3, 4, 5, 6, 7]], expected [1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {tags [vector, edge], type "ui32", case {inputs [[2147483648, 2147483647, 1073741824, 536870912, 0, 1, 2, 3], [31, 30, 29, 28, 0, 1, 2, 3]], expected [1, 1, 2, 2, 0, 0, 0, 0]}}
   impls:
     scalar:
       ?i?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                   var<const_infer>(result, cast<static>(UnsignedT, data) >> cast<static>(UnsignedT, shift));
-                  emit_return(cast<static>(type<generation>(base::in), result));
+                  complete(cast<static>(type<generation>(base::in), result));
                 } else<compile> {
-                  emit_return(data >> shift);
+                  complete(data >> shift);
                 }
               } else<compile> {
-                emit_return(data >> shift);
+                complete(data >> shift);
               }
             """
       f?:
         requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
               var<const_infer>(ures, ua >> cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift));
-              emit_return(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
-              var<init_register>(result)
-              loop<unroll>(value<generation>(vector::length)) 
-              loop<range>(i, 0, value<generation>(vector::length), 1)  {
+              var<init_register>(result);
+              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
                 result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), PreserveSign]>(data[i], shift[i]);
               }
-              emit_return(result);
+              complete(result);
             """
     avx512:
       ui32 {intrinsic "intrin<_mm512_srlv_epi32>", requires [avx512f]}
       ui64 {intrinsic "intrin<_mm512_srlv_epi64>", requires [avx512f]}
       si32:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(shift_u, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(shift));
-                var<const_infer>(ures, intrin_compose<srlv, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(udata, shift_u));
-                emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
+                var<const_infer>(ures, intrin<srlv, build[suffix=base::signed_of(base::in)]>(udata, shift_u));
+                complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                emit_return(intrin_compose<srav>(data, shift));
+                complete(intrin<srav, build>(data, shift));
               }
             """
       si64:
         requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(shift_u, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(shift));
-                var<const_infer>(ures, intrin_compose<srlv, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(udata, shift_u));
-                emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
+                var<const_infer>(ures, intrin<srlv, build[suffix=base::signed_of(base::in)]>(udata, shift_u));
+                complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                emit_return(intrin_compose<srav>(data, shift));
+                complete(intrin<srav, build>(data, shift));
               }
             """
       f?:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, PreserveSign]>(
                     generic_data,
@@ -1387,12 +1907,16 @@ prim<v:=(v,v)> shift_right(data, shift):
             """
       arith:
         requires [avx512f]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, PreserveSign]>(
                     generic_data,
@@ -1406,26 +1930,34 @@ prim<v:=(v,v)> shift_right(data, shift):
       ui64 {intrinsic "intrin<_mm256_srlv_epi64>", requires [avx, avx2]}
       si32:
         requires [avx, avx2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(shift_u, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(shift));
-                var<const_infer>(ures, intrin_compose<srlv, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(udata, shift_u));
-                emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
+                var<const_infer>(ures, intrin<srlv, build[suffix=base::signed_of(base::in)]>(udata, shift_u));
+                complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                emit_return(intrin_compose<srav>(data, shift));
+                complete(intrin<srav, build>(data, shift));
               }
             """
       arith:
         requires [avx]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, PreserveSign]>(
                     generic_data,
@@ -1437,12 +1969,16 @@ prim<v:=(v,v)> shift_right(data, shift):
     sse:
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, PreserveSign]>(
                     generic_data,
@@ -1454,32 +1990,42 @@ prim<v:=(v,v)> shift_right(data, shift):
     neon:
       ?i?:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
-                  let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))))
+                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                  let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                   var<const_infer>(shift_s, call<primitive=reinterpret[Vec, Vec<SignedT>]>(shift));
-                  var<const_infer>(neg, intrin<vnegq_{{ si? }}>(shift_s));
-                  var<const_infer>(ures, intrin<vshlq_{{ ui? }}>(udata, neg));
-                  emit_return(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
+                  var<const_infer>(neg, intrin<vnegq, build[suffix=base::signed_of(base::in)]>(shift_s));
+                  var<const_infer>(ures, intrin<vshlq, build[suffix=base::unsigned_of(base::in)]>(udata, neg));
+                  complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
                 } else<compile> {
-                  emit_return(intrin<vshlq_{{ ?i? }}>(data, intrin<vnegq_{{ si? }}>(shift)));
+                  complete(intrin<vshlq, build[suffix=base::in]>(data, intrin<vnegq, build[suffix=base::signed_of(base::in)]>(shift)));
                 }
               } else<generation> {
-                emit_return(intrin<vshlq_{{ ?i? }}>(data, intrin<vnegq_{{ si? }}>(shift)));
+                let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
+                var<const_infer>(shift_s, call<primitive=reinterpret[Vec, Vec<SignedT>]>(shift));
+                complete(intrin<vshlq, build[suffix=base::in]>(data, intrin<vnegq, build[suffix=base::signed_of(base::in)]>(shift_s)));
               }
             """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
           tsil """
               let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
-              emit_return(
+              complete(
                 call<primitive=from_array[Vec]>(
                   call<primitive=@self[GenericVec, PreserveSign]>(
                     generic_data,
@@ -1491,37 +2037,41 @@ prim<v:=(v,v)> shift_right(data, shift):
     sve:
       ?i?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-              var<const_infer>(pg, call<primitive=mask_true[Vec]>())
-              let<type>(UVec, type<generation>(vector::transform_extension(type<generation>(base::unsigned_of(type<generation>(base::in))))))
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+              let<type>(UVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
               var<const_infer>(shift_u, call<primitive=reinterpret[Vec, UVec]>(shift));
               if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
+                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
-                  var<const_infer>(ures, intrin_compose<svlsr, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=x>(pg, udata, shift_u));
-                  emit_return(call<primitive=reinterpret[UVec, Vec]>(ures));
+                  var<const_infer>(ures, intrin<svlsr, build[suffix=base::unsigned_of(base::in), post=x]>(pg, udata, shift_u));
+                  complete(call<primitive=reinterpret[UVec, Vec]>(ures));
                 } else<compile> {
-                  emit_return(intrin_compose<svasr, post=x>(pg, data, shift_u));
+                  complete(intrin<svasr, build[post=x]>(pg, data, shift_u));
                 }
               } else<generation> {
-                emit_return(intrin_compose<svlsr, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in))))), post=x>(pg, data, shift_u));
+                complete(intrin<svlsr, build[suffix=base::unsigned_of(base::in), post=x]>(pg, data, shift_u));
               }
             """
       f?:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
-              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
-              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
-              emit_return(
-                call<primitive=from_array[Vec]>(
-                  call<primitive=@self[GenericVec, PreserveSign]>(
-                    generic_data,
-                    generic_shift
-                  )
-                )
-              );
+              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+              var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
+              var<const_infer>(shift_u, call<primitive=reinterpret[Vec, UVec]>(shift));
+              var<const_infer>(ures, intrin<svlsr, build[suffix=UBase, post=x]>(pg, udata, shift_u));
+              complete(call<primitive=reinterpret[UVec, Vec]>(ures));
             """

@@ -9,4 +9,5 @@ language cpp:
   u64 {type "uint64_t"}
   f32 {type "float"}
   f64 {type "double"}
+  size {type "std::size_t"}
   ptr {type "void *"}

@@ -1,17 +1,25 @@
-prim<s:=(s,s)> test_mask(mask, position):
+prim<im:=(im,im)> test_imask(mask, position):
   brief_description "Tests whether a specific mask bit is set."
+  detailed_description """
+    Extracts the bit at a runtime position from an integral mask value and
+    returns it as an integral truth value.
+    """
+  semantics """
+    input: integral mask mask, scalar position
+    return (mask >> position) & 1
+    """
   operation ""
   tests:
-    - {test_name "test_mask_ui8_basic", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [170, 1], expected 1}}
-    - {test_name "test_mask_ui8_edge", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [170, 0], expected 0}}
-    - {test_name "test_mask_ui16_basic", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [43690, 1], expected 1}}
-    - {test_name "test_mask_ui16_edge", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [43690, 0], expected 0}}
-    - {test_name "test_mask_ui32_basic", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [43690, 1], expected 1}}
-    - {test_name "test_mask_ui32_edge", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [43690, 0], expected 0}}
-    - {test_name "test_mask_ui64_basic", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [170, 1], expected 1}}
-    - {test_name "test_mask_ui64_edge", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [170, 0], expected 0}}
+    - {tags [basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170, 1], expected 1}}
+    - {tags [edge], extension "avx512", type "ui8", lane_count 64, case {inputs [170, 0], expected 0}}
+    - {tags [basic], extension "avx512", type "ui16", lane_count 32, case {inputs [43690, 1], expected 1}}
+    - {tags [edge], extension "avx512", type "ui16", lane_count 32, case {inputs [43690, 0], expected 0}}
+    - {tags [basic], extension "avx512", type "ui32", lane_count 16, case {inputs [43690, 1], expected 1}}
+    - {tags [edge], extension "avx512", type "ui32", lane_count 16, case {inputs [43690, 0], expected 0}}
+    - {tags [basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 1], expected 1}}
+    - {tags [edge], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 0], expected 0}}
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, scalar, generic, oneAPIfpga]:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneAPIfpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -20,26 +28,37 @@ prim<s:=(s,s)> test_mask(mask, position):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
-          sve [sve]
           scalar []
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(cast<static>(type<generation>(vector::imask), (mask >> position) & cast<static>(type<generation>(vector::imask), 1)));"
-prim<s:=(s,s,s)> insert_mask(mask_a, mask_b, position):
+          tsil "complete(cast<static>(type<generation>(vector::imask), (mask >> position) & cast<static>(type<generation>(vector::imask), 1)));"
+prim<im:=(im,im,im)> insert_imask(mask_a, mask_b, position):
   brief_description "Merges two masks at a runtime position."
+  detailed_description """
+    Combines one integral mask with another integral mask shifted left by a
+    runtime position.
+    """
+  semantics """
+    input: integral mask mask_a, integral mask mask_b, scalar position
+    return mask_a | (mask_b << position)
+    """
   operation ""
   tests:
-    - {test_name "insert_mask_ui8_basic", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [15, 3, 4], expected 63}}
-    - {test_name "insert_mask_ui8_edge", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [240, 15, 0], expected 255}}
-    - {test_name "insert_mask_ui16_basic", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [15, 3, 4], expected 63}}
-    - {test_name "insert_mask_ui16_edge", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [240, 15, 0], expected 255}}
-    - {test_name "insert_mask_ui32_basic", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [15, 3, 4], expected 63}}
-    - {test_name "insert_mask_ui32_edge", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [240, 15, 0], expected 255}}
-    - {test_name "insert_mask_ui64_basic", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [15, 3, 4], expected 63}}
-    - {test_name "insert_mask_ui64_edge", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [240, 15, 0], expected 255}}
+    - {tags [basic], extension "avx512", type "ui8", lane_count 64, case {inputs [15, 3, 4], expected 63}}
+    - {tags [edge], extension "avx512", type "ui8", lane_count 64, case {inputs [240, 15, 0], expected 255}}
+    - {tags [basic], extension "avx512", type "ui16", lane_count 32, case {inputs [15, 3, 4], expected 63}}
+    - {tags [edge], extension "avx512", type "ui16", lane_count 32, case {inputs [240, 15, 0], expected 255}}
+    - {tags [basic], extension "avx512", type "ui32", lane_count 16, case {inputs [15, 3, 4], expected 63}}
+    - {tags [edge], extension "avx512", type "ui32", lane_count 16, case {inputs [240, 15, 0], expected 255}}
+    - {tags [basic], extension "avx512", type "ui64", lane_count 8, case {inputs [15, 3, 4], expected 63}}
+    - {tags [edge], extension "avx512", type "ui64", lane_count 8, case {inputs [240, 15, 0], expected 255}}
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, scalar, generic, oneAPIfpga]:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneAPIfpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -48,26 +67,37 @@ prim<s:=(s,s,s)> insert_mask(mask_a, mask_b, position):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
-          sve [sve]
           scalar []
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(mask_a | (mask_b << position));"
-prim<s:=(s,s)> extract_mask(mask, position):
+          tsil "complete(mask_a | (mask_b << position));"
+prim<im:=(im,im)> extract_imask(mask, position):
   brief_description "Extracts a sub-mask by shifting at a runtime position."
+  detailed_description """
+    Shifts an integral mask right by a runtime position, making the selected
+    bit range start at bit zero.
+    """
+  semantics """
+    input: integral mask mask, scalar position
+    return mask >> position
+    """
   operation ""
   tests:
-    - {test_name "extract_mask_ui8_basic", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [176, 4], expected 11}}
-    - {test_name "extract_mask_ui8_edge", extension "avx512", type "ui8", lane_set "lanes_i8", lanes 64, case {inputs [176, 0], expected 176}}
-    - {test_name "extract_mask_ui16_basic", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [176, 4], expected 11}}
-    - {test_name "extract_mask_ui16_edge", extension "avx512", type "ui16", lane_set "lanes_i16", lanes 32, case {inputs [176, 0], expected 176}}
-    - {test_name "extract_mask_ui32_basic", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [176, 4], expected 11}}
-    - {test_name "extract_mask_ui32_edge", extension "avx512", type "ui32", lane_set "lanes_i32", lanes 16, case {inputs [176, 0], expected 176}}
-    - {test_name "extract_mask_ui64_basic", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [176, 4], expected 11}}
-    - {test_name "extract_mask_ui64_edge", extension "avx512", type "ui64", lane_set "lanes_i64", lanes 8, case {inputs [176, 0], expected 176}}
+    - {tags [basic], extension "avx512", type "ui8", lane_count 64, case {inputs [176, 4], expected 11}}
+    - {tags [edge], extension "avx512", type "ui8", lane_count 64, case {inputs [176, 0], expected 176}}
+    - {tags [basic], extension "avx512", type "ui16", lane_count 32, case {inputs [176, 4], expected 11}}
+    - {tags [edge], extension "avx512", type "ui16", lane_count 32, case {inputs [176, 0], expected 176}}
+    - {tags [basic], extension "avx512", type "ui32", lane_count 16, case {inputs [176, 4], expected 11}}
+    - {tags [edge], extension "avx512", type "ui32", lane_count 16, case {inputs [176, 0], expected 176}}
+    - {tags [basic], extension "avx512", type "ui64", lane_count 8, case {inputs [176, 4], expected 11}}
+    - {tags [edge], extension "avx512", type "ui64", lane_count 8, case {inputs [176, 0], expected 176}}
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, scalar, generic, oneAPIfpga]:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneAPIfpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -76,9 +106,12 @@ prim<s:=(s,s)> extract_mask(mask, position):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
-          sve [sve]
           scalar []
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
         implementation:
-          tsil "emit_return(mask >> position);"
+          tsil "complete(mask >> position);"

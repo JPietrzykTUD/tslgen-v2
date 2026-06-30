@@ -1,0 +1,7 @@
+{conflict_checks}
+pub mod profiles {{
+{profile_module_declarations}
+}}
+
+{profile_reexports}
+

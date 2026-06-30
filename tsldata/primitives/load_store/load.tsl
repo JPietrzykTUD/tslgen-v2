@@ -1,48 +1,65 @@
 description "Load primitives"
-prim<v:=ptr>[aligned=*] load(ptr):
+prim<v:=cptr>[aligned=*] load(ptr):
   brief_description "[Example: sse + si8]: Load 128-bits of integer data from memory into \"dst\". \n\t\"mem_addr\" must be aligned on a 16-byte boundary or a general-protection exception may be generated."
+  detailed_description """
+    Loads one full vector register from contiguous memory. The `aligned`
+    attribute selects whether the pointer is promised to satisfy the selected
+    vector alignment.
+    """
+  semantics """
+    input: const pointer ptr, attribute aligned
+    for each lane i:
+      result[i] = ptr[i]
+    return result
+    """
   operation "[Example: sse + si8]: dst[127:0] := MEM[mem_addr+127:mem_addr]"
   tests:
-    - {test_name "loadu_u32_basic", type "ui32", lane_set "lanes_i32", lanes 8, offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "loadu_u32_misaligned", attrs [aligned=false], type "ui32", lane_set "lanes_i32", lanes 8, offset 1, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17]], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
-    - {test_name "loadu_ui8_basic", type "ui8", lane_set "lanes_i8", lanes 16, offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "loadu_ui8_edge", type "ui8", lane_set "lanes_i8", lanes 16, offset 0, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
-    - {test_name "loadu_si8_basic", type "si8", lane_set "lanes_i8", lanes 16, offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "loadu_si8_edge", type "si8", lane_set "lanes_i8", lanes 16, offset 0, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
-    - {test_name "loadu_ui16_basic", type "ui16", lane_set "lanes_i16", lanes 8, offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "loadu_ui16_edge", type "ui16", lane_set "lanes_i16", lanes 8, offset 0, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
-    - {test_name "loadu_si16_basic", type "si16", lane_set "lanes_i16", lanes 8, offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
-    - {test_name "loadu_si16_edge", type "si16", lane_set "lanes_i16", lanes 8, offset 0, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
-    - {test_name "loadu_si32_basic", type "si32", lane_set "lanes_i32", lanes 4, offset 0, case {inputs [[1, 2, 3, 4]], expected [1, 2, 3, 4]}}
-    - {test_name "loadu_si32_edge", type "si32", lane_set "lanes_i32", lanes 4, offset 0, case {inputs [[0, -1, -2147483648, 2147483647]], expected [0, -1, -2147483648, 2147483647]}}
-    - {test_name "loadu_ui64_basic", type "ui64", lane_set "lanes_i64", lanes 2, offset 0, case {inputs [[1, 2]], expected [1, 2]}}
-    - {test_name "loadu_ui64_edge", type "ui64", lane_set "lanes_i64", lanes 2, offset 0, case {inputs [[0, 1]], expected [0, 1]}}
-    - {test_name "loadu_si64_basic", type "si64", lane_set "lanes_i64", lanes 2, offset 0, case {inputs [[1, 2]], expected [1, 2]}}
-    - {test_name "loadu_si64_edge", type "si64", lane_set "lanes_i64", lanes 2, offset 0, case {inputs [[0, -1]], expected [0, -1]}}
-    - {test_name "loadu_f32_basic", type "f32", lane_set "lanes_f32", lanes 4, offset 0, case {inputs [[1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "loadu_f32_edge", type "f32", lane_set "lanes_f32", lanes 4, offset 0, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
-    - {test_name "loadu_f64_basic", type "f64", lane_set "lanes_f64", lanes 2, offset 0, case {inputs [[1.0, -2.0]], expected [1.0, -2.0]}}
-    - {test_name "loadu_f64_edge", type "f64", lane_set "lanes_f64", lanes 2, offset 0, case {inputs [[0.0, -0.0]], expected [0.0, -0.0]}}
+    - {tags [basic], type "ui32", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [misaligned], attrs [aligned=false], type "ui32", offset 1, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17]], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
+    - {tags [basic], type "ui8", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "ui8", offset 0, case {inputs [[0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]], expected [0, 1, 255, 254, 2, 3, 4, 5, 0, 1, 255, 254, 2, 3, 4, 5]}}
+    - {tags [basic], type "si8", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [edge], type "si8", offset 0, case {inputs [[0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]], expected [0, -1, -128, 127, 1, -2, 2, 126, 0, -1, -128, 127, 1, -2, 2, 126]}}
+    - {tags [basic], type "ui16", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "ui16", offset 0, case {inputs [[0, 1, 65535, 65534, 2, 3, 4, 5]], expected [0, 1, 65535, 65534, 2, 3, 4, 5]}}
+    - {tags [basic], type "si16", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [edge], type "si16", offset 0, case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, -1, -32768, 32767, 1, -2, 2, 32766]}}
+    - {tags [basic], type "si32", offset 0, case {inputs [[1, 2, 3, 4]], expected [1, 2, 3, 4]}}
+    - {tags [edge], type "si32", offset 0, case {inputs [[0, -1, -2147483648, 2147483647]], expected [0, -1, -2147483648, 2147483647]}}
+    - {tags [basic], type "ui64", offset 0, case {inputs [[1, 2]], expected [1, 2]}}
+    - {tags [edge], type "ui64", offset 0, case {inputs [[0, 1]], expected [0, 1]}}
+    - {tags [basic], type "si64", offset 0, case {inputs [[1, 2]], expected [1, 2]}}
+    - {tags [edge], type "si64", offset 0, case {inputs [[0, -1]], expected [0, -1]}}
+    - {tags [basic], type "f32", offset 0, case {inputs [[1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [edge], type "f32", offset 0, case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
+    - {tags [basic], type "f64", offset 0, case {inputs [[1.0, -2.0]], expected [1.0, -2.0]}}
+    - {tags [edge], type "f64", offset 0, case {inputs [[0.0, -0.0]], expected [0.0, -0.0]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
-          tsil "emit_return(*ptr);"
+          tsil "complete(*ptr);"
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
-              let<type>(T, type<generation>(vector::register)) 
-              T reg;
-              loop<unroll>(value<generation>(vector::length)) 
-              loop<range>(idx, 0, value<generation>(vector::length), 1)  {
+              var<init_register>(reg);
+              loop<backend, unroll>(idx, 0, value<generation>(vector::length), 1)  {
                 reg[idx] = *ptr_add(ptr, idx);
               }
-              emit_return(reg);
+              complete(reg);
             """
     [avx512, avx2, sse]:
       ?i?:
@@ -50,21 +67,25 @@ prim<v:=ptr>[aligned=*] load(ptr):
           avx512 [avx512f]
           avx2 [avx]
           sse [sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
-              emit_return(
-                intrin_compose<load, suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)>(
-                  cast<reinterpret>(
-                    type<generation>(vector::register) const *, 
+              complete(
+                intrin<load, build[suffix=intrin::suffix("stream")]>(
+                  cast<reinterpret, type=const_ptr>(
+                    type<generation>(vector::register),
                     assume_aligned<value<generation>(vector::alignment)>(ptr)
                   )
                 )
               );
             } else<generation> {
-              emit_return(
-                intrin_compose<loadu, suffix=value<backend>(intrin::suffix("stream")), prefix=value<backend>(intrin::prefix)>(
-                  cast<reinterpret>(type<generation>(vector::register) const *, ptr)
+              complete(
+                intrin<loadu, build[suffix=intrin::suffix("stream")]>(
+                  cast<reinterpret, type=const_ptr>(type<generation>(vector::register), ptr)
                 )
               );
             }
@@ -72,19 +93,23 @@ prim<v:=ptr>[aligned=*] load(ptr):
       f?:
         requires:
           avx512 [avx512f]
-          avx [avx]
+          avx2 [avx]
           sse [sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
-              emit_return(
-                intrin_compose<load>(
+              complete(
+                intrin<load, build>(
                   assume_aligned<value<generation>(vector::alignment)>(ptr)
                 )
               );
             } else<generation> {
-              emit_return(
-                intrin_compose<loadu>(
+              complete(
+                intrin<loadu, build>(
                   ptr
                 )
               );
@@ -93,17 +118,21 @@ prim<v:=ptr>[aligned=*] load(ptr):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
               if<generation>(value<generation>(primitive::attribute(aligned))) {
-                emit_return(
-                  intrin_compose<vld1q>(
+                complete(
+                  intrin<vld1q, build>(
                     assume_aligned<value<generation>(vector::alignment)>(ptr)
                   )
                 );
               } else<generation> {
-                emit_return(
-                  intrin_compose<vld1q>(
+                complete(
+                  intrin<vld1q, build>(
                     ptr
                   )
                 );
@@ -112,18 +141,22 @@ prim<v:=ptr>[aligned=*] load(ptr):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
               if<generation>(value<generation>(primitive::attribute(aligned))) {
-                emit_return(
-                  intrin_compose<svld1>(
+                complete(
+                  intrin<svld1, build>(
                     call<primitive=mask_true[Vec]>(),
                     assume_aligned<value<generation>(vector::alignment)>(ptr)
                   )
                 );
               } else<generation> {
-                emit_return(
-                  intrin_compose<svld1>(
+                complete(
+                  intrin<svld1, build>(
                     call<primitive=mask_true[Vec]>(),
                     ptr
                   )
@@ -131,46 +164,67 @@ prim<v:=ptr>[aligned=*] load(ptr):
               }
             """
 
-prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
+prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
   brief_description "TODO"
+  detailed_description """
+    Loads mask-selected lanes from contiguous memory and writes zero to inactive
+    lanes. The `aligned` attribute selects whether the pointer is promised to
+    satisfy the selected vector alignment.
+    """
+  semantics """
+    input: mask mask, const pointer ptr, attribute aligned
+    for each lane i:
+      if mask[i] is active:
+        result[i] = ptr[i]
+      else:
+        result[i] = 0
+    return result
+    """
   operation "TODO"
   tests:
-    - {test_name "load_mask_zero_ui32_all", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
-    - {test_name "load_mask_zero_ui32_none", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "load_mask_zero_ui32_alternating", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 170], expected [0, 11, 0, 13, 0, 15, 0, 17]}}
-    - {test_name "load_mask_zero_ui8_all", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 65535], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "load_mask_zero_ui8_none", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 0], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "load_mask_zero_si16_all", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], 255], expected [1, -2, 3, -4, 5, -6, 7, -8]}}
-    - {test_name "load_mask_zero_si16_none", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
-    - {test_name "load_mask_zero_f32_all", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], 15], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "load_mask_zero_f32_none", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], 0], expected [0.0, 0.0, 0.0, 0.0]}}
-    - {test_name "load_mask_zero_f64_all", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], 3], expected [1.0, -2.0]}}
-    - {test_name "load_mask_zero_f64_none", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], 0], expected [0.0, 0.0]}}
+    - {tags [mask, zero, all], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
+    - {tags [mask, zero, none], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [mask, zero, alternating], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 170], expected [0, 11, 0, 13, 0, 15, 0, 17]}}
+    - {tags [mask, zero, all], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 65535], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [mask, zero, none], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 0], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [mask, zero, all], type "si16", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], 255], expected [1, -2, 3, -4, 5, -6, 7, -8]}}
+    - {tags [mask, zero, none], type "si16", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [mask, zero, all], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], 15], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [mask, zero, none], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], 0], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [mask, zero, all], type "f64", case {inputs [[1.0, -2.0], 3], expected [1.0, -2.0]}}
+    - {tags [mask, zero, none], type "f64", case {inputs [[1.0, -2.0], 0], expected [0.0, 0.0]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
-            emit_return(call<primitive=mov attrs[mask=zero]>(mask, *ptr));
+            complete(call<primitive=mov, attrs[mask=zero]>(mask, *ptr));
           """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length)) 
-            loop<range>(i, 0, value<generation>(vector::length), 1)  {
-              if (details::mask_test<Vec>(mask, i)) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
+              if (mask<test>(mask, i)) {
                 result[i] = *ptr_add(ptr, i);
               } else {
                 result[i] = cast<static>(type<generation>(base::in), 0);
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -184,12 +238,16 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
           sse_vl:
             idqword [avx512f, avx512vl, sse, sse2]
             bword   [avx512f, avx512vl, avx512bw, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
-            emit_return(
-              intrin_compose<maskz_loadu, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
-                mask, cast<reinterpret>(SignedBase const *, ptr)
+            complete(
+              intrin<maskz_loadu, build[suffix=base::signed_of(base::in)]>(
+                mask, cast<reinterpret, type=const_ptr>(SignedBase, ptr)
               )
             );
           """
@@ -198,17 +256,21 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
-              emit_return(
-                intrin_compose<maskz_load>(
+              complete(
+                intrin<maskz_load, build>(
                   mask, assume_aligned<value<generation>(vector::alignment)>(ptr)
                 )
               );
             } else<generation> {
-              emit_return(
-                intrin_compose<maskz_load>(
+              complete(
+                intrin<maskz_loadu, build>(
                   mask, ptr
                 )
               );
@@ -220,12 +282,16 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
           avx2 [avx]
           sse [sse, sse2]
           neon [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
-            emit_return(
-              call<primitive=mov attrs[mask=zero]>(
+            complete(
+              call<primitive=mov, attrs[mask=zero]>(
                 mask,
-                call<primitive=load attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                call<primitive=load, attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
                   ptr
                 )
               )
@@ -234,49 +300,71 @@ prim<v:=(m,ptr)>[aligned=*, mask=zero] load(mask, ptr):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
-              emit_return(
-                intrin_compose<svld1>(
+              complete(
+                intrin<svld1, build>(
                   mask,
                   assume_aligned<value<generation>(vector::alignment)>(ptr)
                 )
               );
             } else<generation> {
-              emit_return(
-                intrin_compose<svld1>(
+              complete(
+                intrin<svld1, build>(
                   mask,
                   ptr
                 )
               );
             }
           """
-prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
+prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
   brief_description "Masked load with pass-through semantics: lanes enabled by the mask are loaded from memory, and disabled lanes are taken from data."
+  detailed_description """
+    Loads mask-selected lanes from contiguous memory and preserves inactive
+    lanes from the pass-through vector. The `aligned` attribute selects whether
+    the pointer is promised to satisfy the selected vector alignment.
+    """
+  semantics """
+    input: mask mask, const pointer ptr, register data, attribute aligned
+    for each lane i:
+      if mask[i] is active:
+        result[i] = ptr[i]
+      else:
+        result[i] = data[i]
+    return result
+    """
   operation "TODO"
   tests:
-    - {test_name "load_mask_merge_ui32_all", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [100, 101, 102, 103, 104, 105, 106, 107], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
-    - {test_name "load_mask_merge_ui32_none", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [100, 101, 102, 103, 104, 105, 106, 107], 0], expected [100, 101, 102, 103, 104, 105, 106, 107]}}
-    - {test_name "load_mask_merge_ui32_alternating", type "ui32", lane_set "lanes_i32", lanes 8, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [100, 101, 102, 103, 104, 105, 106, 107], 170], expected [100, 11, 102, 13, 104, 15, 106, 17]}}
-    - {test_name "load_mask_merge_ui8_all", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116], 65535], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
-    - {test_name "load_mask_merge_ui8_none", type "ui8", lane_set "lanes_i8", lanes 16, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116], 0], expected [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]}}
-    - {test_name "load_mask_merge_si16_all", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], [101, 102, 103, 104, 105, 106, 107, 108], 255], expected [1, -2, 3, -4, 5, -6, 7, -8]}}
-    - {test_name "load_mask_merge_si16_none", type "si16", lane_set "lanes_i16", lanes 8, case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], [101, 102, 103, 104, 105, 106, 107, 108], 0], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
-    - {test_name "load_mask_merge_f32_all", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [10.0, 20.0, 30.0, 40.0], 15], expected [1.0, -2.0, 3.5, -4.5]}}
-    - {test_name "load_mask_merge_f32_none", type "f32", lane_set "lanes_f32", lanes 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [10.0, 20.0, 30.0, 40.0], 0], expected [10.0, 20.0, 30.0, 40.0]}}
-    - {test_name "load_mask_merge_f64_all", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [10.0, 20.0], 3], expected [1.0, -2.0]}}
-    - {test_name "load_mask_merge_f64_none", type "f64", lane_set "lanes_f64", lanes 2, case {inputs [[1.0, -2.0], [10.0, 20.0], 0], expected [10.0, 20.0]}}
+    - {tags [mask, merge, all], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [100, 101, 102, 103, 104, 105, 106, 107], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
+    - {tags [mask, merge, none], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [100, 101, 102, 103, 104, 105, 106, 107], 0], expected [100, 101, 102, 103, 104, 105, 106, 107]}}
+    - {tags [mask, merge, alternating], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [100, 101, 102, 103, 104, 105, 106, 107], 170], expected [100, 11, 102, 13, 104, 15, 106, 17]}}
+    - {tags [mask, merge, all], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116], 65535], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [mask, merge, none], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116], 0], expected [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]}}
+    - {tags [mask, merge, all], type "si16", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], [101, 102, 103, 104, 105, 106, 107, 108], 255], expected [1, -2, 3, -4, 5, -6, 7, -8]}}
+    - {tags [mask, merge, none], type "si16", case {inputs [[1, -2, 3, -4, 5, -6, 7, -8], [101, 102, 103, 104, 105, 106, 107, 108], 0], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
+    - {tags [mask, merge, all], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [10.0, 20.0, 30.0, 40.0], 15], expected [1.0, -2.0, 3.5, -4.5]}}
+    - {tags [mask, merge, none], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [10.0, 20.0, 30.0, 40.0], 0], expected [10.0, 20.0, 30.0, 40.0]}}
+    - {tags [mask, merge, all], type "f64", case {inputs [[1.0, -2.0], [10.0, 20.0], 3], expected [1.0, -2.0]}}
+    - {tags [mask, merge, none], type "f64", case {inputs [[1.0, -2.0], [10.0, 20.0], 0], expected [10.0, 20.0]}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             if (mask) {
-              emit_return(*ptr);
+              complete(*ptr);
             } else {
-              emit_return(data);
+              complete(data);
             }
           """
     [generic, oneAPIfpga]:
@@ -284,18 +372,21 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
-            var<init_register>(result)
-            loop<unroll>(value<generation>(vector::length)) 
-            loop<range>(i, 0, value<generation>(vector::length), 1)  {
-              if (details::mask_test<Vec>(mask, i)) {
+            var<init_register>(result);
+            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
+              if (mask<test>(mask, i)) {
                 result[i] = *ptr_add(ptr, i);
               } else {
                 result[i] = data[i];
               }
             }
-            emit_return(result);
+            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -309,14 +400,18 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
           sse_vl:
             idqword [avx512f, avx512vl, sse, sse2]
             bword   [avx512f, avx512vl, avx512bw, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
-            emit_return(
-              intrin_compose<mask_loadu, suffix=value<backend>(intrin::suffix(type<generation>(base::signed_of(type<generation>(base::in)))))>(
+            complete(
+              intrin<mask_loadu, build[suffix=base::signed_of(base::in)]>(
                 data,
                 mask,
-                cast<reinterpret>(SignedBase const *, ptr)
+                cast<reinterpret, type=const_ptr>(SignedBase, ptr)
               )
             );
           """
@@ -325,19 +420,23 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(aligned))) {
-              emit_return(
-                intrin_compose<mask_load>(
+              complete(
+                intrin<mask_load, build>(
                   data,
                   mask,
                   assume_aligned<value<generation>(vector::alignment)>(ptr)
                 )
               );
             } else<generation> {
-              emit_return(
-                intrin_compose<mask_loadu>(
+              complete(
+                intrin<mask_loadu, build>(
                   data,
                   mask,
                   ptr
@@ -351,13 +450,17 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
           avx2 [avx]
           sse [sse, sse2]
           neon [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
-            emit_return(
-              call<primitive=blend attrs[mask=pass_through]>(
+            complete(
+              call<primitive=blend, attrs[mask=pass_through]>(
                 mask,
                 data,
-                call<primitive=load attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                call<primitive=load, attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
                   ptr
                 )
               )
@@ -366,51 +469,92 @@ prim<v:=(m,ptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
-            emit_return(
-              call<primitive=blend attrs[mask=pass_through]>(
+            complete(
+              call<primitive=blend, attrs[mask=pass_through]>(
                 mask,
                 data,
-                call<primitive=load attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                call<primitive=load, attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
                   ptr
                 )
               )
             );
           """
 
-prim<m:=ptr>[aligned=*, packed=*] load_mask(ptr):
+prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
   param_types:
     ptr:
       "if packed=true" "type<generation>(vector::imask) const*"
-      "if packed=false" "type<generation>(vector::mask_underlying_t) const*"
+      "if packed=false" "type<generation>(base::unsigned_of(type<generation>(base::in))) const*"
   brief_description "Loads data from memory to a mask."
+  detailed_description """
+    Loads a mask value from memory. With `packed=true`, memory contains the
+    compact integral mask representation. With `packed=false`, memory contains
+    one unsigned lane word per vector lane, where nonzero words become active
+    mask lanes.
+    """
+  semantics """
+    input: const pointer ptr, attribute packed, attribute aligned
+    if packed is true:
+      return mask_from_integral(ptr[0])
+    for each lane i:
+      result[i] = ptr[i] != 0
+    return result
+    """
   operation ""
   tests:
-    - {test_name "load_mask_packed_true_none", attrs [aligned=false, packed=true], type "ui32", lane_set "lanes_i32", lanes 4, offset 1, case {inputs [[0, 0, 0]], expected 0}}
-    - {test_name "load_mask_packed_false_none", attrs [aligned=false, packed=false], type "ui32", lane_set "lanes_i32", lanes 4, offset 0, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected 0}}
+    - {tags [mask, none], attrs [aligned=false, packed=true], type "ui32", offset 1, case {inputs [[0, 0, 0]], expected 0}}
+    - {tags [mask, none], attrs [aligned=false, packed=false], type "ui32", offset 0, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected 0}}
   impls:
     scalar:
       arith:
         requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
-          tsil "emit_return(call<primitive=to_mask[Vec]>(*ptr));"
+          tsil """
+            if<generation>(value<generation>(primitive::attribute(packed))) {
+              complete(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
+            } else<generation> {
+              let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              complete(
+                call<primitive=to_mask[Vec]>(
+                  cast<static>(type<generation>(vector::imask), *(cast<reinterpret, type=const_ptr>(MaskWord, ptr)))
+                )
+              );
+            }
+          """
     [generic, oneAPIfpga]:
       arith:
         requires:
           generic []
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
-              emit_return(call<primitive=to_mask[Vec]>(*ptr));
+              complete(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
             } else<generation> {
-              let<type>(MaskT, type<generation>(vector::mask))
-              var<typed>(MaskT, result, mask<zero>())
-              loop<range>(i, 0, value<generation>(vector::length), 1) {
-                result[i] = *ptr_add(ptr, i);
+              let<type>(MaskT, type<generation>(vector::mask));
+              let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              var<const_infer>(words, cast<reinterpret, type=const_ptr>(MaskWord, ptr));
+              var<typed>(MaskT, result, mask<zero>());
+              loop<backend>(i, 0, value<generation>(vector::length), 1) {
+                if ((*ptr_add(words, i)) != cast<static>(MaskWord, 0)) {
+                  mask<set:1>(result, i);
+                }
               }
-              emit_return(result);
+              complete(result);
             }
           """
     [avx512, avx2_vl, sse_vl]:
@@ -419,8 +563,27 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask(ptr):
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
-          tsil "emit_return(*ptr);"
+          tsil """
+            if<generation>(value<generation>(primitive::attribute(packed))) {
+              complete(*(cast<reinterpret, type=const_ptr>(type<generation>(vector::imask), ptr)));
+            } else<generation> {
+              let<type>(MaskBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(MaskVec, type<generation>(vector::as_base(MaskBase)));
+              complete(
+                call<primitive=nequal[MaskVec]>(
+                  call<primitive=load[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                    cast<reinterpret, type=const_ptr>(MaskBase, ptr)
+                  ),
+                  call<primitive=set_zero[MaskVec]>()
+                )
+              );
+            }
+          """
     [avx2, sse, neon]:
       arith:
         requires:
@@ -429,80 +592,108 @@ prim<m:=ptr>[aligned=*, packed=*] load_mask(ptr):
             [si8, ui8, si16, ui16, si32, ui32, f32, f64] [sse, sse2]
             [si64, ui64] [sse, sse2, sse4_1]
           neon [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
-              emit_return(call<primitive=to_mask[Vec]>(*ptr));
+              complete(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
             } else<generation> {
-              emit_return(
-                call<primitive=load attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
-                  cast<reinterpret>(type<generation>(vector::mask_underlying_t) const*, ptr)
+              let<type>(MaskBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(MaskVec, type<generation>(vector::as_base(MaskBase)));
+              var<const_infer>(
+                loaded_mask,
+                call<primitive=nequal[MaskVec]>(
+                  call<primitive=load[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                    cast<reinterpret, type=const_ptr>(MaskBase, ptr)
+                  ),
+                  call<primitive=set_zero[MaskVec]>()
                 )
+              );
+              complete(
+                call<primitive=reinterpret[MaskVec, Vec]>(loaded_mask)
               );
             }
           """
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
             if<generation>(value<generation>(primitive::attribute(packed))) {
-              let<type>(MaskT, type<generation>(vector::mask))
-              let<type>(UVec, type<generation>(vector::transform_extension(type<generation>(base::unsigned_of(type<generation>(base::in))))))
-              var<typed>(MaskT, out, intrin<svpfalse_b>())
-              var<const_infer>(all, call<primitive=mask_true[Vec]>())
-              var<const_infer>(idx, call<primitive=sequence[UVec]>())
-              var<const_infer>(lanes, value<generation>(vector::length))
-              var<const_infer>(bytes, cast<reinterpret>(type<backend>(scalar::ui8) const*, ptr))
+              let<type>(MaskT, type<generation>(vector::mask));
+              let<type>(UVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+              var<typed>(MaskT, out, intrin<svpfalse_b>());
+              var<const_infer>(all, call<primitive=mask_true[Vec]>());
+              var<const_infer>(idx, call<primitive=sequence[UVec]>());
+              var<const_infer>(
+                lanes,
+                (intrin<svcntb>() / sizeof(type<generation>(base::unsigned_of(type<generation>(base::in)))))
+              );
+              var<const_infer>(bytes, cast<reinterpret, type=const_ptr>(type<backend>(scalar::ui8), ptr));
 
-              loop<range>(lane, 0, lanes, 1) {
-                var<const_infer>(set, (((*ptr_add(bytes, lane >> 3)) >> (lane & 7)) & 1))
+              loop<backend>(lane, 0, lanes, 1) {
+                var<const_infer>(set, (((*ptr_add(bytes, lane >> 3)) >> (lane & 7)) & 1));
                 if (set) {
-                  var<const_infer>(one, intrin_compose<svcmpeq_n, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))>(
+                  var<const_infer>(one, intrin<svcmpeq_n, build[suffix=base::unsigned_of(base::in)]>(
                     all, idx, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), lane)
-                  ))
+                  ));
                   out = intrin<svorr_b_z>(all, out, one);
                 }
               }
-              emit_return(out);
+              complete(out);
             } else<generation> {
-              let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))))
-              let<type>(UVec, type<generation>(vector::transform_extension(type<generation>(base::unsigned_of(type<generation>(base::in))))))
-              var<const_infer>(pg, call<primitive=mask_true[Vec]>())
-              var<infer>(vec, call<primitive=set_zero[UVec]>())
+              let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(UVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
+              var<infer>(vec, call<primitive=set_zero[UVec]>());
               if<generation>(value<generation>(primitive::attribute(aligned))) {
-                vec = call<primitive=load[UVec] attrs[aligned=true]>(cast<reinterpret>(UnsignedT const*, ptr));
+                vec = call<primitive=load[UVec], attrs[aligned=true]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
               } else<generation> {
-                vec = call<primitive=load[UVec] attrs[aligned=false]>(cast<reinterpret>(UnsignedT const*, ptr));
+                vec = call<primitive=load[UVec], attrs[aligned=false]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
               }
-              emit_return(intrin_compose<svcmpne_n, suffix=value<backend>(intrin::suffix(type<generation>(base::unsigned_of(type<generation>(base::in)))))>(pg, vec, cast<static>(UnsignedT, 0)));
+              complete(intrin<svcmpne_n, build[suffix=base::unsigned_of(base::in)]>(pg, vec, cast<static>(UnsignedT, 0)));
             }
           """
 
-prim<s:=ptr>[aligned=false] load_scalar(ptr):
+prim<s:=cptr>[aligned=false] load_scalar(ptr):
   brief_description "Loads a scalar mask from memory."
+  detailed_description """
+    Loads one scalar value from memory. This primitive always uses the unaligned
+    pointer form.
+    """
+  semantics """
+    input: const pointer ptr
+    return ptr[0]
+    """
   operation ""
   tests:
-    - {test_name "load_scalar_ui8_basic", type "ui8", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_ui8_edge", type "ui8", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_si8_basic", type "si8", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_si8_edge", type "si8", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_ui16_basic", type "ui16", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_ui16_edge", type "ui16", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_si16_basic", type "si16", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_si16_edge", type "si16", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_ui32_basic", type "ui32", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_ui32_edge", type "ui32", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_si32_basic", type "si32", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_si32_edge", type "si32", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_f32_basic", type "f32", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_f32_edge", type "f32", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_ui64_basic", type "ui64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_ui64_edge", type "ui64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_si64_basic", type "si64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_si64_edge", type "si64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
-    - {test_name "load_scalar_f64_basic", type "f64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
-    - {test_name "load_scalar_f64_edge", type "f64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "ui8", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "ui8", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "si8", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "si8", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "ui16", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "ui16", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "si16", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "si16", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "ui32", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "ui32", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "si32", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "si32", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "f32", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "f32", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "ui64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "ui64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "si64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "si64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
+    - {tags [scalar, basic], type "f64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
+    - {tags [scalar, edge], type "f64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
   impls:
     [scalar, generic, avx512, avx2, sse, neon, sve, oneAPIfpga]:
       arith:
@@ -514,5 +705,9 @@ prim<s:=ptr>[aligned=false] load_scalar(ptr):
           neon [neon]
           sve [sve]
           oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
         implementation:
-          tsil "emit_return(*ptr);"
+          tsil "complete(*ptr);"

@@ -1,0 +1,13 @@
+[package]
+name = "{package_name}"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+default = ["{default_rust_feature}"]
+{feature_entries}
+
+{profile_metadata_entries}

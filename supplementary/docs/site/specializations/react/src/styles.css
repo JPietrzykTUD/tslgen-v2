@@ -1,0 +1,627 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #f5f5f7;
+  color: #222;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.page {
+  max-width: 1480px;
+  margin: 42px auto;
+  padding: 0 24px 180px;
+}
+
+.pageHeader {
+  margin-bottom: 18px;
+}
+
+.pageHeader h1 {
+  margin: 0 0 8px;
+  font-size: 1.8rem;
+}
+
+.pageHeader p {
+  margin: 0;
+  color: #666;
+  max-width: 820px;
+  line-height: 1.45;
+}
+
+.searchInput {
+  width: 100%;
+  margin-bottom: 18px;
+  padding: 15px 18px;
+  border: 1px solid #ddd;
+  border-radius: 14px;
+  background: white;
+  outline: none;
+  font-weight: 650;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.searchInput:focus {
+  border-color: #222;
+}
+
+.loading,
+.errorBox {
+  border: 1px solid #ddd;
+  border-radius: 14px;
+  background: white;
+  padding: 18px;
+  color: #666;
+}
+
+.explorerLayout {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+  transition: grid-template-columns 180ms ease;
+}
+
+.explorerLayout.filtersClosed {
+  grid-template-columns: 56px minmax(0, 1fr);
+}
+
+.explorerLayout.filtersOpen {
+  grid-template-columns: 320px minmax(0, 1fr);
+}
+
+.filterPanel {
+  position: sticky;
+  top: 24px;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid #ddd;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.filterPanel.closed {
+  width: 56px;
+  overflow: hidden;
+}
+
+.filterPanel.open {
+  width: 320px;
+}
+
+.collapsedFilterRail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 8px;
+}
+
+.railToggleButton {
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 12px;
+  background: #222;
+  color: white;
+  cursor: pointer;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.railToggleButton:hover {
+  background: #000;
+}
+
+.railBadges {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.railBadge {
+  width: 38px;
+  min-height: 38px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.railBadge strong {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.railBadge span {
+  margin-top: 3px;
+  font-size: 0.65rem;
+  color: #777;
+  font-weight: 800;
+}
+
+.filterPanelContent {
+  padding: 14px;
+}
+
+.filterPanelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.filterPanelTitle {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.filterPanelSubtitle {
+  margin-top: 2px;
+  font-size: 0.8rem;
+  color: #777;
+}
+
+.closeFiltersButton {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  background: #fafafa;
+  cursor: pointer;
+}
+
+.closeFiltersButton:hover {
+  background: #eee;
+}
+
+.filterSection {
+  padding: 12px 0;
+  border-top: 1px solid #eee;
+}
+
+.filterSection:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.filterSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.filterSectionHeader h3 {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.filterActions {
+  display: flex;
+  gap: 6px;
+}
+
+.filterAction {
+  border: none;
+  background: transparent;
+  color: #555;
+  padding: 0;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.filterAction:hover {
+  color: #000;
+  text-decoration: underline;
+}
+
+.filterSubsection {
+  margin-top: 12px;
+}
+
+.filterSubsection:first-child {
+  margin-top: 0;
+}
+
+.filterSubsectionTitle {
+  margin-bottom: 6px;
+  color: #777;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.toggleGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.toggleChip {
+  border: 1px solid #ccc;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: white;
+  color: #222;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.toggleChip:hover {
+  background: #f3f3f3;
+}
+
+.activeToggleChip {
+  border-color: #222;
+  background: #222;
+  color: white;
+}
+
+.contentPanel {
+  min-width: 0;
+}
+
+.activeFilterSummary {
+  margin-bottom: 12px;
+  border: 1px solid #ddd;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: white;
+  color: #555;
+  font-size: 0.9rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.summaryFilterButton {
+  border: 1px solid #ccc;
+  border-radius: 999px;
+  background: #fafafa;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.summaryFilterButton:hover {
+  background: #eee;
+}
+
+.operationList {
+  border: 1px solid #ddd;
+  border-radius: 14px;
+  overflow: visible;
+  background: white;
+}
+
+.operationRowGroup + .operationRowGroup {
+  border-top: 1px solid #eee;
+}
+
+.operationRow {
+  width: 100%;
+  border: none;
+  background: white;
+  padding: 16px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+  cursor: pointer;
+}
+
+.operationRow:hover {
+  background: #fafafa;
+}
+
+.operationRow span:first-child {
+  font-weight: 750;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
+}
+
+.operationMeta {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.chevron {
+  font-size: 1.1rem;
+  opacity: 0.7;
+}
+
+.operationDetails {
+  padding: 0 18px 18px;
+  color: #555;
+  line-height: 1.5;
+  background: white;
+}
+
+.primitiveNarrativeInline {
+  margin-top: 16px;
+  border-top: 1px solid #eee;
+  padding-top: 14px;
+  color: #555;
+  line-height: 1.5;
+}
+
+.primitiveNarrativeInline h2 {
+  margin: 14px 0 8px;
+  font-size: 1rem;
+  color: #222;
+}
+
+.primitiveNarrativeInline pre {
+  margin: 0;
+  overflow: auto;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  background: #fafafa;
+  padding: 12px;
+}
+
+.empty {
+  padding: 18px;
+  color: #777;
+  background: white;
+}
+
+.specializationSummary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.summaryPill {
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summaryPill span {
+  color: #777;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.summaryPill strong {
+  color: #222;
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.specializationInventory {
+  margin-top: 16px;
+}
+
+.inventoryToolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.inventorySubtitle {
+  margin-top: 2px;
+  color: #777;
+  font-size: 0.8rem;
+}
+
+.segmentedControl {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.segmentButton {
+  border: 1px solid #ccc;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #fafafa;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.segmentButton:hover {
+  background: #eee;
+}
+
+.activeSegment {
+  border-color: #222;
+  background: #222;
+  color: white;
+}
+
+.inventoryGroups {
+  display: grid;
+  gap: 12px;
+}
+
+.inventoryGroup {
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  background: white;
+  overflow: hidden;
+}
+
+.inventoryGroupHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #eee;
+  background: #f8f8f8;
+}
+
+.inventoryGroupHeader span {
+  color: #777;
+  font-size: 0.82rem;
+}
+
+.inventoryRowGroup + .inventoryRowGroup {
+  border-top: 1px solid #eee;
+}
+
+.inventoryRow {
+  width: 100%;
+  border: none;
+  background: white;
+  padding: 11px 14px;
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 1.4fr) minmax(90px, 0.8fr) minmax(90px, 0.7fr)
+    minmax(120px, 1fr) minmax(120px, 1fr) auto 24px;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.84rem;
+}
+
+.inventoryRow:hover {
+  background: #fafafa;
+}
+
+.inventoryTarget {
+  color: #222;
+  font-weight: 750;
+}
+
+.inventoryRow span {
+  min-width: 0;
+  color: #555;
+  overflow-wrap: anywhere;
+}
+
+.inventoryRow strong {
+  justify-self: end;
+  color: #222;
+}
+
+.inventoryDetails {
+  border-top: 1px solid #eee;
+  background: #fcfcfc;
+  padding: 8px 10px 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.inventoryDetailRow {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  background: white;
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns:
+    70px 120px 110px 110px 100px 110px minmax(180px, 1.4fr)
+    minmax(140px, 1fr) minmax(120px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.78rem;
+}
+
+.inventoryDetailRow span {
+  min-width: 0;
+  color: #555;
+  overflow-wrap: anywhere;
+}
+
+.inventoryDetailRow strong {
+  justify-self: end;
+}
+
+.inventoryEmpty,
+.inventoryDetailOverflow {
+  border: 1px dashed #ccc;
+  border-radius: 10px;
+  padding: 14px;
+  background: #fafafa;
+  color: #777;
+}
+
+@media (max-width: 900px) {
+  .explorerLayout.filtersClosed,
+  .explorerLayout.filtersOpen {
+    grid-template-columns: 1fr;
+  }
+
+  .filterPanel {
+    position: static;
+    max-height: none;
+  }
+
+  .filterPanel.closed,
+  .filterPanel.open {
+    width: 100%;
+  }
+
+  .collapsedFilterRail {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .railBadges {
+    flex-direction: row;
+  }
+}
+
+@media (max-width: 700px) {
+  .page {
+    margin: 24px auto;
+    padding: 0 12px 180px;
+  }
+
+  .operationDetails {
+    padding: 0 12px 14px;
+  }
+
+  .activeFilterSummary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .inventoryToolbar {
+    flex-direction: column;
+  }
+
+  .segmentedControl {
+    justify-content: flex-start;
+  }
+
+  .inventoryRow,
+  .inventoryDetailRow {
+    grid-template-columns: 1fr;
+  }
+
+  .inventoryRow strong,
+  .inventoryDetailRow strong {
+    justify-self: start;
+  }
+}

@@ -1,0 +1,224 @@
+"""The generated value-correctness tests build and pass (opt-in `run_value_tests`).
+
+Separate from `test_build_verify` (which only compiles the substrate): value testing builds
+and runs the extra `tsl_values` binary, so it is gated behind ``run_value_tests=True`` and kept
+to a focused primitive/profile set to bound its cost.
+"""
+
+from __future__ import annotations
+
+from collections import Counter
+from pathlib import Path
+import shutil
+
+import pytest
+
+from tslc.api import generate_project, verify_project, write_artifacts
+from tslc.catalog.builder import CatalogBuilder
+from tslc.diagnostics import has_errors
+from tslc.sources import SourceLoader
+from tslc.syntax.parser import TslParser
+from tslc.value_tests.coverage import parity_gaps
+
+
+def test_golden_value_tests_build_and_pass(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    # Golden cases run against the generic software reference: vector results (`add`/`sub`/the
+    # cross-lane `conflict`) read back as arrays, a mask result (`equal`) read as the reference's
+    # integer-bitset mask.
+    # `test_harness` also pulls in the vector<->array round-trip so the differential cases
+    # (hardware avx2 vs the generic reference at the same lane count) are emitted and run.
+    # This focused gate stays C++ only to keep the inner value-test smoke cheap; full-corpus Rust
+    # value execution is covered below.
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add", "sub", "conflict", "equal", "store", "hadd", "shift_left"],
+        profiles=["avx2"],
+        backends=("cpp",),
+        test_harness=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    report = verify_project(tmp_path, result.rendered.verify, run_value_tests=True)
+    # No compile/configure errors, and (since the golden tests pass) no value-test warnings.
+    assert report.diagnostics == (), report.diagnostics
+    # The value tests actually ran (the ctest step is present), so a green result is meaningful
+    # rather than vacuous.
+    cpp_steps = {c.command.step for c in report.commands if c.command.backend_id == "cpp"}
+    if cpp_steps:  # cpp toolchain available (else the backend was skipped)
+        assert "test" in cpp_steps, cpp_steps
+        assert "build-values" in cpp_steps, cpp_steps
+
+
+def test_neon_native_arithmetic_bitwise_extract_and_cast_value_tests_build_and_pass(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    """Native ARM coverage beyond `add`: arithmetic, bitwise, extract, and cast tests run."""
+
+    zig = Path("/opt/zig/zig")
+    qemu = shutil.which("qemu-aarch64")
+    if not zig.exists() or qemu is None:
+        pytest.skip("C++/Rust NEON QEMU value-test gate needs /opt/zig/zig and qemu-aarch64")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["sub", "mul", "binary_and", "extract_value", "cast"],
+        profiles=["neon"],
+        backends=("cpp", "rust"),
+        test_harness=True,
+        value_test_warnings=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    report = verify_project(
+        tmp_path,
+        result.rendered.verify,
+        cpp_compiler=(str(zig), "c++"),
+        cpp_target="aarch64-linux-musl",
+        qemu_aarch64_path=qemu,
+        run_value_tests=True,
+    )
+    assert report.diagnostics == (), report.diagnostics
+    steps = {
+        (command.command.backend_id, command.command.step)
+        for command in report.commands
+    }
+    assert ("cpp", "test") in steps
+    assert ("rust", "test") in steps
+
+
+def test_value_full_corpus_avx2_coverage_is_complete(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    """Every planned full-corpus C++ AVX2 value case is emitted or compile-only."""
+
+    result = _full_corpus_cpp_avx2(data_root, machine_profiles_path)
+    assert result.rendered is not None
+    plan = result.rendered.value_tests
+    blocking = [
+        entry
+        for entry in plan.coverage
+        if entry.status
+        in {"missing_authored_tests", "authored_unplanned", "backend_unsupported"}
+    ]
+    assert not blocking
+    store_mask_repr_unpacked = {
+        entry.case_name
+        for entry in plan.coverage
+        if entry.primitive_name == "store_mask_repr"
+        and entry.status == "emitted"
+        and entry.case_name is not None
+        and "_packed_false_" in entry.case_name
+    }
+    assert {
+        "store_mask_repr_ui32_aligned_true_packed_false_mask_unpacked",
+        "store_mask_repr_ui32_aligned_false_packed_false_mask_unpacked",
+        "store_mask_repr_f32_aligned_true_packed_false_mask_unpacked",
+    } <= store_mask_repr_unpacked
+    unpacked_cases = {
+        case.case_name: case
+        for profile in plan.profiles
+        for case in profile.cases
+        if case.call_name == "store_mask_repr" and "_packed_false_" in case.case_name
+    }
+    assert unpacked_cases[
+        "store_mask_repr_f32_aligned_true_packed_false_mask_unpacked"
+    ].expected_type_tag == "ui32"
+    assert any(entry.status == "compile_only_emitted" for entry in plan.coverage)
+    assert len(plan.coverage) >= 1000
+
+
+def test_value_full_corpus_avx2_rust_parity_inventory_is_explicit(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    """Rust and C++ full-corpus AVX2 value-test inventories are in parity."""
+
+    result = _full_corpus_avx2(data_root, machine_profiles_path, backends=("cpp", "rust"))
+    assert result.rendered is not None
+    plan = result.rendered.value_tests
+    status_counts = Counter((entry.backend_id, entry.status) for entry in plan.coverage)
+
+    assert status_counts[("cpp", "missing_authored_tests")] == 0
+    assert status_counts[("cpp", "authored_unplanned")] == 0
+    assert status_counts[("cpp", "backend_unsupported")] == 0
+    assert status_counts[("rust", "missing_authored_tests")] == 0
+    assert status_counts[("rust", "authored_unplanned")] == 0
+    assert status_counts[("rust", "backend_unsupported")] == 0
+    assert status_counts[("rust", "compile_only_emitted")] == 1
+    assert status_counts[("rust", "emitted")] == status_counts[("cpp", "emitted")]
+    assert parity_gaps(plan.coverage, ("cpp", "rust")) == ()
+    assert Counter(diagnostic.code for diagnostic in plan.diagnostics) == {}
+
+
+def test_value_full_corpus_avx2_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    """Promoted value gate: the WHOLE corpus' golden + differential value tests pass on avx2
+    (C++). A failure here is a real value regression (a lane mismatch) — or, rarely, a transient
+    compiler failure under host load."""
+
+    result = _full_corpus_cpp_avx2(data_root, machine_profiles_path)
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    report = verify_project(tmp_path, result.rendered.verify, run_value_tests=True)
+    # Fully green: no compile/configure errors and no value-test (ctest) warnings.
+    assert report.diagnostics == (), report.diagnostics
+
+
+def test_value_full_corpus_avx2_rust_builds(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    """Rust runs the same full-corpus AVX2 authored value-test inventory as C++."""
+
+    result = _full_corpus_avx2(data_root, machine_profiles_path, backends=("rust",))
+    assert result.diagnostics == (), result.diagnostics
+    assert result.rendered is not None
+    write_report = write_artifacts(result.artifacts, tmp_path)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    report = verify_project(tmp_path, result.rendered.verify, run_value_tests=True)
+    assert report.diagnostics == (), report.diagnostics
+
+
+def _full_corpus_cpp_avx2(data_root: Path, machine_profiles_path: Path):
+    result = _full_corpus_avx2(data_root, machine_profiles_path, backends=("cpp",))
+    assert result.diagnostics == (), result.diagnostics
+    return result
+
+
+def _full_corpus_avx2(
+    data_root: Path,
+    machine_profiles_path: Path,
+    *,
+    backends: tuple[str, ...],
+):
+    documents = SourceLoader().load(tuple(sorted(data_root.rglob("*.tsl"))))
+    catalog = CatalogBuilder().build(TslParser().parse(documents.documents)).catalog
+    assert catalog is not None
+    names = sorted({primitive.name for primitive in catalog.primitives})
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=names,
+        profiles=["avx2"],
+        backends=backends,
+        test_harness=True,
+        value_test_warnings=True,
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    return result

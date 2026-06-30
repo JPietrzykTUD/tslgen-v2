@@ -1,0 +1,4 @@
+interface:
+  display_name: "Add TSL Primitive"
+  short_description: "Add a primitive through data, lowering, tests."
+  default_prompt: "Add or update a TSL primitive in this repository."

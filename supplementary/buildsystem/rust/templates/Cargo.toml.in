@@ -1,0 +1,10 @@
+[package]
+name = "{project_name}"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "{artifact_path}"
+
+# backend: {backend_id}
+{helper_manifest}
