@@ -117,20 +117,16 @@ jobs:
 
       - name: Generate small consumer-check output
         run: |
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -w /workspace \
+          bash supplementary/ci/run_tslc_ci_container.sh \
             -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
-            "${TSLC_CI_IMAGE}" \
+            -- \
             bash -lc './dev.sh generate --primitives add --profiles scalar --backends cpp,rust --output-root "${TSLC_CI_OUTPUT}"'
 
       - name: Verify generated consumer projects
         run: |
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -w /workspace \
+          bash supplementary/ci/run_tslc_ci_container.sh \
             -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
-            "${TSLC_CI_IMAGE}" \
+            -- \
             bash -lc 'bash supplementary/ci/verify_generated_consumers.sh "${TSLC_CI_OUTPUT}"'
 
       - name: Clean generated consumer output
@@ -189,13 +185,11 @@ jobs:
 
       - name: Build-verify generated output shard
         run: |
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -w /workspace \
+          bash supplementary/ci/run_tslc_ci_container.sh \
             -e TSLC_BACKENDS="cpp,rust" \
             -e TSLC_PROFILES="${{ matrix.profile_shard.profiles }}" \
             -e TSLC_CI_OUTPUT="./tslctmp/ci-pr-build-${{ matrix.profile_shard.name }}" \
-            "${TSLC_CI_IMAGE}" \
+            -- \
             bash -lc '
               set -e
               trap "rm -rf \"${TSLC_CI_OUTPUT}\" tslctmp/toolchain-preflight tslctmp/zig-local-cache tslctmp/zig-global-cache" EXIT
@@ -275,13 +269,11 @@ jobs:
 
       - name: Run generated value-test shard
         run: |
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -w /workspace \
+          bash supplementary/ci/run_tslc_ci_container.sh \
             -e TSLC_BACKENDS="${{ matrix.backend }}" \
             -e TSLC_PROFILES="${{ matrix.profile_shard.profiles }}" \
             -e TSLC_CI_OUTPUT="./tslctmp/ci-value-${{ matrix.backend }}-${{ matrix.profile_shard.name }}" \
-            "${TSLC_CI_IMAGE}" \
+            -- \
             bash -lc '
               set -e
               trap "rm -rf \"${TSLC_CI_OUTPUT}\" tslctmp/toolchain-preflight tslctmp/zig-local-cache tslctmp/zig-global-cache" EXIT
@@ -321,20 +313,16 @@ jobs:
 
       - name: Generate package output
         run: |
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -w /workspace \
+          bash supplementary/ci/run_tslc_ci_container.sh \
             -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
-            "${TSLC_CI_IMAGE}" \
+            -- \
             bash -lc './dev.sh generate --test --value-test-warnings --backends cpp,rust --output-root "${TSLC_CI_OUTPUT}"'
 
       - name: Verify generated consumer projects
         run: |
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -w /workspace \
+          bash supplementary/ci/run_tslc_ci_container.sh \
             -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
-            "${TSLC_CI_IMAGE}" \
+            -- \
             bash -lc 'bash supplementary/ci/verify_generated_consumers.sh "${TSLC_CI_OUTPUT}"'
 
       - name: Package generated output

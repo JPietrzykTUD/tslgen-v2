@@ -72,7 +72,7 @@ def test_cpp_verifier_skips_after_failed_preflight(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    monkeypatch.setenv("CXX", "zig c++")
+    monkeypatch.setenv("CXX", sys.executable)
     project = VerifyProject(
         backends=(
             VerifyBackend(
