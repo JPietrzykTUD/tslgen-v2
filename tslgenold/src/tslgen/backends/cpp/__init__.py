@@ -1,1 +1,0 @@
-"""Minimal C++ backend slice."""

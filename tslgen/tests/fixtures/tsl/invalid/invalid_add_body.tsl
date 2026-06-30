@@ -1,3 +1,0 @@
-prim<v:=(v,v)> add(left, right):
-  implementation scalar si32:
-    body add(left)

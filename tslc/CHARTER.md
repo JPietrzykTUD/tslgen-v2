@@ -1,10 +1,9 @@
 # tslc charter
 
-This is a one-page contract for how `tslc` is built. It exists because the
-predecessor (`tslgen`) drowned in its own scaffolding: ~500 classes, 155 of them
-`*Handoff/*Fragment/*Payload/*Inventory` plumbing wrappers, produced by a process
-that rewarded adding a typed micro-slice every commit. `tslc` keeps the parts
-that were genuinely good and changes the incentives that produced the rest.
+This is a one-page contract for how `tslc` is built. The project is a compact
+compiler, not a framework for compiler-shaped ceremony: it should grow by
+adding clear domain vocabulary and behavior, while keeping plumbing and handoff
+objects rare.
 
 ## 1. It is a compiler
 
@@ -21,12 +20,12 @@ Handoff → HandoffResult` quartet for one concept. There is one body model
 `(value, diagnostics)`. If you are about to add a wrapper whose only job is to
 carry another type between two functions, don't.
 
-## 3. New types are gated on delivered behavior, not on "two stages need it"
+## 3. New types are gated on delivered behavior
 
 A type earns its place when it lets a primitive **compile** that couldn't
 before — not when a second call site references it. Progress is tracked by a
-coverage table (primitive × extension × backend → compiles?), never by a
-milestone number.
+coverage table (primitive × extension × backend → compiles?), not by the number
+of internal abstractions.
 
 ## 4. The body model is a segment sequence, not an AST
 
@@ -42,7 +41,7 @@ backend with substantially different expression syntax is not just a backend
 module addition. Common operators, memory idioms, and control forms should be
 promoted to typed TSIL regions before such a backend relies on them.
 
-## 5. Hard rules carried over (these were right)
+## 5. Hard rules
 
 - Typed, immutable domain objects after the parser boundary. No dicts as domain
   objects.
@@ -57,13 +56,12 @@ promoted to typed TSIL regions before such a backend relies on them.
 This runs in a WSL devcontainer: `/` (and `/tmp`) is the container overlay,
 backed by a VHDX that only ever grows. Generated trees, build dirs, and test
 scratch go under `./tslctmp` (the workspace 9p host mount), which is
-host-managed and cleanable. Likewise, durable project knowledge lives in the
-repo (this file, `README.md`, code comments) — the agent memory under
-`/root/.claude` is on the ephemeral overlay and is treated as a cache that
-points back here, not as a source of truth.
+host-managed and cleanable. Likewise, durable project knowledge lives in
+source-controlled docs, tests, and code comments, not in local tool caches.
 
-## 7. Evidence, not architecture
+## 7. Current sources of truth
 
-`docs/redesign/` and `tsldata/` are requirements and evidence. `tslgen/`,
-`tslgenold/`, and `frozen/` are read-only evidence. `tslc` never imports them at
-runtime.
+`tsldata/`, `supplementary/`, tests, and the `tslc` package docs are the project
+requirements and evidence. Active compiler behavior should be justified by
+these sources and by passing generated artifacts, not by undocumented
+assumptions or speculative architecture.

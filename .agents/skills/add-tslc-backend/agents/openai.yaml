@@ -1,0 +1,4 @@
+interface:
+  display_name: "Add TSLC Backend"
+  short_description: "Add a backend with typed capabilities and tests."
+  default_prompt: "Add a backend to tslc."

@@ -18,12 +18,12 @@ across a matrix of:
 - **scalar types** — `si8…si64`, `ui8…ui64`, `f32`, `f64`;
 - **machine profiles** — skylake, icelake, etc. (a named CPU-feature set).
 
-It is a clean-room rewrite of the predecessor `tslgen`, which "drowned in its
-own scaffolding." `tslc` keeps a rich **vocabulary** of domain/IR types but
-**budgets plumbing to near-zero**: one body model (`Segment`), one lowered form
-(`LoweredSpecialization`), result objects that carry only `(value,
+The architecture keeps a rich **vocabulary** of domain/IR types while
+**budgeting plumbing tightly**: one body model (`Segment`), one lowered form
+(`LoweredSpecialization`), and result objects that carry only `(value,
 diagnostics)`. Progress is tracked by a coverage table
-(*primitive × extension × backend → compiles?*), not milestone numbers.
+(*primitive × extension × backend → compiles?*) and by generated artifacts that
+build, not by the number of internal abstractions.
 
 ## The pipeline
 
@@ -160,10 +160,10 @@ AVX-512/NEON/SVE code runs on hardware that lacks it.
   be lowered yet is *recorded as a skip*, not a failure; `strict` mode promotes
   skips to errors. [coverage.py](src/tslc/coverage.py) and
   [maintenance/](src/tslc/maintenance/) (e.g. `coverage_inventory`)
-  operationalize the charter's "evidence, not architecture" rule.
+  operationalize the charter's coverage-not-completeness rule.
 - **Honest edges**: [support_policy.py](src/tslc/support_policy.py) centralizes
-  "what this slice can emit today"; some keyword forms are *recognized so a body
-  skips cleanly* rather than leaking through as raw text.
+  what the compiler can emit today; some keyword forms are *recognized so a
+  body skips cleanly* rather than leaking through as raw text.
 - **Tests**: the pure-logic suite is green. The build-verify tests
   (`test_build_verify.py`, full-corpus `test_value_tests.py`) compile/run real
   C++/Rust and make the full run exceed ~5 min. Run the suite from the **repo

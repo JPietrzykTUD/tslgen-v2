@@ -1,1 +1,0 @@
-"""Packaged TSL grammar resources."""

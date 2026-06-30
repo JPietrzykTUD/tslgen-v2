@@ -13,6 +13,7 @@ from tslc.maintenance.coverage_ratchet import (
     diff_snapshots,
     serialize,
 )
+from tslc.maintenance.coverage_inventory import _OUT as COVERAGE_INVENTORY_OUTPUT
 
 
 def _snapshot(slots: dict[SlotKey, SlotRecord]) -> Snapshot:
@@ -128,3 +129,8 @@ def test_compute_snapshot_self_diff_is_clean(
     assert diff_snapshots(snapshot, snapshot).changes == ()
     # add on avx2/cpp/si32 should be emitted
     assert snapshot.slots[SlotKey("avx2", "cpp", "add", "avx2", "si32")].emitted >= 1
+
+
+def test_coverage_inventory_output_is_not_under_top_level_docs() -> None:
+    assert COVERAGE_INVENTORY_OUTPUT.parent.name == "coverage"
+    assert COVERAGE_INVENTORY_OUTPUT.name == "primitive-coverage-inventory.md"

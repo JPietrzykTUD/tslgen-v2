@@ -1,0 +1,4 @@
+interface:
+  display_name: "Add TSIL Region"
+  short_description: "Add a TSIL region through scan, validate, lower, test."
+  default_prompt: "Add a TSIL region to tslc."
