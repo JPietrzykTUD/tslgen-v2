@@ -3,11 +3,7 @@
 from __future__ import annotations
 
 from tslc.backend.rust_translation import rust_raw_identifier
-from tslc.backend.target_capability import (
-    is_x86_register_extension,
-    rust_extension_tag,
-    rust_register_type,
-)
+from tslc.backend.target_capability import rust_extension_tag
 from tslc.documentation import (
     DocumentationBlock,
     documentation_block,
@@ -233,13 +229,9 @@ class RustBackend:
         vidx_type = f"{spec.type_params[0][0]}::RegisterType" if spec.type_params else None
         params = _params(spec, "Self", vt_type=vt_type, vidx_type=vidx_type)
         trait_args = f"<{', '.join(targs)}>" if targs else ""
-        # On a real x86 ISA, pin the index register to that ISA's integer register so a native
-        # intrinsic (which takes a concrete `__m256i`) type-checks; scalar/generic stay opaque.
-        impl_register = (
-            rust_register_type(spec.extension_name, "i32")
-            if is_x86_register_extension(spec.extension_name)
-            else None
-        )
+        # Native index intrinsics take the concrete integer-register type for the selected ISA.
+        # Lowering resolves it from source extension metadata; scalar/generic stay opaque.
+        impl_register = spec.index_register_spelling
         body = spec.body.render(
             RenderContext(
                 backend_id=self.backend_id,
@@ -541,6 +533,8 @@ def _rust_concrete_array(spec: LoweredSpecialization) -> str:
 
 
 def _vector_type(spec: LoweredSpecialization) -> str:
+    if spec.vector_spelling is not None:
+        return spec.vector_spelling
     if spec.uses_sized_vector:
         lane_parameter = spec.lane_parameter
         return f"Simd<{spec.base_type_spelling}, Generic<{lane_parameter}>>"

@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from tslc.backend.rust import RustBackend
 from tslc.backend.target_capability import (
-    is_x86_register_extension,
     rust_arch_module,
     rust_extension_tag,
-    rust_register_type,
-    x86_register_bits,
 )
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
@@ -26,8 +24,6 @@ from tslc.render._common import (
     text,
     type_bits,
     used_exts,
-    used_pairs,
-    used_type_specs,
 )
 
 if TYPE_CHECKING:
@@ -123,7 +119,7 @@ def _rust_arch_use(emitted_exts: list[str], extensions: Mapping[str, Extension])
         module
         for ext in emitted_exts
         if (extension := extensions.get(ext)) is not None
-        if (module := rust_arch_module(extension.family)) is not None
+        if (module := rust_arch_module(extension)) is not None
     }
     if not modules:
         return ""
@@ -132,6 +128,15 @@ def _rust_arch_use(emitted_exts: list[str], extensions: Mapping[str, Extension])
         *(f"use core::arch::{module}::*;" for module in sorted(modules)),
     ]
     return "\n".join(lines) + "\n"
+
+
+@dataclass(frozen=True, slots=True)
+class _RustVectorRegistration:
+    extension_name: str
+    type_tag: str
+    base_spelling: str
+    register_spelling: str
+    vector_bits: int
 
 
 def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
@@ -151,57 +156,85 @@ def _rust_registrations(
     """Rust extension tag structs + SimdVector impls for the used (ext, type) pairs."""
 
     lines: list[str] = []
-    for ext in used_exts(by_primitive):
+    registrations = _rust_vector_registrations(by_primitive, extensions)
+    for ext in sorted({registration.extension_name for registration in registrations}):
         extension = extensions.get(ext)
-        if is_x86_register_extension(ext) or _has_rust_registers(by_primitive, ext, extension):
-            lines.append(f"pub struct {rust_extension_tag(ext)};")
-    for ext, base in used_pairs(by_primitive):
-        if not is_x86_register_extension(ext):
-            continue
-        register = rust_register_type(ext, base)
-        mask = _rust_mask_type(extensions.get(ext), base, register)
-        bits = x86_register_bits(ext)
-        if bits is None:
-            raise ValueError(f"unsupported Rust x86 register extension {ext!r}")
-        imask = _rust_imask_type(extensions.get(ext), base, mask, bits)
-        array = f"array_type<{base}, {bits // type_bits(base)}, {bits // 8}>"
-        lines.append(
-            f"impl SimdVector for Simd<{base}, {rust_extension_tag(ext)}> {{ "
-            f"type BaseType = {base}; type RegisterType = {register}; "
-            f"type MaskType = {mask}; type ImaskType = {imask}; type Array = {array}; }}"
-        )
-    for ext, type_tag, base in used_type_specs(by_primitive):
-        if is_x86_register_extension(ext):
-            continue
-        extension = extensions.get(ext)
+        if extension is not None:
+            lines.append(f"pub struct {rust_extension_tag(extension)};")
+    for registration in registrations:
+        extension = extensions.get(registration.extension_name)
         if extension is None:
             continue
-        register = extension.direct_vector_register_type("rust", type_tag)
-        if register is None:
-            continue
-        bits = extension.vector_bits
+        base = registration.base_spelling
+        register = registration.register_spelling
+        bits = registration.vector_bits
         mask = _rust_mask_type(extension, base, register)
         imask = _rust_imask_type(extension, base, mask, bits)
         array = f"array_type<{base}, {bits // type_bits(base)}, {bits // 8}>"
         lines.append(
-            f"impl SimdVector for Simd<{base}, {rust_extension_tag(ext)}> {{ "
+            f"impl SimdVector for Simd<{base}, {rust_extension_tag(extension)}> {{ "
             f"type BaseType = {base}; type RegisterType = {register}; "
             f"type MaskType = {mask}; type ImaskType = {imask}; type Array = {array}; }}"
         )
     return ("\n".join(lines) + "\n\n") if lines else ""
 
 
-def _has_rust_registers(
+def _rust_vector_registrations(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
-    ext: str,
-    extension: Extension | None,
-) -> bool:
-    if extension is None:
-        return False
-    return any(
-        used_ext == ext
-        and extension.direct_vector_register_type("rust", type_tag) is not None
-        for used_ext, type_tag, _base in used_type_specs(by_primitive)
+    extensions: Mapping[str, Extension],
+) -> tuple[_RustVectorRegistration, ...]:
+    records: dict[tuple[str, str, str, str], _RustVectorRegistration] = {}
+    for specs in by_primitive.values():
+        for spec in specs:
+            _record_rust_vector(
+                records,
+                extensions,
+                spec.extension_name,
+                spec.type_tag,
+                spec.base_type_spelling,
+                spec.register_spelling,
+                uses_sized_vector=spec.uses_sized_vector,
+            )
+            if spec.target is not None:
+                _record_rust_vector(
+                    records,
+                    extensions,
+                    spec.target.extension_isa,
+                    spec.target.base_tag,
+                    spec.target.base_spelling,
+                    spec.target.register_spelling,
+                    uses_sized_vector=spec.target.uses_sized_vector,
+                )
+    return tuple(records[key] for key in sorted(records))
+
+
+def _record_rust_vector(
+    records: dict[tuple[str, str, str, str], _RustVectorRegistration],
+    extensions: Mapping[str, Extension],
+    extension_name: str,
+    type_tag: str,
+    base_spelling: str,
+    register_spelling: str,
+    *,
+    uses_sized_vector: bool,
+) -> None:
+    extension = extensions.get(extension_name)
+    if (
+        extension is None
+        or uses_sized_vector
+        or extension.family in {"scalar", "generic_like"}
+        or extension.vector_bits_kind != "fixed"
+        or extension.vector_bits <= 0
+        or not extension.supports_backend("rust")
+    ):
+        return
+    key = (extension_name, type_tag, base_spelling, register_spelling)
+    records[key] = _RustVectorRegistration(
+        extension_name=extension_name,
+        type_tag=type_tag,
+        base_spelling=base_spelling,
+        register_spelling=register_spelling,
+        vector_bits=extension.vector_bits,
     )
 
 

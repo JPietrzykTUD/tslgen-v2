@@ -158,6 +158,7 @@ def test_extension_inheritance_and_lscpu(catalog: Catalog) -> None:
     # compose metadata is inherited (flattened) from avx2.
     assert avx2_vl.compose_prefix["cpp"] == "_mm256_"
     assert avx2_vl.family == "x86"
+    assert avx2_vl.metadata.backend["rust"].arch_module == "x86_64"
     assert catalog.extension_chain("avx2_vl") == ("avx2_vl", "avx2")
 
 
@@ -193,7 +194,9 @@ def test_extension_descriptive_metadata_is_promoted(catalog: Catalog) -> None:
     assert avx2.metadata.backend["cpp"].test_support_header == "tests/avx2_support.hpp"
     assert avx2.metadata.backend["cpp"].headers == ("immintrin.h",)
     assert avx2.metadata.backend["rust"].type_name == "Avx2"
+    assert avx2.metadata.backend["rust"].arch_module == "x86_64"
     assert avx2.metadata.backend["rust"].generation_support == ("sse",)
+    assert neon.metadata.backend["rust"].arch_module == "aarch64"
     assert neon.metadata.backend["cpp"].header_guard == "__ARM_NEON"
 
 

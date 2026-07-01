@@ -115,6 +115,11 @@ def _requires_source() -> str:
         '  extension_name "avx2"\n'
         '  family "x86"\n'
         "  vector_bits 256\n"
+        "  cpp:\n"
+        "    supported true\n"
+        "  vector_register_types:\n"
+        "    ints:\n"
+        '      cpp "__m256i"\n'
         "language cpp:\n"
         '  s32 {type "int32_t"}\n'
         "prim<v:=v> callee(data):\n"

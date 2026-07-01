@@ -20,6 +20,7 @@ extension avx512:
   rust:
     supported true
     type_name "Avx512"
+    arch_module "x86_64"
     generation_support ["avx2"]
   vector_register_types:
     ?i?:
@@ -85,6 +86,7 @@ extension avx2:
   rust:
     supported true
     type_name "Avx2"
+    arch_module "x86_64"
     generation_support ["sse"]
   vector_register_types:
     ?i?:
@@ -181,6 +183,7 @@ extension sse:
   rust:
     supported true
     type_name "Sse"
+    arch_module "x86_64"
     generation_support []
   vector_register_types:
     ?i?:
@@ -327,6 +330,7 @@ extension neon:
   rust:
     supported true
     type_name "Neon"
+    arch_module "aarch64"
     generation_support []
   vector_register_types:
     si8:

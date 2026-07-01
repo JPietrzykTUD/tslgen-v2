@@ -19,6 +19,12 @@ def _lane_list_catalog(
     family: str = "scalar",
     vector_bits: int = 0,
 ) -> tuple[Catalog, SelectedImplementation]:
+    vector_register_types = (
+        {"ints": {"cpp": "__m128i"}}
+        if family == "x86" and vector_bits == 128
+        else {}
+    )
+    backend_supported = {"cpp": True} if family == "x86" else {}
     extension = Extension(
         name=extension_name,
         isa_name=extension_name,
@@ -26,6 +32,8 @@ def _lane_list_catalog(
         compose_prefix={},
         compose_suffix_by_type={},
         vector_bits=vector_bits,
+        vector_register_types=vector_register_types,
+        backend_supported=backend_supported,
     )
     implementation = Implementation(
         (extension_name, "ints"),
@@ -68,6 +76,12 @@ def _loop_catalog(
     vector_bits_kind: str = "fixed",
     include_unroll_template: bool = True,
 ) -> tuple[Catalog, SelectedImplementation]:
+    vector_register_types = (
+        {"ints": {"cpp": "__m128i"}}
+        if vector_bits_kind == "fixed" and vector_bits == 128
+        else {}
+    )
+    backend_supported = {"cpp": True} if vector_bits_kind == "fixed" else {}
     extension = Extension(
         name=extension_name,
         isa_name=extension_name,
@@ -77,6 +91,8 @@ def _loop_catalog(
         vector_bits=vector_bits,
         vector_bits_kind=vector_bits_kind,
         size_parameter_name="LANES" if vector_bits_kind == "sized" else None,
+        vector_register_types=vector_register_types,
+        backend_supported=backend_supported,
     )
     implementation = Implementation(
         (extension_name, "ints"),

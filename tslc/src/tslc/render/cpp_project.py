@@ -9,7 +9,6 @@ from tslc.backend.cpp import CppBackend
 from tslc.backend.target_capability import (
     cpp_x86_register_helper,
     is_x86_register_extension,
-    x86_register_bits,
 )
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
@@ -46,7 +45,11 @@ def cpp_artifacts(
     for profile_render in profiles:
         by_primitive = profile_render.specializations("cpp")
         emitted_exts = used_exts(by_primitive)
-        x86_exts = [e for e in emitted_exts if is_x86_register_extension(e)]
+        x86_exts = [
+            e
+            for e in emitted_exts
+            if is_x86_register_extension(profile_render.extensions.get(e))
+        ]
         includes = _cpp_includes(emitted_exts, profile_render.extensions)
         registrations = "".join(
             _cpp_registration(ext, profile_render.extensions.get(ext))
@@ -134,7 +137,7 @@ def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
 
 def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) -> str:
     lines = ['#include "tsl_core.hpp"']
-    if any(is_x86_register_extension(ext) for ext in emitted_exts):
+    if any(is_x86_register_extension(extensions.get(ext)) for ext in emitted_exts):
         lines.append('#include "tsl_x86_traits.hpp"')
     headers = sorted(
         {
@@ -151,8 +154,8 @@ def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) 
 def _cpp_registration(ext: str, extension: Extension | None) -> str:
     """A C++ extension tag + `simd<T, ext>` register/mask-type wiring for one ISA ext."""
 
-    helper = cpp_x86_register_helper(ext)
-    bits = x86_register_bits(ext)
+    helper = cpp_x86_register_helper(extension)
+    bits = extension.vector_bits if extension is not None else None
     if helper is None or bits is None:
         raise ValueError(f"unsupported C++ x86 register extension {ext!r}")
     if extension is not None and extension.mask_policy.kind == "native_predicate_by_lanes":
@@ -182,17 +185,15 @@ def _cpp_native_registration(
     emitted = {
         ext
         for ext, type_tag, _base in used_type_specs(by_primitive)
-        if not is_x86_register_extension(ext)
-        and (extension := extensions.get(ext)) is not None
+        if (extension := extensions.get(ext)) is not None
+        and not is_x86_register_extension(extension)
         and extension.direct_vector_register_type("cpp", type_tag) is not None
     }
     for ext in sorted(emitted):
         lines.append(f"struct {ext} {{}};\n")
     for ext, type_tag, base in used_type_specs(by_primitive):
-        if is_x86_register_extension(ext):
-            continue
         extension = extensions.get(ext)
-        if extension is None:
+        if extension is None or is_x86_register_extension(extension):
             continue
         register = extension.direct_vector_register_type("cpp", type_tag)
         if register is None:

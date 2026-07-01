@@ -54,6 +54,7 @@ KNOWN_EXTENSION_FIELDS = EXTENSION_METADATA_FIELDS | frozenset(
 )
 KNOWN_EXTENSION_BACKEND_FIELDS = frozenset(
     {
+        "arch_module",
         "generation_support",
         "header_guard",
         "headers",

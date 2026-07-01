@@ -342,6 +342,7 @@ class BackendExtensionMetadata:
     test_suite_name: str | None = None
     test_support_header: str | None = None
     type_name: str | None = None
+    arch_module: str | None = None
     generation_support: tuple[str, ...] = ()
 
 
