@@ -40,7 +40,7 @@ jobs:
           echo "image=ghcr.io/${owner}/${name}-tslc-ci:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -94,7 +94,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -114,6 +114,8 @@ jobs:
               -e TSLC_BACKENDS="${{ matrix.backend }}" \
               -e TSLC_PROFILES="${{ matrix.profile_shard.profiles }}" \
               -e TSLC_CI_OUTPUT="./tslctmp/ci-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}" \
+              -e TSLC_SDE="/opt/intel-sde/sde64" \
+              -e TSLC_QEMU_AARCH64="/usr/bin/qemu-aarch64" \
               -- \
               bash -lc '
                 set -e
@@ -126,7 +128,7 @@ jobs:
 
       - name: Upload generated value-test logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ci-logs-generated-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}
           path: tslctmp/ci-logs/generated-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}
