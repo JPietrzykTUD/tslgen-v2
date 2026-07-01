@@ -286,6 +286,25 @@ def test_subprocess_runner_closes_command_stdin(tmp_path: Path) -> None:
     assert result.stdout.strip() == "empty"
 
 
+def test_subprocess_runner_replaces_invalid_output_bytes(tmp_path: Path) -> None:
+    command = BuildCommand(
+        backend_id="rust",
+        profile_name="unit",
+        step="invalid-output",
+        argv=(
+            sys.executable,
+            "-c",
+            "import sys; sys.stdout.buffer.write(b'valid\\n\\xb7\\n')",
+        ),
+        cwd=tmp_path,
+    )
+
+    result = run_subprocess_build_command(command)
+
+    assert result.returncode == 0
+    assert result.stdout == "valid\n\ufffd\n"
+
+
 def test_subprocess_runner_defaults_zig_cache_under_command_root(
     tmp_path: Path,
     monkeypatch,
