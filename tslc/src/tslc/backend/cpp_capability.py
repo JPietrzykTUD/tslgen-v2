@@ -9,6 +9,7 @@ from tslc.catalog.model import Catalog
 
 if TYPE_CHECKING:
     from tslc.backend.cpp_translation import CppBackendDialect
+    from tslc.compiler_assets import RenderAssets
     from tslc.output.artifacts import Artifact
     from tslc.output.verify_drivers import VerifyBackendDriver
     from tslc.output.verify_model import VerifyProfile
@@ -22,10 +23,12 @@ def create_cpp_dialect(catalog: Catalog) -> CppBackendDialect:
     return CppBackendDialect(catalog)
 
 
-def cpp_project_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
+def cpp_project_artifacts(
+    profiles: tuple[ProfileRender, ...], assets: RenderAssets
+) -> list[Artifact]:
     from tslc.render.cpp_project import cpp_artifacts
 
-    return cpp_artifacts(profiles)
+    return cpp_artifacts(profiles, assets)
 
 
 def cpp_profile_verification(
@@ -42,10 +45,12 @@ def cpp_value_test_support() -> ValueTestBackendSupport:
     return CPP_VALUE_TEST_SUPPORT
 
 
-def cpp_value_test_artifacts(plan: ValueTestProjectPlan) -> list[Artifact]:
+def cpp_value_test_artifacts(
+    plan: ValueTestProjectPlan, assets: RenderAssets
+) -> list[Artifact]:
     from tslc.render.tests_project import cpp_test_artifacts
 
-    return cpp_test_artifacts(plan)
+    return cpp_test_artifacts(plan, assets)
 
 
 def create_cpp_verify_driver() -> VerifyBackendDriver:

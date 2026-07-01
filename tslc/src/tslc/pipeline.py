@@ -162,6 +162,7 @@ class _GenerationSession:
                 catalog=self.inputs.catalog,
                 value_test_warnings=self.request.value_test_warnings,
                 value_test_fuzz=self.request.value_test_fuzz,
+                assets=self.inputs.render_assets,
             )
             if self.profile_renders
             else None

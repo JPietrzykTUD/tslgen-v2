@@ -6,6 +6,7 @@ from pathlib import Path
 
 from tslc.catalog.model import Catalog
 from tslc.catalog.validation.schema_validation import validate_parsed_documents
+from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import Diagnostic
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
@@ -121,7 +122,7 @@ def _diagnostics(test_block: str) -> set[str]:
         '          tsil "complete(data);"\n'
     )
     document = SourceDocument(Path("tests_fixture.tsl"), source, "d", "tsl")
-    parsed = TslParser().parse((document,))
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
     assert parsed.diagnostics == (), parsed.diagnostics
     diagnostics: list[Diagnostic] = []
     validate_parsed_documents(parsed, diagnostics)
@@ -130,7 +131,7 @@ def _diagnostics(test_block: str) -> set[str]:
 
 def _diagnostics_for_source(source: str) -> set[str]:
     document = SourceDocument(Path("tests_fixture.tsl"), source, "d", "tsl")
-    parsed = TslParser().parse((document,))
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
     assert parsed.diagnostics == (), parsed.diagnostics
     diagnostics: list[Diagnostic] = []
     validate_parsed_documents(parsed, diagnostics)

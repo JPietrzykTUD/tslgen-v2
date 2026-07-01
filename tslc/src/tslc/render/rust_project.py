@@ -16,13 +16,12 @@ from tslc.backend.target_capability import (
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
 from tslc.catalog.target_families import ProfileFamilyCapability
+from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyEmulator, VerifyProfile
 from tslc.render._common import (
-    asset,
     feature_spelling,
-    fill_asset,
     slug,
     text,
     type_bits,
@@ -35,13 +34,15 @@ if TYPE_CHECKING:
     from tslc.render.project import ProfileRender
 
 
-def rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
+def rust_artifacts(
+    profiles: tuple[ProfileRender, ...], assets: RenderAssets
+) -> list[Artifact]:
     backend = RustBackend()
     artifacts = [
-        text("rust/src/tsl_core.rs", asset("tsl_core.rs")),
+        text("rust/src/tsl_core.rs", assets.text("tsl_core.rs")),
         # Ship the formatter config at the crate root so `rustfmt`/`cargo fmt` finds it and the
         # generated crate is self-contained.
-        text("rust/rustfmt.toml", asset("rustfmt.toml")),
+        text("rust/rustfmt.toml", assets.text("rustfmt.toml")),
     ]
     for profile_render in profiles:
         by_primitive = profile_render.specializations("rust")
@@ -55,7 +56,7 @@ def rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
         arch_use = _rust_arch_use(
             used_exts(by_primitive), profile_render.extensions
         )
-        content = fill_asset(
+        content = assets.fill(
             "rust_profile_module.rs.tmpl",
             arch_use=arch_use,
             registrations=registrations,
@@ -64,7 +65,7 @@ def rust_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
         artifacts.append(text(f"rust/src/tsl_{slug(profile_render.profile.name)}.rs", content))
 
     artifacts.append(text("rust/src/lib.rs", _rust_lib(profiles)))
-    artifacts.append(text("rust/Cargo.toml", _rust_cargo(profiles)))
+    artifacts.append(text("rust/Cargo.toml", _rust_cargo(profiles, assets)))
     artifacts.append(
         text("rust/tests/smoke.rs", "#[test]\nfn smoke() {\n    assert!(true);\n}\n")
     )
@@ -245,10 +246,10 @@ def _rust_lib(profiles: tuple[ProfileRender, ...]) -> str:
     return "\n".join(lines)
 
 
-def _rust_cargo(profiles: tuple[ProfileRender, ...]) -> str:
+def _rust_cargo(profiles: tuple[ProfileRender, ...], assets: RenderAssets) -> str:
     default = slug(profiles[0].profile.name) if profiles else "scalar"
     features = [f'default = ["{default}"]']
     features.extend(f"{slug(profile_render.profile.name)} = []" for profile_render in profiles)
     # Opt-in feature that compiles+runs the generated value tests (parity with the C++ ctest gate).
     features.append("value_tests = []")
-    return fill_asset("rust_cargo.toml.tmpl", features="\n".join(features))
+    return assets.fill("rust_cargo.toml.tmpl", features="\n".join(features))

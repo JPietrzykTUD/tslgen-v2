@@ -4,20 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import re
-import string
-from importlib import resources
 
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
-
-_ASSETS = "tslc.backend.assets"
-
-
-class _AtTemplate(string.Template):
-    # Generated build files / sources use `${VAR}` (CMake) and `{ }` (C++/Rust) natively, so the
-    # substitution delimiter is `@` (CMake's own `@ONLY` convention). The `.tmpl` asset then reads
-    # as a real artifact — only `@{name}` holes are filled; everything else passes through verbatim.
-    delimiter = "@"
 
 
 def slug(profile_name: str) -> str:
@@ -36,17 +25,6 @@ def feature_spelling(feature: str, alternatives: Mapping[str, str]) -> str:
     if feature.startswith("avx512_"):
         return "avx512" + feature[len("avx512_") :]
     return feature
-
-
-def asset(name: str) -> str:
-    return resources.files(_ASSETS).joinpath(name).read_text(encoding="utf-8")
-
-
-def fill_asset(name: str, **holes: str) -> str:
-    """Render an ``@{…}``-holed ``.tmpl`` asset, substituting each hole. The static artifact shape
-    lives in the asset (readable as real CMake/C++/Rust); only the dynamic fragments are passed in."""
-
-    return _AtTemplate(asset(name)).substitute(holes)
 
 
 def text(logical_path: str, content: str) -> Artifact:

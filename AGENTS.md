@@ -66,6 +66,7 @@ tslc/
   src/tslc/
     api.py                    Public generation API
     cli.py                    CLI entry point
+    compiler_assets.py        Static grammar/render asset loading
     sources.py                Source-document loading
     syntax/                   TSL parser and parsed-source models
     catalog/                  Typed catalog model, builder, validation
@@ -145,8 +146,8 @@ Use `./dev.sh` for generated-project workflows:
 - Prefer pure functions for simple stateless transformations.
 - Keep raw dictionaries at parser, configuration, or explicit metadata
   boundaries. Downstream compiler stages should consume typed objects.
-- Keep filesystem reads in source/config loading and filesystem writes in
-  artifact writing or explicit maintenance tools.
+- Keep filesystem reads in source/config/static compiler-asset loading and
+  filesystem writes in artifact writing or explicit maintenance tools.
 - Return structured diagnostics from pure logic. Do not call `SystemExit`
   outside CLI boundaries.
 - Preserve source locations for diagnostics where practical.

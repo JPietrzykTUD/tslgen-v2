@@ -7,13 +7,14 @@ from pathlib import Path
 
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.model import Catalog
+from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
 
 
 def _build(text: str):
     doc = SourceDocument(path=Path("inline.tsl"), text=text, digest="d", kind="tsl")
-    parsed = TslParser().parse((doc,))
+    parsed = TslParser(load_default_tsl_grammar()).parse((doc,))
     assert parsed.diagnostics == (), parsed.diagnostics
     return CatalogBuilder().build(parsed)
 

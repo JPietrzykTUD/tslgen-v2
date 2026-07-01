@@ -9,6 +9,7 @@ from types import MappingProxyType
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, Extension
 from tslc.catalog.target_families import ProfileFamilyCapability
+from tslc.compiler_assets import RenderAssets
 from tslc.diagnostics import Diagnostic
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact, ArtifactSet
@@ -76,6 +77,8 @@ def render_project(
     catalog: Catalog | None = None,
     value_test_warnings: bool = False,
     value_test_fuzz: bool = False,
+    *,
+    assets: RenderAssets,
 ) -> RenderedProject:
     ordered = tuple(
         replace(
@@ -98,8 +101,8 @@ def render_project(
     )
 
     for driver in render_backend_drivers(backends):
-        artifacts.extend(driver.project_artifacts(ordered))
-        artifacts.extend(driver.test_artifacts(test_plan))
+        artifacts.extend(driver.project_artifacts(ordered, assets))
+        artifacts.extend(driver.test_artifacts(test_plan, assets))
         verify_backends.append(driver.verify_backend(ordered))
     artifacts.extend(documentation_artifacts(ordered))
     test_diagnostics = tuple(

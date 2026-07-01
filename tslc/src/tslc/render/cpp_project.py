@@ -14,13 +14,12 @@ from tslc.backend.target_capability import (
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
 from tslc.catalog.target_families import ProfileFamilyCapability
+from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyEmulator, VerifyProfile
 from tslc.render._common import (
-    asset,
     feature_spelling,
-    fill_asset,
     slug,
     text,
     type_bits,
@@ -33,14 +32,16 @@ if TYPE_CHECKING:
     from tslc.render.project import ProfileRender
 
 
-def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
+def cpp_artifacts(
+    profiles: tuple[ProfileRender, ...], assets: RenderAssets
+) -> list[Artifact]:
     backend = CppBackend()
     artifacts = [
-        text("cpp/include/tsl_core.hpp", asset("tsl_core.hpp")),
-        text("cpp/include/tsl_x86_traits.hpp", asset("tsl_x86_traits.hpp")),
+        text("cpp/include/tsl_core.hpp", assets.text("tsl_core.hpp")),
+        text("cpp/include/tsl_x86_traits.hpp", assets.text("tsl_x86_traits.hpp")),
         # Ship the formatter config at the C++ project root so `clang-format` (ascending from
         # include/ and tests/) finds it and the generated project is self-contained.
-        text("cpp/.clang-format", asset(".clang-format")),
+        text("cpp/.clang-format", assets.text(".clang-format")),
     ]
     for profile_render in profiles:
         by_primitive = profile_render.specializations("cpp")
@@ -65,7 +66,7 @@ def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
             for name in sorted(by_primitive)
         )
         bodies = declarations + "\n\n" + definitions
-        content = fill_asset(
+        content = assets.fill(
             "cpp_profile_header.hpp.tmpl",
             includes=includes,
             registrations=registrations,
@@ -79,7 +80,7 @@ def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
     artifacts.append(
         text("cpp/docs/input/tsl_api_docs.hpp", _cpp_documentation_facade(profiles))
     )
-    artifacts.append(text("cpp/CMakeLists.txt", _cpp_cmakelists(profiles)))
+    artifacts.append(text("cpp/CMakeLists.txt", _cpp_cmakelists(profiles, assets)))
     return artifacts
 
 
@@ -381,10 +382,10 @@ def _concrete_arg_type(vec: str, kind: str) -> str:
     return f"{vec}::base_type"
 
 
-def _cpp_cmakelists(profiles: tuple[ProfileRender, ...]) -> str:
+def _cpp_cmakelists(profiles: tuple[ProfileRender, ...], assets: RenderAssets) -> str:
     slugs = tuple(slug(profile.profile.name) for profile in profiles)
     fallback = "scalar" if "scalar" in slugs else slugs[0]
-    rendered = fill_asset(
+    rendered = assets.fill(
         "cpp_cmakelists.txt.tmpl",
         available_profiles=_cmake_list(slugs),
         profile_choices=" ".join(

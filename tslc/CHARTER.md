@@ -46,8 +46,9 @@ promoted to typed TSIL regions before such a backend relies on them.
 - Typed, immutable domain objects after the parser boundary. No dicts as domain
   objects.
 - Diagnostics are structured values. Pure logic never calls `SystemExit`.
-- File I/O lives only in source loading and artifact writing. Parsing, catalog
-  building, selection, lowering, and rendering are pure.
+- File I/O lives only in source loading, static compiler-asset loading, and
+  artifact writing. Parsing, catalog building, selection, lowering, and
+  rendering consume loaded inputs and are pure.
 - Deterministic ordering everywhere (sorted artifacts, stable iteration).
 - Templates format already-decided values. No backend semantics in templates.
 

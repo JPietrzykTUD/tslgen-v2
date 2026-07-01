@@ -27,16 +27,17 @@ build, not by the number of internal abstractions.
 
 ## The pipeline
 
-The compiler is a pure function (file I/O is confined to the edges),
-orchestrated in [pipeline.py](src/tslc/pipeline.py):
+The compiler is a pure function once source data and static compiler assets are
+loaded, orchestrated in [pipeline.py](src/tslc/pipeline.py):
 
 ```
-sources → parse → catalog → select → scan body → lower → emit → render → write → verify
+sources + compiler assets → parse → catalog → select → scan body → lower → emit → render → write → verify
 ```
 
 | Stage | Module | Role |
 |---|---|---|
-| **sources** | [sources.py](src/tslc/sources.py) | Read `.tsl` files (the only read boundary) |
+| **compiler assets** | [compiler_assets.py](src/tslc/compiler_assets.py) | Load the bundled grammar and render assets |
+| **sources** | [sources.py](src/tslc/sources.py) | Read `.tsl` source files |
 | **syntax** | [syntax/](src/tslc/syntax/) | Lark grammar → parse tree (outer declarations + TSIL body envelopes) |
 | **catalog** | [catalog/](src/tslc/catalog/) | Promote parse tree → typed, immutable domain model (`Primitive`, `Extension`, `Catalog`) |
 | **select** | [select/](src/tslc/select/) | For each `(backend, extension, type)` slot, pick the best implementation body |

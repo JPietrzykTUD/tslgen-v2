@@ -13,6 +13,7 @@ from tslc.catalog._builder_primitives import _build_primitives
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
+from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
 
@@ -230,7 +231,7 @@ extension child:
         "d",
         "tsl",
     )
-    parsed = TslParser().parse((source,))
+    parsed = TslParser(load_default_tsl_grammar()).parse((source,))
     assert parsed.diagnostics == ()
     result = CatalogBuilder().build(parsed)
     assert result.catalog is not None

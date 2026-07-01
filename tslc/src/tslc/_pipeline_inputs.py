@@ -11,6 +11,11 @@ from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog
 from tslc.catalog.validation import validate_catalog
+from tslc.compiler_assets import (
+    RenderAssets,
+    load_default_render_assets,
+    load_default_tsl_grammar,
+)
 from tslc.diagnostics import Diagnostic, has_errors
 from tslc.sources import SourceLoader
 from tslc.support_policy_views import immediate_split_names, policy_split_names
@@ -28,6 +33,7 @@ class _InputRequest(Protocol):
 class _PipelineInputs:
     catalog: Catalog
     machine_profiles: Mapping[str, MachineProfile]
+    render_assets: RenderAssets
     split_names: frozenset[str]
     imm_split_names: frozenset[str]
     test_harness: HarnessPrimitiveNames
@@ -43,7 +49,7 @@ def _load_inputs(request: _InputRequest) -> tuple[_PipelineInputs | None, list[D
 
     from tslc.syntax.parser import TslParser
 
-    parse_result = TslParser().parse(load_result.documents)
+    parse_result = TslParser(load_default_tsl_grammar()).parse(load_result.documents)
     diagnostics.extend(parse_result.diagnostics)
     if has_errors(diagnostics):
         return None, diagnostics
@@ -78,6 +84,7 @@ def _load_inputs(request: _InputRequest) -> tuple[_PipelineInputs | None, list[D
         _PipelineInputs(
             catalog=catalog,
             machine_profiles=profile_result.profiles,
+            render_assets=load_default_render_assets(),
             split_names=split_names,
             imm_split_names=imm_split_names,
             test_harness=test_harness,
