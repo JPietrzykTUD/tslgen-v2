@@ -47,6 +47,22 @@ if (( $# > 0 )); then
 fi
 extra_args=("$@")
 
+has_cli_flag() {
+  local flag="$1"
+  local arg
+  for arg in "${extra_args[@]}"; do
+    [[ "$arg" == "$flag" ]] && return 0
+  done
+  return 1
+}
+
+if [[ "$mode" == "generate" ]] && { has_cli_flag --test || has_cli_flag --fuzz; }; then
+  echo "ERROR: dev.sh generate does not accept --test or --fuzz." >&2
+  echo "Use './dev.sh test ...' so SDE/qemu-aarch64 paths are wired consistently." >&2
+  echo "For manual control, call 'python -m tslc.cli' directly with explicit --sde/--qemu-aarch64." >&2
+  exit 2
+fi
+
 effective_cli_value() {
   local flag="$1"
   local value="$2"

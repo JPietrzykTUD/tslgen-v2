@@ -54,7 +54,7 @@ jobs:
 
       - name: Upload coverage ratchet logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ci-logs-coverage-ratchet
           path: tslctmp/ci-logs/coverage-ratchet
