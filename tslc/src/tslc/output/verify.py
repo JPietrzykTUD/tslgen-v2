@@ -39,6 +39,7 @@ def run_subprocess_build_command(command: BuildCommand) -> BuildCommandResult:
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
+        errors="replace",
         check=False,
         env=_subprocess_env(command),
     )
