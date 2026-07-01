@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tslc.backend.target_capability import x86_register_bits
 from tslc.documentation import (
     DocumentationBlock,
     documentation_block,
@@ -419,12 +418,11 @@ def _cpp_concrete_result_type(spec: LoweredSpecialization) -> str:
 
 def _cpp_register_doc(spec: LoweredSpecialization) -> str:
     return _cpp_native_register_doc(
-        extension_name=spec.extension_name,
         base_spelling=spec.base_type_spelling,
         uses_sized_vector=spec.uses_sized_vector,
         lane_parameter=spec.lane_parameter,
         register_is_base=spec.register_is_base,
-        fallback=spec.register_spelling,
+        fallback=spec.native_register_spelling or spec.register_spelling,
     )
 
 
@@ -432,18 +430,16 @@ def _cpp_target_register_doc(spec: LoweredSpecialization) -> str:
     if spec.target is None:
         return ""
     return _cpp_native_register_doc(
-        extension_name=spec.target.extension_isa,
         base_spelling=spec.target.base_spelling,
         uses_sized_vector=spec.target.uses_sized_vector,
         lane_parameter=spec.target.lane_parameter or spec.lane_parameter,
         register_is_base=False,
-        fallback=spec.target.register_spelling,
+        fallback=spec.target.native_register_spelling or spec.target.register_spelling,
     )
 
 
 def _cpp_native_register_doc(
     *,
-    extension_name: str,
     base_spelling: str,
     uses_sized_vector: bool,
     lane_parameter: str | None,
@@ -452,13 +448,6 @@ def _cpp_native_register_doc(
 ) -> str:
     if uses_sized_vector:
         return f"::tsl::array_type<{base_spelling}, {lane_parameter}>"
-    bits = x86_register_bits(extension_name)
-    if bits is not None:
-        if base_spelling == "float":
-            return f"__m{bits}"
-        if base_spelling == "double":
-            return f"__m{bits}d"
-        return f"__m{bits}i"
     if register_is_base:
         return base_spelling
     return fallback
@@ -472,6 +461,8 @@ def _free_kind_type(kind: str, base_spelling: str) -> str:
 
 
 def _vector_type(spec: LoweredSpecialization) -> str:
+    if spec.vector_spelling is not None:
+        return spec.vector_spelling
     if spec.uses_sized_vector:
         lane_parameter = spec.lane_parameter
         return f"tsl::simd<{spec.base_type_spelling}, tsl::generic<{lane_parameter}>>"

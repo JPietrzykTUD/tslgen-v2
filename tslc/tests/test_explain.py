@@ -119,12 +119,13 @@ def test_evaluate_candidates_ranks_winner_and_records_rejection(
 ) -> None:
     from tslc.catalog.builder import CatalogBuilder
     from tslc.catalog.machine_profiles import load_machine_profiles
+    from tslc.compiler_assets import load_default_tsl_grammar
     from tslc.sources import SourceLoader
     from tslc.syntax.parser import TslParser
 
     sources = sorted(data_root.rglob("*.tsl"))
     documents = SourceLoader().load(tuple(sources))
-    parse_result = TslParser().parse(documents.documents)
+    parse_result = TslParser(load_default_tsl_grammar()).parse(documents.documents)
     catalog = CatalogBuilder().build(parse_result).catalog
     assert catalog is not None
     profile = load_machine_profiles(machine_profiles_path)["avx2"]

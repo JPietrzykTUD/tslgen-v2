@@ -22,6 +22,7 @@ from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_
 from tslc.catalog.model import Catalog, ImplementationSafety
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.catalog.signatures import parse_signature
+from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import Diagnostic, has_errors
 from tslc.ir.scan import scan
 from tslc.lower.dependencies import extract_call_dependencies_from_segments
@@ -292,7 +293,7 @@ def _load_inputs(
     if has_errors(diagnostics):
         return None, tuple(diagnostics)
 
-    parsed = TslParser().parse(load.documents)
+    parsed = TslParser(load_default_tsl_grammar()).parse(load.documents)
     diagnostics.extend(parsed.diagnostics)
     if has_errors(diagnostics):
         return None, tuple(diagnostics)

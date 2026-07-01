@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from tslc.backend.translation import BackendDialect
     from tslc.catalog.model import Catalog
+    from tslc.compiler_assets import RenderAssets
     from tslc.lower.lowerer import LoweredSpecialization
     from tslc.output.artifacts import Artifact
     from tslc.output.verify_drivers import VerifyBackendDriver
@@ -17,11 +18,15 @@ if TYPE_CHECKING:
     from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
 
 DialectFactory = Callable[["Catalog"], "BackendDialect"]
-ProjectArtifactRenderer = Callable[[tuple["ProfileRender", ...]], list["Artifact"]]
+ProjectArtifactRenderer = Callable[
+    [tuple["ProfileRender", ...], "RenderAssets"], list["Artifact"]
+]
 VerifyProfileRenderer = Callable[
     [tuple["ProfileRender", ...]], tuple["VerifyProfile", ...]
 ]
-TestArtifactRenderer = Callable[["ValueTestProjectPlan"], list["Artifact"]]
+TestArtifactRenderer = Callable[
+    ["ValueTestProjectPlan", "RenderAssets"], list["Artifact"]
+]
 ValueTestSupportFactory = Callable[[], "ValueTestBackendSupport"]
 VerifyDriverFactory = Callable[[], "VerifyBackendDriver"]
 

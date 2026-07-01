@@ -8,7 +8,6 @@ from tslc.backend import translation_common as common
 from tslc.backend.target_capability import (
     rust_arch_module,
     rust_extension_tag,
-    rust_register_type,
 )
 from tslc.catalog.model import Catalog, Extension
 from tslc.render.model import (
@@ -52,7 +51,8 @@ class _RustTypes:
         return common.scalar_spelling(self.catalog, self.backend_id, type_tag)
 
     def vector_type_spelling(self, base_spelling: str, extension_name: str) -> str:
-        return f"Simd<{base_spelling}, {rust_extension_tag(extension_name)}>"
+        extension = common.extension_for_isa(self.catalog, extension_name)
+        return f"Simd<{base_spelling}, {rust_extension_tag(extension)}>"
 
     def sized_vector_spelling(self, base_spelling: str, lanes: int | str) -> str:
         # `lanes` is normally concrete; a sized-vector target of a representation-change uses
@@ -80,7 +80,7 @@ class _RustTypes:
             return declared
         if common.requires_declared_vector_register(self.catalog, extension_isa):
             return None
-        return rust_register_type(extension_isa, base)
+        return base
 
     def register_type_spelling(self) -> RenderText:
         return RenderPlaceholder("current_register", "Self::RegisterType")
@@ -120,7 +120,7 @@ class _RustIntrinsics:
         )
 
     def qualify_intrinsic(self, extension: Extension, name: str) -> str:
-        module = rust_arch_module(extension.family)
+        module = rust_arch_module(extension)
         return f"core::arch::{module}::{name}" if module is not None else name
 
     def render_immediate_intrinsic_call(

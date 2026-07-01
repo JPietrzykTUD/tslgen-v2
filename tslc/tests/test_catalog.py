@@ -13,6 +13,7 @@ from tslc.catalog._builder_primitives import _build_primitives
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog
+from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
 
@@ -157,6 +158,7 @@ def test_extension_inheritance_and_lscpu(catalog: Catalog) -> None:
     # compose metadata is inherited (flattened) from avx2.
     assert avx2_vl.compose_prefix["cpp"] == "_mm256_"
     assert avx2_vl.family == "x86"
+    assert avx2_vl.metadata.backend["rust"].arch_module == "x86_64"
     assert catalog.extension_chain("avx2_vl") == ("avx2_vl", "avx2")
 
 
@@ -192,7 +194,9 @@ def test_extension_descriptive_metadata_is_promoted(catalog: Catalog) -> None:
     assert avx2.metadata.backend["cpp"].test_support_header == "tests/avx2_support.hpp"
     assert avx2.metadata.backend["cpp"].headers == ("immintrin.h",)
     assert avx2.metadata.backend["rust"].type_name == "Avx2"
+    assert avx2.metadata.backend["rust"].arch_module == "x86_64"
     assert avx2.metadata.backend["rust"].generation_support == ("sse",)
+    assert neon.metadata.backend["rust"].arch_module == "aarch64"
     assert neon.metadata.backend["cpp"].header_guard == "__ARM_NEON"
 
 
@@ -230,7 +234,7 @@ extension child:
         "d",
         "tsl",
     )
-    parsed = TslParser().parse((source,))
+    parsed = TslParser(load_default_tsl_grammar()).parse((source,))
     assert parsed.diagnostics == ()
     result = CatalogBuilder().build(parsed)
     assert result.catalog is not None

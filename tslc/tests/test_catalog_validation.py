@@ -13,6 +13,7 @@ from tslc.catalog.machine_profiles import load_machine_profiles_checked
 from tslc.catalog.target_families import ProfileFamilyCapability, TargetFamilyCatalog
 from tslc.catalog.validation import validate_catalog
 from tslc.catalog.validation._schema_extensions import known_extension_fields
+from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import SourceLocation
 from tslc.sources import SourceDocument
 from tslc.syntax.parser import TslParser
@@ -20,7 +21,7 @@ from tslc.syntax.parser import TslParser
 
 def _diagnostics(text: str, *, backends: tuple[str, ...] = ("cpp", "rust")):
     document = SourceDocument(Path("catalog_validation_fixture.tsl"), text, "d", "tsl")
-    parsed = TslParser().parse((document,))
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
     assert parsed.diagnostics == (), parsed.diagnostics
     result = CatalogBuilder().build(parsed)
     assert result.catalog is not None
@@ -84,7 +85,7 @@ def test_primitive_documentation_fields_are_accepted_and_promoted() -> None:
         "  impls:\n",
     )
     document = SourceDocument(Path("catalog_validation_fixture.tsl"), source, "d", "tsl")
-    parsed = TslParser().parse((document,))
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
     assert parsed.diagnostics == (), parsed.diagnostics
     result = CatalogBuilder().build(parsed)
     assert result.catalog is not None

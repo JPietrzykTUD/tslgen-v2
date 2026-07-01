@@ -9,6 +9,7 @@ from tslc.catalog.model import Catalog
 
 if TYPE_CHECKING:
     from tslc.backend.rust_translation import RustBackendDialect
+    from tslc.compiler_assets import RenderAssets
     from tslc.output.artifacts import Artifact
     from tslc.output.verify_drivers import VerifyBackendDriver
     from tslc.output.verify_model import VerifyProfile
@@ -22,10 +23,12 @@ def create_rust_dialect(catalog: Catalog) -> RustBackendDialect:
     return RustBackendDialect(catalog)
 
 
-def rust_project_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
+def rust_project_artifacts(
+    profiles: tuple[ProfileRender, ...], assets: RenderAssets
+) -> list[Artifact]:
     from tslc.render.rust_project import rust_artifacts
 
-    return rust_artifacts(profiles)
+    return rust_artifacts(profiles, assets)
 
 
 def rust_profile_verification(
@@ -42,10 +45,12 @@ def rust_value_test_support() -> ValueTestBackendSupport:
     return RUST_VALUE_TEST_SUPPORT
 
 
-def rust_value_test_artifacts(plan: ValueTestProjectPlan) -> list[Artifact]:
+def rust_value_test_artifacts(
+    plan: ValueTestProjectPlan, assets: RenderAssets
+) -> list[Artifact]:
     from tslc.render.tests_project import rust_test_artifacts
 
-    return rust_test_artifacts(plan)
+    return rust_test_artifacts(plan, assets)
 
 
 def create_rust_verify_driver() -> VerifyBackendDriver:

@@ -12,11 +12,11 @@ from tslc.syntax.parser import TslParser
 
 
 def test_primitive_tsil_statement_regions_have_source_terminators(
-    data_root: Path,
+    data_root: Path, tsl_grammar: str
 ) -> None:
     documents = SourceLoader().load_dir(data_root / "primitives")
     assert documents.diagnostics == ()
-    parsed = TslParser().parse(documents.documents)
+    parsed = TslParser(tsl_grammar).parse(documents.documents)
     assert parsed.diagnostics == ()
 
     missing: list[str] = []
@@ -26,10 +26,12 @@ def test_primitive_tsil_statement_regions_have_source_terminators(
     assert missing == []
 
 
-def test_primitive_tsil_uses_unified_intrin_keyword(data_root: Path) -> None:
+def test_primitive_tsil_uses_unified_intrin_keyword(
+    data_root: Path, tsl_grammar: str
+) -> None:
     documents = SourceLoader().load_dir(data_root / "primitives")
     assert documents.diagnostics == ()
-    parsed = TslParser().parse(documents.documents)
+    parsed = TslParser(tsl_grammar).parse(documents.documents)
     assert parsed.diagnostics == ()
 
     legacy: list[str] = []
@@ -40,10 +42,12 @@ def test_primitive_tsil_uses_unified_intrin_keyword(data_root: Path) -> None:
     assert legacy == []
 
 
-def test_primitive_tsil_uses_backend_loop_surface(data_root: Path) -> None:
+def test_primitive_tsil_uses_backend_loop_surface(
+    data_root: Path, tsl_grammar: str
+) -> None:
     documents = SourceLoader().load_dir(data_root / "primitives")
     assert documents.diagnostics == ()
-    parsed = TslParser().parse(documents.documents)
+    parsed = TslParser(tsl_grammar).parse(documents.documents)
     assert parsed.diagnostics == ()
 
     legacy: list[str] = []

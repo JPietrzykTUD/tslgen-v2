@@ -27,16 +27,17 @@ build, not by the number of internal abstractions.
 
 ## The pipeline
 
-The compiler is a pure function (file I/O is confined to the edges),
-orchestrated in [pipeline.py](src/tslc/pipeline.py):
+The compiler is a pure function once source data and static compiler assets are
+loaded, orchestrated in [pipeline.py](src/tslc/pipeline.py):
 
 ```
-sources → parse → catalog → select → scan body → lower → emit → render → write → verify
+sources + compiler assets → parse → catalog → select → scan body → lower → emit → render → write → verify
 ```
 
 | Stage | Module | Role |
 |---|---|---|
-| **sources** | [sources.py](src/tslc/sources.py) | Read `.tsl` files (the only read boundary) |
+| **compiler assets** | [compiler_assets.py](src/tslc/compiler_assets.py) | Load the bundled grammar and render assets |
+| **sources** | [sources.py](src/tslc/sources.py) | Read `.tsl` source files |
 | **syntax** | [syntax/](src/tslc/syntax/) | Lark grammar → parse tree (outer declarations + TSIL body envelopes) |
 | **catalog** | [catalog/](src/tslc/catalog/) | Promote parse tree → typed, immutable domain model (`Primitive`, `Extension`, `Catalog`) |
 | **select** | [select/](src/tslc/select/) | For each `(backend, extension, type)` slot, pick the best implementation body |
@@ -164,11 +165,12 @@ AVX-512/NEON/SVE code runs on hardware that lacks it.
 - **Honest edges**: [support_policy.py](src/tslc/support_policy.py) centralizes
   what the compiler can emit today; some keyword forms are *recognized so a
   body skips cleanly* rather than leaking through as raw text.
-- **Tests**: the pure-logic suite is green. The build-verify tests
-  (`test_build_verify.py`, full-corpus `test_value_tests.py`) compile/run real
-  C++/Rust and make the full run exceed ~5 min. Run the suite from the **repo
-  root**, not from `tslc/` — `tests/test_value_test_planning.py` reads source via
-  repo-root-relative paths and otherwise reports false failures.
+- **Tests**: the default pytest run exercises the pure-logic suite and skips
+  generated C++/Rust build/value gates. Run `pytest --run-generated-builds
+  tests/test_build_verify.py tests/test_value_tests.py` when a slice needs real
+  toolchain coverage. Run the suite from the **repo root**, not from `tslc/` —
+  `tests/test_value_test_planning.py` reads source via repo-root-relative paths
+  and otherwise reports false failures.
 
 ## Where to look first
 

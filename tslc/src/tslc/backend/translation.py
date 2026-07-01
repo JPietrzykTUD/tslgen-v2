@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from tslc.backend.target_capability import X86_REGISTER_BITS
 from tslc.catalog.model import Extension
 from tslc.catalog.scalar_types import (
     is_signed,
@@ -106,7 +105,6 @@ __all__ = [
     "BackendSyntaxDialect",
     "BackendTemplateDialect",
     "BackendTypeDialect",
-    "X86_REGISTER_BITS",
     "create_backend_dialect",
     "is_signed",
     "is_type_tag",

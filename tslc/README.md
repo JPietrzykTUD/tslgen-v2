@@ -31,6 +31,8 @@ See [CHARTER.md](CHARTER.md) for the design rules this project holds itself to.
 ```bash
 cd tslc
 python -m pytest -q
+# Generated C++/Rust build/value gates are opt-in:
+python -m pytest -q --run-generated-builds tests/test_build_verify.py tests/test_value_tests.py
 # Write scratch/output under the workspace (./tslctmp), not /tmp: on WSL the
 # container overlay (which backs /tmp) only grows the VHDX and never shrinks.
 python -m tslc.cli --sources ../tsldata \

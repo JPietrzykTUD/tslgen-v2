@@ -23,6 +23,7 @@ from pathlib import Path
 
 from tslc.api import generate_project
 from tslc.catalog.builder import CatalogBuilder
+from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import has_errors
 from tslc.sources import SourceLoader
 from tslc.syntax.parser import TslParser
@@ -153,7 +154,7 @@ _CATEGORY_NOTES = {
 
 def main() -> int:
     catalog = CatalogBuilder().build(
-        TslParser().parse(SourceLoader().load_dir(_DATA_ROOT).documents)
+        TslParser(load_default_tsl_grammar()).parse(SourceLoader().load_dir(_DATA_ROOT).documents)
     ).catalog
     names = sorted({p.name for p in catalog.primitives})
     sigs: dict[str, set[str]] = defaultdict(set)

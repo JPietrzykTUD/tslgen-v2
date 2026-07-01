@@ -7,6 +7,7 @@ from pathlib import Path
 from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.builder import CatalogBuildResult, CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
+from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import SourceLocation
 from tslc.lower.lowerer import Lowerer
 from tslc.select.selector import Selector
@@ -34,7 +35,7 @@ def _build(text: str, path: Path = Path("diagnostic_fixture.tsl")) -> CatalogBui
         digest="d",
         kind="tsl",
     )
-    parsed = TslParser().parse((document,))
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
     assert parsed.diagnostics == (), parsed.diagnostics
     return CatalogBuilder().build(parsed)
 

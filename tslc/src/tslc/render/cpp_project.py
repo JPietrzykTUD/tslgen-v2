@@ -9,18 +9,16 @@ from tslc.backend.cpp import CppBackend
 from tslc.backend.target_capability import (
     cpp_x86_register_helper,
     is_x86_register_extension,
-    x86_register_bits,
 )
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
 from tslc.catalog.target_families import ProfileFamilyCapability
+from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyEmulator, VerifyProfile
 from tslc.render._common import (
-    asset,
     feature_spelling,
-    fill_asset,
     slug,
     text,
     type_bits,
@@ -33,19 +31,25 @@ if TYPE_CHECKING:
     from tslc.render.project import ProfileRender
 
 
-def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
+def cpp_artifacts(
+    profiles: tuple[ProfileRender, ...], assets: RenderAssets
+) -> list[Artifact]:
     backend = CppBackend()
     artifacts = [
-        text("cpp/include/tsl_core.hpp", asset("tsl_core.hpp")),
-        text("cpp/include/tsl_x86_traits.hpp", asset("tsl_x86_traits.hpp")),
+        text("cpp/include/tsl_core.hpp", assets.text("tsl_core.hpp")),
+        text("cpp/include/tsl_x86_traits.hpp", assets.text("tsl_x86_traits.hpp")),
         # Ship the formatter config at the C++ project root so `clang-format` (ascending from
         # include/ and tests/) finds it and the generated project is self-contained.
-        text("cpp/.clang-format", asset(".clang-format")),
+        text("cpp/.clang-format", assets.text(".clang-format")),
     ]
     for profile_render in profiles:
         by_primitive = profile_render.specializations("cpp")
         emitted_exts = used_exts(by_primitive)
-        x86_exts = [e for e in emitted_exts if is_x86_register_extension(e)]
+        x86_exts = [
+            e
+            for e in emitted_exts
+            if is_x86_register_extension(profile_render.extensions.get(e))
+        ]
         includes = _cpp_includes(emitted_exts, profile_render.extensions)
         registrations = "".join(
             _cpp_registration(ext, profile_render.extensions.get(ext))
@@ -65,7 +69,7 @@ def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
             for name in sorted(by_primitive)
         )
         bodies = declarations + "\n\n" + definitions
-        content = fill_asset(
+        content = assets.fill(
             "cpp_profile_header.hpp.tmpl",
             includes=includes,
             registrations=registrations,
@@ -79,7 +83,7 @@ def cpp_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
     artifacts.append(
         text("cpp/docs/input/tsl_api_docs.hpp", _cpp_documentation_facade(profiles))
     )
-    artifacts.append(text("cpp/CMakeLists.txt", _cpp_cmakelists(profiles)))
+    artifacts.append(text("cpp/CMakeLists.txt", _cpp_cmakelists(profiles, assets)))
     return artifacts
 
 
@@ -133,7 +137,7 @@ def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
 
 def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) -> str:
     lines = ['#include "tsl_core.hpp"']
-    if any(is_x86_register_extension(ext) for ext in emitted_exts):
+    if any(is_x86_register_extension(extensions.get(ext)) for ext in emitted_exts):
         lines.append('#include "tsl_x86_traits.hpp"')
     headers = sorted(
         {
@@ -150,8 +154,8 @@ def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) 
 def _cpp_registration(ext: str, extension: Extension | None) -> str:
     """A C++ extension tag + `simd<T, ext>` register/mask-type wiring for one ISA ext."""
 
-    helper = cpp_x86_register_helper(ext)
-    bits = x86_register_bits(ext)
+    helper = cpp_x86_register_helper(extension)
+    bits = extension.vector_bits if extension is not None else None
     if helper is None or bits is None:
         raise ValueError(f"unsupported C++ x86 register extension {ext!r}")
     if extension is not None and extension.mask_policy.kind == "native_predicate_by_lanes":
@@ -181,17 +185,15 @@ def _cpp_native_registration(
     emitted = {
         ext
         for ext, type_tag, _base in used_type_specs(by_primitive)
-        if not is_x86_register_extension(ext)
-        and (extension := extensions.get(ext)) is not None
+        if (extension := extensions.get(ext)) is not None
+        and not is_x86_register_extension(extension)
         and extension.direct_vector_register_type("cpp", type_tag) is not None
     }
     for ext in sorted(emitted):
         lines.append(f"struct {ext} {{}};\n")
     for ext, type_tag, base in used_type_specs(by_primitive):
-        if is_x86_register_extension(ext):
-            continue
         extension = extensions.get(ext)
-        if extension is None:
+        if extension is None or is_x86_register_extension(extension):
             continue
         register = extension.direct_vector_register_type("cpp", type_tag)
         if register is None:
@@ -381,10 +383,10 @@ def _concrete_arg_type(vec: str, kind: str) -> str:
     return f"{vec}::base_type"
 
 
-def _cpp_cmakelists(profiles: tuple[ProfileRender, ...]) -> str:
+def _cpp_cmakelists(profiles: tuple[ProfileRender, ...], assets: RenderAssets) -> str:
     slugs = tuple(slug(profile.profile.name) for profile in profiles)
     fallback = "scalar" if "scalar" in slugs else slugs[0]
-    rendered = fill_asset(
+    rendered = assets.fill(
         "cpp_cmakelists.txt.tmpl",
         available_profiles=_cmake_list(slugs),
         profile_choices=" ".join(

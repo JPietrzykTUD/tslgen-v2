@@ -1,0 +1,80 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from tslc.compiler_assets import (
+    RenderAssets,
+    load_default_tsl_grammar,
+)
+from tslc.render.rust_project import rust_artifacts
+from tslc.sources import SourceDocument
+from tslc.syntax.parser import TslParser
+
+
+def test_render_assets_freeze_and_fill_templates() -> None:
+    files = {"plain.txt": "plain", "demo.tmpl": "hello @{name}"}
+    assets = RenderAssets(files)
+
+    files["plain.txt"] = "changed"
+
+    assert assets.text("plain.txt") == "plain"
+    assert assets.fill("demo.tmpl", name="tslc") == "hello tslc"
+    with pytest.raises(KeyError, match="missing.txt"):
+        assets.text("missing.txt")
+    with pytest.raises(TypeError):
+        assets.files["plain.txt"] = "changed"  # type: ignore[index]
+
+
+def test_parser_consumes_injected_grammar() -> None:
+    document = SourceDocument(
+        Path("inline.tsl"),
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n',
+        "d",
+        "tsl",
+    )
+
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
+
+    assert parsed.diagnostics == ()
+    assert parsed.documents[0].primitives[0].name == "id"
+
+
+def test_rust_project_renderer_consumes_injected_assets() -> None:
+    assets = RenderAssets(
+        {
+            "rustfmt.toml": "# injected rustfmt\n",
+            "tsl_core.rs": "// injected core\n",
+            "rust_cargo.toml.tmpl": "[features]\n@{features}\n",
+        }
+    )
+
+    rendered = {artifact.logical_path: artifact.content for artifact in rust_artifacts((), assets)}
+
+    assert rendered["rust/src/tsl_core.rs"] == "// injected core\n"
+    assert rendered["rust/rustfmt.toml"] == "# injected rustfmt\n"
+    assert 'default = ["scalar"]' in rendered["rust/Cargo.toml"]
+
+
+def test_package_resource_reads_stay_in_compiler_asset_boundary() -> None:
+    package_root = Path(__file__).resolve().parents[1] / "src" / "tslc"
+    checked = (
+        package_root / "syntax" / "parser.py",
+        package_root / "render" / "_common.py",
+        package_root / "render" / "cpp_project.py",
+        package_root / "render" / "rust_project.py",
+        package_root / "render" / "tests_project.py",
+        package_root / "value_tests" / "render_cpp.py",
+        package_root / "value_tests" / "render_rust.py",
+    )
+
+    for path in checked:
+        text = path.read_text(encoding="utf-8")
+        assert "importlib import resources" not in text
+        assert "resources.files" not in text

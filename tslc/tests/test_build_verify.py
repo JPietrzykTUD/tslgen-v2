@@ -16,6 +16,8 @@ import pytest
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.diagnostics import has_errors
 
+pytestmark = pytest.mark.generated_build
+
 
 def _cmake_env(tmp_path: Path) -> dict[str, str]:
     env = os.environ.copy()
@@ -1390,11 +1392,14 @@ def test_full_corpus_builds(
     # when both primitives are emitted together. avx2 covers scalar/sse/avx2/generic; skylake
     # adds avx512 + the native-mask (`__mmaskN`) bodies.
     from tslc.catalog.builder import CatalogBuilder
+    from tslc.compiler_assets import load_default_tsl_grammar
     from tslc.sources import SourceLoader
     from tslc.syntax.parser import TslParser
 
     load = SourceLoader().load(tuple(sorted(data_root.rglob("*.tsl"))))
-    catalog = CatalogBuilder().build(TslParser().parse(load.documents)).catalog
+    catalog = CatalogBuilder().build(
+        TslParser(load_default_tsl_grammar()).parse(load.documents)
+    ).catalog
     assert catalog is not None
     names = sorted({primitive.name for primitive in catalog.primitives})
 

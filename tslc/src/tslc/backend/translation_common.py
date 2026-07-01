@@ -7,7 +7,6 @@ from tslc.catalog.scalar_types import (
     normalize_scalar_tag,
 )
 from tslc.render.model import RenderField, RenderText, TemplateApplication
-from tslc.backend.target_capability import X86_REGISTER_BITS
 
 
 def scalar_spelling(catalog: Catalog, backend_id: str, type_tag: str) -> str | None:
@@ -46,20 +45,25 @@ def vector_register_type(
 def requires_declared_vector_register(catalog: Catalog, extension_isa: str) -> bool:
     """Whether a selected vector extension must declare backend register types.
 
-    X86 and scalar/generic substrates have established backend-owned register
-    spelling rules. Native non-x86 substrates do not; their register types are
-    source-owned extension facts and must be present in ``vector_register_types``
-    before lowering may emit them.
+    Native fixed/scalable substrates declare their register types in
+    ``vector_register_types``. Scalar/generic substrates have backend-owned
+    fallbacks because their register representation is the base type or a sized
+    array rather than a hardware register.
     """
 
     return any(
-        extension.family not in {"x86", "scalar", "generic_like"}
+        extension.family not in {"scalar", "generic_like"}
         and (
             (extension.vector_bits_kind == "fixed" and extension.vector_bits > 0)
             or extension.vector_bits_kind == "scalable"
         )
         for extension in _extensions_for_isa(catalog, extension_isa)
     )
+
+
+def extension_for_isa(catalog: Catalog, extension_isa: str) -> Extension | None:
+    extensions = _extensions_for_isa(catalog, extension_isa)
+    return extensions[0] if extensions else None
 
 
 def _extensions_for_isa(catalog: Catalog, extension_isa: str) -> tuple[Extension, ...]:

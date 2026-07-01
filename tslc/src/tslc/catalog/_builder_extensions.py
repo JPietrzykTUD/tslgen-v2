@@ -53,6 +53,13 @@ def _resolve_extension_inheritance(
             ),
             backend_headers=_merge_header_maps(parent.backend_headers, ext.backend_headers),
             backend_supported={**parent.backend_supported, **ext.backend_supported},
+            metadata=replace(
+                ext.metadata,
+                backend=_merge_backend_metadata(
+                    parent.metadata.backend,
+                    ext.metadata.backend,
+                ),
+            ),
             # mask policy / width fall back to the parent only when this block didn't
             # state its own (every `_vl` block does, so this is just gap-filling).
             vector_bits=(
@@ -227,6 +234,7 @@ def _backend_extension_metadata(
             test_suite_name=_field_text(_child(backend, "test_suite_name")),
             test_support_header=_field_text(_child(backend, "test_support_header")),
             type_name=_field_text(_child(backend, "type_name")),
+            arch_module=_field_text(_child(backend, "arch_module")),
             generation_support=_list_text(_child(backend, "generation_support")),
         )
         if metadata != BackendExtensionMetadata():
@@ -290,6 +298,30 @@ def _merge_header_maps(
         values = list(merged.get(key, ()))
         values.extend(header for header in headers if header not in values)
         merged[key] = tuple(values)
+    return merged
+
+
+
+def _merge_backend_metadata(
+    parent: Mapping[str, BackendExtensionMetadata],
+    child: Mapping[str, BackendExtensionMetadata],
+) -> dict[str, BackendExtensionMetadata]:
+    merged = dict(parent)
+    for backend_id, child_meta in child.items():
+        parent_meta = merged.get(backend_id, BackendExtensionMetadata())
+        merged[backend_id] = BackendExtensionMetadata(
+            headers=child_meta.headers or parent_meta.headers,
+            header_guard=child_meta.header_guard or parent_meta.header_guard,
+            test_suite_name=child_meta.test_suite_name or parent_meta.test_suite_name,
+            test_support_header=(
+                child_meta.test_support_header or parent_meta.test_support_header
+            ),
+            type_name=child_meta.type_name or parent_meta.type_name,
+            arch_module=child_meta.arch_module or parent_meta.arch_module,
+            generation_support=(
+                child_meta.generation_support or parent_meta.generation_support
+            ),
+        )
     return merged
 
 

@@ -15,10 +15,13 @@ import pytest
 
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.catalog.builder import CatalogBuilder
+from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import has_errors
 from tslc.sources import SourceLoader
 from tslc.syntax.parser import TslParser
 from tslc.value_tests.coverage import parity_gaps
+
+pytestmark = pytest.mark.generated_build
 
 
 def test_golden_value_tests_build_and_pass(
@@ -206,9 +209,11 @@ def _full_corpus_avx2(
     machine_profiles_path: Path,
     *,
     backends: tuple[str, ...],
-):
+    ):
     documents = SourceLoader().load(tuple(sorted(data_root.rglob("*.tsl"))))
-    catalog = CatalogBuilder().build(TslParser().parse(documents.documents)).catalog
+    catalog = CatalogBuilder().build(
+        TslParser(load_default_tsl_grammar()).parse(documents.documents)
+    ).catalog
     assert catalog is not None
     names = sorted({primitive.name for primitive in catalog.primitives})
     result = generate_project(

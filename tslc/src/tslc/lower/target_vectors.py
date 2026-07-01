@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tslc.backend import translation_common
 from tslc.backend.translation import BackendDialect
 from tslc.catalog.model import RESULT_DIM_BASE, Catalog
 from tslc.diagnostics import Diagnostic
@@ -35,6 +36,7 @@ class TargetVector:
     uses_sized_vector: bool = False
     lane_parameter: str | None = None
     windowed: bool = False
+    native_register_spelling: str | None = None
 
 
 TargetVectorResolution = TargetVector | None | Diagnostic
@@ -63,7 +65,7 @@ def resolve_target_vector(
             selected, backend, dim, alias, scope, support
         )
     if dim == RESULT_DIM_BASE:
-        return _resolve_base_target(selected, backend, alias, scope, support)
+        return _resolve_base_target(selected, catalog, backend, alias, scope, support)
     return _resolve_extension_target(
         selected, catalog, backend, base_type_spelling, alias, support, scope
     )
@@ -114,6 +116,7 @@ def _resolve_sized_target(
 
 def _resolve_base_target(
     selected: SelectedImplementation,
+    catalog: Catalog,
     backend: BackendDialect,
     alias: str,
     scope: LoweringScope,
@@ -150,6 +153,12 @@ def _resolve_base_target(
         base_spelling=to_base_spelling,
         uses_sized_vector=uses_sized_vector,
         lane_parameter=lane_parameter,
+        native_register_spelling=translation_common.vector_register_type(
+            catalog,
+            backend.backend_id,
+            selected.extension.isa_name,
+            selected.to_target,
+        ),
     )
 
 
@@ -194,6 +203,12 @@ def _resolve_extension_target(
         base_spelling=base_type_spelling,
         uses_sized_vector=target_uses_sized_vector,
         lane_parameter=target_lane_parameter if target_uses_sized_vector else None,
+        native_register_spelling=translation_common.vector_register_type(
+            catalog,
+            backend.backend_id,
+            target_isa,
+            selected.type_tag,
+        ),
     )
 
 

@@ -23,7 +23,7 @@ from tslc._pipeline_closure import (
 from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
 from tslc.backend.registry import backend_capabilities
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import Catalog, Extension
+from tslc.catalog.model import RESULT_DIM_EXTENSION, Catalog, Extension
 from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
 from tslc.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
@@ -162,6 +162,7 @@ class _GenerationSession:
                 catalog=self.inputs.catalog,
                 value_test_warnings=self.request.value_test_warnings,
                 value_test_fuzz=self.request.value_test_fuzz,
+                assets=self.inputs.render_assets,
             )
             if self.profile_renders
             else None
@@ -251,7 +252,7 @@ class _GenerationSession:
         discovered_primitives: list[str] = []
 
         for slot in selection.selected:
-            selected_extensions[slot.extension.isa_name] = slot.extension
+            _record_render_extensions(catalog, selected_extensions, slot)
             body_segments = scan(
                 slot.implementation.body_text,
                 source=slot.implementation.body_source,
@@ -349,6 +350,23 @@ class _GenerationSession:
             for slot in lowered_specs
             if slot not in pruned
         )
+
+
+def _record_render_extensions(
+    catalog: Catalog,
+    selected_extensions: dict[str, Extension],
+    slot: SelectedImplementation,
+) -> None:
+    selected_extensions[slot.extension.isa_name] = slot.extension
+    if (
+        slot.primitive.result_target is None
+        or slot.primitive.result_target[0] != RESULT_DIM_EXTENSION
+        or slot.to_target is None
+    ):
+        return
+    target_extension = catalog.extensions.get(slot.to_target)
+    if target_extension is not None:
+        selected_extensions[target_extension.isa_name] = target_extension
 
 
 def _lowering_skipped_entry(

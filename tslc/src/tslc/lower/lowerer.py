@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
+from tslc.backend import translation_common
 from tslc.backend.translation import BackendDialect
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
@@ -48,7 +49,11 @@ from tslc.lower._diagnostics import (
     primitive_signature_source as _primitive_signature_source,
 )
 from tslc.lower.raw_text import render_raw_text
-from tslc.lower.regions import DEFAULT_REGION_LOWERERS, RegionLowerer, StatementFinalizer
+from tslc.lower.region_handlers import (
+    DEFAULT_REGION_LOWERERS,
+    RegionLowerer,
+    StatementFinalizer,
+)
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
 from tslc.render.model import (
     LoweredBody,
@@ -83,6 +88,9 @@ class LoweredSpecialization:
     param_names: tuple[str, ...]
     param_kinds: tuple[str, ...]
     body: LoweredBody
+    vector_spelling: str | None = None  # concrete backend vector spelling for this spec
+    index_register_spelling: str | None = None  # concrete si32 register for `vidx`
+    native_register_spelling: str | None = None  # source-declared native register, if any
     uses_sized_vector: bool = False
     lane_parameter: str | None = None
     # Boolean-wildcard attribute axis (name, concrete value), e.g. (("aligned","false"),).
@@ -270,11 +278,19 @@ class Lowerer:
             if selected.concrete_lanes is not None
             else self._support.size_parameter_name(selected.extension)
         ) if uses_sized_vector else None
-        register_spelling = backend.types.target_register_spelling(
-            selected.type_tag,
-            selected.extension.isa_name,
-            uses_sized_vector=uses_sized_vector,
-            lane_parameter=lane_parameter,
+        is_free_function = self._support.is_free_function_signature(
+            shape.result_kind,
+            shape.param_kinds,
+        )
+        register_spelling = (
+            base_type_spelling
+            if is_free_function
+            else backend.types.target_register_spelling(
+                selected.type_tag,
+                selected.extension.isa_name,
+                uses_sized_vector=uses_sized_vector,
+                lane_parameter=lane_parameter,
+            )
         )
         if register_spelling is None:
             if not selected.extension.supports_backend(backend.backend_id):
@@ -292,6 +308,36 @@ class Lowerer:
                 f"{selected.extension.isa_name!r} / {selected.type_tag!r}",
                 source=_implementation_source(selected),
             )
+
+        vector_spelling = (
+            None
+            if is_free_function
+            else (
+                backend.types.sized_vector_spelling(base_type_spelling, lane_parameter)
+                if uses_sized_vector and lane_parameter is not None
+                else backend.types.vector_type_spelling(
+                    base_type_spelling, selected.extension.isa_name
+                )
+            )
+        )
+        native_register_spelling = (
+            None
+            if is_free_function
+            else translation_common.vector_register_type(
+                catalog,
+                backend.backend_id,
+                selected.extension.isa_name,
+                selected.type_tag,
+            )
+        )
+        index_register_spelling = (
+            backend.types.target_register_spelling("si32", selected.extension.isa_name)
+            if (
+                self._support.index_vector_kind in shape.param_kinds
+                and selected.extension.family == "x86"
+            )
+            else None
+        )
 
         # A representation-change primitive produces a TARGET vector; resolve it (and bind
         # its declared target alias into the scope), or propagate the skip/error it returns.
@@ -407,6 +453,9 @@ class Lowerer:
             param_names=parameters,
             param_kinds=shape.param_kinds,
             body=body,
+            vector_spelling=vector_spelling,
+            index_register_spelling=index_register_spelling,
+            native_register_spelling=native_register_spelling,
             uses_sized_vector=uses_sized_vector,
             lane_parameter=lane_parameter,
             axis=tuple(

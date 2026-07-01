@@ -5,7 +5,6 @@ from __future__ import annotations
 import ast
 from collections.abc import Iterable
 from functools import lru_cache
-from importlib import resources
 
 from lark import Lark, Token, Tree
 from lark.exceptions import UnexpectedInput
@@ -39,8 +38,6 @@ from tslc.syntax.ast import (
 )
 
 
-_GRAMMAR_PACKAGE = "tslc.syntax.grammar"
-_GRAMMAR_FILE = "tsl_data.lark"
 _KNOWN_PRIMITIVE_FIELDS: dict[str, ParsedPrimitiveFieldKind] = {
     "brief_description": "brief_description",
     "detailed_description": "detailed_description",
@@ -66,13 +63,15 @@ class _TslIndenter(Indenter):
 class TslParser:
     """Parse outer TSL declarations and preserve TSIL payload envelopes."""
 
+    def __init__(self, grammar_text: str) -> None:
+        self._parser = _lark_parser(grammar_text)
+
     def parse(self, documents: tuple[SourceDocument, ...]) -> OuterTslParseResult:
         parsed_documents: list[ParsedOuterTslDocument] = []
         diagnostics: list[Diagnostic] = []
-        parser = _lark_parser()
         for document in sorted(documents, key=lambda item: item.path.as_posix()):
             try:
-                tree = parser.parse(document.text)
+                tree = self._parser.parse(document.text)
             except UnexpectedInput as error:
                 diagnostics.append(
                     Diagnostic(
@@ -96,9 +95,8 @@ class TslParser:
         )
 
 
-@lru_cache(maxsize=1)
-def _lark_parser() -> Lark:
-    grammar = resources.files(_GRAMMAR_PACKAGE).joinpath(_GRAMMAR_FILE).read_text()
+@lru_cache(maxsize=4)
+def _lark_parser(grammar: str) -> Lark:
     return Lark(
         grammar,
         parser="lalr",

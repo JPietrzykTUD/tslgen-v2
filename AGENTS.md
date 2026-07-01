@@ -66,6 +66,7 @@ tslc/
   src/tslc/
     api.py                    Public generation API
     cli.py                    CLI entry point
+    compiler_assets.py        Static grammar/render asset loading
     sources.py                Source-document loading
     syntax/                   TSL parser and parsed-source models
     catalog/                  Typed catalog model, builder, validation
@@ -89,10 +90,15 @@ tsldata/
 
 supplementary/
   buildsystem/                C++/Rust build-system static files and templates
-  ci/                         CI helper scripts
+  ci/                         Reusable CI helper scripts
   docs/                       Active generated-documentation assets
   helpers/                    C++/Rust helper sources
   templates/                  C++/Rust render templates
+
+.github/
+  workflows/                  GitHub Actions workflow entry points
+  actions/                    Local GitHub Actions
+  scripts/                    GitHub Actions-only helper scripts
 
 coverage/
   baseline.json               Coverage ratchet baseline
@@ -113,6 +119,14 @@ Run from the repository root unless noted.
 python -m compileall -q tslc/src/tslc
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests
 git diff --check
+```
+
+The default pytest run skips generated C++/Rust build/value gates. Run them
+explicitly when the slice touches generated project layout, backend codegen,
+verification, or executable value tests:
+
+```bash
+PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py
 ```
 
 Useful focused tests:
@@ -145,8 +159,8 @@ Use `./dev.sh` for generated-project workflows:
 - Prefer pure functions for simple stateless transformations.
 - Keep raw dictionaries at parser, configuration, or explicit metadata
   boundaries. Downstream compiler stages should consume typed objects.
-- Keep filesystem reads in source/config loading and filesystem writes in
-  artifact writing or explicit maintenance tools.
+- Keep filesystem reads in source/config/static compiler-asset loading and
+  filesystem writes in artifact writing or explicit maintenance tools.
 - Return structured diagnostics from pure logic. Do not call `SystemExit`
   outside CLI boundaries.
 - Preserve source locations for diagnostics where practical.

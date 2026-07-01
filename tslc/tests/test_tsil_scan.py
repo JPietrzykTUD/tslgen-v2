@@ -24,8 +24,7 @@ def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:
 
     assert len(descriptor_keywords) == len(set(descriptor_keywords))
     assert KEYWORDS == TSIL_REGION_KEYWORDS
-    assert lowerer_keywords <= TSIL_REGION_KEYWORDS
-    assert TSIL_REGION_KEYWORDS - lowerer_keywords == {"pack"}
+    assert lowerer_keywords == TSIL_REGION_KEYWORDS
     assert region_shell_validator("call") == "call_selector"
     assert region_shell_validator("complete") is None
     declared_validators = {
@@ -58,15 +57,13 @@ def test_intrin_build_selector_is_raw_and_args_recurse() -> None:
     assert not intrinsic.has_statement_terminator
 
 
-def test_descriptor_only_keyword_is_still_scanned_as_region() -> None:
+def test_removed_pack_keyword_stays_raw_text() -> None:
     segments = scan("complete(pack<first>(value));")
 
     complete = segments[0]
     assert isinstance(complete, Region)
-    pack = complete.body[0]
-    assert isinstance(pack, Region)
-    assert pack.keyword == "pack"
-    assert pack.selector_text == "first"
+    assert "pack" not in TSIL_REGION_KEYWORDS
+    assert complete.body == (RawText("pack<first>(value)"),)
 
 
 def test_expression_statement_consumes_source_terminator() -> None:

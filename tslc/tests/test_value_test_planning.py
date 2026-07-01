@@ -12,6 +12,7 @@ from tslc.catalog.model import (
     TestArg as TslTestArg,
     TestCase as TslTestCase,
 )
+from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.render.emitted_names import finalize_emitted_names
 from tslc.render.model import LoweredBody
@@ -228,7 +229,9 @@ def test_simple_shape_patterns_are_not_ordered_by_first_overload() -> None:
     ]
 
 
-def test_lane_list_value_tests_are_planned_and_rendered() -> None:
+def test_lane_list_value_tests_are_planned_and_rendered(
+    render_assets: RenderAssets,
+) -> None:
     primitive = Primitive(
         "set",
         "v:=(lanes<s>)",
@@ -254,8 +257,8 @@ def test_lane_list_value_tests_are_planned_and_rendered() -> None:
 
     assert [case.kind for case in plan.profiles_for("cpp")[0].cases] == ["lane_list"]
     assert [case.kind for case in plan.profiles_for("rust")[0].cases] == ["lane_list"]
-    cpp_source = render_cpp_values_runner(plan.profiles_for("cpp")[0])
-    rust_source = render_rust_values_file(plan.profiles_for("rust"))
+    cpp_source = render_cpp_values_runner(plan.profiles_for("cpp")[0], render_assets)
+    rust_source = render_rust_values_file(plan.profiles_for("rust"), render_assets)
     assert "typename tsl::array_for<Vec>::type values;" in cpp_source
     assert "tsl::set<Vec>(values)" in cpp_source
     assert "let mut values: <Vec as SimdVector>::Array = Default::default();" in rust_source
@@ -351,7 +354,9 @@ def test_planner_warns_for_each_unsupported_authored_case() -> None:
     assert "bad" in warnings[0].message
 
 
-def test_render_project_surfaces_value_test_warnings_when_requested() -> None:
+def test_render_project_surfaces_value_test_warnings_when_requested(
+    render_assets: RenderAssets,
+) -> None:
     primitive = Primitive(
         "neg",
         "v:=v",
@@ -378,6 +383,7 @@ def test_render_project_surfaces_value_test_warnings_when_requested() -> None:
         backends=("cpp",),
         catalog=catalog,
         value_test_warnings=True,
+        assets=render_assets,
     )
 
     assert [diagnostic.code for diagnostic in rendered.diagnostics] == [
@@ -388,11 +394,14 @@ def test_render_project_surfaces_value_test_warnings_when_requested() -> None:
         backends=("cpp",),
         catalog=catalog,
         value_test_warnings=False,
+        assets=render_assets,
     )
     assert suppressed.diagnostics == ()
 
 
-def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
+def test_renderers_consume_prebuilt_plans_without_catalog(
+    render_assets: RenderAssets,
+) -> None:
     cpp_case = ValueTestCasePlan(
         kind="generic_golden",
         function_name="test_add",
@@ -407,7 +416,7 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
         param_kinds=("v", "v"),
     )
     cpp_source = render_cpp_values_runner(
-        ValueTestProfilePlan("cpp", "unit-profile", (cpp_case,))
+        ValueTestProfilePlan("cpp", "unit-profile", (cpp_case,)), render_assets
     )
     assert "tsl::plus<Vec>(v0, v1)" in cpp_source
 
@@ -429,7 +438,8 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
         runtime_lanes_expr="svcntb() / sizeof(std::int32_t)",
     )
     cpp_scalable_source = render_cpp_values_runner(
-        ValueTestProfilePlan("cpp", "unit-profile", (cpp_scalable_case,))
+        ValueTestProfilePlan("cpp", "unit-profile", (cpp_scalable_case,)),
+        render_assets,
     )
     assert "using Vec = tsl::simd<std::int32_t, tsl::sve>;" in cpp_scalable_source
     assert "const std::size_t lanes = static_cast<std::size_t>(" in cpp_scalable_source
@@ -451,7 +461,8 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
         param_kinds=("v", "v"),
     )
     rust_source = render_rust_values_file(
-        (ValueTestProfilePlan("rust", "unit-profile", (rust_case,)),)
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_case,)),),
+        render_assets,
     )
     assert "r#mod::<Vec>(a0, a1)" in rust_source
 
@@ -469,7 +480,8 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
         mask_inputs=("5",),
     )
     rust_masked_source = render_rust_values_file(
-        (ValueTestProfilePlan("rust", "unit-profile", (rust_masked_case,)),)
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_masked_case,)),),
+        render_assets,
     )
     assert "let m0: <Vec as SimdVector>::MaskType = 5u64;" in rust_masked_source
     assert "add_maskz::<Vec>(m0, v0, v1)" in rust_masked_source
@@ -487,7 +499,8 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
         mask_inputs=("5",),
     )
     rust_mask_to_vector_source = render_rust_values_file(
-        (ValueTestProfilePlan("rust", "unit-profile", (rust_mask_to_vector_case,)),)
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_mask_to_vector_case,)),),
+        render_assets,
     )
     assert "let mask: <Vec as SimdVector>::MaskType = 5u64;" in rust_mask_to_vector_source
     assert "to_vector::<Vec>(mask)" in rust_mask_to_vector_source
@@ -505,7 +518,8 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
         param_kinds=("v", "v"),
     )
     rust_mask_result_source = render_rust_values_file(
-        (ValueTestProfilePlan("rust", "unit-profile", (rust_mask_result_case,)),)
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_mask_result_case,)),),
+        render_assets,
     )
     assert "equal::<Vec>(v0, v1)" in rust_mask_result_source
     assert 'assert_eq!(mask_bit(result as u64, 2), true, "equal lane 2");' in rust_mask_result_source
@@ -523,7 +537,8 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
         param_kinds=("m", "m"),
     )
     rust_mask_logic_source = render_rust_values_file(
-        (ValueTestProfilePlan("rust", "unit-profile", (rust_mask_logic_case,)),)
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_mask_logic_case,)),),
+        render_assets,
     )
     assert "mask_binary_and::<Vec>(m0, m1)" in rust_mask_logic_source
     assert (
@@ -543,7 +558,8 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
         scalar_input="7",
     )
     rust_broadcast_source = render_rust_values_file(
-        (ValueTestProfilePlan("rust", "unit-profile", (rust_broadcast_case,)),)
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_broadcast_case,)),),
+        render_assets,
     )
     assert "let value: i32 = 7;" in rust_broadcast_source
     assert "set1::<Vec>(value)" in rust_broadcast_source
@@ -561,7 +577,8 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
         immediate_value="1",
     )
     rust_immediate_source = render_rust_values_file(
-        (ValueTestProfilePlan("rust", "unit-profile", (rust_immediate_case,)),)
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_immediate_case,)),),
+        render_assets,
     )
     assert "shift_left_imm::<Vec, 1>(a0)" in rust_immediate_source
     assert "let expected: [u32; 4] = [2, 4, 6, 8];" in rust_immediate_source
@@ -582,7 +599,8 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
         buffer_length=4,
     )
     rust_mask_store_source = render_rust_values_file(
-        (ValueTestProfilePlan("rust", "unit-profile", (rust_mask_store_case,)),)
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_mask_store_case,)),),
+        render_assets,
     )
     assert not any(line.rstrip() != line for line in rust_mask_store_source.splitlines())
     assert "let mut buf: [u32; 4] = [Default::default(); 4];" in rust_mask_store_source
@@ -605,7 +623,8 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
         expected=("10",),
     )
     rust_reduction_source = render_rust_values_file(
-        (ValueTestProfilePlan("rust", "unit-profile", (rust_reduction_case,)),)
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_reduction_case,)),),
+        render_assets,
     )
     assert "hadd::<Vec>(v0)" in rust_reduction_source
     assert "let expected: i32 = 10;" in rust_reduction_source
@@ -624,7 +643,8 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
         scalar_inputs=("3",),
     )
     rust_scalar_vector_source = render_rust_values_file(
-        (ValueTestProfilePlan("rust", "unit-profile", (rust_scalar_vector_case,)),)
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_scalar_vector_case,)),),
+        render_assets,
     )
     assert "let s0: i32 = 3;" in rust_scalar_vector_source
     assert "sequence::<Vec>(s0)" in rust_scalar_vector_source
@@ -644,7 +664,8 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
         index_value="2",
     )
     rust_scalar_source = render_rust_values_file(
-        (ValueTestProfilePlan("rust", "unit-profile", (rust_scalar_case,)),)
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_scalar_case,)),),
+        render_assets,
     )
     assert "extract_value::<Vec, 2>(v0)" in rust_scalar_source
     assert "let expected: i32 = 3;" in rust_scalar_source
@@ -662,7 +683,8 @@ def test_renderers_consume_prebuilt_plans_without_catalog() -> None:
         param_kinds=(),
     )
     rust_compile_source = render_rust_values_file(
-        (ValueTestProfilePlan("rust", "unit-profile", (rust_compile_case,)),)
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_compile_case,)),),
+        render_assets,
     )
     assert "let result = set_undef::<Vec>();" in rust_compile_source
     assert "let _ = result;" in rust_compile_source
@@ -780,7 +802,9 @@ def test_scalable_tiling_is_gated_on_corpus_cross_lane_fact() -> None:
     assert tiling_is_safe((unknown,), catalog) is False
 
 
-def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog() -> None:
+def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog(
+    render_assets: RenderAssets,
+) -> None:
     cases = (
         ValueTestCasePlan(
             "array_to_vector",
@@ -1008,7 +1032,9 @@ def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog() ->
         ),
     )
 
-    source = render_rust_values_file((ValueTestProfilePlan("rust", "unit-profile", cases),))
+    source = render_rust_values_file(
+        (ValueTestProfilePlan("rust", "unit-profile", cases),), render_assets
+    )
 
     assert "from_array::<Vec>(&values)" in source
     assert "to_array::<Vec>(v0)" in source
@@ -1150,11 +1176,11 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
     assert 'extension_name == "scalar"' not in case_plans
     assert "_rust_literal" not in render_cpp
     assert 'backend_id == "rust"' not in render_cpp
-    assert "fill_asset" in render_cpp_entry
+    assert "assets.fill" in render_cpp_entry
     assert "cpp_value_tests.cpp.tmpl" in render_cpp_entry
     assert "std::fprintf" not in render_cpp_entry
     assert "std::fprintf" in cpp_values_template
-    assert "fill_asset" in render_rust
+    assert "assets.fill" in render_rust
     assert "rust_value_tests.rs.tmpl" in render_rust
     assert "rust_value_tests_profile.rs.tmpl" in render_rust
     assert "#![cfg(feature = \"value_tests\")]" not in render_rust

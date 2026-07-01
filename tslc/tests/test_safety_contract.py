@@ -11,6 +11,7 @@ from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, ImplementationSafety
 from tslc.catalog.signatures import parse_signature
 from tslc.catalog.validation import validate_catalog
+from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import Diagnostic
 from tslc.lower.dependencies import CallDependency, VectorIdentity
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
@@ -259,10 +260,10 @@ def test_source_call_to_caller_unsafe_primitive_uses_local_unsafe(
 
 def test_primitive_corpus_implementation_bodies_have_local_safety(
     data_root: Path,
-) -> None:
+    ) -> None:
     documents = SourceLoader().load_dir(data_root / "primitives")
     assert documents.diagnostics == ()
-    parsed = TslParser().parse(documents.documents)
+    parsed = TslParser(load_default_tsl_grammar()).parse(documents.documents)
     assert parsed.diagnostics == ()
 
     missing: list[str] = []
@@ -331,7 +332,7 @@ def test_primitive_corpus_safety_covers_direct_unsafe_facts(
 
 def _catalog_from_source(source: str):
     document = SourceDocument(Path("safety_fixture.tsl"), source, "d", "tsl")
-    parsed = TslParser().parse((document,))
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
     assert parsed.diagnostics == (), parsed.diagnostics
     result = CatalogBuilder().build(parsed)
     assert result.catalog is not None
