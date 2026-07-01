@@ -77,13 +77,13 @@ jobs:
 
       - name: Pull CI image
         run: |
-          bash supplementary/ci/run_with_log.sh \
+          bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/generated-package/docker-pull.log" \
             docker pull "${TSLC_CI_IMAGE}"
 
       - name: Generate package output
         run: |
-          bash supplementary/ci/run_with_log.sh \
+          bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/generated-package/generate.log" \
             bash supplementary/ci/run_tslc_ci_container.sh \
               -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
@@ -92,7 +92,7 @@ jobs:
 
       - name: Verify generated consumer projects
         run: |
-          bash supplementary/ci/run_with_log.sh \
+          bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/generated-package/verify-consumers.log" \
             bash supplementary/ci/run_tslc_ci_container.sh \
               -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
@@ -101,7 +101,7 @@ jobs:
 
       - name: Package generated output
         run: |
-          bash supplementary/ci/run_with_log.sh \
+          bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/generated-package/package.log" \
             bash -lc '
               set -e

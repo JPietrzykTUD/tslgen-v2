@@ -37,7 +37,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          bash supplementary/ci/run_with_log.sh \
+          bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/coverage-ratchet/install.log" \
             bash -lc '
               set -e
@@ -48,7 +48,7 @@ jobs:
 
       - name: Run coverage ratchet
         run: |
-          bash supplementary/ci/run_with_log.sh \
+          bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/coverage-ratchet/ratchet.log" \
             bash dev.sh ratchet
 

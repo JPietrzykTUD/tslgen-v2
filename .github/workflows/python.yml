@@ -31,7 +31,7 @@ jobs:
       - name: Compute Python test shards
         id: shards
         run: |
-          python_test_shards="$(python3 supplementary/ci/python_test_shards.py)"
+          python_test_shards="$(python3 .github/scripts/python_test_shards.py)"
           echo "python_test_shards=${python_test_shards}" >> "$GITHUB_OUTPUT"
 
   python-tests:
@@ -61,7 +61,7 @@ jobs:
 
       - name: Install Python test dependencies
         run: |
-          bash supplementary/ci/run_with_log.sh \
+          bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/python-${{ matrix.python_test_shard.name }}/install.log" \
             bash -lc '
               set -e
@@ -72,7 +72,7 @@ jobs:
 
       - name: Run Python test suite
         run: |
-          bash supplementary/ci/run_with_log.sh \
+          bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/python-${{ matrix.python_test_shard.name }}/tests.log" \
             bash -lc '
               set -e

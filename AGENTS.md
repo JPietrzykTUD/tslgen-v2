@@ -90,10 +90,15 @@ tsldata/
 
 supplementary/
   buildsystem/                C++/Rust build-system static files and templates
-  ci/                         CI helper scripts
+  ci/                         Reusable CI helper scripts
   docs/                       Active generated-documentation assets
   helpers/                    C++/Rust helper sources
   templates/                  C++/Rust render templates
+
+.github/
+  workflows/                  GitHub Actions workflow entry points
+  actions/                    Local GitHub Actions
+  scripts/                    GitHub Actions-only helper scripts
 
 coverage/
   baseline.json               Coverage ratchet baseline

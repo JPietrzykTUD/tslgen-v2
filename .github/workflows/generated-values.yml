@@ -67,7 +67,7 @@ jobs:
         id: shards
         run: |
           profile_shards="$(
-            jq -c -f supplementary/ci/profile_shards.jq \
+            jq -c -f .github/scripts/profile_shards.jq \
               supplementary/buildsystem/machine_profiles.json
           )"
           echo "profile_shards=${profile_shards}" >> "$GITHUB_OUTPUT"
@@ -102,13 +102,13 @@ jobs:
 
       - name: Pull CI image
         run: |
-          bash supplementary/ci/run_with_log.sh \
+          bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/generated-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}/docker-pull.log" \
             docker pull "${TSLC_CI_IMAGE}"
 
       - name: Run generated value-test shard
         run: |
-          bash supplementary/ci/run_with_log.sh \
+          bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/generated-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}/value-tests.log" \
             bash supplementary/ci/run_tslc_ci_container.sh \
               -e TSLC_BACKENDS="${{ matrix.backend }}" \

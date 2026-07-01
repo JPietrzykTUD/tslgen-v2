@@ -20,7 +20,8 @@ generated projects, and optionally verifies them with real toolchains.
 ```text
 tslc/          Python compiler package, tests, charter, and architecture docs
 tsldata/       TSL extension/profile/type/primitive source corpus
-supplementary/ Build-system templates, helper sources, docs assets, CI helpers
+.github/      GitHub Actions workflows, actions, and workflow-only scripts
+supplementary/ Build-system templates, helper sources, docs assets, reusable CI helpers
 coverage/      Coverage ratchet baseline and generated coverage inventory
 tslctmp/       Local generated output and scratch space; do not commit
 ```

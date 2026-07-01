@@ -78,13 +78,13 @@ jobs:
 
       - name: Pull CI image
         run: |
-          bash supplementary/ci/run_with_log.sh \
+          bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/docs/docker-pull.log" \
             docker pull "${TSLC_CI_IMAGE}"
 
       - name: Build generated documentation
         run: |
-          bash supplementary/ci/run_with_log.sh \
+          bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/docs/build-docs.log" \
             bash supplementary/ci/run_tslc_ci_container.sh \
               -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
@@ -99,7 +99,7 @@ jobs:
 
       - name: Package docs site
         run: |
-          bash supplementary/ci/run_with_log.sh \
+          bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/docs/package.log" \
             bash -lc '
               set -e
