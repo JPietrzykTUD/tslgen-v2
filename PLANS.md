@@ -124,8 +124,10 @@ Choose the smallest useful validation first:
   `PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_build_verify_config.py tslc/tests/test_output_format.py`
 - Documentation maintenance:
   `PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_maintenance_documentation.py`
-- Full Python suite:
+- Full Python logic suite:
   `PYTHONPATH=tslc/src python -m pytest -q tslc/tests`
+- Generated build/value pytest gates:
+  `PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py`
 
 Always consider:
 
@@ -134,7 +136,7 @@ python -m compileall -q tslc/src/tslc
 git diff --check
 ```
 
-Generated build/value-test gates can be expensive; run them when the slice
+Generated build/value-test gates are opt-in and expensive; run them when the slice
 touches generated project layout, backend codegen, verification, or value-test
 planning.
 

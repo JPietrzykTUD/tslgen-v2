@@ -11,13 +11,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TEST_ROOT = REPO_ROOT / "tslc" / "tests"
 
-IGNORED_TEST_FILES = frozenset(
-    {
-        "test_build_verify.py",
-        "test_value_tests.py",
-    }
-)
-
 # Approximate per-file cost from pytest --durations in the Python-only CI lane.
 # Unknown files use DEFAULT_WEIGHT and are still included automatically.
 FILE_WEIGHTS = {
@@ -85,11 +78,7 @@ def compute_shards(count: int) -> tuple[TestShard, ...]:
 
 
 def _weighted_test_files() -> tuple[Path, ...]:
-    files = (
-        path
-        for path in TEST_ROOT.glob("test_*.py")
-        if path.name not in IGNORED_TEST_FILES
-    )
+    files = TEST_ROOT.glob("test_*.py")
     return tuple(sorted(files, key=lambda path: (-_weight(path), path.name)))
 
 

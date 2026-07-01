@@ -21,6 +21,37 @@ from tslc.syntax.parser import TslParser
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DATA_ROOT = _REPO_ROOT / "tsldata"
 _MACHINE_PROFILES = _REPO_ROOT / "supplementary" / "buildsystem" / "machine_profiles.json"
+_GENERATED_BUILD_MARK = "generated_build"
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--run-generated-builds",
+        action="store_true",
+        default=False,
+        help="run tests that compile or execute generated C++/Rust projects",
+    )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        f"{_GENERATED_BUILD_MARK}: compiles or executes generated C++/Rust projects",
+    )
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config,
+    items: list[pytest.Item],
+) -> None:
+    if config.getoption("--run-generated-builds"):
+        return
+    skip_generated_build = pytest.mark.skip(
+        reason="generated build/value tests require --run-generated-builds"
+    )
+    for item in items:
+        if _GENERATED_BUILD_MARK in item.keywords:
+            item.add_marker(skip_generated_build)
 
 
 @pytest.fixture(scope="session")

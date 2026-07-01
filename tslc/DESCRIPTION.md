@@ -165,11 +165,12 @@ AVX-512/NEON/SVE code runs on hardware that lacks it.
 - **Honest edges**: [support_policy.py](src/tslc/support_policy.py) centralizes
   what the compiler can emit today; some keyword forms are *recognized so a
   body skips cleanly* rather than leaking through as raw text.
-- **Tests**: the pure-logic suite is green. The build-verify tests
-  (`test_build_verify.py`, full-corpus `test_value_tests.py`) compile/run real
-  C++/Rust and make the full run exceed ~5 min. Run the suite from the **repo
-  root**, not from `tslc/` — `tests/test_value_test_planning.py` reads source via
-  repo-root-relative paths and otherwise reports false failures.
+- **Tests**: the default pytest run exercises the pure-logic suite and skips
+  generated C++/Rust build/value gates. Run `pytest --run-generated-builds
+  tests/test_build_verify.py tests/test_value_tests.py` when a slice needs real
+  toolchain coverage. Run the suite from the **repo root**, not from `tslc/` —
+  `tests/test_value_test_planning.py` reads source via repo-root-relative paths
+  and otherwise reports false failures.
 
 ## Where to look first
 

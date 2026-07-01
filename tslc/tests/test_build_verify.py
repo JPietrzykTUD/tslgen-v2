@@ -16,6 +16,8 @@ import pytest
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.diagnostics import has_errors
 
+pytestmark = pytest.mark.generated_build
+
 
 def _cmake_env(tmp_path: Path) -> dict[str, str]:
     env = os.environ.copy()

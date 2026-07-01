@@ -116,6 +116,14 @@ PYTHONPATH=tslc/src python -m pytest -q tslc/tests
 git diff --check
 ```
 
+The default pytest run skips generated C++/Rust build/value gates. Run them
+explicitly when the slice touches generated project layout, backend codegen,
+verification, or executable value tests:
+
+```bash
+PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_build_verify.py tslc/tests/test_value_tests.py
+```
+
 Useful focused tests:
 
 ```bash

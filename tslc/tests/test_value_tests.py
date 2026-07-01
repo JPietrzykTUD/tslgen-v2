@@ -21,6 +21,8 @@ from tslc.sources import SourceLoader
 from tslc.syntax.parser import TslParser
 from tslc.value_tests.coverage import parity_gaps
 
+pytestmark = pytest.mark.generated_build
+
 
 def test_golden_value_tests_build_and_pass(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
