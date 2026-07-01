@@ -1,0 +1,135 @@
+name: Generated Build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: tslc-generated-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci-image:
+    name: Build CI image
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Compute image tag
+        id: image
+        run: |
+          repo="${GITHUB_REPOSITORY,,}"
+          owner="${repo%%/*}"
+          name="${repo#*/}"
+          echo "image=ghcr.io/${owner}/${name}-tslc-ci:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push CI image
+        uses: ./.github/actions/build-ci-image
+        with:
+          image: ${{ steps.image.outputs.image }}
+          load: "false"
+          push: "true"
+
+  profile-shards:
+    name: Compute profile shards
+    runs-on: ubuntu-latest
+    outputs:
+      profile_shards: ${{ steps.shards.outputs.profile_shards }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Compute generated profile shards
+        id: shards
+        run: |
+          profile_shards="$(
+            jq -c -f supplementary/ci/profile_shards.jq \
+              supplementary/buildsystem/machine_profiles.json
+          )"
+          echo "profile_shards=${profile_shards}" >> "$GITHUB_OUTPUT"
+
+  generated-build:
+    name: Generated build (${{ matrix.profile_shard.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    needs:
+      - ci-image
+      - profile-shards
+
+    strategy:
+      fail-fast: false
+      matrix:
+        profile_shard: ${{ fromJson(needs['profile-shards'].outputs.profile_shards) }}
+
+    env:
+      TSLC_CI_IMAGE: ${{ needs['ci-image'].outputs.image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull CI image
+        run: |
+          bash supplementary/ci/run_with_log.sh \
+            "tslctmp/ci-logs/generated-build-${{ matrix.profile_shard.name }}/docker-pull.log" \
+            docker pull "${TSLC_CI_IMAGE}"
+
+      - name: Build-verify generated output shard
+        run: |
+          bash supplementary/ci/run_with_log.sh \
+            "tslctmp/ci-logs/generated-build-${{ matrix.profile_shard.name }}/build.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              -e TSLC_BACKENDS="cpp,rust" \
+              -e TSLC_PROFILES="${{ matrix.profile_shard.profiles }}" \
+              -e TSLC_CI_OUTPUT="./tslctmp/ci-build-${{ matrix.profile_shard.name }}" \
+              -- \
+              bash -lc '
+                set -e
+                trap "rm -rf \"${TSLC_CI_OUTPUT}\" tslctmp/toolchain-preflight tslctmp/zig-local-cache tslctmp/zig-global-cache" EXIT
+                ./dev.sh build \
+                  --primitives add \
+                  --backends "${TSLC_BACKENDS}" \
+                  --profiles "${TSLC_PROFILES}" \
+                  --output-root "${TSLC_CI_OUTPUT}"
+              '
+
+      - name: Upload generated build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-generated-build-${{ matrix.profile_shard.name }}
+          path: tslctmp/ci-logs/generated-build-${{ matrix.profile_shard.name }}
+          if-no-files-found: ignore
+          retention-days: 14

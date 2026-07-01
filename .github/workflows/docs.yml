@@ -1,0 +1,124 @@
+name: Docs
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: tslc-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci-image:
+    name: Build CI image
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Compute image tag
+        id: image
+        run: |
+          repo="${GITHUB_REPOSITORY,,}"
+          owner="${repo%%/*}"
+          name="${repo#*/}"
+          echo "image=ghcr.io/${owner}/${name}-tslc-ci:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push CI image
+        uses: ./.github/actions/build-ci-image
+        with:
+          image: ${{ steps.image.outputs.image }}
+          load: "false"
+          push: "true"
+
+  docs:
+    name: Build docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    needs:
+      - ci-image
+
+    env:
+      TSLC_CI_IMAGE: ${{ needs['ci-image'].outputs.image }}
+      TSLC_CI_OUTPUT: ./tslctmp/ci-docs
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull CI image
+        run: |
+          bash supplementary/ci/run_with_log.sh \
+            "tslctmp/ci-logs/docs/docker-pull.log" \
+            docker pull "${TSLC_CI_IMAGE}"
+
+      - name: Build generated documentation
+        run: |
+          bash supplementary/ci/run_with_log.sh \
+            "tslctmp/ci-logs/docs/build-docs.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
+              -- \
+              bash -lc '
+                set -e
+                trap "rm -rf tslctmp/toolchain-preflight tslctmp/zig-local-cache tslctmp/zig-global-cache" EXIT
+                ./dev.sh document \
+                  --backends cpp,rust \
+                  --output-root "${TSLC_CI_OUTPUT}"
+              '
+
+      - name: Package docs site
+        run: |
+          bash supplementary/ci/run_with_log.sh \
+            "tslctmp/ci-logs/docs/package.log" \
+            bash -lc '
+              set -e
+              mkdir -p tslctmp/artifacts
+              tar -C "${TSLC_CI_OUTPUT}/docs/site" -czf "tslctmp/artifacts/tsl-docs-${GITHUB_SHA}.tar.gz" .
+            '
+
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsl-docs-${{ github.sha }}
+          path: tslctmp/artifacts/tsl-docs-${{ github.sha }}.tar.gz
+          if-no-files-found: error
+
+      - name: Upload docs logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-docs
+          path: tslctmp/ci-logs/docs
+          if-no-files-found: ignore
+          retention-days: 14

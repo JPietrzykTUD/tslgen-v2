@@ -1,0 +1,126 @@
+name: Generated Package
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: tslc-generated-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci-image:
+    name: Build CI image
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Compute image tag
+        id: image
+        run: |
+          repo="${GITHUB_REPOSITORY,,}"
+          owner="${repo%%/*}"
+          name="${repo#*/}"
+          echo "image=ghcr.io/${owner}/${name}-tslc-ci:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push CI image
+        uses: ./.github/actions/build-ci-image
+        with:
+          image: ${{ steps.image.outputs.image }}
+          load: "false"
+          push: "true"
+
+  package-generated-output:
+    name: Package generated output
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    needs:
+      - ci-image
+
+    env:
+      TSLC_CI_IMAGE: ${{ needs['ci-image'].outputs.image }}
+      TSLC_CI_OUTPUT: ./tslctmp/ci-generated
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull CI image
+        run: |
+          bash supplementary/ci/run_with_log.sh \
+            "tslctmp/ci-logs/generated-package/docker-pull.log" \
+            docker pull "${TSLC_CI_IMAGE}"
+
+      - name: Generate package output
+        run: |
+          bash supplementary/ci/run_with_log.sh \
+            "tslctmp/ci-logs/generated-package/generate.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
+              -- \
+              bash -lc './dev.sh generate --test --value-test-warnings --backends cpp,rust --output-root "${TSLC_CI_OUTPUT}"'
+
+      - name: Verify generated consumer projects
+        run: |
+          bash supplementary/ci/run_with_log.sh \
+            "tslctmp/ci-logs/generated-package/verify-consumers.log" \
+            bash supplementary/ci/run_tslc_ci_container.sh \
+              -e TSLC_CI_OUTPUT="${TSLC_CI_OUTPUT}" \
+              -- \
+              bash -lc 'bash supplementary/ci/verify_generated_consumers.sh "${TSLC_CI_OUTPUT}"'
+
+      - name: Package generated output
+        run: |
+          bash supplementary/ci/run_with_log.sh \
+            "tslctmp/ci-logs/generated-package/package.log" \
+            bash -lc '
+              set -e
+              mkdir -p tslctmp/artifacts
+              tar -C "${TSLC_CI_OUTPUT}" -czf "tslctmp/artifacts/tsl-generated-${GITHUB_SHA}.tar.gz" .
+            '
+
+      - name: Upload generated artifact package
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsl-generated-${{ github.sha }}
+          path: tslctmp/artifacts/tsl-generated-${{ github.sha }}.tar.gz
+          if-no-files-found: error
+
+      - name: Upload package logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-generated-package
+          path: tslctmp/ci-logs/generated-package
+          if-no-files-found: ignore
+          retention-days: 14

@@ -1,0 +1,62 @@
+name: Coverage Ratchet
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tslc-coverage-ratchet-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage-ratchet:
+    name: Coverage ratchet
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            tslc/pyproject.toml
+
+      - name: Install Python dependencies
+        run: |
+          bash supplementary/ci/run_with_log.sh \
+            "tslctmp/ci-logs/coverage-ratchet/install.log" \
+            bash -lc '
+              set -e
+              python -m pip install --upgrade pip
+              python -m pip install -r requirements.txt
+              python -m pip install --no-deps -e ./tslc
+            '
+
+      - name: Run coverage ratchet
+        run: |
+          bash supplementary/ci/run_with_log.sh \
+            "tslctmp/ci-logs/coverage-ratchet/ratchet.log" \
+            bash dev.sh ratchet
+
+      - name: Upload coverage ratchet logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-coverage-ratchet
+          path: tslctmp/ci-logs/coverage-ratchet
+          if-no-files-found: ignore
+          retention-days: 14

@@ -1,0 +1,92 @@
+name: Python Logic
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tslc-python-logic-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-test-shards:
+    name: Compute Python test shards
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      python_test_shards: ${{ steps.shards.outputs.python_test_shards }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Compute Python test shards
+        id: shards
+        run: |
+          python_test_shards="$(python3 supplementary/ci/python_test_shards.py)"
+          echo "python_test_shards=${python_test_shards}" >> "$GITHUB_OUTPUT"
+
+  python-tests:
+    name: Python tests (${{ matrix.python_test_shard.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - python-test-shards
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python_test_shard: ${{ fromJson(needs['python-test-shards'].outputs.python_test_shards) }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            tslc/pyproject.toml
+
+      - name: Install Python test dependencies
+        run: |
+          bash supplementary/ci/run_with_log.sh \
+            "tslctmp/ci-logs/python-${{ matrix.python_test_shard.name }}/install.log" \
+            bash -lc '
+              set -e
+              python -m pip install --upgrade pip
+              python -m pip install -r requirements.txt
+              python -m pip install --no-deps -e ./tslc
+            '
+
+      - name: Run Python test suite
+        run: |
+          bash supplementary/ci/run_with_log.sh \
+            "tslctmp/ci-logs/python-${{ matrix.python_test_shard.name }}/tests.log" \
+            bash -lc '
+              set -e
+              mkdir -p tslctmp
+              trap "rm -rf tslctmp/pytest" EXIT
+              python -m compileall -q tslc/src/tslc
+              python -m pytest -q ${{ matrix.python_test_shard.paths }}
+            '
+
+      - name: Upload Python test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-python-${{ matrix.python_test_shard.name }}
+          path: tslctmp/ci-logs/python-${{ matrix.python_test_shard.name }}
+          if-no-files-found: ignore
+          retention-days: 14
