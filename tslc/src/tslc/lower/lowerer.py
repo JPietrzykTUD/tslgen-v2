@@ -49,7 +49,11 @@ from tslc.lower._diagnostics import (
     primitive_signature_source as _primitive_signature_source,
 )
 from tslc.lower.raw_text import render_raw_text
-from tslc.lower.regions import DEFAULT_REGION_LOWERERS, RegionLowerer, StatementFinalizer
+from tslc.lower.region_handlers import (
+    DEFAULT_REGION_LOWERERS,
+    RegionLowerer,
+    StatementFinalizer,
+)
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
 from tslc.render.model import (
     LoweredBody,
