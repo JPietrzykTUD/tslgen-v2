@@ -48,7 +48,7 @@ translation rust:
     const ALIGN: usize;
     const SIZE_B: usize;
     const MASK_VECTOR_LOADABLE: bool;
-    fn vector_element_count_runtime() -> usize;
+    fn lane_count() -> usize;
   }
   pub trait StaticSimdVector: SimdVector {
     const ELEMENT_COUNT: usize;
@@ -795,7 +795,7 @@ translation rust:
   io_format "crate::tsl_core::ostream_write({out}, &{array}, {modifier})"
   complete "return {value}"
   value_vector_length "Self::ELEMENT_COUNT"
-  value_vector_runtime_length "Self::vector_element_count_runtime()"
+  value_vector_runtime_length "Self::lane_count()"
   value_vector_alignment "Self::ALIGN"
   value_vector_size_B "Self::SIZE_B"
   value_vector_mask_vector_loadable "Self::MASK_VECTOR_LOADABLE"
@@ -805,7 +805,7 @@ translation rust:
   mask_lane_all_true "<{base} as crate::tsl_core::TslMaskLaneValue>::all_true()"
   mask_lane_all_false "<{base} as crate::tsl_core::TslMaskLaneValue>::all_false()"
   value_generic_length "<{type} as StaticSimdVector>::ELEMENT_COUNT"
-  value_generic_runtime_length "<{type} as SimdVector>::vector_element_count_runtime()"
+  value_generic_runtime_length "<{type} as SimdVector>::lane_count()"
   value_cmp_eq_oq "core::arch::x86_64::_CMP_EQ_OQ"
   value_cmp_gt_oq "core::arch::x86_64::_CMP_GT_OQ"
   value_cmp_ge_oq "core::arch::x86_64::_CMP_GE_OQ"

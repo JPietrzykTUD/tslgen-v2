@@ -186,7 +186,7 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
         f"    using mask_type = {mask};\n"
         f"    using imask_type = {imask};\n"
         f"{_cpp_static_element_count_metadata(f'{bits} / (sizeof(T) * 8)')}"
-        f"    static constexpr std::size_t vector_alignment = {alignment};\n"
+        f"    static constexpr std::size_t simd_register_alignment_v = {alignment};\n"
         f"}};\n\n"
     )
 
@@ -227,7 +227,7 @@ def _cpp_native_registration(
             f"    using mask_type = {mask};\n"
             f"    using imask_type = {imask};\n"
             f"{element_count}"
-            f"    static constexpr std::size_t vector_alignment = {alignment};\n"
+            f"    static constexpr std::size_t simd_register_alignment_v = {alignment};\n"
             f"}};\n\n"
         )
     return "".join(lines)
@@ -235,10 +235,10 @@ def _cpp_native_registration(
 
 def _cpp_static_element_count_metadata(count_expr: str) -> str:
     return (
-        "    static constexpr bool has_static_vector_element_count = true;\n"
-        f"    static constexpr std::size_t vector_element_count = {count_expr};\n"
-        "    static constexpr std::size_t vector_element_count_runtime() noexcept {\n"
-        "        return vector_element_count;\n"
+        "    static constexpr bool has_static_lane_count_v = true;\n"
+        f"    static constexpr std::size_t lane_count_v = {count_expr};\n"
+        "    static constexpr std::size_t lane_count() noexcept {\n"
+        "        return lane_count_v;\n"
         "    }\n"
     )
 
@@ -254,8 +254,8 @@ def _cpp_element_count_metadata(
     runtime = extension.runtime_lane_count.get("cpp")
     if runtime is None:
         raise ValueError(
-            f"extension {extension.name!r} needs runtime_lane_count.cpp for "
-            "scalable C++ vector registration"
+            f"extension {extension.name!r} needs a runtime_lane_count entry "
+            "for backend 'cpp' for scalable C++ vector registration"
         )
     runtime = (
         runtime.replace("{base_type}", base_type)
@@ -263,8 +263,8 @@ def _cpp_element_count_metadata(
         .replace("{type_tag}", type_tag)
     )
     return (
-        "    static constexpr bool has_static_vector_element_count = false;\n"
-        "    static std::size_t vector_element_count_runtime() noexcept {\n"
+        "    static constexpr bool has_static_lane_count_v = false;\n"
+        "    static std::size_t lane_count() noexcept {\n"
         f"        return {runtime};\n"
         "    }\n"
     )

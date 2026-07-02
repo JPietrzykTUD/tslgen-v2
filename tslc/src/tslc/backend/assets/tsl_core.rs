@@ -23,7 +23,7 @@ pub trait SimdVector {
     type Array: Index<usize, Output = Self::BaseType> + IndexMut<usize>;
     const ALIGN: usize;
 
-    fn vector_element_count_runtime() -> usize;
+    fn lane_count() -> usize;
 
     // Test lane `index` of a register-backed lane mask (sse/avx2): the mask IS a data register
     // whose lanes are all-ones (set) or all-zeros (clear), so lane `index` is a BaseType-sized
@@ -62,7 +62,7 @@ impl<T> SimdVector for Simd<T, Scalar> {
     type Array = array_type<T, 1>;
     const ALIGN: usize = core::mem::align_of::<T>();
 
-    fn vector_element_count_runtime() -> usize {
+    fn lane_count() -> usize {
         1
     }
 }
@@ -94,7 +94,7 @@ impl<T, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
     type Array = array_type<T, LANES>;
     const ALIGN: usize = core::mem::align_of::<array_type<T, LANES>>();
 
-    fn vector_element_count_runtime() -> usize {
+    fn lane_count() -> usize {
         LANES
     }
 }

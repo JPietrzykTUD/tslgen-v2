@@ -170,7 +170,7 @@ def test_scalable_cpp_extension_requires_runtime_lane_count() -> None:
         for d in diagnostics
         if d.code == "TSL-CATALOG-MISSING-RUNTIME-LANE-COUNT"
     )
-    assert "runtime_lane_count.cpp" in diagnostic.message
+    assert "runtime_lane_count entry for backend 'cpp'" in diagnostic.message
 
 
 def test_invalid_enum_like_values_are_diagnosed() -> None:

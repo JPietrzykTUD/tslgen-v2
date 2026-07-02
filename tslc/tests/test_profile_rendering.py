@@ -200,7 +200,7 @@ def test_neon_profile_registers_native_simd_types(
     assert "pub struct Neon;" in rust
     assert "impl SimdVector for Simd<i32, Neon>" in rust
     assert "impl StaticSimdVector for Simd<i32, Neon>" in rust
-    assert "fn vector_element_count_runtime() -> usize { 4 }" in rust
+    assert "fn lane_count() -> usize { 4 }" in rust
     assert "type RegisterType = core::arch::aarch64::int32x4_t;" in rust
     assert "return core::arch::aarch64::vaddq_s32(left, right);" in rust
 
@@ -227,12 +227,12 @@ def test_sve_profile_registers_scalable_cpp_simd_types(
     sve_i32_start = cpp.index("struct simd<int32_t, sve>")
     sve_i32_end = cpp.index("};", sve_i32_start)
     sve_i32_registration = cpp[sve_i32_start:sve_i32_end]
-    assert "static constexpr bool has_static_vector_element_count = false;" in sve_i32_registration
-    assert "static constexpr std::size_t vector_element_count =" not in sve_i32_registration
-    assert "static std::size_t vector_element_count_runtime() noexcept" in sve_i32_registration
+    assert "static constexpr bool has_static_lane_count_v = false;" in sve_i32_registration
+    assert "static constexpr std::size_t lane_count_v =" not in sve_i32_registration
+    assert "static std::size_t lane_count() noexcept" in sve_i32_registration
     assert "return svcntb() / sizeof(int32_t);" in sve_i32_registration
     assert "using type = ::tsl::simd<int32_t, ::tsl::sve>;" not in cpp
-    assert "static constexpr std::size_t vector_alignment = 4;" in cpp
+    assert "static constexpr std::size_t simd_register_alignment_v = 4;" in cpp
     assert "return svadd_s32_x(::tsl::mask_true<Vec>(), left, right);" in cpp
     assert 'add_library(tsl::sve ALIAS tsl_profile_sve)' in cmake
     assert "target_compile_definitions(tsl_profile_sve INTERFACE TSL_PROFILE_SVE)" in cmake

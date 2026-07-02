@@ -259,7 +259,7 @@ def validate_scalable_runtime_lane_counts(
                     code="TSL-CATALOG-MISSING-RUNTIME-LANE-COUNT",
                     message=(
                         f"scalable extension {name!r} supports backend {backend!r} "
-                        f"but has no runtime_lane_count.{backend} expression"
+                        f"but has no runtime_lane_count entry for backend {backend!r}"
                     ),
                     source=extension_sources.get(name),
                 )
