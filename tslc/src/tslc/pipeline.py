@@ -43,6 +43,7 @@ _DEFAULT_BACKENDS = DEFAULT_SUPPORT_POLICY.default_backend_ids
 GenerationMode = Literal["partial", "strict"]
 SkipStatus = Literal["coverage_gap", "policy_deferred"]
 _TYPE_ORDER = SCALAR_TYPE_ORDER
+_CPP_ALGORITHM_SUPPORT_PRIMITIVES = ("load", "store")
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,10 +189,14 @@ class _GenerationSession:
         # Which extension block this profile selected for each emitted ISA tag, so the renderer
         # can register the right mask_type (lane-bitmask vs native __mmaskN).
         selected_extensions: dict[str, Extension] = {}
-        worklist = list(_requested_primitives(self.request, self.inputs.catalog))
+        all_backend_ids = frozenset(capability.backend_id for capability in self.backends)
+        worklist = [
+            (primitive, all_backend_ids)
+            for primitive in _requested_primitives(self.request, self.inputs.catalog)
+        ]
         if self.request.test_harness:
             worklist.extend(
-                name
+                (name, all_backend_ids)
                 for name in (
                     self.inputs.test_harness.from_array,
                     self.inputs.test_harness.to_array,
@@ -201,19 +206,29 @@ class _GenerationSession:
                 )
                 if name is not None
             )
-        processed: set[str] = set()
-        while worklist:
-            primitive = worklist.pop(0)
-            if primitive in processed:
-                continue
-            processed.add(primitive)
-            primitive_slots, discovered_primitives = self._process_primitive(
-                profile, profile_name, primitive, selected_extensions
+        if "cpp" in all_backend_ids:
+            worklist.extend(
+                (name, frozenset({"cpp"}))
+                for name in _cpp_algorithm_support_primitives(self.inputs.catalog)
             )
+        processed: dict[str, set[str]] = {}
+        while worklist:
+            primitive, target_backends = worklist.pop(0)
+            remaining_backends = target_backends - processed.get(primitive, set())
+            if not remaining_backends:
+                continue
+            primitive_slots, discovered_primitives = self._process_primitive(
+                profile,
+                profile_name,
+                primitive,
+                selected_extensions,
+                remaining_backends,
+            )
+            processed.setdefault(primitive, set()).update(remaining_backends)
             lowered_specs.extend(primitive_slots)
             for dependency_primitive in discovered_primitives:
-                if dependency_primitive not in processed:
-                    worklist.append(dependency_primitive)
+                if remaining_backends - processed.get(dependency_primitive, set()):
+                    worklist.append((dependency_primitive, remaining_backends))
 
         grouped, pruned = _prune_unresolved(lowered_specs, self.inputs.split_names)
         for slot in pruned:
@@ -242,6 +257,7 @@ class _GenerationSession:
         profile_name: str,
         primitive: str,
         selected_extensions: dict[str, Extension],
+        backend_ids: frozenset[str],
     ) -> tuple[list["_LoweredSlot"], list[str]]:
         catalog = self.inputs.catalog
         selection = self.selector.select_profile(
@@ -268,6 +284,8 @@ class _GenerationSession:
             slot_lowered = False
             for capability in self.backends:
                 backend = capability.backend_id
+                if backend not in backend_ids:
+                    continue
                 dialect = capability.create_dialect(catalog)
                 lowered = self.lowerer.lower(
                     slot,
@@ -463,6 +481,14 @@ def _requested_primitives(
     if request.primitives is not None:
         return request.primitives
     return tuple(sorted({primitive.name for primitive in catalog.primitives}))
+
+
+def _cpp_algorithm_support_primitives(catalog: Catalog) -> tuple[str, ...]:
+    return tuple(
+        primitive
+        for primitive in _CPP_ALGORITHM_SUPPORT_PRIMITIVES
+        if catalog.primitives_named(primitive, unmasked=False)
+    )
 
 
 def _finalize(

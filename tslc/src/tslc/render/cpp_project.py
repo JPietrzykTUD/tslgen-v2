@@ -38,6 +38,7 @@ def cpp_artifacts(
     artifacts = [
         text("cpp/include/tsl_core.hpp", assets.text("tsl_core.hpp")),
         text("cpp/include/tsl_inferred_simd.hpp", assets.text("tsl_inferred_simd.hpp")),
+        text("cpp/include/tsl_algorithm.hpp", assets.text("tsl_algorithm.hpp")),
         text("cpp/include/tsl_x86_traits.hpp", assets.text("tsl_x86_traits.hpp")),
         # Ship the formatter config at the C++ project root so `clang-format` (ascending from
         # include/ and tests/) finds it and the generated project is self-contained.
@@ -83,7 +84,15 @@ def cpp_artifacts(
         artifacts.append(text(f"cpp/include/tsl_{profile_slug}.hpp", content))
         artifacts.append(text(f"cpp/tests/smoke_{profile_slug}.cpp", _cpp_smoke(profile_render)))
 
-    artifacts.append(text("cpp/include/tsl.hpp", _cpp_dispatch(profiles)))
+    artifacts.append(
+        text(
+            "cpp/include/tsl.hpp",
+            _cpp_dispatch(
+                profiles,
+                include_algorithm=_cpp_profiles_support_algorithm(profiles),
+            ),
+        )
+    )
     artifacts.append(
         text("cpp/docs/input/tsl_api_docs.hpp", _cpp_documentation_facade(profiles))
     )
@@ -308,7 +317,20 @@ def _cpp_imask_type(
     return f"typename detail::lane_bitmask_int<{vector_bits}, {base_type}>::type"
 
 
-def _cpp_dispatch(profiles: tuple[ProfileRender, ...]) -> str:
+def _cpp_profiles_support_algorithm(profiles: tuple[ProfileRender, ...]) -> bool:
+    if not profiles:
+        return False
+    return all(
+        {"load", "store"} <= set(profile_render.specializations("cpp"))
+        for profile_render in profiles
+    )
+
+
+def _cpp_dispatch(
+    profiles: tuple[ProfileRender, ...],
+    *,
+    include_algorithm: bool = False,
+) -> str:
     lines = ["#pragma once", ""]
     for index, profile_render in enumerate(profiles):
         profile_slug = slug(profile_render.profile.name)
@@ -318,6 +340,8 @@ def _cpp_dispatch(profiles: tuple[ProfileRender, ...]) -> str:
     lines.append("#else")
     lines.append('#  error "No supported TSL profile selected"')
     lines.append("#endif")
+    if include_algorithm:
+        lines.append('#include "tsl_algorithm.hpp"')
     return "\n".join(lines) + "\n"
 
 
