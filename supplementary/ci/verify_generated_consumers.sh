@@ -3,6 +3,8 @@ set -euo pipefail
 
 generated_root="${1:-./tslctmp/ci-generated}"
 scratch_root="${2:-./tslctmp/consumer-checks}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/../.." && pwd)"
 
 if [[ ! -d "$generated_root" ]]; then
   echo "generated output root does not exist: $generated_root" >&2
@@ -23,7 +25,11 @@ case "$scratch_root" in
     ;;
 esac
 
-rm -rf "$scratch_root/cpp-consumer" "$scratch_root/cpp-build" "$scratch_root/rust-consumer"
+rm -rf \
+  "$scratch_root/cpp-consumer" \
+  "$scratch_root/cpp-build" \
+  "$scratch_root/examples-build" \
+  "$scratch_root/rust-consumer"
 mkdir -p "$scratch_root/cpp-consumer" "$scratch_root/rust-consumer/src"
 
 cat >"$scratch_root/cpp-consumer/CMakeLists.txt" <<EOF
@@ -51,6 +57,14 @@ EOF
 
 cmake -S "$scratch_root/cpp-consumer" -B "$scratch_root/cpp-build"
 cmake --build "$scratch_root/cpp-build" --target tsl_cpp_consumer
+
+cmake \
+  -S "$repo_root/examples" \
+  -B "$scratch_root/examples-build" \
+  -DTSL_GENERATED_ROOT_DIR="$generated_root" \
+  -DTSL_PROFILE=scalar
+cmake --build "$scratch_root/examples-build" --target unary_operator
+ctest --test-dir "$scratch_root/examples-build" --output-on-failure
 
 cat >"$scratch_root/rust-consumer/Cargo.toml" <<EOF
 [package]

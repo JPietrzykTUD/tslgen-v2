@@ -93,7 +93,7 @@ jobs:
               -- \
               bash -lc './dev.sh generate --backends cpp,rust --output-root "${TSLC_CI_OUTPUT}"'
 
-      - name: Verify generated consumer projects
+      - name: Verify generated consumers and examples
         run: |
           bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/generated-package/verify-consumers.log" \

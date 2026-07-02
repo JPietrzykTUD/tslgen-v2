@@ -41,6 +41,7 @@ def test_artifact_layout(specialization_result) -> None:
     assert {
         "cpp/include/tsl_core.hpp",
         "cpp/include/tsl_inferred_simd.hpp",
+        "cpp/include/tsl_algorithm.hpp",
         "cpp/include/tsl_x86_traits.hpp",
         "cpp/include/tsl.hpp",
         "cpp/include/tsl_avx2.hpp",
@@ -71,16 +72,34 @@ def test_cpp_core_vectors_expose_metadata_constants(
     )
 
 
-def test_cpp_inferred_simd_helper_is_static_declaration_only(
+def test_cpp_inferred_simd_helper_has_generic_fallback(
     specialization_artifacts: dict[str, str]
 ) -> None:
     helper = specialization_artifacts["cpp/include/tsl_inferred_simd.hpp"]
 
     assert "template <class T, std::size_t ParallelN>" in helper
-    assert "struct inferred_simd;" in helper
+    assert "using type = ::tsl::simd<T, ::tsl::generic<ParallelN>>;" in helper
+    assert "struct inferred_simd<T, 1>" in helper
+    assert "using type = ::tsl::simd<T, ::tsl::scalar>;" in helper
     assert "using inferred_simd_t = typename detail::inferred_simd" in helper
     assert "tsl::avx2" not in helper
     assert "tsl::sse" not in helper
+
+
+def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
+    specialization_artifacts: dict[str, str]
+) -> None:
+    helper = specialization_artifacts["cpp/include/tsl_algorithm.hpp"]
+    dispatch = specialization_artifacts["cpp/include/tsl.hpp"]
+    avx2 = specialization_artifacts["cpp/include/tsl_avx2.hpp"]
+
+    assert "namespace tsl::algo" in helper
+    assert "template <class Vec>\nstruct vector_tag" in helper
+    assert "class Alignment = alignment::detect" in helper
+    assert "void transform_unary(Op&& op" in helper
+    assert '#include "tsl_algorithm.hpp"' in dispatch
+    assert "inline typename Vec::register_type load(" in avx2
+    assert "inline void store(" in avx2
 
 
 def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) -> None:
