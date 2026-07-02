@@ -293,9 +293,9 @@ def test_generic_masks_build(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
     # The generic vector's emulated mask: comparisons build a bitset mask via `let<type>(MaskT,
-    # vector::mask)` + `var<typed>` + `mask<zero>`/`mask<set:1>` (the `mask<*>` ops lowered per
+    # vector::mask)` + `var<typed>` + `mask<zero>`/`mask<set>` (the `mask<*>` ops lowered per
     # the lane-bitmask representation), and the mask/bitwise primitives (pulled by le/ge)
-    # combine them with `mask<test>`/`mask<set>`. Builds in both backends; the native
+    # combine them with `mask<test>`/`mask<set_to>`. Builds in both backends; the native
     # comparison bodies are unaffected.
     result = generate_project(
         [data_root],
@@ -1023,7 +1023,7 @@ def test_mask_boolean_algebra_builds(
     # on the lane-bitmask register (sse/avx2), raw `|`/`^` on the native `__mmaskN` (avx512) /
     # `bool` (scalar), generic bit-loops. `not` is native `~`/`!` (avx512/scalar) + generic loop;
     # its avx2/sse path (`binary_xor(mask, mask_true())`) prunes cleanly — `mask_true` needs the
-    # not-yet-built `mask::lane::all_true` lane value (deferred). Both backends.
+    # not-yet-built `mask<lane_true>()` lane value (deferred). Both backends.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
@@ -1040,7 +1040,7 @@ def test_mask_boolean_algebra_builds(
 
 
 def test_mask_true_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
-    # `mask_true` (`m:=()`) builds on all targets now that `mask::lane::all_true` resolves: native
+    # `mask_true` (`m:=()`) builds on all targets now that `mask<lane_true>()` resolves: native
     # `__mmaskN` all-ones (avx512), `set1(mask_lane_all_true<T>())` on the lane-bitmask ISAs
     # (sse/avx2 — the previously-pruned path), `true` (scalar), generic bit-loop. The lane value
     # comes from the `::tsl::mask_lane_all_true<T>()` / `<T as TslMaskLaneValue>::all_true()`

@@ -117,21 +117,29 @@ queries are rendered with the alias substituted.
 Syntax:
 
 ```tsil
+mask<lane_true>()
+mask<lane_false>()
 mask<zero>()
+mask<all>()
 mask<test>(mask, index)
-mask<set:1>(mask, index)
-mask<set:0>(mask, index)
-mask<set>(mask, index, value)
+mask<test, imask>(imask, index)
+mask<set>(mask, index)
+mask<clear>(mask, index)
+mask<set_to>(mask, index, value)
 ```
 
-Use `mask` for backend-neutral mask bit operations in portable fallback bodies.
-It is mostly used when a mask is represented as a lane bitset or lane register;
-native mask bodies often use intrinsics directly instead.
+Use `mask` for backend-neutral mask lane constants and mask bit operations in
+portable fallback bodies. `mask<lane_true>()` and `mask<lane_false>()` produce
+the scalar lane payload values used by lane-register masks. `mask<zero>()` and
+`mask<all>()` produce all-inactive/all-active mask containers.
+`mask<test, imask>()` tests a packed integral mask bitset. The other forms
+operate on an existing mask container. Native mask bodies often use intrinsics
+directly instead.
 
 Lowering chooses templates based on the selected extension's mask
-representation: `mask_zero_*`, `mask_test_*`, `mask_set_*`,
-`mask_clear_*`, or `mask_set_to_*`. Unsupported operation/representation pairs
-are skipped with a lowering diagnostic.
+representation: `mask_zero_*`, `mask_all_*`, `mask_test_*`, `mask_set_*`,
+`mask_clear_*`, `mask_set_to_*`, or `mask_test_imask`. Unsupported
+operation/representation pairs are skipped with a lowering diagnostic.
 
 ### `mem`
 
@@ -332,8 +340,7 @@ value(query)
 Use `value` to splice generated constants or backend-specific value fragments
 into an expression. Common queries include `vector::length`,
 `vector::alignment`, `generic::length(...)`, `type::size_bytes(...)`,
-`mask::lane::all_true`, `mask::lane::all_false`, `primitive::attribute(...)`,
-and `select(...)`.
+`primitive::attribute(...)`, and `select(...)`.
 
 Lowering uses the same query evaluator as `type`. Text values become literal
 rendered text, type values become backend scalar spellings, and vector values

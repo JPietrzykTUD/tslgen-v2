@@ -875,7 +875,7 @@ prim<v:=v> inv(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(value(mask::lane::all_true))));"
+          tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(mask<lane_true>())));"
     [generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
       arith:
         requires:
@@ -893,7 +893,7 @@ prim<v:=v> inv(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(value(mask::lane::all_true))));"
+          tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(mask<lane_true>())));"
 
 prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
   brief_description "Masked bitwise AND with zeroing."
@@ -2204,7 +2204,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
               complete(
                 call<primitive=binary_xor>(
                   data,
-                  call<primitive=set1[Vec]>(value(mask::lane::all_true))
+                  call<primitive=set1[Vec]>(mask<lane_true>())
                 )
               );
             }
@@ -2226,7 +2226,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_xor[type(vector::as_extension(scalar))]>(
                   data[i],
-                  call<primitive=set1[type(vector::as_extension(scalar))]>(value(mask::lane::all_true))
+                  call<primitive=set1[type(vector::as_extension(scalar))]>(mask<lane_true>())
                 );
               } else {
                 result[i] = call<primitive=set_zero[type(vector::as_extension(scalar))]>();
@@ -2250,7 +2250,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
               intrin<maskz_xor, build[suffix=base::signed_of(base::in)]>(
                 mask,
                 data,
-                call<primitive=set1[Vec]>(value(mask::lane::all_true))
+                call<primitive=set1[Vec]>(mask<lane_true>())
               )
             );
           """
@@ -2287,7 +2287,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
               intrin<maskz_xor, build>(
                 mask,
                 data,
-                call<primitive=set1[Vec]>(value(mask::lane::all_true))
+                call<primitive=set1[Vec]>(mask<lane_true>())
               )
             );
           """
@@ -2328,7 +2328,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
               intrin<sveor, build[post=z]>(
                 mask,
                 data,
-                call<primitive=set1[Vec]>(value(mask::lane::all_true))
+                call<primitive=set1[Vec]>(mask<lane_true>())
               )
             );
           """
@@ -2346,7 +2346,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(data),
                   call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(
-                    call<primitive=set1[Vec]>(value(mask::lane::all_true))
+                    call<primitive=set1[Vec]>(mask<lane_true>())
                   )
                 )
               )
@@ -2386,7 +2386,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
               complete(
                 call<primitive=binary_xor>(
                   data,
-                  call<primitive=set1[Vec]>(value(mask::lane::all_true))
+                  call<primitive=set1[Vec]>(mask<lane_true>())
                 )
               );
             }
@@ -2408,7 +2408,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
               if (mask<test>(mask, i)) {
                 result[i] = call<primitive=binary_xor[type(vector::as_extension(scalar))]>(
                   data[i],
-                  call<primitive=set1[type(vector::as_extension(scalar))]>(value(mask::lane::all_true))
+                  call<primitive=set1[type(vector::as_extension(scalar))]>(mask<lane_true>())
                 );
               } else {
                 result[i] = data[i];
@@ -2433,7 +2433,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
                 data,
                 mask,
                 data,
-                call<primitive=set1[Vec]>(value(mask::lane::all_true))
+                call<primitive=set1[Vec]>(mask<lane_true>())
               )
             );
           """
@@ -2472,7 +2472,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
                 data,
                 mask,
                 data,
-                call<primitive=set1[Vec]>(value(mask::lane::all_true))
+                call<primitive=set1[Vec]>(mask<lane_true>())
               )
             );
           """
@@ -2514,7 +2514,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
               intrin<sveor, build[post=m]>(
                 mask,
                 data,
-                call<primitive=set1[Vec]>(value(mask::lane::all_true))
+                call<primitive=set1[Vec]>(mask<lane_true>())
               )
             );
           """
@@ -2532,7 +2532,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
                   mask,
                   call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(data),
                   call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(
-                    call<primitive=set1[Vec]>(value(mask::lane::all_true))
+                    call<primitive=set1[Vec]>(mask<lane_true>())
                   )
                 )
               )

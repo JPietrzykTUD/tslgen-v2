@@ -11,7 +11,7 @@ from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS, region_shell_validator
 from tslc.ir.scan import find_malformed_regions, scan
 from tslc.ir.segments import RawText, Region, Segment
-from tslc.lower._text import split_top_level
+from tslc.lower._text import split_selector_terms, split_top_level
 from tslc.lower.calls import parse_call_selector
 from tslc.lower.cast_selectors import parse_cast_selector
 from tslc.lower.region_handlers.intrinsics import IntrinsicSelector
@@ -158,6 +158,45 @@ def _validate_intrin_region(
     )
 
 
+def _validate_mask_region(
+    primitive_name: str,
+    region: Region,
+    diagnostics: list[Diagnostic],
+) -> None:
+    selector_terms = split_selector_terms(region.selector_text)
+    selector = tuple(selector_terms)
+    arity = len(split_top_level(_segments_text(region.body)))
+    expected_arity = {
+        ("lane_true",): 0,
+        ("lane_false",): 0,
+        ("zero",): 0,
+        ("all",): 0,
+        ("test",): 2,
+        ("test", "imask"): 2,
+        ("set",): 2,
+        ("clear",): 2,
+        ("set_to",): 3,
+    }.get(selector)
+    if expected_arity == arity:
+        return
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-BODY-BAD-MASK-SELECTOR",
+            message=(
+                f"primitive {primitive_name!r}: malformed mask selector "
+                f"{region.selector_text!r}; expected one of "
+                "`mask<lane_true>()`, `mask<lane_false>()`, `mask<zero>()`, "
+                "`mask<all>()`, `mask<test>(mask, index)`, "
+                "`mask<test, imask>(imask, index)`, "
+                "`mask<set>(mask, index)`, `mask<clear>(mask, index)`, or "
+                "`mask<set_to>(mask, index, value)`"
+            ),
+            source=region.source,
+        )
+    )
+
+
 def _validate_cast_region(
     primitive_name: str,
     region: Region,
@@ -276,6 +315,7 @@ _SHELL_VALIDATORS: dict[str, ShellValidator] = {
     "cast_selector": _validate_cast_region,
     "let_type": _validate_let_region,
     "intrin_selector": _validate_intrin_region,
+    "mask_selector": _validate_mask_region,
     "no_selector": _validate_no_selector_region,
 }
 

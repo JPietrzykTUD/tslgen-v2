@@ -339,7 +339,7 @@ prim<v:=m> to_vector(mask):
               complete(
                 call<primitive=mov, attrs[mask=zero]>(
                   mask,
-                  call<primitive=set1[Vec]>(value(mask::lane::all_true))
+                  call<primitive=set1[Vec]>(mask<lane_true>())
                 )
               );
             """
@@ -355,7 +355,7 @@ prim<v:=m> to_vector(mask):
               complete(
                 call<primitive=mov, attrs[mask=zero]>(
                   mask,
-                  call<primitive=set1[Vec]>(value(mask::lane::all_true))
+                  call<primitive=set1[Vec]>(mask<lane_true>())
                 )
               );
             """
@@ -405,7 +405,7 @@ prim<v:=m> to_vector(mask):
         implementation:
           tsil """
               var<init_register>(result);
-              var<const_infer>(true_val, value(mask::lane::all_true));
+              var<const_infer>(true_val, mask<lane_true>());
                loop<backend>(i, 0, value(vector::length), 1)  {
                 if (mask<test>(mask, i)) {
                   result[i] = true_val;
@@ -541,8 +541,8 @@ prim<m:=im> to_mask(mask):
           tsil """
               var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
               loop<backend>(i, 0, value(vector::length), 1) {
-                if (((mask >> i) & 1) != 0) {
-                  values[i] = value(mask::lane::all_true);
+                if (mask<test, imask>(mask, i)) {
+                  values[i] = mask<lane_true>();
                 }
               }
               complete(call<primitive=from_array[Vec]>(values));
@@ -593,8 +593,8 @@ prim<m:=im> to_mask(mask):
           tsil """
               var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
               loop<backend>(i, 0, value(vector::length), 1) {
-                if (((mask >> i) & 1) != 0) {
-                  values[i] = value(mask::lane::all_true);
+                if (mask<test, imask>(mask, i)) {
+                  values[i] = mask<lane_true>();
                 }
               }
               complete(call<primitive=from_array[Vec]>(values));
@@ -635,8 +635,8 @@ prim<m:=im> to_mask(mask):
           tsil """
               var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
               loop<backend>(i, 0, value(vector::length), 1) {
-                if (((mask >> i) & 1) != 0) {
-                  values[i] = value(mask::lane::all_true);
+                if (mask<test, imask>(mask, i)) {
+                  values[i] = mask<lane_true>();
                 }
               }
               complete(call<primitive=from_array[Vec]>(values));
@@ -652,8 +652,8 @@ prim<m:=im> to_mask(mask):
           tsil """
               var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
               loop<backend>(i, 0, value(vector::length), 1) {
-                if (((mask >> i) & 1) != 0) {
-                  values[i] = value(mask::lane::all_true);
+                if (mask<test, imask>(mask, i)) {
+                  values[i] = mask<lane_true>();
                 }
               }
               complete(call<primitive=from_array[Vec]>(values));
@@ -760,7 +760,7 @@ prim<m:=im> to_mask(mask):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete((mask & 1) != 0);"
+          tsil "complete(mask<test, imask>(mask, 0));"
     generic:
       arith:
         requires []
@@ -774,8 +774,8 @@ prim<m:=im> to_mask(mask):
               var<typed>(MaskT, result, mask<zero>());
               var<const_typed>(type(scalar::size), mask_bits, value(type::size_bytes(type(vector::imask))) * 8);
               loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                if (i < mask_bits && (((mask >> i) & cast<static>(type(vector::imask), 1)) != 0)) {
-                  mask<set:1>(result, i);
+                if (i < mask_bits && mask<test, imask>(mask, i)) {
+                  mask<set>(result, i);
                 }
               }
               complete(result);

@@ -440,6 +440,40 @@ def test_query_region_selectors_are_diagnosed() -> None:
 
 
 @pytest.mark.parametrize(
+    "body",
+    [
+        "complete(mask<set:1>(data, 0));",
+        "complete(mask<set>(data, 0, true));",
+        "complete(mask<lane_true>(data));",
+        "complete(mask<all>(data));",
+        "complete(mask<test, integral>(data, 0));",
+        "complete(mask<test, imask>(data));",
+    ],
+)
+def test_malformed_mask_body_region_is_diagnosed(body: str) -> None:
+    diagnostics = _diagnostics(
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "language rust:\n"
+        '  s32 {type "i32"}\n'
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        f'          tsil "{body}"\n'
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-MASK-SELECTOR")
+    assert "malformed mask selector" in diagnostic.message
+
+
+@pytest.mark.parametrize(
     ("body", "keyword", "reason"),
     [
         ("call<primitive=set_zero(data);", "call", "unterminated selector"),

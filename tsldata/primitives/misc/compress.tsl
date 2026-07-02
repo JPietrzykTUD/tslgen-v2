@@ -237,7 +237,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
               var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
               var<infer>(out_idx, 0);
               loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                if (((imask >> i) & 1) != 0) {
+                if (mask<test, imask>(imask, i)) {
                   result[out_idx] = values[i];
                   out_idx = out_idx + 1;
                 }

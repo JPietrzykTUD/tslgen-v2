@@ -703,7 +703,7 @@ prim<s:=(m,v)> hand(mask, vec):
             }
             complete(cast<static>(type(base::in), intrin<mask_reduce_and, build[suffix=base::signed_of(base::in)]>(mask, vec)));
           """
-    [scalar, generic, oneAPIfpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve]:
+    [scalar, generic, oneAPIfpga, avx512, avx2_vl, avx2, sse_vl, sse, neon]:
       ?i?:
         requires:
           scalar []
@@ -715,7 +715,6 @@ prim<s:=(m,v)> hand(mask, vec):
           sse_vl [avx512bw, avx512vl]
           sse [sse2]
           neon [neon]
-          sve [sve]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -727,7 +726,7 @@ prim<s:=(m,v)> hand(mask, vec):
             var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
             type(scalar::size) found = 0;
             loop<backend>(i, 0, value(vector::length), 1) {
-              if (((mask_scalar >> i) & 0b1) == 1) {
+              if (mask<test, imask>(mask_scalar, i)) {
                 if (found == 0) {
                   result = values[i];
                   found = 1;
@@ -749,7 +748,6 @@ prim<s:=(m,v)> hand(mask, vec):
           sse_vl [avx512bw, avx512vl]
           sse [sse2]
           neon [neon]
-          sve [sve]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -762,7 +760,7 @@ prim<s:=(m,v)> hand(mask, vec):
             var<infer>(result, cast<static>(UnsignedT, 0));
             type(scalar::size) found = 0;
             loop<backend>(i, 0, value(vector::length), 1) {
-              if (((mask_scalar >> i) & 0b1) == 1) {
+              if (mask<test, imask>(mask_scalar, i)) {
                 var<infer>(bits, cast<static>(UnsignedT, 0));
                 mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &values[i]), value(type::size_bytes(type(base::in))));
                 if (found == 0) {
@@ -832,7 +830,7 @@ prim<s:=(m,v)> hor(mask, vec):
           reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type(base::in), intrin<mask_reduce_or, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
-    [scalar, generic, oneAPIfpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve]:
+    [scalar, generic, oneAPIfpga, avx512, avx2_vl, avx2, sse_vl, sse, neon]:
       ?i?:
         requires:
           scalar []
@@ -844,7 +842,6 @@ prim<s:=(m,v)> hor(mask, vec):
           sse_vl [avx512bw, avx512vl]
           sse [sse2]
           neon [neon]
-          sve [sve]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -855,7 +852,7 @@ prim<s:=(m,v)> hor(mask, vec):
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
             loop<backend>(i, 0, value(vector::length), 1) {
-              if (((mask_scalar >> i) & 0b1) == 1) {
+              if (mask<test, imask>(mask_scalar, i)) {
                 result |= values[i];
               }
             }
@@ -872,7 +869,6 @@ prim<s:=(m,v)> hor(mask, vec):
           sse_vl [avx512bw, avx512vl]
           sse [sse2]
           neon [neon]
-          sve [sve]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -884,7 +880,7 @@ prim<s:=(m,v)> hor(mask, vec):
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
             loop<backend>(i, 0, value(vector::length), 1) {
-              if (((mask_scalar >> i) & 0b1) == 1) {
+              if (mask<test, imask>(mask_scalar, i)) {
                 var<infer>(bits, cast<static>(UnsignedT, 0));
                 mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &values[i]), value(type::size_bytes(type(base::in))));
                 result |= bits;

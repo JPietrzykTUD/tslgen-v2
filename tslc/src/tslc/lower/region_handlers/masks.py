@@ -4,26 +4,28 @@ from __future__ import annotations
 
 from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession
+from tslc.lower._text import split_selector_terms
 from tslc.lower.region_handlers.common import _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.render.model import RenderField, RenderText, render_text, trimmed_text
 
 
 class MaskLowerer:
-    """``mask<zero>() / mask<set:1|0>(m,i) / mask<set>(m,i,v) / mask<test>(m,i)`` -> mask-bit
-    ops, lowered per the extension's mask **representation** via a backend translate template
-    keyed by `mask_<op>_<repr>` (so literal/`&mut` differences stay in the translate layer).
-    Currently the integer-bitset repr (`lane_bitmask`, used by the generic vector's emulated
-    masks) is templated; native `__mmask`/register reprs register their own keys later. (Only
-    the emulated/generic bodies use `mask<…>` — native bodies use intrinsics — so the bitset
-    templates are reached only for the generic vector.)"""
+    """``mask<...>`` lane values and mask-container operations.
+
+    ``lane_true`` / ``lane_false`` produce a scalar lane payload value.
+    ``zero`` / ``all`` / ``test`` / ``set`` / ``clear`` / ``set_to`` operate on a mask
+    container and lower per the selected extension's mask representation.
+    ``test, imask`` tests a packed integral mask bitset.
+    """
 
     keyword = "mask"
 
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
-        op, _, bit = region.selector_text.strip().partition(":")
+        selector_terms = split_selector_terms(region.selector_text)
+        op = selector_terms[0] if selector_terms else ""
         extension = context.env.extension
         repr_kind = extension.mask_policy.kind
         # `lane_bitmask` covers two physical reprs: the generic vector's integer bitset (one bit
@@ -37,15 +39,23 @@ class MaskLowerer:
             rendered = render(group)
             if render_text(rendered).strip():
                 args.append(trimmed_text(rendered))
-        if op == "zero":
-            key, fields = f"mask_zero_{repr_kind}", {}
-        elif op == "test" and len(args) == 2:
+        if selector_terms in (["lane_true"], ["lane_false"]) and not args:
+            key = "mask_lane_all_true" if op == "lane_true" else "mask_lane_all_false"
+            base = context.env.backend.types.scalar_spelling(context.env.type_tag)
+            fields = {"base": base} if base is not None else {}
+            if base is None:
+                key = ""
+        elif selector_terms in (["zero"], ["all"]) and not args:
+            key, fields = f"mask_{op}_{repr_kind}", {}
+        elif selector_terms == ["test", "imask"] and len(args) == 2:
+            key, fields = "mask_test_imask", {"mask": args[0], "index": args[1]}
+        elif selector_terms == ["test"] and len(args) == 2:
             key, fields = f"mask_test_{repr_kind}", {"mask": args[0], "index": args[1]}
-        elif op == "set" and bit == "1" and len(args) == 2:
+        elif selector_terms == ["set"] and len(args) == 2:
             key, fields = f"mask_set_{repr_kind}", {"name": args[0], "index": args[1]}
-        elif op == "set" and bit == "0" and len(args) == 2:
+        elif selector_terms == ["clear"] and len(args) == 2:
             key, fields = f"mask_clear_{repr_kind}", {"name": args[0], "index": args[1]}
-        elif op == "set" and not bit and len(args) == 3:
+        elif selector_terms == ["set_to"] and len(args) == 3:
             key = f"mask_set_to_{repr_kind}"
             fields = {"name": args[0], "index": args[1], "value": args[2]}
         else:
