@@ -42,7 +42,7 @@ def test_segment_view_text_and_json_agree_on_structure() -> None:
 
 def test_segment_view_captures_loop_block_not_raw() -> None:
     # the design-central check: a recognized keyword island is a Region, not leaked RawText
-    body = "loop<backend, unroll>(i, 0, value<generation>(n), 1) { result[i] = 0; }"
+    body = "loop<backend, unroll>(i, 0, value(n), 1) { result[i] = 0; }"
     root = segment_to_json(scan(body)[0])
     assert root["kind"] == "region" and root["keyword"] == "loop"
     assert root["block"]  # the { ... } body was captured

@@ -245,7 +245,7 @@ def test_to_from_array_roundtrip_builds(
     # The vector<->array layer: `to_array` (result kind `s[]`, a `var<typed>` over the
     # `array_type` substrate + a defaulted-axis `store` call) and `from_array` (`s[]`
     # parameter, a `load attrs[aligned=false]` call / scalar `data[0]`). Exercises the new
-    # generic constructs (`type<generation>`/`value<generation>` regions, `var<typed>` +
+    # generic constructs (`type`/`value` regions, `var<typed>` +
     # uninit array, calls into the axis'd/overloaded `store`/`load`) end-to-end in C++ and
     # Rust across scalar + SIMD; the closure pulls in `load`/`store`. Including `avx`
     # guards the AVX-only 256-bit integer store/load fallback used by byte/word arrays.
@@ -607,7 +607,7 @@ def test_to_vector_builds(data_root: Path, machine_profiles_path: Path, tmp_path
     # `to_vector` (mask -> vector) closes the mask triad. Exercises the reinterpret /
     # type-conversion cluster: the generic emulated body (`var<init_register>` + `if<compile>`
     # splicing the f32/f64 NaN branch + `mask<test>` loop + `base::unsigned_of` /
-    # `type<backend>(scalar::*)` / `cast<bitcast>` via `tsl_core::bit_cast`), the avx512
+    # `type(scalar::*)` / `cast<bitcast>` via `tsl_core::bit_cast`), the avx512
     # `maskz_set1`+`bit_cast` float paths, and the avx2/sse `complete(mask)` identity.
     # Both backends; avx2_vl/sse_vl native conversion (mov+mask::lane) skips cleanly.
     result = generate_project(
@@ -682,7 +682,7 @@ def test_masked_load_store_build(
     # `store` emits `store_mask` — each carrying the `aligned` const-generic (mask × aligned
     # compose orthogonally). avx512(_vl) uses native masked load/store (`maskz_loadu`/`mask_loadu`/
     # `mask_storeu`); avx2/sse fall back to `load`+`mov`/`blend`(+`store`) — the fallback forwards
-    # the caller's `aligned` via `attrs[aligned=value<generation>(primitive::attribute(aligned))]`,
+    # the caller's `aligned` via `attrs[aligned=value(primitive::attribute(aligned))]`,
     # which the call lowerer now resolves. `void` store result types in both backends. scalar +
     # sse2 + avx2 + skylake. (gather/scatter masked are deferred on the `vidx` kind.)
     result = generate_project(

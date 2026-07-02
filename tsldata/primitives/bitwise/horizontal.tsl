@@ -31,7 +31,7 @@ prim<s:=v> hand(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<svandv, build>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<svandv, build>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
         safety:
@@ -40,12 +40,12 @@ prim<s:=v> hand(vec):
           reasons [intrinsic, raw_memory]
         implementation:
           tsil """
-            let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
-            let<type>(UVec, type<generation>(vector::as_base(UnsignedT)));
+            let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
+            let<type>(UVec, type(vector::as_base(UnsignedT)));
             var<const_infer>(bits_vec, call<primitive=reinterpret[Vec, UVec]>(vec));
             var<infer>(bits, cast<static>(UnsignedT, intrin<svandv, build[suffix=UnsignedT]>(call<primitive=mask_true[UVec]>(), bits_vec)));
-            var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &bits), value<generation>(type::size_bytes(type<generation>(base::in))));
+            var<infer>(out, cast<static>(type(base::in), 0));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &bits), value(type::size_bytes(type(base::in))));
             complete(out);
           """
     avx512:
@@ -56,7 +56,7 @@ prim<s:=v> hand(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_and, build[suffix=base::signed_of(base::in)]>(vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<reduce_and, build[suffix=base::signed_of(base::in)]>(vec)));"
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
         requires [avx512bw, avx512vl]
@@ -65,7 +65,7 @@ prim<s:=v> hand(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_and, build[suffix=base::signed_of(base::in)]>(vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<reduce_and, build[suffix=base::signed_of(base::in)]>(vec)));"
     avx2:
       ?i8:
         requires [avx2]
@@ -82,7 +82,7 @@ prim<s:=v> hand(vec):
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 1));
-            complete(cast<static>(type<generation>(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i16:
         requires [avx2]
@@ -98,7 +98,7 @@ prim<s:=v> hand(vec):
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            complete(cast<static>(type<generation>(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i32:
         requires [avx2]
@@ -113,7 +113,7 @@ prim<s:=v> hand(vec):
             var<infer>(temp, intrin<_mm_and_si128>(lo, hi));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       ?i64:
         requires [avx2]
@@ -127,7 +127,7 @@ prim<s:=v> hand(vec):
             var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
             var<infer>(temp, intrin<_mm_and_si128>(lo, hi));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_unpackhi_epi64>(temp, temp));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       ?i?:
         requires [avx2]
@@ -139,7 +139,7 @@ prim<s:=v> hand(vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, data_arr[0]);
-            loop<backend>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value(vector::length), 1) {
               result &= data_arr[i];
             }
             complete(result);
@@ -158,7 +158,7 @@ prim<s:=v> hand(vec):
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 1));
-            complete(cast<static>(type<generation>(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i16:
         requires [sse2]
@@ -172,7 +172,7 @@ prim<s:=v> hand(vec):
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            complete(cast<static>(type<generation>(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i32:
         requires [sse2]
@@ -185,7 +185,7 @@ prim<s:=v> hand(vec):
             var<infer>(temp, vec);
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_and_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       ?i64:
         requires [sse2]
@@ -196,7 +196,7 @@ prim<s:=v> hand(vec):
         implementation:
           tsil """
             var<const_infer>(temp, intrin<_mm_and_si128>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       ?i?:
         requires [sse2]
@@ -208,7 +208,7 @@ prim<s:=v> hand(vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, data_arr[0]);
-            loop<backend>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value(vector::length), 1) {
               result &= data_arr[i];
             }
             complete(result);
@@ -224,7 +224,7 @@ prim<s:=v> hand(vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, data_arr[0]);
-            loop<backend>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value(vector::length), 1) {
               result &= data_arr[i];
             }
             complete(result);
@@ -237,17 +237,17 @@ prim<s:=v> hand(vec):
           reasons [raw_memory]
         implementation:
           tsil """
-            let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
+            let<type>(UnsignedT, type(select(value(type::is_same(type(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &result), cast<reinterpret, type=const_ptr>(void, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
-            loop<backend>(i, 1, value<generation>(vector::length), 1) {
+            mem<copy>(cast<reinterpret, type=ptr>(void, &result), cast<reinterpret, type=const_ptr>(void, &data_arr[0]), value(type::size_bytes(type(base::in))));
+            loop<backend>(i, 1, value(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value(type::size_bytes(type(base::in))));
               result &= bits;
             }
-            var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            var<infer>(out, cast<static>(type(base::in), 0));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(type(base::in))));
             complete(out);
           """
     [avx2_vl, sse_vl]:
@@ -261,7 +261,7 @@ prim<s:=v> hand(vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, data_arr[0]);
-            loop<backend>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value(vector::length), 1) {
               result &= data_arr[i];
             }
             complete(result);
@@ -274,17 +274,17 @@ prim<s:=v> hand(vec):
           reasons [raw_memory]
         implementation:
           tsil """
-            let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
+            let<type>(UnsignedT, type(select(value(type::is_same(type(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &result), cast<reinterpret, type=const_ptr>(void, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
-            loop<backend>(i, 1, value<generation>(vector::length), 1) {
+            mem<copy>(cast<reinterpret, type=ptr>(void, &result), cast<reinterpret, type=const_ptr>(void, &data_arr[0]), value(type::size_bytes(type(base::in))));
+            loop<backend>(i, 1, value(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value(type::size_bytes(type(base::in))));
               result &= bits;
             }
-            var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            var<infer>(out, cast<static>(type(base::in), 0));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(type(base::in))));
             complete(out);
           """
     [scalar, generic, oneAPIfpga, neon]:
@@ -302,7 +302,7 @@ prim<s:=v> hand(vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, data_arr[0]);
-            loop<backend>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value(vector::length), 1) {
               result &= data_arr[i];
             }
             complete(result);
@@ -322,17 +322,17 @@ prim<s:=v> hand(vec):
           reasons [raw_memory]
         implementation:
           tsil """
-            let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
+            let<type>(UnsignedT, type(select(value(type::is_same(type(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &result), cast<reinterpret, type=const_ptr>(void, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
-            loop<backend>(i, 1, value<generation>(vector::length), 1) {
+            mem<copy>(cast<reinterpret, type=ptr>(void, &result), cast<reinterpret, type=const_ptr>(void, &data_arr[0]), value(type::size_bytes(type(base::in))));
+            loop<backend>(i, 1, value(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value(type::size_bytes(type(base::in))));
               result &= bits;
             }
-            var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            var<infer>(out, cast<static>(type(base::in), 0));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(type(base::in))));
             complete(out);
           """
 
@@ -378,7 +378,7 @@ prim<s:=v> hor(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<svorv, build>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<svorv, build>(call<primitive=mask_true[Vec]>(), vec)));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
@@ -387,7 +387,7 @@ prim<s:=v> hor(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_or, build[suffix=base::signed_of(base::in)]>(vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<reduce_or, build[suffix=base::signed_of(base::in)]>(vec)));"
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
         requires [avx512bw, avx512vl]
@@ -396,7 +396,7 @@ prim<s:=v> hor(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_or, build[suffix=base::signed_of(base::in)]>(vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<reduce_or, build[suffix=base::signed_of(base::in)]>(vec)));"
     avx2:
       ?i8:
         requires [avx2]
@@ -413,7 +413,7 @@ prim<s:=v> hor(vec):
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 1));
-            complete(cast<static>(type<generation>(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i16:
         requires [avx2]
@@ -429,7 +429,7 @@ prim<s:=v> hor(vec):
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            complete(cast<static>(type<generation>(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i32:
         requires [avx2]
@@ -444,7 +444,7 @@ prim<s:=v> hor(vec):
             var<infer>(temp, intrin<_mm_or_si128>(lo, hi));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       ?i64:
         requires [avx2]
@@ -458,7 +458,7 @@ prim<s:=v> hor(vec):
             var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
             var<infer>(temp, intrin<_mm_or_si128>(lo, hi));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_unpackhi_epi64>(temp, temp));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       ?i?:
         requires [avx2]
@@ -469,8 +469,8 @@ prim<s:=v> hor(vec):
         implementation:
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            loop<backend>(i, 0, value(vector::length), 1) {
               result |= data_arr[i];
             }
             complete(result);
@@ -489,7 +489,7 @@ prim<s:=v> hor(vec):
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 1));
-            complete(cast<static>(type<generation>(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i16:
         requires [sse2]
@@ -503,7 +503,7 @@ prim<s:=v> hor(vec):
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            complete(cast<static>(type<generation>(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
+            complete(cast<static>(type(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
           """
       ?i32:
         requires [sse2]
@@ -516,7 +516,7 @@ prim<s:=v> hor(vec):
             var<infer>(temp, vec);
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_or_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       ?i64:
         requires [sse2]
@@ -527,7 +527,7 @@ prim<s:=v> hor(vec):
         implementation:
           tsil """
             var<const_infer>(temp, intrin<_mm_or_si128>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       ?i?:
         requires [sse2]
@@ -538,8 +538,8 @@ prim<s:=v> hor(vec):
         implementation:
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            loop<backend>(i, 0, value(vector::length), 1) {
               result |= data_arr[i];
             }
             complete(result);
@@ -554,8 +554,8 @@ prim<s:=v> hor(vec):
         implementation:
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            loop<backend>(i, 0, value(vector::length), 1) {
               result |= data_arr[i];
             }
             complete(result);
@@ -568,16 +568,16 @@ prim<s:=v> hor(vec):
           reasons [raw_memory]
         implementation:
           tsil """
-            let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
+            let<type>(UnsignedT, type(select(value(type::is_same(type(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<typed>(UnsignedT, result, cast<static>(UnsignedT, 0));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value(type::size_bytes(type(base::in))));
               result |= bits;
             }
-            var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            var<infer>(out, cast<static>(type(base::in), 0));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(type(base::in))));
             complete(out);
           """
     [scalar, generic, oneAPIfpga, neon]:
@@ -595,7 +595,7 @@ prim<s:=v> hor(vec):
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, data_arr[0]);
-            loop<backend>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value(vector::length), 1) {
               result |= data_arr[i];
             }
             complete(result);
@@ -612,17 +612,17 @@ prim<s:=v> hor(vec):
           reasons [raw_memory]
         implementation:
           tsil """
-            let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
+            let<type>(UnsignedT, type(select(value(type::is_same(type(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &result), cast<reinterpret, type=const_ptr>(void, &data_arr[0]), value<generation>(type::size_bytes(type<generation>(base::in))));
-            loop<backend>(i, 1, value<generation>(vector::length), 1) {
+            mem<copy>(cast<reinterpret, type=ptr>(void, &result), cast<reinterpret, type=const_ptr>(void, &data_arr[0]), value(type::size_bytes(type(base::in))));
+            loop<backend>(i, 1, value(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value(type::size_bytes(type(base::in))));
               result |= bits;
             }
-            var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            var<infer>(out, cast<static>(type(base::in), 0));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(type(base::in))));
             complete(out);
           """
 
@@ -669,9 +669,9 @@ prim<s:=(m,v)> hand(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type(base::in), 0));
             }
-            complete(cast<static>(type<generation>(base::in), intrin<svandv, build>(mask, vec)));
+            complete(cast<static>(type(base::in), intrin<svandv, build>(mask, vec)));
           """
     avx512:
       [si32, ui32, si64, ui64]:
@@ -684,9 +684,9 @@ prim<s:=(m,v)> hand(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type(base::in), 0));
             }
-            complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_and, build[suffix=base::signed_of(base::in)]>(mask, vec)));
+            complete(cast<static>(type(base::in), intrin<mask_reduce_and, build[suffix=base::signed_of(base::in)]>(mask, vec)));
           """
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
@@ -699,9 +699,9 @@ prim<s:=(m,v)> hand(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type(base::in), 0));
             }
-            complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_and, build[suffix=base::signed_of(base::in)]>(mask, vec)));
+            complete(cast<static>(type(base::in), intrin<mask_reduce_and, build[suffix=base::signed_of(base::in)]>(mask, vec)));
           """
     [scalar, generic, oneAPIfpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve]:
       ?i?:
@@ -724,9 +724,9 @@ prim<s:=(m,v)> hand(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            type<backend>(scalar::size) found = 0;
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            type(scalar::size) found = 0;
+            loop<backend>(i, 0, value(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 if (found == 0) {
                   result = values[i];
@@ -756,15 +756,15 @@ prim<s:=(m,v)> hand(mask, vec):
           reasons [raw_memory]
         implementation:
           tsil """
-            let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
+            let<type>(UnsignedT, type(select(value(type::is_same(type(base::in), f32)), ui32, ui64)));
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
-            type<backend>(scalar::size) found = 0;
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            type(scalar::size) found = 0;
+            loop<backend>(i, 0, value(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 var<infer>(bits, cast<static>(UnsignedT, 0));
-                mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &values[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+                mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &values[i]), value(type::size_bytes(type(base::in))));
                 if (found == 0) {
                   result = bits;
                   found = 1;
@@ -773,9 +773,9 @@ prim<s:=(m,v)> hand(mask, vec):
                 }
               }
             }
-            var<infer>(out, cast<static>(type<generation>(base::in), 0));
+            var<infer>(out, cast<static>(type(base::in), 0));
             if (found != 0) {
-              mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(type(base::in))));
             }
             complete(out);
           """
@@ -813,7 +813,7 @@ prim<s:=(m,v)> hor(mask, vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<svorv, build>(mask, vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<svorv, build>(mask, vec)));"
     avx512:
       [si32, ui32, si64, ui64]:
         requires [avx512f]
@@ -822,7 +822,7 @@ prim<s:=(m,v)> hor(mask, vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_or, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<mask_reduce_or, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
     [avx2_vl, sse_vl]:
       [si8, ui8, si16, ui16]:
         requires [avx512bw, avx512vl]
@@ -831,7 +831,7 @@ prim<s:=(m,v)> hor(mask, vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_or, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<mask_reduce_or, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
     [scalar, generic, oneAPIfpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, sve]:
       ?i?:
         requires:
@@ -853,8 +853,8 @@ prim<s:=(m,v)> hor(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            loop<backend>(i, 0, value(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 result |= values[i];
               }
@@ -879,19 +879,19 @@ prim<s:=(m,v)> hor(mask, vec):
           reasons [raw_memory]
         implementation:
           tsil """
-            let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
+            let<type>(UnsignedT, type(select(value(type::is_same(type(base::in), f32)), ui32, ui64)));
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value(vector::length), 1) {
               if (((mask_scalar >> i) & 0b1) == 1) {
                 var<infer>(bits, cast<static>(UnsignedT, 0));
-                mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &values[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+                mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &values[i]), value(type::size_bytes(type(base::in))));
                 result |= bits;
               }
             }
-            var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            var<infer>(out, cast<static>(type(base::in), 0));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(type(base::in))));
             complete(out);
           """
     [avx2_vl, sse_vl]:
@@ -904,8 +904,8 @@ prim<s:=(m,v)> hor(mask, vec):
         implementation:
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            loop<backend>(i, 0, value(vector::length), 1) {
               result |= data_arr[i];
             }
             complete(result);
@@ -918,16 +918,16 @@ prim<s:=(m,v)> hor(mask, vec):
           reasons [raw_memory]
         implementation:
           tsil """
-            let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
+            let<type>(UnsignedT, type(select(value(type::is_same(type(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<typed>(UnsignedT, result, cast<static>(UnsignedT, 0));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value(type::size_bytes(type(base::in))));
               result |= bits;
             }
-            var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            var<infer>(out, cast<static>(type(base::in), 0));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(type(base::in))));
             complete(out);
           """
     [scalar, generic, oneAPIfpga, neon]:
@@ -944,8 +944,8 @@ prim<s:=(m,v)> hor(mask, vec):
         implementation:
           tsil """
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            loop<backend>(i, 0, value(vector::length), 1) {
               result |= data_arr[i];
             }
             complete(result);
@@ -966,15 +966,15 @@ prim<s:=(m,v)> hor(mask, vec):
           reasons [raw_memory]
         implementation:
           tsil """
-            let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
+            let<type>(UnsignedT, type(select(value(type::is_same(type(base::in), f32)), ui32, ui64)));
             var<const_infer>(data_arr, call<primitive=to_array[Vec]>(vec));
             var<typed>(UnsignedT, result, cast<static>(UnsignedT, 0));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value(vector::length), 1) {
               var<infer>(bits, cast<static>(UnsignedT, 0));
-              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value<generation>(type::size_bytes(type<generation>(base::in))));
+              mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data_arr[i]), value(type::size_bytes(type(base::in))));
               result |= bits;
             }
-            var<infer>(out, cast<static>(type<generation>(base::in), 0));
-            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value<generation>(type::size_bytes(type<generation>(base::in))));
+            var<infer>(out, cast<static>(type(base::in), 0));
+            mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(type(base::in))));
             complete(out);
           """

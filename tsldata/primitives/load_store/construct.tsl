@@ -41,7 +41,7 @@ prim<v:=s> set1(value):
           tsil """
             complete(
               intrin<set1, build[suffix=base::signed_of(base::in)]>(
-                cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), value)
+                cast<static>(type(base::signed_of(type(base::in))), value)
               )
             );
           """
@@ -68,15 +68,15 @@ prim<v:=s> set1(value):
           reasons [intrinsic]
         implementation:
           tsil """
-            if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
+            if<generation>(type::is_same(type(base::in), si64) || type::is_same(type(base::in), ui64)) {
               // in 8byte path
               complete(
-                intrin<set1, build[suffix="epi64x"]>(cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), value))
+                intrin<set1, build[suffix="epi64x"]>(cast<static>(type(base::signed_of(type(base::in))), value))
               );
             } else<generation> {
               complete(
                 intrin<set1, build[suffix=base::signed_of(base::in)]>(
-                  cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), value)
+                  cast<static>(type(base::signed_of(type(base::in))), value)
                 )
               );
             }
@@ -141,8 +141,8 @@ prim<v:=s> set1(value):
           reasons []
         implementation:
           tsil """
-              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, result_arr, value<backend>(uninit::array));
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
+              var<typed>(array_type<type(base::in), value(vector::length), value(vector::alignment)>, result_arr, value(uninit::array));
+              loop<backend, unroll>(i, 0, value(vector::length), 1)  {
                 result_arr[i] = value;
               }
                complete(result_arr) ;
@@ -236,7 +236,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
         implementation:
           tsil """
               var<init_register>(result);
-               loop<backend>(i, 0, value<generation>(vector::length), 1)  {
+               loop<backend>(i, 0, value(vector::length), 1)  {
                 result[i] = data[i];
                 if (mask<test>(mask, i)) {
                   result[i] = scalar;
@@ -299,7 +299,7 @@ prim<v:=()>[value=zero] set_zero():
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), 0));"
+          tsil "complete(cast<static>(type(base::in), 0));"
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -400,7 +400,7 @@ prim<v:=()>[value=undef] set_undef():
           reasons []
         implementation:
           tsil """
-              var<typed>(type<generation>(base::in), result, value<backend>(uninit::scalar));
+              var<typed>(type(base::in), result, value(uninit::scalar));
               complete(result);
             """
     [generic, oneAPIfpga]:
@@ -414,7 +414,7 @@ prim<v:=()>[value=undef] set_undef():
           reasons []
         implementation:
           tsil """
-              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, result, value<backend>(uninit::array));
+              var<typed>(array_type<type(base::in), value(vector::length), value(vector::alignment)>, result, value(uninit::array));
               complete(result);
             """
     avx512:
@@ -478,7 +478,7 @@ prim<v:=()>[value=undef] set_undef():
           reasons []
         implementation:
           tsil """
-              var<typed>(type<generation>(vector::register), value, value<backend>(uninit::array));
+              var<typed>(type(vector::register), value, value(uninit::array));
               complete(value);
             """
     sve:
@@ -539,21 +539,21 @@ prim<v:=(lanes<s>)> set(values):
           reasons [intrinsic]
         implementation:
           tsil """
-            if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
+            if<generation>(type::is_same(type(base::in), si64) || type::is_same(type(base::in), ui64)) {
               complete(
                 intrin<set, build[suffix="epi64"]>(
-                  cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
-                  loop<generation>(i, 1, value<generation>(vector::length), 1) {
-                    , cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, i))
+                  cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, 0))
+                  loop<generation>(i, 1, value(vector::length), 1) {
+                    , cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, i))
                   }
                 )
               );
             } else<generation> {
               complete(
                 intrin<set, build[suffix=base::signed_of(base::in)]>(
-                  cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
-                  loop<generation>(i, 1, value<generation>(vector::length), 1) {
-                    , cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, i))
+                  cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, 0))
+                  loop<generation>(i, 1, value(vector::length), 1) {
+                    , cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, i))
                   }
                 )
               );
@@ -570,7 +570,7 @@ prim<v:=(lanes<s>)> set(values):
             complete(
               intrin<set, build>(
                 lanes<at>(values, 0)
-                loop<generation>(i, 1, value<generation>(vector::length), 1) {
+                loop<generation>(i, 1, value(vector::length), 1) {
                   , lanes<at>(values, i)
                 }
               )
@@ -587,21 +587,21 @@ prim<v:=(lanes<s>)> set(values):
           reasons [intrinsic]
         implementation:
           tsil """
-            if<generation>(type::is_same(type<generation>(base::in), si64) || type::is_same(type<generation>(base::in), ui64)) {
+            if<generation>(type::is_same(type(base::in), si64) || type::is_same(type(base::in), ui64)) {
               complete(
                 intrin<set, build[suffix="epi64x"]>(
-                  cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
-                  loop<generation>(i, 1, value<generation>(vector::length), 1) {
-                    , cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, i))
+                  cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, 0))
+                  loop<generation>(i, 1, value(vector::length), 1) {
+                    , cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, i))
                   }
                 )
               );
             } else<generation> {
               complete(
                 intrin<set, build[suffix=base::signed_of(base::in)]>(
-                  cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, 0))
-                  loop<generation>(i, 1, value<generation>(vector::length), 1) {
-                    , cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), lanes<at>(values, i))
+                  cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, 0))
+                  loop<generation>(i, 1, value(vector::length), 1) {
+                    , cast<static>(type(base::signed_of(type(base::in))), lanes<at>(values, i))
                   }
                 )
               );
@@ -620,7 +620,7 @@ prim<v:=(lanes<s>)> set(values):
             complete(
               intrin<set, build>(
                 lanes<at>(values, 0)
-                loop<generation>(i, 1, value<generation>(vector::length), 1) {
+                loop<generation>(i, 1, value(vector::length), 1) {
                   , lanes<at>(values, i)
                 }
               )
@@ -641,8 +641,8 @@ prim<v:=(lanes<s>)> set(values):
           tsil """
                var<const_infer>(zero, call<primitive=set_zero[Vec]>());
                var<infer>(data, call<primitive=to_array[Vec]>(zero));
-               loop<backend>(i, 0, value<generation>(vector::length), 1)  {
-                data[i] = cast<static>(type<generation>(base::in), values[value<generation>(vector::length) - 1 - i]);
+               loop<backend>(i, 0, value(vector::length), 1)  {
+                data[i] = cast<static>(type(base::in), values[value(vector::length) - 1 - i]);
               }
                complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr())) ;
             """

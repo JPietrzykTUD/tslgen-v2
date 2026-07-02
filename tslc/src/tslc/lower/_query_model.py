@@ -34,7 +34,6 @@ QueryValue = TypeValue | TextValue | BoolValue | VectorValue
 @dataclass(frozen=True, slots=True)
 class QueryTerm:
     head: str
-    mode: str | None
     args: tuple["QueryTerm", ...]
 
 
@@ -43,25 +42,15 @@ class QueryParser:
         text = text.strip()
         split = split_head_arg(text)
         if split is None:
-            head, mode = _split_head_mode(text)
-            return QueryTerm(head=head, mode=mode, args=())
+            return QueryTerm(head=text, args=())
         head_text, arg_text = split
-        head, mode = _split_head_mode(head_text)
         args: list[QueryTerm] = []
         for piece in split_top_level(arg_text):
             parsed = self.parse(piece)
             if parsed is None:
                 return None
             args.append(parsed)
-        return QueryTerm(head=head, mode=mode, args=tuple(args))
-
-
-def _split_head_mode(text: str) -> tuple[str, str | None]:
-    text = text.strip()
-    if text.endswith(">") and "<" in text:
-        name, _, rest = text.partition("<")
-        return name.strip(), rest[:-1].strip()
-    return text, None
+        return QueryTerm(head=head_text.strip(), args=tuple(args))
 
 
 class QueryFunction(Protocol):

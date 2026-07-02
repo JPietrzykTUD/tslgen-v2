@@ -54,8 +54,8 @@ prim<v:=(v,v)> mul(factor1, factor2):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
-              result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(factor1[i], factor2[i]);
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(factor1[i], factor2[i]);
             }
             complete(result);
           """
@@ -91,7 +91,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons []
         implementation:
           tsil """
-            let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+            let<type>(GenericVec, type(vector::as_extension(generic)));
             var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
             var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
             complete(
@@ -153,7 +153,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons []
         implementation:
           tsil """
-            let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+            let<type>(GenericVec, type(vector::as_extension(generic)));
             var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
             var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
             complete(
@@ -223,7 +223,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons []
         implementation:
           tsil """
-            let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+            let<type>(GenericVec, type(vector::as_extension(generic)));
             var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
             var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
             complete(
@@ -249,7 +249,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons []
         implementation:
           tsil """
-            let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+            let<type>(GenericVec, type(vector::as_extension(generic)));
             var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
             var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
             complete(
@@ -629,8 +629,8 @@ prim<v:=(v,v)> div(divident, divisor):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
-              result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(divident[i], divisor[i]);
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(divident[i], divisor[i]);
             }
             complete(result);
           """
@@ -686,7 +686,7 @@ prim<v:=(v,v)> div(divident, divisor):
           reasons []
         implementation:
           tsil """
-            let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+            let<type>(GenericVec, type(vector::as_extension(generic)));
             var<const_infer>(generic_divident, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divident)));
             var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divisor)));
             complete(
@@ -966,7 +966,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(details::arith_mul(data, cast<static>(type<generation>(base::in), factor)));"
+          tsil "complete(details::arith_mul(data, cast<static>(type(base::in), factor)));"
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -979,8 +979,8 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
-              result[i] = details::arith_mul(data[i], cast<static>(type<generation>(base::in), factor));
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = details::arith_mul(data[i], cast<static>(type(base::in), factor));
             }
             complete(result);
           """
@@ -996,7 +996,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               intrin<mul, build>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1011,7 +1011,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1026,7 +1026,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1041,7 +1041,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1056,7 +1056,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               call<primitive=mul>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1072,7 +1072,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               intrin<mul, build>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1087,7 +1087,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1102,7 +1102,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1117,7 +1117,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1132,7 +1132,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               call<primitive=mul>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1148,7 +1148,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               intrin<mul, build>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1163,7 +1163,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               intrin<mul, build>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1178,7 +1178,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1193,7 +1193,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1208,7 +1208,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               intrin<mullo, build[suffix=base::signed_of(base::in)]>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1223,7 +1223,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               call<primitive=mul>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1239,7 +1239,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               intrin<vmulq, build>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1254,7 +1254,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               call<primitive=mul>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1270,7 +1270,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             complete(
               call<primitive=mul>(
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1306,7 +1306,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
         implementation:
           tsil """
             if (mask) {
-              complete(details::arith_mul(data, cast<static>(type<generation>(base::in), factor)));
+              complete(details::arith_mul(data, cast<static>(type(base::in), factor)));
             }
             complete(call<primitive=set_zero[Vec]>());
           """
@@ -1330,7 +1330,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
               call<primitive=mul, attrs[mask=zero]>(
                 mask,
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1366,7 +1366,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
         implementation:
           tsil """
             if (mask) {
-              complete(details::arith_mul(data, cast<static>(type<generation>(base::in), factor)));
+              complete(details::arith_mul(data, cast<static>(type(base::in), factor)));
             }
             complete(data);
           """
@@ -1390,7 +1390,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
               call<primitive=mul, attrs[mask=pass_through]>(
                 mask,
                 data,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), factor))
+                call<primitive=set1>(cast<static>(type(base::in), factor))
               )
             );
           """
@@ -1432,7 +1432,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons []
         implementation:
           tsil """
-            let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+            let<type>(GenericVec, type(vector::as_extension(generic)));
             var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(dividend)));
             var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divisor)));
             complete(
@@ -1450,7 +1450,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons []
         implementation:
           tsil """
-            let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+            let<type>(GenericVec, type(vector::as_extension(generic)));
             var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(dividend)));
             var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divisor)));
             complete(
@@ -1468,7 +1468,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons []
         implementation:
           tsil """
-            let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+            let<type>(GenericVec, type(vector::as_extension(generic)));
             var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(dividend)));
             var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divisor)));
             complete(
@@ -1486,7 +1486,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-            let<type>(Base, type<generation>(base::in));
+            let<type>(Base, type(base::in));
             var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
             var<const_infer>(dividends, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
             var<const_infer>(divisors, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
@@ -1528,7 +1528,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(QuotientBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(QuotientBase, type(base::signed_of(type(base::in))));
             var<const_infer>(pg, call<primitive=mask_true[Vec]>());
             var<const_infer>(quotient, intrin<svdiv, build[post=x]>(pg, dividend, divisor));
             var<const_infer>(truncated, intrin<svcvt_, build[infix=QuotientBase, suffix=base::in, post=z]>(pg, quotient));
@@ -1560,7 +1560,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
               result[i] = details::arith_rem(dividend[i], divisor[i]);
             }
             complete(result);
@@ -1574,7 +1574,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
               result[i] = details::arith_rem(dividend[i], divisor[i]);
             }
             complete(result);
@@ -1730,7 +1730,7 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
             complete(
               call<primitive=mod>(
                 dividend,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), divisor))
+                call<primitive=set1>(cast<static>(type(base::in), divisor))
               )
             );
           """
@@ -1742,7 +1742,7 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(details::arith_rem(dividend, cast<static>(type<generation>(base::in), divisor)));"
+          tsil "complete(details::arith_rem(dividend, cast<static>(type(base::in), divisor)));"
     generic:
       ?i?:
         requires []
@@ -1753,8 +1753,8 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
-              result[i] = details::arith_rem(dividend[i], cast<static>(type<generation>(base::in), divisor));
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = details::arith_rem(dividend[i], cast<static>(type(base::in), divisor));
             }
             complete(result);
           """
@@ -1767,8 +1767,8 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
-              result[i] = details::arith_rem(dividend[i], cast<static>(type<generation>(base::in), divisor));
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = details::arith_rem(dividend[i], cast<static>(type(base::in), divisor));
             }
             complete(result);
           """
@@ -1803,7 +1803,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
         implementation:
           tsil """
             if (mask) {
-              complete(details::arith_rem(dividend, cast<static>(type<generation>(base::in), divisor)));
+              complete(details::arith_rem(dividend, cast<static>(type(base::in), divisor)));
             }
             complete(call<primitive=set_zero[Vec]>());
           """
@@ -1825,7 +1825,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
               call<primitive=mod, attrs[mask=zero]>(
                 mask,
                 dividend,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), divisor))
+                call<primitive=set1>(cast<static>(type(base::in), divisor))
               )
             );
           """
@@ -1861,7 +1861,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
         implementation:
           tsil """
             if (mask) {
-              complete(details::arith_rem(dividend, cast<static>(type<generation>(base::in), divisor)));
+              complete(details::arith_rem(dividend, cast<static>(type(base::in), divisor)));
             }
             complete(dividend);
           """
@@ -1883,7 +1883,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
               call<primitive=mod, attrs[mask=pass_through]>(
                 mask,
                 dividend,
-                call<primitive=set1>(cast<static>(type<generation>(base::in), divisor))
+                call<primitive=set1>(cast<static>(type(base::in), divisor))
               )
             );
           """

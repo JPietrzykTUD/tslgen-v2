@@ -92,8 +92,8 @@ prim<v:=v> conflict(data):
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-              let<type>(Base, type<generation>(base::in));
-              let<type>(ConflictT, type<backend>(scalar::size));
+              let<type>(Base, type(base::in));
+              let<type>(ConflictT, type(scalar::size));
               var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
               var<const_infer>(bit_limit, (sizeof(Base) * 8));
               var<const_infer>(values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
@@ -131,17 +131,17 @@ prim<v:=v> conflict(data):
           reasons []
         implementation:
           tsil """
-              let<type>(ConflictT, type<backend>(scalar::size));
+              let<type>(ConflictT, type(scalar::size));
               var<const_infer>(values, call<primitive=to_array[Vec]>(data));
               var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-              loop<backend>(idx, 1, value<generation>(vector::length), 1) {
+              loop<backend>(idx, 1, value(vector::length), 1) {
                 var<infer>(conflict, cast<static>(ConflictT, 0));
                 loop<backend>(cur, 0, idx, 1) {
-                  if ((cur < (value<generation>(type::size_bytes(type<generation>(base::in))) * 8)) && (values[idx] == values[cur])) {
+                  if ((cur < (value(type::size_bytes(type(base::in))) * 8)) && (values[idx] == values[cur])) {
                     conflict |= (cast<static>(ConflictT, 1)) << cur;
                   }
                 }
-                result[idx] = cast<static>(type<generation>(base::in), conflict);
+                result[idx] = cast<static>(type(base::in), conflict);
               }
               complete(call<primitive=from_array[Vec]>(result));
             """
@@ -155,7 +155,7 @@ prim<v:=v> conflict(data):
         implementation:
           tsil """
               var<infer>(_data, data);
-              complete(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type(base::in), 0));
             """
 prim<m:=(m,v)> conflict_free(mask, data):
   cross_lane true

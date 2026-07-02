@@ -236,7 +236,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
               var<const_infer>(values, call<primitive=to_array[Vec]>(data));
               var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
               var<infer>(out_idx, 0);
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
                 if (((imask >> i) & 1) != 0) {
                   result[out_idx] = values[i];
                   out_idx = out_idx + 1;
@@ -253,8 +253,8 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(IndexBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
-              let<type>(IndexVec, type<generation>(vector::as_base(IndexBase)));
+              let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
+              let<type>(IndexVec, type(vector::as_base(IndexBase)));
               var<const_infer>(packed, intrin<svcompact, build>(mask, data));
               var<const_infer>(active_count, call<primitive=mask_population_count[Vec]>(mask));
               var<const_infer>(indices, call<primitive=sequence[IndexVec]>());
@@ -270,7 +270,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-              let<type>(Base, type<generation>(base::in));
+              let<type>(Base, type(base::in));
               var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
               var<const_infer>(values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
               var<const_infer>(result_values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
@@ -310,7 +310,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
               var<const_infer>(values, call<primitive=to_array[Vec]>(data));
               var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
               var<infer>(out_idx, 0);
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
                 if (mask<test>(mask, i)) {
                   result[out_idx] = values[i];
                   out_idx = out_idx + 1;
@@ -327,7 +327,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           reasons []
         implementation:
           tsil """
-              var<infer>(result, cast<static>(type<generation>(base::in), 0));
+              var<infer>(result, cast<static>(type(base::in), 0));
               if (mask) {
                 result = data;
               }

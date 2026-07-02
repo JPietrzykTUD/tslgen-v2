@@ -278,7 +278,7 @@ def test_pointer_layout_planning_consumes_param_types() -> None:
                 parameter_name="ptr",
                 attribute_name="packed",
                 attribute_value="false",
-                type_expr="type<generation>(base::in) *",
+                type_expr="type(base::in) *",
             ),
         ),
         tests=(

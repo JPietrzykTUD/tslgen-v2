@@ -58,8 +58,8 @@ prim<v:=(v,v)> add(left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
-              result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(left[i], right[i]);
             }
             complete(result);
           """
@@ -474,8 +474,8 @@ prim<v:=(v,v)> sub(left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
-              result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(left[i], right[i]);
             }
             complete(result);
           """

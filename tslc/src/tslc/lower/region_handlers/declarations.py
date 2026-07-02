@@ -21,7 +21,7 @@ class VarLowerer:
     Two shapes: inferred (``var<infer>(name, value)`` / ``var<const_infer>``) fills
     ``var_<variant> = {name}/{value}``; typed (``var<typed>(type, name, value)``)
     additionally carries ``{type}``. An uninitialized array initializer
-    (``value<backend>(uninit::array)``) routes to the dedicated ``var_array_uninit``
+    (``value(uninit::array)``) routes to the dedicated ``var_array_uninit``
     template instead, which carries ``{type}`` so Rust's MaybeUninit gets it (a value
     region alone cannot supply the array type). The declaration syntax itself is
     backend-neutral, coming from the ``var_*`` translate templates.
@@ -124,7 +124,7 @@ class LetLowerer:
     alias references during body rendering. A real local alias would be ``using Name = T;`` in
     C++, but Rust rejects a fn-local ``type Name = Self::T;`` (E0401), so inlining is the
     backend-neutral form. The type-expression is resolved via the normal region path (e.g.
-    ``type<generation>(vector::mask)`` -> the mask-type spelling)."""
+    ``type(vector::mask)`` -> the mask-type spelling)."""
 
     keyword = "let"
 

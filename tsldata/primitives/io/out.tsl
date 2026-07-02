@@ -61,7 +61,7 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-               let<type>(Base, type<generation>(base::in));
+               let<type>(Base, type(base::in));
                var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
                var<const_infer>(values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
                intrin<svst1, build>(call<primitive=mask_true[Vec]>(), values, data);

@@ -96,13 +96,13 @@ def test_immediate_split_names_only_mixed_immediate_families(catalog: Catalog) -
 def test_call_selector_parser_keeps_syntax_only_shape() -> None:
     assert parse_call_selector(
         "primitive=@self[Vec<UnsignedT>, shift, PreserveSign], "
-        "attrs[mask=pass_through, aligned=value<generation>(primitive::attribute(aligned))]"
+        "attrs[mask=pass_through, aligned=value(primitive::attribute(aligned))]"
     ) == ParsedCallSelector(
         primitive_ref="@self",
         type_args=("Vec<UnsignedT>", "shift", "PreserveSign"),
         attrs=(
             ("mask", "pass_through"),
-            ("aligned", "value<generation>(primitive::attribute(aligned))"),
+            ("aligned", "value(primitive::attribute(aligned))"),
         ),
     )
     assert parse_call_selector("primitive=set_zero[OutVec]") == ParsedCallSelector(
@@ -117,7 +117,7 @@ def test_dependency_extraction_resolves_queries_without_backend_dialect(
     catalog: Catalog,
 ) -> None:
     body = """
-      let<type>(ScalarVec, type<backend>(vector::as_extension(scalar)));
+      let<type>(ScalarVec, type(vector::as_extension(scalar)));
       call<primitive=@self[ScalarVec], attrs[mask=zero]>(left, right);
     """
 
@@ -147,9 +147,9 @@ def test_dependency_extraction_uses_shared_query_functions(catalog: Catalog) -> 
     body = """
       let<type>(
         SourceVec,
-        type<generation>(
+        type(
           select(
-            type::is_same(type<generation>(base::in), si32),
+            type::is_same(type(base::in), si32),
             vector::as_extension(scalar),
             vector::as_extension(avx2)
           )

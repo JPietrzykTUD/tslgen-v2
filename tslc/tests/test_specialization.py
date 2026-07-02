@@ -210,7 +210,7 @@ def test_cast_lowers_integer_reductions(specialization_artifacts: dict[str, str]
     sky_cpp = specialization_artifacts["cpp/include/tsl_skylake.hpp"]
     sky_rust = specialization_artifacts["rust/src/tsl_skylake.rs"]
     # hadd's avx512 integer reduction casts the result to the base type:
-    # cast<static>(type<generation>(base::in), intrin<reduce_add, build[...]>(vec)).
+    # cast<static>(type(base::in), intrin<reduce_add, build[...]>(vec)).
     assert "static_cast<int32_t>(_mm512_reduce_add_epi32(vec))" in sky_cpp
     assert "(core::arch::x86_64::_mm512_reduce_add_epi32(vec)) as i32" in sky_rust
 

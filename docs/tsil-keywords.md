@@ -91,7 +91,7 @@ backend choose the local type spelling. The typed forms render an explicit type.
 The register forms declare zero-initialized vector registers.
 
 Lowering renders the appropriate `var_*` backend translate template. A typed
-declaration initialized with `value<backend>(uninit::array)` routes to the
+declaration initialized with `value(uninit::array)` routes to the
 type-carrying `var_array_uninit` template so Rust can use `MaybeUninit` while
 C++ can use a normal value-initialized array.
 
@@ -308,8 +308,7 @@ Rust emits a `match` over the selector.
 Syntax:
 
 ```tsil
-type<generation>(query)
-type<backend>(query)
+type(query)
 ```
 
 Use `type` to splice a generated backend type spelling into a TSIL body. Common
@@ -317,20 +316,17 @@ queries include `base::in`, `base::signed_of(...)`, `base::unsigned_of(...)`,
 `vector::register`, `vector::mask`, `vector::imask`, `vector::as_base(...)`,
 and `vector::as_extension(...)`.
 
-Lowering evaluates the whole region with the query evaluator. Type values become
-backend scalar spellings, text values pass through as text, and vector values
-become backend vector spellings. If the query cannot be resolved, lowering
-records a skip and leaves the original region text. The current evaluator
-records but does not distinguish the `generation` and `backend` modes; those
-names document source intent.
+Lowering evaluates the whole region with the query evaluator. Type values
+become backend scalar spellings, text values pass through as text, and vector
+values become backend vector spellings. If the query cannot be resolved,
+lowering records a skip and leaves the original region text.
 
 ### `value`
 
 Syntax:
 
 ```tsil
-value<generation>(query)
-value<backend>(query)
+value(query)
 ```
 
 Use `value` to splice generated constants or backend-specific value fragments
@@ -342,8 +338,7 @@ and `select(...)`.
 Lowering uses the same query evaluator as `type`. Text values become literal
 rendered text, type values become backend scalar spellings, and vector values
 become backend vector spellings. Unresolved queries are skipped and left as
-their original region text. As with `type`, `generation` and `backend` are
-currently source-level intent markers rather than separate evaluator modes.
+their original region text.
 
 ### `complete`
 

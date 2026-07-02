@@ -242,6 +242,26 @@ def _validate_cast_region(
         )
 
 
+def _validate_no_selector_region(
+    primitive_name: str,
+    region: Region,
+    diagnostics: list[Diagnostic],
+) -> None:
+    if not region.selector_text.strip():
+        return
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-BODY-BAD-QUERY-SELECTOR",
+            message=(
+                f"primitive {primitive_name!r}: {region.keyword} regions do "
+                f"not take selectors; use `{region.keyword}(query)`"
+            ),
+            source=region.source,
+        )
+    )
+
+
 def _segments_text(segments: tuple[Segment, ...]) -> str:
     return "".join(
         segment.text if isinstance(segment, RawText) else segment.full_text
@@ -256,6 +276,7 @@ _SHELL_VALIDATORS: dict[str, ShellValidator] = {
     "cast_selector": _validate_cast_region,
     "let_type": _validate_let_region,
     "intrin_selector": _validate_intrin_region,
+    "no_selector": _validate_no_selector_region,
 }
 
 

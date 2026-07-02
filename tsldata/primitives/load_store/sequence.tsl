@@ -35,7 +35,7 @@ prim<v:=()> sequence():
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(IntrinBase, type(base::signed_of(type(base::in))));
             complete(
               intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 63), cast<static>(IntrinBase, 62), cast<static>(IntrinBase, 61), cast<static>(IntrinBase, 60),
@@ -65,7 +65,7 @@ prim<v:=()> sequence():
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(IntrinBase, type(base::signed_of(type(base::in))));
             complete(
               intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 31), cast<static>(IntrinBase, 30), cast<static>(IntrinBase, 29), cast<static>(IntrinBase, 28),
@@ -87,7 +87,7 @@ prim<v:=()> sequence():
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(IntrinBase, type(base::signed_of(type(base::in))));
             complete(
               intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
@@ -105,7 +105,7 @@ prim<v:=()> sequence():
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(IntrinBase, type(base::signed_of(type(base::in))));
             complete(
               intrin<set, build[suffix="epi64"]>(
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
@@ -123,10 +123,10 @@ prim<v:=()> sequence():
           tsil """
             complete(
               intrin<set, build>(
-                cast<static>(type<generation>(base::in), 15), cast<static>(type<generation>(base::in), 14), cast<static>(type<generation>(base::in), 13), cast<static>(type<generation>(base::in), 12),
-                cast<static>(type<generation>(base::in), 11), cast<static>(type<generation>(base::in), 10), cast<static>(type<generation>(base::in), 9), cast<static>(type<generation>(base::in), 8),
-                cast<static>(type<generation>(base::in), 7), cast<static>(type<generation>(base::in), 6), cast<static>(type<generation>(base::in), 5), cast<static>(type<generation>(base::in), 4),
-                cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
+                cast<static>(type(base::in), 15), cast<static>(type(base::in), 14), cast<static>(type(base::in), 13), cast<static>(type(base::in), 12),
+                cast<static>(type(base::in), 11), cast<static>(type(base::in), 10), cast<static>(type(base::in), 9), cast<static>(type(base::in), 8),
+                cast<static>(type(base::in), 7), cast<static>(type(base::in), 6), cast<static>(type(base::in), 5), cast<static>(type(base::in), 4),
+                cast<static>(type(base::in), 3), cast<static>(type(base::in), 2), cast<static>(type(base::in), 1), cast<static>(type(base::in), 0)
               )
             );
           """
@@ -140,8 +140,8 @@ prim<v:=()> sequence():
           tsil """
             complete(
               intrin<set, build>(
-                cast<static>(type<generation>(base::in), 7), cast<static>(type<generation>(base::in), 6), cast<static>(type<generation>(base::in), 5), cast<static>(type<generation>(base::in), 4),
-                cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
+                cast<static>(type(base::in), 7), cast<static>(type(base::in), 6), cast<static>(type(base::in), 5), cast<static>(type(base::in), 4),
+                cast<static>(type(base::in), 3), cast<static>(type(base::in), 2), cast<static>(type(base::in), 1), cast<static>(type(base::in), 0)
               )
             );
           """
@@ -156,7 +156,7 @@ prim<v:=()> sequence():
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(IntrinBase, type(base::signed_of(type(base::in))));
             complete(
               intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 31), cast<static>(IntrinBase, 30), cast<static>(IntrinBase, 29), cast<static>(IntrinBase, 28),
@@ -180,7 +180,7 @@ prim<v:=()> sequence():
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(IntrinBase, type(base::signed_of(type(base::in))));
             complete(
               intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
@@ -200,7 +200,7 @@ prim<v:=()> sequence():
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(IntrinBase, type(base::signed_of(type(base::in))));
             complete(
               intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
@@ -218,7 +218,7 @@ prim<v:=()> sequence():
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(IntrinBase, type(base::signed_of(type(base::in))));
             complete(
               intrin<set, build[suffix="epi64x"]>(
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
@@ -237,8 +237,8 @@ prim<v:=()> sequence():
           tsil """
             complete(
               intrin<set, build>(
-                cast<static>(type<generation>(base::in), 7), cast<static>(type<generation>(base::in), 6), cast<static>(type<generation>(base::in), 5), cast<static>(type<generation>(base::in), 4),
-                cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
+                cast<static>(type(base::in), 7), cast<static>(type(base::in), 6), cast<static>(type(base::in), 5), cast<static>(type(base::in), 4),
+                cast<static>(type(base::in), 3), cast<static>(type(base::in), 2), cast<static>(type(base::in), 1), cast<static>(type(base::in), 0)
               )
             );
           """
@@ -254,7 +254,7 @@ prim<v:=()> sequence():
           tsil """
             complete(
               intrin<set, build>(
-                cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
+                cast<static>(type(base::in), 3), cast<static>(type(base::in), 2), cast<static>(type(base::in), 1), cast<static>(type(base::in), 0)
               )
             );
           """
@@ -269,7 +269,7 @@ prim<v:=()> sequence():
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(IntrinBase, type(base::signed_of(type(base::in))));
             complete(
               intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 15), cast<static>(IntrinBase, 14), cast<static>(IntrinBase, 13), cast<static>(IntrinBase, 12),
@@ -289,7 +289,7 @@ prim<v:=()> sequence():
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(IntrinBase, type(base::signed_of(type(base::in))));
             complete(
               intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 7), cast<static>(IntrinBase, 6), cast<static>(IntrinBase, 5), cast<static>(IntrinBase, 4),
@@ -307,7 +307,7 @@ prim<v:=()> sequence():
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(IntrinBase, type(base::signed_of(type(base::in))));
             complete(
               intrin<set, build[suffix=base::signed_of(base::in)]>(
                 cast<static>(IntrinBase, 3), cast<static>(IntrinBase, 2), cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
@@ -324,7 +324,7 @@ prim<v:=()> sequence():
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IntrinBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(IntrinBase, type(base::signed_of(type(base::in))));
             complete(
               intrin<set, build[suffix="epi64x"]>(
                 cast<static>(IntrinBase, 1), cast<static>(IntrinBase, 0)
@@ -343,7 +343,7 @@ prim<v:=()> sequence():
           tsil """
             complete(
               intrin<set, build>(
-                cast<static>(type<generation>(base::in), 3), cast<static>(type<generation>(base::in), 2), cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
+                cast<static>(type(base::in), 3), cast<static>(type(base::in), 2), cast<static>(type(base::in), 1), cast<static>(type(base::in), 0)
               )
             );
           """
@@ -359,7 +359,7 @@ prim<v:=()> sequence():
           tsil """
             complete(
               intrin<set, build>(
-                cast<static>(type<generation>(base::in), 1), cast<static>(type<generation>(base::in), 0)
+                cast<static>(type(base::in), 1), cast<static>(type(base::in), 0)
               )
             );
           """
@@ -374,8 +374,8 @@ prim<v:=()> sequence():
           tsil """
             complete(
               intrin<svindex, build>(
-                cast<static>(type<generation>(base::in), 0),
-                cast<static>(type<generation>(base::in), 1)
+                cast<static>(type(base::in), 0),
+                cast<static>(type(base::in), 1)
               )
             );
           """
@@ -387,8 +387,8 @@ prim<v:=()> sequence():
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IndexBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
-            let<type>(IndexVec, type<generation>(vector::as_base(IndexBase)));
+            let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
+            let<type>(IndexVec, type(vector::as_base(IndexBase)));
             var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
               cast<static>(IndexBase, 0),
               cast<static>(IndexBase, 1)
@@ -411,8 +411,8 @@ prim<v:=()> sequence():
         implementation:
           tsil """
             var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
-              result[i] = cast<static>(type<generation>(base::in), i);
+            loop<backend>(i, 0, value(vector::length), 1) {
+              result[i] = cast<static>(type(base::in), i);
             }
             complete(call<primitive=from_array[Vec]>(result));
           """
@@ -424,7 +424,7 @@ prim<v:=()> sequence():
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), 0));"
+          tsil "complete(cast<static>(type(base::in), 0));"
 
 prim<v:=(s,s)> custom_sequence(start, stepwidth):
   cross_lane true
@@ -477,8 +477,8 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(IndexBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
-            let<type>(IndexVec, type<generation>(vector::as_base(IndexBase)));
+            let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
+            let<type>(IndexVec, type(vector::as_base(IndexBase)));
             var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
               cast<static>(IndexBase, 0),
               cast<static>(IndexBase, 1)
@@ -518,7 +518,7 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
           tsil """
             var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
             var<infer>(current, start);
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend>(i, 0, value(vector::length), 1) {
               result[i] = current;
               current = details::arith_add(current, stepwidth);
             }

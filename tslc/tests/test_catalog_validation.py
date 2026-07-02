@@ -410,6 +410,35 @@ def test_malformed_intrin_body_region_is_diagnosed() -> None:
     assert "build" in diagnostic.message
 
 
+def test_query_region_selectors_are_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "language rust:\n"
+        '  s32 {type "i32"}\n'
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(cast<static>(type<generation>(base::in), value<backend>(uninit::array)));"\n'
+    )
+
+    messages = [
+        diagnostic.message
+        for diagnostic in diagnostics
+        if diagnostic.code == "TSL-BODY-BAD-QUERY-SELECTOR"
+    ]
+    assert len(messages) == 2
+    assert any("use `type(query)`" in message for message in messages)
+    assert any("use `value(query)`" in message for message in messages)
+
+
 @pytest.mark.parametrize(
     ("body", "keyword", "reason"),
     [
@@ -417,7 +446,7 @@ def test_malformed_intrin_body_region_is_diagnosed() -> None:
         ("call<primitive=set_zero>;", "call", "missing argument payload"),
         ("call<primitive=set_zero>(data;", "call", "unterminated argument payload"),
         (
-            "if<generation>(value<generation>(type::is_integral)) complete(data);",
+            "if<generation>(value(type::is_integral)) complete(data);",
             "if",
             "missing block",
         ),
@@ -471,7 +500,7 @@ def test_legacy_pointer_cast_shell_is_diagnosed() -> None:
         "    scalar:\n"
         "      ints:\n"
         "        implementation:\n"
-        '          tsil "complete(cast<reinterpret>(type<generation>(base::in) const *, data));"\n'
+        '          tsil "complete(cast<reinterpret>(type(base::in) const *, data));"\n'
     )
 
     diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-CAST")

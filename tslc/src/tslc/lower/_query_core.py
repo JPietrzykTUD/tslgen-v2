@@ -39,7 +39,7 @@ class UnsignedOfQuery:
 
 
 class TypeQuery:
-    """``type<generation>(x)`` / ``type<backend>(x)``."""
+    """``type(x)`` passthrough wrapper."""
 
     head = "type"
 
@@ -48,7 +48,7 @@ class TypeQuery:
 
 
 class ValueQuery:
-    """``value<backend>(x)`` / ``value<generation>(x)`` passthrough wrapper."""
+    """``value(x)`` passthrough wrapper."""
 
     head = "value"
 

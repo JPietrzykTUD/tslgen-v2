@@ -196,9 +196,9 @@ def test_lanes_at_reports_literal_index_out_of_range() -> None:
 
 def test_generation_loop_expands_with_bound_lane_indexes() -> None:
     catalog, selected = _lane_list_catalog(
-        "loop<generation>(i, 0, value<generation>(vector::length), 1) { "
+        "loop<generation>(i, 0, value(vector::length), 1) { "
         "lanes<at>(values, i); "
-        "} complete(lanes<at>(values, value<generation>(vector::length) - 1));",
+        "} complete(lanes<at>(values, value(vector::length) - 1));",
         extension_name="simd128",
         family="x86",
         vector_bits=128,
@@ -243,7 +243,7 @@ def test_generation_loop_rejects_zero_step() -> None:
 
 def test_backend_loop_renders_without_unroll_hint() -> None:
     catalog, selected = _loop_catalog(
-        "loop<backend>(i, 0, value<generation>(vector::length), 1) { "
+        "loop<backend>(i, 0, value(vector::length), 1) { "
         "intrin<touch>(i); "
         "} complete(a);"
     )
@@ -259,7 +259,7 @@ def test_backend_loop_renders_without_unroll_hint() -> None:
 
 def test_backend_loop_unroll_hint_uses_generation_known_trip_count() -> None:
     catalog, selected = _loop_catalog(
-        "loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) { "
+        "loop<backend, unroll>(i, 0, value(vector::length), 1) { "
         "intrin<touch>(i); "
         "} complete(a);"
     )
@@ -276,7 +276,7 @@ def test_backend_loop_unroll_hint_uses_generation_known_trip_count() -> None:
 
 def test_backend_loop_unroll_without_backend_support_renders_plain_loop() -> None:
     catalog, selected = _loop_catalog(
-        "loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) { "
+        "loop<backend, unroll>(i, 0, value(vector::length), 1) { "
         "intrin<touch>(i); "
         "} complete(a);",
         extension_name="generic",
@@ -296,7 +296,7 @@ def test_backend_loop_unroll_without_backend_support_renders_plain_loop() -> Non
 
 def test_backend_loop_unroll_with_symbolic_count_renders_plain_loop() -> None:
     catalog, selected = _loop_catalog(
-        "loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) { "
+        "loop<backend, unroll>(i, 0, value(vector::length), 1) { "
         "intrin<touch>(i); "
         "} complete(a);",
         extension_name="generic",
@@ -315,7 +315,7 @@ def test_backend_loop_unroll_with_symbolic_count_renders_plain_loop() -> None:
 
 def test_legacy_loop_range_selector_is_not_supported() -> None:
     catalog, selected = _loop_catalog(
-        "loop<range>(i, 0, value<generation>(vector::length), 1) { "
+        "loop<range>(i, 0, value(vector::length), 1) { "
         "intrin<touch>(i); "
         "} complete(a);"
     )

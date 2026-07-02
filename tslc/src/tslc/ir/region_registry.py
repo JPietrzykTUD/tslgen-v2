@@ -36,8 +36,8 @@ DEFAULT_TSIL_REGION_DESCRIPTORS: tuple[TsilRegionDescriptor, ...] = (
     TsilRegionDescriptor("assume_aligned"),
     TsilRegionDescriptor("loop", body_shape="loop_block"),
     TsilRegionDescriptor("switch", body_shape="switch_block"),
-    TsilRegionDescriptor("type"),
-    TsilRegionDescriptor("value"),
+    TsilRegionDescriptor("type", shell_validator="no_selector"),
+    TsilRegionDescriptor("value", shell_validator="no_selector"),
     TsilRegionDescriptor("complete"),
 )
 
