@@ -28,6 +28,7 @@ from tslc.lower.queries import (
     BaseGenericQuery,
     BaseInQuery,
     GenericLengthQuery,
+    GenericRuntimeLengthQuery,
     IsSameQuery,
     IsSignedQuery,
     QueryEvaluator,
@@ -43,6 +44,7 @@ from tslc.lower.queries import (
     VectorAlignmentQuery,
     VectorAsQuery,
     VectorLengthQuery,
+    VectorRuntimeLengthQuery,
     WindowBaseQuery,
 )
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
@@ -61,12 +63,14 @@ _DEPENDENCY_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     AttributeQuery(),
     VectorAlignmentQuery(),
     VectorLengthQuery(),
+    VectorRuntimeLengthQuery(),
     AsExtensionQuery(),
     AsBaseQuery(),
     WindowBaseQuery(),
     VectorAsQuery(),
     BaseGenericQuery(),
     GenericLengthQuery(),
+    GenericRuntimeLengthQuery(),
 )
 
 

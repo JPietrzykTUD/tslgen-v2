@@ -86,6 +86,7 @@ def _resolve_extension_inheritance(
                 if "unroll_variants" in declared_fields
                 else parent.unroll_variants
             ),
+            runtime_lane_count={**parent.runtime_lane_count, **ext.runtime_lane_count},
             test_runtime_lanes={**parent.test_runtime_lanes, **ext.test_runtime_lanes},
             test_mask_from_bits={**parent.test_mask_from_bits, **ext.test_mask_from_bits},
             test_mask_check={**parent.test_mask_check, **ext.test_mask_check},
@@ -160,6 +161,7 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
         test_filter_exclude_templates=_list_text_set(
             _child(fields.get("test_filter"), "exclude_templates")
         ),
+        runtime_lane_count=_backend_text_map(fields.get("runtime_lane_count")),
         test_runtime_lanes=_backend_text_map(fields.get("test_runtime_lanes")),
         test_mask_from_bits=_backend_text_map(fields.get("test_mask_from_bits")),
         test_mask_check=_backend_text_map(fields.get("test_mask_check")),

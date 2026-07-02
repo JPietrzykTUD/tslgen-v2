@@ -102,7 +102,7 @@ class RustBackend:
         )
         trait = (
             (f"{doc}\n" if doc else "")
-            + f"pub trait {arg_trait}<S: SimdVector{axis_decl}{gp_decl}> {{\n"
+            + f"pub trait {arg_trait}<S: StaticSimdVector{axis_decl}{gp_decl}> {{\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply(self{fixed_trait}) -> {ret};\n"
             f"}}"
         )
@@ -203,7 +203,7 @@ class RustBackend:
         return (
             (f"{doc}\n" if doc else "")
             + f"pub {unsafe_prefix}fn {primitive_name}"
-            f"<S: SimdVector, {axis_wrap}{gp_wrap}"
+            f"<S: StaticSimdVector, {axis_wrap}{gp_wrap}"
             f"V: {arg_trait}<S{axis_args}{gp_args}>>"
             f"({wrap_params}) -> {ret_type} {{\n"
             f"    {call}\n"
@@ -226,7 +226,7 @@ class RustBackend:
         # A representation-change primitive takes the target vector as a first generic `ToVec`
         # and returns (and may take, via a `vt` param) its register type.
         if shape.target is not None:
-            decls = ["ToVec: SimdVector", *decls]
+            decls = ["ToVec: StaticSimdVector", *decls]
             ret = "ToVec::RegisterType"
             vt_type = "ToVec::RegisterType"
         # Free SIMD type params (gather's `IndicesType`) — a `vidx` param projects through one.
@@ -236,7 +236,7 @@ class RustBackend:
         generics = f"<{', '.join(decls)}>" if decls else ""
         trait_header = (
             f"pub trait {_trait_name(primitive_name)}{generics}: "
-            f"SimdVector{_index_where(shape)}"
+            f"StaticSimdVector{_index_where(shape)}"
         )
         doc = _rust_doc(shape, context="Rust dispatch trait", concrete=False)
         return (
@@ -321,7 +321,7 @@ class RustBackend:
         # call is qualified to pin the target.
         if shape.target is not None:
             targs = ["T", *targs]
-            decl_list = ["T: SimdVector", *decl_list]
+            decl_list = ["T: StaticSimdVector", *decl_list]
             ret = "T::RegisterType"
             vt_type = "T::RegisterType"
             call = (
@@ -529,7 +529,7 @@ def _trait_name(primitive_name: str) -> str:
 def _type_param_decls(
     shape: LoweredSpecialization, *, trait_prefix: str = ""
 ) -> list[str]:
-    """`NAME: SimdVector + <Bound>Impl…` for each free SIMD type param (gather's `IndicesType`).
+    """`NAME: StaticSimdVector + <Bound>Impl…` for each free SIMD type param (gather's `IndicesType`).
     The bound primitives are the ones the body calls on the param (recorded by the lowerer), so
     the param satisfies them — `to_array[IndicesType]` adds `To_arrayImpl`. C++ needs no such
     bound (templates are duck-typed); only Rust does. Type params precede const generics (Rust
@@ -541,7 +541,7 @@ def _type_param_decls(
 
     decls: list[str] = []
     for name, bounds in shape.type_params:
-        traits = ["SimdVector", *(f"{trait_prefix}{_trait_name(b)}" for b in bounds)]
+        traits = ["StaticSimdVector", *(f"{trait_prefix}{_trait_name(b)}" for b in bounds)]
         decls.append(f"{name}: {' + '.join(traits)}")
     return decls
 

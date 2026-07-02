@@ -238,6 +238,34 @@ def validate_extension_inheritance(
             current = catalog.extensions[current].inherits
 
 
+def validate_scalable_runtime_lane_counts(
+    catalog: Catalog,
+    required_backends: Sequence[str],
+    diagnostics: list[Diagnostic],
+    parsed: OuterTslParseResult | None,
+) -> None:
+    extension_sources = _extension_sources(parsed)
+    for name, extension in sorted(catalog.extensions.items()):
+        if not DEFAULT_SUPPORT_POLICY.uses_scalable_vector(extension):
+            continue
+        for backend in required_backends:
+            if not extension.supports_backend(backend):
+                continue
+            if backend in extension.runtime_lane_count:
+                continue
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-MISSING-RUNTIME-LANE-COUNT",
+                    message=(
+                        f"scalable extension {name!r} supports backend {backend!r} "
+                        f"but has no runtime_lane_count.{backend} expression"
+                    ),
+                    source=extension_sources.get(name),
+                )
+            )
+
+
 def _catalog_type_tags(catalog: Catalog) -> tuple[str, ...]:
     tags: set[str] = set()
     for members in catalog.type_groups.values():
@@ -290,4 +318,17 @@ def _inherit_sources(parsed: OuterTslParseResult | None) -> dict[str, SourceSpan
             inherit = child_from_sequence(declaration.fields, "inherits")
             if declaration.name is not None and inherit is not None:
                 sources[declaration.name] = source_span(inherit.source)
+    return sources
+
+
+def _extension_sources(parsed: OuterTslParseResult | None) -> dict[str, SourceSpan]:
+    if parsed is None:
+        return {}
+    sources: dict[str, SourceSpan] = {}
+    for document in parsed.documents:
+        for declaration in document.declarations:
+            if not isinstance(declaration, ParsedBlockDeclaration) or declaration.kind != "extension":
+                continue
+            if declaration.name is not None:
+                sources[declaration.name] = source_span(declaration.source)
     return sources

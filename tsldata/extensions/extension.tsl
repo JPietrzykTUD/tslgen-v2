@@ -403,6 +403,8 @@ extension sve:
   mask_width "lanes"
   mask_vector_loadable false
   runtime_lanes true
+  runtime_lane_count:
+    cpp "svcntb() / sizeof({base_type})"
   default_test_target true
   test_runtime_lanes:
     cpp "svcntb() / sizeof({base_type})"

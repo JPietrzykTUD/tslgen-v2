@@ -402,6 +402,7 @@ class Extension:
     # width(s) when a sized extension is itself the subject (modeled now, not yet wired).
     default_test_target: bool = False
     test_filter_exclude_templates: frozenset[str] = frozenset()
+    runtime_lane_count: Mapping[str, str] = field(default_factory=dict)
     test_runtime_lanes: Mapping[str, str] = field(default_factory=dict)
     test_mask_from_bits: Mapping[str, str] = field(default_factory=dict)
     test_mask_check: Mapping[str, str] = field(default_factory=dict)
@@ -440,6 +441,11 @@ class Extension:
         )
         object.__setattr__(
             self, "backend_supported", MappingProxyType(dict(self.backend_supported))
+        )
+        object.__setattr__(
+            self,
+            "runtime_lane_count",
+            MappingProxyType(dict(self.runtime_lane_count)),
         )
         object.__setattr__(
             self,

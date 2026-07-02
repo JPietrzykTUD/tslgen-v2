@@ -1,6 +1,7 @@
-// tslc static substrate (profile-independent). The SimdVector trait, the
-// Simd<BaseType, Extension> type, and the scalar registration. Per-profile modules
-// add the extension tags + SimdVector impls for the (type, ext) pairs they use.
+// tslc static substrate (profile-independent). The SimdVector/StaticSimdVector
+// traits, the Simd<BaseType, Extension> type, and the scalar registration.
+// Per-profile modules add the extension tags + vector impls for the
+// (type, ext) pairs they use.
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
@@ -20,8 +21,9 @@ pub trait SimdVector {
     // over a free `IndicesType` — can read/write lanes; concrete `array_type` already satisfies
     // this.
     type Array: Index<usize, Output = Self::BaseType> + IndexMut<usize>;
-    const ELEMENT_COUNT: usize;
     const ALIGN: usize;
+
+    fn vector_element_count_runtime() -> usize;
 
     // Test lane `index` of a register-backed lane mask (sse/avx2): the mask IS a data register
     // whose lanes are all-ones (set) or all-zeros (clear), so lane `index` is a BaseType-sized
@@ -43,6 +45,10 @@ pub trait SimdVector {
     }
 }
 
+pub trait StaticSimdVector: SimdVector {
+    const ELEMENT_COUNT: usize;
+}
+
 // scalar is always available and needs no SIMD substrate.
 pub struct Scalar;
 
@@ -54,8 +60,15 @@ impl<T> SimdVector for Simd<T, Scalar> {
     type MaskType = bool;
     type ImaskType = u64;
     type Array = array_type<T, 1>;
-    const ELEMENT_COUNT: usize = 1;
     const ALIGN: usize = core::mem::align_of::<T>();
+
+    fn vector_element_count_runtime() -> usize {
+        1
+    }
+}
+
+impl<T> StaticSimdVector for Simd<T, Scalar> {
+    const ELEMENT_COUNT: usize = 1;
 }
 
 // The `generic` portable vector: a sized, array-backed register parameterized by its lane
@@ -79,8 +92,15 @@ impl<T, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
     // Integral mask: the same 64-bit bitset (LANES can't size a smaller integer here).
     type ImaskType = u64;
     type Array = array_type<T, LANES>;
-    const ELEMENT_COUNT: usize = LANES;
     const ALIGN: usize = core::mem::align_of::<array_type<T, LANES>>();
+
+    fn vector_element_count_runtime() -> usize {
+        LANES
+    }
+}
+
+impl<T, const LANES: usize> StaticSimdVector for Simd<T, Generic<LANES>> {
+    const ELEMENT_COUNT: usize = LANES;
 }
 
 // A fixed-size array buffer (the `s[]` kind), counterpart to the C++ `tsl::array_type`.

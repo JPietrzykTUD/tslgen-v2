@@ -41,6 +41,7 @@ from tslc.lower._query_vector import (
     AsExtensionQuery,
     BaseGenericQuery,
     GenericLengthQuery,
+    GenericRuntimeLengthQuery,
     ImaskQuery,
     MaskQuery,
     RegisterGenericQuery,
@@ -48,6 +49,7 @@ from tslc.lower._query_vector import (
     VectorAlignmentQuery,
     VectorAsQuery,
     VectorLengthQuery,
+    VectorRuntimeLengthQuery,
     WindowBaseQuery,
 )
 from tslc.lower.context import LoweringSession
@@ -71,12 +73,14 @@ DEFAULT_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     ImaskQuery(),
     VectorAlignmentQuery(),
     VectorLengthQuery(),
+    VectorRuntimeLengthQuery(),
     AsExtensionQuery(),
     AsBaseQuery(),
     WindowBaseQuery(),
     VectorAsQuery(),
     BaseGenericQuery(),
     GenericLengthQuery(),
+    GenericRuntimeLengthQuery(),
 )
 
 
@@ -123,6 +127,7 @@ __all__ = [
     "BoolValue",
     "DEFAULT_QUERY_FUNCTIONS",
     "GenericLengthQuery",
+    "GenericRuntimeLengthQuery",
     "ImaskQuery",
     "IntrinPrefixQuery",
     "IntrinSuffixQuery",
@@ -147,5 +152,6 @@ __all__ = [
     "VectorAlignmentQuery",
     "VectorAsQuery",
     "VectorLengthQuery",
+    "VectorRuntimeLengthQuery",
     "WindowBaseQuery",
 ]

@@ -178,6 +178,7 @@ def test_extension_backend_support_is_explicit_and_inherited(catalog: Catalog) -
 def test_extension_descriptive_metadata_is_promoted(catalog: Catalog) -> None:
     avx2 = catalog.extensions["avx2"]
     neon = catalog.extensions["neon"]
+    sve = catalog.extensions["sve"]
 
     assert avx2.metadata.vendor == "intel"
     assert avx2.metadata.native_sort_order == 300
@@ -198,6 +199,7 @@ def test_extension_descriptive_metadata_is_promoted(catalog: Catalog) -> None:
     assert avx2.metadata.backend["rust"].generation_support == ("sse",)
     assert neon.metadata.backend["rust"].arch_module == "aarch64"
     assert neon.metadata.backend["cpp"].header_guard == "__ARM_NEON"
+    assert sve.runtime_lane_count["cpp"] == "svcntb() / sizeof({base_type})"
 
 
 def test_extension_inheritance_respects_explicit_false_and_empty_overrides() -> None:

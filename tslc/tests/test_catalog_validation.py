@@ -152,6 +152,27 @@ def test_extension_backend_field_names_follow_supported_backends() -> None:
     assert "zig" not in known_extension_fields()
 
 
+def test_scalable_cpp_extension_requires_runtime_lane_count() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension sve_demo:\n"
+            '  extension_name "sve_demo"\n'
+            '  family "arm"\n'
+            '  vector_bits "scalable"\n'
+            "  cpp:\n"
+            "    supported true\n"
+        ),
+        backends=("cpp",),
+    )
+
+    diagnostic = next(
+        d
+        for d in diagnostics
+        if d.code == "TSL-CATALOG-MISSING-RUNTIME-LANE-COUNT"
+    )
+    assert "runtime_lane_count.cpp" in diagnostic.message
+
+
 def test_invalid_enum_like_values_are_diagnosed() -> None:
     diagnostics = _diagnostics(
         "target_families:\n"

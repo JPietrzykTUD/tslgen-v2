@@ -99,6 +99,9 @@ inline void transform_unary_loop(
     T* output,
     std::size_t count) {
     using scalar_vec = ::tsl::simd<T, ::tsl::scalar>;
+    static_assert(
+        Vec::has_static_vector_element_count,
+        "tsl::algo::transform_unary requires a static-lane SIMD vector");
     constexpr bool input_aligned =
         std::is_same<InputAlignment, alignment::assume_aligned>::value;
     constexpr bool output_aligned =
@@ -136,6 +139,9 @@ inline void transform_unary(Op&& op, const T* input, T* output, std::size_t coun
     static_assert(
         std::is_same<T, typename vec::base_type>::value,
         "tsl::inferred_simd_t<T, ParallelN> must preserve T as Vec::base_type");
+    static_assert(
+        vec::has_static_vector_element_count,
+        "tsl::inferred_simd_t<T, ParallelN> must be a static-lane SIMD vector");
     static_assert(
         vec::vector_element_count == ParallelN,
         "tsl::inferred_simd_t<T, ParallelN> must produce exactly ParallelN lanes");

@@ -63,8 +63,10 @@ def test_cpp_core_vectors_expose_metadata_constants(
 ) -> None:
     core = specialization_artifacts["cpp/include/tsl_core.hpp"]
 
+    assert "static constexpr bool has_static_vector_element_count = true;" in core
     assert "static constexpr std::size_t vector_element_count = 1;" in core
     assert "static constexpr std::size_t vector_element_count = LANES;" in core
+    assert "static constexpr std::size_t vector_element_count_runtime() noexcept" in core
     assert "static constexpr std::size_t vector_alignment = alignof(T);" in core
     assert (
         "static constexpr std::size_t vector_alignment = alignof(register_type);"
@@ -95,6 +97,7 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
 
     assert "namespace tsl::algo" in helper
     assert "template <class Vec>\nstruct vector_tag" in helper
+    assert "Vec::has_static_vector_element_count" in helper
     assert "class Alignment = alignment::detect" in helper
     assert "void transform_unary(Op&& op" in helper
     assert '#include "tsl_algorithm.hpp"' in dispatch
@@ -155,6 +158,8 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
     core = specialization_artifacts["rust/src/tsl_core.rs"]
 
+    assert "pub trait StaticSimdVector: SimdVector" in core
+    assert "fn vector_element_count_runtime() -> usize;" in core
     assert "const ELEMENT_COUNT: usize;" in core
     assert "const ELEMENT_COUNT: usize = 1;" in core
     assert "const ELEMENT_COUNT: usize = LANES;" in core
@@ -164,9 +169,11 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
         "const ALIGN: usize = core::mem::align_of::<array_type<T, LANES>>();"
         in core
     )
-    assert "pub trait AddImpl: SimdVector {" in avx2
+    assert "pub trait AddImpl: StaticSimdVector {" in avx2
     assert "impl AddImpl for Simd<i32, Avx2> {" in avx2
+    assert "impl StaticSimdVector for Simd<i32, Avx2>" in avx2
     assert "const ELEMENT_COUNT: usize = 8;" in avx2
+    assert "fn vector_element_count_runtime() -> usize { 8 }" in avx2
     assert "const ALIGN: usize = 32;" in avx2
     assert "unsafe { return core::arch::x86_64::_mm256_add_epi32(left, right); }" in avx2
     assert "impl AddImpl for Simd<i32, Sse> {" in avx2

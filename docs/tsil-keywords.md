@@ -358,9 +358,10 @@ value(query)
 ```
 
 Use `value` to splice generated constants or backend-specific value fragments
-into an expression. Common queries include `vector::length`,
-`vector::alignment`, `generic::length(...)`, `type::size_bytes(...)`,
-`primitive::attribute(...)`, and `select(...)`.
+into an expression. Common queries include `vector::length` for static lane
+counts, `vector::runtime_length` for runtime lane counts, `vector::alignment`,
+`generic::length(...)`, `generic::runtime_length(...)`,
+`type::size_bytes(...)`, `primitive::attribute(...)`, and `select(...)`.
 
 Lowering uses the same query evaluator as `type`. Text values become literal
 rendered text, type values become backend scalar spellings, and vector values

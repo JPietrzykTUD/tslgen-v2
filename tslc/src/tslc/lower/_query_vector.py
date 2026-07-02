@@ -164,6 +164,30 @@ class VectorLengthQuery:
         )
 
 
+class VectorRuntimeLengthQuery:
+    """``vector::runtime_length`` -> lane count expression valid at runtime."""
+
+    head = "vector::runtime_length"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if args:
+            return None
+        if context.env.concrete_lanes is not None:
+            return TextValue(str(context.env.concrete_lanes))
+        if DEFAULT_SUPPORT_POLICY.uses_sized_vector(context.env.extension):
+            return TextValue(context.env.lane_symbol())
+        lanes = DEFAULT_SUPPORT_POLICY.lane_count(
+            context.env.extension, context.env.type_tag
+        )
+        if lanes is not None:
+            return TextValue(str(lanes))
+        return _runtime_lane_count_text(
+            context.env.extension,
+            context.env.type_tag,
+            context,
+        )
+
+
 class AsExtensionQuery:
     """``vector::as_extension(ext)`` -> current base under a named extension."""
 
@@ -274,3 +298,38 @@ class GenericLengthQuery:
         if value.lane_parameter is not None:
             return TextValue(value.lane_parameter)
         return None
+
+
+class GenericRuntimeLengthQuery:
+    """``generic::runtime_length(V)`` -> runtime lane count of a vector value."""
+
+    head = "generic::runtime_length"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 1 or not isinstance(args[0], VectorValue):
+            return None
+        value = args[0]
+        if value.lanes is not None:
+            return TextValue(str(value.lanes))
+        if value.lane_parameter is not None:
+            return TextValue(value.lane_parameter)
+        extension = _catalog_extension(value.extension_isa, context)
+        if extension is None:
+            return None
+        return _runtime_lane_count_text(extension, value.base_tag, context)
+
+
+def _runtime_lane_count_text(
+    extension: Extension,
+    type_tag: str,
+    context: LoweringSession,
+) -> TextValue | None:
+    template = extension.runtime_lane_count.get(context.env.backend.backend_id)
+    if template is None:
+        return None
+    base = context.env.backend.types.scalar_spelling(type_tag) or type_tag
+    return TextValue(
+        template.replace("{base_type}", base)
+        .replace("{base}", base)
+        .replace("{type_tag}", type_tag)
+    )

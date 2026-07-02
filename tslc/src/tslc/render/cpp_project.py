@@ -185,7 +185,7 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
         f"    using register_type = typename detail::{helper}<T>::type;\n"
         f"    using mask_type = {mask};\n"
         f"    using imask_type = {imask};\n"
-        f"    static constexpr std::size_t vector_element_count = {bits} / (sizeof(T) * 8);\n"
+        f"{_cpp_static_element_count_metadata(f'{bits} / (sizeof(T) * 8)')}"
         f"    static constexpr std::size_t vector_alignment = {alignment};\n"
         f"}};\n\n"
     )
@@ -218,12 +218,7 @@ def _cpp_native_registration(
         mask = _cpp_mask_type(extension, bits, register, base_type=base)
         imask = _cpp_imask_type(extension, bits, mask, base_type=base)
         alignment = DEFAULT_SUPPORT_POLICY.vector_alignment_bytes(extension, type_tag)
-        lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
-        element_count = (
-            ""
-            if lane_count is None
-            else f"    static constexpr std::size_t vector_element_count = {lane_count};\n"
-        )
+        element_count = _cpp_element_count_metadata(extension, type_tag, base)
         lines.append(
             f"template <>\n"
             f"struct simd<{base}, {ext}> {{\n"
@@ -236,6 +231,43 @@ def _cpp_native_registration(
             f"}};\n\n"
         )
     return "".join(lines)
+
+
+def _cpp_static_element_count_metadata(count_expr: str) -> str:
+    return (
+        "    static constexpr bool has_static_vector_element_count = true;\n"
+        f"    static constexpr std::size_t vector_element_count = {count_expr};\n"
+        "    static constexpr std::size_t vector_element_count_runtime() noexcept {\n"
+        "        return vector_element_count;\n"
+        "    }\n"
+    )
+
+
+def _cpp_element_count_metadata(
+    extension: Extension,
+    type_tag: str,
+    base_type: str,
+) -> str:
+    lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
+    if lane_count is not None:
+        return _cpp_static_element_count_metadata(str(lane_count))
+    runtime = extension.runtime_lane_count.get("cpp")
+    if runtime is None:
+        raise ValueError(
+            f"extension {extension.name!r} needs runtime_lane_count.cpp for "
+            "scalable C++ vector registration"
+        )
+    runtime = (
+        runtime.replace("{base_type}", base_type)
+        .replace("{base}", base_type)
+        .replace("{type_tag}", type_tag)
+    )
+    return (
+        "    static constexpr bool has_static_vector_element_count = false;\n"
+        "    static std::size_t vector_element_count_runtime() noexcept {\n"
+        f"        return {runtime};\n"
+        "    }\n"
+    )
 
 
 def _cpp_inferred_simd_registrations(

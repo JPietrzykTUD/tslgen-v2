@@ -161,7 +161,7 @@ def _rust_registrations(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     extensions: Mapping[str, Extension],
 ) -> str:
-    """Rust extension tag structs + SimdVector impls for the used (ext, type) pairs."""
+    """Rust extension tag structs + vector trait impls for the used (ext, type) pairs."""
 
     lines: list[str] = []
     registrations = _rust_vector_registrations(by_primitive, extensions)
@@ -185,8 +185,12 @@ def _rust_registrations(
             f"impl SimdVector for Simd<{base}, {rust_extension_tag(extension)}> {{ "
             f"type BaseType = {base}; type RegisterType = {register}; "
             f"type MaskType = {mask}; type ImaskType = {imask}; type Array = {array}; "
-            f"const ELEMENT_COUNT: usize = {lane_count}; "
-            f"const ALIGN: usize = {alignment}; }}"
+            f"const ALIGN: usize = {alignment}; "
+            f"fn vector_element_count_runtime() -> usize {{ {lane_count} }} }}"
+        )
+        lines.append(
+            f"impl StaticSimdVector for Simd<{base}, {rust_extension_tag(extension)}> {{ "
+            f"const ELEMENT_COUNT: usize = {lane_count}; }}"
         )
     return ("\n".join(lines) + "\n\n") if lines else ""
 

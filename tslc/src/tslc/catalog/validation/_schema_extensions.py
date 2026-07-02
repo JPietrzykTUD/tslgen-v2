@@ -32,6 +32,7 @@ EXTENSION_METADATA_FIELDS = frozenset(
         "mask_vector_loadable",
         "mask_width",
         "native_sort_order",
+        "runtime_lane_count",
         "runtime_lanes",
         "signature_support",
         "size_bits",
@@ -165,6 +166,7 @@ def validate_extension_block(
             label=f"extension backend {backend_id} field",
         )
     for backend_map_name in (
+        "runtime_lane_count",
         "test_runtime_lanes",
         "test_mask_from_bits",
         "test_mask_check",

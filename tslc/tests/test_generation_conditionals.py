@@ -59,6 +59,7 @@ def test_query_facade_separates_evaluator_from_namespace_functions() -> None:
     assert QueryEvaluator.__module__ == "tslc.lower.queries"
     assert modules_by_head["type::is_same"] == "tslc.lower._query_core"
     assert modules_by_head["vector::length"] == "tslc.lower._query_vector"
+    assert modules_by_head["vector::runtime_length"] == "tslc.lower._query_vector"
 
 
 def test_type_is_same_query(catalog: Catalog) -> None:
@@ -88,6 +89,23 @@ def test_select_query_chooses_same_kind_generation_value(catalog: Catalog) -> No
         "ui32, scalar::size)",
         ctx_f32,
     ) is None
+
+
+def test_runtime_vector_length_query_uses_static_or_declared_runtime_count(
+    catalog: Catalog,
+) -> None:
+    ev = QueryEvaluator()
+
+    assert ev.evaluate(
+        "value(vector::runtime_length)", _ctx(catalog, "avx2", "si32")
+    ) == TextValue("8")
+    assert ev.evaluate(
+        "value(vector::runtime_length)", _ctx(catalog, "generic", "si32")
+    ) == TextValue("LANES")
+    assert ev.evaluate(
+        "value(vector::runtime_length)", _ctx(catalog, "sve", "si32")
+    ) == TextValue("svcntb() / sizeof(int32_t)")
+    assert ev.evaluate("value(vector::length)", _ctx(catalog, "sve", "si32")) is None
 
 
 def test_named_stream_suffix_resolves_per_extension(catalog: Catalog) -> None:
@@ -126,6 +144,9 @@ def test_query_evaluator_returns_source_identities_for_type_and_vector_terms(cat
     assert ev.evaluate(
         "type(vector::as(sse, ToBase))", ctx
     ) == VectorValue(base_tag="ui16", extension_isa="sse", lanes=8)
+    assert ev.evaluate(
+        "value(generic::runtime_length(vector::as(sve, ToBase)))", ctx
+    ) == TextValue("svcntb() / sizeof(uint16_t)")
     assert ev.evaluate(
         "type(vector::transform_extension(ToBase))", ctx
     ) is None

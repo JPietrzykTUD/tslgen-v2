@@ -226,7 +226,7 @@ def test_rust_backend_formats_caller_unsafe_contract() -> None:
 
     rendered = RustBackend().render_primitive("needs_contract", (spec,))
 
-    assert "pub trait Needs_contractImpl: SimdVector" in rendered
+    assert "pub trait Needs_contractImpl: StaticSimdVector" in rendered
     assert "    unsafe fn apply(data: Self::RegisterType)" in rendered
     assert (
         "pub unsafe fn needs_contract<S: detail::primitives::Needs_contractImpl>"
