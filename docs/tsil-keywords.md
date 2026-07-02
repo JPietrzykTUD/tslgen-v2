@@ -31,8 +31,8 @@ switch<compile>(selector) { label => { body } _ => { body } }
 ```
 
 Catalog validation checks malformed region shells before lowering. Today,
-`intrin`, `let`, `cast`, and `call` have extra shell validation because their
-selectors have structured syntax.
+`intrin`, `helper`, `let`, `cast`, and `call` have extra shell validation
+because their selectors have structured syntax.
 
 ## Keyword Inventory
 
@@ -56,6 +56,26 @@ build modifiers through the query evaluator, and asks the backend intrinsic
 dialect to spell the call. C++ emits the positional intrinsic call. Rust may add
 `core::arch::*` qualification, turn immediates into const generics, or emit a
 literal `match` for immediates that require literal const arguments.
+
+### `helper`
+
+Syntax:
+
+```tsil
+helper<name>(args)
+helper<name, template_arg, ...>(args)
+```
+
+Use `helper` to call compiler-owned runtime/helper functions from portable
+fallback bodies. The selector is a backend-neutral helper id such as
+`arith_add`, `arith_mul`, `arith_rem`, `popcount`, `clz`, or `ctz`; it is not a
+target-language path.
+
+Lowering looks for a backend translate template named `helper_<name>`.
+C++ currently maps helpers to `::tsl::detail::helpers`, while Rust maps them to
+`crate::tsl_core::detail::helpers`. This keeps primitive implementation
+internals free to live under `detail::primitives` without raw helper lookup
+depending on lexical namespace/module scope.
 
 ### `op`
 

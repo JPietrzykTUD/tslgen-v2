@@ -40,6 +40,7 @@ def test_artifact_layout(specialization_result) -> None:
     # static cores, per-profile headers, top-level dispatch, per-profile smokes.
     assert {
         "cpp/include/tsl_core.hpp",
+        "cpp/include/tsl_inferred_simd.hpp",
         "cpp/include/tsl_x86_traits.hpp",
         "cpp/include/tsl.hpp",
         "cpp/include/tsl_avx2.hpp",
@@ -56,11 +57,41 @@ def test_artifact_layout(specialization_result) -> None:
     assert "docs/specializations/styles.css" not in paths
 
 
+def test_cpp_core_vectors_expose_metadata_constants(
+    specialization_artifacts: dict[str, str]
+) -> None:
+    core = specialization_artifacts["cpp/include/tsl_core.hpp"]
+
+    assert "static constexpr std::size_t vector_element_count = 1;" in core
+    assert "static constexpr std::size_t vector_element_count = LANES;" in core
+    assert "static constexpr std::size_t vector_alignment = alignof(T);" in core
+    assert (
+        "static constexpr std::size_t vector_alignment = alignof(register_type);"
+        in core
+    )
+
+
+def test_cpp_inferred_simd_helper_is_static_declaration_only(
+    specialization_artifacts: dict[str, str]
+) -> None:
+    helper = specialization_artifacts["cpp/include/tsl_inferred_simd.hpp"]
+
+    assert "template <class T, std::size_t ParallelN>" in helper
+    assert "struct inferred_simd;" in helper
+    assert "using inferred_simd_t = typename detail::inferred_simd" in helper
+    assert "tsl::avx2" not in helper
+    assert "tsl::sse" not in helper
+
+
 def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) -> None:
     avx2 = specialization_artifacts["cpp/include/tsl_avx2.hpp"]
     # primary template, the avx2 si32 specialization, an sse specialization in the
     # same profile header, and the generic wrapper.
     assert "template <class Vec>\nstruct add_impl;" in avx2
+    assert (
+        "static constexpr std::size_t vector_element_count = 256 / (sizeof(T) * 8);"
+        in avx2
+    )
     assert "struct add_impl<tsl::simd<int32_t, tsl::avx2>>" in avx2
     assert "return _mm256_add_epi32(left, right);" in avx2
     assert "struct add_impl<tsl::simd<int32_t, tsl::sse>>" in avx2
@@ -84,13 +115,44 @@ def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) 
     assert "struct hadd_impl<tsl::simd<double, tsl::avx2>>" in avx2
 
 
+def test_cpp_profile_specializes_inferred_simd_from_registered_vectors(
+    specialization_artifacts: dict[str, str]
+) -> None:
+    avx2 = specialization_artifacts["cpp/include/tsl_avx2.hpp"]
+
+    assert "struct inferred_simd<int32_t, 1>" in avx2
+    assert "using type = ::tsl::simd<int32_t, ::tsl::scalar>;" in avx2
+    assert "struct inferred_simd<int32_t, 4>" in avx2
+    assert "using type = ::tsl::simd<int32_t, ::tsl::sse>;" in avx2
+    assert "struct inferred_simd<int32_t, 8>" in avx2
+    assert "using type = ::tsl::simd<int32_t, ::tsl::avx2>;" in avx2
+    assert "struct inferred_simd<float, 4>" in avx2
+    assert "using type = ::tsl::simd<float, ::tsl::sse>;" in avx2
+    assert "struct inferred_simd<float, 8>" in avx2
+    assert "using type = ::tsl::simd<float, ::tsl::avx2>;" in avx2
+
+
 def test_rust_specialization_structure(specialization_artifacts: dict[str, str]) -> None:
     avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
+    core = specialization_artifacts["rust/src/tsl_core.rs"]
+
+    assert "const ELEMENT_COUNT: usize;" in core
+    assert "const ELEMENT_COUNT: usize = 1;" in core
+    assert "const ELEMENT_COUNT: usize = LANES;" in core
+    assert "const ALIGN: usize;" in core
+    assert "const ALIGN: usize = core::mem::align_of::<T>();" in core
+    assert (
+        "const ALIGN: usize = core::mem::align_of::<array_type<T, LANES>>();"
+        in core
+    )
     assert "pub trait AddImpl: SimdVector {" in avx2
     assert "impl AddImpl for Simd<i32, Avx2> {" in avx2
+    assert "const ELEMENT_COUNT: usize = 8;" in avx2
+    assert "const ALIGN: usize = 32;" in avx2
     assert "unsafe { return core::arch::x86_64::_mm256_add_epi32(left, right); }" in avx2
     assert "impl AddImpl for Simd<i32, Sse> {" in avx2
-    assert "pub fn add<S: AddImpl>(" in avx2
+    assert "pub mod detail {\n    pub mod primitives {" in avx2
+    assert "pub fn add<S: detail::primitives::AddImpl>(" in avx2
     assert '/// [Example: sse + si8]: Add packed 8-bit integers' in avx2
     assert "/// # Semantics" in avx2
     assert "/// # API" in avx2

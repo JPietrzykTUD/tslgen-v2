@@ -180,10 +180,10 @@ def test_lzc_scalar_float_bitwise_path_does_not_need_offset_base(
     )
 
     assert spec_cpp is not None
-    assert "details::clz(bits)" in spec_cpp.body_text
+    assert "detail::helpers::clz(bits)" in spec_cpp.body_text
     assert "offset_base" not in spec_cpp.body_text
     assert spec_rust is not None
-    assert "details::clz(bits)" in spec_rust.body_text
+    assert "detail::helpers::clz(bits)" in spec_rust.body_text
     assert "offset_base" not in spec_rust.body_text
     assert "bits{}" not in spec_rust.body_text
     assert "let mut bits" in spec_rust.body_text

@@ -43,9 +43,17 @@ def rust_artifacts(
     for profile_render in profiles:
         by_primitive = profile_render.specializations("rust")
         registrations = _rust_registrations(by_primitive, profile_render.extensions)
-        bodies = "\n\n".join(
-            backend.render_primitive(name, by_primitive[name])
+        internal = "\n\n".join(
+            rendered
             for name in sorted(by_primitive)
+            if (rendered := backend.render_primitive_internal(name, by_primitive[name]))
+        )
+        public = "\n\n".join(
+            backend.render_primitive_public(name, by_primitive[name])
+            for name in sorted(by_primitive)
+        )
+        bodies = "\n\n".join(
+            part for part in (backend.render_primitive_module(internal), public) if part
         )
         # Arch modules are imported for intrinsic constants left verbatim in bodies.
         # Intrinsics themselves stay fully qualified by lowering.
@@ -170,11 +178,15 @@ def _rust_registrations(
         bits = registration.vector_bits
         mask = _rust_mask_type(extension, base, register)
         imask = _rust_imask_type(extension, base, mask, bits)
-        array = f"array_type<{base}, {bits // type_bits(base)}, {bits // 8}>"
+        alignment = bits // 8
+        lane_count = bits // type_bits(base)
+        array = f"array_type<{base}, {lane_count}, {alignment}>"
         lines.append(
             f"impl SimdVector for Simd<{base}, {rust_extension_tag(extension)}> {{ "
             f"type BaseType = {base}; type RegisterType = {register}; "
-            f"type MaskType = {mask}; type ImaskType = {imask}; type Array = {array}; }}"
+            f"type MaskType = {mask}; type ImaskType = {imask}; type Array = {array}; "
+            f"const ELEMENT_COUNT: usize = {lane_count}; "
+            f"const ALIGN: usize = {alignment}; }}"
         )
     return ("\n".join(lines) + "\n\n") if lines else ""
 

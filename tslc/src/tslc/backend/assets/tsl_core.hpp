@@ -35,7 +35,7 @@ inline To bit_cast(const From &src) {
 // Saturating narrowing cast (`cast<saturating>`, used by `convert_down`): clamp the value to the
 // target type's representable range, then convert. Used only where the source is wider than the
 // target (a narrowing convert), so the bounds convert exactly into `From` for the comparison.
-// Counterpart to the Rust `details::saturating_cast_value`. `lowest()` is the most-negative finite
+// Counterpart to the Rust `detail::helpers::saturating_cast_value`. `lowest()` is the most-negative finite
 // value (int min / float -max); an unsigned target's lower bound is 0 and is never exceeded.
 template <class To, class From>
 inline To saturating_cast(From value) {
@@ -93,6 +93,8 @@ struct simd<T, scalar> {
     using mask_type = bool;
     // Integral mask: a fixed unsigned scalar (to_integral packs the 0/1 mask into it).
     using imask_type = std::uint64_t;
+    static constexpr std::size_t vector_element_count = 1;
+    static constexpr std::size_t vector_alignment = alignof(T);
 };
 
 // How a register value is passed to apply(): by value.
@@ -229,6 +231,8 @@ struct simd<T, generic<LANES>> {
     // Integral mask: the same 64-bit bitset (LANES is a template param, so the lane count
     // can't size a smaller integer at this point).
     using imask_type = std::uint64_t;
+    static constexpr std::size_t vector_element_count = LANES;
+    static constexpr std::size_t vector_alignment = alignof(register_type);
 };
 
 template <class T, std::size_t LANES>
@@ -237,8 +241,8 @@ struct reg_param<simd<T, generic<LANES>>> {
 };
 
 // Scalar-core helpers used by emulated (loop) bodies. Grows one function at a time as the
-// primitives that call `details::*` land; `arith_add` is the reductions' accumulate step.
-namespace details {
+// primitives that call `helper<...>` land; `arith_add` is the reductions' accumulate step.
+namespace detail::helpers {
 template <class T>
 inline T arith_add(T a, T b) {
     return a + b;
@@ -315,6 +319,6 @@ inline bool mask_test(const typename Vec::mask_type& mask, std::size_t index) {
         return lanes[index] != BaseT(0);
     }
 }
-}  // namespace details
+}  // namespace detail::helpers
 
 }  // namespace tsl

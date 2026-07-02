@@ -45,7 +45,7 @@ translation rust:
     type ImaskType: Copy;
     type OffsetBaseType: Copy;
     type TransformExtension<T>;
-    const LANES: usize;
+    const ELEMENT_COUNT: usize;
     const ALIGN: usize;
     const SIZE_B: usize;
     const MASK_VECTOR_LOADABLE: bool;
@@ -699,7 +699,7 @@ translation rust:
   }
 """
   call "crate::tsl::{name}({args})"
-  call_primitive "crate::tsl::{name}::{func}{template}({args})"
+  call_primitive "crate::tsl::detail::primitives::{name}::{func}{template}({args})"
   type_is_same "crate::tsl::type_is_same::<{lhs}, {rhs}>()"
   type_is_signed "crate::tsl::type_is_signed::<{type}>()"
   type_is_integral "crate::tsl::type_is_integral::<{type}>()"
@@ -739,6 +739,12 @@ translation rust:
   op_sub "{a0}.tsl_sub({a1})"
   op_mul "{a0}.tsl_mul({a1})"
   op_bit_negate "(!{a0})"
+  helper_arith_add "crate::tsl_core::detail::helpers::arith_add({args})"
+  helper_arith_mul "crate::tsl_core::detail::helpers::arith_mul({args})"
+  helper_arith_rem "crate::tsl_core::detail::helpers::arith_rem({args})"
+  helper_popcount "crate::tsl_core::detail::helpers::popcount({args})"
+  helper_ctz "crate::tsl_core::detail::helpers::ctz({args})"
+  helper_clz "crate::tsl_core::detail::helpers::clz({args})"
   mask_zero_lane_bitmask "0"
   mask_all_lane_bitmask "if LANES >= 64 { u64::MAX } else { (1u64 << LANES) - 1u64 }"
   mask_set_lane_bitmask "{name} |= 1u64 << {index}"
@@ -765,7 +771,7 @@ translation rust:
   flow_else_if_runtime "else if {cond}"
   loop_backend "for {var} in ({start}..{end}).step_by({step})"
   cast_static "({expr}) as {type}"
-  cast_saturating "crate::tsl_core::details::saturating_cast_value::<_, {type}>({expr})"
+  cast_saturating "crate::tsl_core::detail::helpers::saturating_cast_value::<_, {type}>({expr})"
   cast_reinterpret "crate::tsl_core::bit_cast::<_, {type}>({expr})"
   cast_bitcast "crate::tsl_core::bit_cast::<_, {type}>({expr})"
   cast_const "({expr}) as {type}"
@@ -785,7 +791,7 @@ translation rust:
   io_endl "crate::tsl::io_endl({out})"
   io_format "crate::tsl_core::ostream_write({out}, &{array}, {modifier})"
   complete "return {value}"
-  value_vector_length "Self::LANES"
+  value_vector_length "Self::ELEMENT_COUNT"
   value_vector_alignment "Self::ALIGN"
   value_vector_size_B "Self::SIZE_B"
   value_vector_mask_vector_loadable "Self::MASK_VECTOR_LOADABLE"
@@ -794,8 +800,8 @@ translation rust:
   value_pack_size "tsl_pack_size!({expr})"
   mask_lane_all_true "<{base} as crate::tsl_core::TslMaskLaneValue>::all_true()"
   mask_lane_all_false "<{base} as crate::tsl_core::TslMaskLaneValue>::all_false()"
-  value_generic_length "<{type} as SimdVector>::LANES"
-  value_generic_runtime_length "<{type} as SimdVector>::LANES"
+  value_generic_length "<{type} as SimdVector>::ELEMENT_COUNT"
+  value_generic_runtime_length "<{type} as SimdVector>::ELEMENT_COUNT"
   value_cmp_eq_oq "core::arch::x86_64::_CMP_EQ_OQ"
   value_cmp_gt_oq "core::arch::x86_64::_CMP_GT_OQ"
   value_cmp_ge_oq "core::arch::x86_64::_CMP_GE_OQ"

@@ -37,6 +37,7 @@ def cpp_artifacts(
     backend = CppBackend()
     artifacts = [
         text("cpp/include/tsl_core.hpp", assets.text("tsl_core.hpp")),
+        text("cpp/include/tsl_inferred_simd.hpp", assets.text("tsl_inferred_simd.hpp")),
         text("cpp/include/tsl_x86_traits.hpp", assets.text("tsl_x86_traits.hpp")),
         # Ship the formatter config at the C++ project root so `clang-format` (ascending from
         # include/ and tests/) finds it and the generated project is self-contained.
@@ -56,6 +57,9 @@ def cpp_artifacts(
             for ext in x86_exts
         )
         registrations += _cpp_native_registration(
+            by_primitive, profile_render.extensions
+        )
+        registrations += _cpp_inferred_simd_registrations(
             by_primitive, profile_render.extensions
         )
         # All declarations (impl primary templates + wrappers) precede all
@@ -136,7 +140,7 @@ def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
 
 
 def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) -> str:
-    lines = ['#include "tsl_core.hpp"']
+    lines = ['#include "tsl_core.hpp"', '#include "tsl_inferred_simd.hpp"']
     if any(is_x86_register_extension(extensions.get(ext)) for ext in emitted_exts):
         lines.append('#include "tsl_x86_traits.hpp"')
     headers = sorted(
@@ -163,6 +167,7 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
     else:
         mask = "register_type"
     imask = _cpp_imask_type(extension, bits, mask)
+    alignment = max(1, bits // 8)
     return (
         f"struct {ext} {{}};\n"
         f"template <class T>\n"
@@ -171,6 +176,8 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
         f"    using register_type = typename detail::{helper}<T>::type;\n"
         f"    using mask_type = {mask};\n"
         f"    using imask_type = {imask};\n"
+        f"    static constexpr std::size_t vector_element_count = {bits} / (sizeof(T) * 8);\n"
+        f"    static constexpr std::size_t vector_alignment = {alignment};\n"
         f"}};\n\n"
     )
 
@@ -201,6 +208,13 @@ def _cpp_native_registration(
         bits = extension.vector_bits
         mask = _cpp_mask_type(extension, bits, register, base_type=base)
         imask = _cpp_imask_type(extension, bits, mask, base_type=base)
+        alignment = DEFAULT_SUPPORT_POLICY.vector_alignment_bytes(extension, type_tag)
+        lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
+        element_count = (
+            ""
+            if lane_count is None
+            else f"    static constexpr std::size_t vector_element_count = {lane_count};\n"
+        )
         lines.append(
             f"template <>\n"
             f"struct simd<{base}, {ext}> {{\n"
@@ -208,8 +222,55 @@ def _cpp_native_registration(
             f"    using register_type = {register};\n"
             f"    using mask_type = {mask};\n"
             f"    using imask_type = {imask};\n"
+            f"{element_count}"
+            f"    static constexpr std::size_t vector_alignment = {alignment};\n"
             f"}};\n\n"
         )
+    return "".join(lines)
+
+
+def _cpp_inferred_simd_registrations(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    extensions: Mapping[str, Extension],
+) -> str:
+    """Specialize ``inferred_simd<T, N>`` for fixed-width vectors in this profile."""
+
+    candidates: dict[tuple[str, int], tuple[tuple[int, int, str], str]] = {}
+    for ext, type_tag, base in used_type_specs(by_primitive):
+        extension = extensions.get(ext)
+        if extension is None or DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
+            continue
+        lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
+        if lane_count is None:
+            continue
+        if (
+            extension.vector_bits > 0
+            and not is_x86_register_extension(extension)
+            and extension.direct_vector_register_type("cpp", type_tag) is None
+        ):
+            continue
+        preference = (
+            extension.metadata.native_sort_order or 0,
+            extension.vector_bits,
+            extension.isa_name,
+        )
+        key = (base, lane_count)
+        current = candidates.get(key)
+        if current is None or preference > current[0]:
+            candidates[key] = (preference, extension.isa_name)
+
+    if not candidates:
+        return ""
+
+    lines = ["namespace detail {\n"]
+    for (base, lane_count), (_preference, ext) in sorted(candidates.items()):
+        lines.append(
+            f"template <>\n"
+            f"struct inferred_simd<{base}, {lane_count}> {{\n"
+            f"    using type = ::tsl::simd<{base}, ::tsl::{ext}>;\n"
+            f"}};\n\n"
+        )
+    lines.append("}  // namespace detail\n\n")
     return "".join(lines)
 
 
