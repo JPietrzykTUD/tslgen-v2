@@ -222,6 +222,9 @@ def test_sve_profile_registers_scalable_cpp_simd_types(
     assert "using register_type = svint32_t;" in cpp
     assert "using mask_type = svbool_t;" in cpp
     assert "using imask_type = svbool_t;" in cpp
+    sve_i32_start = cpp.index("struct simd<int32_t, sve>")
+    sve_i32_end = cpp.index("};", sve_i32_start)
+    assert "vector_element_count" not in cpp[sve_i32_start:sve_i32_end]
     assert "static constexpr std::size_t vector_alignment = 4;" in cpp
     assert "return svadd_s32_x(::tsl::mask_true<Vec>(), left, right);" in cpp
     assert 'add_library(tsl::sve ALIAS tsl_profile_sve)' in cmake

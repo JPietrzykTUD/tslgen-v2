@@ -31,10 +31,14 @@ def test_x86_register_capabilities_derive_from_extension_facts(
     assert cpp_x86_register_helper(custom) == "reg256"
     rendered = _cpp_registration("x86_demo", custom)
     assert "struct x86_demo" in rendered
+    assert (
+        "static constexpr std::size_t vector_element_count = 256 / (sizeof(T) * 8);"
+        in rendered
+    )
     assert "static constexpr std::size_t vector_alignment = 32;" in rendered
 
 
-def test_cpp_native_registration_exposes_vector_alignment(catalog: Catalog) -> None:
+def test_cpp_native_registration_exposes_vector_metadata(catalog: Catalog) -> None:
     spec = LoweredSpecialization(
         backend_id="cpp",
         primitive_name="add",
@@ -53,6 +57,7 @@ def test_cpp_native_registration_exposes_vector_alignment(catalog: Catalog) -> N
     rendered = _cpp_native_registration({"add": (spec,)}, catalog.extensions)
 
     assert "struct simd<int32_t, neon>" in rendered
+    assert "static constexpr std::size_t vector_element_count = 4;" in rendered
     assert "static constexpr std::size_t vector_alignment = 16;" in rendered
 
 
@@ -121,7 +126,7 @@ def test_rust_registration_uses_source_tag_and_lowered_register(
     assert "pub struct X86Demo;" in rendered
     assert "impl SimdVector for Simd<i32, X86Demo>" in rendered
     assert "type RegisterType = core::arch::x86_64::__m256i;" in rendered
-    assert "const ALIGN: usize = 32;" in rendered
+    assert "const ELEMENT_COUNT: usize = 8;" in rendered
     assert "const ALIGN: usize = 32;" in rendered
 
 

@@ -45,7 +45,7 @@ translation rust:
     type ImaskType: Copy;
     type OffsetBaseType: Copy;
     type TransformExtension<T>;
-    const LANES: usize;
+    const ELEMENT_COUNT: usize;
     const ALIGN: usize;
     const SIZE_B: usize;
     const MASK_VECTOR_LOADABLE: bool;
@@ -785,7 +785,7 @@ translation rust:
   io_endl "crate::tsl::io_endl({out})"
   io_format "crate::tsl_core::ostream_write({out}, &{array}, {modifier})"
   complete "return {value}"
-  value_vector_length "Self::LANES"
+  value_vector_length "Self::ELEMENT_COUNT"
   value_vector_alignment "Self::ALIGN"
   value_vector_size_B "Self::SIZE_B"
   value_vector_mask_vector_loadable "Self::MASK_VECTOR_LOADABLE"
@@ -794,8 +794,8 @@ translation rust:
   value_pack_size "tsl_pack_size!({expr})"
   mask_lane_all_true "<{base} as crate::tsl_core::TslMaskLaneValue>::all_true()"
   mask_lane_all_false "<{base} as crate::tsl_core::TslMaskLaneValue>::all_false()"
-  value_generic_length "<{type} as SimdVector>::LANES"
-  value_generic_runtime_length "<{type} as SimdVector>::LANES"
+  value_generic_length "<{type} as SimdVector>::ELEMENT_COUNT"
+  value_generic_runtime_length "<{type} as SimdVector>::ELEMENT_COUNT"
   value_cmp_eq_oq "core::arch::x86_64::_CMP_EQ_OQ"
   value_cmp_gt_oq "core::arch::x86_64::_CMP_GT_OQ"
   value_cmp_ge_oq "core::arch::x86_64::_CMP_GE_OQ"

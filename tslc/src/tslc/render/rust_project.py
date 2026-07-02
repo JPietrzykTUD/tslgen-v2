@@ -171,11 +171,13 @@ def _rust_registrations(
         mask = _rust_mask_type(extension, base, register)
         imask = _rust_imask_type(extension, base, mask, bits)
         alignment = bits // 8
-        array = f"array_type<{base}, {bits // type_bits(base)}, {alignment}>"
+        lane_count = bits // type_bits(base)
+        array = f"array_type<{base}, {lane_count}, {alignment}>"
         lines.append(
             f"impl SimdVector for Simd<{base}, {rust_extension_tag(extension)}> {{ "
             f"type BaseType = {base}; type RegisterType = {register}; "
             f"type MaskType = {mask}; type ImaskType = {imask}; type Array = {array}; "
+            f"const ELEMENT_COUNT: usize = {lane_count}; "
             f"const ALIGN: usize = {alignment}; }}"
         )
     return ("\n".join(lines) + "\n\n") if lines else ""

@@ -172,6 +172,7 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
         f"    using register_type = typename detail::{helper}<T>::type;\n"
         f"    using mask_type = {mask};\n"
         f"    using imask_type = {imask};\n"
+        f"    static constexpr std::size_t vector_element_count = {bits} / (sizeof(T) * 8);\n"
         f"    static constexpr std::size_t vector_alignment = {alignment};\n"
         f"}};\n\n"
     )
@@ -204,6 +205,12 @@ def _cpp_native_registration(
         mask = _cpp_mask_type(extension, bits, register, base_type=base)
         imask = _cpp_imask_type(extension, bits, mask, base_type=base)
         alignment = DEFAULT_SUPPORT_POLICY.vector_alignment_bytes(extension, type_tag)
+        lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
+        element_count = (
+            ""
+            if lane_count is None
+            else f"    static constexpr std::size_t vector_element_count = {lane_count};\n"
+        )
         lines.append(
             f"template <>\n"
             f"struct simd<{base}, {ext}> {{\n"
@@ -211,6 +218,7 @@ def _cpp_native_registration(
             f"    using register_type = {register};\n"
             f"    using mask_type = {mask};\n"
             f"    using imask_type = {imask};\n"
+            f"{element_count}"
             f"    static constexpr std::size_t vector_alignment = {alignment};\n"
             f"}};\n\n"
         )
