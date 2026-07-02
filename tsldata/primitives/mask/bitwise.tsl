@@ -467,7 +467,7 @@ prim<usize:=m> mask_population_count(mask):
             complete(
               cast<static>(
                 type(scalar::size),
-                detail::popcount(imask)
+                helper<popcount>(imask)
               )
             );
           """

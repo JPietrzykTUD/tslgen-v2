@@ -520,7 +520,7 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
             var<infer>(current, start);
             loop<backend>(i, 0, value(vector::length), 1) {
               result[i] = current;
-              current = detail::arith_add(current, stepwidth);
+              current = helper<arith_add>(current, stepwidth);
             }
             complete(call<primitive=from_array[Vec]>(result));
           """

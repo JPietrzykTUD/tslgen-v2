@@ -14,6 +14,7 @@ from tslc.lower.region_handlers.control import (
     SwitchLowerer,
 )
 from tslc.lower.region_handlers.declarations import LetLowerer, VarLowerer
+from tslc.lower.region_handlers.helpers import HelperLowerer
 from tslc.lower.region_handlers.intrinsics import IntrinLowerer
 from tslc.lower.region_handlers.io import IoLowerer
 from tslc.lower.region_handlers.lanes import LanesLowerer
@@ -28,6 +29,7 @@ RegionLowererFactory = Callable[[], RegionLowerer]
 
 _REGION_LOWERER_FACTORIES: dict[str, RegionLowererFactory] = {
     "intrin": IntrinLowerer,
+    "helper": HelperLowerer,
     "op": OpLowerer,
     "var": VarLowerer,
     "let": LetLowerer,

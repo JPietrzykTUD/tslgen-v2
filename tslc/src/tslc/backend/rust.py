@@ -20,11 +20,46 @@ from tslc.lower.lowerer import (
 from tslc.render.model import RenderContext
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
+_PRIMITIVE_TRAIT_PREFIX = "detail::primitives::"
+
 
 class RustBackend:
     backend_id = "rust"
 
     def render_primitive(
+        self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
+    ) -> str:
+        internal = self.render_primitive_internal(primitive_name, specializations)
+        public = self.render_primitive_public(primitive_name, specializations)
+        if not internal:
+            return public
+        return "\n\n".join([_primitive_module(internal), public])
+
+    def render_primitive_module(self, internal: str) -> str:
+        return _primitive_module(internal) if internal.strip() else ""
+
+    def render_primitive_internal(
+        self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
+    ) -> str:
+        shape = specializations[0]
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            shape.result_kind,
+            shape.param_kinds,
+        ):
+            return ""
+        # Rust has no fn overloading: a primitive with several signatures (e.g. store's
+        # `(ptr,v)`/`(ptr,s)`) dispatches on the varying argument's type via a trait
+        # implemented for that type. Single-signature primitives keep the simple trait.
+        if varying_positions(specializations):
+            return self._render_overloaded_internal(primitive_name, specializations)
+        caller_unsafe = _any_caller_unsafe(specializations)
+        trait = self._trait(primitive_name, shape, caller_unsafe=caller_unsafe)
+        impls = [
+            self._impl(spec, caller_unsafe=caller_unsafe) for spec in specializations
+        ]
+        return "\n\n".join([trait, *impls])
+
+    def render_primitive_public(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
     ) -> str:
         shape = specializations[0]
@@ -35,21 +70,14 @@ class RustBackend:
             # A non-vector primitive (`allocate`/`deallocate`): a plain `pub fn` in the module,
             # not a `SimdVector`-bound trait/impl/wrapper.
             return _free_function(shape)
-        # Rust has no fn overloading: a primitive with several signatures (e.g. store's
-        # `(ptr,v)`/`(ptr,s)`) dispatches on the varying argument's type via a trait
-        # implemented for that type. Single-signature primitives keep the simple trait.
-        if varying_positions(specializations):
-            return self._render_overloaded(primitive_name, specializations)
-        shape = specializations[0]
         caller_unsafe = _any_caller_unsafe(specializations)
-        trait = self._trait(primitive_name, shape, caller_unsafe=caller_unsafe)
-        impls = [
-            self._impl(spec, caller_unsafe=caller_unsafe) for spec in specializations
-        ]
-        wrapper = self._wrapper(primitive_name, shape, caller_unsafe=caller_unsafe)
-        return "\n\n".join([trait, *impls, wrapper])
+        if varying_positions(specializations):
+            return self._render_overloaded_wrapper(
+                primitive_name, specializations, caller_unsafe=caller_unsafe
+            )
+        return self._wrapper(primitive_name, shape, caller_unsafe=caller_unsafe)
 
-    def _render_overloaded(
+    def _render_overloaded_internal(
         self, primitive_name: str, specs: tuple[LoweredSpecialization, ...]
     ) -> str:
         shape = specs[0]
@@ -139,21 +167,40 @@ class RustBackend:
                 f"}}"
             )
 
+        return "\n\n".join([trait, *impls])
+
+    def _render_overloaded_wrapper(
+        self,
+        primitive_name: str,
+        specs: tuple[LoweredSpecialization, ...],
+        *,
+        caller_unsafe: bool,
+    ) -> str:
+        shape = specs[0]
+        vi = varying_positions(specs)[0]
+        arg_trait = f"{_PRIMITIVE_TRAIT_PREFIX}{_trait_name(primitive_name)}Arg"
+        fixed = [
+            (name, kind)
+            for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
+            if i != vi
+        ]
         axis_wrap = "".join(f"const {_axis_name(k)}: bool, " for k, _ in shape.axis)
         axis_args = "".join(f", {_axis_name(k)}" for k, _ in shape.axis)
         gp_wrap = "".join(f"const {name}: {typ}, " for name, typ, _ in shape.generic_params)
+        gp_names = [name for name, _, _ in shape.generic_params]
         gp_args = "".join(f", {name}" for name in gp_names)
         wrap_params = ", ".join(
             (f"{name}: V" if i == vi else f"{name}: {_param_kind_type(kind, 'S')}")
             for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
         )
-        fixed_names = ", ".join(n for n, _ in fixed)
-        call = f"{shape.param_names[vi]}.apply({fixed_names})"
+        fixed_names = [n for n, _ in fixed]
+        call_args = ", ".join((shape.param_names[vi], *fixed_names))
+        call = f"<V as {arg_trait}<S{axis_args}{gp_args}>>::apply({call_args})"
         call = _unsafe_call(call, caller_unsafe)
         unsafe_prefix = _unsafe_prefix(caller_unsafe)
         ret_type = _kind_type(shape.result_kind, "S")
         doc = _rust_doc(shape, context="Rust wrapper", concrete=False)
-        wrapper = (
+        return (
             (f"{doc}\n" if doc else "")
             + f"pub {unsafe_prefix}fn {primitive_name}"
             f"<S: SimdVector, {axis_wrap}{gp_wrap}"
@@ -162,7 +209,6 @@ class RustBackend:
             f"    {call}\n"
             f"}}"
         )
-        return "\n\n".join([trait, *impls, wrapper])
 
     def _trait(
         self,
@@ -268,7 +314,7 @@ class RustBackend:
         targs = _trait_args_by_name(shape)
         decl_list = _generic_decls(shape)
         ret = _kind_type(shape.result_kind, "S")
-        call = f"S::apply({names})"
+        call = ""
         vt_type: str | None = None
         # A representation-change primitive takes the target vector `T` as a generic, bounds `S`
         # on `…Impl<T, …>`, and returns (and may take, via a `vt` param) `T`'s register; the
@@ -278,26 +324,39 @@ class RustBackend:
             decl_list = ["T: SimdVector", *decl_list]
             ret = "T::RegisterType"
             vt_type = "T::RegisterType"
-            call = f"<S as {_trait_name(primitive_name)}<{', '.join(targs)}>>::apply({names})"
+            call = (
+                f"<S as {_PRIMITIVE_TRAIT_PREFIX}{_trait_name(primitive_name)}"
+                f"<{', '.join(targs)}>>::apply({names})"
+            )
         # Free SIMD type params: declare them (bounded) and pass them as trait args. The call is
         # qualified — `IndicesType::RegisterType` is non-injective, so it can't be inferred from
         # the `vidx` argument; pinning `IndicesType` in the trait path resolves `apply`.
         if shape.type_params:
             targs = [*_type_param_names(shape), *targs]
-            decl_list = _type_param_decls(shape) + decl_list
+            decl_list = _type_param_decls(
+                shape, trait_prefix=_PRIMITIVE_TRAIT_PREFIX
+            ) + decl_list
             vidx_type = f"{shape.type_params[0][0]}::RegisterType"
-            call = f"<S as {_trait_name(primitive_name)}<{', '.join(targs)}>>::apply({names})"
+            call = (
+                f"<S as {_PRIMITIVE_TRAIT_PREFIX}{_trait_name(primitive_name)}"
+                f"<{', '.join(targs)}>>::apply({names})"
+            )
         else:
             vidx_type = None
         params = _params(shape, "S", vt_type=vt_type, vidx_type=vidx_type)
         trait_args = f"<{', '.join(targs)}>" if targs else ""
         decls = "".join(f", {d}" for d in decl_list)
+        call = (
+            f"<S as {_PRIMITIVE_TRAIT_PREFIX}{_trait_name(primitive_name)}"
+            f"{trait_args}>::apply({names})"
+        )
         call = _unsafe_call(call, caller_unsafe)
         doc = _rust_doc(shape, context="Rust wrapper", concrete=False)
         return (
             (f"{doc}\n" if doc else "")
             + f"pub {_unsafe_prefix(caller_unsafe)}fn {rust_raw_identifier(primitive_name)}"
-            f"<S: {_trait_name(primitive_name)}{trait_args}{decls}>"
+            f"<S: {_PRIMITIVE_TRAIT_PREFIX}{_trait_name(primitive_name)}"
+            f"{trait_args}{decls}>"
             f"({params}) -> {ret}{_index_where(shape)} {{\n"
             f"    {call}\n"
             f"}}"
@@ -327,6 +386,22 @@ def _free_function(spec: LoweredSpecialization) -> str:
         f"    {spec.body_text}\n"
         f"}}"
     )
+
+
+def _primitive_module(internal: str) -> str:
+    return (
+        "pub mod detail {\n"
+        "    pub mod primitives {\n"
+        "        use super::super::*;\n\n"
+        f"{_indent(internal, 8)}\n"
+        "    }\n"
+        "}"
+    )
+
+
+def _indent(text: str, spaces: int) -> str:
+    prefix = " " * spaces
+    return "\n".join(prefix + line if line else line for line in text.splitlines())
 
 
 def _rust_doc(
@@ -451,7 +526,9 @@ def _trait_name(primitive_name: str) -> str:
     return f"{primitive_name[:1].upper()}{primitive_name[1:]}Impl"
 
 
-def _type_param_decls(shape: LoweredSpecialization) -> list[str]:
+def _type_param_decls(
+    shape: LoweredSpecialization, *, trait_prefix: str = ""
+) -> list[str]:
     """`NAME: SimdVector + <Bound>Impl…` for each free SIMD type param (gather's `IndicesType`).
     The bound primitives are the ones the body calls on the param (recorded by the lowerer), so
     the param satisfies them — `to_array[IndicesType]` adds `To_arrayImpl`. C++ needs no such
@@ -464,7 +541,7 @@ def _type_param_decls(shape: LoweredSpecialization) -> list[str]:
 
     decls: list[str] = []
     for name, bounds in shape.type_params:
-        traits = ["SimdVector", *(_trait_name(b) for b in bounds)]
+        traits = ["SimdVector", *(f"{trait_prefix}{_trait_name(b)}" for b in bounds)]
         decls.append(f"{name}: {' + '.join(traits)}")
     return decls
 

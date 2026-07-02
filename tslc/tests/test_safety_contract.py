@@ -228,8 +228,14 @@ def test_rust_backend_formats_caller_unsafe_contract() -> None:
 
     assert "pub trait Needs_contractImpl: SimdVector" in rendered
     assert "    unsafe fn apply(data: Self::RegisterType)" in rendered
-    assert "pub unsafe fn needs_contract<S: Needs_contractImpl>" in rendered
-    assert "unsafe { S::apply(data) }" in rendered
+    assert (
+        "pub unsafe fn needs_contract<S: detail::primitives::Needs_contractImpl>"
+        in rendered
+    )
+    assert (
+        "unsafe { <S as detail::primitives::Needs_contractImpl>::apply(data) }"
+        in rendered
+    )
 
 
 def test_source_call_to_caller_unsafe_primitive_uses_local_unsafe(

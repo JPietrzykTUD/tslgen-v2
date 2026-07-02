@@ -151,7 +151,8 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "const ALIGN: usize = 32;" in avx2
     assert "unsafe { return core::arch::x86_64::_mm256_add_epi32(left, right); }" in avx2
     assert "impl AddImpl for Simd<i32, Sse> {" in avx2
-    assert "pub fn add<S: AddImpl>(" in avx2
+    assert "pub mod detail {\n    pub mod primitives {" in avx2
+    assert "pub fn add<S: detail::primitives::AddImpl>(" in avx2
     assert '/// [Example: sse + si8]: Add packed 8-bit integers' in avx2
     assert "/// # Semantics" in avx2
     assert "/// # API" in avx2

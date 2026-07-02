@@ -35,7 +35,7 @@ inline To bit_cast(const From &src) {
 // Saturating narrowing cast (`cast<saturating>`, used by `convert_down`): clamp the value to the
 // target type's representable range, then convert. Used only where the source is wider than the
 // target (a narrowing convert), so the bounds convert exactly into `From` for the comparison.
-// Counterpart to the Rust `detail::saturating_cast_value`. `lowest()` is the most-negative finite
+// Counterpart to the Rust `detail::helpers::saturating_cast_value`. `lowest()` is the most-negative finite
 // value (int min / float -max); an unsigned target's lower bound is 0 and is never exceeded.
 template <class To, class From>
 inline To saturating_cast(From value) {
@@ -241,8 +241,8 @@ struct reg_param<simd<T, generic<LANES>>> {
 };
 
 // Scalar-core helpers used by emulated (loop) bodies. Grows one function at a time as the
-// primitives that call `detail::*` land; `arith_add` is the reductions' accumulate step.
-namespace detail {
+// primitives that call `helper<...>` land; `arith_add` is the reductions' accumulate step.
+namespace detail::helpers {
 template <class T>
 inline T arith_add(T a, T b) {
     return a + b;
@@ -319,6 +319,6 @@ inline bool mask_test(const typename Vec::mask_type& mask, std::size_t index) {
         return lanes[index] != BaseT(0);
     }
 }
-}  // namespace detail
+}  // namespace detail::helpers
 
 }  // namespace tsl

@@ -43,9 +43,17 @@ def rust_artifacts(
     for profile_render in profiles:
         by_primitive = profile_render.specializations("rust")
         registrations = _rust_registrations(by_primitive, profile_render.extensions)
-        bodies = "\n\n".join(
-            backend.render_primitive(name, by_primitive[name])
+        internal = "\n\n".join(
+            rendered
             for name in sorted(by_primitive)
+            if (rendered := backend.render_primitive_internal(name, by_primitive[name]))
+        )
+        public = "\n\n".join(
+            backend.render_primitive_public(name, by_primitive[name])
+            for name in sorted(by_primitive)
+        )
+        bodies = "\n\n".join(
+            part for part in (backend.render_primitive_module(internal), public) if part
         )
         # Arch modules are imported for intrinsic constants left verbatim in bodies.
         # Intrinsics themselves stay fully qualified by lowering.

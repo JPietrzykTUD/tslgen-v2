@@ -966,7 +966,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(detail::arith_mul(data, cast<static>(type(base::in), factor)));"
+          tsil "complete(helper<arith_mul>(data, cast<static>(type(base::in), factor)));"
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -980,7 +980,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           tsil """
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = detail::arith_mul(data[i], cast<static>(type(base::in), factor));
+              result[i] = helper<arith_mul>(data[i], cast<static>(type(base::in), factor));
             }
             complete(result);
           """
@@ -1306,7 +1306,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
         implementation:
           tsil """
             if (mask) {
-              complete(detail::arith_mul(data, cast<static>(type(base::in), factor)));
+              complete(helper<arith_mul>(data, cast<static>(type(base::in), factor)));
             }
             complete(call<primitive=set_zero[Vec]>());
           """
@@ -1366,7 +1366,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
         implementation:
           tsil """
             if (mask) {
-              complete(detail::arith_mul(data, cast<static>(type(base::in), factor)));
+              complete(helper<arith_mul>(data, cast<static>(type(base::in), factor)));
             }
             complete(data);
           """
@@ -1494,7 +1494,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
             intrin<svst1, build>(call<primitive=mask_true[Vec]>(), dividends, dividend);
             intrin<svst1, build>(call<primitive=mask_true[Vec]>(), divisors, divisor);
             loop<backend>(i, 0, lanes, 1) {
-              result_values[i] = detail::arith_rem(dividends[i], divisors[i]);
+              result_values[i] = helper<arith_rem>(dividends[i], divisors[i]);
             }
             var<const_infer>(result, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result_values));
             std::free(dividends);
@@ -1549,7 +1549,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(detail::arith_rem(dividend, divisor));"
+          tsil "complete(helper<arith_rem>(dividend, divisor));"
     generic:
       ?i?:
         requires []
@@ -1561,7 +1561,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
           tsil """
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = detail::arith_rem(dividend[i], divisor[i]);
+              result[i] = helper<arith_rem>(dividend[i], divisor[i]);
             }
             complete(result);
           """
@@ -1575,7 +1575,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
           tsil """
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = detail::arith_rem(dividend[i], divisor[i]);
+              result[i] = helper<arith_rem>(dividend[i], divisor[i]);
             }
             complete(result);
           """
@@ -1742,7 +1742,7 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(detail::arith_rem(dividend, cast<static>(type(base::in), divisor)));"
+          tsil "complete(helper<arith_rem>(dividend, cast<static>(type(base::in), divisor)));"
     generic:
       ?i?:
         requires []
@@ -1754,7 +1754,7 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
           tsil """
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = detail::arith_rem(dividend[i], cast<static>(type(base::in), divisor));
+              result[i] = helper<arith_rem>(dividend[i], cast<static>(type(base::in), divisor));
             }
             complete(result);
           """
@@ -1768,7 +1768,7 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
           tsil """
             var<init_register>(result);
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = detail::arith_rem(dividend[i], cast<static>(type(base::in), divisor));
+              result[i] = helper<arith_rem>(dividend[i], cast<static>(type(base::in), divisor));
             }
             complete(result);
           """
@@ -1803,7 +1803,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
         implementation:
           tsil """
             if (mask) {
-              complete(detail::arith_rem(dividend, cast<static>(type(base::in), divisor)));
+              complete(helper<arith_rem>(dividend, cast<static>(type(base::in), divisor)));
             }
             complete(call<primitive=set_zero[Vec]>());
           """
@@ -1861,7 +1861,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
         implementation:
           tsil """
             if (mask) {
-              complete(detail::arith_rem(dividend, cast<static>(type(base::in), divisor)));
+              complete(helper<arith_rem>(dividend, cast<static>(type(base::in), divisor)));
             }
             complete(dividend);
           """

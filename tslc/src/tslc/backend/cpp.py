@@ -63,7 +63,9 @@ class CppBackend:
         # the wrapper, not the primary template).
         decl_params += "".join(f", {typ} {name}" for name, typ, _ in shape.generic_params)
         return (
-            f"template <{decl_params}>\nstruct {primitive_name}_impl;"
+            "namespace detail::primitives {\n"
+            f"template <{decl_params}>\nstruct {primitive_name}_impl;\n"
+            "}  // namespace detail::primitives"
             + "\n\n"
             + self._wrapper(primitive_name, specializations)
         )
@@ -96,7 +98,12 @@ class CppBackend:
                 groups[key] = []
                 order.append(key)
             groups[key].append(spec)
-        return "\n\n".join(self._specialization(groups[key]) for key in order)
+        definitions = "\n\n".join(self._specialization(groups[key]) for key in order)
+        return (
+            "namespace detail::primitives {\n"
+            f"{definitions}\n"
+            "}  // namespace detail::primitives"
+        )
 
     def render_documentation_api_declaration(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
@@ -193,7 +200,8 @@ class CppBackend:
             prefix
             + f"template <{', '.join(signature.template_params)}>\n"
             f"inline {signature.result_type} {primitive_name}({signature.params}) {{\n"
-            f"    return {primitive_name}_impl<{signature.impl_args}>::apply("
+            f"    return ::tsl::detail::primitives::{primitive_name}_impl"
+            f"<{signature.impl_args}>::apply("
             f"{signature.argument_names});\n"
             f"}}"
         )

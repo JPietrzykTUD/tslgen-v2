@@ -158,6 +158,27 @@ def _validate_intrin_region(
     )
 
 
+def _validate_helper_region(
+    primitive_name: str,
+    region: Region,
+    diagnostics: list[Diagnostic],
+) -> None:
+    terms = split_selector_terms(region.selector_text)
+    if terms and _IDENTIFIER.fullmatch(terms[0].strip()) is not None:
+        return
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-BODY-BAD-HELPER-SELECTOR",
+            message=(
+                f"primitive {primitive_name!r}: malformed helper selector "
+                f"{region.selector_text!r}; expected `helper<name>(args)`"
+            ),
+            source=region.source,
+        )
+    )
+
+
 def _validate_mask_region(
     primitive_name: str,
     region: Region,
@@ -313,6 +334,7 @@ ShellValidator = Callable[[str, Region, list[Diagnostic]], None]
 _SHELL_VALIDATORS: dict[str, ShellValidator] = {
     "call_selector": _validate_call_region,
     "cast_selector": _validate_cast_region,
+    "helper_selector": _validate_helper_region,
     "let_type": _validate_let_region,
     "intrin_selector": _validate_intrin_region,
     "mask_selector": _validate_mask_region,
