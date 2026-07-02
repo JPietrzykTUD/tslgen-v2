@@ -121,6 +121,8 @@ def test_rust_registration_uses_source_tag_and_lowered_register(
     assert "pub struct X86Demo;" in rendered
     assert "impl SimdVector for Simd<i32, X86Demo>" in rendered
     assert "type RegisterType = core::arch::x86_64::__m256i;" in rendered
+    assert "const ALIGN: usize = 32;" in rendered
+    assert "const ALIGN: usize = 32;" in rendered
 
 
 def _custom_rust_extension(catalog: Catalog, name: str, type_name: str):

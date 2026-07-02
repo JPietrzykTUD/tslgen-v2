@@ -98,8 +98,17 @@ def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) 
 
 def test_rust_specialization_structure(specialization_artifacts: dict[str, str]) -> None:
     avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
+    core = specialization_artifacts["rust/src/tsl_core.rs"]
+
+    assert "const ALIGN: usize;" in core
+    assert "const ALIGN: usize = core::mem::align_of::<T>();" in core
+    assert (
+        "const ALIGN: usize = core::mem::align_of::<array_type<T, LANES>>();"
+        in core
+    )
     assert "pub trait AddImpl: SimdVector {" in avx2
     assert "impl AddImpl for Simd<i32, Avx2> {" in avx2
+    assert "const ALIGN: usize = 32;" in avx2
     assert "unsafe { return core::arch::x86_64::_mm256_add_epi32(left, right); }" in avx2
     assert "impl AddImpl for Simd<i32, Sse> {" in avx2
     assert "pub fn add<S: AddImpl>(" in avx2

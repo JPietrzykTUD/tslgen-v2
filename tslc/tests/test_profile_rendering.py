@@ -222,6 +222,7 @@ def test_sve_profile_registers_scalable_cpp_simd_types(
     assert "using register_type = svint32_t;" in cpp
     assert "using mask_type = svbool_t;" in cpp
     assert "using imask_type = svbool_t;" in cpp
+    assert "static constexpr std::size_t vector_alignment = 4;" in cpp
     assert "return svadd_s32_x(::tsl::mask_true<Vec>(), left, right);" in cpp
     assert 'add_library(tsl::sve ALIAS tsl_profile_sve)' in cmake
     assert "target_compile_definitions(tsl_profile_sve INTERFACE TSL_PROFILE_SVE)" in cmake
