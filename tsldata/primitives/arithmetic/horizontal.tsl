@@ -137,7 +137,7 @@ prim<s:=v> hadd(vec):
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
             loop<backend>(i, 0, value(vector::length), 1) {
-              result = details::arith_add(result, values[i]);
+              result = detail::arith_add(result, values[i]);
             }
             complete(result);
           """
@@ -201,7 +201,7 @@ prim<s:=v> hadd(vec):
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
             loop<backend>(i, 0, value(vector::length), 1) {
-              result = details::arith_add(result, values[i]);
+              result = detail::arith_add(result, values[i]);
             }
             complete(result);
           """
@@ -224,7 +224,7 @@ prim<s:=v> hadd(vec):
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
             loop<backend>(i, 0, value(vector::length), 1) {
-              result = details::arith_add(result, values[i]);
+              result = detail::arith_add(result, values[i]);
             }
             complete(result);
           """
@@ -683,7 +683,7 @@ prim<s:=(m,v)> hadd(mask, vec):
             var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
             loop<backend>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, i)) {
-                result = details::arith_add(result, values[i]);
+                result = detail::arith_add(result, values[i]);
               }
             }
             complete(result);

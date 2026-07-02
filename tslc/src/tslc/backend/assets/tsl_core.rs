@@ -26,7 +26,7 @@ pub trait SimdVector {
     // Test lane `index` of a register-backed lane mask (sse/avx2): the mask IS a data register
     // whose lanes are all-ones (set) or all-zeros (clear), so lane `index` is a BaseType-sized
     // byte chunk and nonzero means set. Counterpart to the register branch of C++
-    // `tsl::details::mask_test`. `mask<test>` calls this only for register reprs; the integer
+    // `tsl::detail::mask_test`. `mask<test>` calls this only for register reprs; the integer
     // bitset repr (generic `u64`, native `__mmaskN`) uses the inline shift template, so the
     // default body is never reached for those.
     fn mask_lane_test(mask: Self::MaskType, index: usize) -> bool {
@@ -137,9 +137,9 @@ impl<T: Copy + Default, const N: usize> Default for ArrayStorage<T, N> {
     }
 }
 
-// Scalar-core helpers used by emulated (loop) bodies, counterpart to C++ `tsl::details`.
+// Scalar-core helpers used by emulated (loop) bodies, counterpart to C++ `tsl::detail`.
 // In scope via `use crate::tsl_core::*`. Grows one function at a time with the primitives
-// that call `details::*`; `arith_add` is the reductions' accumulate step.
+// that call `detail::*`; `arith_add` is the reductions' accumulate step.
 // Pointer-offset helpers used by the generic vector's element-wise load/store loops. Our
 // pointer kind is `*mut`, so both take it; callers deref inside an `unsafe`-framed body.
 // Type-punning bit reinterpret (`cast<bitcast>` / value `cast<reinterpret>`): reinterpret
@@ -223,7 +223,7 @@ impl_tsl_mask_lane_value_float!(f32, u32);
 impl_tsl_mask_lane_value_float!(f64, u64);
 
 // Population count of an integer mask: the number of set bits, as an unsigned count (not the
-// input type). Counterpart to C++ `tsl::details::popcount`; `count_ones` is already `u32`.
+// input type). Counterpart to C++ `tsl::detail::popcount`; `count_ones` is already `u32`.
 pub trait TslPopCount: Copy {
     fn popcount(self) -> u32;
 }
@@ -247,7 +247,7 @@ impl_tsl_popcount!(u32);
 impl_tsl_popcount!(u64);
 
 // Trailing-zero count of an integer mask (used by `tzc`). Counterpart to C++
-// `tsl::details::ctz`; Rust's `trailing_zeros` already returns the bit-width for a zero input.
+// `tsl::detail::ctz`; Rust's `trailing_zeros` already returns the bit-width for a zero input.
 pub trait TslCtz: Copy {
     fn ctz(self) -> u32;
 }
@@ -271,7 +271,7 @@ impl_tsl_ctz!(u32);
 impl_tsl_ctz!(u64);
 
 // Leading-zero count of an integer (used by `lzc`/`lzc_imask`). Counterpart to C++
-// `tsl::details::clz`; Rust's `leading_zeros` is already width-aware (a `u8` counts in 8 bits)
+// `tsl::detail::clz`; Rust's `leading_zeros` is already width-aware (a `u8` counts in 8 bits)
 // and returns the bit-width for a zero input.
 pub trait TslClz: Copy {
     fn clz(self) -> u32;
@@ -438,7 +438,7 @@ pub fn ostream_write<T: TslBits, const N: usize>(
     out.push('\n');
 }
 
-pub mod details {
+pub mod detail {
     pub fn arith_add<T: core::ops::Add<Output = T>>(a: T, b: T) -> T {
         a + b
     }
@@ -446,7 +446,7 @@ pub mod details {
         a * b
     }
     // Remainder for emulated `mod` loops. Rust `%` is integer remainder / float fmod, so one
-    // bound covers both; counterpart to C++ `tsl::details::arith_rem`.
+    // bound covers both; counterpart to C++ `tsl::detail::arith_rem`.
     pub fn arith_rem<T: core::ops::Rem<Output = T>>(a: T, b: T) -> T {
         a % b
     }

@@ -76,7 +76,7 @@ translation cpp:
   mask_set_to_lane_bitmask "{name} = ({name} & ~(1ull << {index})) | ((static_cast<std::uint64_t>({value}) & 1ull) << {index})"
   mask_test_lane_bitmask "((({mask} >> {index}) & 1ull) != 0)"
   mask_test_imask "(((static_cast<std::uint64_t>({mask}) >> {index}) & 1ull) != 0)"
-  mask_test_lane_register "::tsl::details::mask_test<Vec>({mask}, {index})"
+  mask_test_lane_register "::tsl::detail::mask_test<Vec>({mask}, {index})"
   mask_zero_native_predicate_by_lanes "0"
   mask_all_native_predicate_by_lanes "static_cast<typename Vec::mask_type>(~0ull)"
   mask_set_native_predicate_by_lanes "{name} |= (1ull << {index})"

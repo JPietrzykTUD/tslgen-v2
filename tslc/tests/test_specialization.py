@@ -40,6 +40,7 @@ def test_artifact_layout(specialization_result) -> None:
     # static cores, per-profile headers, top-level dispatch, per-profile smokes.
     assert {
         "cpp/include/tsl_core.hpp",
+        "cpp/include/tsl_inferred_simd.hpp",
         "cpp/include/tsl_x86_traits.hpp",
         "cpp/include/tsl.hpp",
         "cpp/include/tsl_avx2.hpp",
@@ -68,6 +69,18 @@ def test_cpp_core_vectors_expose_metadata_constants(
         "static constexpr std::size_t vector_alignment = alignof(register_type);"
         in core
     )
+
+
+def test_cpp_inferred_simd_helper_is_static_declaration_only(
+    specialization_artifacts: dict[str, str]
+) -> None:
+    helper = specialization_artifacts["cpp/include/tsl_inferred_simd.hpp"]
+
+    assert "template <class T, std::size_t ParallelN>" in helper
+    assert "struct inferred_simd;" in helper
+    assert "using inferred_simd_t = typename detail::inferred_simd" in helper
+    assert "tsl::avx2" not in helper
+    assert "tsl::sse" not in helper
 
 
 def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) -> None:
@@ -100,6 +113,23 @@ def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) 
     # hadd is scalar-returning (s:=v) and picks the f64 body.
     assert "inline typename Vec::base_type hadd(" in avx2
     assert "struct hadd_impl<tsl::simd<double, tsl::avx2>>" in avx2
+
+
+def test_cpp_profile_specializes_inferred_simd_from_registered_vectors(
+    specialization_artifacts: dict[str, str]
+) -> None:
+    avx2 = specialization_artifacts["cpp/include/tsl_avx2.hpp"]
+
+    assert "struct inferred_simd<int32_t, 1>" in avx2
+    assert "using type = ::tsl::simd<int32_t, ::tsl::scalar>;" in avx2
+    assert "struct inferred_simd<int32_t, 4>" in avx2
+    assert "using type = ::tsl::simd<int32_t, ::tsl::sse>;" in avx2
+    assert "struct inferred_simd<int32_t, 8>" in avx2
+    assert "using type = ::tsl::simd<int32_t, ::tsl::avx2>;" in avx2
+    assert "struct inferred_simd<float, 4>" in avx2
+    assert "using type = ::tsl::simd<float, ::tsl::sse>;" in avx2
+    assert "struct inferred_simd<float, 8>" in avx2
+    assert "using type = ::tsl::simd<float, ::tsl::avx2>;" in avx2
 
 
 def test_rust_specialization_structure(specialization_artifacts: dict[str, str]) -> None:

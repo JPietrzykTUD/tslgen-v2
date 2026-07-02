@@ -355,7 +355,7 @@ def test_elementwise_bitwise_builds(
     # The core elementwise arithmetic + bitwise families. `add` was already build-verified;
     # this is the first compile of `sub`/`mul`/`div`/`binary_{and,andnot,or,xor}` in either
     # backend (they lowered but had never been built). Their integer/float intrinsic paths
-    # plus the byte/word scalar-loop fallback (details::arith_mul) compile on scalar + SIMD;
+    # plus the byte/word scalar-loop fallback (detail::arith_mul) compile on scalar + SIMD;
     # cluster-gated variants (float bitwise via reinterpret, si64 mul via delegation) stay
     # skipped and are simply absent from the emitted set.
     result = generate_project(
@@ -384,7 +384,7 @@ def test_elementwise_bitwise_builds(
 
 def test_reductions_build(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
     # Horizontal reductions: `hadd` (loop fallback via to_array + loop<backend> +
-    # details::arith_add) and `hmax`/`hmin` (intrinsic reduce_*/extracti128 bodies plus the
+    # detail::arith_add) and `hmax`/`hmin` (intrinsic reduce_*/extracti128 bodies plus the
     # generic var<infer> + runtime-`if` loop for byte/word). Exercises native loop and
     # runtime-conditional translation end-to-end in C++ and Rust across scalar + SIMD; the
     # closure pulls in `to_array`/`load`/`store`.
@@ -567,7 +567,7 @@ def test_to_integral_builds(data_root: Path, machine_profiles_path: Path, tmp_pa
     # and the avx512/_vl `complete(mask)` identity (imask = the native `__mmaskN`).
     # The `cast<static>(vector::imask, …)` resolves via the new `vector::imask` query.
     # Generic/neon/sve to_integral still skip (their bit-loop uses `type::size_bytes` /
-    # `details::mask_test`, unimplemented), so they don't appear in the build.
+    # `detail::mask_test`, unimplemented), so they don't appear in the build.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
@@ -1086,7 +1086,7 @@ def test_mask_population_count_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
     # `mask_population_count` (`usize:=m`) counts a mask's set lanes: `to_integral` then
-    # `details::popcount` (C++ `__builtin_popcountll` / Rust `count_ones`, returning a u32
+    # `detail::popcount` (C++ `__builtin_popcountll` / Rust `count_ones`, returning a u32
     # count), cast to the `usize` result (`std::size_t`/`usize` — a count, not a mask). The
     # generic path is a `size_t` count loop over `mask<test>`. Exercises the new `usize`
     # signature kind + the popcount substrate. Both backends.
@@ -1133,7 +1133,7 @@ def test_simple_memory_build(
     # `load_scalar` (`s:=cptr`, a scalar dereference / masked-zero variant). Builds in both
     # backends across scalar + SIMD. (Deferred siblings: `memory_cp`'s `mem<copy>` directive
     # and `void`-pointer types aren't lowered for Rust yet; `compress_store`'s generic
-    # fallback needs `details::mask_test` — see test_masked_memory_build, skipped.)
+    # fallback needs `detail::mask_test` — see test_masked_memory_build, skipped.)
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
@@ -1175,7 +1175,7 @@ def test_blend_add_sequence_build(
 ) -> None:
     # `blend_add` (`v:=(m,v,v,v)`, the composite `mov[mask=pass_through](mask, add(left,
     # right))`-shaped masked add) and `custom_sequence` (`v:=(s,s)`, an iota from a start
-    # + stepwidth built over to_array/from_array + scalar `details::arith_add`). The
+    # + stepwidth built over to_array/from_array + scalar `detail::arith_add`). The
     # closure pulls `mov`/`add` and the array layer. Builds in C++ and Rust across scalar
     # + SIMD.
     result = generate_project(
@@ -1222,7 +1222,7 @@ def test_bit_reductions_build(
     # `hand`/`hor` (`s:=v` horizontal AND/OR: native reduce + the extract/shuffle x86 path,
     # plus the `to_array` + `var<typed>` accumulator loop) and `popcnt` (`v:=v`, per-lane
     # population count on the AVX512 VPOPCNTDQ/BITALG native path — hence icelake-rockerlake —
-    # plus the sse/avx2 intrinsic slots), and `tzc` (`s:=m`, `details::ctz` of the integral
+    # plus the sse/avx2 intrinsic slots), and `tzc` (`s:=m`, `detail::ctz` of the integral
     # mask, cast to the result scalar). Both backends; the generic fallbacks use width-aware
     # helper functions and no longer depend on a `vector::offset_base` query.
     result = generate_project(
@@ -1245,8 +1245,8 @@ def test_leading_zeros_build(
 ) -> None:
     # Leading-zero counts: `lzc` (`v:=v`, the avx512cd `_mm*_lzcnt_epi32/64` native plus the
     # per-lane loop fallback that delegates to `lzc_scalar` over the scalar vector) and
-    # `lzc_imask` (`s:=m`, `details::clz` of the integral mask, cast to the result scalar). The
-    # closure pulls `lzc_scalar` (`s:=s`), whose integer body is `details::clz(data)` — the
+    # `lzc_imask` (`s:=m`, `detail::clz` of the integral mask, cast to the result scalar). The
+    # closure pulls `lzc_scalar` (`s:=s`), whose integer body is `detail::clz(data)` — the
     # `clz` helper is width-aware via `sizeof(T)` / Rust `leading_zeros`, so no offset arg is
     # needed. The float `lzc_scalar` bit-reinterpret path uses `mem<copy>` into an unsigned
     # carrier and the same width-aware helper. Both backends, scalar + sse2 + avx2 + skylake.
@@ -1274,7 +1274,7 @@ def test_masked_memory_build(
     # generic/sse/avx2 per-lane fallbacks whose loop tests the mask with `mask<test>`. That
     # region now lowers per physical mask repr: the generic vector's integer bitset uses the
     # inline `(m>>i)&1` shift, while sse/avx2 register lane-masks route to the universal
-    # `tsl::details::mask_test<Vec>` / `Self::mask_lane_test` lane-extraction helper. sse2/avx2
+    # `tsl::detail::mask_test<Vec>` / `Self::mask_lane_test` lane-extraction helper. sse2/avx2
     # exercise the register-mask loop fallback (the path the helper fixes); skylake exercises
     # the AVX-512 native paths plus the generic fallback for the vbmi2-gated i8/i16 `compress`
     # (Skylake-X lacks VBMI2, so those `compress` bodies skip and fall back to the loop).
