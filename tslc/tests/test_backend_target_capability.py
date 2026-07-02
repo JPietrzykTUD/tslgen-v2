@@ -12,7 +12,7 @@ from tslc.backend.target_capability import (
 from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.lower.lowerer import LoweredSpecialization
-from tslc.render.cpp_project import _cpp_registration
+from tslc.render.cpp_project import _cpp_native_registration, _cpp_registration
 from tslc.render.model import LoweredBody
 from tslc.render.rust_project import _rust_registrations
 
@@ -29,7 +29,31 @@ def test_x86_register_capabilities_derive_from_extension_facts(
     assert x86_register_bits(avx2) == 256
     assert cpp_x86_register_helper(avx2) == "reg256"
     assert cpp_x86_register_helper(custom) == "reg256"
-    assert "struct x86_demo" in _cpp_registration("x86_demo", custom)
+    rendered = _cpp_registration("x86_demo", custom)
+    assert "struct x86_demo" in rendered
+    assert "static constexpr std::size_t vector_alignment = 32;" in rendered
+
+
+def test_cpp_native_registration_exposes_vector_alignment(catalog: Catalog) -> None:
+    spec = LoweredSpecialization(
+        backend_id="cpp",
+        primitive_name="add",
+        source_primitive_name="add",
+        extension_name="neon",
+        type_tag="si32",
+        base_type_spelling="int32_t",
+        register_spelling="int32x4_t",
+        result_kind="v",
+        param_names=("left", "right"),
+        param_kinds=("v", "v"),
+        body=LoweredBody.from_text("return left;", backend_id="cpp"),
+        vector_spelling="tsl::simd<int32_t, tsl::neon>",
+    )
+
+    rendered = _cpp_native_registration({"add": (spec,)}, catalog.extensions)
+
+    assert "struct simd<int32_t, neon>" in rendered
+    assert "static constexpr std::size_t vector_alignment = 16;" in rendered
 
 
 def test_rust_target_presentation_capabilities_derive_from_metadata(

@@ -93,6 +93,7 @@ struct simd<T, scalar> {
     using mask_type = bool;
     // Integral mask: a fixed unsigned scalar (to_integral packs the 0/1 mask into it).
     using imask_type = std::uint64_t;
+    static constexpr std::size_t vector_alignment = alignof(T);
 };
 
 // How a register value is passed to apply(): by value.
@@ -229,6 +230,7 @@ struct simd<T, generic<LANES>> {
     // Integral mask: the same 64-bit bitset (LANES is a template param, so the lane count
     // can't size a smaller integer at this point).
     using imask_type = std::uint64_t;
+    static constexpr std::size_t vector_alignment = alignof(register_type);
 };
 
 template <class T, std::size_t LANES>

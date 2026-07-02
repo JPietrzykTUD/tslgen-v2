@@ -56,6 +56,18 @@ def test_artifact_layout(specialization_result) -> None:
     assert "docs/specializations/styles.css" not in paths
 
 
+def test_cpp_core_vectors_expose_alignment_constant(
+    specialization_artifacts: dict[str, str]
+) -> None:
+    core = specialization_artifacts["cpp/include/tsl_core.hpp"]
+
+    assert "static constexpr std::size_t vector_alignment = alignof(T);" in core
+    assert (
+        "static constexpr std::size_t vector_alignment = alignof(register_type);"
+        in core
+    )
+
+
 def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) -> None:
     avx2 = specialization_artifacts["cpp/include/tsl_avx2.hpp"]
     # primary template, the avx2 si32 specialization, an sse specialization in the

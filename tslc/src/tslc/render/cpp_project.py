@@ -163,6 +163,7 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
     else:
         mask = "register_type"
     imask = _cpp_imask_type(extension, bits, mask)
+    alignment = max(1, bits // 8)
     return (
         f"struct {ext} {{}};\n"
         f"template <class T>\n"
@@ -171,6 +172,7 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
         f"    using register_type = typename detail::{helper}<T>::type;\n"
         f"    using mask_type = {mask};\n"
         f"    using imask_type = {imask};\n"
+        f"    static constexpr std::size_t vector_alignment = {alignment};\n"
         f"}};\n\n"
     )
 
@@ -201,6 +203,7 @@ def _cpp_native_registration(
         bits = extension.vector_bits
         mask = _cpp_mask_type(extension, bits, register, base_type=base)
         imask = _cpp_imask_type(extension, bits, mask, base_type=base)
+        alignment = DEFAULT_SUPPORT_POLICY.vector_alignment_bytes(extension, type_tag)
         lines.append(
             f"template <>\n"
             f"struct simd<{base}, {ext}> {{\n"
@@ -208,6 +211,7 @@ def _cpp_native_registration(
             f"    using register_type = {register};\n"
             f"    using mask_type = {mask};\n"
             f"    using imask_type = {imask};\n"
+            f"    static constexpr std::size_t vector_alignment = {alignment};\n"
             f"}};\n\n"
         )
     return "".join(lines)

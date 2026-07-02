@@ -118,7 +118,7 @@ translation cpp:
   complete "return {value}"
   value_vector_length "Vec::vector_element_count()"
   value_vector_runtime_length "Vec::vector_element_count_runtime()"
-  value_vector_alignment "Vec::vector_alignment()"
+  value_vector_alignment "Vec::vector_alignment"
   value_vector_size_B "Vec::vector_size_B()"
   value_vector_mask_vector_loadable "Vec::mask_vector_loadable"
   value_size_of "sizeof({type})"
