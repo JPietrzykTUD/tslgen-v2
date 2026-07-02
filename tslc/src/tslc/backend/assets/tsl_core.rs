@@ -176,7 +176,7 @@ macro_rules! float_lane_arith {
 }
 float_lane_arith!(f32, f64);
 
-// Mask lane values (`mask::lane::all_true` / `all_false`): the all-bits-set / all-bits-clear
+// Mask lane values (`mask<lane_true>()` / `mask<lane_false>()`): the all-bits-set / all-bits-clear
 // value of a lane, broadcast by `set1` to build an all-true / all-false lane-bitmask mask.
 // Counterpart to C++ `tsl::mask_lane_all_true`; int is `!0`, float the all-ones-bit NaN.
 pub trait TslMaskLaneValue: Copy + Default + 'static {

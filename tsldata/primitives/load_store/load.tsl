@@ -56,7 +56,7 @@ prim<v:=cptr>[aligned=*] load(ptr):
         implementation:
           tsil """
               var<init_register>(reg);
-              loop<backend, unroll>(idx, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(idx, 0, value(vector::length), 1)  {
                 reg[idx] = *ptr_add(ptr, idx);
               }
               complete(reg);
@@ -73,19 +73,19 @@ prim<v:=cptr>[aligned=*] load(ptr):
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-            if<generation>(value<generation>(primitive::attribute(aligned))) {
+            if<generation>(value(primitive::attribute(aligned))) {
               complete(
                 intrin<load, build[suffix=intrin::suffix("stream")]>(
                   cast<reinterpret, type=const_ptr>(
-                    type<generation>(vector::register),
-                    assume_aligned<value<generation>(vector::alignment)>(ptr)
+                    type(vector::register),
+                    assume_aligned<value(vector::alignment)>(ptr)
                   )
                 )
               );
             } else<generation> {
               complete(
                 intrin<loadu, build[suffix=intrin::suffix("stream")]>(
-                  cast<reinterpret, type=const_ptr>(type<generation>(vector::register), ptr)
+                  cast<reinterpret, type=const_ptr>(type(vector::register), ptr)
                 )
               );
             }
@@ -101,10 +101,10 @@ prim<v:=cptr>[aligned=*] load(ptr):
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-            if<generation>(value<generation>(primitive::attribute(aligned))) {
+            if<generation>(value(primitive::attribute(aligned))) {
               complete(
                 intrin<load, build>(
-                  assume_aligned<value<generation>(vector::alignment)>(ptr)
+                  assume_aligned<value(vector::alignment)>(ptr)
                 )
               );
             } else<generation> {
@@ -124,10 +124,10 @@ prim<v:=cptr>[aligned=*] load(ptr):
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-              if<generation>(value<generation>(primitive::attribute(aligned))) {
+              if<generation>(value(primitive::attribute(aligned))) {
                 complete(
                   intrin<vld1q, build>(
-                    assume_aligned<value<generation>(vector::alignment)>(ptr)
+                    assume_aligned<value(vector::alignment)>(ptr)
                   )
                 );
               } else<generation> {
@@ -147,11 +147,11 @@ prim<v:=cptr>[aligned=*] load(ptr):
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-              if<generation>(value<generation>(primitive::attribute(aligned))) {
+              if<generation>(value(primitive::attribute(aligned))) {
                 complete(
                   intrin<svld1, build>(
                     call<primitive=mask_true[Vec]>(),
-                    assume_aligned<value<generation>(vector::alignment)>(ptr)
+                    assume_aligned<value(vector::alignment)>(ptr)
                   )
                 );
               } else<generation> {
@@ -217,11 +217,11 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
+            loop<backend, unroll>(i, 0, value(vector::length), 1)  {
               if (mask<test>(mask, i)) {
                 result[i] = *ptr_add(ptr, i);
               } else {
-                result[i] = cast<static>(type<generation>(base::in), 0);
+                result[i] = cast<static>(type(base::in), 0);
               }
             }
             complete(result);
@@ -244,7 +244,7 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(SignedBase, type(base::signed_of(type(base::in))));
             complete(
               intrin<maskz_loadu, build[suffix=base::signed_of(base::in)]>(
                 mask, cast<reinterpret, type=const_ptr>(SignedBase, ptr)
@@ -262,10 +262,10 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-            if<generation>(value<generation>(primitive::attribute(aligned))) {
+            if<generation>(value(primitive::attribute(aligned))) {
               complete(
                 intrin<maskz_load, build>(
-                  mask, assume_aligned<value<generation>(vector::alignment)>(ptr)
+                  mask, assume_aligned<value(vector::alignment)>(ptr)
                 )
               );
             } else<generation> {
@@ -291,7 +291,7 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
             complete(
               call<primitive=mov, attrs[mask=zero]>(
                 mask,
-                call<primitive=load, attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                call<primitive=load, attrs[aligned=value(primitive::attribute(aligned))]>(
                   ptr
                 )
               )
@@ -306,11 +306,11 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-            if<generation>(value<generation>(primitive::attribute(aligned))) {
+            if<generation>(value(primitive::attribute(aligned))) {
               complete(
                 intrin<svld1, build>(
                   mask,
-                  assume_aligned<value<generation>(vector::alignment)>(ptr)
+                  assume_aligned<value(vector::alignment)>(ptr)
                 )
               );
             } else<generation> {
@@ -379,7 +379,7 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
+            loop<backend, unroll>(i, 0, value(vector::length), 1)  {
               if (mask<test>(mask, i)) {
                 result[i] = *ptr_add(ptr, i);
               } else {
@@ -406,7 +406,7 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-            let<type>(SignedBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(SignedBase, type(base::signed_of(type(base::in))));
             complete(
               intrin<mask_loadu, build[suffix=base::signed_of(base::in)]>(
                 data,
@@ -426,12 +426,12 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-            if<generation>(value<generation>(primitive::attribute(aligned))) {
+            if<generation>(value(primitive::attribute(aligned))) {
               complete(
                 intrin<mask_load, build>(
                   data,
                   mask,
-                  assume_aligned<value<generation>(vector::alignment)>(ptr)
+                  assume_aligned<value(vector::alignment)>(ptr)
                 )
               );
             } else<generation> {
@@ -460,7 +460,7 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
               call<primitive=blend, attrs[mask=pass_through]>(
                 mask,
                 data,
-                call<primitive=load, attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                call<primitive=load, attrs[aligned=value(primitive::attribute(aligned))]>(
                   ptr
                 )
               )
@@ -479,7 +479,7 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
               call<primitive=blend, attrs[mask=pass_through]>(
                 mask,
                 data,
-                call<primitive=load, attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                call<primitive=load, attrs[aligned=value(primitive::attribute(aligned))]>(
                   ptr
                 )
               )
@@ -489,8 +489,8 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
 prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
   param_types:
     ptr:
-      "if packed=true" "type<generation>(vector::imask) const*"
-      "if packed=false" "type<generation>(base::unsigned_of(type<generation>(base::in))) const*"
+      "if packed=true" "type(vector::imask) const*"
+      "if packed=false" "type(base::unsigned_of(type(base::in))) const*"
   brief_description "Loads data from memory to a mask."
   detailed_description """
     Loads a mask value from memory. With `packed=true`, memory contains the
@@ -520,13 +520,13 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
           reasons [raw_pointer]
         implementation:
           tsil """
-            if<generation>(value<generation>(primitive::attribute(packed))) {
-              complete(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
+            if<generation>(value(primitive::attribute(packed))) {
+              complete(call<primitive=to_mask[Vec]>(cast<static>(type(vector::imask), *ptr)));
             } else<generation> {
-              let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(MaskWord, type(base::unsigned_of(type(base::in))));
               complete(
                 call<primitive=to_mask[Vec]>(
-                  cast<static>(type<generation>(vector::imask), *(cast<reinterpret, type=const_ptr>(MaskWord, ptr)))
+                  cast<static>(type(vector::imask), *(cast<reinterpret, type=const_ptr>(MaskWord, ptr)))
                 )
               );
             }
@@ -542,16 +542,16 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
           reasons [raw_pointer]
         implementation:
           tsil """
-            if<generation>(value<generation>(primitive::attribute(packed))) {
-              complete(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
+            if<generation>(value(primitive::attribute(packed))) {
+              complete(call<primitive=to_mask[Vec]>(cast<static>(type(vector::imask), *ptr)));
             } else<generation> {
-              let<type>(MaskT, type<generation>(vector::mask));
-              let<type>(MaskWord, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(MaskT, type(vector::mask));
+              let<type>(MaskWord, type(base::unsigned_of(type(base::in))));
               var<const_infer>(words, cast<reinterpret, type=const_ptr>(MaskWord, ptr));
               var<typed>(MaskT, result, mask<zero>());
-              loop<backend>(i, 0, value<generation>(vector::length), 1) {
+              loop<backend>(i, 0, value(vector::length), 1) {
                 if ((*ptr_add(words, i)) != cast<static>(MaskWord, 0)) {
-                  mask<set:1>(result, i);
+                  mask<set>(result, i);
                 }
               }
               complete(result);
@@ -569,14 +569,14 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
           reasons [raw_pointer]
         implementation:
           tsil """
-            if<generation>(value<generation>(primitive::attribute(packed))) {
-              complete(*(cast<reinterpret, type=const_ptr>(type<generation>(vector::imask), ptr)));
+            if<generation>(value(primitive::attribute(packed))) {
+              complete(*(cast<reinterpret, type=const_ptr>(type(vector::imask), ptr)));
             } else<generation> {
-              let<type>(MaskBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
-              let<type>(MaskVec, type<generation>(vector::as_base(MaskBase)));
+              let<type>(MaskBase, type(base::unsigned_of(type(base::in))));
+              let<type>(MaskVec, type(vector::as_base(MaskBase)));
               complete(
                 call<primitive=nequal[MaskVec]>(
-                  call<primitive=load[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                  call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
                     cast<reinterpret, type=const_ptr>(MaskBase, ptr)
                   ),
                   call<primitive=set_zero[MaskVec]>()
@@ -598,15 +598,15 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
           reasons [raw_pointer]
         implementation:
           tsil """
-            if<generation>(value<generation>(primitive::attribute(packed))) {
-              complete(call<primitive=to_mask[Vec]>(cast<static>(type<generation>(vector::imask), *ptr)));
+            if<generation>(value(primitive::attribute(packed))) {
+              complete(call<primitive=to_mask[Vec]>(cast<static>(type(vector::imask), *ptr)));
             } else<generation> {
-              let<type>(MaskBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
-              let<type>(MaskVec, type<generation>(vector::as_base(MaskBase)));
+              let<type>(MaskBase, type(base::unsigned_of(type(base::in))));
+              let<type>(MaskVec, type(vector::as_base(MaskBase)));
               var<const_infer>(
                 loaded_mask,
                 call<primitive=nequal[MaskVec]>(
-                  call<primitive=load[MaskVec], attrs[aligned=value<generation>(primitive::attribute(aligned))]>(
+                  call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
                     cast<reinterpret, type=const_ptr>(MaskBase, ptr)
                   ),
                   call<primitive=set_zero[MaskVec]>()
@@ -626,34 +626,34 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-            if<generation>(value<generation>(primitive::attribute(packed))) {
-              let<type>(MaskT, type<generation>(vector::mask));
-              let<type>(UVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+            if<generation>(value(primitive::attribute(packed))) {
+              let<type>(MaskT, type(vector::mask));
+              let<type>(UVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
               var<typed>(MaskT, out, intrin<svpfalse_b>());
               var<const_infer>(all, call<primitive=mask_true[Vec]>());
               var<const_infer>(idx, call<primitive=sequence[UVec]>());
               var<const_infer>(
                 lanes,
-                (intrin<svcntb>() / sizeof(type<generation>(base::unsigned_of(type<generation>(base::in)))))
+                (intrin<svcntb>() / sizeof(type(base::unsigned_of(type(base::in)))))
               );
-              var<const_infer>(bytes, cast<reinterpret, type=const_ptr>(type<backend>(scalar::ui8), ptr));
+              var<const_infer>(bytes, cast<reinterpret, type=const_ptr>(type(scalar::ui8), ptr));
 
               loop<backend>(lane, 0, lanes, 1) {
                 var<const_infer>(set, (((*ptr_add(bytes, lane >> 3)) >> (lane & 7)) & 1));
                 if (set) {
                   var<const_infer>(one, intrin<svcmpeq_n, build[suffix=base::unsigned_of(base::in)]>(
-                    all, idx, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), lane)
+                    all, idx, cast<static>(type(base::unsigned_of(type(base::in))), lane)
                   ));
                   out = intrin<svorr_b_z>(all, out, one);
                 }
               }
               complete(out);
             } else<generation> {
-              let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
-              let<type>(UVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+              let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
+              let<type>(UVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
               var<infer>(vec, call<primitive=set_zero[UVec]>());
-              if<generation>(value<generation>(primitive::attribute(aligned))) {
+              if<generation>(value(primitive::attribute(aligned))) {
                 vec = call<primitive=load[UVec], attrs[aligned=true]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
               } else<generation> {
                 vec = call<primitive=load[UVec], attrs[aligned=false]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));

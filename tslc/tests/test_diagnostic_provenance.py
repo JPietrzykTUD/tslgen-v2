@@ -140,7 +140,7 @@ def test_lowerer_handler_diagnostic_has_region_source_location() -> None:
         "    scalar:\n"
         "      si32:\n"
         "        implementation:\n"
-        '          tsil "complete(value<generation>(vector::unknown));"\n'
+        '          tsil "complete(value(vector::unknown));"\n'
     )
     assert result.catalog is not None
     selection = Selector().select_profile(

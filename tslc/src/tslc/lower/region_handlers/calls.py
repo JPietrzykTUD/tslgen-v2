@@ -136,7 +136,7 @@ class CallLowerer:
 
     def _resolve_attr_value(self, value: str, context: LoweringSession) -> str:
         """An `attrs[key=value]` value. A literal (`false`) passes through; a generation query
-        — `value<generation>(primitive::attribute(aligned))`, used by masked `load`/`store` to
+        — `value(primitive::attribute(aligned))`, used by masked `load`/`store` to
         forward the caller's `aligned` to the delegated unmasked op — is evaluated to its literal
         so it doesn't leak unlowered into the emitted call."""
 

@@ -26,7 +26,7 @@ DEFAULT_TSIL_REGION_DESCRIPTORS: tuple[TsilRegionDescriptor, ...] = (
     TsilRegionDescriptor("op"),
     TsilRegionDescriptor("var"),
     TsilRegionDescriptor("let", shell_validator="let_type"),
-    TsilRegionDescriptor("mask"),
+    TsilRegionDescriptor("mask", shell_validator="mask_selector"),
     TsilRegionDescriptor("mem"),
     TsilRegionDescriptor("lanes"),
     TsilRegionDescriptor("io"),
@@ -36,8 +36,8 @@ DEFAULT_TSIL_REGION_DESCRIPTORS: tuple[TsilRegionDescriptor, ...] = (
     TsilRegionDescriptor("assume_aligned"),
     TsilRegionDescriptor("loop", body_shape="loop_block"),
     TsilRegionDescriptor("switch", body_shape="switch_block"),
-    TsilRegionDescriptor("type"),
-    TsilRegionDescriptor("value"),
+    TsilRegionDescriptor("type", shell_validator="no_selector"),
+    TsilRegionDescriptor("value", shell_validator="no_selector"),
     TsilRegionDescriptor("complete"),
 )
 

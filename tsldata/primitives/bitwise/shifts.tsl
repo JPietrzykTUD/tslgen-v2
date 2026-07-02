@@ -52,9 +52,9 @@ prim<v:=(v,sImm)> shift_left(data, shift):
           # UB in C++ (and the vector path already does this), so the scalar path must too. Covers
           # signed, unsigned, and (bit-pattern) float alike.
           tsil """
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
-              var<const_infer>(ures, ua << cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift));
-              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(data));
+              var<const_infer>(ures, ua << cast<static>(type(base::unsigned_of(type(base::in))), shift));
+              complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
@@ -68,8 +68,8 @@ prim<v:=(v,sImm)> shift_left(data, shift):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
-                result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), shift]>(data[i]);
+              loop<backend, unroll>(i, 0, value(vector::length), 1)  {
+                result[i] = call<primitive=@self[type(vector::as_extension(scalar)), shift]>(data[i]);
               }
               complete(result);
             """
@@ -93,7 +93,7 @@ prim<v:=(v,sImm)> shift_left(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -120,7 +120,7 @@ prim<v:=(v,sImm)> shift_left(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -147,7 +147,7 @@ prim<v:=(v,sImm)> shift_left(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -170,7 +170,7 @@ prim<v:=(v,sImm)> shift_left(data, shift):
               intrin<vshlq, build[suffix=base::in]>(
                 data,
                 intrin<vdupq_n, build[suffix=base::signed_of(base::in)]>(
-                  cast<static>(type<generation>(base::signed_of(base::in)), shift)
+                  cast<static>(type(base::signed_of(base::in)), shift)
                 )
               )
             );
@@ -183,7 +183,7 @@ prim<v:=(v,sImm)> shift_left(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -203,7 +203,7 @@ prim<v:=(v,sImm)> shift_left(data, shift):
         implementation:
           tsil """
               complete(
-                intrin<svlsl_n, build[suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift))
+                intrin<svlsl_n, build[suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data, cast<static>(type(base::unsigned_of(type(base::in))), shift))
               );
             """
       f?:
@@ -214,8 +214,8 @@ prim<v:=(v,sImm)> shift_left(data, shift):
           reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
-              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              let<type>(UBase, type(base::unsigned_of(type(base::in))));
+              let<type>(UVec, type(vector::as_base(UBase)));
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
               var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
               var<const_infer>(ures, intrin<svlsl_n, build[suffix=UBase, post=x]>(
@@ -300,9 +300,9 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(i, 0, value(vector::length), 1)  {
                 if (mask<test>(mask, i)) {
-                  result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), shift]>(data[i]);
+                  result[i] = call<primitive=@self[type(vector::as_extension(scalar)), shift]>(data[i]);
                 } else {
                   result[i] = data[i];
                 }
@@ -417,9 +417,9 @@ prim<v:=(v,s)> shift_left(data, shift):
           # UB in C++ (and the vector path already does this), so the scalar path must too. Covers
           # signed, unsigned, and (bit-pattern) float alike.
           tsil """
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
-              var<const_infer>(ures, ua << cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift));
-              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(data));
+              var<const_infer>(ures, ua << cast<static>(type(base::unsigned_of(type(base::in))), shift));
+              complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
@@ -433,8 +433,8 @@ prim<v:=(v,s)> shift_left(data, shift):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
-                result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(data[i], shift);
+              loop<backend, unroll>(i, 0, value(vector::length), 1)  {
+                result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(data[i], shift);
               }
               complete(result);
             """
@@ -458,7 +458,7 @@ prim<v:=(v,s)> shift_left(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -489,7 +489,7 @@ prim<v:=(v,s)> shift_left(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -509,7 +509,7 @@ prim<v:=(v,s)> shift_left(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -533,7 +533,7 @@ prim<v:=(v,s)> shift_left(data, shift):
               intrin<vshlq, build[suffix=base::in]>(
                 data,
                 intrin<vdupq_n, build[suffix=base::signed_of(base::in)]>(
-                  cast<static>(type<generation>(base::signed_of(base::in)), shift)
+                  cast<static>(type(base::signed_of(base::in)), shift)
                 )
               )
             );
@@ -546,7 +546,7 @@ prim<v:=(v,s)> shift_left(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -567,7 +567,7 @@ prim<v:=(v,s)> shift_left(data, shift):
         implementation:
           tsil """
               complete(
-                intrin<svlsl_n, build[suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift))
+                intrin<svlsl_n, build[suffix=base::in, post=x]>(call<primitive=mask_true[Vec]>(), data, cast<static>(type(base::unsigned_of(type(base::in))), shift))
               );
             """
       f?:
@@ -578,8 +578,8 @@ prim<v:=(v,s)> shift_left(data, shift):
           reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
-              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              let<type>(UBase, type(base::unsigned_of(type(base::in))));
+              let<type>(UVec, type(vector::as_base(UBase)));
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
               var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
               var<const_infer>(ures, intrin<svlsl_n, build[suffix=UBase, post=x]>(
@@ -620,9 +620,9 @@ prim<v:=(v,v)> shift_left(data, shift):
           # UB in C++ (and the vector path already does this), so the scalar path must too. Covers
           # signed, unsigned, and (bit-pattern) float alike.
           tsil """
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
-              var<const_infer>(ures, ua << cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift));
-              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(data));
+              var<const_infer>(ures, ua << cast<static>(type(base::unsigned_of(type(base::in))), shift));
+              complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
@@ -636,8 +636,8 @@ prim<v:=(v,v)> shift_left(data, shift):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
-                result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(data[i], shift[i]);
+              loop<backend, unroll>(i, 0, value(vector::length), 1)  {
+                result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(data[i], shift[i]);
               }
               complete(result);
             """
@@ -661,7 +661,7 @@ prim<v:=(v,v)> shift_left(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
               complete(
@@ -693,7 +693,7 @@ prim<v:=(v,v)> shift_left(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
               complete(
@@ -714,7 +714,7 @@ prim<v:=(v,v)> shift_left(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
               complete(
@@ -735,12 +735,12 @@ prim<v:=(v,v)> shift_left(data, shift):
           reasons [intrinsic]
         implementation:
           tsil """
-              if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+              if<generation>(value(type::is_signed(type(base::in)))) {
                 complete(
                   intrin<vshlq, build[suffix=base::in]>(data, shift)
                 );
               } else<generation> {
-                var<const_infer>(shift_s, call<primitive=reinterpret[Vec, Vec<type<generation>(base::signed_of(type<generation>(base::in)))>]>(shift));
+                var<const_infer>(shift_s, call<primitive=reinterpret[Vec, Vec<type(base::signed_of(type(base::in)))>]>(shift));
                 complete(
                   intrin<vshlq, build[suffix=base::in]>(
                     data,
@@ -757,7 +757,7 @@ prim<v:=(v,v)> shift_left(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
               complete(
@@ -778,7 +778,7 @@ prim<v:=(v,v)> shift_left(data, shift):
         implementation:
           tsil """
                var<const_infer>(pg, call<primitive=mask_true[Vec]>());
-               var<const_infer>(shift_u, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(shift));
+               var<const_infer>(shift_u, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(shift));
                complete(intrin<svlsl, build[post=x]>(pg, data, shift_u));
             """
       f?:
@@ -789,8 +789,8 @@ prim<v:=(v,v)> shift_left(data, shift):
           reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
-              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              let<type>(UBase, type(base::unsigned_of(type(base::in))));
+              let<type>(UVec, type(vector::as_base(UBase)));
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
               var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
               var<const_infer>(shift_u, call<primitive=reinterpret[Vec, UVec]>(shift));
@@ -856,11 +856,11 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+              if<generation>(value(type::is_signed(type(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                  let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                   var<const_infer>(result, cast<static>(UnsignedT, data) >> cast<static>(UnsignedT, shift));
-                  complete(cast<static>(type<generation>(base::in), result));
+                  complete(cast<static>(type(base::in), result));
                 } else<compile> {
                   complete(data >> shift);
                 }
@@ -877,13 +877,13 @@ prim<v:=(v,sImm)> shift_right(data, shift):
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
-                var<const_infer>(ures, ua >> cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift));
-                complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+                var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(data));
+                var<const_infer>(ures, ua >> cast<static>(type(base::unsigned_of(type(base::in))), shift));
+                complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
               } else<compile> {
-                var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::signed_of(type<generation>(base::in)))>]>(data));
-                var<const_infer>(ures, ua >> cast<static>(type<generation>(base::signed_of(type<generation>(base::in))), shift));
-                complete(call<primitive=reinterpret[Vec<type<generation>(base::signed_of(type<generation>(base::in)))>, Vec]>(ures));
+                var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::signed_of(type(base::in)))>]>(data));
+                var<const_infer>(ures, ua >> cast<static>(type(base::signed_of(type(base::in))), shift));
+                complete(call<primitive=reinterpret[Vec<type(base::signed_of(type(base::in)))>, Vec]>(ures));
               }
             """
     [generic, oneAPIfpga]:
@@ -898,8 +898,8 @@ prim<v:=(v,sImm)> shift_right(data, shift):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
-                result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), shift, PreserveSign]>(data[i]);
+              loop<backend, unroll>(i, 0, value(vector::length), 1)  {
+                result[i] = call<primitive=@self[type(vector::as_extension(scalar)), shift, PreserveSign]>(data[i]);
               }
               complete(result);
             """
@@ -927,7 +927,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<srli, build[suffix=base::signed_of(base::in)]>(udata, shift));
                 complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
@@ -943,7 +943,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -961,7 +961,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -989,7 +989,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<srli, build[suffix=base::signed_of(base::in)]>(udata, shift));
                 complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
@@ -1005,7 +1005,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1023,7 +1023,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1041,7 +1041,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1069,7 +1069,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<srli, build[suffix=base::signed_of(base::in)]>(udata, shift));
                 complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
@@ -1085,7 +1085,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1103,7 +1103,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1121,7 +1121,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1140,25 +1140,25 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           reasons [intrinsic]
         implementation:
           tsil """
-            if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+            if<generation>(value(type::is_signed(type(base::in)))) {
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
-                let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
-                let<type>(SignedVec, type<generation>(vector::as_base(SignedT)));
+                let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
+                let<type>(SignedT, type(base::signed_of(type(base::in))));
+                let<type>(SignedVec, type(vector::as_base(SignedT)));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(shift_s, (cast<static>(SignedT, 0) - cast<static>(SignedT, shift)));
                 var<const_infer>(sh, call<primitive=set1[SignedVec]>(shift_s));
                 var<const_infer>(ures, intrin<vshlq, build[suffix=base::unsigned_of(base::in)]>(udata, sh));
                 complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
               } else<compile> {
-                let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
+                let<type>(SignedT, type(base::signed_of(type(base::in))));
                 var<const_infer>(shift_s, (cast<static>(SignedT, 0) - cast<static>(SignedT, shift)));
                 var<const_infer>(sh, call<primitive=set1[Vec]>(shift_s));
                 complete(intrin<vshlq, build[suffix=base::in]>(data, sh));
               }
             } else<generation> {
-              let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
-              let<type>(SignedVec, type<generation>(vector::as_base(SignedT)));
+              let<type>(SignedT, type(base::signed_of(type(base::in))));
+              let<type>(SignedVec, type(vector::as_base(SignedT)));
               var<const_infer>(shift_s, (cast<static>(SignedT, 0) - cast<static>(SignedT, shift)));
               var<const_infer>(sh, call<primitive=set1[SignedVec]>(shift_s));
               complete(intrin<vshlq, build[suffix=base::in]>(data, sh));
@@ -1172,7 +1172,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1192,18 +1192,18 @@ prim<v:=(v,sImm)> shift_right(data, shift):
         implementation:
           tsil """
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
-              if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+              if<generation>(value(type::is_signed(type(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
-                  let<type>(UVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+                  let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
+                  let<type>(UVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
-                  var<const_infer>(ures, intrin<svlsr_n, build[suffix=base::unsigned_of(base::in), post=x]>(pg, udata, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+                  var<const_infer>(ures, intrin<svlsr_n, build[suffix=base::unsigned_of(base::in), post=x]>(pg, udata, cast<static>(type(base::unsigned_of(type(base::in))), shift)));
                   complete(call<primitive=reinterpret[UVec, Vec]>(ures));
                 } else<compile> {
-                  complete(intrin<svasr_n, build[suffix=base::in, post=x]>(pg, data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+                  complete(intrin<svasr_n, build[suffix=base::in, post=x]>(pg, data, cast<static>(type(base::unsigned_of(type(base::in))), shift)));
                 }
               } else<generation> {
-                complete(intrin<svlsr_n, build[suffix=base::in, post=x]>(pg, data, cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
+                complete(intrin<svlsr_n, build[suffix=base::in, post=x]>(pg, data, cast<static>(type(base::unsigned_of(type(base::in))), shift)));
               }
             """
       f?:
@@ -1215,17 +1215,17 @@ prim<v:=(v,sImm)> shift_right(data, shift):
         implementation:
           tsil """
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
-              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(UBase, type(base::unsigned_of(type(base::in))));
               if<compile>(!PreserveSign) {
-                let<type>(UVec, type<generation>(vector::as_base(UBase)));
+                let<type>(UVec, type(vector::as_base(UBase)));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
                 var<const_infer>(ures, intrin<svlsr_n, build[suffix=UBase, post=x]>(
                   pg, udata, cast<static>(UBase, shift)
                 ));
                 complete(call<primitive=reinterpret[UVec, Vec]>(ures));
               } else<compile> {
-                let<type>(SBase, type<generation>(base::signed_of(type<generation>(base::in))));
-                let<type>(SVec, type<generation>(vector::as_base(SBase)));
+                let<type>(SBase, type(base::signed_of(type(base::in))));
+                let<type>(SVec, type(vector::as_base(SBase)));
                 var<const_infer>(sdata, call<primitive=reinterpret[Vec, SVec]>(data));
                 var<const_infer>(sres, intrin<svasr_n, build[suffix=SBase, post=x]>(
                   pg, sdata, cast<static>(UBase, shift)
@@ -1286,11 +1286,11 @@ prim<v:=(v,s)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+              if<generation>(value(type::is_signed(type(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                  let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                   var<const_infer>(result, cast<static>(UnsignedT, data) >> cast<static>(UnsignedT, shift));
-                  complete(cast<static>(type<generation>(base::in), result));
+                  complete(cast<static>(type(base::in), result));
                 } else<compile> {
                   complete(data >> shift);
                 }
@@ -1306,9 +1306,9 @@ prim<v:=(v,s)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
-              var<const_infer>(ures, ua >> cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift));
-              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(data));
+              var<const_infer>(ures, ua >> cast<static>(type(base::unsigned_of(type(base::in))), shift));
+              complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
@@ -1322,8 +1322,8 @@ prim<v:=(v,s)> shift_right(data, shift):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
-                result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), PreserveSign]>(data[i], shift);
+              loop<backend, unroll>(i, 0, value(vector::length), 1)  {
+                result[i] = call<primitive=@self[type(vector::as_extension(scalar)), PreserveSign]>(data[i], shift);
               }
               complete(result);
             """
@@ -1361,7 +1361,7 @@ prim<v:=(v,s)> shift_right(data, shift):
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<_mm512_srl_epi16>(udata, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
                 complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
@@ -1378,7 +1378,7 @@ prim<v:=(v,s)> shift_right(data, shift):
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<_mm512_srl_epi32>(udata, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
                 complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
@@ -1395,7 +1395,7 @@ prim<v:=(v,s)> shift_right(data, shift):
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<_mm512_srl_epi64>(udata, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
                 complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
@@ -1411,7 +1411,7 @@ prim<v:=(v,s)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1430,7 +1430,7 @@ prim<v:=(v,s)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1475,7 +1475,7 @@ prim<v:=(v,s)> shift_right(data, shift):
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<_mm256_srl_epi16>(udata, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
                 complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
@@ -1492,7 +1492,7 @@ prim<v:=(v,s)> shift_right(data, shift):
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<_mm256_srl_epi32>(udata, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
                 complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
@@ -1508,7 +1508,7 @@ prim<v:=(v,s)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1527,7 +1527,7 @@ prim<v:=(v,s)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1546,7 +1546,7 @@ prim<v:=(v,s)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1591,7 +1591,7 @@ prim<v:=(v,s)> shift_right(data, shift):
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<_mm_srl_epi16>(udata, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
                 complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
@@ -1608,7 +1608,7 @@ prim<v:=(v,s)> shift_right(data, shift):
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(ures, intrin<_mm_srl_epi32>(udata, intrin<_mm_cvtsi32_si128>(cast<static>(si32, shift))));
                 complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
@@ -1624,7 +1624,7 @@ prim<v:=(v,s)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1643,7 +1643,7 @@ prim<v:=(v,s)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1662,7 +1662,7 @@ prim<v:=(v,s)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1682,25 +1682,25 @@ prim<v:=(v,s)> shift_right(data, shift):
           reasons [intrinsic]
         implementation:
           tsil """
-              if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+              if<generation>(value(type::is_signed(type(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
-                  let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
-                  let<type>(SignedVec, type<generation>(vector::as_base(SignedT)));
+                  let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
+                  let<type>(SignedT, type(base::signed_of(type(base::in))));
+                  let<type>(SignedVec, type(vector::as_base(SignedT)));
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                   var<const_infer>(shift_s, (cast<static>(SignedT, 0) - cast<static>(SignedT, shift)));
                   var<const_infer>(sh, call<primitive=set1[SignedVec]>(shift_s));
                   var<const_infer>(ures, intrin<vshlq, build[suffix=base::unsigned_of(base::in)]>(udata, sh));
                   complete(call<primitive=reinterpret[Vec<UnsignedT>, Vec]>(ures));
                 } else<compile> {
-                  let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
+                  let<type>(SignedT, type(base::signed_of(type(base::in))));
                   var<const_infer>(shift_s, (cast<static>(SignedT, 0) - cast<static>(SignedT, shift)));
                   var<const_infer>(sh, call<primitive=set1[Vec]>(shift_s));
                   complete(intrin<vshlq, build[suffix=base::in]>(data, sh));
                 }
               } else<generation> {
-                let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
-                let<type>(SignedVec, type<generation>(vector::as_base(SignedT)));
+                let<type>(SignedT, type(base::signed_of(type(base::in))));
+                let<type>(SignedVec, type(vector::as_base(SignedT)));
                 var<const_infer>(shift_s, (cast<static>(SignedT, 0) - cast<static>(SignedT, shift)));
                 var<const_infer>(sh, call<primitive=set1[SignedVec]>(shift_s));
                 complete(intrin<vshlq, build[suffix=base::in]>(data, sh));
@@ -1714,7 +1714,7 @@ prim<v:=(v,s)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
                 call<primitive=from_array[Vec]>(
@@ -1735,11 +1735,11 @@ prim<v:=(v,s)> shift_right(data, shift):
         implementation:
           tsil """
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
-              var<const_infer>(sh, intrin<svdup_n, build[suffix=base::unsigned_of(base::in)]>(cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift)));
-              if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+              var<const_infer>(sh, intrin<svdup_n, build[suffix=base::unsigned_of(base::in)]>(cast<static>(type(base::unsigned_of(type(base::in))), shift)));
+              if<generation>(value(type::is_signed(type(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
-                  let<type>(UVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+                  let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
+                  let<type>(UVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
                   var<const_infer>(ures, intrin<svlsr, build[suffix=base::unsigned_of(base::in), post=x]>(pg, udata, sh));
                   complete(call<primitive=reinterpret[UVec, Vec]>(ures));
@@ -1758,8 +1758,8 @@ prim<v:=(v,s)> shift_right(data, shift):
           reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
-              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              let<type>(UBase, type(base::unsigned_of(type(base::in))));
+              let<type>(UVec, type(vector::as_base(UBase)));
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
               var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
               var<const_infer>(sh, intrin<svdup_n, build[suffix=UBase]>(cast<static>(UBase, shift)));
@@ -1805,11 +1805,11 @@ prim<v:=(v,v)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+              if<generation>(value(type::is_signed(type(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                  let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                   var<const_infer>(result, cast<static>(UnsignedT, data) >> cast<static>(UnsignedT, shift));
-                  complete(cast<static>(type<generation>(base::in), result));
+                  complete(cast<static>(type(base::in), result));
                 } else<compile> {
                   complete(data >> shift);
                 }
@@ -1825,9 +1825,9 @@ prim<v:=(v,v)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data));
-              var<const_infer>(ures, ua >> cast<static>(type<generation>(base::unsigned_of(type<generation>(base::in))), shift));
-              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(data));
+              var<const_infer>(ures, ua >> cast<static>(type(base::unsigned_of(type(base::in))), shift));
+              complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
@@ -1841,8 +1841,8 @@ prim<v:=(v,v)> shift_right(data, shift):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
-                result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar)), PreserveSign]>(data[i], shift[i]);
+              loop<backend, unroll>(i, 0, value(vector::length), 1)  {
+                result[i] = call<primitive=@self[type(vector::as_extension(scalar)), PreserveSign]>(data[i], shift[i]);
               }
               complete(result);
             """
@@ -1858,7 +1858,7 @@ prim<v:=(v,v)> shift_right(data, shift):
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(shift_u, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(shift));
                 var<const_infer>(ures, intrin<srlv, build[suffix=base::signed_of(base::in)]>(udata, shift_u));
@@ -1876,7 +1876,7 @@ prim<v:=(v,v)> shift_right(data, shift):
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(shift_u, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(shift));
                 var<const_infer>(ures, intrin<srlv, build[suffix=base::signed_of(base::in)]>(udata, shift_u));
@@ -1893,7 +1893,7 @@ prim<v:=(v,v)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
               complete(
@@ -1913,7 +1913,7 @@ prim<v:=(v,v)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
               complete(
@@ -1937,7 +1937,7 @@ prim<v:=(v,v)> shift_right(data, shift):
         implementation:
           tsil """
               if<compile>(!PreserveSign) {
-                let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                 var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                 var<const_infer>(shift_u, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(shift));
                 var<const_infer>(ures, intrin<srlv, build[suffix=base::signed_of(base::in)]>(udata, shift_u));
@@ -1954,7 +1954,7 @@ prim<v:=(v,v)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
               complete(
@@ -1975,7 +1975,7 @@ prim<v:=(v,v)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
               complete(
@@ -1996,10 +1996,10 @@ prim<v:=(v,v)> shift_right(data, shift):
           reasons [intrinsic]
         implementation:
           tsil """
-              if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+              if<generation>(value(type::is_signed(type(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
-                  let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
+                  let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
+                  let<type>(SignedT, type(base::signed_of(type(base::in))));
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(data));
                   var<const_infer>(shift_s, call<primitive=reinterpret[Vec, Vec<SignedT>]>(shift));
                   var<const_infer>(neg, intrin<vnegq, build[suffix=base::signed_of(base::in)]>(shift_s));
@@ -2009,7 +2009,7 @@ prim<v:=(v,v)> shift_right(data, shift):
                   complete(intrin<vshlq, build[suffix=base::in]>(data, intrin<vnegq, build[suffix=base::signed_of(base::in)]>(shift)));
                 }
               } else<generation> {
-                let<type>(SignedT, type<generation>(base::signed_of(type<generation>(base::in))));
+                let<type>(SignedT, type(base::signed_of(type(base::in))));
                 var<const_infer>(shift_s, call<primitive=reinterpret[Vec, Vec<SignedT>]>(shift));
                 complete(intrin<vshlq, build[suffix=base::in]>(data, intrin<vnegq, build[suffix=base::signed_of(base::in)]>(shift_s)));
               }
@@ -2022,7 +2022,7 @@ prim<v:=(v,v)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
-              let<type>(GenericVec, type<backend>(vector::as_extension(generic)));
+              let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
               complete(
@@ -2044,11 +2044,11 @@ prim<v:=(v,v)> shift_right(data, shift):
         implementation:
           tsil """
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
-              let<type>(UVec, type<generation>(vector::as_base(type<generation>(base::unsigned_of(type<generation>(base::in))))));
+              let<type>(UVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
               var<const_infer>(shift_u, call<primitive=reinterpret[Vec, UVec]>(shift));
-              if<generation>(value<generation>(type::is_signed(type<generation>(base::in)))) {
+              if<generation>(value(type::is_signed(type(base::in)))) {
                 if<compile>(!PreserveSign) {
-                  let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+                  let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
                   var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
                   var<const_infer>(ures, intrin<svlsr, build[suffix=base::unsigned_of(base::in), post=x]>(pg, udata, shift_u));
                   complete(call<primitive=reinterpret[UVec, Vec]>(ures));
@@ -2067,8 +2067,8 @@ prim<v:=(v,v)> shift_right(data, shift):
           reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(UBase, type<generation>(base::unsigned_of(type<generation>(base::in))));
-              let<type>(UVec, type<generation>(vector::as_base(UBase)));
+              let<type>(UBase, type(base::unsigned_of(type(base::in))));
+              let<type>(UVec, type(vector::as_base(UBase)));
               var<const_infer>(pg, call<primitive=mask_true[Vec]>());
               var<const_infer>(udata, call<primitive=reinterpret[Vec, UVec]>(data));
               var<const_infer>(shift_u, call<primitive=reinterpret[Vec, UVec]>(shift));

@@ -251,7 +251,7 @@ class AssumeAlignedLowerer:
     """``assume_aligned<N>(ptr)`` -> an aligned-pointer hint. C++ forwards to the static
     core's ``::tsl::assume_aligned<N>(ptr)`` (``std::assume_aligned``); Rust has no stable
     equivalent and the aligned intrinsic already assumes alignment, so it drops to ``ptr``.
-    The ``<N>`` selector (e.g. ``value<generation>(vector::alignment)``) is query-resolved."""
+    The ``<N>`` selector (e.g. ``value(vector::alignment)``) is query-resolved."""
 
     keyword = "assume_aligned"
 

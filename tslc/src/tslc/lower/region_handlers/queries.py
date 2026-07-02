@@ -10,10 +10,10 @@ from tslc.lower.region_handlers.protocol import RenderBody
 from tslc.render.model import RenderField
 
 class QueryRegionLowerer:
-    """``type<generation>(x)`` / ``value<generation>(x)`` in raw expression position ->
-    the evaluated query's rendered text. A type resolves to its backend spelling; a
-    text/integer value to its literal. This is how generation-time constants are spliced
-    into a body, e.g. ``array_type<type<generation>(base::in), value<generation>(...)>``.
+    """``type(x)`` / ``value(x)`` in raw expression position -> the evaluated
+    query's rendered text. A type resolves to its backend spelling; a text/integer
+    value to its literal. This is how generated constants are spliced into a
+    body, e.g. ``array_type<type(base::in), value(vector::length)>``.
     One instance is registered per keyword (``type``/``value``)."""
 
     def __init__(self, keyword: str, evaluator: QueryEvaluator | None = None) -> None:
@@ -31,7 +31,7 @@ class QueryRegionLowerer:
             spelling = context.env.backend.types.scalar_spelling(value.type_tag)
             if spelling is not None:
                 return spelling
-        if isinstance(value, VectorValue):  # e.g. `type<generation>(transform_extension(ToBase))`
+        if isinstance(value, VectorValue):  # e.g. `type(vector::as_base(ToBase))`
             spelling = _vector_spelling(value, context)
             if spelling is not None:
                 return spelling

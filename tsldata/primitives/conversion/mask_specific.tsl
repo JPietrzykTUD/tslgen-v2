@@ -78,7 +78,7 @@ prim<im:=m> to_integral(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_epi8>(mask)));"
+          tsil "complete(cast<static>(type(vector::imask), intrin<_mm256_movemask_epi8>(mask)));"
       ?i16:
         requires [avx2]
         safety:
@@ -89,9 +89,9 @@ prim<im:=m> to_integral(mask):
           tsil """
                var<const_infer>(packed, intrin<_mm256_packs_epi16>(mask, intrin<_mm256_setzero_si256>()));
                var<const_infer>(mm, intrin<_mm256_movemask_epi8>(packed));
-               var<const_infer>(low, cast<static>(type<generation>(vector::imask), (mm & 0xFF)));
-               var<const_infer>(high, cast<static>(type<generation>(vector::imask), ((mm >> 16) & 0xFF)));
-               complete(cast<static>(type<generation>(vector::imask), (low | (high << 8)))) ;
+               var<const_infer>(low, cast<static>(type(vector::imask), (mm & 0xFF)));
+               var<const_infer>(high, cast<static>(type(vector::imask), ((mm >> 16) & 0xFF)));
+               complete(cast<static>(type(vector::imask), (low | (high << 8)))) ;
             """
       f32:
         requires [avx]
@@ -100,7 +100,7 @@ prim<im:=m> to_integral(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_ps>(mask)));"
+          tsil "complete(cast<static>(type(vector::imask), intrin<_mm256_movemask_ps>(mask)));"
       ?i32:
         requires [avx]
         safety:
@@ -108,7 +108,7 @@ prim<im:=m> to_integral(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_ps>(intrin<_mm256_castsi256_ps>(mask))));"
+          tsil "complete(cast<static>(type(vector::imask), intrin<_mm256_movemask_ps>(intrin<_mm256_castsi256_ps>(mask))));"
       ?i64:
         requires [avx]
         safety:
@@ -116,7 +116,7 @@ prim<im:=m> to_integral(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_pd>(intrin<_mm256_castsi256_pd>(mask))));"
+          tsil "complete(cast<static>(type(vector::imask), intrin<_mm256_movemask_pd>(intrin<_mm256_castsi256_pd>(mask))));"
       f64:
         requires [avx]
         safety:
@@ -124,7 +124,7 @@ prim<im:=m> to_integral(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm256_movemask_pd>(mask)));"
+          tsil "complete(cast<static>(type(vector::imask), intrin<_mm256_movemask_pd>(mask)));"
       arith:
         requires [avx]
         safety:
@@ -133,9 +133,9 @@ prim<im:=m> to_integral(mask):
           reasons []
         implementation:
           tsil """
-              let<type>(ImaskT, type<generation>(vector::imask));
+              let<type>(ImaskT, type(vector::imask));
               var<infer>(result, cast<static>(ImaskT, 0));
-              loop<backend>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend>(i, 0, value(vector::length), 1)  {
                 if (mask<test>(mask, i)) {
                   result |= (cast<static>(ImaskT, 1)) << i;
                 }
@@ -150,7 +150,7 @@ prim<im:=m> to_integral(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_epi8>(mask)));"
+          tsil "complete(cast<static>(type(vector::imask), intrin<_mm_movemask_epi8>(mask)));"
       ?i16:
         requires [sse2]
         safety:
@@ -160,7 +160,7 @@ prim<im:=m> to_integral(mask):
         implementation:
           tsil """
                var<const_infer>(packed, intrin<_mm_packs_epi16>(mask, intrin<_mm_setzero_si128>()));
-               complete(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_epi8>(packed))) ;
+               complete(cast<static>(type(vector::imask), intrin<_mm_movemask_epi8>(packed))) ;
             """
       f32:
         requires [sse]
@@ -169,7 +169,7 @@ prim<im:=m> to_integral(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_ps>(mask)));"
+          tsil "complete(cast<static>(type(vector::imask), intrin<_mm_movemask_ps>(mask)));"
       ?i32:
         requires [sse, sse2]
         safety:
@@ -177,7 +177,7 @@ prim<im:=m> to_integral(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_ps>(intrin<_mm_castsi128_ps>(mask))));"
+          tsil "complete(cast<static>(type(vector::imask), intrin<_mm_movemask_ps>(intrin<_mm_castsi128_ps>(mask))));"
       ?i64:
         requires [sse, sse2]
         safety:
@@ -185,7 +185,7 @@ prim<im:=m> to_integral(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_pd>(intrin<_mm_castsi128_pd>(mask))));"
+          tsil "complete(cast<static>(type(vector::imask), intrin<_mm_movemask_pd>(intrin<_mm_castsi128_pd>(mask))));"
       f64:
         requires [sse, sse2]
         safety:
@@ -193,7 +193,7 @@ prim<im:=m> to_integral(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::imask), intrin<_mm_movemask_pd>(mask)));"
+          tsil "complete(cast<static>(type(vector::imask), intrin<_mm_movemask_pd>(mask)));"
     neon:
       arith:
         requires [neon]
@@ -203,9 +203,9 @@ prim<im:=m> to_integral(mask):
           reasons []
         implementation:
           tsil """
-              let<type>(ImaskT, type<generation>(vector::imask));
+              let<type>(ImaskT, type(vector::imask));
               var<infer>(result, cast<static>(ImaskT, 0));
-              loop<backend>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend>(i, 0, value(vector::length), 1)  {
                 if (mask<test>(mask, i)) {
                   result |= (cast<static>(ImaskT, 1)) << i;
                 }
@@ -236,10 +236,10 @@ prim<im:=m> to_integral(mask):
           reasons []
         implementation:
           tsil """
-               let<type>(ImaskT, type<generation>(vector::imask));
+               let<type>(ImaskT, type(vector::imask));
               var<infer>(result, cast<static>(ImaskT, 0));
-              var<const_typed>(type<backend>(scalar::size), mask_bits, value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8);
-               loop<backend>(i, 0, value<generation>(vector::length), 1)  {
+              var<const_typed>(type(scalar::size), mask_bits, value(type::size_bytes(type(vector::imask))) * 8);
+               loop<backend>(i, 0, value(vector::length), 1)  {
                 if (i < mask_bits && mask<test>(mask, i)) {
                   result |= (cast<static>(ImaskT, 1)) << i;
                 }
@@ -312,7 +312,7 @@ prim<v:=m> to_vector(mask):
         implementation:
           tsil """
               var<const_infer>(bits, intrin<maskz_set1, build[suffix=si32]>(mask, -1));
-              complete(cast<bitcast>(type<generation>(vector::register), bits));
+              complete(cast<bitcast>(type(vector::register), bits));
             """
       f64:
         requires [avx512f]
@@ -323,7 +323,7 @@ prim<v:=m> to_vector(mask):
         implementation:
           tsil """
               var<const_infer>(bits, intrin<maskz_set1, build[suffix=si64]>(mask, -1));
-              complete(cast<bitcast>(type<generation>(vector::register), bits));
+              complete(cast<bitcast>(type(vector::register), bits));
             """
     [avx2_vl, sse_vl]:
       arith:
@@ -339,7 +339,7 @@ prim<v:=m> to_vector(mask):
               complete(
                 call<primitive=mov, attrs[mask=zero]>(
                   mask,
-                  call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
+                  call<primitive=set1[Vec]>(mask<lane_true>())
                 )
               );
             """
@@ -355,7 +355,7 @@ prim<v:=m> to_vector(mask):
               complete(
                 call<primitive=mov, attrs[mask=zero]>(
                   mask,
-                  call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
+                  call<primitive=set1[Vec]>(mask<lane_true>())
                 )
               );
             """
@@ -394,7 +394,7 @@ prim<v:=m> to_vector(mask):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), cast<static>(si32, mask)));"
+          tsil "complete(cast<static>(type(base::in), cast<static>(si32, mask)));"
     generic:
       arith:
         requires []
@@ -405,12 +405,12 @@ prim<v:=m> to_vector(mask):
         implementation:
           tsil """
               var<init_register>(result);
-              var<const_infer>(true_val, value<generation>(mask::lane::all_true));
-               loop<backend>(i, 0, value<generation>(vector::length), 1)  {
+              var<const_infer>(true_val, mask<lane_true>());
+               loop<backend>(i, 0, value(vector::length), 1)  {
                 if (mask<test>(mask, i)) {
                   result[i] = true_val;
                 } else {
-                  result[i] = cast<static>(type<generation>(base::in), 0);
+                  result[i] = cast<static>(type(base::in), 0);
                 }
               }
                complete(result) ;
@@ -494,13 +494,13 @@ prim<m:=im> to_mask(mask):
           reasons []
         implementation:
           tsil """
-              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
-                and_values[i] = cast<static>(type<generation>(base::in), bit);
+              var<typed>(array_type<type(base::in), value(vector::length)>, and_values, value(uninit::array));
+              loop<backend>(i, 0, value(vector::length), 1) {
+                var<const_infer>(bit, (cast<static>(type(scalar::ui64), 1)) << i);
+                and_values[i] = cast<static>(type(base::in), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.as_ptr()));
-              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)));
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type(base::in), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec));
               complete(call<primitive=equal[Vec]>(anded_vec, and_vec));
             """
@@ -540,9 +540,9 @@ prim<m:=im> to_mask(mask):
         implementation:
           tsil """
               var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-              loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                if (((mask >> i) & 1) != 0) {
-                  values[i] = value<generation>(mask::lane::all_true);
+              loop<backend>(i, 0, value(vector::length), 1) {
+                if (mask<test, imask>(mask, i)) {
+                  values[i] = mask<lane_true>();
                 }
               }
               complete(call<primitive=from_array[Vec]>(values));
@@ -555,13 +555,13 @@ prim<m:=im> to_mask(mask):
           reasons []
         implementation:
           tsil """
-              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
-                and_values[i] = cast<static>(type<generation>(base::in), bit);
+              var<typed>(array_type<type(base::in), value(vector::length)>, and_values, value(uninit::array));
+              loop<backend>(i, 0, value(vector::length), 1) {
+                var<const_infer>(bit, (cast<static>(type(scalar::ui64), 1)) << i);
+                and_values[i] = cast<static>(type(base::in), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.as_ptr()));
-              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)));
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type(base::in), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec));
               complete(call<primitive=equal[Vec]>(anded_vec, and_vec));
             """
@@ -573,13 +573,13 @@ prim<m:=im> to_mask(mask):
           reasons []
         implementation:
           tsil """
-              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
-                and_values[i] = cast<static>(type<generation>(base::in), bit);
+              var<typed>(array_type<type(base::in), value(vector::length)>, and_values, value(uninit::array));
+              loop<backend>(i, 0, value(vector::length), 1) {
+                var<const_infer>(bit, (cast<static>(type(scalar::ui64), 1)) << i);
+                and_values[i] = cast<static>(type(base::in), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.as_ptr()));
-              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)));
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type(base::in), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec));
               complete(call<primitive=equal[Vec]>(anded_vec, and_vec));
             """
@@ -592,9 +592,9 @@ prim<m:=im> to_mask(mask):
         implementation:
           tsil """
               var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-              loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                if (((mask >> i) & 1) != 0) {
-                  values[i] = value<generation>(mask::lane::all_true);
+              loop<backend>(i, 0, value(vector::length), 1) {
+                if (mask<test, imask>(mask, i)) {
+                  values[i] = mask<lane_true>();
                 }
               }
               complete(call<primitive=from_array[Vec]>(values));
@@ -634,9 +634,9 @@ prim<m:=im> to_mask(mask):
         implementation:
           tsil """
               var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-              loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                if (((mask >> i) & 1) != 0) {
-                  values[i] = value<generation>(mask::lane::all_true);
+              loop<backend>(i, 0, value(vector::length), 1) {
+                if (mask<test, imask>(mask, i)) {
+                  values[i] = mask<lane_true>();
                 }
               }
               complete(call<primitive=from_array[Vec]>(values));
@@ -651,9 +651,9 @@ prim<m:=im> to_mask(mask):
         implementation:
           tsil """
               var<infer>(values, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-              loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                if (((mask >> i) & 1) != 0) {
-                  values[i] = value<generation>(mask::lane::all_true);
+              loop<backend>(i, 0, value(vector::length), 1) {
+                if (mask<test, imask>(mask, i)) {
+                  values[i] = mask<lane_true>();
                 }
               }
               complete(call<primitive=from_array[Vec]>(values));
@@ -666,13 +666,13 @@ prim<m:=im> to_mask(mask):
           reasons []
         implementation:
           tsil """
-              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
-                and_values[i] = cast<static>(type<generation>(base::in), bit);
+              var<typed>(array_type<type(base::in), value(vector::length)>, and_values, value(uninit::array));
+              loop<backend>(i, 0, value(vector::length), 1) {
+                var<const_infer>(bit, (cast<static>(type(scalar::ui64), 1)) << i);
+                and_values[i] = cast<static>(type(base::in), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.as_ptr()));
-              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)));
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type(base::in), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec));
               complete(call<primitive=equal[Vec]>(anded_vec, and_vec));
             """
@@ -684,13 +684,13 @@ prim<m:=im> to_mask(mask):
           reasons []
         implementation:
           tsil """
-              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
-                and_values[i] = cast<static>(type<generation>(base::in), bit);
+              var<typed>(array_type<type(base::in), value(vector::length)>, and_values, value(uninit::array));
+              loop<backend>(i, 0, value(vector::length), 1) {
+                var<const_infer>(bit, (cast<static>(type(scalar::ui64), 1)) << i);
+                and_values[i] = cast<static>(type(base::in), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.as_ptr()));
-              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)));
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type(base::in), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec));
               complete(call<primitive=equal[Vec]>(anded_vec, and_vec));
             """
@@ -702,13 +702,13 @@ prim<m:=im> to_mask(mask):
           reasons []
         implementation:
           tsil """
-              var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
-                and_values[i] = cast<static>(type<generation>(base::in), bit);
+              var<typed>(array_type<type(base::in), value(vector::length)>, and_values, value(uninit::array));
+              loop<backend>(i, 0, value(vector::length), 1) {
+                var<const_infer>(bit, (cast<static>(type(scalar::ui64), 1)) << i);
+                and_values[i] = cast<static>(type(base::in), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[Vec], attrs[aligned=false]>(and_values.as_ptr()));
-              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type<generation>(base::in), mask)));
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type(base::in), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec));
               complete(call<primitive=equal[Vec]>(anded_vec, and_vec));
             """
@@ -720,14 +720,14 @@ prim<m:=im> to_mask(mask):
           reasons []
         implementation:
           tsil """
-              let<type>(MaskVec, type<generation>(vector::as_base(type<backend>(scalar::si32))));
-              var<typed>(array_type<type<backend>(scalar::si32), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
-                and_values[i] = cast<static>(type<backend>(scalar::si32), bit);
+              let<type>(MaskVec, type(vector::as_base(type(scalar::si32))));
+              var<typed>(array_type<type(scalar::si32), value(vector::length)>, and_values, value(uninit::array));
+              loop<backend>(i, 0, value(vector::length), 1) {
+                var<const_infer>(bit, (cast<static>(type(scalar::ui64), 1)) << i);
+                and_values[i] = cast<static>(type(scalar::si32), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[MaskVec], attrs[aligned=false]>(and_values.as_ptr()));
-              var<const_infer>(data_vec, call<primitive=set1[MaskVec]>(cast<static>(type<backend>(scalar::si32), mask)));
+              var<const_infer>(data_vec, call<primitive=set1[MaskVec]>(cast<static>(type(scalar::si32), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[MaskVec]>(data_vec, and_vec));
               var<const_infer>(tmp, call<primitive=equal[MaskVec]>(anded_vec, and_vec));
               complete(call<primitive=reinterpret[MaskVec, Vec]>(tmp));
@@ -740,14 +740,14 @@ prim<m:=im> to_mask(mask):
           reasons []
         implementation:
           tsil """
-              let<type>(MaskVec, type<generation>(vector::as_base(type<backend>(scalar::si64))));
-              var<typed>(array_type<type<backend>(scalar::si64), value<generation>(vector::length)>, and_values, value<backend>(uninit::array));
-              loop<backend>(i, 0, value<generation>(vector::length), 1) {
-                var<const_infer>(bit, (cast<static>(type<backend>(scalar::ui64), 1)) << i);
-                and_values[i] = cast<static>(type<backend>(scalar::si64), bit);
+              let<type>(MaskVec, type(vector::as_base(type(scalar::si64))));
+              var<typed>(array_type<type(scalar::si64), value(vector::length)>, and_values, value(uninit::array));
+              loop<backend>(i, 0, value(vector::length), 1) {
+                var<const_infer>(bit, (cast<static>(type(scalar::ui64), 1)) << i);
+                and_values[i] = cast<static>(type(scalar::si64), bit);
               }
               var<const_infer>(and_vec, call<primitive=load[MaskVec], attrs[aligned=false]>(and_values.as_ptr()));
-              var<const_infer>(data_vec, call<primitive=set1[MaskVec]>(cast<static>(type<backend>(scalar::si64), mask)));
+              var<const_infer>(data_vec, call<primitive=set1[MaskVec]>(cast<static>(type(scalar::si64), mask)));
               var<const_infer>(anded_vec, call<primitive=binary_and[MaskVec]>(data_vec, and_vec));
               var<const_infer>(tmp, call<primitive=equal[MaskVec]>(anded_vec, and_vec));
               complete(call<primitive=reinterpret[MaskVec, Vec]>(tmp));
@@ -760,7 +760,7 @@ prim<m:=im> to_mask(mask):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete((mask & 1) != 0);"
+          tsil "complete(mask<test, imask>(mask, 0));"
     generic:
       arith:
         requires []
@@ -770,12 +770,12 @@ prim<m:=im> to_mask(mask):
           reasons []
         implementation:
           tsil """
-              let<type>(MaskT, type<generation>(vector::mask));
+              let<type>(MaskT, type(vector::mask));
               var<typed>(MaskT, result, mask<zero>());
-              var<const_typed>(type<backend>(scalar::size), mask_bits, value<generation>(type::size_bytes(type<generation>(vector::imask))) * 8);
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
-                if (i < mask_bits && (((mask >> i) & cast<static>(type<generation>(vector::imask), 1)) != 0)) {
-                  mask<set:1>(result, i);
+              var<const_typed>(type(scalar::size), mask_bits, value(type::size_bytes(type(vector::imask))) * 8);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                if (i < mask_bits && mask<test, imask>(mask, i)) {
+                  mask<set>(result, i);
                 }
               }
               complete(result);

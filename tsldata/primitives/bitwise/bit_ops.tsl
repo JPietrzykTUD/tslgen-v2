@@ -53,10 +53,10 @@ prim<v:=(v,v)> binary_and(left, right):
           reasons []
         implementation:
           tsil """
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left));
-              var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left));
+              var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right));
               var<const_infer>(ures, ua & ub);
-              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
@@ -70,8 +70,8 @@ prim<v:=(v,v)> binary_and(left, right):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
-                result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
+              loop<backend, unroll>(i, 0, value(vector::length), 1)  {
+                result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(left[i], right[i]);
               }
               complete(result);
             """
@@ -94,7 +94,7 @@ prim<v:=(v,v)> binary_and(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(BitBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(BitBase, type(base::signed_of(type(base::in))));
             complete(
               call<primitive=reinterpret[Vec<BitBase>, Vec]>(
                 intrin<and, build[suffix=intrin::suffix("stream")]>(
@@ -177,10 +177,10 @@ prim<v:=(v,v)> binary_and(left, right):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<vandq, build[suffix=base::unsigned_of(base::in)]>(
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
                 )
               )
             );
@@ -203,11 +203,11 @@ prim<v:=(v,v)> binary_and(left, right):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<svand, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
                 )
               )
             );
@@ -253,10 +253,10 @@ prim<v:=(v,v)> binary_andnot(left, right):
           reasons []
         implementation:
           tsil """
-            var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left));
-            var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right));
+            var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left));
+            var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right));
             var<const_infer>(ures, op<bit_negate>(ua) & ub);
-            complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+            complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
           """
     [generic, oneAPIfpga]:
       arith:
@@ -270,8 +270,8 @@ prim<v:=(v,v)> binary_andnot(left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
-              result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
+            loop<backend, unroll>(i, 0, value(vector::length), 1)  {
+              result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(left[i], right[i]);
             }
             complete(result);
           """
@@ -371,10 +371,10 @@ prim<v:=(v,v)> binary_andnot(left, right):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<vbicq, build[suffix=base::unsigned_of(base::in)]>(
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left)
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left)
                 )
               )
             );
@@ -397,11 +397,11 @@ prim<v:=(v,v)> binary_andnot(left, right):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<svbic, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left)
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left)
                 )
               )
             );
@@ -461,10 +461,10 @@ prim<v:=(v,v)> binary_or(left, right):
           reasons []
         implementation:
           tsil """
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left));
-              var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left));
+              var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right));
               var<const_infer>(ures, ua | ub);
-              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
@@ -478,8 +478,8 @@ prim<v:=(v,v)> binary_or(left, right):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
-                result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
+              loop<backend, unroll>(i, 0, value(vector::length), 1)  {
+                result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(left[i], right[i]);
               }
               complete(result);
             """
@@ -502,7 +502,7 @@ prim<v:=(v,v)> binary_or(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(BitBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(BitBase, type(base::signed_of(type(base::in))));
             complete(
               call<primitive=reinterpret[Vec<BitBase>, Vec]>(
                 intrin<or, build[suffix=intrin::suffix("stream")]>(
@@ -585,10 +585,10 @@ prim<v:=(v,v)> binary_or(left, right):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<vorrq, build[suffix=base::unsigned_of(base::in)]>(
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
                 )
               )
             );
@@ -611,11 +611,11 @@ prim<v:=(v,v)> binary_or(left, right):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<svorr, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
                 )
               )
             );
@@ -675,10 +675,10 @@ prim<v:=(v,v)> binary_xor(left, right):
           reasons []
         implementation:
           tsil """
-              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left));
-              var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right));
+              var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left));
+              var<const_infer>(ub, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right));
               var<const_infer>(ures, ua ^ ub);
-              complete(call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(ures));
+              complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
     [generic, oneAPIfpga]:
       arith:
@@ -692,8 +692,8 @@ prim<v:=(v,v)> binary_xor(left, right):
         implementation:
           tsil """
               var<init_register>(result);
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
-                result[i] = call<primitive=@self[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
+              loop<backend, unroll>(i, 0, value(vector::length), 1)  {
+                result[i] = call<primitive=@self[type(vector::as_extension(scalar))]>(left[i], right[i]);
               }
               complete(result);
             """
@@ -716,7 +716,7 @@ prim<v:=(v,v)> binary_xor(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(BitBase, type<generation>(base::signed_of(type<generation>(base::in))));
+            let<type>(BitBase, type(base::signed_of(type(base::in))));
             complete(
               call<primitive=reinterpret[Vec<BitBase>, Vec]>(
                 intrin<xor, build[suffix=intrin::suffix("stream")]>(
@@ -799,10 +799,10 @@ prim<v:=(v,v)> binary_xor(left, right):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<veorq, build[suffix=base::unsigned_of(base::in)]>(
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
                 )
               )
             );
@@ -825,11 +825,11 @@ prim<v:=(v,v)> binary_xor(left, right):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<sveor, build[suffix=base::unsigned_of(base::in), post=x]>(
                   call<primitive=mask_true[Vec]>(),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
                 )
               )
             );
@@ -875,7 +875,7 @@ prim<v:=v> inv(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))));"
+          tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(mask<lane_true>())));"
     [generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
       arith:
         requires:
@@ -893,7 +893,7 @@ prim<v:=v> inv(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))));"
+          tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(mask<lane_true>())));"
 
 prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
   brief_description "Masked bitwise AND with zeroing."
@@ -941,11 +941,11 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_and[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_and[type(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
-                result[i] = call<primitive=set_zero[type<backend>(vector::as_extension(scalar))]>();
+                result[i] = call<primitive=set_zero[type(vector::as_extension(scalar))]>();
               }
             }
             complete(result);
@@ -1047,11 +1047,11 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<svand, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
                 )
               )
             );
@@ -1103,9 +1103,9 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_and[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_and[type(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
                 result[i] = left[i];
               }
@@ -1211,11 +1211,11 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<svand, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
                 )
               )
             );
@@ -1268,11 +1268,11 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_andnot[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_andnot[type(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
-                result[i] = call<primitive=set_zero[type<backend>(vector::as_extension(scalar))]>();
+                result[i] = call<primitive=set_zero[type(vector::as_extension(scalar))]>();
               }
             }
             complete(result);
@@ -1374,11 +1374,11 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<svbic, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left)
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left)
                 )
               )
             );
@@ -1431,9 +1431,9 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_andnot[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_andnot[type(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
                 result[i] = left[i];
               }
@@ -1565,11 +1565,11 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_or[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_or[type(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
-                result[i] = call<primitive=set_zero[type<backend>(vector::as_extension(scalar))]>();
+                result[i] = call<primitive=set_zero[type(vector::as_extension(scalar))]>();
               }
             }
             complete(result);
@@ -1671,11 +1671,11 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<svorr, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
                 )
               )
             );
@@ -1727,9 +1727,9 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_or[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_or[type(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
                 result[i] = left[i];
               }
@@ -1835,11 +1835,11 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<svorr, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
                 )
               )
             );
@@ -1891,11 +1891,11 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_xor[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_xor[type(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
-                result[i] = call<primitive=set_zero[type<backend>(vector::as_extension(scalar))]>();
+                result[i] = call<primitive=set_zero[type(vector::as_extension(scalar))]>();
               }
             }
             complete(result);
@@ -1997,11 +1997,11 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<sveor, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
                 )
               )
             );
@@ -2053,9 +2053,9 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_xor[type<backend>(vector::as_extension(scalar))]>(left[i], right[i]);
+                result[i] = call<primitive=binary_xor[type(vector::as_extension(scalar))]>(left[i], right[i]);
               } else {
                 result[i] = left[i];
               }
@@ -2161,11 +2161,11 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<sveor, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(left),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(right)
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(right)
                 )
               )
             );
@@ -2204,7 +2204,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
               complete(
                 call<primitive=binary_xor>(
                   data,
-                  call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
+                  call<primitive=set1[Vec]>(mask<lane_true>())
                 )
               );
             }
@@ -2222,14 +2222,14 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_xor[type<backend>(vector::as_extension(scalar))]>(
+                result[i] = call<primitive=binary_xor[type(vector::as_extension(scalar))]>(
                   data[i],
-                  call<primitive=set1[type<backend>(vector::as_extension(scalar))]>(value<generation>(mask::lane::all_true))
+                  call<primitive=set1[type(vector::as_extension(scalar))]>(mask<lane_true>())
                 );
               } else {
-                result[i] = call<primitive=set_zero[type<backend>(vector::as_extension(scalar))]>();
+                result[i] = call<primitive=set_zero[type(vector::as_extension(scalar))]>();
               }
             }
             complete(result);
@@ -2250,7 +2250,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
               intrin<maskz_xor, build[suffix=base::signed_of(base::in)]>(
                 mask,
                 data,
-                call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
+                call<primitive=set1[Vec]>(mask<lane_true>())
               )
             );
           """
@@ -2287,7 +2287,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
               intrin<maskz_xor, build>(
                 mask,
                 data,
-                call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
+                call<primitive=set1[Vec]>(mask<lane_true>())
               )
             );
           """
@@ -2328,7 +2328,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
               intrin<sveor, build[post=z]>(
                 mask,
                 data,
-                call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
+                call<primitive=set1[Vec]>(mask<lane_true>())
               )
             );
           """
@@ -2341,12 +2341,12 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<sveor, build[suffix=base::unsigned_of(base::in), post=z]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(
-                    call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(data),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(
+                    call<primitive=set1[Vec]>(mask<lane_true>())
                   )
                 )
               )
@@ -2386,7 +2386,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
               complete(
                 call<primitive=binary_xor>(
                   data,
-                  call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
+                  call<primitive=set1[Vec]>(mask<lane_true>())
                 )
               );
             }
@@ -2404,11 +2404,11 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
         implementation:
           tsil """
             var<init_register>(result);
-            loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (mask<test>(mask, i)) {
-                result[i] = call<primitive=binary_xor[type<backend>(vector::as_extension(scalar))]>(
+                result[i] = call<primitive=binary_xor[type(vector::as_extension(scalar))]>(
                   data[i],
-                  call<primitive=set1[type<backend>(vector::as_extension(scalar))]>(value<generation>(mask::lane::all_true))
+                  call<primitive=set1[type(vector::as_extension(scalar))]>(mask<lane_true>())
                 );
               } else {
                 result[i] = data[i];
@@ -2433,7 +2433,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
                 data,
                 mask,
                 data,
-                call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
+                call<primitive=set1[Vec]>(mask<lane_true>())
               )
             );
           """
@@ -2472,7 +2472,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
                 data,
                 mask,
                 data,
-                call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
+                call<primitive=set1[Vec]>(mask<lane_true>())
               )
             );
           """
@@ -2514,7 +2514,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
               intrin<sveor, build[post=m]>(
                 mask,
                 data,
-                call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
+                call<primitive=set1[Vec]>(mask<lane_true>())
               )
             );
           """
@@ -2527,12 +2527,12 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<sveor, build[suffix=base::unsigned_of(base::in), post=m]>(
                   mask,
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(data),
-                  call<primitive=reinterpret[Vec, Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>]>(
-                    call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true))
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(data),
+                  call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(
+                    call<primitive=set1[Vec]>(mask<lane_true>())
                   )
                 )
               )

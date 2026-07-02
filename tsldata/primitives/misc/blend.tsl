@@ -65,7 +65,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           tsil """
               var<infer>(result, call<primitive=to_array[Vec]>(left));
               var<const_infer>(right_array, call<primitive=to_array[Vec]>(right));
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(i, 0, value(vector::length), 1)  {
                 if (mask<test>(mask, i)) {
                   result[i] = right_array[i];
                 }
@@ -163,7 +163,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           tsil """
               var<infer>(result, call<primitive=to_array[Vec]>(left));
               var<const_infer>(right_array, call<primitive=to_array[Vec]>(right));
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
+              loop<backend, unroll>(i, 0, value(vector::length), 1)  {
                 if (mask<test>(mask, i)) {
                   result[i] = right_array[i];
                 }
@@ -205,7 +205,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           reasons [intrinsic]
         implementation:
           tsil """
-              let<type>(UnsignedT, type<generation>(base::unsigned_of(type<generation>(base::in))));
+              let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
               var<const_infer>(mask_v, call<primitive=to_vector>(mask));
               var<const_infer>(mask_u, call<primitive=reinterpret[Vec, Vec<UnsignedT>]>(mask_v));
               complete(intrin<vbslq, build[suffix=base::in]>(mask_u, right, left));
@@ -274,7 +274,7 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
               if (mask) {
                 complete(src);
               } else {
-                complete(cast<static>(type<generation>(base::in), 0));
+                complete(cast<static>(type(base::in), 0));
               }
             """
     [avx512, avx2_vl, sse_vl]:

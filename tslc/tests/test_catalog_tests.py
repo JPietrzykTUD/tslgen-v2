@@ -143,13 +143,13 @@ def test_param_type_rules_are_validated() -> None:
         "prim<v:=ptr>[packed=*] id(ptr):\n"
         "  param_types:\n"
         "    missing:\n"
-        '      "if packed=true" "type<generation>(base::in) *"\n'
+        '      "if packed=true" "type(base::in) *"\n'
         "    ptr:\n"
-        '      "if unknown=true" "type<generation>(base::in) *"\n'
-        '      "when packed=true" "type<generation>(base::in) *"\n'
-        '      "if packed=maybe" "type<generation>(base::in) *"\n'
-        '      "if packed=false" "type<generation>(base::in) *"\n'
-        '      "if packed=false" "type<generation>(base::in) const*"\n'
+        '      "if unknown=true" "type(base::in) *"\n'
+        '      "when packed=true" "type(base::in) *"\n'
+        '      "if packed=maybe" "type(base::in) *"\n'
+        '      "if packed=false" "type(base::in) *"\n'
+        '      "if packed=false" "type(base::in) const*"\n'
         '      "if packed=true" ""\n'
         "  impls:\n"
         "    scalar:\n"

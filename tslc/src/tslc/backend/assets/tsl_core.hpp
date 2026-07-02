@@ -51,7 +51,7 @@ inline To saturating_cast(From value) {
     return static_cast<To>(value);
 }
 
-// Mask lane values (`mask::lane::all_true` / `all_false`): the all-bits-set / all-bits-clear
+// Mask lane values (`mask<lane_true>()` / `mask<lane_false>()`): the all-bits-set / all-bits-clear
 // value of a lane, broadcast by `set1` to build an all-true / all-false lane-bitmask mask.
 // Uniform for integer and float via the object representation — all-ones bytes are an int's
 // all-ones and a float's all-ones-bit NaN. (Runtime, not constexpr: `set1`'s arg is a

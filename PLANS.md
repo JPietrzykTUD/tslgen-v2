@@ -48,8 +48,8 @@ state the plan before editing.
 7. Update root/package guidance only when behavior or workflow changed.
 8. Report the result, validation, and meaningful follow-ups.
 
-Do not create top-level `docs/` workflow files. Historical prompt machinery is
-retired.
+Use top-level `docs/` for human-authored project documentation only, not
+workflow or prompt machinery. Historical prompt machinery is retired.
 
 ## Architecture Pressure Checks
 
@@ -172,6 +172,7 @@ scoped:
 - remove retired dependencies from active code and workflow;
 - keep generated baselines such as `coverage/baseline.json` and
   `coverage/primitive-coverage-inventory.md`;
-- do not delete `supplementary/docs/`;
+- preserve `supplementary/docs/`; it contains generated-TSL documentation
+  assets;
 - do not mix large deletion-only cleanup with semantic generator changes unless
   the deletion is necessary for the slice.

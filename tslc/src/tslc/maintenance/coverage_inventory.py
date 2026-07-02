@@ -115,14 +115,14 @@ _CATEGORY_NOTES = {
         "(LANES-sized target). Known deferred slice."
     ),
     "unresolved type query": (
-        "A `type<generation>(...)` query is not yet evaluated (e.g. "
+        "A `type(...)` query is not yet evaluated (e.g. "
         "`vector::offset_base`, `vector::mask_underlying_t`, `vector::transform(...)`). "
         "See the per-primitive table for current owners."
     ),
     "unresolved value query": (
-        "A `value<generation>(...)` / `value<backend>(...)` query unevaluated "
-        "(e.g. `type::size_bytes(...)`). Blocks to_integral/to_mask generic "
-        "paths and arithmetic fallback bodies."
+        "A `value(...)` query is not yet evaluated (e.g. "
+        "`type::size_bytes(...)`). Blocks to_integral/to_mask generic paths "
+        "and arithmetic fallback bodies."
     ),
     "unresolved pointer-cast type": (
         "`cast<reinterpret>` to a `vector::mask_underlying_t` pointer not resolved."

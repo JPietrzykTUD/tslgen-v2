@@ -49,7 +49,7 @@ prim<s[]:=v> to_array(a):
           reasons []
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
+               var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
               call<primitive=store>(tmp.data(), a);
                complete(tmp) ;
             """
@@ -61,7 +61,7 @@ prim<s[]:=v> to_array(a):
           reasons []
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
+               var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
               call<primitive=store>(tmp.data(), a);
                complete(tmp) ;
             """
@@ -74,7 +74,7 @@ prim<s[]:=v> to_array(a):
           reasons []
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
+               var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
               call<primitive=store>(tmp.data(), a);
                complete(tmp) ;
             """
@@ -86,7 +86,7 @@ prim<s[]:=v> to_array(a):
           reasons []
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
+               var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
               call<primitive=store>(tmp.data(), a);
                complete(tmp) ;
             """
@@ -99,7 +99,7 @@ prim<s[]:=v> to_array(a):
           reasons []
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
+               var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
               call<primitive=store>(tmp.data(), a);
                complete(tmp) ;
             """
@@ -111,7 +111,7 @@ prim<s[]:=v> to_array(a):
           reasons []
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
+               var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
               call<primitive=store>(tmp.data(), a);
                complete(tmp) ;
             """
@@ -124,7 +124,7 @@ prim<s[]:=v> to_array(a):
           reasons []
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
+               var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
               call<primitive=store>(tmp.data(), a);
                complete(tmp) ;
             """
@@ -136,7 +136,7 @@ prim<s[]:=v> to_array(a):
           reasons []
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, tmp, value<backend>(uninit::array));
+               var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
               call<primitive=store>(tmp.data(), a);
                complete(tmp) ;
             """
@@ -149,11 +149,11 @@ prim<s[]:=v> to_array(a):
           reasons [intrinsic]
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length), value<generation>(vector::alignment)>, tmp, value<backend>(uninit::array));
+               var<typed>(array_type<type(base::in), value(vector::length), value(vector::alignment)>, tmp, value(uninit::array));
               svbool_t pg = intrin<svptrue_b8>();
-              if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 2) { pg = intrin<svptrue_b16>(); }
-              else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 4) { pg = intrin<svptrue_b32>(); }
-              else if<generation>(value<generation>(type::size_bytes(type<generation>(base::in))) == 8) { pg = intrin<svptrue_b64>(); }
+              if<generation>(value(type::size_bytes(type(base::in))) == 2) { pg = intrin<svptrue_b16>(); }
+              else if<generation>(value(type::size_bytes(type(base::in))) == 4) { pg = intrin<svptrue_b32>(); }
+              else if<generation>(value(type::size_bytes(type(base::in))) == 8) { pg = intrin<svptrue_b64>(); }
               intrin<svst1>(pg, tmp.data(), a);
                complete(tmp) ;
             """
@@ -177,7 +177,7 @@ prim<s[]:=v> to_array(a):
           reasons []
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, temp, value<backend>(uninit::array));
+               var<typed>(array_type<type(base::in), value(vector::length)>, temp, value(uninit::array));
               temp.fill(a);
                complete(temp) ;
             """
@@ -189,7 +189,7 @@ prim<s[]:=v> to_array(a):
           reasons []
         implementation:
           tsil """
-               var<typed>(array_type<type<generation>(base::in), value<generation>(vector::length)>, temp, value<backend>(uninit::array));
+               var<typed>(array_type<type(base::in), value(vector::length)>, temp, value(uninit::array));
               temp.fill(a);
                complete(temp) ;
             """
@@ -303,7 +303,7 @@ prim<s:=v[idx]> extract_value(a):
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
-               complete(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
+               complete(arr[cast<static>(type(scalar::size), Index)]) ;
             """
     avx2:
       arith:
@@ -315,7 +315,7 @@ prim<s:=v[idx]> extract_value(a):
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
-               complete(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
+               complete(arr[cast<static>(type(scalar::size), Index)]) ;
             """
     sse:
       arith:
@@ -327,7 +327,7 @@ prim<s:=v[idx]> extract_value(a):
         implementation:
           tsil """
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
-               complete(arr[cast<static>(type<backend>(scalar::size), Index)]) ;
+               complete(arr[cast<static>(type(scalar::size), Index)]) ;
             """
     neon:
       arith:
@@ -347,11 +347,11 @@ prim<s:=v[idx]> extract_value(a):
           reasons [intrinsic, raw_pointer]
         implementation:
           tsil """
-               let<type>(Base, type<generation>(base::in));
+               let<type>(Base, type(base::in));
                var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
                var<const_infer>(values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
                intrin<svst1, build>(call<primitive=mask_true[Vec]>(), values, a);
-               var<const_infer>(result, values[cast<static>(type<backend>(scalar::size), Index)]);
+               var<const_infer>(result, values[cast<static>(type(scalar::size), Index)]);
                std::free(values);
                complete(result);
             """
@@ -365,7 +365,7 @@ prim<s:=v[idx]> extract_value(a):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(a[cast<static>(type<backend>(scalar::size), Index)]);"
+          tsil "complete(a[cast<static>(type(scalar::size), Index)]);"
     scalar:
       arith:
         requires []

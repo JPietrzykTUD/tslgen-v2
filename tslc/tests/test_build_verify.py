@@ -245,7 +245,7 @@ def test_to_from_array_roundtrip_builds(
     # The vector<->array layer: `to_array` (result kind `s[]`, a `var<typed>` over the
     # `array_type` substrate + a defaulted-axis `store` call) and `from_array` (`s[]`
     # parameter, a `load attrs[aligned=false]` call / scalar `data[0]`). Exercises the new
-    # generic constructs (`type<generation>`/`value<generation>` regions, `var<typed>` +
+    # generic constructs (`type`/`value` regions, `var<typed>` +
     # uninit array, calls into the axis'd/overloaded `store`/`load`) end-to-end in C++ and
     # Rust across scalar + SIMD; the closure pulls in `load`/`store`. Including `avx`
     # guards the AVX-only 256-bit integer store/load fallback used by byte/word arrays.
@@ -293,9 +293,9 @@ def test_generic_masks_build(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
     # The generic vector's emulated mask: comparisons build a bitset mask via `let<type>(MaskT,
-    # vector::mask)` + `var<typed>` + `mask<zero>`/`mask<set:1>` (the `mask<*>` ops lowered per
+    # vector::mask)` + `var<typed>` + `mask<zero>`/`mask<set>` (the `mask<*>` ops lowered per
     # the lane-bitmask representation), and the mask/bitwise primitives (pulled by le/ge)
-    # combine them with `mask<test>`/`mask<set>`. Builds in both backends; the native
+    # combine them with `mask<test>`/`mask<set_to>`. Builds in both backends; the native
     # comparison bodies are unaffected.
     result = generate_project(
         [data_root],
@@ -607,7 +607,7 @@ def test_to_vector_builds(data_root: Path, machine_profiles_path: Path, tmp_path
     # `to_vector` (mask -> vector) closes the mask triad. Exercises the reinterpret /
     # type-conversion cluster: the generic emulated body (`var<init_register>` + `if<compile>`
     # splicing the f32/f64 NaN branch + `mask<test>` loop + `base::unsigned_of` /
-    # `type<backend>(scalar::*)` / `cast<bitcast>` via `tsl_core::bit_cast`), the avx512
+    # `type(scalar::*)` / `cast<bitcast>` via `tsl_core::bit_cast`), the avx512
     # `maskz_set1`+`bit_cast` float paths, and the avx2/sse `complete(mask)` identity.
     # Both backends; avx2_vl/sse_vl native conversion (mov+mask::lane) skips cleanly.
     result = generate_project(
@@ -682,7 +682,7 @@ def test_masked_load_store_build(
     # `store` emits `store_mask` — each carrying the `aligned` const-generic (mask × aligned
     # compose orthogonally). avx512(_vl) uses native masked load/store (`maskz_loadu`/`mask_loadu`/
     # `mask_storeu`); avx2/sse fall back to `load`+`mov`/`blend`(+`store`) — the fallback forwards
-    # the caller's `aligned` via `attrs[aligned=value<generation>(primitive::attribute(aligned))]`,
+    # the caller's `aligned` via `attrs[aligned=value(primitive::attribute(aligned))]`,
     # which the call lowerer now resolves. `void` store result types in both backends. scalar +
     # sse2 + avx2 + skylake. (gather/scatter masked are deferred on the `vidx` kind.)
     result = generate_project(
@@ -1023,7 +1023,7 @@ def test_mask_boolean_algebra_builds(
     # on the lane-bitmask register (sse/avx2), raw `|`/`^` on the native `__mmaskN` (avx512) /
     # `bool` (scalar), generic bit-loops. `not` is native `~`/`!` (avx512/scalar) + generic loop;
     # its avx2/sse path (`binary_xor(mask, mask_true())`) prunes cleanly — `mask_true` needs the
-    # not-yet-built `mask::lane::all_true` lane value (deferred). Both backends.
+    # not-yet-built `mask<lane_true>()` lane value (deferred). Both backends.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
@@ -1040,7 +1040,7 @@ def test_mask_boolean_algebra_builds(
 
 
 def test_mask_true_builds(data_root: Path, machine_profiles_path: Path, tmp_path: Path) -> None:
-    # `mask_true` (`m:=()`) builds on all targets now that `mask::lane::all_true` resolves: native
+    # `mask_true` (`m:=()`) builds on all targets now that `mask<lane_true>()` resolves: native
     # `__mmaskN` all-ones (avx512), `set1(mask_lane_all_true<T>())` on the lane-bitmask ISAs
     # (sse/avx2 — the previously-pruned path), `true` (scalar), generic bit-loop. The lane value
     # comes from the `::tsl::mask_lane_all_true<T>()` / `<T as TslMaskLaneValue>::all_true()`

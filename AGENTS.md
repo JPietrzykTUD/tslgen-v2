@@ -62,6 +62,9 @@ The project design rests on these ideas:
 ## Project Map
 
 ```text
+docs/
+  README.md                   Project documentation index
+
 tslc/
   src/tslc/
     api.py                    Public generation API
@@ -91,7 +94,7 @@ tsldata/
 supplementary/
   buildsystem/                C++/Rust build-system static files and templates
   ci/                         Reusable CI helper scripts
-  docs/                       Active generated-documentation assets
+  docs/                       Generated-TSL documentation input assets
   helpers/                    C++/Rust helper sources
   templates/                  C++/Rust render templates
 
@@ -240,7 +243,8 @@ container where `/tmp` lives on an overlay that only grows.
 - Do not commit generated scratch output.
 - Do not delete or rewrite committed baselines unless the task explicitly calls
   for it.
-- `supplementary/docs/` is an active asset tree; keep it.
+- `supplementary/docs/` contains assets used only for generated-TSL
+  documentation; keep it.
 
 ## Review Expectations
 

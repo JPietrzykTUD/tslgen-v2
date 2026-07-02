@@ -81,7 +81,7 @@ prim<v:=v> popcnt(data):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<svcnt, build[post=x]>(call<primitive=mask_true[Vec]>(), data)
               )
             );
@@ -101,8 +101,8 @@ prim<v:=v> popcnt(data):
         implementation:
           tsil """
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
-               loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
-                data_arr[i] = cast<static>(type<generation>(base::in), details::popcount(data_arr[i]));
+               loop<backend, unroll>(i, 0, value(vector::length), 1)  {
+                data_arr[i] = cast<static>(type(base::in), details::popcount(data_arr[i]));
               }
                complete(call<primitive=from_array[Vec]>(data_arr)) ;
             """
@@ -114,7 +114,7 @@ prim<v:=v> popcnt(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), details::popcount(data)));"
+          tsil "complete(cast<static>(type(base::in), details::popcount(data)));"
 prim<s:=s> lzc_scalar(data):
   brief_description "Counts leading zeros (scalar)."
   detailed_description """
@@ -143,7 +143,7 @@ prim<s:=s> lzc_scalar(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), details::clz(data)));"
+          tsil "complete(cast<static>(type(base::in), details::clz(data)));"
       f?:
         requires:
           scalar []
@@ -154,10 +154,10 @@ prim<s:=s> lzc_scalar(data):
           reasons [raw_memory]
         implementation:
           tsil """
-               let<type>(UnsignedT, type<generation>(select(value<generation>(type::is_same(type<generation>(base::in), f32)), ui32, ui64)));
+               let<type>(UnsignedT, type(select(value(type::is_same(type(base::in), f32)), ui32, ui64)));
                var<infer>(bits, cast<static>(UnsignedT, 0));
-               mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data), value<generation>(type::size_bytes(type<generation>(base::in)))) ;
-               complete(cast<static>(type<generation>(base::in), details::clz(bits))) ;
+               mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data), value(type::size_bytes(type(base::in)))) ;
+               complete(cast<static>(type(base::in), details::clz(bits))) ;
             """
     oneAPIfpga:
       ?i?:
@@ -167,7 +167,7 @@ prim<s:=s> lzc_scalar(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), details::clz_recursive<type<generation>(base::in), type<generation>(vector::offset_base)::apply>(data)));"
+          tsil "complete(cast<static>(type(base::in), details::clz_recursive<type(base::in), type(vector::offset_base)::apply>(data)));"
     oneAPIfpgaRTL:
       ?i?:
         requires [oneAPIfpgaDev]
@@ -176,7 +176,7 @@ prim<s:=s> lzc_scalar(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), details::clz_recursive<type<generation>(base::in), type<generation>(vector::offset_base)::apply>(data)));"
+          tsil "complete(cast<static>(type(base::in), details::clz_recursive<type(base::in), type(vector::offset_base)::apply>(data)));"
 prim<v:=v> lzc(data):
   brief_description "Counts leading zeros (vector)."
   detailed_description """
@@ -249,7 +249,7 @@ prim<v:=v> lzc(data):
         implementation:
           tsil """
             complete(
-              call<primitive=reinterpret[Vec<type<generation>(base::unsigned_of(type<generation>(base::in)))>, Vec]>(
+              call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(
                 intrin<svclz, build[post=x]>(call<primitive=mask_true[Vec]>(), data)
               )
             );
@@ -270,8 +270,8 @@ prim<v:=v> lzc(data):
         implementation:
           tsil """
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
-               loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
-                data_arr[i] = call<primitive=lzc_scalar[type<backend>(vector::as_extension(scalar))]>(data_arr[i]);
+               loop<backend, unroll>(i, 0, value(vector::length), 1)  {
+                data_arr[i] = call<primitive=lzc_scalar[type(vector::as_extension(scalar))]>(data_arr[i]);
               }
                complete(call<primitive=from_array[Vec]>(data_arr)) ;
             """
@@ -287,8 +287,8 @@ prim<v:=v> lzc(data):
         implementation:
           tsil """
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
-               loop<backend, unroll>(i, 0, value<generation>(vector::length), 1)  {
-                data_arr[i] = cast<static>(type<generation>(base::in), details::clz_recursive<type<generation>(base::in), type<generation>(vector::offset_base)::apply>(data_arr[i]));
+               loop<backend, unroll>(i, 0, value(vector::length), 1)  {
+                data_arr[i] = cast<static>(type(base::in), details::clz_recursive<type(base::in), type(vector::offset_base)::apply>(data_arr[i]));
               }
                complete(call<primitive=from_array[Vec]>(data_arr)) ;
             """
@@ -323,7 +323,7 @@ prim<s:=m> lzc_imask(value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), details::clz(call<primitive=to_integral[Vec]>(value))));"
+          tsil "complete(cast<static>(type(base::in), details::clz(call<primitive=to_integral[Vec]>(value))));"
     [oneAPIfpga, oneAPIfpgaRTL]:
       ?i?:
         requires:
@@ -334,7 +334,7 @@ prim<s:=m> lzc_imask(value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(details::clz_recursive<type<generation>(vector::imask), type<backend>(intrin::vector::imask)::apply>(call<primitive=to_integral[Vec]>(value)));"
+          tsil "complete(details::clz_recursive<type(vector::imask), type(intrin::vector::imask)::apply>(call<primitive=to_integral[Vec]>(value)));"
 prim<s:=m> tzc(value):
   brief_description "Counts trailing zeros in an imask."
   detailed_description """
@@ -366,4 +366,4 @@ prim<s:=m> tzc(value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), details::ctz(call<primitive=to_integral[Vec]>(value))));"
+          tsil "complete(cast<static>(type(base::in), details::ctz(call<primitive=to_integral[Vec]>(value))));"

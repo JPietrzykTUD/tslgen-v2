@@ -132,24 +132,6 @@ class ImaskQuery:
         return TextValue(context.env.backend.types.imask_type_spelling())
 
 
-class MaskLaneQuery:
-    """``mask::lane::*`` -> all-true/all-false lane value for current base type."""
-
-    def __init__(self, head: str, template_key: str) -> None:
-        self.head = head
-        self._template_key = template_key
-
-    def apply(self, args, context):  # noqa: ANN001
-        if args:
-            return None
-        base = context.env.backend.types.scalar_spelling(context.env.type_tag)
-        if base is None or context.env.backend.templates.template(self._template_key) is None:
-            return None
-        return TextValue(
-            context.env.backend.templates.render_template(self._template_key, base=base)
-        )
-
-
 class VectorAlignmentQuery:
     """``vector::alignment`` -> natural register byte alignment."""
 

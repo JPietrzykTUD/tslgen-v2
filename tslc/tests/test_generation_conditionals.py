@@ -64,8 +64,8 @@ def test_query_facade_separates_evaluator_from_namespace_functions() -> None:
 def test_type_is_same_query(catalog: Catalog) -> None:
     ev = QueryEvaluator()
     ctx = _ctx(catalog, "avx2", "ui16")
-    assert ev.evaluate("type::is_same(type<generation>(base::in), ui16)", ctx) == BoolValue(True)
-    assert ev.evaluate("type::is_same(type<generation>(base::in), ui8)", ctx) == BoolValue(False)
+    assert ev.evaluate("type::is_same(type(base::in), ui16)", ctx) == BoolValue(True)
+    assert ev.evaluate("type::is_same(type(base::in), ui8)", ctx) == BoolValue(False)
 
 
 def test_select_query_chooses_same_kind_generation_value(catalog: Catalog) -> None:
@@ -74,14 +74,17 @@ def test_select_query_chooses_same_kind_generation_value(catalog: Catalog) -> No
     ctx_f64 = _ctx(catalog, "avx2", "f64")
 
     query = (
-        "select(value<generation>(type::is_same(type<generation>(base::in), f32)), "
+        "select(value(type::is_same(type(base::in), f32)), "
         "ui32, ui64)"
     )
 
     assert ev.evaluate(query, ctx_f32) == TypeValue("ui32")
     assert ev.evaluate(query, ctx_f64) == TypeValue("ui64")
     assert ev.evaluate(
-        "select(value<generation>(type::is_same(type<generation>(base::in), f32)), "
+        "value<generation>(type::is_same(type(base::in), f32))", ctx_f32
+    ) is None
+    assert ev.evaluate(
+        "select(value(type::is_same(type(base::in), f32)), "
         "ui32, scalar::size)",
         ctx_f32,
     ) is None
@@ -110,22 +113,24 @@ def test_query_evaluator_returns_source_identities_for_type_and_vector_terms(cat
         ),
     )
 
-    assert ev.evaluate("type<backend>(scalar::si16)", ctx) == TypeValue("si16")
+    assert ev.evaluate("type(scalar::si16)", ctx) == TypeValue("si16")
+    assert ev.evaluate("type<backend>(scalar::si16)", ctx) is None
+    assert ev.evaluate("mask::lane::all_true", ctx) is None
     assert ev.evaluate("base::signed_of(AliasBase)", ctx) == TypeValue("si32")
     assert ev.evaluate(
-        "type<generation>(vector::as_base(ToBase))", ctx
+        "type(vector::as_base(ToBase))", ctx
     ) == VectorValue(base_tag="ui16", extension_isa="avx2", lanes=16)
     assert ev.evaluate(
-        "type<generation>(vector::as_extension(ToExtension))", ctx
+        "type(vector::as_extension(ToExtension))", ctx
     ) == VectorValue(base_tag="si32", extension_isa="sse", lanes=4)
     assert ev.evaluate(
-        "type<generation>(vector::as(sse, ToBase))", ctx
+        "type(vector::as(sse, ToBase))", ctx
     ) == VectorValue(base_tag="ui16", extension_isa="sse", lanes=8)
     assert ev.evaluate(
-        "type<generation>(vector::transform_extension(ToBase))", ctx
+        "type(vector::transform_extension(ToBase))", ctx
     ) is None
     assert ev.evaluate(
-        "type<generation>(vector::as_extension(sse, ToBase))", ctx
+        "type(vector::as_extension(sse, ToBase))", ctx
     ) is None
 
 
@@ -262,6 +267,37 @@ def test_native_mask_registration_per_profile(
 
     assert "register_type" in _mask_line("avx2")  # lane-bitmask
     assert "native_mask<256" in _mask_line("skylake")  # avx2_vl native predicate
+
+
+def test_mask_all_and_zero_lower_for_native_predicate_masks(
+    catalog: Catalog, machine_profiles
+) -> None:
+    cpp_true = _spec(catalog, machine_profiles, "skylake", "mask_true", "avx512", "ui32")
+    cpp_false = _spec(catalog, machine_profiles, "skylake", "mask_false", "avx512", "ui32")
+    rust_true = _spec(
+        catalog, machine_profiles, "skylake", "mask_true", "avx512", "ui32", backend="rust"
+    )
+    generic_true = _spec(catalog, machine_profiles, "avx2", "mask_true", "generic", "ui32")
+
+    assert cpp_true is not None
+    assert cpp_true.body_text == "return static_cast<typename Vec::mask_type>(~0ull);"
+    assert cpp_false is not None
+    assert cpp_false.body_text == "return 0;"
+    assert rust_true is not None
+    assert rust_true.body_text == "return u64::MAX as _;"
+    assert generic_true is not None
+    assert "LANES" in generic_true.body_text
+    assert "mask<all>" not in cpp_true.body_text + rust_true.body_text + generic_true.body_text
+
+
+def test_mask_test_imask_lowers_integral_mask_bit_test(
+    catalog: Catalog, machine_profiles
+) -> None:
+    cpp = _spec(catalog, machine_profiles, "avx2", "test_imask", "avx2", "ui32")
+
+    assert cpp is not None
+    assert "static_cast<std::uint64_t>(mask)" in cpp.body_text
+    assert "mask<test" not in cpp.body_text
 
 
 # --- masked-variant selection: native blend (first mask-consuming primitive) --

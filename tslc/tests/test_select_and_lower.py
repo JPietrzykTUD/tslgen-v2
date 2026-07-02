@@ -284,7 +284,7 @@ def test_consumed_tsil_statement_terminators_render_once() -> None:
         "scalar",
         "ints",
         (
-            "let<type>(Alias, type<generation>(base::in)); "
+            "let<type>(Alias, type(base::in)); "
             "var<infer>(tmp, a); intrin<side_effect>(tmp); complete(tmp);"
         ),
         source_order=0,

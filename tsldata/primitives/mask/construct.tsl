@@ -27,7 +27,7 @@ prim<m:=()>[value=zero] mask_false():
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::mask), 0));"
+          tsil "complete(mask<zero>());"
     [avx2, sse, neon]:
       arith:
         requires:
@@ -60,7 +60,7 @@ prim<m:=()>[value=zero] mask_false():
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(false);"
+          tsil "complete(mask<zero>());"
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -101,7 +101,7 @@ prim<m:=()>[value=all] mask_true():
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type<generation>(vector::mask), cast<static>(type<backend>(scalar::ui64), 0xFFFFFFFFFFFFFFFF)));"
+          tsil "complete(mask<all>());"
     [avx2, sse, neon]:
       arith:
         requires:
@@ -116,7 +116,7 @@ prim<m:=()>[value=all] mask_true():
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(call<primitive=set1[Vec]>(value<generation>(mask::lane::all_true)));"
+          tsil "complete(call<primitive=set1[Vec]>(mask<lane_true>()));"
     sve:
       ?i8:
         requires [sve]
@@ -174,7 +174,7 @@ prim<m:=()>[value=all] mask_true():
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(true);"
+          tsil "complete(mask<all>());"
     [generic, oneAPIfpga]:
       arith:
         requires:
@@ -185,11 +185,4 @@ prim<m:=()>[value=all] mask_true():
           caller_unsafe false
           reasons []
         implementation:
-          tsil """
-              let<type>(MaskT, type<generation>(vector::mask));
-              var<typed>(MaskT, result, mask<zero>());
-              loop<backend, unroll>(i, 0, value<generation>(vector::length), 1) {
-                mask<set:1>(result, i);
-              }
-              complete(result);
-            """
+          tsil "complete(mask<all>());"

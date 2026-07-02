@@ -32,7 +32,7 @@ prim<s:=v> hadd(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<svaddv, build>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<svaddv, build>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
         safety:
@@ -49,7 +49,7 @@ prim<s:=v> hadd(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_add, build[suffix=base::signed_of(base::in)]>(vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<reduce_add, build[suffix=base::signed_of(base::in)]>(vec)));"
       f?:
         requires [avx512f]
         safety:
@@ -66,7 +66,7 @@ prim<s:=v> hadd(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_add, build[suffix=base::signed_of(base::in)]>(vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<reduce_add, build[suffix=base::signed_of(base::in)]>(vec)));"
     avx2:
       [si32, ui32]:
         requires [avx2]
@@ -81,7 +81,7 @@ prim<s:=v> hadd(vec):
             var<infer>(temp, intrin<_mm_add_epi32>(lo, hi));
             temp = intrin<_mm_add_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_add_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       [si64, ui64]:
         requires [avx2]
@@ -95,7 +95,7 @@ prim<s:=v> hadd(vec):
             var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
             var<infer>(temp, intrin<_mm_add_epi64>(lo, hi));
             temp = intrin<_mm_add_epi64>(temp, intrin<_mm_unpackhi_epi64>(temp, temp));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       f32:
         requires [avx2]
@@ -135,8 +135,8 @@ prim<s:=v> hadd(vec):
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            loop<backend>(i, 0, value(vector::length), 1) {
               result = details::arith_add(result, values[i]);
             }
             complete(result);
@@ -153,7 +153,7 @@ prim<s:=v> hadd(vec):
             var<infer>(temp, vec);
             temp = intrin<_mm_add_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_add_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       [si64, ui64]:
         requires [sse2]
@@ -164,7 +164,7 @@ prim<s:=v> hadd(vec):
         implementation:
           tsil """
             var<const_infer>(temp, intrin<_mm_add_epi64>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si64>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si64>(temp)));
           """
       f32:
         requires [sse2]
@@ -199,13 +199,13 @@ prim<s:=v> hadd(vec):
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            loop<backend>(i, 0, value(vector::length), 1) {
               result = details::arith_add(result, values[i]);
             }
             complete(result);
           """
-    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
+    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon]:
       arith:
         requires:
           scalar []
@@ -215,7 +215,6 @@ prim<s:=v> hadd(vec):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
-          sve [sve]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -223,8 +222,8 @@ prim<s:=v> hadd(vec):
         implementation:
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
+            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            loop<backend>(i, 0, value(vector::length), 1) {
               result = details::arith_add(result, values[i]);
             }
             complete(result);
@@ -262,7 +261,7 @@ prim<s:=v> hmax(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<svmaxv, build>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<svmaxv, build>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
         safety:
@@ -279,7 +278,7 @@ prim<s:=v> hmax(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_max, build>(vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<reduce_max, build>(vec)));"
       f?:
         requires [avx512f]
         safety:
@@ -296,7 +295,7 @@ prim<s:=v> hmax(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_max, build>(vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<reduce_max, build>(vec)));"
     avx2:
       si32:
         requires [avx2]
@@ -311,7 +310,7 @@ prim<s:=v> hmax(vec):
             var<infer>(temp, intrin<_mm_max_epi32>(lo, hi));
             temp = intrin<_mm_max_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_max_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       ui32:
         requires [avx2]
@@ -326,7 +325,7 @@ prim<s:=v> hmax(vec):
             var<infer>(temp, intrin<_mm_max_epu32>(lo, hi));
             temp = intrin<_mm_max_epu32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_max_epu32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       f32:
         requires [avx2]
@@ -382,7 +381,7 @@ prim<s:=v> hmax(vec):
             var<const_infer>(temp, intrin<_mm_max_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
             complete(intrin<_mm_cvtsd_f64>(temp));
           """
-    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
+    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon]:
       arith:
         requires:
           scalar []
@@ -392,7 +391,6 @@ prim<s:=v> hmax(vec):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
-          sve [sve]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -401,7 +399,7 @@ prim<s:=v> hmax(vec):
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, values[0]);
-            loop<backend>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value(vector::length), 1) {
               if (values[i] > result) {
                 result = values[i];
               }
@@ -441,7 +439,7 @@ prim<s:=v> hmin(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<svminv, build>(call<primitive=mask_true[Vec]>(), vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<svminv, build>(call<primitive=mask_true[Vec]>(), vec)));"
       f?:
         requires [sve]
         safety:
@@ -458,7 +456,7 @@ prim<s:=v> hmin(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_min, build>(vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<reduce_min, build>(vec)));"
       f?:
         requires [avx512f]
         safety:
@@ -475,7 +473,7 @@ prim<s:=v> hmin(vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<reduce_min, build>(vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<reduce_min, build>(vec)));"
     avx2:
       si32:
         requires [avx2]
@@ -490,7 +488,7 @@ prim<s:=v> hmin(vec):
             var<infer>(temp, intrin<_mm_min_epi32>(lo, hi));
             temp = intrin<_mm_min_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_min_epi32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       ui32:
         requires [avx2]
@@ -505,7 +503,7 @@ prim<s:=v> hmin(vec):
             var<infer>(temp, intrin<_mm_min_epu32>(lo, hi));
             temp = intrin<_mm_min_epu32>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
             temp = intrin<_mm_min_epu32>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type<generation>(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si32>(temp)));
           """
       f32:
         requires [avx2]
@@ -561,7 +559,7 @@ prim<s:=v> hmin(vec):
             var<const_infer>(temp, intrin<_mm_min_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
             complete(intrin<_mm_cvtsd_f64>(temp));
           """
-    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
+    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon]:
       arith:
         requires:
           scalar []
@@ -571,7 +569,6 @@ prim<s:=v> hmin(vec):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
-          sve [sve]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -580,7 +577,7 @@ prim<s:=v> hmin(vec):
           tsil """
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, values[0]);
-            loop<backend>(i, 1, value<generation>(vector::length), 1) {
+            loop<backend>(i, 1, value(vector::length), 1) {
               if (values[i] < result) {
                 result = values[i];
               }
@@ -619,7 +616,7 @@ prim<s:=(m,v)> hadd(mask, vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<svaddv, build>(mask, vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<svaddv, build>(mask, vec)));"
       f?:
         requires [sve]
         safety:
@@ -636,7 +633,7 @@ prim<s:=(m,v)> hadd(mask, vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_add, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<mask_reduce_add, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
       f?:
         requires [avx512f]
         safety:
@@ -653,7 +650,7 @@ prim<s:=(m,v)> hadd(mask, vec):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_add, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
+          tsil "complete(cast<static>(type(base::in), intrin<mask_reduce_add, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
     [avx2, sse]:
       [si32, ui32, f32, f64]:
         requires:
@@ -665,7 +662,7 @@ prim<s:=(m,v)> hadd(mask, vec):
           reasons []
         implementation:
           tsil "complete(call<primitive=hadd>(call<primitive=blend>(mask, call<primitive=set_zero[Vec]>(), vec)));"
-    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
+    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon]:
       arith:
         requires:
           scalar []
@@ -675,7 +672,6 @@ prim<s:=(m,v)> hadd(mask, vec):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
-          sve [sve]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -684,9 +680,9 @@ prim<s:=(m,v)> hadd(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
-              if (((mask_scalar >> i) & 0b1) == 1) {
+            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            loop<backend>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(mask_scalar, i)) {
                 result = details::arith_add(result, values[i]);
               }
             }
@@ -732,9 +728,9 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type(base::in), 0));
             }
-            complete(cast<static>(type<generation>(base::in), intrin<svmaxv, build>(mask, vec)));
+            complete(cast<static>(type(base::in), intrin<svmaxv, build>(mask, vec)));
           """
       f?:
         requires [sve]
@@ -746,7 +742,7 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type(base::in), 0));
             }
             complete(intrin<svmaxv, build>(mask, vec));
           """
@@ -761,9 +757,9 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type(base::in), 0));
             }
-            complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_max, build>(mask, vec)));
+            complete(cast<static>(type(base::in), intrin<mask_reduce_max, build>(mask, vec)));
           """
       f?:
         requires [avx512f]
@@ -775,7 +771,7 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type(base::in), 0));
             }
             complete(intrin<mask_reduce_max, build>(mask, vec));
           """
@@ -790,11 +786,11 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type(base::in), 0));
             }
-            complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_max, build>(mask, vec)));
+            complete(cast<static>(type(base::in), intrin<mask_reduce_max, build>(mask, vec)));
           """
-    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
+    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon]:
       arith:
         requires:
           scalar []
@@ -804,7 +800,6 @@ prim<s:=(m,v)> hmax(mask, vec):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
-          sve [sve]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -813,10 +808,10 @@ prim<s:=(m,v)> hmax(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            type<backend>(scalar::size) found = 0;
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
-              if (((mask_scalar >> i) & 0b1) == 1) {
+            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            type(scalar::size) found = 0;
+            loop<backend>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(mask_scalar, i)) {
                 if (found == 0) {
                   result = values[i];
                   found = 1;
@@ -867,9 +862,9 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type(base::in), 0));
             }
-            complete(cast<static>(type<generation>(base::in), intrin<svminv, build>(mask, vec)));
+            complete(cast<static>(type(base::in), intrin<svminv, build>(mask, vec)));
           """
       f?:
         requires [sve]
@@ -881,7 +876,7 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type(base::in), 0));
             }
             complete(intrin<svminv, build>(mask, vec));
           """
@@ -896,9 +891,9 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type(base::in), 0));
             }
-            complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_min, build>(mask, vec)));
+            complete(cast<static>(type(base::in), intrin<mask_reduce_min, build>(mask, vec)));
           """
       f?:
         requires [avx512f]
@@ -910,7 +905,7 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type(base::in), 0));
             }
             complete(intrin<mask_reduce_min, build>(mask, vec));
           """
@@ -925,11 +920,11 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             if (mask_scalar == 0) {
-              complete(cast<static>(type<generation>(base::in), 0));
+              complete(cast<static>(type(base::in), 0));
             }
-            complete(cast<static>(type<generation>(base::in), intrin<mask_reduce_min, build>(mask, vec)));
+            complete(cast<static>(type(base::in), intrin<mask_reduce_min, build>(mask, vec)));
           """
-    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
+    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon]:
       arith:
         requires:
           scalar []
@@ -939,7 +934,6 @@ prim<s:=(m,v)> hmin(mask, vec):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
-          sve [sve]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -948,10 +942,10 @@ prim<s:=(m,v)> hmin(mask, vec):
           tsil """
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
-            var<typed>(type<generation>(base::in), result, cast<static>(type<generation>(base::in), 0));
-            type<backend>(scalar::size) found = 0;
-            loop<backend>(i, 0, value<generation>(vector::length), 1) {
-              if (((mask_scalar >> i) & 0b1) == 1) {
+            var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
+            type(scalar::size) found = 0;
+            loop<backend>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(mask_scalar, i)) {
                 if (found == 0) {
                   result = values[i];
                   found = 1;

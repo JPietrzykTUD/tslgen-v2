@@ -26,6 +26,9 @@ def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:
     assert KEYWORDS == TSIL_REGION_KEYWORDS
     assert lowerer_keywords == TSIL_REGION_KEYWORDS
     assert region_shell_validator("call") == "call_selector"
+    assert region_shell_validator("mask") == "mask_selector"
+    assert region_shell_validator("type") == "no_selector"
+    assert region_shell_validator("value") == "no_selector"
     assert region_shell_validator("complete") is None
     declared_validators = {
         descriptor.shell_validator
@@ -126,7 +129,7 @@ def _joined(segments) -> str:
 
 
 def test_if_generation_captures_branch_blocks() -> None:
-    body = "if<generation>(type::is_same(type<generation>(base::in), ui8)) { a = 1; } else<generation> { a = 2; }"
+    body = "if<generation>(type::is_same(type(base::in), ui8)) { a = 1; } else<generation> { a = 2; }"
     region = scan(body)[0]
     assert isinstance(region, Region)
     assert region.keyword == "if"
