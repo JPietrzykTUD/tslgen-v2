@@ -61,5 +61,9 @@ FetchContent_MakeAvailable(tsl)
 add_executable(unary_operator unary_operator.cpp)
 target_link_libraries(unary_operator PRIVATE tsl::tsl)
 
+add_executable(binary_operator binary_operator.cpp)
+target_link_libraries(binary_operator PRIVATE tsl::tsl)
+
 enable_testing()
 add_test(NAME unary_operator COMMAND unary_operator)
+add_test(NAME binary_operator COMMAND binary_operator)

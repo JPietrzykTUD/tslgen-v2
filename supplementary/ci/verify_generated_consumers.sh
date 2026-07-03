@@ -63,7 +63,7 @@ cmake \
   -B "$scratch_root/examples-build" \
   -DTSL_GENERATED_ROOT_DIR="$generated_root" \
   -DTSL_PROFILE=scalar
-cmake --build "$scratch_root/examples-build" --target unary_operator
+cmake --build "$scratch_root/examples-build"
 ctest --test-dir "$scratch_root/examples-build" --output-on-failure
 
 cat >"$scratch_root/rust-consumer/Cargo.toml" <<EOF

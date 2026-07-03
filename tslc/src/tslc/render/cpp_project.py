@@ -25,6 +25,7 @@ from tslc.render._common import (
     used_exts,
     used_type_specs,
 )
+from tslc.render.model import TemplateApplication
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 if TYPE_CHECKING:
@@ -257,11 +258,11 @@ def _cpp_element_count_metadata(
             f"extension {extension.name!r} needs a runtime_lane_count entry "
             "for backend 'cpp' for scalable C++ vector registration"
         )
-    runtime = (
-        runtime.replace("{base_type}", base_type)
-        .replace("{base}", base_type)
-        .replace("{type_tag}", type_tag)
-    )
+    runtime = TemplateApplication(
+        f"{extension.name}.runtime_lane_count.cpp",
+        runtime,
+        {"base_type": base_type, "base": base_type, "type_tag": type_tag},
+    ).render()
     return (
         "    static constexpr bool has_static_lane_count_v = false;\n"
         "    static std::size_t lane_count() noexcept {\n"

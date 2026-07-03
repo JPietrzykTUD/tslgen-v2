@@ -102,9 +102,15 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "namespace parallelism" in helper
     assert "struct native" in helper
     assert "struct fixed" in helper
+    assert "parallelism::fixed<N> requires N > 0" in helper
     assert "vector_for_parallelism<parallelism::native" in helper
     assert "class Alignment = alignment::detect" in helper
     assert "void transform_unary(Op&& op" in helper
+    assert "std::size_t ParallelN" in helper
+    assert "transform_unary<parallelism::fixed<ParallelN>, Alignment>" in helper
+    assert "void transform_binary(" in helper
+    assert "transform_binary_loop" in helper
+    assert "transform_binary<parallelism::fixed<ParallelN>, Alignment>" in helper
     assert '#include "tsl_algorithm.hpp"' in dispatch
     assert "inline typename Vec::register_type load(" in avx2
     assert "inline void store(" in avx2

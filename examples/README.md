@@ -12,7 +12,7 @@ its `cpp/` project through `FetchContent`:
 
 ```bash
 ./dev.sh generate \
-  --primitives mul \
+  --primitives add,mul \
   --profiles scalar \
   --backends cpp \
   --types si32 \
@@ -74,17 +74,39 @@ same operation through native and exact data-parallel policies:
 
 - `transform_unary(...)` defaults to `parallelism::native`, the selected
   profile's natural vector shape for the element type.
-- `transform_unary<parallelism::fixed<4>>` requests exactly four lanes, using a
-  matching static native vector when available or the portable
-  `tsl::generic<4>` vector otherwise.
-- `transform_unary<parallelism::fixed<128>>` demonstrates a large portable
-  generic vector and why operations should accept values through
+- `transform_unary<1>`, `transform_unary<4>`, and `transform_unary<128>`
+  request exact lane counts. They forward to `parallelism::fixed<N>` internally,
+  using a matching static native vector when available or the portable
+  `tsl::generic<N>` vector otherwise.
+- `transform_unary<128>` demonstrates a large portable generic vector and why
+  operations should accept values through
   `tsl::reg_param<Vec>::type`.
 
 `Vec::register_type` names the actual register object type. `tsl::reg_param`
 names the generated-library parameter-passing convention for that object:
 native/scalar registers are passed by value, while array-backed generic
 registers are passed by `const&` to avoid large copies.
+
+### `binary_operator.cpp`
+
+Demonstrates `tsl::algo::transform_binary` with a register-level add operation:
+
+```cpp
+struct add_op {
+  template <class Vec>
+  typename Vec::register_type operator()(
+      typename tsl::reg_param<Vec>::type left,
+      typename tsl::reg_param<Vec>::type right) const {
+    return tsl::add<Vec>(left, right);
+  }
+};
+```
+
+The example allocates two 1000-element `std::int32_t` inputs, fills them, and
+verifies the native default plus direct `transform_binary<1>`,
+`transform_binary<4>`, and `transform_binary<128>` exact-lane overloads. It
+exercises the same helper-owned loop, alignment, load, tail, and store mechanics
+as the unary example, but for two contiguous input columns.
 
 ## CI Integration
 
