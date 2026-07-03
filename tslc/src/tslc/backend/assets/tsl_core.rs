@@ -10,6 +10,7 @@ use core::ops::{Index, IndexMut};
 
 pub trait SimdVector {
     type BaseType;
+    type Extension;
     type RegisterType;
     type MaskType;
     // The integral mask (to_integral's result): the mask packed into an unsigned integer,
@@ -21,6 +22,8 @@ pub trait SimdVector {
     // over a free `IndicesType` — can read/write lanes; concrete `array_type` already satisfies
     // this.
     type Array: Index<usize, Output = Self::BaseType> + IndexMut<usize>;
+    type WithBaseType<ToBase>;
+    type WithExtension<ToExtension>;
     const ALIGN: usize;
 
     fn lane_count() -> usize;
@@ -56,10 +59,13 @@ pub struct Simd<T, Ext>(PhantomData<(T, Ext)>);
 
 impl<T> SimdVector for Simd<T, Scalar> {
     type BaseType = T;
+    type Extension = Scalar;
     type RegisterType = T;
     type MaskType = bool;
     type ImaskType = u64;
     type Array = array_type<T, 1>;
+    type WithBaseType<ToBase> = Simd<ToBase, Scalar>;
+    type WithExtension<ToExtension> = Simd<T, ToExtension>;
     const ALIGN: usize = core::mem::align_of::<T>();
 
     fn lane_count() -> usize {
@@ -86,12 +92,15 @@ pub struct Generic<const LANES: usize>;
 // 128-bit-multiple lane count. Only a hand-written `Simd<u8, Generic<3>>` would violate it, unchecked.
 impl<T, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
     type BaseType = T;
+    type Extension = Generic<LANES>;
     type RegisterType = array_type<T, LANES>;
     // Emulated mask: a bitset, one bit per lane (≤64 lanes covers all real widths).
     type MaskType = u64;
     // Integral mask: the same 64-bit bitset (LANES can't size a smaller integer here).
     type ImaskType = u64;
     type Array = array_type<T, LANES>;
+    type WithBaseType<ToBase> = Simd<ToBase, Generic<LANES>>;
+    type WithExtension<ToExtension> = Simd<T, ToExtension>;
     const ALIGN: usize = core::mem::align_of::<array_type<T, LANES>>();
 
     fn lane_count() -> usize {

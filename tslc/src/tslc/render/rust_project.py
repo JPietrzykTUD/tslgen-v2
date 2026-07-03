@@ -183,8 +183,11 @@ def _rust_registrations(
         array = f"array_type<{base}, {lane_count}, {alignment}>"
         lines.append(
             f"impl SimdVector for Simd<{base}, {rust_extension_tag(extension)}> {{ "
-            f"type BaseType = {base}; type RegisterType = {register}; "
+            f"type BaseType = {base}; type Extension = {rust_extension_tag(extension)}; "
+            f"type RegisterType = {register}; "
             f"type MaskType = {mask}; type ImaskType = {imask}; type Array = {array}; "
+            f"type WithBaseType<ToBase> = Simd<ToBase, {rust_extension_tag(extension)}>; "
+            f"type WithExtension<ToExtension> = Simd<{base}, ToExtension>; "
             f"const ALIGN: usize = {alignment}; "
             f"fn lane_count() -> usize {{ {lane_count} }} }}"
         )

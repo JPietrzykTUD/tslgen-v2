@@ -64,8 +64,13 @@ def test_cpp_core_vectors_expose_metadata_constants(
     core = specialization_artifacts["cpp/include/tsl_core.hpp"]
 
     assert "static constexpr bool has_static_lane_count_v = true;" in core
+    assert "using extension_type = scalar;" in core
+    assert "using with_base_type = simd<ToBase, scalar>;" in core
+    assert "using with_extension = simd<T, ToExtension>;" in core
     assert "static constexpr std::size_t lane_count_v = 1;" in core
     assert "static constexpr std::size_t lane_count_v = LANES;" in core
+    assert "using extension_type = generic<LANES>;" in core
+    assert "using with_base_type = simd<ToBase, generic<LANES>>;" in core
     assert "static constexpr std::size_t vector_element_count = lane_count_v;" in core
     assert "static constexpr std::size_t lane_count() noexcept" in core
     assert "static constexpr std::size_t vector_alignment = alignof(T);" in core
@@ -191,6 +196,9 @@ def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) 
     assert "static constexpr std::size_t vector_element_count = lane_count_v;" in avx2
     assert "static constexpr std::size_t vector_alignment = 32;" in avx2
     assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in avx2
+    assert "using extension_type = avx2;" in avx2
+    assert "using with_base_type = simd<ToBase, avx2>;" in avx2
+    assert "using with_extension = simd<T, ToExtension>;" in avx2
     assert "struct add_impl<tsl::simd<int32_t, tsl::avx2>>" in avx2
     assert "return _mm256_add_epi32(left, right);" in avx2
     assert "struct add_impl<tsl::simd<int32_t, tsl::sse>>" in avx2
@@ -248,6 +256,14 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     core = specialization_artifacts["rust/src/tsl_core.rs"]
 
     assert "pub trait StaticSimdVector: SimdVector" in core
+    assert "type Extension;" in core
+    assert "type WithBaseType<ToBase>;" in core
+    assert "type WithExtension<ToExtension>;" in core
+    assert "type Extension = Scalar;" in core
+    assert "type WithBaseType<ToBase> = Simd<ToBase, Scalar>;" in core
+    assert "type WithExtension<ToExtension> = Simd<T, ToExtension>;" in core
+    assert "type Extension = Generic<LANES>;" in core
+    assert "type WithBaseType<ToBase> = Simd<ToBase, Generic<LANES>>;" in core
     assert "fn lane_count() -> usize;" in core
     assert "const ELEMENT_COUNT: usize;" in core
     assert "const ELEMENT_COUNT: usize = 1;" in core
@@ -261,6 +277,9 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "pub trait AddImpl: StaticSimdVector {" in avx2
     assert "impl AddImpl for Simd<i32, Avx2> {" in avx2
     assert "impl StaticSimdVector for Simd<i32, Avx2>" in avx2
+    assert "type Extension = Avx2;" in avx2
+    assert "type WithBaseType<ToBase> = Simd<ToBase, Avx2>;" in avx2
+    assert "type WithExtension<ToExtension> = Simd<i32, ToExtension>;" in avx2
     assert "const ELEMENT_COUNT: usize = 8;" in avx2
     assert "fn lane_count() -> usize { 8 }" in avx2
     assert "const ALIGN: usize = 32;" in avx2

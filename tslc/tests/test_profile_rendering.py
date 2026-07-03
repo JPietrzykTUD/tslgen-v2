@@ -192,6 +192,9 @@ def test_neon_profile_registers_native_simd_types(
     assert "#include <arm_neon.h>" in cpp
     assert "struct neon {};" in cpp
     assert "struct simd<int32_t, neon>" in cpp
+    assert "using extension_type = neon;" in cpp
+    assert "using with_base_type = simd<ToBase, neon>;" in cpp
+    assert "using with_extension = simd<int32_t, ToExtension>;" in cpp
     assert "using register_type = int32x4_t;" in cpp
     assert "return vaddq_s32(left, right);" in cpp
 
@@ -200,6 +203,9 @@ def test_neon_profile_registers_native_simd_types(
     assert "pub struct Neon;" in rust
     assert "impl SimdVector for Simd<i32, Neon>" in rust
     assert "impl StaticSimdVector for Simd<i32, Neon>" in rust
+    assert "type Extension = Neon;" in rust
+    assert "type WithBaseType<ToBase> = Simd<ToBase, Neon>;" in rust
+    assert "type WithExtension<ToExtension> = Simd<i32, ToExtension>;" in rust
     assert "fn lane_count() -> usize { 4 }" in rust
     assert "type RegisterType = core::arch::aarch64::int32x4_t;" in rust
     assert "return core::arch::aarch64::vaddq_s32(left, right);" in rust
