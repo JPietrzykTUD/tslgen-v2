@@ -43,7 +43,15 @@ _DEFAULT_BACKENDS = DEFAULT_SUPPORT_POLICY.default_backend_ids
 GenerationMode = Literal["partial", "strict"]
 SkipStatus = Literal["coverage_gap", "policy_deferred"]
 _TYPE_ORDER = SCALAR_TYPE_ORDER
-_CPP_ALGORITHM_SUPPORT_PRIMITIVES = ("load", "store")
+_CPP_ALGORITHM_SUPPORT_PRIMITIVES = (
+    "load",
+    "store",
+    "to_integral",
+    "to_mask",
+    "compress_store",
+    "mask_population_count",
+    "mask_binary_and",
+)
 
 
 @dataclass(frozen=True, slots=True)

@@ -95,10 +95,12 @@ struct simd<T, scalar> {
     using imask_type = std::uint64_t;
     static constexpr bool has_static_lane_count_v = true;
     static constexpr std::size_t lane_count_v = 1;
+    static constexpr std::size_t vector_element_count = lane_count_v;
     static constexpr std::size_t lane_count() noexcept {
         return lane_count_v;
     }
-    static constexpr std::size_t simd_register_alignment_v = alignof(T);
+    static constexpr std::size_t vector_alignment = alignof(T);
+    static constexpr std::size_t simd_register_alignment_v = vector_alignment;
 };
 
 // How a register value is passed to apply(): by value.
@@ -237,10 +239,12 @@ struct simd<T, generic<LANES>> {
     using imask_type = std::uint64_t;
     static constexpr bool has_static_lane_count_v = true;
     static constexpr std::size_t lane_count_v = LANES;
+    static constexpr std::size_t vector_element_count = lane_count_v;
     static constexpr std::size_t lane_count() noexcept {
         return lane_count_v;
     }
-    static constexpr std::size_t simd_register_alignment_v = alignof(register_type);
+    static constexpr std::size_t vector_alignment = alignof(register_type);
+    static constexpr std::size_t simd_register_alignment_v = vector_alignment;
 };
 
 template <class T, std::size_t LANES>

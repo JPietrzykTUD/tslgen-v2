@@ -66,10 +66,12 @@ def test_cpp_core_vectors_expose_metadata_constants(
     assert "static constexpr bool has_static_lane_count_v = true;" in core
     assert "static constexpr std::size_t lane_count_v = 1;" in core
     assert "static constexpr std::size_t lane_count_v = LANES;" in core
+    assert "static constexpr std::size_t vector_element_count = lane_count_v;" in core
     assert "static constexpr std::size_t lane_count() noexcept" in core
-    assert "static constexpr std::size_t simd_register_alignment_v = alignof(T);" in core
+    assert "static constexpr std::size_t vector_alignment = alignof(T);" in core
+    assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in core
     assert (
-        "static constexpr std::size_t simd_register_alignment_v = alignof(register_type);"
+        "static constexpr std::size_t vector_alignment = alignof(register_type);"
         in core
     )
 
@@ -98,6 +100,7 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     avx2 = specialization_artifacts["cpp/include/tsl_avx2.hpp"]
 
     assert "namespace tsl::algo" in helper
+    assert "#include <iterator>" in helper
     assert "template <class Vec>\nstruct vector_tag" in helper
     assert "namespace parallelism" in helper
     assert "struct native" in helper
@@ -105,15 +108,75 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "parallelism::fixed<N> requires N > 0" in helper
     assert "vector_for_parallelism<parallelism::native" in helper
     assert "class Alignment = alignment::detect" in helper
+    assert "range_data" in helper
+    assert "std::size(range)" in helper
+    assert "void for_each_chunk(Op&& op" in helper
+    assert "void for_each_chunk(Op&& op, Range& data)" in helper
     assert "void transform_unary(Op&& op" in helper
+    assert "void transform_unary(Op&& op, const InputRange& input" in helper
     assert "std::size_t ParallelN" in helper
     assert "transform_unary<parallelism::fixed<ParallelN>, Alignment>" in helper
     assert "void transform_binary(" in helper
     assert "transform_binary_loop" in helper
     assert "transform_binary<parallelism::fixed<ParallelN>, Alignment>" in helper
+    assert "namespace mask_layout" in helper
+    assert (
+        "struct integral {};\nstruct native {};\nstruct bytes {};\nstruct bits {};"
+        in helper
+    )
+    assert "fixed_native_mask_type" in helper
+    assert "native_mask_chunk_count" in helper
+    assert "fixed_byte_mask_type" in helper
+    assert "byte_mask_count" in helper
+    assert "fixed_bit_mask_type" in helper
+    assert "bit_mask_count" in helper
+    assert "std::size_t predicate_unary(" in helper
+    assert "std::size_t predicate_binary(" in helper
+    assert "void transform_where_unary(" in helper
+    assert "void transform_where_binary(" in helper
+    assert "void transform_masked_unary(" in helper
+    assert "void transform_masked_binary(" in helper
+    assert "std::size_t select_unary(" in helper
+    assert "std::size_t select_masked_unary(" in helper
+    assert "std::size_t select_indices_unary(" in helper
+    assert "std::size_t select_indices_binary(" in helper
+    assert "std::size_t select_masked_indices_unary(" in helper
+    assert "std::size_t select_masked_indices_binary(" in helper
+    assert "selection-vector output indices must use an integral element type" in helper
+    assert "std::size_t select_selected_indices_unary(" in helper
+    assert "std::size_t select_selected_indices_binary(" in helper
+    assert "append_selected_indices_from_mask" in helper
+    assert "void transform_selected_unary(" in helper
+    assert "void transform_selected_binary(" in helper
+    assert "auto aggregate_selected_unary(" in helper
+    assert "auto aggregate_selected_binary(" in helper
+    assert "void consume_selected_unary(" in helper
+    assert "void consume_selected_binary(" in helper
+    assert "selection-vector input indices must use an integral element type" in helper
+    assert "vector_for_selected_rows" in helper
+    assert "std::size_t count_unary(" in helper
+    assert "std::size_t count_binary(" in helper
+    assert "std::size_t count_masked_unary(" in helper
+    assert "std::size_t count_masked_binary(" in helper
+    assert "std::size_t count_selected_unary(" in helper
+    assert "std::size_t count_selected_binary(" in helper
+    assert "auto aggregate_unary(" in helper
+    assert "auto aggregate_binary(" in helper
+    assert "auto aggregate_masked_unary(" in helper
+    assert "auto aggregate_masked_binary(" in helper
+    assert "void consume_unary(" in helper
+    assert "void consume_binary(" in helper
+    assert "void consume_masked_unary(" in helper
+    assert "void consume_masked_binary(" in helper
     assert '#include "tsl_algorithm.hpp"' in dispatch
     assert "inline typename Vec::register_type load(" in avx2
     assert "inline void store(" in avx2
+    assert "inline void store_mask(" in avx2
+    assert "inline typename Vec::imask_type to_integral(" in avx2
+    assert "inline typename Vec::mask_type to_mask(" in avx2
+    assert "inline void compress_store(" in avx2
+    assert "inline std::size_t mask_population_count(" in avx2
+    assert "inline typename Vec::mask_type mask_binary_and(" in avx2
 
 
 def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) -> None:
@@ -125,6 +188,9 @@ def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) 
         "static constexpr std::size_t lane_count_v = 256 / (sizeof(T) * 8);"
         in avx2
     )
+    assert "static constexpr std::size_t vector_element_count = lane_count_v;" in avx2
+    assert "static constexpr std::size_t vector_alignment = 32;" in avx2
+    assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in avx2
     assert "struct add_impl<tsl::simd<int32_t, tsl::avx2>>" in avx2
     assert "return _mm256_add_epi32(left, right);" in avx2
     assert "struct add_impl<tsl::simd<int32_t, tsl::sse>>" in avx2

@@ -36,8 +36,10 @@ def test_x86_register_capabilities_derive_from_extension_facts(
         in rendered
     )
     assert "static constexpr bool has_static_lane_count_v = true;" in rendered
+    assert "static constexpr std::size_t vector_element_count = lane_count_v;" in rendered
     assert "static constexpr std::size_t lane_count() noexcept" in rendered
-    assert "static constexpr std::size_t simd_register_alignment_v = 32;" in rendered
+    assert "static constexpr std::size_t vector_alignment = 32;" in rendered
+    assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in rendered
 
 
 def test_cpp_native_registration_exposes_vector_metadata(catalog: Catalog) -> None:
@@ -61,8 +63,10 @@ def test_cpp_native_registration_exposes_vector_metadata(catalog: Catalog) -> No
     assert "struct simd<int32_t, neon>" in rendered
     assert "static constexpr bool has_static_lane_count_v = true;" in rendered
     assert "static constexpr std::size_t lane_count_v = 4;" in rendered
+    assert "static constexpr std::size_t vector_element_count = lane_count_v;" in rendered
     assert "static constexpr std::size_t lane_count() noexcept" in rendered
-    assert "static constexpr std::size_t simd_register_alignment_v = 16;" in rendered
+    assert "static constexpr std::size_t vector_alignment = 16;" in rendered
+    assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in rendered
 
 
 def test_rust_target_presentation_capabilities_derive_from_metadata(

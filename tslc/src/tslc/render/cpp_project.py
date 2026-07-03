@@ -187,7 +187,8 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
         f"    using mask_type = {mask};\n"
         f"    using imask_type = {imask};\n"
         f"{_cpp_static_element_count_metadata(f'{bits} / (sizeof(T) * 8)')}"
-        f"    static constexpr std::size_t simd_register_alignment_v = {alignment};\n"
+        f"    static constexpr std::size_t vector_alignment = {alignment};\n"
+        "    static constexpr std::size_t simd_register_alignment_v = vector_alignment;\n"
         f"}};\n\n"
     )
 
@@ -228,7 +229,8 @@ def _cpp_native_registration(
             f"    using mask_type = {mask};\n"
             f"    using imask_type = {imask};\n"
             f"{element_count}"
-            f"    static constexpr std::size_t simd_register_alignment_v = {alignment};\n"
+            f"    static constexpr std::size_t vector_alignment = {alignment};\n"
+            "    static constexpr std::size_t simd_register_alignment_v = vector_alignment;\n"
             f"}};\n\n"
         )
     return "".join(lines)
@@ -238,6 +240,7 @@ def _cpp_static_element_count_metadata(count_expr: str) -> str:
     return (
         "    static constexpr bool has_static_lane_count_v = true;\n"
         f"    static constexpr std::size_t lane_count_v = {count_expr};\n"
+        "    static constexpr std::size_t vector_element_count = lane_count_v;\n"
         "    static constexpr std::size_t lane_count() noexcept {\n"
         "        return lane_count_v;\n"
         "    }\n"
@@ -368,8 +371,18 @@ def _cpp_imask_type(
 def _cpp_profiles_support_algorithm(profiles: tuple[ProfileRender, ...]) -> bool:
     if not profiles:
         return False
+    required = {
+        "load",
+        "store",
+        "store_mask",
+        "to_integral",
+        "to_mask",
+        "compress_store",
+        "mask_population_count",
+        "mask_binary_and",
+    }
     return all(
-        {"load", "store"} <= set(profile_render.specializations("cpp"))
+        required <= set(profile_render.specializations("cpp"))
         for profile_render in profiles
     )
 

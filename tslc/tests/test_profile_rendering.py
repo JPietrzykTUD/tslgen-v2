@@ -229,6 +229,7 @@ def test_sve_profile_registers_scalable_cpp_simd_types(
     sve_i32_registration = cpp[sve_i32_start:sve_i32_end]
     assert "static constexpr bool has_static_lane_count_v = false;" in sve_i32_registration
     assert "static constexpr std::size_t lane_count_v =" not in sve_i32_registration
+    assert "static constexpr std::size_t vector_element_count =" not in sve_i32_registration
     assert "static std::size_t lane_count() noexcept" in sve_i32_registration
     assert "return svcntb() / sizeof(int32_t);" in sve_i32_registration
     assert "struct native_simd<int32_t>" in cpp
@@ -238,7 +239,8 @@ def test_sve_profile_registers_scalable_cpp_simd_types(
     ]
     assert inferred_i32_blocks
     assert all("::tsl::sve" not in block for block in inferred_i32_blocks)
-    assert "static constexpr std::size_t simd_register_alignment_v = 4;" in cpp
+    assert "static constexpr std::size_t vector_alignment = 4;" in cpp
+    assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in cpp
     assert "return svadd_s32_x(::tsl::mask_true<Vec>(), left, right);" in cpp
     assert 'add_library(tsl::sve ALIAS tsl_profile_sve)' in cmake
     assert "target_compile_definitions(tsl_profile_sve INTERFACE TSL_PROFILE_SVE)" in cmake
