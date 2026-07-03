@@ -83,6 +83,8 @@ def test_cpp_inferred_simd_helper_has_generic_fallback(
     assert "using type = ::tsl::simd<T, ::tsl::generic<ParallelN>>;" in helper
     assert "struct inferred_simd<T, 1>" in helper
     assert "using type = ::tsl::simd<T, ::tsl::scalar>;" in helper
+    assert "struct native_simd" in helper
+    assert "using native_simd_t = typename detail::native_simd" in helper
     assert "using inferred_simd_t = typename detail::inferred_simd" in helper
     assert "tsl::avx2" not in helper
     assert "tsl::sse" not in helper
@@ -97,7 +99,10 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
 
     assert "namespace tsl::algo" in helper
     assert "template <class Vec>\nstruct vector_tag" in helper
-    assert "Vec::has_static_lane_count_v" in helper
+    assert "namespace parallelism" in helper
+    assert "struct native" in helper
+    assert "struct fixed" in helper
+    assert "vector_for_parallelism<parallelism::native" in helper
     assert "class Alignment = alignment::detect" in helper
     assert "void transform_unary(Op&& op" in helper
     assert '#include "tsl_algorithm.hpp"' in dispatch
@@ -152,6 +157,18 @@ def test_cpp_profile_specializes_inferred_simd_from_registered_vectors(
     assert "using type = ::tsl::simd<float, ::tsl::sse>;" in avx2
     assert "struct inferred_simd<float, 8>" in avx2
     assert "using type = ::tsl::simd<float, ::tsl::avx2>;" in avx2
+    assert "struct native_simd<int32_t>" in avx2
+    assert (
+        "struct native_simd<int32_t> {\n"
+        "    using type = ::tsl::simd<int32_t, ::tsl::avx2>;"
+        in avx2
+    )
+    assert "struct native_simd<float>" in avx2
+    assert (
+        "struct native_simd<float> {\n"
+        "    using type = ::tsl::simd<float, ::tsl::avx2>;"
+        in avx2
+    )
 
 
 def test_rust_specialization_structure(specialization_artifacts: dict[str, str]) -> None:

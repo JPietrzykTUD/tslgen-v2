@@ -274,33 +274,33 @@ def _cpp_inferred_simd_registrations(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     extensions: Mapping[str, Extension],
 ) -> str:
-    """Specialize ``inferred_simd<T, N>`` for fixed-width vectors in this profile."""
+    """Specialize C++ SIMD inference helpers for vectors in this profile."""
 
     candidates: dict[tuple[str, int], tuple[tuple[int, int, str], str]] = {}
+    native_candidates: dict[str, tuple[tuple[int, int, str], str]] = {}
     for ext, type_tag, base in used_type_specs(by_primitive):
         extension = extensions.get(ext)
         if extension is None or DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
             continue
-        lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
-        if lane_count is None:
-            continue
-        if (
-            extension.vector_bits > 0
-            and not is_x86_register_extension(extension)
-            and extension.direct_vector_register_type("cpp", type_tag) is None
-        ):
+        if not _cpp_extension_register_is_available(extension, type_tag):
             continue
         preference = (
             extension.metadata.native_sort_order or 0,
             extension.vector_bits,
             extension.isa_name,
         )
+        current_native = native_candidates.get(base)
+        if current_native is None or preference > current_native[0]:
+            native_candidates[base] = (preference, extension.isa_name)
+        lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
+        if lane_count is None:
+            continue
         key = (base, lane_count)
         current = candidates.get(key)
         if current is None or preference > current[0]:
             candidates[key] = (preference, extension.isa_name)
 
-    if not candidates:
+    if not candidates and not native_candidates:
         return ""
 
     lines = ["namespace detail {\n"]
@@ -311,8 +311,23 @@ def _cpp_inferred_simd_registrations(
             f"    using type = ::tsl::simd<{base}, ::tsl::{ext}>;\n"
             f"}};\n\n"
         )
+    for base, (_preference, ext) in sorted(native_candidates.items()):
+        lines.append(
+            f"template <>\n"
+            f"struct native_simd<{base}> {{\n"
+            f"    using type = ::tsl::simd<{base}, ::tsl::{ext}>;\n"
+            f"}};\n\n"
+        )
     lines.append("}  // namespace detail\n\n")
     return "".join(lines)
+
+
+def _cpp_extension_register_is_available(extension: Extension, type_tag: str) -> bool:
+    if extension.vector_bits <= 0 and not DEFAULT_SUPPORT_POLICY.uses_scalable_vector(extension):
+        return True
+    return is_x86_register_extension(extension) or (
+        extension.direct_vector_register_type("cpp", type_tag) is not None
+    )
 
 
 def _cpp_mask_type(

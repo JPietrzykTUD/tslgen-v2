@@ -70,13 +70,16 @@ struct square_op {
 ```
 
 The example allocates 1000 `std::int32_t` values, fills them, and verifies the
-same operation through three data-parallel widths:
+same operation through native and exact data-parallel policies:
 
-- `transform_unary<1>` maps to the scalar vector type.
-- `transform_unary<4>` maps to a native profile vector when available, otherwise
-  the portable `tsl::generic<4>` vector.
-- `transform_unary<128>` demonstrates a large portable generic vector and why
-  operations should accept values through `tsl::reg_param<Vec>::type`.
+- `transform_unary(...)` defaults to `parallelism::native`, the selected
+  profile's natural vector shape for the element type.
+- `transform_unary<parallelism::fixed<4>>` requests exactly four lanes, using a
+  matching static native vector when available or the portable
+  `tsl::generic<4>` vector otherwise.
+- `transform_unary<parallelism::fixed<128>>` demonstrates a large portable
+  generic vector and why operations should accept values through
+  `tsl::reg_param<Vec>::type`.
 
 `Vec::register_type` names the actual register object type. `tsl::reg_param`
 names the generated-library parameter-passing convention for that object:

@@ -18,6 +18,15 @@ struct unaligned {};
 struct assume_aligned {};
 }  // namespace alignment
 
+namespace parallelism {
+struct native {};
+
+template <std::size_t N>
+struct fixed {
+    static constexpr std::size_t lanes = N;
+};
+}  // namespace parallelism
+
 namespace detail {
 
 template <class Alignment>
@@ -30,6 +39,28 @@ struct is_supported_alignment_policy
 
 template <class...>
 struct always_false : std::false_type {};
+
+template <class Vec>
+inline std::size_t lane_count() noexcept {
+    if constexpr (Vec::has_static_lane_count_v) {
+        return Vec::lane_count_v;
+    } else {
+        return Vec::lane_count();
+    }
+}
+
+template <class Parallelism, class T>
+struct vector_for_parallelism;
+
+template <class T>
+struct vector_for_parallelism<parallelism::native, T> {
+    using type = ::tsl::native_simd_t<T>;
+};
+
+template <std::size_t N, class T>
+struct vector_for_parallelism<parallelism::fixed<N>, T> {
+    using type = ::tsl::inferred_simd_t<T, N>;
+};
 
 template <class Vec, class Ptr>
 inline bool is_aligned_for(Ptr ptr) noexcept {
@@ -99,15 +130,12 @@ inline void transform_unary_loop(
     T* output,
     std::size_t count) {
     using scalar_vec = ::tsl::simd<T, ::tsl::scalar>;
-    static_assert(
-        Vec::has_static_lane_count_v,
-        "tsl::algo::transform_unary requires a static-lane SIMD vector");
     constexpr bool input_aligned =
         std::is_same<InputAlignment, alignment::assume_aligned>::value;
     constexpr bool output_aligned =
         std::is_same<OutputAlignment, alignment::assume_aligned>::value;
 
-    constexpr std::size_t lanes = Vec::lane_count_v;
+    const std::size_t lanes = detail::lane_count<Vec>();
     const std::size_t chunk_count = count / lanes;
     std::size_t i = 0;
     for (std::size_t chunk = 0; chunk < chunk_count; ++chunk, i += lanes) {
@@ -125,26 +153,27 @@ inline void transform_unary_loop(
 }  // namespace detail
 
 template <
-    std::size_t ParallelN,
+    class Parallelism = parallelism::native,
     class Alignment = alignment::detect,
     class Op,
     class T>
 inline void transform_unary(Op&& op, const T* input, T* output, std::size_t count) {
-    using vec = ::tsl::inferred_simd_t<T, ParallelN>;
+    using vec = typename detail::vector_for_parallelism<Parallelism, T>::type;
 
-    static_assert(ParallelN > 0, "ParallelN must be greater than zero");
     static_assert(
         detail::is_supported_alignment_policy<Alignment>::value,
         "Alignment must be tsl::algo::alignment::detect, unaligned, or assume_aligned");
     static_assert(
         std::is_same<T, typename vec::base_type>::value,
-        "tsl::inferred_simd_t<T, ParallelN> must preserve T as Vec::base_type");
-    static_assert(
-        vec::has_static_lane_count_v,
-        "tsl::inferred_simd_t<T, ParallelN> must be a static-lane SIMD vector");
-    static_assert(
-        vec::lane_count_v == ParallelN,
-        "tsl::inferred_simd_t<T, ParallelN> must produce exactly ParallelN lanes");
+        "selected SIMD vector must preserve T as Vec::base_type");
+    if constexpr (!std::is_same<Parallelism, parallelism::native>::value) {
+        static_assert(
+            vec::has_static_lane_count_v,
+            "tsl::algo::parallelism::fixed<N> requires a static-lane SIMD vector");
+        static_assert(
+            vec::lane_count_v == Parallelism::lanes,
+            "tsl::algo::parallelism::fixed<N> must produce exactly N lanes");
+    }
 
     if constexpr (std::is_same<Alignment, alignment::detect>::value) {
         const bool input_aligned = detail::is_aligned_for<vec>(input);

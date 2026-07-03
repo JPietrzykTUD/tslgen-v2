@@ -11,7 +11,7 @@ struct square_op {
     }
 };
 
-template <std::size_t ParallelN>
+template <class Parallelism = tsl::algo::parallelism::native>
 bool run_square_case() {
     constexpr std::size_t count = 1000;
     std::vector<std::int32_t> input(count);
@@ -21,7 +21,7 @@ bool run_square_case() {
         input[i] = static_cast<std::int32_t>(static_cast<int>(i % 31) - 15);
     }
 
-    tsl::algo::transform_unary<ParallelN, tsl::algo::alignment::unaligned>(
+    tsl::algo::transform_unary<Parallelism, tsl::algo::alignment::unaligned>(
         square_op{},
         input.data(),
         output.data(),
@@ -37,13 +37,13 @@ bool run_square_case() {
 }
 
 int main() {
-    if (!run_square_case<1>()) {
+    if (!run_square_case<>()) {
         return 1;
     }
-    if (!run_square_case<4>()) {
+    if (!run_square_case<tsl::algo::parallelism::fixed<4>>()) {
         return 2;
     }
-    if (!run_square_case<128>()) {
+    if (!run_square_case<tsl::algo::parallelism::fixed<128>>()) {
         return 3;
     }
     return 0;
