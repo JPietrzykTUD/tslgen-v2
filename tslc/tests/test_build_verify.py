@@ -1222,8 +1222,8 @@ def test_bit_reductions_build(
     # `hand`/`hor` (`s:=v` horizontal AND/OR: native reduce + the extract/shuffle x86 path,
     # plus the `to_array` + `var<typed>` accumulator loop) and `popcnt` (`v:=v`, per-lane
     # population count on the AVX512 VPOPCNTDQ/BITALG native path — hence icelake-rockerlake —
-    # plus the sse/avx2 intrinsic slots), and `tzc` (`s:=m`, `helper<ctz>` of the integral
-    # mask, cast to the result scalar). Both backends; the generic fallbacks use width-aware
+    # plus the sse/avx2 intrinsic slots), and `tzc` (`usize:=m`, `helper<ctz>` of the integral
+    # mask, cast to a size value). Both backends; the generic fallbacks use width-aware
     # helper functions and no longer depend on a `vector::offset_base` query.
     result = generate_project(
         [data_root],
@@ -1245,11 +1245,12 @@ def test_leading_zeros_build(
 ) -> None:
     # Leading-zero counts: `lzc` (`v:=v`, the avx512cd `_mm*_lzcnt_epi32/64` native plus the
     # per-lane loop fallback that delegates to `lzc_scalar` over the scalar vector) and
-    # `lzc_imask` (`s:=m`, `helper<clz>` of the integral mask, cast to the result scalar). The
-    # closure pulls `lzc_scalar` (`s:=s`), whose integer body is `helper<clz>(data)` — the
-    # `clz` helper is width-aware via `sizeof(T)` / Rust `leading_zeros`, so no offset arg is
-    # needed. The float `lzc_scalar` bit-reinterpret path uses `mem<copy>` into an unsigned
-    # carrier and the same width-aware helper. Both backends, scalar + sse2 + avx2 + skylake.
+    # `lzc_imask` (`usize:=m`, `helper<clz>` of the integral mask, cast to a size value). The
+    # closure pulls `lzc_scalar` (`usize:=s`), whose integer body is `helper<clz>(data)` cast to
+    # a size value — the `clz` helper is width-aware via `sizeof(T)` / Rust `leading_zeros`, so
+    # no offset arg is needed. The float `lzc_scalar` bit-reinterpret path uses `mem<copy>` into
+    # an unsigned carrier and the same width-aware helper. Both backends, scalar + sse2 + avx2 +
+    # skylake.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
