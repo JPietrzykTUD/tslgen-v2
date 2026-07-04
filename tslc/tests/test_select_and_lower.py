@@ -381,6 +381,38 @@ def test_masked_set1_reuses_blend_and_set1_on_x86(
     assert "to_array" not in cpp.body_text
 
 
+def test_runtime_array_var_lowers_sve_scratch_storage(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slot = next(
+        s
+        for s in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["sve"],
+            "gather_narrow_partial",
+            ("ui16",),
+        )
+        .selected
+        if s.extension.name == "sve"
+    )
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert (
+        "std::vector<typename IndicesType::base_type> idx_array_storage"
+        in cpp.body_text
+    )
+    assert "std::vector<uint16_t> result_storage" in cpp.body_text
+    assert "auto *idx_array = idx_array_storage.data();" in cpp.body_text
+    assert "auto *result = result_storage.data();" in cpp.body_text
+    assert "std::malloc" not in cpp.body_text
+    assert "std::free" not in cpp.body_text
+
+
 def test_consumed_tsil_statement_terminators_render_once() -> None:
     ext = Extension(
         name="scalar",

@@ -27,6 +27,7 @@ def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:
     assert lowerer_keywords == TSIL_REGION_KEYWORDS
     assert region_shell_validator("call") == "call_selector"
     assert region_shell_validator("mask") == "mask_selector"
+    assert region_shell_validator("var") == "var_selector"
     assert region_shell_validator("type") == "no_selector"
     assert region_shell_validator("value") == "no_selector"
     assert region_shell_validator("complete") is None

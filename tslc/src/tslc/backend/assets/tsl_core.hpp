@@ -11,6 +11,7 @@
 #include <limits>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 // Loop-unroll hint for `loop<backend, unroll>`. A no-op by default (a real
 // unroll pragma is compiler-specific and only a hint); kept as a macro so

@@ -62,6 +62,7 @@ translation cpp:
   var_const_typed "const {type} {name} = {value};"
   var_array_uninit "{type} {name}{};"
   var_uninit "{type} {name};"
+  var_runtime_array "std::vector<{type}> {name}_storage(static_cast<std::size_t>({count})); auto *{name} = {name}_storage.data();"
   var_init_register "{type} {name}{};"
   var_const_init_register "{type} {name}{};"
   let_type "using {name} = {type};"

@@ -25,7 +25,7 @@ DEFAULT_TSIL_REGION_DESCRIPTORS: tuple[TsilRegionDescriptor, ...] = (
     TsilRegionDescriptor("intrin", shell_validator="intrin_selector"),
     TsilRegionDescriptor("helper", shell_validator="helper_selector"),
     TsilRegionDescriptor("op"),
-    TsilRegionDescriptor("var"),
+    TsilRegionDescriptor("var", shell_validator="var_selector"),
     TsilRegionDescriptor("let", shell_validator="let_type"),
     TsilRegionDescriptor("mask", shell_validator="mask_selector"),
     TsilRegionDescriptor("mem"),

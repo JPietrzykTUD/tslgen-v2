@@ -42,6 +42,8 @@ class VarLowerer:
             # Both are `(type, name, value)` 3-group forms; `_typed` keys on the variant
             # (`var_typed` / `var_const_typed`), so a const-qualified typed local works too.
             return self._typed(variant, groups, region, context, render)
+        if variant == "runtime_array":
+            return self._runtime_array(groups, region, context, render)
         if variant in ("init_register", "const_init_register"):
             # A zero-initialized register declaration: `var<init_register>(name)`. The type is
             # the vector's register type (C++ template uses it; the Rust template builds
@@ -106,6 +108,31 @@ class VarLowerer:
         value = render(groups[2])
         return context.env.backend.templates.render_template(
             key, type=type_value, name=name, value=value
+        )
+
+    def _runtime_array(
+        self,
+        groups: list[tuple[Segment, ...]],
+        region: Region,
+        context: LoweringSession,
+        render: RenderBody,
+    ) -> RenderField:
+        if (
+            len(groups) != 3
+            or context.env.backend.templates.template("var_runtime_array") is None
+        ):
+            context.effects.skip(
+                "TSL-LOWER-UNSUPPORTED-VAR",
+                f"unsupported var<runtime_array> declaration: {region.full_text!r}",
+                source=region.source,
+            )
+            return region.full_text
+        context.effects.mark_internal_unsafe("raw_memory")
+        type_value = render(groups[0])
+        name = render_text(render(groups[1])).strip()
+        count = render(groups[2])
+        return context.env.backend.templates.render_template(
+            "var_runtime_array", type=type_value, name=name, count=count
         )
 
 

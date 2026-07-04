@@ -501,6 +501,42 @@ def test_malformed_let_body_region_is_diagnosed() -> None:
     assert "let<type>(Name, type-expression)" in diagnostic.message
 
 
+def test_runtime_array_var_body_region_is_accepted() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            'tsil "complete(data);"',
+            (
+                'tsil "var<runtime_array>('
+                'type(base::in), tmp, value(vector::runtime_length)'
+                '); complete(data);"'
+            ),
+        )
+    )
+
+    assert diagnostics == ()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "var<runtime_array>(type(base::in), tmp); complete(data);",
+        (
+            "var<runtime_array>("
+            "type(base::in), tmp[0], value(vector::runtime_length)"
+            "); complete(data);"
+        ),
+        "var<unknown>(tmp, data); complete(data);",
+    ],
+)
+def test_malformed_var_body_region_is_diagnosed(body: str) -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace('tsil "complete(data);"', f'tsil "{body}"')
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-VAR")
+    assert "malformed var declaration" in diagnostic.message
+
+
 def test_malformed_intrin_body_region_is_diagnosed() -> None:
     diagnostics = _diagnostics(
         "types:\n"

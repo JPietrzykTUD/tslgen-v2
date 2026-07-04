@@ -435,9 +435,10 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
         implementation:
           tsil """
             let<type>(Base, type(base::in));
+            let<type>(IndexBase, type(base::generic(IndicesType)));
             var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-            var<const_infer>(idx_array, static_cast<typename IndicesType::base_type *>(std::malloc(lanes * sizeof(typename IndicesType::base_type))));
-            var<const_infer>(result, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+            var<runtime_array>(IndexBase, idx_array, lanes);
+            var<runtime_array>(Base, result, lanes);
             intrin<svst1>(
               call<primitive=mask_true[IndicesType]>(),
               idx_array,
@@ -447,8 +448,6 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
               result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
             }
             var<const_infer>(loaded, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result));
-            std::free(idx_array);
-            std::free(result);
             complete(loaded);
           """
     [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
@@ -561,8 +560,8 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
             let<type>(IndexBase, type(base::generic(IndicesType)));
             var<const_infer>(lanes, value(vector::runtime_length));
             var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
-            var<const_infer>(idx_array, cast<reinterpret, type=ptr>(IndexBase, mem<alloc>(index_lanes * sizeof(IndexBase))));
-            var<const_infer>(result, cast<reinterpret, type=ptr>(Base, mem<alloc>(lanes * sizeof(Base))));
+            var<runtime_array>(IndexBase, idx_array, index_lanes);
+            var<runtime_array>(Base, result, lanes);
             intrin<svst1>(
               call<primitive=mask_true[IndicesType]>(),
               idx_array,
@@ -575,8 +574,6 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
               result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
             }
             var<const_infer>(loaded, intrin<svld1>(call<primitive=mask_true[Vec]>(), result));
-            mem<free>(idx_array);
-            mem<free>(result);
             complete(loaded);
           """
     scalar:
@@ -1197,9 +1194,10 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
         implementation:
           tsil """
             let<type>(Base, type(base::in));
+            let<type>(IndexBase, type(base::generic(IndicesType)));
             var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-            var<const_infer>(val_array, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
-            var<const_infer>(idx_array, static_cast<typename IndicesType::base_type *>(std::malloc(lanes * sizeof(typename IndicesType::base_type))));
+            var<runtime_array>(Base, val_array, lanes);
+            var<runtime_array>(IndexBase, idx_array, lanes);
             intrin<svst1, build>(call<primitive=mask_true[Vec]>(), val_array, a);
             intrin<svst1>(
               call<primitive=mask_true[IndicesType]>(),
@@ -1209,8 +1207,6 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
             loop<backend>(i, 0, lanes, 1) {
               *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
             }
-            std::free(val_array);
-            std::free(idx_array);
           """
     [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
       arith:
