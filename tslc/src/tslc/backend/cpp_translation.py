@@ -61,6 +61,17 @@ class _CppTypes:
             return "std::size_t"
         return "bool"
 
+    def simd_type_param_base_spelling(self, name: str) -> str:
+        return f"typename {name}::base_type"
+
+    def simd_type_param_register_spelling(self, name: str) -> str:
+        return f"typename {name}::register_type"
+
+    def simd_type_param_lane_count_spelling(
+        self, name: str, *, runtime: bool
+    ) -> str:
+        return f"{name}::lane_count()" if runtime else f"{name}::lane_count_v"
+
 
 @dataclass(frozen=True, slots=True)
 class _CppIntrinsics:

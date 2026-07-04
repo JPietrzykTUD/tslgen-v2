@@ -99,6 +99,17 @@ class _RustTypes:
             return "i32"
         return "bool"
 
+    def simd_type_param_base_spelling(self, name: str) -> str:
+        return f"{name}::BaseType"
+
+    def simd_type_param_register_spelling(self, name: str) -> str:
+        return f"{name}::RegisterType"
+
+    def simd_type_param_lane_count_spelling(
+        self, name: str, *, runtime: bool
+    ) -> str:
+        return f"{name}::lane_count()" if runtime else f"{name}::ELEMENT_COUNT"
+
 
 @dataclass(frozen=True, slots=True)
 class _RustIntrinsics:

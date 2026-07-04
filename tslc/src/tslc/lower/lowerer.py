@@ -378,6 +378,11 @@ class Lowerer:
                 generic_param_names=tuple(
                     gp.name for gp in selected.primitive.generic_params
                 ),
+                simd_type_param_names=frozenset(
+                    gp.name
+                    for gp in selected.primitive.generic_params
+                    if gp.kind == "simd_type"
+                ),
                 lane_list_params=_lane_list_param_map(
                     parameters,
                     shape,

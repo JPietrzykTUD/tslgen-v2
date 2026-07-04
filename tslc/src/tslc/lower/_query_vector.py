@@ -6,7 +6,7 @@ from dataclasses import replace
 
 from tslc.catalog.model import Extension
 from tslc.lower._query_model import TextValue, TypeValue
-from tslc.lower.context import LoweringSession, VectorValue
+from tslc.lower.context import LoweringSession, SimdTypeParameterValue, VectorValue
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
@@ -97,6 +97,9 @@ class RegisterGenericQuery:
             base_tag, isa = arg.base_tag, arg.extension_isa
             uses_sized_vector = arg.uses_sized_vector
             lane_parameter = arg.lane_parameter
+        elif isinstance(arg, SimdTypeParameterValue):
+            spelling = _simd_type_param_register_spelling(arg, context)
+            return TextValue(spelling) if spelling is not None else None
         else:
             return None
         spelling = context.env.backend.types.target_register_spelling(
@@ -279,9 +282,15 @@ class BaseGenericQuery:
     head = "base::generic"
 
     def apply(self, args, context):  # noqa: ANN001
-        if len(args) != 1 or not isinstance(args[0], VectorValue):
+        if len(args) != 1:
             return None
-        return TypeValue(args[0].base_tag)
+        arg = args[0]
+        if isinstance(arg, VectorValue):
+            return TypeValue(arg.base_tag)
+        if isinstance(arg, SimdTypeParameterValue):
+            spelling = _simd_type_param_base_spelling(arg, context)
+            return TextValue(spelling) if spelling is not None else None
+        return None
 
 
 class GenericLengthQuery:
@@ -290,13 +299,21 @@ class GenericLengthQuery:
     head = "generic::length"
 
     def apply(self, args, context):  # noqa: ANN001
-        if len(args) != 1 or not isinstance(args[0], VectorValue):
+        if len(args) != 1:
             return None
         value = args[0]
-        if value.lanes is not None:
-            return TextValue(str(value.lanes))
-        if value.lane_parameter is not None:
-            return TextValue(value.lane_parameter)
+        if isinstance(value, SimdTypeParameterValue):
+            spelling = _simd_type_param_lane_count_spelling(
+                value,
+                context,
+                runtime=False,
+            )
+            return TextValue(spelling) if spelling is not None else None
+        if isinstance(value, VectorValue):
+            if value.lanes is not None:
+                return TextValue(str(value.lanes))
+            if value.lane_parameter is not None:
+                return TextValue(value.lane_parameter)
         return None
 
 
@@ -306,9 +323,18 @@ class GenericRuntimeLengthQuery:
     head = "generic::runtime_length"
 
     def apply(self, args, context):  # noqa: ANN001
-        if len(args) != 1 or not isinstance(args[0], VectorValue):
+        if len(args) != 1:
             return None
         value = args[0]
+        if isinstance(value, SimdTypeParameterValue):
+            spelling = _simd_type_param_lane_count_spelling(
+                value,
+                context,
+                runtime=True,
+            )
+            return TextValue(spelling) if spelling is not None else None
+        if not isinstance(value, VectorValue):
+            return None
         if value.lanes is not None:
             return TextValue(str(value.lanes))
         if value.lane_parameter is not None:
@@ -333,3 +359,35 @@ def _runtime_lane_count_text(
         .replace("{base}", base)
         .replace("{type_tag}", type_tag)
     )
+
+
+def _simd_type_param_base_spelling(
+    value: SimdTypeParameterValue,
+    context: LoweringSession,
+) -> str | None:
+    types = getattr(getattr(context.env, "backend", None), "types", None)
+    if types is None:
+        return None
+    return types.simd_type_param_base_spelling(value.name)
+
+
+def _simd_type_param_register_spelling(
+    value: SimdTypeParameterValue,
+    context: LoweringSession,
+) -> str | None:
+    types = getattr(getattr(context.env, "backend", None), "types", None)
+    if types is None:
+        return None
+    return types.simd_type_param_register_spelling(value.name)
+
+
+def _simd_type_param_lane_count_spelling(
+    value: SimdTypeParameterValue,
+    context: LoweringSession,
+    *,
+    runtime: bool,
+) -> str | None:
+    types = getattr(getattr(context.env, "backend", None), "types", None)
+    if types is None:
+        return None
+    return types.simd_type_param_lane_count_spelling(value.name, runtime=runtime)

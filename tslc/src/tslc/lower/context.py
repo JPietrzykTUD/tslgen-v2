@@ -44,6 +44,19 @@ class VectorValue:
 
 
 @dataclass(frozen=True, slots=True)
+class SimdTypeParameterValue:
+    """A free ``generic_params`` entry with ``kind simd_type``.
+
+    Unlike :class:`VectorValue`, this does not name a concrete source vector
+    with known base tag and extension. It names a caller-bound SIMD type, so
+    queries can only project associated facts such as its base type, register
+    type, or lane count.
+    """
+
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
 class LaneListParameter:
     """A named ``lanes<s>`` parameter selected for one specialization.
 
@@ -101,6 +114,9 @@ class LoweringEnv:
     # render knows which condition leaves are symbolic template params (rendered raw) vs
     # generation-time queries (folded to a literal).
     generic_param_names: tuple[str, ...] = ()
+    # Free SIMD type parameters from `generic_params` entries with `kind simd_type`.
+    # These are queryable by authored name, e.g. `generic::length(IndexVec)`.
+    simd_type_param_names: frozenset[str] = frozenset()
     # Named first-class lane-list parameters (`lanes<s>`), keyed by source/emitted parameter name.
     lane_list_params: Mapping[str, LaneListParameter] = field(default_factory=dict)
     # When this specialization is monomorphized at a concrete sized lane count (an
@@ -138,6 +154,11 @@ class LoweringEnv:
             self,
             "primitive_borrowed_arg_positions",
             _frozen_mapping(self.primitive_borrowed_arg_positions),
+        )
+        object.__setattr__(
+            self,
+            "simd_type_param_names",
+            frozenset(self.simd_type_param_names),
         )
         object.__setattr__(
             self, "lane_list_params", _frozen_mapping(self.lane_list_params)

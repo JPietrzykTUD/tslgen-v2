@@ -33,6 +33,7 @@ from tslc.lower._query_model import (
     QueryParser,
     QueryTerm,
     QueryValue,
+    SimdTypeParameterValue,
     TextValue,
     TypeValue,
 )
@@ -143,6 +144,7 @@ __all__ = [
     "RegisterQuery",
     "SelectQuery",
     "SignedOfQuery",
+    "SimdTypeParameterValue",
     "SizeBytesQuery",
     "TextValue",
     "TypeQuery",

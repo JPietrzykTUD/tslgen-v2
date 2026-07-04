@@ -5,7 +5,13 @@ from __future__ import annotations
 import pytest
 
 from tslc.backend.translation import create_backend_dialect
-from tslc.catalog.model import Catalog, Extension, Implementation, Primitive
+from tslc.catalog.model import (
+    Catalog,
+    Extension,
+    GenericParam,
+    Implementation,
+    Primitive,
+)
 from tslc.catalog.target_families import ProfileFamilyCapability, TargetFamilyCatalog
 from tslc.lower import lowerer as lowerer_module
 from tslc.lower.lowerer import Lowerer
@@ -206,6 +212,48 @@ def test_backend_value_query_uses_backend_translation_template(
     ).specialization
     assert rust is not None
     assert "core::arch::x86_64::_MM_FROUND_TO_ZERO" in rust.body_text
+
+
+@pytest.mark.parametrize(
+    ("backend_id", "expected"),
+    (
+        ("cpp", "return IndexVec::lane_count_v;"),
+        ("rust", "return IndexVec::ELEMENT_COUNT;"),
+    ),
+)
+def test_simd_type_generic_param_queries_lower_from_authored_name(
+    catalog: Catalog,
+    backend_id: str,
+    expected: str,
+) -> None:
+    impl = Implementation(
+        ("avx2", "all"),
+        "avx2",
+        "all",
+        "complete(value(generic::length(IndexVec)));",
+        source_order=0,
+    )
+    primitive = Primitive(
+        name="index_lane_probe",
+        signature="usize:=vidx",
+        parameters=("index",),
+        attribute_keys=(),
+        generic_params=(GenericParam("IndexVec", "simd_type", ""),),
+        implementations=(impl,),
+    )
+    slot = SelectedImplementation(
+        primitive=primitive,
+        implementation=impl,
+        extension=catalog.extensions["avx2"],
+        type_tag="si32",
+    )
+
+    lowered = Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend_id))
+
+    assert lowered.diagnostics == ()
+    assert lowered.specialization is not None
+    assert lowered.specialization.type_params == (("IndexVec", ()),)
+    assert lowered.specialization.body_text == expected
 
 
 def test_sse41_cast_fast_path_wins_over_portable_fallback(
