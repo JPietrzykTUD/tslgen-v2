@@ -81,6 +81,15 @@ same operation through native and exact data-parallel policies:
 - `transform_unary<128>` demonstrates a large portable generic vector and why
   operations should accept values through
   `tsl::reg_param<Vec>::type`.
+- `alignment::peel_to_aligned` can be requested explicitly when matching input
+  and output alignment offsets should use a scalar prologue before the aligned
+  vector loop.
+- `alignment::assume_inputs_aligned` and
+  `alignment::assume_output_aligned` can be used when only the input load or
+  output store side has an alignment promise.
+
+The example also verifies exact in-place operation (`input == output`). Shifted
+or partial input/output overlap is not part of the dense transform contract.
 
 `Vec::register_type` names the actual register object type. `tsl::reg_param`
 names the generated-library parameter-passing convention for that object:
@@ -107,6 +116,15 @@ verifies the native default plus direct `transform_binary<1>`,
 `transform_binary<4>`, and `transform_binary<128>` exact-lane overloads. It
 exercises the same helper-owned loop, alignment, load, tail, and store mechanics
 as the unary example, but for two contiguous input columns.
+
+The example also calls `alignment::peel_to_aligned` on shifted input and output
+regions, demonstrating the explicit scalar-prologue policy for dense transforms.
+It verifies exact in-place output aliases for both binary operands
+(`output == left` and `output == right`). Shifted or partial overlap remains a
+caller error.
+It also instantiates `alignment::assume_inputs_aligned` and
+`alignment::assume_output_aligned`; for binary transforms the input-side promise
+covers both input columns.
 
 ### `chunk_operator.cpp`
 
@@ -222,32 +240,36 @@ beyond the logical row count are cleared in the final byte.
 
 ### `selection_operator.cpp`
 
-Demonstrates `tsl::algo::select_unary`, a compacting `N -> K` helper. The
-operation produces a predicate mask, and the helper writes only active input
-values densely to the output range.
+Demonstrates `tsl::algo::select_unary` and `tsl::algo::select_binary`,
+compacting `N -> K` helpers. The operation produces a predicate mask, and the
+helper writes only active left-input values densely to the output range. For
+`select_binary`, the predicate sees both inputs while the compacted values come
+from the left input.
 
-The example filters negative `std::int32_t` values, verifies the returned
-produced count, and checks that selected values keep their original order. It
-also verifies that output positions after `produced` are not touched.
+The example filters negative `std::int32_t` values, filters one value stream
+against a per-row threshold stream, verifies returned produced counts, and
+checks that selected values keep their original order. It also verifies that
+output positions after `produced` are not touched.
 
 ### `masked_selection_operator.cpp`
 
-Demonstrates `tsl::algo::select_masked_unary`, a compacting helper that
-combines an input mask with an operation-produced predicate mask. A row is
-selected only when both masks are active.
+Demonstrates `tsl::algo::select_masked_unary` and
+`tsl::algo::select_masked_binary`, compacting helpers that combine an input
+mask with an operation-produced predicate mask. A row is selected only when
+both masks are active.
 
-The example builds input masks with `predicate_binary`, then selects negative
-input values from the active rows. It verifies compacted order, the returned
-produced count, untouched output positions after `produced`, exact-lane
-overloads `1`, `4`, and `16`, and integral, native, byte, and packed-bit mask
-layouts.
+The example builds input masks with `predicate_unary` and `predicate_binary`,
+then selects left-input values from the active rows. It verifies compacted
+order, the returned produced count, untouched output positions after
+`produced`, exact-lane overloads `1`, `4`, and `16`, and integral, native,
+byte, and packed-bit mask layouts.
 
 ### `selection_vector_operator.cpp`
 
 Demonstrates selection-vector production with `select_indices_unary`,
 `select_indices_binary`, `select_masked_indices_unary`, and
 `select_masked_indices_binary`. These helpers write selected row ids into a
-caller-provided integral output range instead of compacting values.
+caller-provided unsigned integral output range instead of compacting values.
 
 The example uses `std::uint32_t` row ids, verifies stable input order and
 returned produced counts, and checks that positions after `produced` are not
@@ -261,11 +283,13 @@ Demonstrates selection-vector consumption with `transform_selected_unary` and
 selected input rows in that order, apply the operation, and write a dense output
 range.
 
-The implementation is a portable fallback: `ParallelN=1` uses the scalar vector
-type, while larger exact lane counts use the generated `tsl::generic<N>` vector
-type filled from the selection vector. It does not require or imply native
-gather support. The example uses a reverse-ordered row-id stream to prove output
-order follows the selection vector rather than the input batch.
+The helper uses `gather_narrow` for 32-bit and 64-bit pointer-backed row-id
+streams, falling back to scalar or portable generic loading where needed. Plain
+`gather` is reserved for a future row source that consumes caller-owned
+index-register chunks, because it needs an index register rather than a row-id
+pointer. A `Scale` template argument may override the default byte scale of
+`sizeof(T)`. The example uses a `std::size_t` reverse-ordered row-id stream to
+prove output order follows the selection vector rather than the input batch.
 
 ### `selected_refinement_operator.cpp`
 
@@ -275,11 +299,11 @@ helpers read an existing caller-owned row-id stream, evaluate the predicate on
 the selected input rows, and write a new dense row-id stream containing the
 original row ids whose selected rows passed the predicate.
 
-Like other selected-row helpers, refinement is portable: `ParallelN=1` uses the
-scalar vector type, and larger exact lane counts use generated
-`tsl::generic<N>` chunks filled from the selection vector. The example verifies
-pointer and range overloads for exact lane counts `1`, `4`, and `16`, including
-that output order follows the input selection vector.
+Like other selected-row helpers, refinement uses `gather_narrow` for 32-bit and
+64-bit pointer-backed row-id streams, falling back to scalar or portable
+generic loading where needed. The example verifies pointer and range overloads
+for exact lane counts `1`, `4`, and `16`, including that output order follows
+the input selection vector.
 
 ### `selected_aggregate_consume_operator.cpp`
 
@@ -289,9 +313,10 @@ Demonstrates selected-row sink helpers: `aggregate_selected_unary`,
 selected input rows in that order, and either return an aggregate finalizer
 value or update a stateful sink.
 
-Like selected transforms, these helpers use scalar TSL for `ParallelN=1` and
-portable `tsl::generic<N>` chunks for larger exact lane counts. The example
-checks pointer and range overloads for exact lane counts `1`, `4`, and `16`.
+Like selected transforms, these helpers use `gather_narrow` for 32-bit and
+64-bit pointer-backed row-id streams, falling back to scalar or portable
+generic loading where needed. The example checks pointer and range overloads
+for exact lane counts `1`, `4`, and `16`.
 
 ### `count_operator.cpp`
 
@@ -303,10 +328,10 @@ values, or row ids.
 
 The masked helpers combine the input mask with the operation-produced predicate
 mask before counting. The selected helpers count matching rows from an existing
-selection vector using the same scalar/generic selected-row loading policy as
-selected transforms. The example verifies pointer and range overloads for exact
-lane counts `1`, `4`, and `16`, and covers integral, native, byte, and
-packed-bit mask layouts.
+selection vector using the same selected-row loading policy as selected
+transforms. The example verifies pointer and range overloads for exact lane
+counts `1`, `4`, and `16`, and covers integral, native, byte, and packed-bit
+mask layouts.
 
 ### `aggregation_operator.cpp`
 

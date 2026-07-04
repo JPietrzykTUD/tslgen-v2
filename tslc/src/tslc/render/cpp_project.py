@@ -387,6 +387,7 @@ def _cpp_profiles_support_algorithm(profiles: tuple[ProfileRender, ...]) -> bool
         "store_mask",
         "to_integral",
         "to_mask",
+        "gather_narrow",
         "compress_store",
         "mask_population_count",
         "mask_binary_and",

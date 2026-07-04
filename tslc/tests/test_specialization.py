@@ -113,16 +113,25 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "parallelism::fixed<N> requires N > 0" in helper
     assert "vector_for_parallelism<parallelism::native" in helper
     assert "class Alignment = alignment::detect" in helper
+    assert "struct peel_to_aligned {};" in helper
+    assert "struct assume_inputs_aligned {};" in helper
+    assert "struct assume_output_aligned {};" in helper
+    assert "is_supported_transform_alignment_policy" in helper
+    assert "has_same_alignment_residue" in helper
     assert "range_data" in helper
     assert "std::size(range)" in helper
     assert "void for_each_chunk(Op&& op" in helper
     assert "void for_each_chunk(Op&& op, Range& data)" in helper
     assert "void transform_unary(Op&& op" in helper
     assert "void transform_unary(Op&& op, const InputRange& input" in helper
+    assert "transform_unary_loop_peel_to_aligned" in helper
+    assert "alignment::assume_inputs_aligned" in helper
+    assert "alignment::assume_output_aligned" in helper
     assert "std::size_t ParallelN" in helper
     assert "transform_unary<parallelism::fixed<ParallelN>, Alignment>" in helper
     assert "void transform_binary(" in helper
     assert "transform_binary_loop" in helper
+    assert "transform_binary_loop_peel_to_aligned" in helper
     assert "transform_binary<parallelism::fixed<ParallelN>, Alignment>" in helper
     assert "namespace mask_layout" in helper
     assert (
@@ -142,12 +151,18 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "void transform_masked_unary(" in helper
     assert "void transform_masked_binary(" in helper
     assert "std::size_t select_unary(" in helper
+    assert "std::size_t select_binary(" in helper
     assert "std::size_t select_masked_unary(" in helper
+    assert "std::size_t select_masked_binary(" in helper
     assert "std::size_t select_indices_unary(" in helper
     assert "std::size_t select_indices_binary(" in helper
     assert "std::size_t select_masked_indices_unary(" in helper
     assert "std::size_t select_masked_indices_binary(" in helper
-    assert "selection-vector output indices must use an integral element type" in helper
+    assert "is_selection_index" in helper
+    assert (
+        "selection-vector output indices must use an unsigned integral row-id type"
+        in helper
+    )
     assert "std::size_t select_selected_indices_unary(" in helper
     assert "std::size_t select_selected_indices_binary(" in helper
     assert "append_selected_indices_from_mask" in helper
@@ -157,8 +172,14 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "auto aggregate_selected_binary(" in helper
     assert "void consume_selected_unary(" in helper
     assert "void consume_selected_binary(" in helper
-    assert "selection-vector input indices must use an integral element type" in helper
+    assert (
+        "selection-vector input indices must use an unsigned integral row-id type"
+        in helper
+    )
     assert "vector_for_selected_rows" in helper
+    assert "load_selected_vector" in helper
+    assert "gather_narrow" in helper
+    assert "std::size_t Scale = 0" in helper
     assert "std::size_t count_unary(" in helper
     assert "std::size_t count_binary(" in helper
     assert "std::size_t count_masked_unary(" in helper
@@ -179,6 +200,8 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "inline void store_mask(" in avx2
     assert "inline typename Vec::imask_type to_integral(" in avx2
     assert "inline typename Vec::mask_type to_mask(" in avx2
+    assert "inline typename Vec::register_type gather_narrow(" in avx2
+    assert "inline typename Vec::register_type gather(" not in avx2
     assert "inline void compress_store(" in avx2
     assert "inline std::size_t mask_population_count(" in avx2
     assert "inline typename Vec::mask_type mask_binary_and(" in avx2

@@ -88,6 +88,48 @@ bool run_masked_selection_case() {
             return false;
         }
     }
+
+    const auto unary_masks_produced = tsl::algo::predicate_unary<
+        ParallelN,
+        tsl::algo::alignment::unaligned,
+        MaskLayout>(
+        negative_op{},
+        input.data(),
+        masks.get(),
+        count);
+    if (unary_masks_produced != mask_count) {
+        return false;
+    }
+
+    output.assign(count, sentinel);
+    const auto binary_produced = tsl::algo::select_masked_binary<
+        ParallelN,
+        tsl::algo::alignment::unaligned,
+        MaskLayout>(
+        less_than_op{},
+        input.data(),
+        threshold.data(),
+        masks.get(),
+        output.data(),
+        count);
+
+    expected_count = 0;
+    for (std::size_t i = 0; i < count; ++i) {
+        if ((input[i] < 0) && (input[i] < threshold[i])) {
+            if (output[expected_count] != input[i]) {
+                return false;
+            }
+            expected_count += 1;
+        }
+    }
+    if (binary_produced != expected_count) {
+        return false;
+    }
+    for (std::size_t i = binary_produced; i < count; ++i) {
+        if (output[i] != sentinel) {
+            return false;
+        }
+    }
     return true;
 }
 

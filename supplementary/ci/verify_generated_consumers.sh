@@ -55,17 +55,6 @@ int main() {
 }
 EOF
 
-cmake -S "$scratch_root/cpp-consumer" -B "$scratch_root/cpp-build"
-cmake --build "$scratch_root/cpp-build" --target tsl_cpp_consumer
-
-cmake \
-  -S "$repo_root/examples" \
-  -B "$scratch_root/examples-build" \
-  -DTSL_GENERATED_ROOT_DIR="$generated_root" \
-  -DTSL_PROFILE=scalar
-cmake --build "$scratch_root/examples-build"
-ctest --test-dir "$scratch_root/examples-build" --output-on-failure
-
 cat >"$scratch_root/rust-consumer/Cargo.toml" <<EOF
 [package]
 name = "tsl_rust_consumer_check"
@@ -86,4 +75,18 @@ fn main() {
 }
 EOF
 
-cargo run --quiet --manifest-path "$scratch_root/rust-consumer/Cargo.toml"
+# Cargo probes rustc with `rustc -`. Run the Rust consumer before the verbose
+# C++ build/test phase so PTY-backed callers cannot leak build-log bytes into
+# that probe as inherited source input.
+cargo run --quiet --manifest-path "$scratch_root/rust-consumer/Cargo.toml" </dev/null
+
+cmake -S "$scratch_root/cpp-consumer" -B "$scratch_root/cpp-build"
+cmake --build "$scratch_root/cpp-build" --target tsl_cpp_consumer
+
+cmake \
+  -S "$repo_root/examples" \
+  -B "$scratch_root/examples-build" \
+  -DTSL_GENERATED_ROOT_DIR="$generated_root" \
+  -DTSL_PROFILE=scalar
+cmake --build "$scratch_root/examples-build"
+ctest --test-dir "$scratch_root/examples-build" --output-on-failure

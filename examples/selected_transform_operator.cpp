@@ -30,18 +30,18 @@ void fill_inputs(
     }
 }
 
-std::vector<std::uint32_t> make_selection(std::size_t count) {
-    std::vector<std::uint32_t> indices;
+std::vector<std::size_t> make_selection(std::size_t count) {
+    std::vector<std::size_t> indices;
     for (std::size_t i = count; i > 0; --i) {
         const std::size_t row = i - 1;
         if ((row % 3) == 0 || (row % 5) == 0) {
-            indices.push_back(static_cast<std::uint32_t>(row));
+            indices.push_back(row);
         }
     }
     return indices;
 }
 
-template <std::size_t ParallelN>
+template <std::size_t ParallelN, std::size_t Scale = 0>
 bool run_selected_transform_pointer_case() {
     constexpr std::size_t count = 1003;
     constexpr std::int32_t sentinel = 7654321;
@@ -51,7 +51,7 @@ bool run_selected_transform_pointer_case() {
     const auto indices = make_selection(count);
 
     std::vector<std::int32_t> output(count, sentinel);
-    tsl::algo::transform_selected_unary<ParallelN>(
+    tsl::algo::transform_selected_unary<ParallelN, Scale>(
         square_op{},
         left.data(),
         indices.data(),
@@ -70,7 +70,7 @@ bool run_selected_transform_pointer_case() {
     }
 
     output.assign(count, sentinel);
-    tsl::algo::transform_selected_binary<ParallelN>(
+    tsl::algo::transform_selected_binary<ParallelN, Scale>(
         add_op{},
         left.data(),
         right.data(),
@@ -129,8 +129,14 @@ int main() {
     if (!run_selected_transform_cases<4>()) {
         return 2;
     }
-    if (!run_selected_transform_cases<16>()) {
+    if (!run_selected_transform_cases<8>()) {
         return 3;
+    }
+    if (!run_selected_transform_cases<16>()) {
+        return 4;
+    }
+    if (!run_selected_transform_pointer_case<4, sizeof(std::int32_t)>()) {
+        return 5;
     }
     return 0;
 }

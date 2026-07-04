@@ -46,8 +46,12 @@ _TYPE_ORDER = SCALAR_TYPE_ORDER
 _CPP_ALGORITHM_SUPPORT_PRIMITIVES = (
     "load",
     "store",
+    # The helper calls the emitted wrapper `store_mask`; selecting `store`
+    # also selects its pass-through masked form, which is split to that name
+    # during C++ emitted-name finalization.
     "to_integral",
     "to_mask",
+    "gather_narrow",
     "compress_store",
     "mask_population_count",
     "mask_binary_and",
