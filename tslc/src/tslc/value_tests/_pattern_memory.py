@@ -142,7 +142,10 @@ class _IndexedMemoryPattern(_BasePattern):
         spec = specs[0]
         return (
             spec.result_kind == self.result_kind
-            and "vidx" in spec.param_kinds
+            and (
+                "vidx" in spec.param_kinds
+                or tuple(spec.param_kinds) == ("cptr", "cptr", "sImm")
+            )
             and spec.immediate is not None
             and spec.target is None
         )

@@ -451,6 +451,37 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         in cpp_indexed_source
     )
 
+    cpp_pointer_indexed_case = ValueTestCasePlan(
+        kind="indexed_load",
+        function_name="test_gather_narrow",
+        case_name="basic",
+        call_name="gather_narrow",
+        type_tag="ui16",
+        base_spelling="std::uint16_t",
+        lanes=8,
+        vector_inputs=(
+            ("100", "101", "102", "103", "104", "105", "106", "107"),
+            ("3", "0", "2", "1", "7", "6", "5", "4"),
+        ),
+        expected=("103", "100", "102", "101", "107", "106", "105", "104"),
+        result_kind="v",
+        param_kinds=("cptr", "cptr", "sImm"),
+        immediate_value="2",
+        target_lanes=8,
+        index_type_tag="ui64",
+        index_base_spelling="std::uint64_t",
+        index_lanes=8,
+    )
+    cpp_pointer_source = render_cpp_values_runner(
+        ValueTestProfilePlan("cpp", "unit-profile", (cpp_pointer_indexed_case,)),
+        render_assets,
+    )
+    assert "typename Indices::register_type idx" not in cpp_pointer_source
+    assert (
+        "tsl::gather_narrow<Vec, Indices, 2>(data, idx_in);"
+        in cpp_pointer_source
+    )
+
     cpp_scalable_case = ValueTestCasePlan(
         kind="scalable_golden",
         function_name="test_scalable_plus",
@@ -496,6 +527,44 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         render_assets,
     )
     assert "r#mod::<Vec>(a0, a1)" in rust_source
+
+    rust_pointer_source = render_rust_values_file(
+        (
+            ValueTestProfilePlan(
+                "rust",
+                "unit-profile",
+                (
+                    ValueTestCasePlan(
+                        kind="indexed_load",
+                        function_name="test_gather_narrow",
+                        case_name="basic",
+                        call_name="gather_narrow",
+                        type_tag="ui16",
+                        base_spelling="u16",
+                        lanes=8,
+                        vector_inputs=(
+                            ("100", "101", "102", "103", "104", "105", "106", "107"),
+                            ("3", "0", "2", "1", "7", "6", "5", "4"),
+                        ),
+                        expected=("103", "100", "102", "101", "107", "106", "105", "104"),
+                        result_kind="v",
+                        param_kinds=("cptr", "cptr", "sImm"),
+                        immediate_value="2",
+                        target_lanes=8,
+                        index_type_tag="ui64",
+                        index_base_spelling="u64",
+                        index_lanes=8,
+                    ),
+                ),
+            ),
+        ),
+        render_assets,
+    )
+    assert "let mut idx: <Indices as SimdVector>::RegisterType" not in rust_pointer_source
+    assert (
+        "gather_narrow::<Vec, Indices, 2, 8>(data.as_ptr(), idx_in.as_ptr())"
+        in rust_pointer_source
+    )
 
     rust_masked_case = ValueTestCasePlan(
         kind="masked",

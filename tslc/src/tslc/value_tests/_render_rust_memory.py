@@ -247,6 +247,7 @@ def _indexed_load(case: ValueTestCasePlan) -> str:
     lanes = case.target_lanes or len(case.expected)
     index_lanes = case.index_lanes or lanes
     scale = case.immediate_value or "1"
+    pointer_indices = tuple(case.param_kinds) == ("cptr", "cptr", "sImm")
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
@@ -257,9 +258,14 @@ def _indexed_load(case: ValueTestCasePlan) -> str:
         f"        let mut data: [{case.base_spelling}; {len(case.vector_inputs[0])}] = "
         f"[Default::default(); {len(case.vector_inputs[0])}];",
         f"        for i in 0..{len(case.vector_inputs[0])} {{ data[i] = data_in[i]; }}",
-        "        let mut idx: <Indices as SimdVector>::RegisterType = Default::default();",
-        f"        for i in 0..{index_lanes} {{ idx[i] = idx_in[i]; }}",
     ]
+    if not pointer_indices:
+        lines.extend(
+            [
+                "        let mut idx: <Indices as SimdVector>::RegisterType = Default::default();",
+                f"        for i in 0..{index_lanes} {{ idx[i] = idx_in[i]; }}",
+            ]
+        )
     if case.mask_inputs:
         source = rust_literal_list(case.vector_inputs[2], case.type_tag)
         lines.append(f"        let mask: <Vec as SimdVector>::MaskType = {case.mask_inputs[0]}u64;")
@@ -269,6 +275,11 @@ def _indexed_load(case: ValueTestCasePlan) -> str:
         lines.append(
             f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}"
             f"::<Vec, Indices, {scale}, {index_lanes}>(mask, data.as_ptr(), idx, source) }};"
+        )
+    elif pointer_indices:
+        lines.append(
+            f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}"
+            f"::<Vec, Indices, {scale}, {index_lanes}>(data.as_ptr(), idx_in.as_ptr()) }};"
         )
     else:
         lines.append(

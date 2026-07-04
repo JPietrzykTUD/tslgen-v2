@@ -166,8 +166,10 @@ class CppBackend:
             seen.add(signature)
             index_type = spec.type_params[0].name if spec.type_params else None
             params = ", ".join(
-                f"{_param_type(kind, index_type)} {name}"
-                for name, kind in zip(spec.param_names, spec.param_kinds)
+                f"{_param_type_for(spec, i, kind, index_type)} {name}"
+                for i, (name, kind) in enumerate(
+                    zip(spec.param_names, spec.param_kinds)
+                )
                 if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
             )
             doc = _cpp_doc(spec, context="C++ specialization", indent="    ")
@@ -255,7 +257,7 @@ def _wrapper_signature(
         (
             f"Arg{i} {name}"
             if i in varying
-            else f"{_param_type(kind, index_type)} {name}"
+            else f"{_param_type_for(shape, i, kind, index_type)} {name}"
         )
         for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
         if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
@@ -498,3 +500,13 @@ def _result_type(kind: str) -> str:
 
 def _param_type(kind: str, index_type: str | None = None) -> str:
     return DEFAULT_SUPPORT_POLICY.cpp_param_type(kind, index_type=index_type)
+
+
+def _param_type_for(
+    spec: LoweredSpecialization,
+    index: int,
+    kind: str,
+    index_type: str | None = None,
+) -> str:
+    override = spec.effective_param_type_overrides[index]
+    return override if override is not None else _param_type(kind, index_type)

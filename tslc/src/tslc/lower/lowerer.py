@@ -26,6 +26,7 @@ from tslc.catalog.model import (
     Catalog,
     ImmediateParam,
     ImplementationSafety,
+    Primitive,
 )
 from tslc.catalog.scalar_types import scalar_bit_width_or_default
 from tslc.catalog.signatures import SignatureShape, parse_signature
@@ -62,6 +63,7 @@ from tslc.render.model import (
     RenderText,
     as_render_text,
     literal_text,
+    render_text,
     render_sequence,
     trimmed_text,
 )
@@ -97,6 +99,10 @@ class LoweredSpecialization:
     param_names: tuple[str, ...]
     param_kinds: tuple[str, ...]
     body: LoweredBody
+    # Backend-spelled public/apply parameter type overrides from unconditional
+    # `param_types: name: default "..."` rules. Each position is either the
+    # override type or None, matching `param_names`/`param_kinds`.
+    param_type_overrides: tuple[str | None, ...] = ()
     vector_spelling: str | None = None  # concrete backend vector spelling for this spec
     index_register_spelling: str | None = None  # concrete si32 register for `vidx`
     native_register_spelling: str | None = None  # source-declared native register, if any
@@ -144,6 +150,12 @@ class LoweredSpecialization:
     @property
     def body_text(self) -> str:
         return self.body.render()
+
+    @property
+    def effective_param_type_overrides(self) -> tuple[str | None, ...]:
+        if len(self.param_type_overrides) == len(self.param_kinds):
+            return self.param_type_overrides
+        return (None,) * len(self.param_kinds)
 
 
 @dataclass(frozen=True, slots=True)
@@ -410,6 +422,13 @@ class Lowerer:
         if self._support.requires_unsafe_frame(shape):
             context.effects.mark_caller_unsafe("raw_pointer")
 
+        param_type_overrides = _param_type_overrides(
+            selected.primitive,
+            parameters,
+            context,
+            self._region_lowerers,
+        )
+
         segments = (
             body_segments
             if body_segments is not None
@@ -467,6 +486,7 @@ class Lowerer:
             param_names=parameters,
             param_kinds=shape.param_kinds,
             body=body,
+            param_type_overrides=param_type_overrides,
             vector_spelling=vector_spelling,
             index_register_spelling=index_register_spelling,
             native_register_spelling=native_register_spelling,
@@ -756,12 +776,81 @@ def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
     where register_type == base_type (scalar/generic), so colliding overloads merge."""
 
     return tuple(
-        DEFAULT_SUPPORT_POLICY.overload_identity_token(
-            kind,
-            register_is_base=spec.register_is_base,
+        (
+            override
+            if override is not None
+            else DEFAULT_SUPPORT_POLICY.overload_identity_token(
+                kind,
+                register_is_base=spec.register_is_base,
+            )
         )
-        for kind in spec.param_kinds
+        for kind, override in zip(spec.param_kinds, spec.effective_param_type_overrides)
     )
+
+
+def _param_type_overrides(
+    primitive: Primitive,
+    parameters: tuple[str, ...],
+    context: LoweringSession,
+    region_lowerers: tuple[RegionLowerer, ...],
+) -> tuple[str | None, ...]:
+    overrides: list[str | None] = []
+    renderer = ExpressionRenderer(context, region_lowerers)
+    for parameter_name in parameters:
+        rule = next(
+            (
+                rule
+                for rule in primitive.param_type_rules
+                if rule.parameter_name == parameter_name
+                and rule.attribute_name is None
+            ),
+            None,
+        )
+        if rule is None:
+            overrides.append(None)
+            continue
+        text = _render_param_type_expr(rule.type_expr, context, renderer, rule.source)
+        if not text:
+            context.effects.skip(
+                "TSL-LOWER-UNSUPPORTED-PARAM-TYPE",
+                f"could not resolve param_types default for {parameter_name!r}",
+                source=rule.source,
+            )
+            overrides.append(None)
+            continue
+        overrides.append(text)
+    return tuple(overrides)
+
+
+def _render_param_type_expr(
+    type_expr: str,
+    context: LoweringSession,
+    renderer: ExpressionRenderer,
+    source: SourceSpan | None,
+) -> str:
+    if context.env.backend.backend_id == "rust":
+        pointer = _split_c_like_pointer_type(type_expr)
+        if pointer is not None:
+            base_expr, is_const = pointer
+            base = render_text(renderer.render(scan(base_expr, source=source))).strip()
+            if not base:
+                return ""
+            return f"*{'const' if is_const else 'mut'} {base}"
+    return render_text(renderer.render(scan(type_expr, source=source))).strip()
+
+
+def _split_c_like_pointer_type(type_expr: str) -> tuple[str, bool] | None:
+    text = type_expr.strip()
+    if not text.endswith("*"):
+        return None
+    base = text[:-1].rstrip()
+    is_const = False
+    if base.endswith("const"):
+        is_const = True
+        base = base[:-len("const")].rstrip()
+    if not base:
+        return None
+    return base, is_const
 
 
 def _find_region(segments: tuple[Segment, ...] | None, keyword: str) -> Region | None:

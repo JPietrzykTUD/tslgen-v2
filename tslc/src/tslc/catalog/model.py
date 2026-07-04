@@ -113,11 +113,11 @@ class Primitive:
     # (aligned/packed) is expanded by the builder into concrete-value copies, so here the
     # value is always concrete. `attribute_keys` is kept for the masked-variant filter.
     attributes: Mapping[str, str] = field(default_factory=dict)
-    # Conditional pointer parameter layout rules from a `param_types:` block.
-    # These are source-owned facts about what an abstract `ptr` parameter points
-    # to under a concrete attribute value. They do not change the public wrapper
-    # ABI by themselves; consumers such as value-test planning resolve them when
-    # they need storage layout.
+    # Pointer parameter layout rules from a `param_types:` block. Conditional
+    # rules are source-owned facts about what an abstract pointer parameter
+    # points to under a concrete attribute value; consumers such as value-test
+    # planning resolve them when they need storage layout. An unconditional
+    # `default` rule is a public ABI override for that parameter.
     param_type_rules: tuple["ParamTypeRule", ...] = ()
     # Per-parameter metadata for `sImm` compile-time immediates, from the `params:` block
     # (keyed by the signature parameter name). Empty when absent — the lowerer then defaults
@@ -210,11 +210,11 @@ class GenericParam:
 
 @dataclass(frozen=True, slots=True)
 class ParamTypeRule:
-    """One conditional `param_types:` rule for a primitive parameter."""
+    """One `param_types:` rule for a primitive parameter."""
 
     parameter_name: str
-    attribute_name: str
-    attribute_value: str
+    attribute_name: str | None
+    attribute_value: str | None
     type_expr: str
     source: SourceSpan | None = None
 

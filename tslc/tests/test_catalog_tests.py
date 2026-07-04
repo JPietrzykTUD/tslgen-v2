@@ -107,6 +107,16 @@ def test_param_type_rules_are_promoted(catalog: Catalog) -> None:
     assert "base::unsigned_of" in packed_false.type_expr
     assert packed_false.source is not None
 
+    gather_narrow = _first(catalog, "gather_narrow", masked=False)
+    index_ptr = next(
+        rule
+        for rule in gather_narrow.param_type_rules
+        if rule.parameter_name == "index_ptr"
+    )
+    assert index_ptr.attribute_name is None
+    assert index_ptr.attribute_value is None
+    assert "base::generic(IndicesType)" in index_ptr.type_expr
+
 
 # --- structural validation ---------------------------------------------------
 
@@ -145,6 +155,8 @@ def test_param_type_rules_are_validated() -> None:
         "    missing:\n"
         '      "if packed=true" "type(base::in) *"\n'
         "    ptr:\n"
+        '      default "type(base::in) *"\n'
+        '      default "type(base::in) const*"\n'
         '      "if unknown=true" "type(base::in) *"\n'
         '      "when packed=true" "type(base::in) *"\n'
         '      "if packed=maybe" "type(base::in) *"\n'

@@ -559,12 +559,18 @@ def _index_where(shape: LoweredSpecialization, *, impl_register: str | None = No
     knowledge. Emitted on the trait/impl/wrapper so each constraint holds where the body needs it;
     empty for non-`vidx` primitives."""
 
-    if (
-        DEFAULT_SUPPORT_POLICY.index_vector_kind not in shape.param_kinds
-        or not shape.type_params
-    ):
+    if not shape.type_params:
         return ""
     index = shape.type_params[0].name
+    needs_index_base = (
+        DEFAULT_SUPPORT_POLICY.index_vector_kind in shape.param_kinds
+        or any(
+            override is not None and f"{index}::BaseType" in override
+            for override in shape.effective_param_type_overrides
+        )
+    )
+    if not needs_index_base:
+        return ""
     clauses = [f"{index}::BaseType: IndexBase"]
     if impl_register is not None:
         clauses.insert(0, f"{index}: SimdVector<RegisterType = {impl_register}>")
@@ -643,10 +649,13 @@ def _params(
     # wrapper `T::RegisterType`); a `vidx` (index vector) param uses `vidx_type`
     # (`IndicesType::RegisterType` — the generic name is the same in every context).
     parts: list[str] = []
-    for name, kind in zip(shape.param_names, shape.param_kinds):
+    for index, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds)):
         if kind == DEFAULT_SUPPORT_POLICY.immediate_kind:
             continue
-        if kind == "vt":
+        override = shape.effective_param_type_overrides[index]
+        if override is not None:
+            typ = override
+        elif kind == "vt":
             typ = vt_type
         elif kind == DEFAULT_SUPPORT_POLICY.index_vector_kind:
             typ = vidx_type

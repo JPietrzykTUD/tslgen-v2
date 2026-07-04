@@ -130,7 +130,7 @@ def _param_type_rules(declaration: ParsedPrimitiveDeclaration) -> tuple[ParamTyp
             for entry in _children(parameter):
                 condition = _parse_param_type_condition(entry.key.text)
                 type_expr = _field_text(entry)
-                if condition is None or not type_expr:
+                if condition is _INVALID_PARAM_TYPE_CONDITION or not type_expr:
                     continue
                 attribute_name, attribute_value = condition
                 rules.append(
@@ -146,11 +146,16 @@ def _param_type_rules(declaration: ParsedPrimitiveDeclaration) -> tuple[ParamTyp
 
 
 
-def _parse_param_type_condition(text: str) -> tuple[str, str] | None:
+_INVALID_PARAM_TYPE_CONDITION = object()
+
+
+def _parse_param_type_condition(text: str) -> tuple[str | None, str | None] | object:
     condition = _unquote_key(text)
+    if condition == "default":
+        return (None, None)
     match = _PARAM_TYPE_CONDITION_RE.fullmatch(condition)
     if match is None:
-        return None
+        return _INVALID_PARAM_TYPE_CONDITION
     return match.group(1), match.group(2)
 
 

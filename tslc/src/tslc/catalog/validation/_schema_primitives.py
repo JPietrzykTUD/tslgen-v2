@@ -243,7 +243,7 @@ def _validate_param_types(
                 )
             for entry in children(parameter):
                 parsed = _parse_param_type_condition(entry.key.text)
-                if parsed is None:
+                if parsed is _INVALID_PARAM_TYPE_CONDITION:
                     diagnostics.append(
                         diagnostic_at(
                             severity="error",
@@ -251,13 +251,41 @@ def _validate_param_types(
                             message=(
                                 f"primitive {declaration.name!r} param_types rule "
                                 f"{unquote_key(entry.key.text)!r} must be shaped "
-                                "as 'if attribute=value'"
+                                "as 'default' or 'if attribute=value'"
                             ),
                             source=source_span(entry.source),
                         )
                     )
                     continue
                 attribute_name, attribute_value = parsed
+                if attribute_name is None:
+                    identity = (parameter_name, "", "")
+                    if identity in seen:
+                        diagnostics.append(
+                            diagnostic_at(
+                                severity="error",
+                                code="TSL-CATALOG-PARAM-TYPES-DUPLICATE-RULE",
+                                message=(
+                                    "duplicate default param_types rule for parameter "
+                                    f"{parameter_name!r}"
+                                ),
+                                source=source_span(entry.source),
+                            )
+                        )
+                    seen.add(identity)
+                    if not field_text(entry):
+                        diagnostics.append(
+                            diagnostic_at(
+                                severity="error",
+                                code="TSL-CATALOG-PARAM-TYPES-MISSING-TYPE",
+                                message=(
+                                    f"primitive {declaration.name!r} param_types rule for "
+                                    f"parameter {parameter_name!r} has no type expression"
+                                ),
+                                source=source_span(entry.source),
+                            )
+                        )
+                    continue
                 attribute = attributes.get(attribute_name)
                 if attribute is None:
                     diagnostics.append(
@@ -311,10 +339,16 @@ def _validate_param_types(
                     )
 
 
-def _parse_param_type_condition(text: str) -> tuple[str, str] | None:
-    match = _PARAM_TYPE_CONDITION_RE.fullmatch(unquote_key(text))
+_INVALID_PARAM_TYPE_CONDITION = object()
+
+
+def _parse_param_type_condition(text: str) -> tuple[str | None, str | None] | object:
+    condition = unquote_key(text)
+    if condition == "default":
+        return (None, None)
+    match = _PARAM_TYPE_CONDITION_RE.fullmatch(condition)
     if match is None:
-        return None
+        return _INVALID_PARAM_TYPE_CONDITION
     return match.group(1), match.group(2)
 
 
