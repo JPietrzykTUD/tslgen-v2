@@ -338,7 +338,7 @@ def test_subprocess_runner_defaults_zig_cache_under_command_root(
     assert Path(global_cache).name == "global"
 
 
-def test_cpp_value_test_run_can_be_wrapped_with_sde(tmp_path: Path) -> None:
+def test_cpp_value_test_run_configures_sde_as_test_launcher(tmp_path: Path) -> None:
     project = VerifyProject(
         backends=(
             VerifyBackend(
@@ -380,9 +380,10 @@ def test_cpp_value_test_run_can_be_wrapped_with_sde(tmp_path: Path) -> None:
         "build-values",
         "test",
     ]
+    configure = seen[2].argv
+    assert f"-DTSL_TEST_LAUNCHER={sys.executable};-hsw;--" in configure
     assert seen[-2].argv[0] == "cmake"
-    assert seen[-1].argv[:3] == (sys.executable, "-hsw", "--")
-    assert seen[-1].argv[3] == "ctest"
+    assert seen[-1].argv[0] == "ctest"
 
 
 def test_sde_cpp_value_tests_pin_default_compiler_over_ambient_cxx(

@@ -11,8 +11,8 @@ from tslc.output._verify_common import (
     configured_emulator_kinds,
     cpp_environment,
     cpp_target,
-    ctest_prefix,
     effective_cpp_compiler,
+    emulator_prefix,
     missing_executable,
 )
 from tslc.output.verify_drivers import VerifyBackendDriver
@@ -162,7 +162,6 @@ def _cpp_command_groups(
                     profile_name=profile.profile_name,
                     step="test",
                     argv=(
-                        *ctest_prefix(profile, config),
                         "ctest",
                         "--test-dir",
                         str(build_dir),
@@ -204,7 +203,19 @@ def _cpp_configure_args(
     cross_emulator = cmake_cross_emulator(profile, config)
     if cross_emulator:
         args.append(f"-DCMAKE_CROSSCOMPILING_EMULATOR={';'.join(cross_emulator)}")
+    test_launcher = _cmake_test_launcher(profile, config)
+    if test_launcher:
+        args.append(f"-DTSL_TEST_LAUNCHER={';'.join(test_launcher)}")
     return tuple(args)
+
+
+def _cmake_test_launcher(
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+) -> tuple[str, ...]:
+    if profile.emulator is None or profile.emulator.kind != "sde":
+        return ()
+    return emulator_prefix(profile, config)
 
 
 def _cpp_preflight_command(

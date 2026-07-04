@@ -107,15 +107,6 @@ def rust_target_args(
     return ("--target", target) if target is not None else ()
 
 
-def ctest_prefix(
-    profile: VerifyProfile,
-    config: BuildVerifierConfig,
-) -> tuple[str, ...]:
-    if profile.emulator is None or profile.emulator.kind != "sde":
-        return ()
-    return emulator_prefix(profile, config)
-
-
 def cmake_cross_emulator(
     profile: VerifyProfile,
     config: BuildVerifierConfig,
