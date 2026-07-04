@@ -126,6 +126,44 @@ def test_simd_type_base_constraints_are_accepted_and_promoted() -> None:
     assert primitive.generic_params[0].base_type_constraints == ("ints", "si32")
 
 
+def test_test_index_type_is_accepted_and_promoted() -> None:
+    source = _base_source().replace(
+        "  impls:\n",
+        "  tests:\n"
+        "    - {tags [basic], type \"si32\", index_type \"si32\", case {inputs [[1, 2, 3, 4]], expected [1, 2, 3, 4]}}\n"
+        "  impls:\n",
+    )
+    document = SourceDocument(Path("catalog_validation_fixture.tsl"), source, "d", "tsl")
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
+    assert parsed.diagnostics == (), parsed.diagnostics
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+    diagnostics = (
+        *result.diagnostics,
+        *validate_catalog(result.catalog, parsed, required_backends=("cpp", "rust")),
+    )
+    assert diagnostics == ()
+
+    primitive = result.catalog.primitive("id")
+    assert primitive is not None
+    assert primitive.tests[0].index_type == "si32"
+    assert primitive.tests[0].name == "id_si32_index_si32_basic"
+
+
+def test_test_index_type_must_be_a_known_scalar_type() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "  impls:\n",
+            "  tests:\n"
+            "    - {tags [basic], type \"si32\", index_type \"vec32\", case {inputs [[1, 2, 3, 4]], expected [1, 2, 3, 4]}}\n"
+            "  impls:\n",
+        )
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-CATALOG-INVALID-ENUM")
+    assert "test index_type 'vec32'" in diagnostic.message
+
+
 def test_simd_type_base_constraints_are_allowed_only_on_simd_type_params() -> None:
     diagnostics = _diagnostics(
         _base_source().replace(

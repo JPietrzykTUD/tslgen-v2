@@ -266,6 +266,58 @@ def test_simd_type_generic_param_queries_lower_from_authored_name(
     assert lowered.specialization.body_text == expected
 
 
+@pytest.mark.parametrize(
+    ("backend_id", "expected_call"),
+    (
+        ("cpp", "to_array<IndexVec>(index)"),
+        ("rust", "to_array::<IndexVec>(index)"),
+    ),
+)
+def test_simd_type_generic_param_can_target_primitive_call(
+    catalog: Catalog,
+    backend_id: str,
+    expected_call: str,
+) -> None:
+    impl = Implementation(
+        ("avx2", "all"),
+        "avx2",
+        "all",
+        """
+        var<infer>(idx_array, call<primitive=to_array[IndexVec]>(index));
+        complete(idx_array[0]);
+        """,
+        source_order=0,
+    )
+    primitive = Primitive(
+        name="index_array_probe",
+        signature="usize:=vidx",
+        parameters=("index",),
+        attribute_keys=(),
+        generic_params=(
+            GenericParam(
+                "IndexVec",
+                "simd_type",
+                "",
+                base_type_constraints=("?i32",),
+            ),
+        ),
+        implementations=(impl,),
+    )
+    slot = SelectedImplementation(
+        primitive=primitive,
+        implementation=impl,
+        extension=catalog.extensions["avx2"],
+        type_tag="si32",
+    )
+
+    lowered = Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend_id))
+
+    assert lowered.diagnostics == ()
+    assert lowered.specialization is not None
+    assert expected_call in lowered.specialization.body_text
+    assert tuple(param.name for param in lowered.specialization.type_params) == ("IndexVec",)
+
+
 def test_sse41_cast_fast_path_wins_over_portable_fallback(
     catalog: Catalog, machine_profiles
 ) -> None:

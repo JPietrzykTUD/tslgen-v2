@@ -16,6 +16,7 @@ def derive_test_case_name(
     to_type: str | None = None,
     to_extension: str | None = None,
     index: int | None = None,
+    index_type: str | None = None,
     attrs: dict[str, str] | None = None,
 ) -> str:
     """Stable case id from semantic axes and tags.
@@ -34,6 +35,8 @@ def derive_test_case_name(
         parts.extend(("to", _piece(to_extension)))
     if index is not None:
         parts.append(f"idx{index}")
+    if index_type:
+        parts.extend(("index", _piece(index_type)))
     for key, value in sorted((attrs or {}).items()):
         parts.extend((_piece(key), _piece(value)))
     if case_id:

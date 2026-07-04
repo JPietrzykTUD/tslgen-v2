@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tslc.catalog.model import Catalog, Primitive
+from tslc.catalog.scalar_types import normalize_scalar_tag
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests._case_memory import (
     indexed_load_case,
@@ -160,13 +161,28 @@ class _IndexedMemoryPattern(_BasePattern):
 
     def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
         build = indexed_load_case if self.result_kind == "v" else indexed_store_case
+        index_base_spelling = _index_base_spelling(
+            kwargs["catalog"],
+            kwargs["backend"].backend_id,
+            kwargs["case"].index_type,
+        )
         plan = build(
             kwargs["emitted_name"],
             kwargs["index"],
             kwargs["case"],
             kwargs["specs"],
+            index_base_spelling,
         )
         return (plan,) if plan is not None else ()
+
+def _index_base_spelling(
+    catalog: Catalog,
+    backend_id: str,
+    type_tag: str | None,
+) -> str | None:
+    if type_tag is None:
+        return None
+    return catalog.type_spellings.get(backend_id, {}).get(normalize_scalar_tag(type_tag))
 
 __all__ = (
     "_PointerLayoutShapePattern",

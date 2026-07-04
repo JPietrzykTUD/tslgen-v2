@@ -249,9 +249,10 @@ class TestCase:
 
     Optional axes pin a case to one specialization or carry operand metadata: ``extension`` (a
     specific subject extension), ``to_type``/``to_extension`` (representation-change targets),
-    ``index`` (compile-time lane index), ``scale``/``alignment`` and ``offset``/``src_offset``/
-    ``dst_offset`` (gather/scatter and load/store buffer placement), ``attrs`` (the
-    ``aligned``/``packed`` axes).
+    ``index`` (compile-time lane index), ``index_type`` (the scalar type tag of a ``vidx``
+    test vector when it differs from the result vector base), ``scale``/``alignment`` and
+    ``offset``/``src_offset``/``dst_offset`` (gather/scatter and load/store buffer placement),
+    ``attrs`` (the ``aligned``/``packed`` axes).
     """
 
     name: str
@@ -267,6 +268,7 @@ class TestCase:
     to_type: str | None = None
     to_extension: str | None = None
     index: int | None = None
+    index_type: str | None = None
     offset: int | None = None
     src_offset: int | None = None
     dst_offset: int | None = None

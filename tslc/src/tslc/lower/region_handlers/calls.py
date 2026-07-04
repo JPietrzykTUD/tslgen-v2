@@ -236,6 +236,8 @@ class CallLowerer:
             return context.env.backend.types.vector_type_spelling(
                 base, context.env.extension.isa_name
             )
+        if entry in context.env.simd_type_param_names:
+            return entry
         value = self._evaluator.evaluate(entry, context)
         if isinstance(value, TextValue):  # a query resolving to a vector spelling
             return value.as_text()

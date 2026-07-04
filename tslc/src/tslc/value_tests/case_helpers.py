@@ -32,6 +32,9 @@ def plan_case(
     expected_type_tag: str | None = None,
     target_base_spelling: str | None = None,
     target_lanes: int | None = None,
+    index_type_tag: str | None = None,
+    index_base_spelling: str | None = None,
+    index_lanes: int | None = None,
     lanes: int | None = None,
 ) -> ValueTestCasePlan:
     return ValueTestCasePlan.checked(
@@ -60,6 +63,9 @@ def plan_case(
         generic_defaults=generic_defaults,
         target_base_spelling=target_base_spelling,
         target_lanes=target_lanes,
+        index_type_tag=index_type_tag,
+        index_base_spelling=index_base_spelling,
+        index_lanes=index_lanes,
     )
 
 

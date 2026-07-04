@@ -420,6 +420,37 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
     )
     assert "tsl::plus<Vec>(v0, v1)" in cpp_source
 
+    cpp_indexed_case = ValueTestCasePlan(
+        kind="indexed_load",
+        function_name="test_gather_narrow_partial",
+        case_name="partial",
+        call_name="gather_narrow_partial",
+        type_tag="ui16",
+        base_spelling="std::uint16_t",
+        lanes=4,
+        vector_inputs=(("100", "101", "102", "103", "104"), ("0", "4")),
+        expected=("100", "104", "0", "0"),
+        immediate_value="2",
+        target_lanes=4,
+        index_type_tag="ui64",
+        index_base_spelling="std::uint64_t",
+        index_lanes=2,
+    )
+    cpp_indexed_source = render_cpp_values_runner(
+        ValueTestProfilePlan("cpp", "unit-profile", (cpp_indexed_case,)),
+        render_assets,
+    )
+    assert "using Vec = tsl::simd<std::uint16_t, tsl::generic<4>>;" in cpp_indexed_source
+    assert (
+        "using Indices = tsl::simd<std::uint64_t, tsl::generic<2>>;"
+        in cpp_indexed_source
+    )
+    assert "static const std::uint64_t idx_in[2] = {0, 4};" in cpp_indexed_source
+    assert (
+        "tsl::gather_narrow_partial<Vec, Indices, 2>(data, idx);"
+        in cpp_indexed_source
+    )
+
     cpp_scalable_case = ValueTestCasePlan(
         kind="scalable_golden",
         function_name="test_scalable_plus",
@@ -956,6 +987,22 @@ def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog(
             target_lanes=4,
         ),
         ValueTestCasePlan(
+            "indexed_load",
+            "test_gather_narrow_partial",
+            "gather_narrow_partial",
+            "gather_narrow_partial",
+            "ui16",
+            "u16",
+            4,
+            vector_inputs=(("100", "101", "102", "103", "104"), ("0", "4")),
+            expected=("100", "104", "0", "0"),
+            immediate_value="2",
+            target_lanes=4,
+            index_type_tag="ui64",
+            index_base_spelling="u64",
+            index_lanes=2,
+        ),
+        ValueTestCasePlan(
             "indexed_store",
             "test_scatter",
             "scatter",
@@ -1048,6 +1095,9 @@ def test_rust_renderer_consumes_memory_and_conversion_plans_without_catalog(
     assert "let ptr = allocate(64usize);" in source
     assert "unsafe { deallocate(ptr); }" in source
     assert "gather::<Vec, Indices, 4, 4>(data.as_ptr(), idx)" in source
+    assert "type Indices = Simd<u64, Generic<2>>;" in source
+    assert "gather_narrow_partial::<Vec, Indices, 2, 2>(data.as_ptr(), idx)" in source
+    assert "let expected: [u16; 4] = [100, 104, 0, 0];" in source
     assert "scatter::<Vec, Indices, 4, 4>(data.as_mut_ptr(), idx, values);" in source
     assert 'assert_eq!(result.as_str(), "4|3|2|1|\\n", "to_ostream");' in source
     assert "type Vec = Simd<i16, Avx2>;" in source

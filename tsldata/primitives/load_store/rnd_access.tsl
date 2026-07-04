@@ -494,6 +494,110 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
             );
             complete(*ptr);
           """
+prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
+  brief_description "Gathers narrow memory elements with a wider index vector and zero-fills result lanes without an index."
+  detailed_description """
+    Loads non-contiguous memory elements through a SIMD index vector whose base
+    type is wider than the result vector base type. Only lanes covered by the
+    index vector are loaded. Remaining result lanes are set to zero.
+  """
+  semantics """
+    input: const pointer base_ptr, index register index, immediate scale
+    result = zero vector
+    for each lane i in index:
+      address = base_ptr + index[i] * scale bytes
+      result[i] = load element at address
+    return result
+    """
+  cross_lane true
+  generic_params:
+    IndicesType {kind simd_type, base_types [?i64]}
+    N {kind int, default 1}
+  tests:
+    - {tags [basic, partial], type "ui8", index_type "ui64", scale 1, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [0, 3]], expected [10, 13, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic, partial], type "si8", index_type "si64", scale 1, case {inputs [[-10, -9, -8, -7, -6, -5, -4, -3], [1, 6]], expected [-9, -4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic, partial], type "ui16", index_type "ui64", scale 2, case {inputs [[100, 101, 102, 103, 104, 105], [0, 4]], expected [100, 104, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic, partial], type "si16", index_type "si64", scale 2, case {inputs [[-100, -50, 0, 50, 100, 150], [1, 5]], expected [-50, 150, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic, partial], type "ui32", index_type "ui64", scale 4, case {inputs [[10, 20, 30, 40, 50, 60], [2, 4]], expected [30, 50, 0, 0]}}
+    - {tags [basic, partial], type "si32", index_type "si64", scale 4, case {inputs [[-10, -20, -30, -40, -50, -60], [0, 3]], expected [-10, -40, 0, 0]}}
+    - {tags [basic, partial], type "f32", index_type "si64", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5, 5.25, -6.25], [1, 4]], expected [-2.0, 5.25, 0.0, 0.0]}}
+  impls:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
+      [bword, dword]:
+        requires:
+          avx512:
+            bword [avx512f, avx512bw]
+            dword [avx512f]
+          avx2 [avx, avx2]
+          avx2_vl [avx, avx2]
+          sse [sse, sse2]
+          sse_vl [sse, sse2]
+          neon [neon]
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+            loop<backend, unroll>(i, 0, value(generic::length(IndicesType)), 1) {
+              result[i] = *(cast<reinterpret, type=const_ptr>(type(base::in), ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
+            }
+            complete(call<primitive=from_array[Vec]>(result));
+          """
+    sve:
+      [bword, dword]:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, type(base::in));
+            let<type>(IndexBase, type(base::generic(IndicesType)));
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
+            var<const_infer>(idx_array, cast<reinterpret, type=ptr>(IndexBase, mem<alloc>(index_lanes * sizeof(IndexBase))));
+            var<const_infer>(result, cast<reinterpret, type=ptr>(Base, mem<alloc>(lanes * sizeof(Base))));
+            intrin<svst1>(
+              call<primitive=mask_true[IndicesType]>(),
+              idx_array,
+              index
+            );
+            loop<backend>(i, 0, lanes, 1) {
+              result[i] = cast<static>(Base, 0);
+            }
+            loop<backend>(i, 0, index_lanes, 1) {
+              result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
+            }
+            var<const_infer>(loaded, intrin<svld1>(call<primitive=mask_true[Vec]>(), result));
+            mem<free>(idx_array);
+            mem<free>(result);
+            complete(loaded);
+          """
+    scalar:
+      [bword, dword]:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<const_infer>(
+              ptr,
+              cast<reinterpret, type=const_ptr>(
+                type(base::in),
+                ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[0], scale))
+              )
+            );
+            complete(*ptr);
+          """
 prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, source, scale):
   brief_description "[Example: avx512 + si32]: Gather 32-bit integers from memory using 32-bit indices. 32-bit elements are loaded from addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\"). Gathered elements are merged into \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set). \"scale\" should be 1, 2, 4 or 8."
   detailed_description """
