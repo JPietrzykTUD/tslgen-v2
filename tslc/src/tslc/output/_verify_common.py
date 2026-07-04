@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shlex
 import shutil
+from pathlib import Path
 
 from tslc.diagnostics import Diagnostic
 from tslc.output.verify_model import (
@@ -142,12 +143,25 @@ def effective_cpp_compiler(
         return config.cpp_compiler
     if backend is not None and any(cpp_target(profile, config) for profile in backend.profiles):
         return ("clang++",)
-    ambient = os.environ.get("CXX")
-    if ambient:
-        parsed = tuple(shlex.split(ambient))
-        if parsed:
+    parsed = _ambient_cpp_compiler()
+    if parsed:
+        # The CI/devcontainer environment exposes Zig through CXX for cross
+        # builds. Zig is not the native host compiler unless the caller asks for
+        # it explicitly through BuildVerifierConfig/--cpp-compiler.
+        if not _is_zig_driver(parsed[0]):
             return parsed
     return ("c++",)
+
+
+def _ambient_cpp_compiler() -> tuple[str, ...]:
+    ambient = os.environ.get("CXX")
+    if not ambient:
+        return ()
+    return tuple(shlex.split(ambient))
+
+
+def _is_zig_driver(executable: str) -> bool:
+    return Path(executable).name == "zig"
 
 
 def effective_rust_compiler(config: BuildVerifierConfig) -> str:
@@ -165,14 +179,17 @@ def cpp_environment(
     config: BuildVerifierConfig,
     backend: VerifyBackend | None = None,
 ) -> tuple[BuildCommandEnvironment, ...]:
+    compiler = effective_cpp_compiler(config, backend)
     if config.cpp_compiler is None and not (
         backend is not None and any(cpp_target(profile, config) for profile in backend.profiles)
     ):
-        return ()
+        ambient = _ambient_cpp_compiler()
+        if ambient == compiler:
+            return ()
     return (
         BuildCommandEnvironment(
             key="CXX",
-            value=shlex.join(effective_cpp_compiler(config, backend)),
+            value=shlex.join(compiler),
         ),
     )
 

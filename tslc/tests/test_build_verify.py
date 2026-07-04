@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 import textwrap
 
@@ -23,7 +24,22 @@ def _cmake_env(tmp_path: Path) -> dict[str, str]:
     env = os.environ.copy()
     env.setdefault("ZIG_LOCAL_CACHE_DIR", str(tmp_path / "zig-local-cache"))
     env.setdefault("ZIG_GLOBAL_CACHE_DIR", str(tmp_path / "zig-global-cache"))
+    _prefer_host_compiler_for_native_cmake(env)
     return env
+
+
+def _prefer_host_compiler_for_native_cmake(env: dict[str, str]) -> None:
+    if _compiler_basename(env.get("CXX", "")) == "zig":
+        env["CXX"] = "c++"
+    if _compiler_basename(env.get("CC", "")) == "zig":
+        env["CC"] = "cc"
+
+
+def _compiler_basename(command: str) -> str:
+    parts = shlex.split(command)
+    if not parts:
+        return ""
+    return Path(parts[0]).name
 
 
 def test_generated_profiles_build(

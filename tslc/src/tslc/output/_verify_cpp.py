@@ -50,17 +50,24 @@ def _prepare_cpp_backend(
     if missing_compiler is not None:
         skipped.append(f"cpp: C++ compiler {missing_compiler} not found")
         return None
-    preflight = _cpp_preflight_command(root, backend, compiler)
-    if isinstance(preflight, Diagnostic):
-        diagnostics.append(preflight)
-        return None
-    result = runner(preflight)
-    results.append(result)
-    if result.returncode != 0:
-        skipped.append(_cpp_preflight_skip(result))
-        return None
+    native_preflight_ok = True
+    if any(cpp_target(profile, config) is None for profile in backend.profiles):
+        preflight = _cpp_preflight_command(root, backend, compiler)
+        if isinstance(preflight, Diagnostic):
+            diagnostics.append(preflight)
+            native_preflight_ok = False
+        else:
+            result = runner(preflight)
+            results.append(result)
+            if result.returncode != 0:
+                skipped.append(_cpp_preflight_skip(result))
+                native_preflight_ok = False
     target_profiles: list[VerifyProfile] = []
     for profile in backend.profiles:
+        if cpp_target(profile, config) is None:
+            if native_preflight_ok:
+                target_profiles.append(profile)
+            continue
         target_preflight = _cpp_target_preflight_command(
             root,
             backend,
@@ -68,9 +75,6 @@ def _prepare_cpp_backend(
             config,
             compiler,
         )
-        if target_preflight is None:
-            target_profiles.append(profile)
-            continue
         if isinstance(target_preflight, Diagnostic):
             diagnostics.append(target_preflight)
             continue

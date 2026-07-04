@@ -98,8 +98,17 @@ def test_neon_native_arithmetic_bitwise_extract_and_cast_value_tests_build_and_p
         (command.command.backend_id, command.command.step)
         for command in report.commands
     }
-    assert ("cpp", "test") in steps
-    assert ("rust", "test") in steps
+    command_steps = [
+        (
+            command.command.backend_id,
+            command.command.profile_name,
+            command.command.step,
+            command.returncode,
+        )
+        for command in report.commands
+    ]
+    assert ("cpp", "test") in steps, (report.skipped, command_steps)
+    assert ("rust", "test") in steps, (report.skipped, command_steps)
 
 
 def test_value_full_corpus_avx2_coverage_is_complete(
