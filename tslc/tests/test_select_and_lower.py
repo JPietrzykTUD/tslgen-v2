@@ -238,7 +238,14 @@ def test_simd_type_generic_param_queries_lower_from_authored_name(
         signature="usize:=vidx",
         parameters=("index",),
         attribute_keys=(),
-        generic_params=(GenericParam("IndexVec", "simd_type", ""),),
+        generic_params=(
+            GenericParam(
+                "IndexVec",
+                "simd_type",
+                "",
+                base_type_constraints=("?i32",),
+            ),
+        ),
         implementations=(impl,),
     )
     slot = SelectedImplementation(
@@ -252,7 +259,10 @@ def test_simd_type_generic_param_queries_lower_from_authored_name(
 
     assert lowered.diagnostics == ()
     assert lowered.specialization is not None
-    assert lowered.specialization.type_params == (("IndexVec", ()),)
+    assert tuple(
+        (param.name, param.bounds, param.base_type_constraints)
+        for param in lowered.specialization.type_params
+    ) == (("IndexVec", (), ("?i32",)),)
     assert lowered.specialization.body_text == expected
 
 

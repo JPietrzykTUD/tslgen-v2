@@ -108,6 +108,34 @@ def validate_primitive_signatures(
         _validate_lane_list_signature_terms(primitive.name, shape, diagnostics, source)
 
 
+def validate_generic_param_base_constraints(
+    catalog: Catalog,
+    diagnostics: list[Diagnostic],
+) -> None:
+    for primitive in catalog.primitives:
+        for generic_param in primitive.generic_params:
+            if not generic_param.base_type_constraints:
+                continue
+            for constraint in generic_param.base_type_constraints:
+                members = catalog.type_group_members(constraint)
+                invalid = tuple(
+                    member for member in members if member not in KNOWN_SCALAR_TYPE_TAGS
+                )
+                if not members or invalid:
+                    diagnostics.append(
+                        diagnostic_at(
+                            severity="error",
+                            code="TSL-CATALOG-SIMD-TYPE-CONSTRAINT",
+                            message=(
+                                f"primitive {primitive.name!r} generic parameter "
+                                f"{generic_param.name!r} has invalid base_types entry "
+                                f"{constraint!r}; expected scalar type tags or type groups"
+                            ),
+                            source=generic_param.source,
+                        )
+                    )
+
+
 def _validate_lane_list_signature_terms(
     primitive_name: str,
     shape: SignatureShape,

@@ -8,6 +8,7 @@ from tslc.catalog.validation._schema_common import (
     KNOWN_BOOLEAN_VALUES,
     diagnose_duplicate_fields,
     invalid_enum,
+    is_non_empty_scalar_list,
     unquote_key,
     validate_known_fields,
 )
@@ -141,7 +142,7 @@ def _validate_generic_params(
         for entry in children(field.field):
             validate_known_fields(
                 children(entry),
-                frozenset({"kind", "default"}),
+                frozenset({"kind", "default", "base_types"}),
                 diagnostics,
                 owner=f"generic parameter {entry.key.text!r}",
             )
@@ -153,6 +154,33 @@ def _validate_generic_params(
                     kind_field,
                     f"generic parameter kind {kind!r}",
                     sorted(_KNOWN_GENERIC_PARAM_KINDS),
+                )
+            base_types = child(entry, "base_types")
+            if base_types is None:
+                continue
+            if kind != "simd_type":
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-SIMD-TYPE-CONSTRAINT",
+                        message=(
+                            f"generic parameter {entry.key.text!r} uses base_types, "
+                            "but base_types is allowed only for kind 'simd_type'"
+                        ),
+                        source=source_span(base_types.source),
+                    )
+                )
+            if not is_non_empty_scalar_list(base_types):
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-SIMD-TYPE-CONSTRAINT",
+                        message=(
+                            f"generic parameter {entry.key.text!r} base_types must be "
+                            "a non-empty list of scalar type tags or type groups"
+                        ),
+                        source=source_span(base_types.source),
+                    )
                 )
 
 

@@ -201,6 +201,10 @@ class GenericParam:
     name: str
     kind: str  # "bool", "int", or "simd_type"
     default: str  # e.g. "true"
+    # For `kind simd_type`, optional source-level constraints on the parameter's
+    # associated base type. Entries are scalar type tags or catalog type-group
+    # names, e.g. ("?i32", "?i64").
+    base_type_constraints: tuple[str, ...] = ()
     source: SourceSpan | None = None
 
 

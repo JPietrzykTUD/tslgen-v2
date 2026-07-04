@@ -231,7 +231,7 @@ class RustBackend:
             vt_type = "ToVec::RegisterType"
         # Free SIMD type params (gather's `IndicesType`) — a `vidx` param projects through one.
         decls = _type_param_decls(shape) + decls
-        vidx_type = f"{shape.type_params[0][0]}::RegisterType" if shape.type_params else None
+        vidx_type = f"{shape.type_params[0].name}::RegisterType" if shape.type_params else None
         params = _params(shape, "Self", vt_type=vt_type, vidx_type=vidx_type)
         generics = f"<{', '.join(decls)}>" if decls else ""
         trait_header = (
@@ -272,7 +272,7 @@ class RustBackend:
             ret = spec.target.register_spelling
             vt_type = spec.target.register_spelling
         targs = [*_type_param_names(spec), *targs]
-        vidx_type = f"{spec.type_params[0][0]}::RegisterType" if spec.type_params else None
+        vidx_type = f"{spec.type_params[0].name}::RegisterType" if spec.type_params else None
         params = _params(spec, "Self", vt_type=vt_type, vidx_type=vidx_type)
         trait_args = f"<{', '.join(targs)}>" if targs else ""
         # Native index intrinsics take the concrete integer-register type for the selected ISA.
@@ -336,7 +336,7 @@ class RustBackend:
             decl_list = _type_param_decls(
                 shape, trait_prefix=_PRIMITIVE_TRAIT_PREFIX
             ) + decl_list
-            vidx_type = f"{shape.type_params[0][0]}::RegisterType"
+            vidx_type = f"{shape.type_params[0].name}::RegisterType"
             call = (
                 f"<S as {_PRIMITIVE_TRAIT_PREFIX}{_trait_name(primitive_name)}"
                 f"<{', '.join(targs)}>>::apply({names})"
@@ -474,8 +474,8 @@ def _rust_type_parameter_summary(spec: LoweredSpecialization) -> str:
     if spec.target is not None:
         params.append("T selects the target SIMD vector type")
     params.extend(
-        f"{name} selects an additional SIMD vector type"
-        for name, _ in spec.type_params
+        f"{param.name} selects an additional SIMD vector type"
+        for param in spec.type_params
     )
     params.extend(f"{_axis_name(key)} selects `{key}`" for key, _ in spec.axis)
     if spec.immediate is not None:
@@ -540,9 +540,12 @@ def _type_param_decls(
     sites, so the constraint must be restated where the body needs it."""
 
     decls: list[str] = []
-    for name, bounds in shape.type_params:
-        traits = ["StaticSimdVector", *(f"{trait_prefix}{_trait_name(b)}" for b in bounds)]
-        decls.append(f"{name}: {' + '.join(traits)}")
+    for param in shape.type_params:
+        traits = [
+            "StaticSimdVector",
+            *(f"{trait_prefix}{_trait_name(b)}" for b in param.bounds),
+        ]
+        decls.append(f"{param.name}: {' + '.join(traits)}")
     return decls
 
 
@@ -561,7 +564,7 @@ def _index_where(shape: LoweredSpecialization, *, impl_register: str | None = No
         or not shape.type_params
     ):
         return ""
-    index = shape.type_params[0][0]
+    index = shape.type_params[0].name
     clauses = [f"{index}::BaseType: IndexBase"]
     if impl_register is not None:
         clauses.insert(0, f"{index}: SimdVector<RegisterType = {impl_register}>")
@@ -569,7 +572,7 @@ def _index_where(shape: LoweredSpecialization, *, impl_register: str | None = No
 
 
 def _type_param_names(shape: LoweredSpecialization) -> list[str]:
-    return [name for name, _ in shape.type_params]
+    return [param.name for param in shape.type_params]
 
 
 def _axis_name(key: str) -> str:

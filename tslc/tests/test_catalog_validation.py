@@ -103,6 +103,61 @@ def test_primitive_documentation_fields_are_accepted_and_promoted() -> None:
     assert "return data" in (primitive.semantics or "")
 
 
+def test_simd_type_base_constraints_are_accepted_and_promoted() -> None:
+    source = _base_source().replace(
+        "  impls:\n",
+        "  generic_params:\n"
+        "    IndexVec {kind simd_type, base_types [ints, si32]}\n"
+        "  impls:\n",
+    )
+    document = SourceDocument(Path("catalog_validation_fixture.tsl"), source, "d", "tsl")
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
+    assert parsed.diagnostics == (), parsed.diagnostics
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+    diagnostics = (
+        *result.diagnostics,
+        *validate_catalog(result.catalog, parsed, required_backends=("cpp", "rust")),
+    )
+    assert diagnostics == ()
+
+    primitive = result.catalog.primitive("id")
+    assert primitive is not None
+    assert primitive.generic_params[0].base_type_constraints == ("ints", "si32")
+
+
+def test_simd_type_base_constraints_are_allowed_only_on_simd_type_params() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "  impls:\n",
+            "  generic_params:\n"
+            "    PreserveSign {kind bool, base_types [si32]}\n"
+            "  impls:\n",
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-SIMD-TYPE-CONSTRAINT"
+    )
+    assert "allowed only for kind 'simd_type'" in diagnostic.message
+
+
+def test_simd_type_base_constraints_must_resolve_to_scalar_types() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "  impls:\n",
+            "  generic_params:\n"
+            "    IndexVec {kind simd_type, base_types [ui128]}\n"
+            "  impls:\n",
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-SIMD-TYPE-CONSTRAINT"
+    )
+    assert "invalid base_types entry 'ui128'" in diagnostic.message
+
+
 def test_duplicate_keys_are_diagnosed() -> None:
     diagnostics = _diagnostics(
         _base_source(

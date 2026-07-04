@@ -71,6 +71,15 @@ from tslc.support_policy_views import immediate_split_names, policy_split_names
 
 
 @dataclass(frozen=True, slots=True)
+class LoweredTypeParam:
+    """A free SIMD type parameter carried to backend rendering."""
+
+    name: str
+    bounds: tuple[str, ...] = ()
+    base_type_constraints: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class LoweredSpecialization:
     """One `<primitive, extension, type>` body, ready for the backend to wrap in a
     template specialization (C++) / trait impl (Rust). Signature types are *not*
@@ -110,7 +119,7 @@ class LoweredSpecialization:
     # Rust `NAME: SimdVector + <Bound>Impl…` generic, threaded through trait/impl/wrapper like the
     # representation-change `ToVec`. The bound names are the primitives the body calls on the param
     # (`to_array[IndicesType]` -> `to_array`); the Rust backend maps each to its `…Impl` trait.
-    type_params: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    type_params: tuple[LoweredTypeParam, ...] = ()
     # True when register_type == base_type for this extension (scalar/generic). Lets the
     # backend dedup overload `apply`s that collapse to the same type (a `v` and an `s`
     # parameter are distinct on SIMD but identical here).
@@ -477,7 +486,11 @@ class Lowerer:
                 if gp.kind != "simd_type"
             ),
             type_params=tuple(
-                (gp.name, _type_param_bounds(segments, gp.name))
+                LoweredTypeParam(
+                    name=gp.name,
+                    bounds=_type_param_bounds(segments, gp.name),
+                    base_type_constraints=gp.base_type_constraints,
+                )
                 for gp in selected.primitive.generic_params
                 if gp.kind == "simd_type"
             ),
