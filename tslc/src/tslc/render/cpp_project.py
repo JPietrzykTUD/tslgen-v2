@@ -32,15 +32,26 @@ if TYPE_CHECKING:
     from tslc.render.project import ProfileRender
 
 
+_CPP_STATIC_HEADERS = (
+    "tsl_core.hpp",
+    "tsl_inferred_simd.hpp",
+    "tsl_algorithm_tags.hpp",
+    "tsl_algorithm_detail_core.hpp",
+    "tsl_algorithm_detail_mask.hpp",
+    "tsl_algorithm_detail_loops.hpp",
+    "tsl_algorithm.hpp",
+    "tsl_x86_traits.hpp",
+)
+
+
 def cpp_artifacts(
     profiles: tuple[ProfileRender, ...], assets: RenderAssets
 ) -> list[Artifact]:
     backend = CppBackend()
     artifacts = [
-        text("cpp/include/tsl_core.hpp", assets.text("tsl_core.hpp")),
-        text("cpp/include/tsl_inferred_simd.hpp", assets.text("tsl_inferred_simd.hpp")),
-        text("cpp/include/tsl_algorithm.hpp", assets.text("tsl_algorithm.hpp")),
-        text("cpp/include/tsl_x86_traits.hpp", assets.text("tsl_x86_traits.hpp")),
+        text(f"cpp/include/{header}", assets.text(header))
+        for header in _CPP_STATIC_HEADERS
+    ] + [
         # Ship the formatter config at the C++ project root so `clang-format` (ascending from
         # include/ and tests/) finds it and the generated project is self-contained.
         text("cpp/.clang-format", assets.text(".clang-format")),

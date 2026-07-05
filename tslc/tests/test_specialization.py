@@ -41,6 +41,10 @@ def test_artifact_layout(specialization_result) -> None:
     assert {
         "cpp/include/tsl_core.hpp",
         "cpp/include/tsl_inferred_simd.hpp",
+        "cpp/include/tsl_algorithm_tags.hpp",
+        "cpp/include/tsl_algorithm_detail_core.hpp",
+        "cpp/include/tsl_algorithm_detail_mask.hpp",
+        "cpp/include/tsl_algorithm_detail_loops.hpp",
         "cpp/include/tsl_algorithm.hpp",
         "cpp/include/tsl_x86_traits.hpp",
         "cpp/include/tsl.hpp",
@@ -100,10 +104,21 @@ def test_cpp_inferred_simd_helper_has_generic_fallback(
 def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     specialization_artifacts: dict[str, str]
 ) -> None:
-    helper = specialization_artifacts["cpp/include/tsl_algorithm.hpp"]
+    umbrella = specialization_artifacts["cpp/include/tsl_algorithm.hpp"]
+    helper = "\n".join(
+        specialization_artifacts[f"cpp/include/{header}"]
+        for header in (
+            "tsl_algorithm_tags.hpp",
+            "tsl_algorithm_detail_core.hpp",
+            "tsl_algorithm_detail_mask.hpp",
+            "tsl_algorithm_detail_loops.hpp",
+            "tsl_algorithm.hpp",
+        )
+    )
     dispatch = specialization_artifacts["cpp/include/tsl.hpp"]
     avx2 = specialization_artifacts["cpp/include/tsl_avx2.hpp"]
 
+    assert '#include "tsl_algorithm_detail_loops.hpp"' in umbrella
     assert "namespace tsl::algo" in helper
     assert "#include <iterator>" in helper
     assert "template <class Vec>\nstruct vector_tag" in helper
