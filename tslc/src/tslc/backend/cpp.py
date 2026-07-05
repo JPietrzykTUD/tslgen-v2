@@ -62,9 +62,14 @@ class CppBackend:
         # `generic_params` (e.g. `PreserveSign`) are free template params too (defaults go on
         # the wrapper, not the primary template).
         decl_params += "".join(f", {typ} {name}" for name, typ, _ in shape.generic_params)
+        variant_decls = "".join(
+            f"template <{decl_params}>\nstruct {_impl_name(primitive_name, name)};\n"
+            for name in _variant_names(specializations)
+        )
         return (
             "namespace detail::primitives {\n"
-            f"template <{decl_params}>\nstruct {primitive_name}_impl;\n"
+            f"template <{decl_params}>\nstruct {_impl_name(primitive_name)};\n"
+            f"{variant_decls}"
             "}  // namespace detail::primitives"
             + "\n\n"
             + self._wrapper(primitive_name, specializations)
@@ -98,7 +103,18 @@ class CppBackend:
                 groups[key] = []
                 order.append(key)
             groups[key].append(spec)
-        definitions = "\n\n".join(self._specialization(groups[key]) for key in order)
+        definitions_by_group: list[str] = []
+        for key in order:
+            group = groups[key]
+            definitions_by_group.append(self._specialization(group))
+            definitions_by_group.extend(
+                rendered
+                for name in _variant_names(group)
+                if (
+                    rendered := self._specialization(group, variant_name=name)
+                )
+            )
+        definitions = "\n\n".join(definitions_by_group)
         return (
             "namespace detail::primitives {\n"
             f"{definitions}\n"
@@ -124,7 +140,12 @@ class CppBackend:
     def documentation_target_register_type(self, spec: LoweredSpecialization) -> str:
         return _cpp_target_register_doc(spec)
 
-    def _specialization(self, group: list[LoweredSpecialization]) -> str:
+    def _specialization(
+        self,
+        group: list[LoweredSpecialization],
+        *,
+        variant_name: str | None = None,
+    ) -> str:
         first = group[0]
         # A sized vector is parameterized by its lane parameter, so it emits as a partial
         # specialization rather than a full specialization.
@@ -158,6 +179,9 @@ class CppBackend:
         applies: list[str] = []
         seen: set[tuple[str, ...]] = set()
         for spec in group:
+            body = _body_for(spec, variant_name)
+            if body is None:
+                continue
             # Dedup overloads that collapse to the same parameter types (a `v` and an
             # `s` parameter are identical where register_type == base_type, i.e. scalar).
             signature = effective_param_types(spec)
@@ -172,14 +196,21 @@ class CppBackend:
                 )
                 if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
             )
-            doc = _cpp_doc(spec, context="C++ specialization", indent="    ")
+            doc_context = (
+                "C++ specialization"
+                if variant_name is None
+                else f"C++ specialization variant {variant_name}"
+            )
+            doc = _cpp_doc(spec, context=doc_context, indent="    ")
             prefix = f"{doc}\n" if doc else ""
             applies.append(
                 f"{prefix}"
                 f"    static inline {_apply_result_type(spec)} apply({params}) {{\n"
-                f"        {spec.body_text}\n"
+                f"        {body.render()}\n"
                 f"    }}"
             )
+        if not applies:
+            return ""
         # A representation-change spec exposes `ToVec` (the target vector) in the impl so a
         # `tv` param / the result can project through it (`typename ToVec::register_type`).
         to_vec = (
@@ -188,7 +219,7 @@ class CppBackend:
             else ""
         )
         return (
-            f"{head}\nstruct {first.primitive_name}_impl<{key}> {{\n"
+            f"{head}\nstruct {_impl_name(first.primitive_name, variant_name)}<{key}> {{\n"
             f"    using Vec = {vec};\n" + to_vec + "\n".join(applies) + "\n};"
         )
 
@@ -202,7 +233,7 @@ class CppBackend:
             prefix
             + f"template <{', '.join(signature.template_params)}>\n"
             f"inline {signature.result_type} {primitive_name}({signature.params}) {{\n"
-            f"    return ::tsl::detail::primitives::{primitive_name}_impl"
+            f"    return ::tsl::detail::primitives::{_impl_name(primitive_name)}"
             f"<{signature.impl_args}>::apply("
             f"{signature.argument_names});\n"
             f"}}"
@@ -308,6 +339,35 @@ def _free_function(spec: LoweredSpecialization, *, define: bool) -> str:
         prefix = f"{doc}\n" if doc else ""
         return f"{prefix}{signature};"
     return f"{signature} {{\n    {spec.body_text}\n}}"
+
+
+def _impl_name(primitive_name: str, variant_name: str | None = None) -> str:
+    if variant_name is None:
+        return f"{primitive_name}_impl"
+    return f"{primitive_name}_impl_{variant_name}"
+
+
+def _variant_names(
+    specializations: tuple[LoweredSpecialization, ...] | list[LoweredSpecialization],
+) -> tuple[str, ...]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for spec in specializations:
+        for variant in spec.variant_bodies:
+            if variant.name in seen:
+                continue
+            seen.add(variant.name)
+            names.append(variant.name)
+    return tuple(names)
+
+
+def _body_for(spec: LoweredSpecialization, variant_name: str | None):
+    if variant_name is None:
+        return spec.body
+    for variant in spec.variant_bodies:
+        if variant.name == variant_name:
+            return variant.body
+    return None
 
 
 def _cpp_doc(

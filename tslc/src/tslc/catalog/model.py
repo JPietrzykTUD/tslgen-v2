@@ -76,6 +76,23 @@ class ImplementationSafety:
 
 
 @dataclass(frozen=True, slots=True)
+class ImplementationVariant:
+    """One alternative body for the same implementation leaf.
+
+    Variants inherit the leaf's requirements and public caller-safety. The
+    ``safety`` field contributes only internal facts/reasons that are unioned
+    with the default implementation and any effects discovered while lowering.
+    """
+
+    name: str
+    body_text: str
+    safety: ImplementationSafety = field(default_factory=ImplementationSafety)
+    source_order: int = 0
+    source: SourceSpan | None = None
+    body_source: SourceSpan | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Implementation:
     """One source-authored body for a (extension, type-group) selector path."""
 
@@ -97,6 +114,7 @@ class Implementation:
     # ``LANES`` template — so stable Rust can spell the width-changed output type.
     unroll_variants: bool | None = None
     safety: ImplementationSafety = field(default_factory=ImplementationSafety)
+    variants: tuple[ImplementationVariant, ...] = ()
     source: SourceSpan | None = None
     selector_source: SourceSpan | None = None
     body_source: SourceSpan | None = None

@@ -46,18 +46,51 @@ class RustBackend:
             shape.result_kind,
             shape.param_kinds,
         ):
-            return ""
+            return _free_variant_functions(specializations)
         # Rust has no fn overloading: a primitive with several signatures (e.g. store's
         # `(ptr,v)`/`(ptr,s)`) dispatches on the varying argument's type via a trait
         # implemented for that type. Single-signature primitives keep the simple trait.
         if varying_positions(specializations):
-            return self._render_overloaded_internal(primitive_name, specializations)
+            parts = [self._render_overloaded_internal(primitive_name, specializations)]
+            parts.extend(
+                rendered
+                for name in _variant_names(specializations)
+                if (
+                    rendered := self._render_overloaded_internal(
+                        primitive_name,
+                        specializations,
+                        variant_name=name,
+                    )
+                )
+            )
+            return "\n\n".join(parts)
         caller_unsafe = _any_caller_unsafe(specializations)
         trait = self._trait(primitive_name, shape, caller_unsafe=caller_unsafe)
         impls = [
             self._impl(spec, caller_unsafe=caller_unsafe) for spec in specializations
         ]
-        return "\n\n".join([trait, *impls])
+        parts = [trait, *impls]
+        for name in _variant_names(specializations):
+            variant_primitive = _variant_primitive_name(primitive_name, name)
+            variant_impls = [
+                rendered
+                for spec in specializations
+                if (rendered := self._impl(
+                    spec,
+                    caller_unsafe=caller_unsafe,
+                    variant_name=name,
+                ))
+            ]
+            if variant_impls:
+                parts.append(
+                    self._trait(
+                        variant_primitive,
+                        shape,
+                        caller_unsafe=caller_unsafe,
+                    )
+                )
+                parts.extend(variant_impls)
+        return "\n\n".join(parts)
 
     def render_primitive_public(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
@@ -78,12 +111,17 @@ class RustBackend:
         return self._wrapper(primitive_name, shape, caller_unsafe=caller_unsafe)
 
     def _render_overloaded_internal(
-        self, primitive_name: str, specs: tuple[LoweredSpecialization, ...]
+        self,
+        primitive_name: str,
+        specs: tuple[LoweredSpecialization, ...],
+        *,
+        variant_name: str | None = None,
     ) -> str:
         shape = specs[0]
+        internal_name = _variant_primitive_name(primitive_name, variant_name)
         caller_unsafe = _any_caller_unsafe(specs)
         vi = varying_positions(specs)[0]  # one varying position in scope
-        arg_trait = f"{_trait_name(primitive_name)}Arg"
+        arg_trait = f"{_trait_name(internal_name)}Arg"
         fixed = [
             (name, kind)
             for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
@@ -112,6 +150,9 @@ class RustBackend:
         impls: list[str] = []
         seen: set[tuple[str, str, tuple, tuple[str, ...]]] = set()
         for spec in specs:
+            body_ref = _body_for(spec, variant_name)
+            if body_ref is None:
+                continue
             signature = (
                 spec.base_type_spelling,
                 spec.extension_name,
@@ -147,7 +188,7 @@ class RustBackend:
             )
             ret_impl = _rust_concrete_result(spec)
             bind = f"let {spec.param_names[vi]} = self;\n        "
-            body = spec.body.render(
+            body = body_ref.render(
                 RenderContext(
                     backend_id=self.backend_id,
                     current_vector=vec,
@@ -157,7 +198,12 @@ class RustBackend:
                     current_imask=f"<{vec} as SimdVector>::ImaskType",
                 )
             )
-            doc = _rust_doc(spec, context="Rust specialization")
+            doc_context = (
+                "Rust specialization"
+                if variant_name is None
+                else f"Rust specialization variant {variant_name}"
+            )
+            doc = _rust_doc(spec, context=doc_context)
             impls.append(
                 (f"{doc}\n" if doc else "")
                 + f"{impl_prefix} {arg_trait}{trait_args} for {self_ty} {{\n"
@@ -167,7 +213,7 @@ class RustBackend:
                 f"}}"
             )
 
-        return "\n\n".join([trait, *impls])
+        return "\n\n".join([trait, *impls]) if impls else ""
 
     def _render_overloaded_wrapper(
         self,
@@ -246,7 +292,16 @@ class RustBackend:
             f"}}"
         )
 
-    def _impl(self, spec: LoweredSpecialization, *, caller_unsafe: bool) -> str:
+    def _impl(
+        self,
+        spec: LoweredSpecialization,
+        *,
+        caller_unsafe: bool,
+        variant_name: str | None = None,
+    ) -> str:
+        body_ref = _body_for(spec, variant_name)
+        if body_ref is None:
+            return ""
         # A sized vector's impl is parameterized by its lane const generic; an `sImm` immediate
         # is a further free const generic. A monomorphized slot (numeric `lane_parameter`) is over
         # a concrete `Generic<N>` instead, so it declares no lane generic.
@@ -278,7 +333,7 @@ class RustBackend:
         # Native index intrinsics take the concrete integer-register type for the selected ISA.
         # Lowering resolves it from source extension metadata; scalar/generic stay opaque.
         impl_register = spec.index_register_spelling
-        body = spec.body.render(
+        body = body_ref.render(
             RenderContext(
                 backend_id=self.backend_id,
                 current_vector=key,
@@ -288,10 +343,16 @@ class RustBackend:
                 current_imask=f"<{key} as SimdVector>::ImaskType",
             )
         )
-        doc = _rust_doc(spec, context="Rust specialization")
+        doc_context = (
+            "Rust specialization"
+            if variant_name is None
+            else f"Rust specialization variant {variant_name}"
+        )
+        doc = _rust_doc(spec, context=doc_context)
+        trait_primitive = _variant_primitive_name(spec.primitive_name, variant_name)
         return (
             (f"{doc}\n" if doc else "")
-            + f"impl{impl_generics} {_trait_name(spec.primitive_name)}{trait_args} for {key}"
+            + f"impl{impl_generics} {_trait_name(trait_primitive)}{trait_args} for {key}"
             f"{_index_where(spec, impl_register=impl_register)} {{\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret} {{\n"
             f"        {body}\n"
@@ -386,6 +447,73 @@ def _free_function(spec: LoweredSpecialization) -> str:
         f"    {spec.body_text}\n"
         f"}}"
     )
+
+
+def _free_variant_functions(
+    specializations: tuple[LoweredSpecialization, ...]
+) -> str:
+    rendered: list[str] = []
+    for spec in specializations:
+        for variant in spec.variant_bodies:
+            rendered.append(_free_function_variant(spec, variant.name))
+    return "\n\n".join(rendered)
+
+
+def _free_function_variant(spec: LoweredSpecialization, variant_name: str) -> str:
+    body = _body_for(spec, variant_name)
+    if body is None:
+        return ""
+    params = ", ".join(
+        f"{name}: {_free_kind_type(kind, spec.base_type_spelling)}"
+        for name, kind in zip(spec.param_names, spec.param_kinds)
+    )
+    ret_clause = (
+        ""
+        if spec.result_kind == "void"
+        else f" -> {_free_kind_type(spec.result_kind, spec.base_type_spelling)}"
+    )
+    unsafe_prefix = _unsafe_prefix(spec.safety.caller_unsafe)
+    function_name = rust_raw_identifier(
+        _variant_primitive_name(spec.primitive_name, variant_name)
+    )
+    doc = _rust_doc(spec, context=f"Rust free function variant {variant_name}")
+    return (
+        (f"{doc}\n" if doc else "")
+        + f"pub {unsafe_prefix}fn {function_name}({params}){ret_clause} {{\n"
+        f"    {body.render()}\n"
+        f"}}"
+    )
+
+
+def _variant_primitive_name(
+    primitive_name: str, variant_name: str | None = None
+) -> str:
+    if variant_name is None:
+        return primitive_name
+    return f"{primitive_name}_{variant_name}"
+
+
+def _variant_names(
+    specializations: tuple[LoweredSpecialization, ...] | list[LoweredSpecialization],
+) -> tuple[str, ...]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for spec in specializations:
+        for variant in spec.variant_bodies:
+            if variant.name in seen:
+                continue
+            seen.add(variant.name)
+            names.append(variant.name)
+    return tuple(names)
+
+
+def _body_for(spec: LoweredSpecialization, variant_name: str | None):
+    if variant_name is None:
+        return spec.body
+    for variant in spec.variant_bodies:
+        if variant.name == variant_name:
+            return variant.body
+    return None
 
 
 def _primitive_module(internal: str) -> str:

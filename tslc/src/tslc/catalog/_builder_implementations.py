@@ -9,8 +9,14 @@ from tslc.catalog._builder_common import (
     _list_text,
     _source_span,
 )
-from tslc.catalog.model import Implementation, ImplementationSafety, RequirementClause
+from tslc.catalog.model import (
+    Implementation,
+    ImplementationSafety,
+    ImplementationVariant,
+    RequirementClause,
+)
 from tslc.syntax.ast import (
+    ParsedImplementationVariant,
     ParsedImplementationSelectorEntry,
     ParsedRequiresValue,
     ParsedTslField,
@@ -54,6 +60,7 @@ def _implementations_from_entries(
                         to_target_group=to_target_group,
                         unroll_variants=unroll,
                         safety=safety,
+                        variants=_variants(entry.variants),
                         source=_source_span(envelope.envelope_source),
                         selector_source=_source_span(entry.source),
                         body_source=_source_span(envelope.payload_source),
@@ -84,19 +91,54 @@ def _entry_unroll_variants(
 
 
 def _entry_safety(entry: ParsedImplementationSelectorEntry) -> ImplementationSafety:
+    return _safety_from_fields(entry.fields, allow_caller_unsafe=True)
+
+
+def _variant_safety(variant: ParsedImplementationVariant) -> ImplementationSafety:
+    return _safety_from_fields(variant.fields, allow_caller_unsafe=False)
+
+
+def _safety_from_fields(
+    fields: tuple[ParsedTslField, ...],
+    *,
+    allow_caller_unsafe: bool,
+) -> ImplementationSafety:
     safety = ImplementationSafety()
-    for field in entry.fields:
+    for field in fields:
         if field.key.text != "safety":
             continue
         children = {child.key.text: child for child in _children(field)}
         safety = safety.merge(
             ImplementationSafety(
                 internal_unsafe=_bool_field(children.get("internal_unsafe")),
-                caller_unsafe=_bool_field(children.get("caller_unsafe")),
+                caller_unsafe=(
+                    _bool_field(children.get("caller_unsafe"))
+                    if allow_caller_unsafe
+                    else False
+                ),
                 reasons=frozenset(_list_text(children.get("reasons"))),
             )
         )
     return safety
+
+
+def _variants(
+    variants: tuple[ParsedImplementationVariant, ...],
+) -> tuple[ImplementationVariant, ...]:
+    promoted: list[ImplementationVariant] = []
+    for variant in variants:
+        for envelope in variant.body_envelopes:
+            promoted.append(
+                ImplementationVariant(
+                    name=variant.name,
+                    body_text=envelope.payload_text,
+                    safety=_variant_safety(variant),
+                    source_order=envelope.source_order,
+                    source=_source_span(variant.source),
+                    body_source=_source_span(envelope.payload_source),
+                )
+            )
+    return tuple(promoted)
 
 
 def _split_target_selector(

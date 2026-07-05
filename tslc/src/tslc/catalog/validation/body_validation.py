@@ -28,8 +28,16 @@ def validate_body_regions(
 
     for document in parsed.documents:
         for primitive in document.primitives:
-            for envelope in primitive.body_envelopes:
+            for envelope in _implementation_body_envelopes(primitive.impl_entries):
                 _validate_envelope(primitive.name, envelope, diagnostics)
+
+
+def _implementation_body_envelopes(entries):
+    for entry in entries:
+        yield from entry.body_envelopes
+        for variant in entry.variants:
+            yield from variant.body_envelopes
+        yield from _implementation_body_envelopes(entry.children)
 
 
 def _validate_envelope(

@@ -18,6 +18,7 @@ from tslc.syntax.ast import (
     ParsedFieldDeclaration,
     ParsedImplementationBodyEnvelope,
     ParsedImplementationSelectorEntry,
+    ParsedImplementationVariant,
     ParsedPrimitiveDeclaration,
     ParsedPrimitiveField,
     ParsedPrimitiveFieldKind,
@@ -205,11 +206,17 @@ class _DocumentTransformer:
             if child.key.text == "implementation"
             for envelope in self._implementation_body_envelopes(child, selector_path)
         )
+        variants = tuple(
+            variant
+            for child in field.children
+            if child.key.text == "variants"
+            for variant in self._implementation_variants(child, selector_path)
+        )
         nested = tuple(
             self._parse_impl_selector(child, selector_path)
             for child in field.children
             if child.key.text
-            not in {"requires", "implementation", "safety", "unroll_variants"}
+            not in {"requires", "implementation", "safety", "unroll_variants", "variants"}
         )
         return ParsedImplementationSelectorEntry(
             selector=field.key,
@@ -219,6 +226,26 @@ class _DocumentTransformer:
             children=nested,
             requires=requires,
             body_envelopes=body_envelopes,
+            variants=variants,
+        )
+
+    def _implementation_variants(
+        self,
+        field: ParsedTslField,
+        selector_path: tuple[str, ...],
+    ) -> tuple[ParsedImplementationVariant, ...]:
+        return tuple(
+            ParsedImplementationVariant(
+                name=child.key.text,
+                source=child.source,
+                source_order=child.source_order,
+                fields=child.children,
+                body_envelopes=self._implementation_body_envelopes(
+                    child,
+                    selector_path,
+                ),
+            )
+            for child in field.children
         )
 
     def _implementation_body_envelopes(

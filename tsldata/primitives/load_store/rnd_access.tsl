@@ -521,6 +521,72 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
     - {tags [basic, partial], type "si32", index_type "si64", scale 4, case {inputs [[-10, -20, -30, -40, -50, -60], [0, 3]], expected [-10, -40, 0, 0]}}
     - {tags [basic, partial], type "f32", index_type "si64", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5, 5.25, -6.25], [1, 4]], expected [-2.0, 5.25, 0.0, 0.0]}}
   impls:
+    avx512:
+      ?i32:
+        requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+            loop<backend, unroll>(i, 0, value(generic::length(IndicesType)), 1) {
+              result[i] = *(cast<reinterpret, type=const_ptr>(type(base::in), ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
+            }
+            complete(call<primitive=from_array[Vec]>(result));
+          """
+        variants:
+          intrinsic_gather:
+            safety:
+              internal_unsafe true
+              reasons [intrinsic]
+            tsil """
+              let<type>(SignedBase, type(base::signed_of(base::in)));
+              switch<compile>(scale) {
+                1 => {
+                  var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=1]>(
+                    index,
+                    cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
+                    1
+                  ));
+                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                }
+                2 => {
+                  var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=2]>(
+                    index,
+                    cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
+                    2
+                  ));
+                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                }
+                4 => {
+                  var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=4]>(
+                    index,
+                    cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
+                    4
+                  ));
+                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                }
+                8 => {
+                  var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=8]>(
+                    index,
+                    cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
+                    8
+                  ));
+                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                }
+                _ => {
+                  var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                  var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+                  loop<backend, unroll>(i, 0, value(generic::length(IndicesType)), 1) {
+                    result[i] = *(cast<reinterpret, type=const_ptr>(type(base::in), ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
+                  }
+                  complete(call<primitive=from_array[Vec]>(result));
+                }
+              }
+            """
     [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
       [bword, dword]:
         requires:

@@ -139,6 +139,15 @@ class ParsedImplementationBodyEnvelope:
 
 
 @dataclass(frozen=True, slots=True)
+class ParsedImplementationVariant:
+    name: str
+    source: ParsedTslSourceSpan
+    source_order: int
+    fields: tuple[ParsedTslField, ...]
+    body_envelopes: tuple[ParsedImplementationBodyEnvelope, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class ParsedImplementationSelectorEntry:
     selector: ParsedTslKey
     source: ParsedTslSourceSpan
@@ -147,6 +156,7 @@ class ParsedImplementationSelectorEntry:
     children: tuple["ParsedImplementationSelectorEntry", ...] = ()
     requires: tuple[ParsedRequiresValue, ...] = ()
     body_envelopes: tuple[ParsedImplementationBodyEnvelope, ...] = ()
+    variants: tuple[ParsedImplementationVariant, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

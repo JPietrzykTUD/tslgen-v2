@@ -20,6 +20,14 @@ class _LoweredSlot:
     backend: str
     spec: LoweredSpecialization
     callees: frozenset[CallDependency]
+    callee_origins: tuple["CallDependencyOrigin", ...] = ()
+    unresolved_callee: "CallDependencyOrigin | None" = None
+
+
+@dataclass(frozen=True, slots=True)
+class CallDependencyOrigin:
+    dependency: CallDependency
+    origin: str
 
 
 def _target_dependency_context(
@@ -63,9 +71,16 @@ def _prune_unresolved(
             slot_key = _slot_key(slot, split_names)
             if slot_key not in valid:
                 continue
+            origins = {
+                origin.dependency: origin for origin in slot.callee_origins
+            }
             for dependency in slot.callees:
                 resolved = _dependency_key(slot, dependency, split_names)
                 if resolved not in valid:
+                    slot.unresolved_callee = origins.get(
+                        dependency,
+                        CallDependencyOrigin(dependency, "implementation"),
+                    )
                     valid.discard(slot_key)
                     changed = True
                     break
