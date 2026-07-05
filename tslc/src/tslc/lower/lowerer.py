@@ -28,6 +28,7 @@ from tslc.catalog.model import (
     ImplementationSafety,
     Primitive,
 )
+from tslc.catalog.param_types import parse_param_type_expression
 from tslc.catalog.scalar_types import scalar_bit_width_or_default
 from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, sort_diagnostics
@@ -827,29 +828,19 @@ def _render_param_type_expr(
     renderer: ExpressionRenderer,
     source: SourceSpan | None,
 ) -> str:
-    if context.env.backend.backend_id == "rust":
-        pointer = _split_c_like_pointer_type(type_expr)
-        if pointer is not None:
-            base_expr, is_const = pointer
-            base = render_text(renderer.render(scan(base_expr, source=source))).strip()
-            if not base:
-                return ""
-            return f"*{'const' if is_const else 'mut'} {base}"
-    return render_text(renderer.render(scan(type_expr, source=source))).strip()
-
-
-def _split_c_like_pointer_type(type_expr: str) -> tuple[str, bool] | None:
-    text = type_expr.strip()
-    if not text.endswith("*"):
-        return None
-    base = text[:-1].rstrip()
-    is_const = False
-    if base.endswith("const"):
-        is_const = True
-        base = base[:-len("const")].rstrip()
-    if not base:
-        return None
-    return base, is_const
+    expr = parse_param_type_expression(type_expr)
+    value = render_text(renderer.render(scan(expr.value_expr, source=source))).strip()
+    if not value:
+        return ""
+    rendered = context.env.backend.syntax.render_param_type(
+        value,
+        is_pointer=expr.is_pointer,
+        is_const=bool(expr.pointer_const),
+    )
+    text = render_text(rendered).strip()
+    if not text:
+        return ""
+    return text
 
 
 def _error(code: str, message: str, *, source: SourceSpan | None = None) -> LoweringResult:

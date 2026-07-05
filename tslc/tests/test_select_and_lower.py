@@ -430,18 +430,69 @@ def test_param_types_default_overrides_rendered_pointer_type(
     cpp = lowerer.lower(
         slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
+    rust_dialect = create_backend_dialect(catalog, "rust")
+    recording_syntax = _RecordingSyntax(rust_dialect.syntax)
     rust = lowerer.lower(
-        slot, catalog, create_backend_dialect(catalog, "rust")
+        slot, catalog, _RecordingDialect(rust_dialect, recording_syntax)
     ).specialization
 
     assert cpp is not None
     assert rust is not None
     assert cpp.param_type_overrides[1] == "typename IndicesType::base_type const *"
     assert rust.param_type_overrides[1] == "*const IndicesType::BaseType"
+    assert recording_syntax.param_type_calls == [(True, True)]
     cpp_source = CppBackend().render_primitive("gather_narrow", (cpp,))
     rust_source = RustBackend().render_primitive("gather_narrow", (rust,))
     assert "typename IndicesType::base_type const * index_ptr" in cpp_source
     assert "index_ptr: *const IndicesType::BaseType" in rust_source
+
+
+class _RecordingSyntax:
+    def __init__(self, inner) -> None:  # noqa: ANN001
+        self.inner = inner
+        self.borrowed_call_arg_prefix = inner.borrowed_call_arg_prefix
+        self.param_type_calls: list[tuple[bool, bool]] = []
+
+    def frame_return(self, value):  # noqa: ANN001, ANN201
+        return self.inner.frame_return(value)
+
+    def render_call(self, *args, **kwargs):  # noqa: ANN002, ANN003, ANN201
+        return self.inner.render_call(*args, **kwargs)
+
+    def render_pointer_cast(self, inner, *, is_const, expr):  # noqa: ANN001, ANN201
+        return self.inner.render_pointer_cast(inner, is_const=is_const, expr=expr)
+
+    def render_param_type(  # noqa: ANN001, ANN201
+        self,
+        value,
+        *,
+        is_pointer: bool = False,
+        is_const: bool = False,
+    ):
+        self.param_type_calls.append((is_pointer, is_const))
+        return self.inner.render_param_type(
+            value,
+            is_pointer=is_pointer,
+            is_const=is_const,
+        )
+
+    def render_assume_aligned(self, expr, alignment):  # noqa: ANN001, ANN201
+        return self.inner.render_assume_aligned(expr, alignment)
+
+    def render_compile_switch(self, selector, arms):  # noqa: ANN001, ANN201
+        return self.inner.render_compile_switch(selector, arms)
+
+
+class _RecordingDialect:
+    def __init__(self, inner, syntax: _RecordingSyntax) -> None:  # noqa: ANN001
+        self.backend_id = inner.backend_id
+        self.supports_sized_vector_lane_expressions = (
+            inner.supports_sized_vector_lane_expressions
+        )
+        self.types = inner.types
+        self.intrinsics = inner.intrinsics
+        self.templates = inner.templates
+        self.syntax = syntax
 
 
 def test_consumed_tsil_statement_terminators_render_once() -> None:

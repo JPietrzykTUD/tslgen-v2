@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tslc.catalog.model import Primitive, TestCase
-from tslc.catalog.scalar_types import signed_of, unsigned_of
+from tslc.catalog.param_types import resolve_param_type_scalar_tag
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests.case_helpers import base_spelling
 
@@ -17,6 +17,12 @@ class ParamLayout:
     type_expr: str
     type_tag: str
     base_spelling: str
+
+
+@dataclass(frozen=True, slots=True)
+class ParamLayoutResolution:
+    layout: ParamLayout | None = None
+    reason: str | None = None
 
 
 def resolve_param_layout(
@@ -32,6 +38,15 @@ def resolve_param_layout(
     needs a concrete buffer type.
     """
 
+    return resolve_param_layout_checked(primitive, parameter_name, case, specs).layout
+
+
+def resolve_param_layout_checked(
+    primitive: Primitive,
+    parameter_name: str,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> ParamLayoutResolution:
     attrs = dict(specs[0].axis) if specs else {}
     attrs.update(case.attrs)
     for rule in primitive.param_type_rules:
@@ -42,31 +57,59 @@ def resolve_param_layout(
             and attrs.get(rule.attribute_name) != rule.attribute_value
         ):
             continue
-        type_tag = scalar_type_tag_from_expr(rule.type_expr, case.type_tag)
-        if type_tag is None:
-            return None
+        resolved = resolve_param_type_scalar_tag(rule.type_expr, case.type_tag)
+        if resolved.type_tag is None:
+            return ParamLayoutResolution(reason=resolved.reason)
+        type_tag = resolved.type_tag
         spelling = base_spelling(specs, type_tag)
         if spelling is None:
-            return None
-        return ParamLayout(
-            type_expr=rule.type_expr,
-            type_tag=type_tag,
-            base_spelling=spelling,
+            return ParamLayoutResolution(
+                reason=(
+                    f"param_types layout expression {rule.type_expr!r} resolved to "
+                    f"type tag {type_tag!r}, but this backend has no scalar spelling for it"
+                )
+            )
+        return ParamLayoutResolution(
+            layout=ParamLayout(
+                type_expr=rule.type_expr,
+                type_tag=type_tag,
+                base_spelling=spelling,
+            )
         )
-    return None
+    return ParamLayoutResolution(
+        reason=(
+            f"no param_types layout rule for pointer parameter {parameter_name!r} "
+            f"under attrs {_attrs_label(attrs)}"
+        )
+    )
 
 
 def scalar_type_tag_from_expr(type_expr: str, input_type_tag: str) -> str | None:
     """Resolve the scalar subset of `param_types` expressions used by value tests."""
 
-    normalized = "".join(type_expr.split())
-    if "base::unsigned_of" in normalized and "base::in" in normalized:
-        return unsigned_of(input_type_tag)
-    if "base::signed_of" in normalized and "base::in" in normalized:
-        return signed_of(input_type_tag)
-    if "base::in" in normalized:
-        return input_type_tag
-    return None
+    return resolve_param_type_scalar_tag(type_expr, input_type_tag).type_tag
 
 
-__all__ = ("ParamLayout", "resolve_param_layout", "scalar_type_tag_from_expr")
+def unsupported_param_layout_reason(
+    primitive: Primitive,
+    parameter_name: str,
+    case: TestCase,
+    specs: tuple[LoweredSpecialization, ...],
+) -> str | None:
+    return resolve_param_layout_checked(primitive, parameter_name, case, specs).reason
+
+
+def _attrs_label(attrs: dict[str, str]) -> str:
+    if not attrs:
+        return "{}"
+    return "{" + ", ".join(f"{key}={attrs[key]}" for key in sorted(attrs)) + "}"
+
+
+__all__ = (
+    "ParamLayout",
+    "ParamLayoutResolution",
+    "resolve_param_layout",
+    "resolve_param_layout_checked",
+    "scalar_type_tag_from_expr",
+    "unsupported_param_layout_reason",
+)

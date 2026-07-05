@@ -37,6 +37,7 @@ def case_coverage(
     case_name: str,
     planned: tuple[ValueTestCasePlan, ...],
     supported: tuple[ValueTestCasePlan, ...],
+    unplanned_reason: str | None = None,
 ) -> ValueTestCoverageEntry:
     if supported:
         status = (
@@ -68,7 +69,7 @@ def case_coverage(
         primitive_name=primitive_name,
         case_name=case_name,
         status="authored_unplanned",
-        reason="no value-test pattern accepted the authored case shape",
+        reason=unplanned_reason or "no value-test pattern accepted the authored case shape",
     )
 
 
