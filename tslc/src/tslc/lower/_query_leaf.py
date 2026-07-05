@@ -6,7 +6,7 @@ import re
 
 from tslc.catalog.scalar_types import is_type_tag
 from tslc.lower._query_model import QueryValue, TextValue, TypeValue
-from tslc.lower.context import LoweringSession
+from tslc.lower.context import LoweringSession, SimdTypeParameterValue
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -31,6 +31,9 @@ def resolve_query_leaf(head: str, context: LoweringSession) -> QueryValue | None
     type_alias = context.scope.resolve_type_alias(head)
     if type_alias is not None:
         return TextValue(type_alias)
+
+    if head in getattr(context.env, "simd_type_param_names", frozenset()):
+        return SimdTypeParameterValue(head)
 
     if is_type_tag(head):
         return TypeValue(head)

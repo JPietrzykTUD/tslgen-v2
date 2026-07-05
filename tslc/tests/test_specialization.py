@@ -63,9 +63,18 @@ def test_cpp_core_vectors_expose_metadata_constants(
 ) -> None:
     core = specialization_artifacts["cpp/include/tsl_core.hpp"]
 
-    assert "static constexpr std::size_t vector_element_count = 1;" in core
-    assert "static constexpr std::size_t vector_element_count = LANES;" in core
+    assert "static constexpr bool has_static_lane_count_v = true;" in core
+    assert "using extension_type = scalar;" in core
+    assert "using with_base_type = simd<ToBase, scalar>;" in core
+    assert "using with_extension = simd<T, ToExtension>;" in core
+    assert "static constexpr std::size_t lane_count_v = 1;" in core
+    assert "static constexpr std::size_t lane_count_v = LANES;" in core
+    assert "using extension_type = generic<LANES>;" in core
+    assert "using with_base_type = simd<ToBase, generic<LANES>>;" in core
+    assert "static constexpr std::size_t vector_element_count = lane_count_v;" in core
+    assert "static constexpr std::size_t lane_count() noexcept" in core
     assert "static constexpr std::size_t vector_alignment = alignof(T);" in core
+    assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in core
     assert (
         "static constexpr std::size_t vector_alignment = alignof(register_type);"
         in core
@@ -81,6 +90,8 @@ def test_cpp_inferred_simd_helper_has_generic_fallback(
     assert "using type = ::tsl::simd<T, ::tsl::generic<ParallelN>>;" in helper
     assert "struct inferred_simd<T, 1>" in helper
     assert "using type = ::tsl::simd<T, ::tsl::scalar>;" in helper
+    assert "struct native_simd" in helper
+    assert "using native_simd_t = typename detail::native_simd" in helper
     assert "using inferred_simd_t = typename detail::inferred_simd" in helper
     assert "tsl::avx2" not in helper
     assert "tsl::sse" not in helper
@@ -94,12 +105,106 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     avx2 = specialization_artifacts["cpp/include/tsl_avx2.hpp"]
 
     assert "namespace tsl::algo" in helper
+    assert "#include <iterator>" in helper
     assert "template <class Vec>\nstruct vector_tag" in helper
+    assert "namespace parallelism" in helper
+    assert "struct native" in helper
+    assert "struct fixed" in helper
+    assert "parallelism::fixed<N> requires N > 0" in helper
+    assert "vector_for_parallelism<parallelism::native" in helper
     assert "class Alignment = alignment::detect" in helper
+    assert "struct peel_to_aligned {};" in helper
+    assert "struct assume_inputs_aligned {};" in helper
+    assert "struct assume_output_aligned {};" in helper
+    assert "is_supported_transform_alignment_policy" in helper
+    assert "has_same_alignment_residue" in helper
+    assert "range_data" in helper
+    assert "std::size(range)" in helper
+    assert "void for_each_chunk(Op&& op" in helper
+    assert "void for_each_chunk(Op&& op, Range& data)" in helper
     assert "void transform_unary(Op&& op" in helper
+    assert "void transform_unary(Op&& op, const InputRange& input" in helper
+    assert "transform_unary_loop_peel_to_aligned" in helper
+    assert "alignment::assume_inputs_aligned" in helper
+    assert "alignment::assume_output_aligned" in helper
+    assert "std::size_t ParallelN" in helper
+    assert "transform_unary<parallelism::fixed<ParallelN>, Alignment>" in helper
+    assert "void transform_binary(" in helper
+    assert "transform_binary_loop" in helper
+    assert "transform_binary_loop_peel_to_aligned" in helper
+    assert "transform_binary<parallelism::fixed<ParallelN>, Alignment>" in helper
+    assert "namespace mask_layout" in helper
+    assert (
+        "struct integral {};\nstruct native {};\nstruct bytes {};\nstruct bits {};"
+        in helper
+    )
+    assert "fixed_native_mask_type" in helper
+    assert "native_mask_chunk_count" in helper
+    assert "fixed_byte_mask_type" in helper
+    assert "byte_mask_count" in helper
+    assert "fixed_bit_mask_type" in helper
+    assert "bit_mask_count" in helper
+    assert "std::size_t predicate_unary(" in helper
+    assert "std::size_t predicate_binary(" in helper
+    assert "void transform_where_unary(" in helper
+    assert "void transform_where_binary(" in helper
+    assert "void transform_masked_unary(" in helper
+    assert "void transform_masked_binary(" in helper
+    assert "std::size_t select_unary(" in helper
+    assert "std::size_t select_binary(" in helper
+    assert "std::size_t select_masked_unary(" in helper
+    assert "std::size_t select_masked_binary(" in helper
+    assert "std::size_t select_indices_unary(" in helper
+    assert "std::size_t select_indices_binary(" in helper
+    assert "std::size_t select_masked_indices_unary(" in helper
+    assert "std::size_t select_masked_indices_binary(" in helper
+    assert "is_selection_index" in helper
+    assert (
+        "selection-vector output indices must use an unsigned integral row-id type"
+        in helper
+    )
+    assert "std::size_t select_selected_indices_unary(" in helper
+    assert "std::size_t select_selected_indices_binary(" in helper
+    assert "append_selected_indices_from_mask" in helper
+    assert "void transform_selected_unary(" in helper
+    assert "void transform_selected_binary(" in helper
+    assert "auto aggregate_selected_unary(" in helper
+    assert "auto aggregate_selected_binary(" in helper
+    assert "void consume_selected_unary(" in helper
+    assert "void consume_selected_binary(" in helper
+    assert (
+        "selection-vector input indices must use an unsigned integral row-id type"
+        in helper
+    )
+    assert "vector_for_selected_rows" in helper
+    assert "load_selected_vector" in helper
+    assert "gather_narrow" in helper
+    assert "std::size_t Scale = 0" in helper
+    assert "std::size_t count_unary(" in helper
+    assert "std::size_t count_binary(" in helper
+    assert "std::size_t count_masked_unary(" in helper
+    assert "std::size_t count_masked_binary(" in helper
+    assert "std::size_t count_selected_unary(" in helper
+    assert "std::size_t count_selected_binary(" in helper
+    assert "auto aggregate_unary(" in helper
+    assert "auto aggregate_binary(" in helper
+    assert "auto aggregate_masked_unary(" in helper
+    assert "auto aggregate_masked_binary(" in helper
+    assert "void consume_unary(" in helper
+    assert "void consume_binary(" in helper
+    assert "void consume_masked_unary(" in helper
+    assert "void consume_masked_binary(" in helper
     assert '#include "tsl_algorithm.hpp"' in dispatch
     assert "inline typename Vec::register_type load(" in avx2
     assert "inline void store(" in avx2
+    assert "inline void store_mask(" in avx2
+    assert "inline typename Vec::imask_type to_integral(" in avx2
+    assert "inline typename Vec::mask_type to_mask(" in avx2
+    assert "inline typename Vec::register_type gather_narrow(" in avx2
+    assert "inline typename Vec::register_type gather(" not in avx2
+    assert "inline void compress_store(" in avx2
+    assert "inline std::size_t mask_population_count(" in avx2
+    assert "inline typename Vec::mask_type mask_binary_and(" in avx2
 
 
 def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) -> None:
@@ -108,9 +213,15 @@ def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) 
     # same profile header, and the generic wrapper.
     assert "template <class Vec>\nstruct add_impl;" in avx2
     assert (
-        "static constexpr std::size_t vector_element_count = 256 / (sizeof(T) * 8);"
+        "static constexpr std::size_t lane_count_v = 256 / (sizeof(T) * 8);"
         in avx2
     )
+    assert "static constexpr std::size_t vector_element_count = lane_count_v;" in avx2
+    assert "static constexpr std::size_t vector_alignment = 32;" in avx2
+    assert "static constexpr std::size_t simd_register_alignment_v = vector_alignment;" in avx2
+    assert "using extension_type = avx2;" in avx2
+    assert "using with_base_type = simd<ToBase, avx2>;" in avx2
+    assert "using with_extension = simd<T, ToExtension>;" in avx2
     assert "struct add_impl<tsl::simd<int32_t, tsl::avx2>>" in avx2
     assert "return _mm256_add_epi32(left, right);" in avx2
     assert "struct add_impl<tsl::simd<int32_t, tsl::sse>>" in avx2
@@ -149,12 +260,34 @@ def test_cpp_profile_specializes_inferred_simd_from_registered_vectors(
     assert "using type = ::tsl::simd<float, ::tsl::sse>;" in avx2
     assert "struct inferred_simd<float, 8>" in avx2
     assert "using type = ::tsl::simd<float, ::tsl::avx2>;" in avx2
+    assert "struct native_simd<int32_t>" in avx2
+    assert (
+        "struct native_simd<int32_t> {\n"
+        "    using type = ::tsl::simd<int32_t, ::tsl::avx2>;"
+        in avx2
+    )
+    assert "struct native_simd<float>" in avx2
+    assert (
+        "struct native_simd<float> {\n"
+        "    using type = ::tsl::simd<float, ::tsl::avx2>;"
+        in avx2
+    )
 
 
 def test_rust_specialization_structure(specialization_artifacts: dict[str, str]) -> None:
     avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
     core = specialization_artifacts["rust/src/tsl_core.rs"]
 
+    assert "pub trait StaticSimdVector: SimdVector" in core
+    assert "type Extension;" in core
+    assert "type WithBaseType<ToBase>;" in core
+    assert "type WithExtension<ToExtension>;" in core
+    assert "type Extension = Scalar;" in core
+    assert "type WithBaseType<ToBase> = Simd<ToBase, Scalar>;" in core
+    assert "type WithExtension<ToExtension> = Simd<T, ToExtension>;" in core
+    assert "type Extension = Generic<LANES>;" in core
+    assert "type WithBaseType<ToBase> = Simd<ToBase, Generic<LANES>>;" in core
+    assert "fn lane_count() -> usize;" in core
     assert "const ELEMENT_COUNT: usize;" in core
     assert "const ELEMENT_COUNT: usize = 1;" in core
     assert "const ELEMENT_COUNT: usize = LANES;" in core
@@ -164,9 +297,14 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
         "const ALIGN: usize = core::mem::align_of::<array_type<T, LANES>>();"
         in core
     )
-    assert "pub trait AddImpl: SimdVector {" in avx2
+    assert "pub trait AddImpl: StaticSimdVector {" in avx2
     assert "impl AddImpl for Simd<i32, Avx2> {" in avx2
+    assert "impl StaticSimdVector for Simd<i32, Avx2>" in avx2
+    assert "type Extension = Avx2;" in avx2
+    assert "type WithBaseType<ToBase> = Simd<ToBase, Avx2>;" in avx2
+    assert "type WithExtension<ToExtension> = Simd<i32, ToExtension>;" in avx2
     assert "const ELEMENT_COUNT: usize = 8;" in avx2
+    assert "fn lane_count() -> usize { 8 }" in avx2
     assert "const ALIGN: usize = 32;" in avx2
     assert "unsafe { return core::arch::x86_64::_mm256_add_epi32(left, right); }" in avx2
     assert "impl AddImpl for Simd<i32, Sse> {" in avx2

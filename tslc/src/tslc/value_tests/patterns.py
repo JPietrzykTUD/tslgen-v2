@@ -125,6 +125,7 @@ def default_value_test_patterns(
         _simple(scalar_result_case, "s", ("s",), support=support),
         _simple(scalar_result_case, "s", ("v", "s"), support=support),
         _simple(scalar_result_case, "usize", ("m",), support=support),
+        _simple(scalar_result_case, "usize", ("s",), support=support),
         _MaskConversionPattern(scalar_result_case, "im", ("m",)),
         _simple(
             scalar_result_case,

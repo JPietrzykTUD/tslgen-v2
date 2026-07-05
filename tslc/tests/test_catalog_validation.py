@@ -103,6 +103,218 @@ def test_primitive_documentation_fields_are_accepted_and_promoted() -> None:
     assert "return data" in (primitive.semantics or "")
 
 
+def test_implementation_variants_are_accepted_and_promoted() -> None:
+    source = _base_source().replace(
+        "        implementation:\n"
+        '          tsil "complete(data);"\n',
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+        "        variants:\n"
+        "          scalar_loop:\n"
+        '            tsil "complete(data);"\n'
+        "          intrinsic_composition:\n"
+        "            safety:\n"
+        "              internal_unsafe true\n"
+        "              reasons [intrinsic]\n"
+        '            tsil "complete(intrin<identity>(data));"\n',
+    )
+    document = SourceDocument(Path("catalog_validation_fixture.tsl"), source, "d", "tsl")
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
+    assert parsed.diagnostics == (), parsed.diagnostics
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+    diagnostics = (
+        *result.diagnostics,
+        *validate_catalog(result.catalog, parsed, required_backends=("cpp", "rust")),
+    )
+    assert diagnostics == ()
+
+    implementation = result.catalog.primitive("id").implementations[0]
+    assert tuple(variant.name for variant in implementation.variants) == (
+        "scalar_loop",
+        "intrinsic_composition",
+    )
+    assert implementation.variants[0].body_text == "complete(data);"
+    assert implementation.variants[1].safety.internal_unsafe is True
+    assert implementation.variants[1].safety.caller_unsafe is False
+    assert implementation.variants[1].safety.reasons == frozenset({"intrinsic"})
+
+
+def test_implementation_variants_must_live_on_body_leaf() -> None:
+    diagnostics = _diagnostics(
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "language rust:\n"
+        '  s32 {type "i32"}\n'
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      variants:\n"
+        "        alt:\n"
+        '          tsil "complete(data);"\n'
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n'
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-CATALOG-MALFORMED-VARIANT")
+    assert "same selector entry as an implementation body" in diagnostic.message
+
+
+def test_implementation_variant_cannot_change_public_caller_safety() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "        implementation:\n"
+            '          tsil "complete(data);"\n',
+            "        implementation:\n"
+            '          tsil "complete(data);"\n'
+            "        variants:\n"
+            "          alt:\n"
+            "            safety:\n"
+            "              caller_unsafe true\n"
+            '            tsil "complete(data);"\n',
+        )
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-CATALOG-UNKNOWN-FIELD")
+    assert "implementation variant 'alt' safety" in diagnostic.message
+    assert "caller_unsafe" in diagnostic.message
+
+
+def test_duplicate_implementation_variant_names_are_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "        implementation:\n"
+            '          tsil "complete(data);"\n',
+            "        implementation:\n"
+            '          tsil "complete(data);"\n'
+            "        variants:\n"
+            "          alt:\n"
+            '            tsil "complete(data);"\n'
+            "          alt:\n"
+            '            tsil "complete(data);"\n',
+        )
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-CATALOG-DUPLICATE-FIELD")
+    assert "implementation variant 'alt'" in diagnostic.message
+
+
+def test_implementation_variant_bodies_are_validated_like_default_bodies() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "        implementation:\n"
+            '          tsil "complete(data);"\n',
+            "        implementation:\n"
+            '          tsil "complete(data);"\n'
+            "        variants:\n"
+            "          alt:\n"
+            '            tsil "call<primitive=set_zero trailing>(data);"\n',
+        )
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-CALL-SELECTOR")
+    assert "primitive 'id': malformed call selector" in diagnostic.message
+
+
+def test_simd_type_base_constraints_are_accepted_and_promoted() -> None:
+    source = _base_source().replace(
+        "  impls:\n",
+        "  generic_params:\n"
+        "    IndexVec {kind simd_type, base_types [ints, si32]}\n"
+        "  impls:\n",
+    )
+    document = SourceDocument(Path("catalog_validation_fixture.tsl"), source, "d", "tsl")
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
+    assert parsed.diagnostics == (), parsed.diagnostics
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+    diagnostics = (
+        *result.diagnostics,
+        *validate_catalog(result.catalog, parsed, required_backends=("cpp", "rust")),
+    )
+    assert diagnostics == ()
+
+    primitive = result.catalog.primitive("id")
+    assert primitive is not None
+    assert primitive.generic_params[0].base_type_constraints == ("ints", "si32")
+
+
+def test_test_index_type_is_accepted_and_promoted() -> None:
+    source = _base_source().replace(
+        "  impls:\n",
+        "  tests:\n"
+        "    - {tags [basic], type \"si32\", index_type \"si32\", case {inputs [[1, 2, 3, 4]], expected [1, 2, 3, 4]}}\n"
+        "  impls:\n",
+    )
+    document = SourceDocument(Path("catalog_validation_fixture.tsl"), source, "d", "tsl")
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
+    assert parsed.diagnostics == (), parsed.diagnostics
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+    diagnostics = (
+        *result.diagnostics,
+        *validate_catalog(result.catalog, parsed, required_backends=("cpp", "rust")),
+    )
+    assert diagnostics == ()
+
+    primitive = result.catalog.primitive("id")
+    assert primitive is not None
+    assert primitive.tests[0].index_type == "si32"
+    assert primitive.tests[0].name == "id_si32_index_si32_basic"
+
+
+def test_test_index_type_must_be_a_known_scalar_type() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "  impls:\n",
+            "  tests:\n"
+            "    - {tags [basic], type \"si32\", index_type \"vec32\", case {inputs [[1, 2, 3, 4]], expected [1, 2, 3, 4]}}\n"
+            "  impls:\n",
+        )
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-CATALOG-INVALID-ENUM")
+    assert "test index_type 'vec32'" in diagnostic.message
+
+
+def test_simd_type_base_constraints_are_allowed_only_on_simd_type_params() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "  impls:\n",
+            "  generic_params:\n"
+            "    PreserveSign {kind bool, base_types [si32]}\n"
+            "  impls:\n",
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-SIMD-TYPE-CONSTRAINT"
+    )
+    assert "allowed only for kind 'simd_type'" in diagnostic.message
+
+
+def test_simd_type_base_constraints_must_resolve_to_scalar_types() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "  impls:\n",
+            "  generic_params:\n"
+            "    IndexVec {kind simd_type, base_types [ui128]}\n"
+            "  impls:\n",
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-SIMD-TYPE-CONSTRAINT"
+    )
+    assert "invalid base_types entry 'ui128'" in diagnostic.message
+
+
 def test_duplicate_keys_are_diagnosed() -> None:
     diagnostics = _diagnostics(
         _base_source(
@@ -150,6 +362,27 @@ def test_extension_backend_field_names_follow_supported_backends() -> None:
     assert {"cpp", "rust"} <= known_extension_fields()
     assert "zig" in known_extension_fields(("zig",))
     assert "zig" not in known_extension_fields()
+
+
+def test_scalable_cpp_extension_requires_runtime_lane_count() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension sve_demo:\n"
+            '  extension_name "sve_demo"\n'
+            '  family "arm"\n'
+            '  vector_bits "scalable"\n'
+            "  cpp:\n"
+            "    supported true\n"
+        ),
+        backends=("cpp",),
+    )
+
+    diagnostic = next(
+        d
+        for d in diagnostics
+        if d.code == "TSL-CATALOG-MISSING-RUNTIME-LANE-COUNT"
+    )
+    assert "runtime_lane_count entry for backend 'cpp'" in diagnostic.message
 
 
 def test_invalid_enum_like_values_are_diagnosed() -> None:
@@ -385,6 +618,42 @@ def test_malformed_let_body_region_is_diagnosed() -> None:
 
     diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-LET")
     assert "let<type>(Name, type-expression)" in diagnostic.message
+
+
+def test_runtime_array_var_body_region_is_accepted() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            'tsil "complete(data);"',
+            (
+                'tsil "var<runtime_array>('
+                'type(base::in), tmp, value(vector::runtime_length)'
+                '); complete(data);"'
+            ),
+        )
+    )
+
+    assert diagnostics == ()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "var<runtime_array>(type(base::in), tmp); complete(data);",
+        (
+            "var<runtime_array>("
+            "type(base::in), tmp[0], value(vector::runtime_length)"
+            "); complete(data);"
+        ),
+        "var<unknown>(tmp, data); complete(data);",
+    ],
+)
+def test_malformed_var_body_region_is_diagnosed(body: str) -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace('tsil "complete(data);"', f'tsil "{body}"')
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-VAR")
+    assert "malformed var declaration" in diagnostic.message
 
 
 def test_malformed_intrin_body_region_is_diagnosed() -> None:

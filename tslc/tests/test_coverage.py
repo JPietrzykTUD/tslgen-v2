@@ -51,7 +51,13 @@ def test_coverage_reports_full_emission_when_no_gaps_remain(
 def test_report_text_is_actionable(representative_coverage_result) -> None:
     report = format_coverage_report(representative_coverage_result)
     assert "add" in report and "emitted" in report
-    assert "3584 emitted / 3584 attempted" in report
+    assert "4270 emitted / 4270 attempted" in report
+    assert "compress_store" in report
+    assert "gather_narrow" in report
+    assert "mask_population_count" in report
+    assert "mask_binary_and" in report
+    assert "to_integral" in report
+    assert "to_mask" in report
     assert "skipped because" not in report
 
 
@@ -79,7 +85,7 @@ def test_scalable_fixed_lane_signatures_are_policy_deferred(
     assert {entry.status for entry in result.skipped} == {"policy_deferred"}
 
     report = format_coverage_report(result)
-    assert "788 emitted / 788 attempted" in report
+    assert "1079 emitted / 1079 attempted" in report
     assert "30 policy-deferred slots" in report
     assert "skipped because" not in report
     assert "policy-deferred because" in report

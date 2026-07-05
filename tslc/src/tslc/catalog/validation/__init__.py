@@ -15,8 +15,10 @@ from tslc.catalog.validation.body_validation import validate_body_regions
 from tslc.catalog.validation.invariants import (
     validate_backend_type_spellings,
     validate_extension_inheritance,
+    validate_generic_param_base_constraints,
     validate_primitive_signatures,
     validate_required_backends,
+    validate_scalable_runtime_lane_counts,
 )
 from tslc.catalog.validation.schema_validation import validate_parsed_documents
 from tslc.diagnostics import Diagnostic, sort_diagnostics
@@ -38,8 +40,10 @@ def validate_catalog(
     backends = tuple(dict.fromkeys(required_backends))
     validate_required_backends(catalog, backends, diagnostics)
     validate_primitive_signatures(catalog, diagnostics)
+    validate_generic_param_base_constraints(catalog, diagnostics)
     validate_extension_inheritance(catalog, diagnostics, parsed)
     validate_backend_type_spellings(catalog, backends, diagnostics, parsed)
+    validate_scalable_runtime_lane_counts(catalog, backends, diagnostics, parsed)
     if parsed is not None:
         validate_parsed_documents(parsed, diagnostics, catalog.target_families)
         validate_body_regions(parsed, diagnostics)

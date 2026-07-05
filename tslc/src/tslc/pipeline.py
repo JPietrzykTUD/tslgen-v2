@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Literal
 
 from tslc._pipeline_closure import (
+    CallDependencyOrigin,
     _LoweredSlot,
     _profile_with_required_features,
     _propagate_transitive_call_facts,
@@ -28,6 +29,7 @@ from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
 from tslc.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
 from tslc.lower.dependencies import (
+    CallDependency,
     extract_call_dependencies_from_segments,
 )
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer, LoweringResult
@@ -43,7 +45,19 @@ _DEFAULT_BACKENDS = DEFAULT_SUPPORT_POLICY.default_backend_ids
 GenerationMode = Literal["partial", "strict"]
 SkipStatus = Literal["coverage_gap", "policy_deferred"]
 _TYPE_ORDER = SCALAR_TYPE_ORDER
-_CPP_ALGORITHM_SUPPORT_PRIMITIVES = ("load", "store")
+_CPP_ALGORITHM_SUPPORT_PRIMITIVES = (
+    "load",
+    "store",
+    # The helper calls the emitted wrapper `store_mask`; selecting `store`
+    # also selects its pass-through masked form, which is split to that name
+    # during C++ emitted-name finalization.
+    "to_integral",
+    "to_mask",
+    "gather_narrow",
+    "compress_store",
+    "mask_population_count",
+    "mask_binary_and",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,14 +287,38 @@ class _GenerationSession:
                 slot.implementation.body_text,
                 source=slot.implementation.body_source,
             )
-            callees = extract_call_dependencies_from_segments(
-                body_segments,
-                primitive,
-                slot.extension.isa_name,
-                slot.type_tag,
-                *_target_dependency_context(slot),
-                catalog,
+            dependency_context = _target_dependency_context(slot)
+            callees = set(
+                extract_call_dependencies_from_segments(
+                    body_segments,
+                    primitive,
+                    slot.extension.isa_name,
+                    slot.type_tag,
+                    *dependency_context,
+                    catalog,
+                )
             )
+            callee_origins = [
+                CallDependencyOrigin(dependency, "implementation")
+                for dependency in sorted(callees, key=_dependency_sort_key)
+            ]
+            for variant in slot.implementation.variants:
+                variant_callees = extract_call_dependencies_from_segments(
+                    scan(variant.body_text, source=variant.body_source),
+                    primitive,
+                    slot.extension.isa_name,
+                    slot.type_tag,
+                    *dependency_context,
+                    catalog,
+                )
+                callees.update(variant_callees)
+                callee_origins.extend(
+                    CallDependencyOrigin(
+                        dependency,
+                        f"implementation variant {variant.name!r}",
+                    )
+                    for dependency in sorted(variant_callees, key=_dependency_sort_key)
+                )
             slot_lowered = False
             for capability in self.backends:
                 backend = capability.backend_id
@@ -302,7 +340,8 @@ class _GenerationSession:
                     _LoweredSlot(
                         backend=backend,
                         spec=lowered.specialization,
-                        callees=callees,
+                        callees=frozenset(callees),
+                        callee_origins=tuple(callee_origins),
                     )
                 )
                 slot_lowered = True
@@ -345,7 +384,7 @@ class _GenerationSession:
             primitive=slot.spec.primitive_name,
             extension=slot.spec.extension_name,
             type_tag=slot.spec.type_tag,
-            reason="pruned: a called primitive is not generated for this profile",
+            reason=_pruned_reason(slot),
         )
         self.skipped.append(entry)
         if self.request.mode == "strict":
@@ -385,6 +424,45 @@ def _record_render_extensions(
     target_extension = catalog.extensions.get(slot.to_target)
     if target_extension is not None:
         selected_extensions[target_extension.isa_name] = target_extension
+
+
+def _dependency_sort_key(
+    dependency: CallDependency,
+) -> tuple[str, str, str, str, str, str]:
+    return (
+        dependency.primitive,
+        dependency.mask_policy or "",
+        dependency.source.extension_isa,
+        dependency.source.base_tag,
+        dependency.target.extension_isa if dependency.target is not None else "",
+        dependency.target.base_tag if dependency.target is not None else "",
+    )
+
+
+def _pruned_reason(slot: "_LoweredSlot") -> str:
+    unresolved = slot.unresolved_callee
+    if unresolved is None:
+        return "pruned: a called primitive is not generated for this profile"
+    dependency = unresolved.dependency
+    return (
+        f"pruned: {unresolved.origin} calls {_dependency_label(dependency)}, "
+        "but that specialization is not generated for this profile"
+    )
+
+
+def _dependency_label(dependency: CallDependency) -> str:
+    source = (
+        f"{dependency.primitive}<"
+        f"{dependency.source.extension_isa}, {dependency.source.base_tag}>"
+    )
+    if dependency.mask_policy is not None:
+        source = f"{source}[mask={dependency.mask_policy}]"
+    if dependency.target is None:
+        return source
+    return (
+        f"{source} -> <"
+        f"{dependency.target.extension_isa}, {dependency.target.base_tag}>"
+    )
 
 
 def _lowering_skipped_entry(

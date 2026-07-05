@@ -93,6 +93,9 @@ class ValueTestCasePlan:
     generic_defaults: tuple[str, ...] = ()
     target_base_spelling: str | None = None
     target_lanes: int | None = None
+    index_type_tag: str | None = None
+    index_base_spelling: str | None = None
+    index_lanes: int | None = None
     source_extension: str | None = None
     target_extension: str | None = None
     index_value: str | None = None
@@ -162,6 +165,10 @@ class ValueTestCasePlan:
         if self.target_lanes is not None and self.target_lanes <= 0:
             raise ValueError(
                 f"value-test case {self.function_name!r} requires positive target_lanes"
+            )
+        if self.index_lanes is not None and self.index_lanes <= 0:
+            raise ValueError(
+                f"value-test case {self.function_name!r} requires positive index_lanes"
             )
         if self.source_offset < 0 or self.buffer_offset < 0:
             raise ValueError(

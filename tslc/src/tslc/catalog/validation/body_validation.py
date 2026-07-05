@@ -28,8 +28,16 @@ def validate_body_regions(
 
     for document in parsed.documents:
         for primitive in document.primitives:
-            for envelope in primitive.body_envelopes:
+            for envelope in _implementation_body_envelopes(primitive.impl_entries):
                 _validate_envelope(primitive.name, envelope, diagnostics)
+
+
+def _implementation_body_envelopes(entries):
+    for entry in entries:
+        yield from entry.body_envelopes
+        for variant in entry.variants:
+            yield from variant.body_envelopes
+        yield from _implementation_body_envelopes(entry.children)
 
 
 def _validate_envelope(
@@ -218,6 +226,46 @@ def _validate_mask_region(
     )
 
 
+def _validate_var_region(
+    primitive_name: str,
+    region: Region,
+    diagnostics: list[Diagnostic],
+) -> None:
+    variant = region.selector_text.strip()
+    groups = split_top_level(_segments_text(region.body))
+    is_valid = False
+    if variant in {"infer", "const_infer"}:
+        is_valid = len(groups) >= 2
+    elif variant in {"typed", "const_typed"}:
+        is_valid = len(groups) == 3
+    elif variant in {"init_register", "const_init_register"}:
+        is_valid = len(groups) == 1
+    elif variant == "runtime_array":
+        is_valid = (
+            len(groups) == 3
+            and _IDENTIFIER.fullmatch(groups[1].strip()) is not None
+        )
+    if is_valid:
+        return
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-BODY-BAD-VAR",
+            message=(
+                f"primitive {primitive_name!r}: malformed var declaration; "
+                "expected `var<infer>(name, value)`, "
+                "`var<const_infer>(name, value)`, "
+                "`var<typed>(type, name, value)`, "
+                "`var<const_typed>(type, name, value)`, "
+                "`var<init_register>(name)`, "
+                "`var<const_init_register>(name)`, or "
+                "`var<runtime_array>(element_type, name, count)`"
+            ),
+            source=region.source,
+        )
+    )
+
+
 def _validate_cast_region(
     primitive_name: str,
     region: Region,
@@ -339,6 +387,7 @@ _SHELL_VALIDATORS: dict[str, ShellValidator] = {
     "intrin_selector": _validate_intrin_region,
     "mask_selector": _validate_mask_region,
     "no_selector": _validate_no_selector_region,
+    "var_selector": _validate_var_region,
 }
 
 

@@ -11,6 +11,7 @@
 #include <limits>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 // Loop-unroll hint for `loop<backend, unroll>`. A no-op by default (a real
 // unroll pragma is compiler-specific and only a hint); kept as a macro so
@@ -89,12 +90,23 @@ struct scalar {};
 template <class T>
 struct simd<T, scalar> {
     using base_type = T;
+    using extension_type = scalar;
     using register_type = T;
     using mask_type = bool;
     // Integral mask: a fixed unsigned scalar (to_integral packs the 0/1 mask into it).
     using imask_type = std::uint64_t;
-    static constexpr std::size_t vector_element_count = 1;
+    template <class ToBase>
+    using with_base_type = simd<ToBase, scalar>;
+    template <class ToExtension>
+    using with_extension = simd<T, ToExtension>;
+    static constexpr bool has_static_lane_count_v = true;
+    static constexpr std::size_t lane_count_v = 1;
+    static constexpr std::size_t vector_element_count = lane_count_v;
+    static constexpr std::size_t lane_count() noexcept {
+        return lane_count_v;
+    }
     static constexpr std::size_t vector_alignment = alignof(T);
+    static constexpr std::size_t simd_register_alignment_v = vector_alignment;
 };
 
 // How a register value is passed to apply(): by value.
@@ -225,14 +237,25 @@ struct simd<T, generic<LANES>> {
     static_assert((LANES * sizeof(T)) % 16 == 0,
                   "tsl::generic<LANES>: LANES * sizeof(T) must be a multiple of 16 bytes (128 bits)");
     using base_type = T;
+    using extension_type = generic<LANES>;
     using register_type = array_type<T, LANES>;
     // Emulated mask: a bitset, one bit per lane (≤64 lanes covers all real widths).
     using mask_type = std::uint64_t;
     // Integral mask: the same 64-bit bitset (LANES is a template param, so the lane count
     // can't size a smaller integer at this point).
     using imask_type = std::uint64_t;
-    static constexpr std::size_t vector_element_count = LANES;
+    template <class ToBase>
+    using with_base_type = simd<ToBase, generic<LANES>>;
+    template <class ToExtension>
+    using with_extension = simd<T, ToExtension>;
+    static constexpr bool has_static_lane_count_v = true;
+    static constexpr std::size_t lane_count_v = LANES;
+    static constexpr std::size_t vector_element_count = lane_count_v;
+    static constexpr std::size_t lane_count() noexcept {
+        return lane_count_v;
+    }
     static constexpr std::size_t vector_alignment = alignof(register_type);
+    static constexpr std::size_t simd_register_alignment_v = vector_alignment;
 };
 
 template <class T, std::size_t LANES>

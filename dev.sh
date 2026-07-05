@@ -120,6 +120,24 @@ if [[ -z "${CMAKE_BUILD_PARALLEL_LEVEL:-}" ]]; then
 fi
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$CMAKE_BUILD_PARALLEL_LEVEL}"
 
+compiler_basename() {
+  local command="${1:-}"
+  command="${command%% *}"
+  command="${command##*/}"
+  printf '%s\n' "$command"
+}
+
+# The CI/devcontainer image exposes Zig via ambient CC/CXX for cross-target
+# flows. Native host builds should use the host toolchain unless the caller
+# passes --cpp-compiler directly to tslc or opts into a different host compiler
+# through TSLC_HOST_CXX/TSLC_HOST_CC.
+if [[ "$(compiler_basename "${CXX:-}")" == "zig" ]]; then
+  export CXX="${TSLC_HOST_CXX:-c++}"
+fi
+if [[ "$(compiler_basename "${CC:-}")" == "zig" ]]; then
+  export CC="${TSLC_HOST_CC:-cc}"
+fi
+
 # Fail fast with a clear message if a compiling mode has no working toolchain.
 if [[ "$mode" == "build" || "$mode" == "test" ]]; then
   python - <<'PY'

@@ -317,6 +317,7 @@ def indexed_load_case(
     index: int,
     case: TestCase,
     specs: tuple[LoweredSpecialization, ...],
+    index_base_spelling: str | None = None,
 ) -> ValueTestCasePlan | None:
     base_spelling = _ordinary_base_spelling(case, specs)
     if base_spelling is None or case.scale is None:
@@ -325,6 +326,8 @@ def indexed_load_case(
     mask_inputs = _mask_inputs(case)
     expected_len = len(case.expected)
     if len(vector_inputs) not in (2, 3) or expected_len == 0:
+        return None
+    if case.index_type is not None and index_base_spelling is None:
         return None
     return _plan(
         "indexed_load",
@@ -338,6 +341,9 @@ def indexed_load_case(
         expected=case.expected,
         immediate_value=str(case.scale),
         target_lanes=expected_len,
+        index_type_tag=case.index_type,
+        index_base_spelling=index_base_spelling,
+        index_lanes=len(vector_inputs[1]),
     )
 
 def indexed_store_case(
@@ -345,6 +351,7 @@ def indexed_store_case(
     index: int,
     case: TestCase,
     specs: tuple[LoweredSpecialization, ...],
+    index_base_spelling: str | None = None,
 ) -> ValueTestCasePlan | None:
     base_spelling = _ordinary_base_spelling(case, specs)
     if base_spelling is None or case.scale is None:
@@ -352,6 +359,8 @@ def indexed_store_case(
     vector_inputs = _vector_inputs(case)
     mask_inputs = _mask_inputs(case)
     if len(vector_inputs) != 2 or not case.expected:
+        return None
+    if case.index_type is not None and index_base_spelling is None:
         return None
     return _plan(
         "indexed_store",
@@ -365,6 +374,9 @@ def indexed_store_case(
         expected=case.expected,
         immediate_value=str(case.scale),
         buffer_length=len(case.expected),
+        index_type_tag=case.index_type,
+        index_base_spelling=index_base_spelling,
+        index_lanes=len(vector_inputs[1]),
     )
 
 def stream_case(

@@ -18,11 +18,19 @@ struct inferred_simd<T, 1> {
     using type = ::tsl::simd<T, ::tsl::scalar>;
 };
 
+template <class T>
+struct native_simd {
+    using type = ::tsl::simd<T, ::tsl::scalar>;
+};
+
 }  // namespace tsl::detail
 
 namespace tsl {
 
 template <class T, std::size_t ParallelN>
 using inferred_simd_t = typename detail::inferred_simd<T, ParallelN>::type;
+
+template <class T>
+using native_simd_t = typename detail::native_simd<T>::type;
 
 }  // namespace tsl

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.cpp import CppBackend
 from tslc.backend.rust import RustBackend
+from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, ImplementationSafety
@@ -16,8 +17,11 @@ from tslc.diagnostics import Diagnostic
 from tslc.lower.dependencies import CallDependency, VectorIdentity
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc.pipeline import (
+    CallDependencyOrigin,
     _LoweredSlot,
     _profile_with_required_features,
+    _pruned_reason,
+    _prune_unresolved,
     _propagate_transitive_call_facts,
 )
 from tslc.render.model import LoweredBody
@@ -190,6 +194,35 @@ def test_call_facts_propagate_bottom_up_recursively() -> None:
     assert root.spec.body.requires_unsafe is False
 
 
+def test_pruned_variant_dependency_keeps_variant_origin() -> None:
+    dependency = CallDependency(
+        primitive="missing",
+        mask_policy=None,
+        source=VectorIdentity("si32", "scalar"),
+    )
+    caller = _slot(
+        "caller",
+        callees=frozenset({dependency}),
+        callee_origins=(
+            CallDependencyOrigin(
+                dependency,
+                "implementation variant 'alt'",
+            ),
+        ),
+    )
+
+    grouped, pruned = _prune_unresolved([caller], frozenset())
+
+    assert grouped == {}
+    assert pruned == [caller]
+    assert caller.unresolved_callee is not None
+    assert caller.unresolved_callee.origin == "implementation variant 'alt'"
+    assert _pruned_reason(caller) == (
+        "pruned: implementation variant 'alt' calls missing<scalar, si32>, "
+        "but that specialization is not generated for this profile"
+    )
+
+
 def test_render_profile_features_include_transitive_lowered_requirements() -> None:
     profile = MachineProfile(
         name="fixture",
@@ -226,7 +259,7 @@ def test_rust_backend_formats_caller_unsafe_contract() -> None:
 
     rendered = RustBackend().render_primitive("needs_contract", (spec,))
 
-    assert "pub trait Needs_contractImpl: SimdVector" in rendered
+    assert "pub trait Needs_contractImpl: StaticSimdVector" in rendered
     assert "    unsafe fn apply(data: Self::RegisterType)" in rendered
     assert (
         "pub unsafe fn needs_contract<S: detail::primitives::Needs_contractImpl>"
@@ -264,6 +297,63 @@ def test_source_call_to_caller_unsafe_primitive_uses_local_unsafe(
     assert not lowered.body_text.startswith("unsafe {")
 
 
+def test_implementation_variants_lower_and_render_as_detail_symbols() -> None:
+    diagnostics, catalog = _catalog_from_source(
+        "target_families:\n"
+        "  known_extension_families [scalar]\n"
+        "  universal_extension_families [scalar]\n"
+        "  profile_families:\n"
+        "    generic:\n"
+        "      extension_families []\n"
+        + _base_source(
+            "    scalar:\n"
+            "      ints:\n"
+            "        implementation:\n"
+            '          tsil "complete(data);"\n'
+            "        variants:\n"
+            "          alt:\n"
+            "            safety:\n"
+            "              internal_unsafe true\n"
+            "              reasons [intrinsic]\n"
+            '            tsil "complete(data);"\n'
+        )
+    )
+    assert diagnostics == ()
+    profile = MachineProfile(
+        name="fixture",
+        family="generic",
+        features=frozenset(),
+        alternatives={},
+    )
+    slot = Selector().select_profile(catalog, profile, "id", ("si32",)).selected[0]
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    rust = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+
+    assert cpp is not None
+    assert rust is not None
+    assert tuple(variant.name for variant in cpp.variant_bodies) == ("alt",)
+    assert cpp.safety.internal_unsafe is True
+    assert cpp.body.requires_unsafe is False
+    assert cpp.variant_bodies[0].body.requires_unsafe is True
+    cpp_source = CppBackend().render_primitive("id", (cpp,))
+    assert "struct id_impl<" in cpp_source
+    assert "struct id_impl_alt<" in cpp_source
+    assert "::tsl::detail::primitives::id_impl<" in cpp_source
+    assert "::tsl::detail::primitives::id_impl_alt<" not in cpp_source
+
+    rust_source = RustBackend().render_primitive("id", (rust,))
+    assert "pub trait IdImpl" in rust_source
+    assert "pub trait Id_altImpl" in rust_source
+    assert "<S as detail::primitives::IdImpl>::apply(data)" in rust_source
+    assert "<S as detail::primitives::Id_altImpl>::apply(data)" not in rust_source
+    assert "unsafe { return data; }" in rust_source
+
+
 def test_primitive_corpus_implementation_bodies_have_local_safety(
     data_root: Path,
     ) -> None:
@@ -285,6 +375,16 @@ def test_primitive_corpus_implementation_bodies_have_local_safety(
                     f"{envelope.envelope_source.path}:"
                     f"{envelope.envelope_source.line}: {primitive_name}"
                 )
+        for variant in entry.variants:
+            variant_has_safety = any(
+                field.key.text == "safety" for field in variant.fields
+            )
+            for envelope in variant.body_envelopes:
+                if not has_safety and not variant_has_safety:
+                    missing.append(
+                        f"{envelope.envelope_source.path}:"
+                        f"{envelope.envelope_source.line}: {primitive_name}"
+                    )
         for child in entry.children:
             walk(primitive_name, child)
 
@@ -332,6 +432,29 @@ def test_primitive_corpus_safety_covers_direct_unsafe_facts(
                     or "raw_pointer" not in implementation.safety.reasons
                 ):
                     violations.append(f"{location}: missing raw_pointer safety")
+            for variant in implementation.variants:
+                variant_location = (
+                    f"{variant.source.path}:{variant.source.line}"
+                    if variant.source is not None
+                    else f"{primitive.name}:{implementation.selector_path}:{variant.name}"
+                )
+                variant_safety = implementation.safety.merge(variant.safety)
+                _require_safety_fact(
+                    violations,
+                    variant_location,
+                    variant.body_text,
+                    variant_safety,
+                    token="intrin<",
+                    reason="intrinsic",
+                )
+                _require_safety_fact(
+                    violations,
+                    variant_location,
+                    variant.body_text,
+                    variant_safety,
+                    token="mem<",
+                    reason="raw_memory",
+                )
 
     assert violations == []
 
@@ -390,6 +513,7 @@ def _slot(
     param_kinds: tuple[str, ...] = ("v",),
     immediate: tuple[str, str] | None = None,
     callees: frozenset[CallDependency] = frozenset(),
+    callee_origins: tuple[CallDependencyOrigin, ...] = (),
 ) -> _LoweredSlot:
     return _LoweredSlot(
         backend="rust",
@@ -402,6 +526,7 @@ def _slot(
             immediate=immediate,
         ),
         callees=callees,
+        callee_origins=callee_origins,
     )
 
 

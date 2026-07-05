@@ -37,7 +37,10 @@ def resolve_param_layout(
     for rule in primitive.param_type_rules:
         if rule.parameter_name != parameter_name:
             continue
-        if attrs.get(rule.attribute_name) != rule.attribute_value:
+        if (
+            rule.attribute_name is not None
+            and attrs.get(rule.attribute_name) != rule.attribute_value
+        ):
             continue
         type_tag = scalar_type_tag_from_expr(rule.type_expr, case.type_tag)
         if type_tag is None:

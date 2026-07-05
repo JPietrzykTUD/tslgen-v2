@@ -76,6 +76,23 @@ class ImplementationSafety:
 
 
 @dataclass(frozen=True, slots=True)
+class ImplementationVariant:
+    """One alternative body for the same implementation leaf.
+
+    Variants inherit the leaf's requirements and public caller-safety. The
+    ``safety`` field contributes only internal facts/reasons that are unioned
+    with the default implementation and any effects discovered while lowering.
+    """
+
+    name: str
+    body_text: str
+    safety: ImplementationSafety = field(default_factory=ImplementationSafety)
+    source_order: int = 0
+    source: SourceSpan | None = None
+    body_source: SourceSpan | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Implementation:
     """One source-authored body for a (extension, type-group) selector path."""
 
@@ -97,6 +114,7 @@ class Implementation:
     # ``LANES`` template — so stable Rust can spell the width-changed output type.
     unroll_variants: bool | None = None
     safety: ImplementationSafety = field(default_factory=ImplementationSafety)
+    variants: tuple[ImplementationVariant, ...] = ()
     source: SourceSpan | None = None
     selector_source: SourceSpan | None = None
     body_source: SourceSpan | None = None
@@ -113,11 +131,11 @@ class Primitive:
     # (aligned/packed) is expanded by the builder into concrete-value copies, so here the
     # value is always concrete. `attribute_keys` is kept for the masked-variant filter.
     attributes: Mapping[str, str] = field(default_factory=dict)
-    # Conditional pointer parameter layout rules from a `param_types:` block.
-    # These are source-owned facts about what an abstract `ptr` parameter points
-    # to under a concrete attribute value. They do not change the public wrapper
-    # ABI by themselves; consumers such as value-test planning resolve them when
-    # they need storage layout.
+    # Pointer parameter layout rules from a `param_types:` block. Conditional
+    # rules are source-owned facts about what an abstract pointer parameter
+    # points to under a concrete attribute value; consumers such as value-test
+    # planning resolve them when they need storage layout. An unconditional
+    # `default` rule is a public ABI override for that parameter.
     param_type_rules: tuple["ParamTypeRule", ...] = ()
     # Per-parameter metadata for `sImm` compile-time immediates, from the `params:` block
     # (keyed by the signature parameter name). Empty when absent — the lowerer then defaults
@@ -201,16 +219,20 @@ class GenericParam:
     name: str
     kind: str  # "bool", "int", or "simd_type"
     default: str  # e.g. "true"
+    # For `kind simd_type`, optional source-level constraints on the parameter's
+    # associated base type. Entries are scalar type tags or catalog type-group
+    # names, e.g. ("?i32", "?i64").
+    base_type_constraints: tuple[str, ...] = ()
     source: SourceSpan | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class ParamTypeRule:
-    """One conditional `param_types:` rule for a primitive parameter."""
+    """One `param_types:` rule for a primitive parameter."""
 
     parameter_name: str
-    attribute_name: str
-    attribute_value: str
+    attribute_name: str | None
+    attribute_value: str | None
     type_expr: str
     source: SourceSpan | None = None
 
@@ -245,9 +267,10 @@ class TestCase:
 
     Optional axes pin a case to one specialization or carry operand metadata: ``extension`` (a
     specific subject extension), ``to_type``/``to_extension`` (representation-change targets),
-    ``index`` (compile-time lane index), ``scale``/``alignment`` and ``offset``/``src_offset``/
-    ``dst_offset`` (gather/scatter and load/store buffer placement), ``attrs`` (the
-    ``aligned``/``packed`` axes).
+    ``index`` (compile-time lane index), ``index_type`` (the scalar type tag of a ``vidx``
+    test vector when it differs from the result vector base), ``scale``/``alignment`` and
+    ``offset``/``src_offset``/``dst_offset`` (gather/scatter and load/store buffer placement),
+    ``attrs`` (the ``aligned``/``packed`` axes).
     """
 
     name: str
@@ -263,6 +286,7 @@ class TestCase:
     to_type: str | None = None
     to_extension: str | None = None
     index: int | None = None
+    index_type: str | None = None
     offset: int | None = None
     src_offset: int | None = None
     dst_offset: int | None = None
@@ -402,6 +426,7 @@ class Extension:
     # width(s) when a sized extension is itself the subject (modeled now, not yet wired).
     default_test_target: bool = False
     test_filter_exclude_templates: frozenset[str] = frozenset()
+    runtime_lane_count: Mapping[str, str] = field(default_factory=dict)
     test_runtime_lanes: Mapping[str, str] = field(default_factory=dict)
     test_mask_from_bits: Mapping[str, str] = field(default_factory=dict)
     test_mask_check: Mapping[str, str] = field(default_factory=dict)
@@ -440,6 +465,11 @@ class Extension:
         )
         object.__setattr__(
             self, "backend_supported", MappingProxyType(dict(self.backend_supported))
+        )
+        object.__setattr__(
+            self,
+            "runtime_lane_count",
+            MappingProxyType(dict(self.runtime_lane_count)),
         )
         object.__setattr__(
             self,

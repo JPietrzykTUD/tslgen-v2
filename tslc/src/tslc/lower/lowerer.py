@@ -26,48 +26,61 @@ from tslc.catalog.model import (
     Catalog,
     ImmediateParam,
     ImplementationSafety,
+    Primitive,
 )
 from tslc.catalog.scalar_types import scalar_bit_width_or_default
 from tslc.catalog.signatures import SignatureShape, parse_signature
-from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at, sort_diagnostics
+from tslc.diagnostics import Diagnostic, SourceSpan, sort_diagnostics
 from tslc.documentation import PrimitiveDocumentation, primitive_documentation
 from tslc.ir.scan import scan
-from tslc.ir.segments import RawText, Region, Segment
+from tslc.ir.segments import Region, Segment
+from tslc.lower.body_rendering import ExpressionRenderer, body_context, render_body
 from tslc.lower.calls import parse_call_selector
 from tslc.lower.context import (
     LaneListParameter,
-    LoweringEffects,
     LoweringEnv,
     LoweringScope,
-    LoweringSession,
 )
 from tslc.lower._diagnostics import (
-    implementation_body_source as _implementation_body_source,
     implementation_source as _implementation_source,
     lowering_error_diagnostic,
     lowering_skip_diagnostic,
     primitive_signature_source as _primitive_signature_source,
 )
-from tslc.lower.raw_text import render_raw_text
 from tslc.lower.region_handlers import (
     DEFAULT_REGION_LOWERERS,
     RegionLowerer,
-    StatementFinalizer,
 )
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
 from tslc.render.model import (
     LoweredBody,
-    RenderContext,
-    RenderSequence,
-    RenderText,
-    as_render_text,
-    literal_text,
-    render_sequence,
-    trimmed_text,
+    render_text,
 )
 from tslc.select.selector import SelectedImplementation
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
 from tslc.support_policy_views import immediate_split_names, policy_split_names
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredTypeParam:
+    """A free SIMD type parameter carried to backend rendering."""
+
+    name: str
+    bounds: tuple[str, ...] = ()
+    base_type_constraints: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class LoweredImplementationVariant:
+    """One lowered alternative body for the selected implementation leaf."""
+
+    name: str
+    body: LoweredBody
+    safety: ImplementationSafety = field(default_factory=ImplementationSafety)
+
+    @property
+    def body_text(self) -> str:
+        return self.body.render()
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +101,10 @@ class LoweredSpecialization:
     param_names: tuple[str, ...]
     param_kinds: tuple[str, ...]
     body: LoweredBody
+    # Backend-spelled public/apply parameter type overrides from unconditional
+    # `param_types: name: default "..."` rules. Each position is either the
+    # override type or None, matching `param_names`/`param_kinds`.
+    param_type_overrides: tuple[str | None, ...] = ()
     vector_spelling: str | None = None  # concrete backend vector spelling for this spec
     index_register_spelling: str | None = None  # concrete si32 register for `vidx`
     native_register_spelling: str | None = None  # source-declared native register, if any
@@ -110,7 +127,7 @@ class LoweredSpecialization:
     # Rust `NAME: SimdVector + <Bound>Impl…` generic, threaded through trait/impl/wrapper like the
     # representation-change `ToVec`. The bound names are the primitives the body calls on the param
     # (`to_array[IndicesType]` -> `to_array`); the Rust backend maps each to its `…Impl` trait.
-    type_params: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    type_params: tuple[LoweredTypeParam, ...] = ()
     # True when register_type == base_type for this extension (scalar/generic). Lets the
     # backend dedup overload `apply`s that collapse to the same type (a `v` and an `s`
     # parameter are distinct on SIMD but identical here).
@@ -130,11 +147,18 @@ class LoweredSpecialization:
     # dependency pruning.
     required_features: frozenset[str] = frozenset()
     safety: ImplementationSafety = field(default_factory=ImplementationSafety)
+    variant_bodies: tuple[LoweredImplementationVariant, ...] = ()
     documentation: PrimitiveDocumentation = field(default_factory=PrimitiveDocumentation)
 
     @property
     def body_text(self) -> str:
         return self.body.render()
+
+    @property
+    def effective_param_type_overrides(self) -> tuple[str | None, ...]:
+        if len(self.param_type_overrides) == len(self.param_kinds):
+            return self.param_type_overrides
+        return (None,) * len(self.param_kinds)
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,41 +194,6 @@ class _LowererCatalogFacts:
             policy_split_names=policy_split_names(catalog, support),
             immediate_split_names=immediate_split_names(catalog, support),
         )
-
-
-class ExpressionRenderer:
-    """Render a TSIL expression (segment sequence) to target text."""
-
-    def __init__(
-        self,
-        context: LoweringSession,
-        region_lowerers: tuple[RegionLowerer, ...] = DEFAULT_REGION_LOWERERS,
-    ) -> None:
-        self._context = context
-        self._lowerers = {lowerer.keyword: lowerer for lowerer in region_lowerers}
-
-    def render(self, segments: tuple[Segment, ...]) -> RenderText:
-        parts = [self._render_segment(segment) for segment in segments]
-        return trimmed_text(RenderSequence(tuple(parts)))
-
-    def render_text(self, segments: tuple[Segment, ...]) -> str:
-        return self.render(segments).render(
-            RenderContext(backend_id=self._context.env.backend.backend_id)
-        )
-
-    def _render_segment(self, segment: Segment) -> RenderText:
-        if isinstance(segment, RawText):
-            return render_raw_text(segment.text, self._context)
-        lowerer = self._lowerers.get(segment.keyword)
-        if lowerer is None:
-            self._context.effects.skip(
-                "TSL-LOWER-UNSUPPORTED-REGION",
-                f"region {segment.keyword!r} is not supported yet: {segment.full_text!r}",
-                source=segment.source,
-            )
-            return literal_text(segment.full_text)
-        rendered = as_render_text(lowerer.lower(segment, self._context, self.render))
-        return _finish_consumed_statement_terminator(segment, lowerer, rendered)
 
 
 class Lowerer:
@@ -356,45 +345,48 @@ class Lowerer:
         immediate_name = immediate[0] if immediate is not None else None
 
         catalog_facts = self._facts_for(catalog)
-        context = LoweringSession(
-            env=LoweringEnv(
-                catalog=catalog,
-                backend=backend,
-                extension=selected.extension,
-                type_tag=selected.type_tag,
-                attributes=dict(selected.primitive.attributes),
-                primitive_axes=catalog_facts.primitive_axes,
-                primitive_arg_generics=catalog_facts.primitive_arg_generics,
-                primitive_caller_unsafe=catalog_facts.primitive_caller_unsafe,
-                primitive_borrowed_arg_positions=(
-                    catalog_facts.primitive_borrowed_arg_positions
-                ),
-                policy_split_names=catalog_facts.policy_split_names,
-                immediate_split_names=catalog_facts.immediate_split_names,
-                current_primitive=selected.primitive.name,
-                immediate_name=immediate_name,
-                immediate_dispatch=immediate_dispatch,
-                immediate_range=immediate_range,
-                generic_param_names=tuple(
-                    gp.name for gp in selected.primitive.generic_params
-                ),
-                lane_list_params=_lane_list_param_map(
-                    parameters,
-                    shape,
-                    selected,
-                    self._support,
-                ),
-                concrete_lanes=selected.concrete_lanes,
+        env = LoweringEnv(
+            catalog=catalog,
+            backend=backend,
+            extension=selected.extension,
+            type_tag=selected.type_tag,
+            attributes=dict(selected.primitive.attributes),
+            primitive_axes=catalog_facts.primitive_axes,
+            primitive_arg_generics=catalog_facts.primitive_arg_generics,
+            primitive_caller_unsafe=catalog_facts.primitive_caller_unsafe,
+            primitive_borrowed_arg_positions=(
+                catalog_facts.primitive_borrowed_arg_positions
             ),
-            scope=scope,
-            effects=LoweringEffects(),
+            policy_split_names=catalog_facts.policy_split_names,
+            immediate_split_names=catalog_facts.immediate_split_names,
+            current_primitive=selected.primitive.name,
+            immediate_name=immediate_name,
+            immediate_dispatch=immediate_dispatch,
+            immediate_range=immediate_range,
+            generic_param_names=tuple(
+                gp.name for gp in selected.primitive.generic_params
+            ),
+            simd_type_param_names=frozenset(
+                gp.name
+                for gp in selected.primitive.generic_params
+                if gp.kind == "simd_type"
+            ),
+            lane_list_params=_lane_list_param_map(
+                parameters,
+                shape,
+                selected,
+                self._support,
+            ),
+            concrete_lanes=selected.concrete_lanes,
         )
+        context = body_context(env, scope, shape, self._support)
 
-        # Dereferencing a raw pointer is `unsafe` in Rust, so a pointer-taking body needs
-        # the unsafe frame even when it uses no intrinsics (e.g. scalar `*ptr = data;`).
-        # Raw-pointer APIs also require callers to uphold pointer validity.
-        if self._support.requires_unsafe_frame(shape):
-            context.effects.mark_caller_unsafe("raw_pointer")
+        param_type_overrides = _param_type_overrides(
+            selected.primitive,
+            parameters,
+            context,
+            self._region_lowerers,
+        )
 
         segments = (
             body_segments
@@ -404,41 +396,72 @@ class Lowerer:
                 source=selected.implementation.body_source,
             )
         )
-        # A `void` primitive (e.g. `store`) has no return value, so it carries no
-        # top-level `complete`; only value-returning bodies require one.
-        if shape.result_kind != "void" and _find_region(segments, "complete") is None:
-            # No top-level return statement to model yet — skip, don't fail.
+
+        default_body = render_body(
+            selected=selected,
+            shape=shape,
+            context=context,
+            segments=segments,
+            region_lowerers=self._region_lowerers,
+        )
+        if default_body.rendered is None:
             return LoweringResult(
                 specialization=None,
-                diagnostics=(
-                    diagnostic_at(
-                        severity="info",
-                        code="TSL-LOWER-NO-COMPLETE",
-                        message=(
-                            f"implementation for {selected.primitive.name!r} has no top-level "
-                            "complete(...); skipped"
-                        ),
-                        source=_implementation_body_source(selected),
-                    ),
-                ),
+                diagnostics=sort_diagnostics(default_body.diagnostics),
             )
-
-        # Render the whole body as a statement stream: var/complete are registered
-        # handlers, and raw text (assignment LHS, newlines, ";") passes through.
-        renderer = ExpressionRenderer(context, self._region_lowerers)
-        rendered_body = renderer.render(segments)
-        if context.effects.unsupported or context.effects.has_errors:
-            # A not-yet-lowerable construct was hit: skip this specialization.
-            return LoweringResult(
-                specialization=None, diagnostics=tuple(context.effects.diagnostics)
-            )
-        safety = selected.implementation.safety.merge(context.effects.safety)
+        safety = selected.implementation.safety.merge(default_body.safety)
         body = LoweredBody.from_render_text(
-            rendered_body,
+            default_body.rendered,
             backend_id=backend.backend_id,
             requires_unsafe=safety.internal_unsafe,
         )
 
+        variant_sources = tuple(
+            (
+                variant,
+                scan(variant.body_text, source=variant.body_source),
+            )
+            for variant in selected.implementation.variants
+        )
+        variant_bodies: list[LoweredImplementationVariant] = []
+        effective_safety = safety
+        diagnostics = [*default_body.diagnostics]
+        for variant, variant_segments in variant_sources:
+            variant_context = body_context(env, scope, shape, self._support)
+            rendered_variant = render_body(
+                selected=selected,
+                shape=shape,
+                context=variant_context,
+                segments=variant_segments,
+                region_lowerers=self._region_lowerers,
+                variant_name=variant.name,
+                variant_source=variant.body_source,
+            )
+            if rendered_variant.rendered is None:
+                return LoweringResult(
+                    specialization=None,
+                    diagnostics=sort_diagnostics(rendered_variant.diagnostics),
+                )
+            variant_safety = (
+                selected.implementation.safety
+                .merge(variant.safety)
+                .merge(rendered_variant.safety)
+            )
+            effective_safety = effective_safety.merge(variant_safety)
+            diagnostics.extend(rendered_variant.diagnostics)
+            variant_bodies.append(
+                LoweredImplementationVariant(
+                    name=variant.name,
+                    body=LoweredBody.from_render_text(
+                        rendered_variant.rendered,
+                        backend_id=backend.backend_id,
+                        requires_unsafe=variant_safety.internal_unsafe,
+                    ),
+                    safety=variant_safety,
+                )
+            )
+
+        type_param_segments = (segments, *(item[1] for item in variant_sources))
         specialization = LoweredSpecialization(
             backend_id=backend.backend_id,
             primitive_name=selected.primitive.name,
@@ -453,6 +476,7 @@ class Lowerer:
             param_names=parameters,
             param_kinds=shape.param_kinds,
             body=body,
+            param_type_overrides=param_type_overrides,
             vector_spelling=vector_spelling,
             index_register_spelling=index_register_spelling,
             native_register_spelling=native_register_spelling,
@@ -472,7 +496,19 @@ class Lowerer:
                 if gp.kind != "simd_type"
             ),
             type_params=tuple(
-                (gp.name, _type_param_bounds(segments, gp.name))
+                LoweredTypeParam(
+                    name=gp.name,
+                    bounds=tuple(
+                        sorted(
+                            {
+                                bound
+                                for body in type_param_segments
+                                for bound in _type_param_bounds(body, gp.name)
+                            }
+                        )
+                    ),
+                    base_type_constraints=gp.base_type_constraints,
+                )
                 for gp in selected.primitive.generic_params
                 if gp.kind == "simd_type"
             ),
@@ -484,7 +520,8 @@ class Lowerer:
             mask_policy=selected.primitive.attributes.get("mask"),
             lane_list_params=tuple(context.env.lane_list_params.values()),
             required_features=selected.required_features,
-            safety=safety,
+            safety=effective_safety,
+            variant_bodies=tuple(variant_bodies),
             documentation=primitive_documentation(
                 brief=selected.primitive.brief_description,
                 detailed=selected.primitive.detailed_description,
@@ -493,7 +530,7 @@ class Lowerer:
         )
         return LoweringResult(
             specialization=specialization,
-            diagnostics=sort_diagnostics(context.effects.diagnostics),
+            diagnostics=sort_diagnostics(diagnostics),
         )
 
     def _facts_for(self, catalog: Catalog) -> _LowererCatalogFacts:
@@ -738,51 +775,81 @@ def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
     where register_type == base_type (scalar/generic), so colliding overloads merge."""
 
     return tuple(
-        DEFAULT_SUPPORT_POLICY.overload_identity_token(
-            kind,
-            register_is_base=spec.register_is_base,
+        (
+            override
+            if override is not None
+            else DEFAULT_SUPPORT_POLICY.overload_identity_token(
+                kind,
+                register_is_base=spec.register_is_base,
+            )
         )
-        for kind in spec.param_kinds
+        for kind, override in zip(spec.param_kinds, spec.effective_param_type_overrides)
     )
 
 
-def _find_region(segments: tuple[Segment, ...] | None, keyword: str) -> Region | None:
-    """Find a region by keyword, descending into ``if`` branch blocks and ``switch`` arms so an
-    ``complete`` guarded by ``if<generation>`` / inside a ``switch<compile>`` arm still counts
-    as present (every arm returns, so finding it in any arm is sufficient)."""
+def _param_type_overrides(
+    primitive: Primitive,
+    parameters: tuple[str, ...],
+    context: LoweringSession,
+    region_lowerers: tuple[RegionLowerer, ...],
+) -> tuple[str | None, ...]:
+    overrides: list[str | None] = []
+    renderer = ExpressionRenderer(context, region_lowerers)
+    for parameter_name in parameters:
+        rule = next(
+            (
+                rule
+                for rule in primitive.param_type_rules
+                if rule.parameter_name == parameter_name
+                and rule.attribute_name is None
+            ),
+            None,
+        )
+        if rule is None:
+            overrides.append(None)
+            continue
+        text = _render_param_type_expr(rule.type_expr, context, renderer, rule.source)
+        if not text:
+            context.effects.skip(
+                "TSL-LOWER-UNSUPPORTED-PARAM-TYPE",
+                f"could not resolve param_types default for {parameter_name!r}",
+                source=rule.source,
+            )
+            overrides.append(None)
+            continue
+        overrides.append(text)
+    return tuple(overrides)
 
-    if segments is None:
+
+def _render_param_type_expr(
+    type_expr: str,
+    context: LoweringSession,
+    renderer: ExpressionRenderer,
+    source: SourceSpan | None,
+) -> str:
+    if context.env.backend.backend_id == "rust":
+        pointer = _split_c_like_pointer_type(type_expr)
+        if pointer is not None:
+            base_expr, is_const = pointer
+            base = render_text(renderer.render(scan(base_expr, source=source))).strip()
+            if not base:
+                return ""
+            return f"*{'const' if is_const else 'mut'} {base}"
+    return render_text(renderer.render(scan(type_expr, source=source))).strip()
+
+
+def _split_c_like_pointer_type(type_expr: str) -> tuple[str, bool] | None:
+    text = type_expr.strip()
+    if not text.endswith("*"):
         return None
-    for segment in segments:
-        if isinstance(segment, Region):
-            if segment.keyword == keyword:
-                return segment
-            if segment.keyword == "if":
-                nested = _find_region(segment.block, keyword)
-                if nested is None and segment.else_block is not None:
-                    nested = _find_region(segment.else_block, keyword)
-                if nested is not None:
-                    return nested
-            if segment.keyword == "switch" and segment.arms is not None:
-                for _label, body in segment.arms:
-                    nested = _find_region(body, keyword)
-                    if nested is not None:
-                        return nested
-    return None
-
-
-def _finish_consumed_statement_terminator(
-    region: Region,
-    lowerer: RegionLowerer,
-    rendered: RenderText,
-) -> RenderText:
-    if not region.has_statement_terminator:
-        return rendered
-    if region.block or region.else_block is not None or region.arms is not None:
-        return rendered
-    if isinstance(lowerer, StatementFinalizer):
-        return as_render_text(lowerer.finish_statement(rendered, region))
-    return render_sequence((rendered, literal_text(";")))
+    base = text[:-1].rstrip()
+    is_const = False
+    if base.endswith("const"):
+        is_const = True
+        base = base[:-len("const")].rstrip()
+    if not base:
+        return None
+    return base, is_const
 
 
 def _error(code: str, message: str, *, source: SourceSpan | None = None) -> LoweringResult:

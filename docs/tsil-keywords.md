@@ -30,9 +30,10 @@ loop<selector>(var, start, end, step) { body }
 switch<compile>(selector) { label => { body } _ => { body } }
 ```
 
-Catalog validation checks malformed region shells before lowering. Today,
-`intrin`, `helper`, `let`, `cast`, and `call` have extra shell validation
-because their selectors have structured syntax.
+Catalog validation checks malformed region shells before lowering. Regions with
+structured selectors or argument shells, such as `intrin`, `helper`, `var`,
+`let`, `mask`, `cast`, `call`, `type`, and `value`, have extra shell
+validation before backend lowering.
 
 ## Keyword Inventory
 
@@ -102,6 +103,7 @@ var<infer>(name, value)
 var<const_infer>(name, value)
 var<typed>(type, name, value)
 var<const_typed>(type, name, value)
+var<runtime_array>(element_type, name, count)
 var<init_register>(name)
 var<const_init_register>(name)
 ```
@@ -113,7 +115,10 @@ The register forms declare zero-initialized vector registers.
 Lowering renders the appropriate `var_*` backend translate template. A typed
 declaration initialized with `value(uninit::array)` routes to the
 type-carrying `var_array_uninit` template so Rust can use `MaybeUninit` while
-C++ can use a normal value-initialized array.
+C++ can use a normal value-initialized array. `var<runtime_array>` declares
+mutable runtime-sized scratch storage for `count` elements of `element_type`;
+the backend owns cleanup and exposes `name` as pointer-like storage for the
+current function body.
 
 ### `let`
 
@@ -358,9 +363,10 @@ value(query)
 ```
 
 Use `value` to splice generated constants or backend-specific value fragments
-into an expression. Common queries include `vector::length`,
-`vector::alignment`, `generic::length(...)`, `type::size_bytes(...)`,
-`primitive::attribute(...)`, and `select(...)`.
+into an expression. Common queries include `vector::length` for static lane
+counts, `vector::runtime_length` for runtime lane counts, `vector::alignment`,
+`generic::length(...)`, `generic::runtime_length(...)`,
+`type::size_bytes(...)`, `primitive::attribute(...)`, and `select(...)`.
 
 Lowering uses the same query evaluator as `type`. Text values become literal
 rendered text, type values become backend scalar spellings, and vector values

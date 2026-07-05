@@ -45,6 +45,7 @@ def build_test_cases(
         to_type = _field_text(entries.get("to_type"))
         to_extension = _field_text(entries.get("to_extension"))
         index = _opt_int(_field_text(entries.get("index")))
+        index_type = _field_text(entries.get("index_type"))
         lanes = infer_test_lane_count(
             shape=parse_signature(declaration.signature),
             inputs=inputs,
@@ -61,6 +62,7 @@ def build_test_cases(
             to_type=to_type,
             to_extension=to_extension,
             index=index,
+            index_type=index_type,
             attrs=attrs,
         )
         cases.append(
@@ -78,6 +80,7 @@ def build_test_cases(
                 to_type=to_type,
                 to_extension=to_extension,
                 index=index,
+                index_type=index_type,
                 offset=_opt_int(_field_text(entries.get("offset"))),
                 src_offset=_opt_int(_field_text(entries.get("src_offset"))),
                 dst_offset=_opt_int(_field_text(entries.get("dst_offset"))),

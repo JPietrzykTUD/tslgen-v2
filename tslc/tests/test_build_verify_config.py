@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -66,6 +67,36 @@ def test_cpp_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
     assert seen[0].argv[0] == "/usr/bin/c++"
     assert _env(seen[1])["CXX"] == "/usr/bin/c++"
     assert _env(seen[2])["CXX"] == "/usr/bin/c++"
+
+
+def test_native_cpp_verifier_uses_host_compiler_over_ambient_zig(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("CXX", "zig c++")
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="cpp",
+                root_path="cpp",
+                profiles=(VerifyProfile(profile_name="scalar", file_stem="scalar"),),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(tmp_path, project, runner)
+
+    assert report.diagnostics == ()
+    assert report.skipped == ()
+    assert [command.step for command in seen] == ["preflight", "configure", "build"]
+    assert seen[0].argv[0] == "c++"
+    assert _env(seen[1])["CXX"] == "c++"
+    assert _env(seen[2])["CXX"] == "c++"
 
 
 def test_cpp_verifier_skips_after_failed_preflight(
@@ -286,6 +317,41 @@ def test_subprocess_runner_closes_command_stdin(tmp_path: Path) -> None:
     assert result.stdout.strip() == "empty"
 
 
+def test_subprocess_runner_installs_rustc_stdin_guard_for_cargo(tmp_path: Path) -> None:
+    cargo = tmp_path / "cargo"
+    cargo.write_text(
+        "\n".join(
+            (
+                "#!/usr/bin/env python3",
+                "import os",
+                "import sys",
+                "print(os.environ['RUSTC_WRAPPER'])",
+                "print(repr(sys.stdin.read()))",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    cargo.chmod(0o755)
+    command = BuildCommand(
+        backend_id="rust",
+        profile_name="unit",
+        step="cargo",
+        argv=(str(cargo),),
+        cwd=tmp_path,
+    )
+
+    result = run_subprocess_build_command(command)
+
+    assert result.returncode == 0
+    wrapper_path, stdin = result.stdout.splitlines()
+    wrapper = Path(wrapper_path)
+    assert wrapper.is_file()
+    assert os.access(wrapper, os.X_OK)
+    assert "fn main()" in wrapper.read_text(encoding="utf-8")
+    assert stdin == repr("")
+
+
 def test_subprocess_runner_replaces_invalid_output_bytes(tmp_path: Path) -> None:
     command = BuildCommand(
         backend_id="rust",
@@ -338,7 +404,7 @@ def test_subprocess_runner_defaults_zig_cache_under_command_root(
     assert Path(global_cache).name == "global"
 
 
-def test_cpp_value_test_run_can_be_wrapped_with_sde(tmp_path: Path) -> None:
+def test_cpp_value_test_run_configures_sde_as_test_launcher(tmp_path: Path) -> None:
     project = VerifyProject(
         backends=(
             VerifyBackend(
@@ -380,9 +446,10 @@ def test_cpp_value_test_run_can_be_wrapped_with_sde(tmp_path: Path) -> None:
         "build-values",
         "test",
     ]
+    configure = seen[2].argv
+    assert f"-DTSL_TEST_LAUNCHER={sys.executable};-hsw;--" in configure
     assert seen[-2].argv[0] == "cmake"
-    assert seen[-1].argv[:3] == (sys.executable, "-hsw", "--")
-    assert seen[-1].argv[3] == "ctest"
+    assert seen[-1].argv[0] == "ctest"
 
 
 def test_sde_cpp_value_tests_pin_default_compiler_over_ambient_cxx(
@@ -508,7 +575,6 @@ def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(tmp_path: Path) -> 
 
     assert report.diagnostics == ()
     assert [command.step for command in seen] == [
-        "preflight",
         "target-preflight",
         "clean",
         "configure",
@@ -517,8 +583,8 @@ def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(tmp_path: Path) -> 
         "test",
     ]
     assert seen[0].argv[0] == "clang++"
-    assert "--target=aarch64-linux-gnu" in seen[1].argv
-    configure = seen[3].argv
+    assert "--target=aarch64-linux-gnu" in seen[0].argv
+    configure = seen[2].argv
     assert "-DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-gnu" in configure
     assert (
         f"-DCMAKE_CROSSCOMPILING_EMULATOR={sys.executable};-cpu;cortex-a76"

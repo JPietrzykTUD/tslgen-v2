@@ -4,8 +4,16 @@ from __future__ import annotations
 
 import pytest
 
+from tslc.backend.cpp import CppBackend
+from tslc.backend.rust import RustBackend
 from tslc.backend.translation import create_backend_dialect
-from tslc.catalog.model import Catalog, Extension, Implementation, Primitive
+from tslc.catalog.model import (
+    Catalog,
+    Extension,
+    GenericParam,
+    Implementation,
+    Primitive,
+)
 from tslc.catalog.target_families import ProfileFamilyCapability, TargetFamilyCatalog
 from tslc.lower import lowerer as lowerer_module
 from tslc.lower.lowerer import Lowerer
@@ -208,6 +216,110 @@ def test_backend_value_query_uses_backend_translation_template(
     assert "core::arch::x86_64::_MM_FROUND_TO_ZERO" in rust.body_text
 
 
+@pytest.mark.parametrize(
+    ("backend_id", "expected"),
+    (
+        ("cpp", "return IndexVec::lane_count_v;"),
+        ("rust", "return IndexVec::ELEMENT_COUNT;"),
+    ),
+)
+def test_simd_type_generic_param_queries_lower_from_authored_name(
+    catalog: Catalog,
+    backend_id: str,
+    expected: str,
+) -> None:
+    impl = Implementation(
+        ("avx2", "all"),
+        "avx2",
+        "all",
+        "complete(value(generic::length(IndexVec)));",
+        source_order=0,
+    )
+    primitive = Primitive(
+        name="index_lane_probe",
+        signature="usize:=vidx",
+        parameters=("index",),
+        attribute_keys=(),
+        generic_params=(
+            GenericParam(
+                "IndexVec",
+                "simd_type",
+                "",
+                base_type_constraints=("?i32",),
+            ),
+        ),
+        implementations=(impl,),
+    )
+    slot = SelectedImplementation(
+        primitive=primitive,
+        implementation=impl,
+        extension=catalog.extensions["avx2"],
+        type_tag="si32",
+    )
+
+    lowered = Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend_id))
+
+    assert lowered.diagnostics == ()
+    assert lowered.specialization is not None
+    assert tuple(
+        (param.name, param.bounds, param.base_type_constraints)
+        for param in lowered.specialization.type_params
+    ) == (("IndexVec", (), ("?i32",)),)
+    assert lowered.specialization.body_text == expected
+
+
+@pytest.mark.parametrize(
+    ("backend_id", "expected_call"),
+    (
+        ("cpp", "to_array<IndexVec>(index)"),
+        ("rust", "to_array::<IndexVec>(index)"),
+    ),
+)
+def test_simd_type_generic_param_can_target_primitive_call(
+    catalog: Catalog,
+    backend_id: str,
+    expected_call: str,
+) -> None:
+    impl = Implementation(
+        ("avx2", "all"),
+        "avx2",
+        "all",
+        """
+        var<infer>(idx_array, call<primitive=to_array[IndexVec]>(index));
+        complete(idx_array[0]);
+        """,
+        source_order=0,
+    )
+    primitive = Primitive(
+        name="index_array_probe",
+        signature="usize:=vidx",
+        parameters=("index",),
+        attribute_keys=(),
+        generic_params=(
+            GenericParam(
+                "IndexVec",
+                "simd_type",
+                "",
+                base_type_constraints=("?i32",),
+            ),
+        ),
+        implementations=(impl,),
+    )
+    slot = SelectedImplementation(
+        primitive=primitive,
+        implementation=impl,
+        extension=catalog.extensions["avx2"],
+        type_tag="si32",
+    )
+
+    lowered = Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend_id))
+
+    assert lowered.diagnostics == ()
+    assert lowered.specialization is not None
+    assert expected_call in lowered.specialization.body_text
+    assert tuple(param.name for param in lowered.specialization.type_params) == ("IndexVec",)
+
+
 def test_sse41_cast_fast_path_wins_over_portable_fallback(
     catalog: Catalog, machine_profiles
 ) -> None:
@@ -269,6 +381,67 @@ def test_masked_set1_reuses_blend_and_set1_on_x86(
     assert "::tsl::blend<Vec>" in cpp.body_text
     assert "::tsl::set1<Vec>" in cpp.body_text
     assert "to_array" not in cpp.body_text
+
+
+def test_runtime_array_var_lowers_sve_scratch_storage(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slot = next(
+        s
+        for s in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["sve"],
+            "gather_narrow_partial",
+            ("ui16",),
+        )
+        .selected
+        if s.extension.name == "sve"
+    )
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert (
+        "std::vector<typename IndicesType::base_type> idx_array_storage"
+        in cpp.body_text
+    )
+    assert "std::vector<uint16_t> result_storage" in cpp.body_text
+    assert "auto *idx_array = idx_array_storage.data();" in cpp.body_text
+    assert "auto *result = result_storage.data();" in cpp.body_text
+    assert "std::malloc" not in cpp.body_text
+    assert "std::free" not in cpp.body_text
+
+
+def test_param_types_default_overrides_rendered_pointer_type(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slot = next(
+        s
+        for s in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "gather_narrow", ("ui16",))
+        .selected
+        if s.extension.name == "avx2"
+    )
+    lowerer = Lowerer()
+
+    cpp = lowerer.lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    rust = lowerer.lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+
+    assert cpp is not None
+    assert rust is not None
+    assert cpp.param_type_overrides[1] == "typename IndicesType::base_type const *"
+    assert rust.param_type_overrides[1] == "*const IndicesType::BaseType"
+    cpp_source = CppBackend().render_primitive("gather_narrow", (cpp,))
+    rust_source = RustBackend().render_primitive("gather_narrow", (rust,))
+    assert "typename IndicesType::base_type const * index_ptr" in cpp_source
+    assert "index_ptr: *const IndicesType::BaseType" in rust_source
 
 
 def test_consumed_tsil_statement_terminators_render_once() -> None:

@@ -14,7 +14,13 @@ from pathlib import Path
 from tslc.api import generate_project
 from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.model import Catalog
-from tslc.lower.context import LoweringEnv, LoweringScope, LoweringSession, VectorValue
+from tslc.lower.context import (
+    LoweringEnv,
+    LoweringScope,
+    LoweringSession,
+    SimdTypeParameterValue,
+    VectorValue,
+)
 from tslc.lower.lowerer import Lowerer
 from tslc.lower.queries import (
     DEFAULT_QUERY_FUNCTIONS,
@@ -59,6 +65,7 @@ def test_query_facade_separates_evaluator_from_namespace_functions() -> None:
     assert QueryEvaluator.__module__ == "tslc.lower.queries"
     assert modules_by_head["type::is_same"] == "tslc.lower._query_core"
     assert modules_by_head["vector::length"] == "tslc.lower._query_vector"
+    assert modules_by_head["vector::runtime_length"] == "tslc.lower._query_vector"
 
 
 def test_type_is_same_query(catalog: Catalog) -> None:
@@ -88,6 +95,23 @@ def test_select_query_chooses_same_kind_generation_value(catalog: Catalog) -> No
         "ui32, scalar::size)",
         ctx_f32,
     ) is None
+
+
+def test_runtime_vector_length_query_uses_static_or_declared_runtime_count(
+    catalog: Catalog,
+) -> None:
+    ev = QueryEvaluator()
+
+    assert ev.evaluate(
+        "value(vector::runtime_length)", _ctx(catalog, "avx2", "si32")
+    ) == TextValue("8")
+    assert ev.evaluate(
+        "value(vector::runtime_length)", _ctx(catalog, "generic", "si32")
+    ) == TextValue("LANES")
+    assert ev.evaluate(
+        "value(vector::runtime_length)", _ctx(catalog, "sve", "si32")
+    ) == TextValue("svcntb() / sizeof(int32_t)")
+    assert ev.evaluate("value(vector::length)", _ctx(catalog, "sve", "si32")) is None
 
 
 def test_named_stream_suffix_resolves_per_extension(catalog: Catalog) -> None:
@@ -127,11 +151,84 @@ def test_query_evaluator_returns_source_identities_for_type_and_vector_terms(cat
         "type(vector::as(sse, ToBase))", ctx
     ) == VectorValue(base_tag="ui16", extension_isa="sse", lanes=8)
     assert ev.evaluate(
+        "value(generic::runtime_length(vector::as(sve, ToBase)))", ctx
+    ) == TextValue("svcntb() / sizeof(uint16_t)")
+    assert ev.evaluate(
         "type(vector::transform_extension(ToBase))", ctx
     ) is None
     assert ev.evaluate(
         "type(vector::as_extension(sse, ToBase))", ctx
     ) is None
+
+
+def test_simd_type_generic_params_are_queryable_by_authored_name(
+    catalog: Catalog,
+) -> None:
+    ev = QueryEvaluator()
+    cpp = LoweringSession(
+        env=LoweringEnv(
+            catalog=catalog,
+            backend=create_backend_dialect(catalog, "cpp"),
+            extension=catalog.extensions["avx2"],
+            type_tag="si32",
+            simd_type_param_names=frozenset({"IndexVec", "SourceVec"}),
+        )
+    )
+    rust = LoweringSession(
+        env=LoweringEnv(
+            catalog=catalog,
+            backend=create_backend_dialect(catalog, "rust"),
+            extension=catalog.extensions["avx2"],
+            type_tag="si32",
+            simd_type_param_names=frozenset({"IndexVec"}),
+        )
+    )
+
+    assert ev.evaluate("IndexVec", cpp) == SimdTypeParameterValue("IndexVec")
+    assert ev.evaluate("SourceVec", cpp) == SimdTypeParameterValue("SourceVec")
+    assert ev.evaluate("OtherVec", cpp) == TextValue("OtherVec")
+    assert ev.evaluate("value(generic::length(OtherVec))", cpp) is None
+
+    assert ev.evaluate("value(generic::length(IndexVec))", cpp) == TextValue(
+        "IndexVec::lane_count_v"
+    )
+    assert ev.evaluate("value(generic::runtime_length(IndexVec))", cpp) == TextValue(
+        "IndexVec::lane_count()"
+    )
+    assert ev.evaluate("type(base::generic(IndexVec))", cpp) == TextValue(
+        "typename IndexVec::base_type"
+    )
+    assert ev.evaluate("type(register::generic(IndexVec))", cpp) == TextValue(
+        "typename IndexVec::register_type"
+    )
+
+    assert ev.evaluate("value(generic::length(IndexVec))", rust) == TextValue(
+        "IndexVec::ELEMENT_COUNT"
+    )
+    assert ev.evaluate("value(generic::runtime_length(IndexVec))", rust) == TextValue(
+        "IndexVec::lane_count()"
+    )
+    assert ev.evaluate("type(base::generic(IndexVec))", rust) == TextValue(
+        "IndexVec::BaseType"
+    )
+    assert ev.evaluate("type(register::generic(IndexVec))", rust) == TextValue(
+        "IndexVec::RegisterType"
+    )
+
+
+def test_lowering_env_freezes_simd_type_param_names(catalog: Catalog) -> None:
+    names = {"IndexVec"}
+    env = LoweringEnv(
+        catalog=catalog,
+        backend=create_backend_dialect(catalog, "cpp"),
+        extension=catalog.extensions["avx2"],
+        type_tag="si32",
+        simd_type_param_names=names,
+    )
+
+    names.add("OtherVec")
+
+    assert env.simd_type_param_names == frozenset({"IndexVec"})
 
 
 # --- if<generation> lowering (taken branch only) -----------------------------

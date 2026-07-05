@@ -182,21 +182,30 @@ def _pointer_free(case: ValueTestCasePlan) -> str:
 
 def _indexed_load(case: ValueTestCasePlan) -> str:
     data = cpp_literal_list(case.vector_inputs[0], case.type_tag)
-    indices = cpp_literal_list(case.vector_inputs[1], case.type_tag)
+    index_type = case.index_type_tag or case.type_tag
+    index_base = case.index_base_spelling or case.base_spelling
+    indices = cpp_literal_list(case.vector_inputs[1], index_type)
     expected = cpp_literal_list(case.expected, case.type_tag)
     lanes = case.target_lanes or len(case.expected)
+    index_lanes = case.index_lanes or lanes
     scale = case.immediate_value or "1"
+    pointer_indices = tuple(case.param_kinds) == ("cptr", "cptr", "sImm")
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{lanes}>>;",
-        f"  using Indices = tsl::simd<{case.base_spelling}, tsl::generic<{lanes}>>;",
+        f"  using Indices = tsl::simd<{index_base}, tsl::generic<{index_lanes}>>;",
         f"  static const {case.base_spelling} data_in[{len(case.vector_inputs[0])}] = {{{data}}};",
-        f"  static const {case.base_spelling} idx_in[{lanes}] = {{{indices}}};",
+        f"  static const {index_base} idx_in[{index_lanes}] = {{{indices}}};",
         f"  {case.base_spelling} data[{len(case.vector_inputs[0])}] = {{0}};",
         f"  for (std::size_t i = 0; i < {len(case.vector_inputs[0])}; ++i) data[i] = data_in[i];",
-        "  typename Indices::register_type idx;",
-        f"  for (std::size_t i = 0; i < {lanes}; ++i) idx[i] = idx_in[i];",
     ]
+    if not pointer_indices:
+        lines.extend(
+            [
+                "  typename Indices::register_type idx;",
+                f"  for (std::size_t i = 0; i < {index_lanes}; ++i) idx[i] = idx_in[i];",
+            ]
+        )
     if case.mask_inputs:
         source = cpp_literal_list(case.vector_inputs[2], case.type_tag)
         lines.append(f"  typename Vec::mask_type mask = {_uint_literal(case.mask_inputs[0])};")
@@ -206,6 +215,11 @@ def _indexed_load(case: ValueTestCasePlan) -> str:
         lines.append(
             f"  typename Vec::register_type result = "
             f"tsl::{case.call_name}<Vec, Indices, {scale}>(mask, data, idx, source);"
+        )
+    elif pointer_indices:
+        lines.append(
+            f"  typename Vec::register_type result = "
+            f"tsl::{case.call_name}<Vec, Indices, {scale}>(data, idx_in);"
         )
     else:
         lines.append(
@@ -224,21 +238,25 @@ def _indexed_load(case: ValueTestCasePlan) -> str:
 
 def _indexed_store(case: ValueTestCasePlan) -> str:
     values = cpp_literal_list(case.vector_inputs[0], case.type_tag)
-    indices = cpp_literal_list(case.vector_inputs[1], case.type_tag)
+    index_type = case.index_type_tag or case.type_tag
+    index_base = case.index_base_spelling or case.base_spelling
+    indices = cpp_literal_list(case.vector_inputs[1], index_type)
     expected = cpp_literal_list(case.expected, case.type_tag)
     lanes = case.lanes
+    index_lanes = case.index_lanes or lanes
     scale = case.immediate_value or "1"
     buflen = case.buffer_length or len(case.expected)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{lanes}>>;",
-        f"  using Indices = tsl::simd<{case.base_spelling}, tsl::generic<{lanes}>>;",
+        f"  using Indices = tsl::simd<{index_base}, tsl::generic<{index_lanes}>>;",
         f"  static const {case.base_spelling} value_in[{lanes}] = {{{values}}};",
-        f"  static const {case.base_spelling} idx_in[{lanes}] = {{{indices}}};",
+        f"  static const {index_base} idx_in[{index_lanes}] = {{{indices}}};",
         f"  {case.base_spelling} data[{buflen}] = {{0}};",
         "  typename Vec::register_type values;",
         "  typename Indices::register_type idx;",
-        f"  for (std::size_t i = 0; i < {lanes}; ++i) {{ values[i] = value_in[i]; idx[i] = idx_in[i]; }}",
+        f"  for (std::size_t i = 0; i < {lanes}; ++i) values[i] = value_in[i];",
+        f"  for (std::size_t i = 0; i < {index_lanes}; ++i) idx[i] = idx_in[i];",
     ]
     if case.mask_inputs:
         lines.append(f"  typename Vec::mask_type mask = {_uint_literal(case.mask_inputs[0])};")

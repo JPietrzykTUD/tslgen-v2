@@ -25,6 +25,7 @@ from tslc.render._common import (
     used_exts,
     used_type_specs,
 )
+from tslc.render.model import TemplateApplication
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 if TYPE_CHECKING:
@@ -182,11 +183,17 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
         f"template <class T>\n"
         f"struct simd<T, {ext}> {{\n"
         f"    using base_type = T;\n"
+        f"    using extension_type = {ext};\n"
         f"    using register_type = typename detail::{helper}<T>::type;\n"
         f"    using mask_type = {mask};\n"
         f"    using imask_type = {imask};\n"
-        f"    static constexpr std::size_t vector_element_count = {bits} / (sizeof(T) * 8);\n"
+        f"    template <class ToBase>\n"
+        f"    using with_base_type = simd<ToBase, {ext}>;\n"
+        f"    template <class ToExtension>\n"
+        f"    using with_extension = simd<T, ToExtension>;\n"
+        f"{_cpp_static_element_count_metadata(f'{bits} / (sizeof(T) * 8)')}"
         f"    static constexpr std::size_t vector_alignment = {alignment};\n"
+        "    static constexpr std::size_t simd_register_alignment_v = vector_alignment;\n"
         f"}};\n\n"
     )
 
@@ -218,57 +225,96 @@ def _cpp_native_registration(
         mask = _cpp_mask_type(extension, bits, register, base_type=base)
         imask = _cpp_imask_type(extension, bits, mask, base_type=base)
         alignment = DEFAULT_SUPPORT_POLICY.vector_alignment_bytes(extension, type_tag)
-        lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
-        element_count = (
-            ""
-            if lane_count is None
-            else f"    static constexpr std::size_t vector_element_count = {lane_count};\n"
-        )
+        element_count = _cpp_element_count_metadata(extension, type_tag, base)
         lines.append(
             f"template <>\n"
             f"struct simd<{base}, {ext}> {{\n"
             f"    using base_type = {base};\n"
+            f"    using extension_type = {ext};\n"
             f"    using register_type = {register};\n"
             f"    using mask_type = {mask};\n"
             f"    using imask_type = {imask};\n"
+            f"    template <class ToBase>\n"
+            f"    using with_base_type = simd<ToBase, {ext}>;\n"
+            f"    template <class ToExtension>\n"
+            f"    using with_extension = simd<{base}, ToExtension>;\n"
             f"{element_count}"
             f"    static constexpr std::size_t vector_alignment = {alignment};\n"
+            "    static constexpr std::size_t simd_register_alignment_v = vector_alignment;\n"
             f"}};\n\n"
         )
     return "".join(lines)
+
+
+def _cpp_static_element_count_metadata(count_expr: str) -> str:
+    return (
+        "    static constexpr bool has_static_lane_count_v = true;\n"
+        f"    static constexpr std::size_t lane_count_v = {count_expr};\n"
+        "    static constexpr std::size_t vector_element_count = lane_count_v;\n"
+        "    static constexpr std::size_t lane_count() noexcept {\n"
+        "        return lane_count_v;\n"
+        "    }\n"
+    )
+
+
+def _cpp_element_count_metadata(
+    extension: Extension,
+    type_tag: str,
+    base_type: str,
+) -> str:
+    lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
+    if lane_count is not None:
+        return _cpp_static_element_count_metadata(str(lane_count))
+    runtime = extension.runtime_lane_count.get("cpp")
+    if runtime is None:
+        raise ValueError(
+            f"extension {extension.name!r} needs a runtime_lane_count entry "
+            "for backend 'cpp' for scalable C++ vector registration"
+        )
+    runtime = TemplateApplication(
+        f"{extension.name}.runtime_lane_count.cpp",
+        runtime,
+        {"base_type": base_type, "base": base_type, "type_tag": type_tag},
+    ).render()
+    return (
+        "    static constexpr bool has_static_lane_count_v = false;\n"
+        "    static std::size_t lane_count() noexcept {\n"
+        f"        return {runtime};\n"
+        "    }\n"
+    )
 
 
 def _cpp_inferred_simd_registrations(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     extensions: Mapping[str, Extension],
 ) -> str:
-    """Specialize ``inferred_simd<T, N>`` for fixed-width vectors in this profile."""
+    """Specialize C++ SIMD inference helpers for vectors in this profile."""
 
     candidates: dict[tuple[str, int], tuple[tuple[int, int, str], str]] = {}
+    native_candidates: dict[str, tuple[tuple[int, int, str], str]] = {}
     for ext, type_tag, base in used_type_specs(by_primitive):
         extension = extensions.get(ext)
         if extension is None or DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
             continue
-        lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
-        if lane_count is None:
-            continue
-        if (
-            extension.vector_bits > 0
-            and not is_x86_register_extension(extension)
-            and extension.direct_vector_register_type("cpp", type_tag) is None
-        ):
+        if not _cpp_extension_register_is_available(extension, type_tag):
             continue
         preference = (
             extension.metadata.native_sort_order or 0,
             extension.vector_bits,
             extension.isa_name,
         )
+        current_native = native_candidates.get(base)
+        if current_native is None or preference > current_native[0]:
+            native_candidates[base] = (preference, extension.isa_name)
+        lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
+        if lane_count is None:
+            continue
         key = (base, lane_count)
         current = candidates.get(key)
         if current is None or preference > current[0]:
             candidates[key] = (preference, extension.isa_name)
 
-    if not candidates:
+    if not candidates and not native_candidates:
         return ""
 
     lines = ["namespace detail {\n"]
@@ -279,8 +325,23 @@ def _cpp_inferred_simd_registrations(
             f"    using type = ::tsl::simd<{base}, ::tsl::{ext}>;\n"
             f"}};\n\n"
         )
+    for base, (_preference, ext) in sorted(native_candidates.items()):
+        lines.append(
+            f"template <>\n"
+            f"struct native_simd<{base}> {{\n"
+            f"    using type = ::tsl::simd<{base}, ::tsl::{ext}>;\n"
+            f"}};\n\n"
+        )
     lines.append("}  // namespace detail\n\n")
     return "".join(lines)
+
+
+def _cpp_extension_register_is_available(extension: Extension, type_tag: str) -> bool:
+    if extension.vector_bits <= 0 and not DEFAULT_SUPPORT_POLICY.uses_scalable_vector(extension):
+        return True
+    return is_x86_register_extension(extension) or (
+        extension.direct_vector_register_type("cpp", type_tag) is not None
+    )
 
 
 def _cpp_mask_type(
@@ -320,8 +381,19 @@ def _cpp_imask_type(
 def _cpp_profiles_support_algorithm(profiles: tuple[ProfileRender, ...]) -> bool:
     if not profiles:
         return False
+    required = {
+        "load",
+        "store",
+        "store_mask",
+        "to_integral",
+        "to_mask",
+        "gather_narrow",
+        "compress_store",
+        "mask_population_count",
+        "mask_binary_and",
+    }
     return all(
-        {"load", "store"} <= set(profile_render.specializations("cpp"))
+        required <= set(profile_render.specializations("cpp"))
         for profile_render in profiles
     )
 

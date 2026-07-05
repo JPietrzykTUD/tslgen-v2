@@ -11,8 +11,8 @@ from tslc.output._verify_common import (
     configured_emulator_kinds,
     cpp_environment,
     cpp_target,
-    ctest_prefix,
     effective_cpp_compiler,
+    emulator_prefix,
     missing_executable,
 )
 from tslc.output.verify_drivers import VerifyBackendDriver
@@ -50,17 +50,24 @@ def _prepare_cpp_backend(
     if missing_compiler is not None:
         skipped.append(f"cpp: C++ compiler {missing_compiler} not found")
         return None
-    preflight = _cpp_preflight_command(root, backend, compiler)
-    if isinstance(preflight, Diagnostic):
-        diagnostics.append(preflight)
-        return None
-    result = runner(preflight)
-    results.append(result)
-    if result.returncode != 0:
-        skipped.append(_cpp_preflight_skip(result))
-        return None
+    native_preflight_ok = True
+    if any(cpp_target(profile, config) is None for profile in backend.profiles):
+        preflight = _cpp_preflight_command(root, backend, compiler)
+        if isinstance(preflight, Diagnostic):
+            diagnostics.append(preflight)
+            native_preflight_ok = False
+        else:
+            result = runner(preflight)
+            results.append(result)
+            if result.returncode != 0:
+                skipped.append(_cpp_preflight_skip(result))
+                native_preflight_ok = False
     target_profiles: list[VerifyProfile] = []
     for profile in backend.profiles:
+        if cpp_target(profile, config) is None:
+            if native_preflight_ok:
+                target_profiles.append(profile)
+            continue
         target_preflight = _cpp_target_preflight_command(
             root,
             backend,
@@ -68,9 +75,6 @@ def _prepare_cpp_backend(
             config,
             compiler,
         )
-        if target_preflight is None:
-            target_profiles.append(profile)
-            continue
         if isinstance(target_preflight, Diagnostic):
             diagnostics.append(target_preflight)
             continue
@@ -162,7 +166,6 @@ def _cpp_command_groups(
                     profile_name=profile.profile_name,
                     step="test",
                     argv=(
-                        *ctest_prefix(profile, config),
                         "ctest",
                         "--test-dir",
                         str(build_dir),
@@ -204,7 +207,19 @@ def _cpp_configure_args(
     cross_emulator = cmake_cross_emulator(profile, config)
     if cross_emulator:
         args.append(f"-DCMAKE_CROSSCOMPILING_EMULATOR={';'.join(cross_emulator)}")
+    test_launcher = _cmake_test_launcher(profile, config)
+    if test_launcher:
+        args.append(f"-DTSL_TEST_LAUNCHER={';'.join(test_launcher)}")
     return tuple(args)
+
+
+def _cmake_test_launcher(
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+) -> tuple[str, ...]:
+    if profile.emulator is None or profile.emulator.kind != "sde":
+        return ()
+    return emulator_prefix(profile, config)
 
 
 def _cpp_preflight_command(

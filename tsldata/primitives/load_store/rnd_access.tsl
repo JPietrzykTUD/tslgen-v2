@@ -435,9 +435,10 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
         implementation:
           tsil """
             let<type>(Base, type(base::in));
+            let<type>(IndexBase, type(base::generic(IndicesType)));
             var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-            var<const_infer>(idx_array, static_cast<typename IndicesType::base_type *>(std::malloc(lanes * sizeof(typename IndicesType::base_type))));
-            var<const_infer>(result, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+            var<runtime_array>(IndexBase, idx_array, lanes);
+            var<runtime_array>(Base, result, lanes);
             intrin<svst1>(
               call<primitive=mask_true[IndicesType]>(),
               idx_array,
@@ -447,8 +448,6 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
               result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
             }
             var<const_infer>(loaded, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result));
-            std::free(idx_array);
-            std::free(result);
             complete(loaded);
           """
     [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
@@ -490,6 +489,265 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
               cast<reinterpret, type=const_ptr>(
                 type(base::in),
                 ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[0], scale))
+              )
+            );
+            complete(*ptr);
+          """
+prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
+  brief_description "Gathers narrow memory elements with a wider index vector and zero-fills result lanes without an index."
+  detailed_description """
+    Loads non-contiguous memory elements through a SIMD index vector whose base
+    type is wider than the result vector base type. Only lanes covered by the
+    index vector are loaded. Remaining result lanes are set to zero.
+  """
+  semantics """
+    input: const pointer base_ptr, index register index, immediate scale
+    result = zero vector
+    for each lane i in index:
+      address = base_ptr + index[i] * scale bytes
+      result[i] = load element at address
+    return result
+    """
+  cross_lane true
+  generic_params:
+    IndicesType {kind simd_type, base_types [?i64]}
+    N {kind int, default 1}
+  tests:
+    - {tags [basic, partial], type "ui8", index_type "ui64", scale 1, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [0, 3]], expected [10, 13, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic, partial], type "si8", index_type "si64", scale 1, case {inputs [[-10, -9, -8, -7, -6, -5, -4, -3], [1, 6]], expected [-9, -4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic, partial], type "ui16", index_type "ui64", scale 2, case {inputs [[100, 101, 102, 103, 104, 105], [0, 4]], expected [100, 104, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic, partial], type "si16", index_type "si64", scale 2, case {inputs [[-100, -50, 0, 50, 100, 150], [1, 5]], expected [-50, 150, 0, 0, 0, 0, 0, 0]}}
+    - {tags [basic, partial], type "ui32", index_type "ui64", scale 4, case {inputs [[10, 20, 30, 40, 50, 60], [2, 4]], expected [30, 50, 0, 0]}}
+    - {tags [basic, partial], type "si32", index_type "si64", scale 4, case {inputs [[-10, -20, -30, -40, -50, -60], [0, 3]], expected [-10, -40, 0, 0]}}
+    - {tags [basic, partial], type "f32", index_type "si64", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5, 5.25, -6.25], [1, 4]], expected [-2.0, 5.25, 0.0, 0.0]}}
+  impls:
+    avx512:
+      ?i32:
+        requires [avx512f]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+            loop<backend, unroll>(i, 0, value(generic::length(IndicesType)), 1) {
+              result[i] = *(cast<reinterpret, type=const_ptr>(type(base::in), ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
+            }
+            complete(call<primitive=from_array[Vec]>(result));
+          """
+        variants:
+          intrinsic_gather:
+            safety:
+              internal_unsafe true
+              reasons [intrinsic]
+            tsil """
+              let<type>(SignedBase, type(base::signed_of(base::in)));
+              switch<compile>(scale) {
+                1 => {
+                  var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=1]>(
+                    index,
+                    cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
+                    1
+                  ));
+                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                }
+                2 => {
+                  var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=2]>(
+                    index,
+                    cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
+                    2
+                  ));
+                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                }
+                4 => {
+                  var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=4]>(
+                    index,
+                    cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
+                    4
+                  ));
+                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                }
+                8 => {
+                  var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=8]>(
+                    index,
+                    cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
+                    8
+                  ));
+                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                }
+                _ => {
+                  var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+                  var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+                  loop<backend, unroll>(i, 0, value(generic::length(IndicesType)), 1) {
+                    result[i] = *(cast<reinterpret, type=const_ptr>(type(base::in), ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
+                  }
+                  complete(call<primitive=from_array[Vec]>(result));
+                }
+              }
+            """
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
+      [bword, dword]:
+        requires:
+          avx512:
+            bword [avx512f, avx512bw]
+            dword [avx512f]
+          avx2 [avx, avx2]
+          avx2_vl [avx, avx2]
+          sse [sse, sse2]
+          sse_vl [sse, sse2]
+          neon [neon]
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+            loop<backend, unroll>(i, 0, value(generic::length(IndicesType)), 1) {
+              result[i] = *(cast<reinterpret, type=const_ptr>(type(base::in), ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
+            }
+            complete(call<primitive=from_array[Vec]>(result));
+          """
+    sve:
+      [bword, dword]:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, type(base::in));
+            let<type>(IndexBase, type(base::generic(IndicesType)));
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
+            var<runtime_array>(IndexBase, idx_array, index_lanes);
+            var<runtime_array>(Base, result, lanes);
+            intrin<svst1>(
+              call<primitive=mask_true[IndicesType]>(),
+              idx_array,
+              index
+            );
+            loop<backend>(i, 0, lanes, 1) {
+              result[i] = cast<static>(Base, 0);
+            }
+            loop<backend>(i, 0, index_lanes, 1) {
+              result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
+            }
+            var<const_infer>(loaded, intrin<svld1>(call<primitive=mask_true[Vec]>(), result));
+            complete(loaded);
+          """
+    scalar:
+      [bword, dword]:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
+            var<const_infer>(
+              ptr,
+              cast<reinterpret, type=const_ptr>(
+                type(base::in),
+                ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[0], scale))
+              )
+            );
+            complete(*ptr);
+          """
+prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
+  brief_description "Gathers narrow memory elements using a pointer to wider indices."
+  detailed_description """
+    Loads non-contiguous memory elements through a pointer to integral indices
+    whose type is selected by `IndicesType`. Unlike `gather_narrow_partial`, the
+    index pointer supplies one index for every output lane, so the result
+    register is filled completely.
+  """
+  semantics """
+    input: const pointer base_ptr, const pointer index_ptr, immediate scale
+    for each output lane i:
+      address = base_ptr + index_ptr[i] * scale bytes
+      result[i] = load element at address
+    return result
+    """
+  cross_lane true
+  generic_params:
+    IndicesType {kind simd_type, base_types [?i32, ?i64]}
+    N {kind int, default 1}
+  param_types:
+    index_ptr:
+      default "type(base::generic(IndicesType)) const *"
+  tests:
+    - {tags [basic], type "ui8", index_type "ui32", scale 1, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25], [0, 2, 4, 6, 8, 10, 12, 14, 15, 13, 11, 9, 7, 5, 3, 1]], expected [10, 12, 14, 16, 18, 20, 22, 24, 25, 23, 21, 19, 17, 15, 13, 11]}}
+    - {tags [basic], type "si8", index_type "si32", scale 1, case {inputs [[-10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5], [1, 3, 5, 7, 9, 11, 13, 15, 14, 12, 10, 8, 6, 4, 2, 0]], expected [-9, -7, -5, -3, -1, 1, 3, 5, 4, 2, 0, -2, -4, -6, -8, -10]}}
+    - {tags [basic], type "ui16", index_type "ui64", scale 2, case {inputs [[100, 101, 102, 103, 104, 105, 106, 107], [0, 1, 2, 3, 7, 6, 5, 4]], expected [100, 101, 102, 103, 107, 106, 105, 104]}}
+    - {tags [stride], type "si16", index_type "si64", scale 2, case {inputs [[-8, -6, -4, -2, 0, 2, 4, 6], [3, 1, 0, 2, 4, 6, 7, 5]], expected [-2, -6, -8, -4, 0, 4, 6, 2]}}
+    - {tags [basic], type "ui32", index_type "ui64", scale 4, case {inputs [[10, 20, 30, 40], [3, 0, 2, 1]], expected [40, 10, 30, 20]}}
+    - {tags [basic], type "si32", index_type "si64", scale 4, case {inputs [[-10, -20, -30, -40], [1, 2, 3, 0]], expected [-20, -30, -40, -10]}}
+    - {tags [basic], type "f32", index_type "si64", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [2, 0, 3, 1]], expected [3.5, 1.0, -4.5, -2.0]}}
+  impls:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
+      [bword, dword]:
+        requires:
+          avx512:
+            bword [avx512f, avx512bw]
+            dword [avx512f]
+          avx2 [avx, avx2]
+          avx2_vl [avx, avx2]
+          sse [sse, sse2]
+          sse_vl [sse, sse2]
+          neon [neon]
+          generic []
+          oneAPIfpga [oneAPIfpgaDev]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              result[i] = *(cast<reinterpret, type=const_ptr>(type(base::in), ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(*(ptr_add(index_ptr, i)), scale))));
+            }
+            complete(call<primitive=from_array[Vec]>(result));
+          """
+    sve:
+      [bword, dword]:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            let<type>(Base, type(base::in));
+            var<const_infer>(lanes, value(vector::runtime_length));
+            var<runtime_array>(Base, result, lanes);
+            loop<backend>(i, 0, lanes, 1) {
+              result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(*(ptr_add(index_ptr, i)), scale))));
+            }
+            complete(intrin<svld1>(call<primitive=mask_true[Vec]>(), result));
+          """
+    scalar:
+      [bword, dword]:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            var<const_infer>(
+              ptr,
+              cast<reinterpret, type=const_ptr>(
+                type(base::in),
+                ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(*(ptr_add(index_ptr, 0)), scale))
               )
             );
             complete(*ptr);
@@ -1093,9 +1351,10 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
         implementation:
           tsil """
             let<type>(Base, type(base::in));
+            let<type>(IndexBase, type(base::generic(IndicesType)));
             var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-            var<const_infer>(val_array, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
-            var<const_infer>(idx_array, static_cast<typename IndicesType::base_type *>(std::malloc(lanes * sizeof(typename IndicesType::base_type))));
+            var<runtime_array>(Base, val_array, lanes);
+            var<runtime_array>(IndexBase, idx_array, lanes);
             intrin<svst1, build>(call<primitive=mask_true[Vec]>(), val_array, a);
             intrin<svst1>(
               call<primitive=mask_true[IndicesType]>(),
@@ -1105,8 +1364,6 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
             loop<backend>(i, 0, lanes, 1) {
               *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
             }
-            std::free(val_array);
-            std::free(idx_array);
           """
     [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
       arith:

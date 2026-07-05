@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from tslc.lower._text import split_head_arg, split_top_level
-from tslc.lower.context import LoweringSession, VectorValue
+from tslc.lower.context import LoweringSession, SimdTypeParameterValue, VectorValue
 from tslc.render.model import RenderField, render_text
 
 
@@ -28,7 +28,7 @@ class BoolValue:
     value: bool
 
 
-QueryValue = TypeValue | TextValue | BoolValue | VectorValue
+QueryValue = TypeValue | TextValue | BoolValue | VectorValue | SimdTypeParameterValue
 
 
 @dataclass(frozen=True, slots=True)

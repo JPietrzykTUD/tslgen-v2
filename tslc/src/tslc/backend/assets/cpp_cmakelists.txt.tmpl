@@ -39,6 +39,7 @@ else()
   set(_TSL_BUILD_TESTS_DEFAULT OFF)
 endif()
 option(TSL_BUILD_TESTS "Build generated TSL smoke/value test targets" ${_TSL_BUILD_TESTS_DEFAULT})
+set(TSL_TEST_LAUNCHER "" CACHE STRING "Optional command prefix used by CTest to run generated test executables")
 
 # The smoke binary forces every wrapper specialization to compile; the values binary
 # runs the generated value-correctness checks (returns non-zero on a lane mismatch).
@@ -52,5 +53,9 @@ if(TSL_BUILD_TESTS)
   # complement) so the scalar `generic` reference agrees with wrapping SIMD on full-width random
   # inputs. Harmless for the in-range authored tests. GCC/Clang only (the supported toolchains).
   target_compile_options(tsl_values PRIVATE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-fwrapv>)
-  add_test(NAME values COMMAND tsl_values)
+  if(TSL_TEST_LAUNCHER)
+    add_test(NAME values COMMAND ${TSL_TEST_LAUNCHER} $<TARGET_FILE:tsl_values>)
+  else()
+    add_test(NAME values COMMAND tsl_values)
+  endif()
 endif()

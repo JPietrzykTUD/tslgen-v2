@@ -8,6 +8,7 @@ from tslc.catalog.validation._schema_common import (
     is_non_empty_scalar_list,
     validate_known_fields,
 )
+from tslc.catalog.scalar_types import KNOWN_SCALAR_TYPE_TAGS, is_type_tag
 from tslc.catalog.validation.source_spans import child, children, field_text, source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.ast import (
@@ -30,6 +31,7 @@ _KNOWN_TEST_FIELDS = frozenset(
         "to_type",
         "to_extension",
         "index",
+        "index_type",
         "offset",
         "src_offset",
         "dst_offset",
@@ -138,6 +140,14 @@ def _validate_test_case(
             entries.get("role"),
             f"test role {role!r}",
             sorted(_KNOWN_TEST_ROLES),
+        )
+    index_type = field_text(entries.get("index_type"))
+    if index_type is not None and not is_type_tag(index_type):
+        invalid_enum(
+            diagnostics,
+            entries.get("index_type"),
+            f"test index_type {index_type!r}",
+            sorted(KNOWN_SCALAR_TYPE_TAGS),
         )
     case = entries.get("case")
     if case is not None:

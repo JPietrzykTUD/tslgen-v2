@@ -240,23 +240,32 @@ def _pointer_free(case: ValueTestCasePlan) -> str:
 
 def _indexed_load(case: ValueTestCasePlan) -> str:
     data = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    indices = rust_literal_list(case.vector_inputs[1], case.type_tag)
+    index_type = case.index_type_tag or case.type_tag
+    index_base = case.index_base_spelling or case.base_spelling
+    indices = rust_literal_list(case.vector_inputs[1], index_type)
     expected = rust_literal_list(case.expected, case.type_tag)
     lanes = case.target_lanes or len(case.expected)
+    index_lanes = case.index_lanes or lanes
     scale = case.immediate_value or "1"
+    pointer_indices = tuple(case.param_kinds) == ("cptr", "cptr", "sImm")
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
         f"        type Vec = Simd<{case.base_spelling}, Generic<{lanes}>>;",
-        f"        type Indices = Simd<{case.base_spelling}, Generic<{lanes}>>;",
+        f"        type Indices = Simd<{index_base}, Generic<{index_lanes}>>;",
         f"        let data_in: [{case.base_spelling}; {len(case.vector_inputs[0])}] = [{data}];",
-        f"        let idx_in: [{case.base_spelling}; {lanes}] = [{indices}];",
+        f"        let idx_in: [{index_base}; {index_lanes}] = [{indices}];",
         f"        let mut data: [{case.base_spelling}; {len(case.vector_inputs[0])}] = "
         f"[Default::default(); {len(case.vector_inputs[0])}];",
         f"        for i in 0..{len(case.vector_inputs[0])} {{ data[i] = data_in[i]; }}",
-        "        let mut idx: <Indices as SimdVector>::RegisterType = Default::default();",
-        f"        for i in 0..{lanes} {{ idx[i] = idx_in[i]; }}",
     ]
+    if not pointer_indices:
+        lines.extend(
+            [
+                "        let mut idx: <Indices as SimdVector>::RegisterType = Default::default();",
+                f"        for i in 0..{index_lanes} {{ idx[i] = idx_in[i]; }}",
+            ]
+        )
     if case.mask_inputs:
         source = rust_literal_list(case.vector_inputs[2], case.type_tag)
         lines.append(f"        let mask: <Vec as SimdVector>::MaskType = {case.mask_inputs[0]}u64;")
@@ -265,12 +274,17 @@ def _indexed_load(case: ValueTestCasePlan) -> str:
         lines.append(f"        for i in 0..{lanes} {{ source[i] = source_in[i]; }}")
         lines.append(
             f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}"
-            f"::<Vec, Indices, {scale}, {lanes}>(mask, data.as_ptr(), idx, source) }};"
+            f"::<Vec, Indices, {scale}, {index_lanes}>(mask, data.as_ptr(), idx, source) }};"
+        )
+    elif pointer_indices:
+        lines.append(
+            f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}"
+            f"::<Vec, Indices, {scale}, {index_lanes}>(data.as_ptr(), idx_in.as_ptr()) }};"
         )
     else:
         lines.append(
             f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}"
-            f"::<Vec, Indices, {scale}, {lanes}>(data.as_ptr(), idx) }};"
+            f"::<Vec, Indices, {scale}, {index_lanes}>(data.as_ptr(), idx) }};"
         )
     lines.extend(
         [
@@ -286,33 +300,37 @@ def _indexed_load(case: ValueTestCasePlan) -> str:
 
 def _indexed_store(case: ValueTestCasePlan) -> str:
     values = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    indices = rust_literal_list(case.vector_inputs[1], case.type_tag)
+    index_type = case.index_type_tag or case.type_tag
+    index_base = case.index_base_spelling or case.base_spelling
+    indices = rust_literal_list(case.vector_inputs[1], index_type)
     expected = rust_literal_list(case.expected, case.type_tag)
     lanes = case.lanes
+    index_lanes = case.index_lanes or lanes
     scale = case.immediate_value or "1"
     buflen = case.buffer_length or len(case.expected)
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
         f"        type Vec = Simd<{case.base_spelling}, Generic<{lanes}>>;",
-        f"        type Indices = Simd<{case.base_spelling}, Generic<{lanes}>>;",
+        f"        type Indices = Simd<{index_base}, Generic<{index_lanes}>>;",
         f"        let value_in: [{case.base_spelling}; {lanes}] = [{values}];",
-        f"        let idx_in: [{case.base_spelling}; {lanes}] = [{indices}];",
+        f"        let idx_in: [{index_base}; {index_lanes}] = [{indices}];",
         f"        let mut data: [{case.base_spelling}; {buflen}] = [Default::default(); {buflen}];",
         "        let mut values: <Vec as SimdVector>::RegisterType = Default::default();",
         "        let mut idx: <Indices as SimdVector>::RegisterType = Default::default();",
-        f"        for i in 0..{lanes} {{ values[i] = value_in[i]; idx[i] = idx_in[i]; }}",
+        f"        for i in 0..{lanes} {{ values[i] = value_in[i]; }}",
+        f"        for i in 0..{index_lanes} {{ idx[i] = idx_in[i]; }}",
     ]
     if case.mask_inputs:
         lines.append(f"        let mask: <Vec as SimdVector>::MaskType = {case.mask_inputs[0]}u64;")
         lines.append(
             f"        unsafe {{ {rust_raw_identifier(case.call_name)}"
-            f"::<Vec, Indices, {scale}, {lanes}>(mask, data.as_mut_ptr(), idx, values); }}"
+            f"::<Vec, Indices, {scale}, {index_lanes}>(mask, data.as_mut_ptr(), idx, values); }}"
         )
     else:
         lines.append(
             f"        unsafe {{ {rust_raw_identifier(case.call_name)}"
-            f"::<Vec, Indices, {scale}, {lanes}>(data.as_mut_ptr(), idx, values); }}"
+            f"::<Vec, Indices, {scale}, {index_lanes}>(data.as_mut_ptr(), idx, values); }}"
         )
     lines.extend(
         [

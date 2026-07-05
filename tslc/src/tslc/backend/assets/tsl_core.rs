@@ -1,6 +1,7 @@
-// tslc static substrate (profile-independent). The SimdVector trait, the
-// Simd<BaseType, Extension> type, and the scalar registration. Per-profile modules
-// add the extension tags + SimdVector impls for the (type, ext) pairs they use.
+// tslc static substrate (profile-independent). The SimdVector/StaticSimdVector
+// traits, the Simd<BaseType, Extension> type, and the scalar registration.
+// Per-profile modules add the extension tags + vector impls for the
+// (type, ext) pairs they use.
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
@@ -9,6 +10,7 @@ use core::ops::{Index, IndexMut};
 
 pub trait SimdVector {
     type BaseType;
+    type Extension;
     type RegisterType;
     type MaskType;
     // The integral mask (to_integral's result): the mask packed into an unsigned integer,
@@ -20,8 +22,11 @@ pub trait SimdVector {
     // over a free `IndicesType` — can read/write lanes; concrete `array_type` already satisfies
     // this.
     type Array: Index<usize, Output = Self::BaseType> + IndexMut<usize>;
-    const ELEMENT_COUNT: usize;
+    type WithBaseType<ToBase>;
+    type WithExtension<ToExtension>;
     const ALIGN: usize;
+
+    fn lane_count() -> usize;
 
     // Test lane `index` of a register-backed lane mask (sse/avx2): the mask IS a data register
     // whose lanes are all-ones (set) or all-zeros (clear), so lane `index` is a BaseType-sized
@@ -43,6 +48,10 @@ pub trait SimdVector {
     }
 }
 
+pub trait StaticSimdVector: SimdVector {
+    const ELEMENT_COUNT: usize;
+}
+
 // scalar is always available and needs no SIMD substrate.
 pub struct Scalar;
 
@@ -50,12 +59,22 @@ pub struct Simd<T, Ext>(PhantomData<(T, Ext)>);
 
 impl<T> SimdVector for Simd<T, Scalar> {
     type BaseType = T;
+    type Extension = Scalar;
     type RegisterType = T;
     type MaskType = bool;
     type ImaskType = u64;
     type Array = array_type<T, 1>;
-    const ELEMENT_COUNT: usize = 1;
+    type WithBaseType<ToBase> = Simd<ToBase, Scalar>;
+    type WithExtension<ToExtension> = Simd<T, ToExtension>;
     const ALIGN: usize = core::mem::align_of::<T>();
+
+    fn lane_count() -> usize {
+        1
+    }
+}
+
+impl<T> StaticSimdVector for Simd<T, Scalar> {
+    const ELEMENT_COUNT: usize = 1;
 }
 
 // The `generic` portable vector: a sized, array-backed register parameterized by its lane
@@ -73,14 +92,24 @@ pub struct Generic<const LANES: usize>;
 // 128-bit-multiple lane count. Only a hand-written `Simd<u8, Generic<3>>` would violate it, unchecked.
 impl<T, const LANES: usize> SimdVector for Simd<T, Generic<LANES>> {
     type BaseType = T;
+    type Extension = Generic<LANES>;
     type RegisterType = array_type<T, LANES>;
     // Emulated mask: a bitset, one bit per lane (≤64 lanes covers all real widths).
     type MaskType = u64;
     // Integral mask: the same 64-bit bitset (LANES can't size a smaller integer here).
     type ImaskType = u64;
     type Array = array_type<T, LANES>;
-    const ELEMENT_COUNT: usize = LANES;
+    type WithBaseType<ToBase> = Simd<ToBase, Generic<LANES>>;
+    type WithExtension<ToExtension> = Simd<T, ToExtension>;
     const ALIGN: usize = core::mem::align_of::<array_type<T, LANES>>();
+
+    fn lane_count() -> usize {
+        LANES
+    }
+}
+
+impl<T, const LANES: usize> StaticSimdVector for Simd<T, Generic<LANES>> {
+    const ELEMENT_COUNT: usize = LANES;
 }
 
 // A fixed-size array buffer (the `s[]` kind), counterpart to the C++ `tsl::array_type`.

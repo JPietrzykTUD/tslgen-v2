@@ -55,16 +55,21 @@ class CppBackend:
             ", class ToVec" if shape.target is not None else ""
         )
         # Free SIMD type params (gather's `IndicesType`) — a caller-bound vector type, like ToVec.
-        decl_params += "".join(f", class {name}" for name, _ in shape.type_params)
+        decl_params += "".join(f", class {param.name}" for param in shape.type_params)
         decl_params += "".join(f", bool {_axis_name(k)}" for k, _ in shape.axis)
         if shape.immediate is not None:  # an `sImm` non-type template parameter
             decl_params += f", {shape.immediate[1]} {shape.immediate[0]}"
         # `generic_params` (e.g. `PreserveSign`) are free template params too (defaults go on
         # the wrapper, not the primary template).
         decl_params += "".join(f", {typ} {name}" for name, typ, _ in shape.generic_params)
+        variant_decls = "".join(
+            f"template <{decl_params}>\nstruct {_impl_name(primitive_name, name)};\n"
+            for name in _variant_names(specializations)
+        )
         return (
             "namespace detail::primitives {\n"
-            f"template <{decl_params}>\nstruct {primitive_name}_impl;\n"
+            f"template <{decl_params}>\nstruct {_impl_name(primitive_name)};\n"
+            f"{variant_decls}"
             "}  // namespace detail::primitives"
             + "\n\n"
             + self._wrapper(primitive_name, specializations)
@@ -98,7 +103,18 @@ class CppBackend:
                 groups[key] = []
                 order.append(key)
             groups[key].append(spec)
-        definitions = "\n\n".join(self._specialization(groups[key]) for key in order)
+        definitions_by_group: list[str] = []
+        for key in order:
+            group = groups[key]
+            definitions_by_group.append(self._specialization(group))
+            definitions_by_group.extend(
+                rendered
+                for name in _variant_names(group)
+                if (
+                    rendered := self._specialization(group, variant_name=name)
+                )
+            )
+        definitions = "\n\n".join(definitions_by_group)
         return (
             "namespace detail::primitives {\n"
             f"{definitions}\n"
@@ -124,7 +140,12 @@ class CppBackend:
     def documentation_target_register_type(self, spec: LoweredSpecialization) -> str:
         return _cpp_target_register_doc(spec)
 
-    def _specialization(self, group: list[LoweredSpecialization]) -> str:
+    def _specialization(
+        self,
+        group: list[LoweredSpecialization],
+        *,
+        variant_name: str | None = None,
+    ) -> str:
         first = group[0]
         # A sized vector is parameterized by its lane parameter, so it emits as a partial
         # specialization rather than a full specialization.
@@ -141,7 +162,7 @@ class CppBackend:
         if first.immediate is not None:
             free.append(f"{first.immediate[1]} {first.immediate[0]}")
         # Free SIMD type params are unbound in the (partial) specialization — head AND key.
-        free += [f"class {name}" for name, _ in first.type_params]
+        free += [f"class {param.name}" for param in first.type_params]
         free += [f"{typ} {name}" for name, typ, _ in first.generic_params]
         head = f"template <{', '.join(free)}>" if free else "template <>"
         # A boolean-wildcard attribute keys the specialization so both variants coexist.
@@ -150,7 +171,7 @@ class CppBackend:
         key = vec
         if first.target is not None:
             key += f", {first.target.vector_spelling}"
-        key += "".join(f", {name}" for name, _ in first.type_params)
+        key += "".join(f", {param.name}" for param in first.type_params)
         key += "".join(f", {value}" for _, value in first.axis)
         if first.immediate is not None:
             key += f", {first.immediate[0]}"
@@ -158,26 +179,38 @@ class CppBackend:
         applies: list[str] = []
         seen: set[tuple[str, ...]] = set()
         for spec in group:
+            body = _body_for(spec, variant_name)
+            if body is None:
+                continue
             # Dedup overloads that collapse to the same parameter types (a `v` and an
             # `s` parameter are identical where register_type == base_type, i.e. scalar).
             signature = effective_param_types(spec)
             if signature in seen:
                 continue
             seen.add(signature)
-            index_type = spec.type_params[0][0] if spec.type_params else None
+            index_type = spec.type_params[0].name if spec.type_params else None
             params = ", ".join(
-                f"{_param_type(kind, index_type)} {name}"
-                for name, kind in zip(spec.param_names, spec.param_kinds)
+                f"{_param_type_for(spec, i, kind, index_type)} {name}"
+                for i, (name, kind) in enumerate(
+                    zip(spec.param_names, spec.param_kinds)
+                )
                 if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
             )
-            doc = _cpp_doc(spec, context="C++ specialization", indent="    ")
+            doc_context = (
+                "C++ specialization"
+                if variant_name is None
+                else f"C++ specialization variant {variant_name}"
+            )
+            doc = _cpp_doc(spec, context=doc_context, indent="    ")
             prefix = f"{doc}\n" if doc else ""
             applies.append(
                 f"{prefix}"
                 f"    static inline {_apply_result_type(spec)} apply({params}) {{\n"
-                f"        {spec.body_text}\n"
+                f"        {body.render()}\n"
                 f"    }}"
             )
+        if not applies:
+            return ""
         # A representation-change spec exposes `ToVec` (the target vector) in the impl so a
         # `tv` param / the result can project through it (`typename ToVec::register_type`).
         to_vec = (
@@ -186,7 +219,7 @@ class CppBackend:
             else ""
         )
         return (
-            f"{head}\nstruct {first.primitive_name}_impl<{key}> {{\n"
+            f"{head}\nstruct {_impl_name(first.primitive_name, variant_name)}<{key}> {{\n"
             f"    using Vec = {vec};\n" + to_vec + "\n".join(applies) + "\n};"
         )
 
@@ -200,7 +233,7 @@ class CppBackend:
             prefix
             + f"template <{', '.join(signature.template_params)}>\n"
             f"inline {signature.result_type} {primitive_name}({signature.params}) {{\n"
-            f"    return ::tsl::detail::primitives::{primitive_name}_impl"
+            f"    return ::tsl::detail::primitives::{_impl_name(primitive_name)}"
             f"<{signature.impl_args}>::apply("
             f"{signature.argument_names});\n"
             f"}}"
@@ -241,11 +274,11 @@ def _wrapper_signature(
         else []
     )
     has_target = shape.target is not None
-    index_type = shape.type_params[0][0] if shape.type_params else None
+    index_type = shape.type_params[0].name if shape.type_params else None
     template_params = (
         ["class Vec"]
         + (["class ToVec"] if has_target else [])
-        + [f"class {name}" for name, _ in shape.type_params]
+        + [f"class {param.name}" for param in shape.type_params]
         + [f"bool {_axis_name(k)} = false" for k, _ in shape.axis]
         + immediate_params
         + [f"{typ} {name} = {default}" for name, typ, default in shape.generic_params]
@@ -255,7 +288,7 @@ def _wrapper_signature(
         (
             f"Arg{i} {name}"
             if i in varying
-            else f"{_param_type(kind, index_type)} {name}"
+            else f"{_param_type_for(shape, i, kind, index_type)} {name}"
         )
         for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
         if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
@@ -268,7 +301,7 @@ def _wrapper_signature(
     impl_args = (
         "Vec"
         + (", ToVec" if has_target else "")
-        + "".join(f", {name}" for name, _ in shape.type_params)
+        + "".join(f", {param.name}" for param in shape.type_params)
         + "".join(f", {_axis_name(k)}" for k, _ in shape.axis)
         + (f", {shape.immediate[0]}" if shape.immediate is not None else "")
         + "".join(f", {name}" for name, _, _ in shape.generic_params)
@@ -306,6 +339,35 @@ def _free_function(spec: LoweredSpecialization, *, define: bool) -> str:
         prefix = f"{doc}\n" if doc else ""
         return f"{prefix}{signature};"
     return f"{signature} {{\n    {spec.body_text}\n}}"
+
+
+def _impl_name(primitive_name: str, variant_name: str | None = None) -> str:
+    if variant_name is None:
+        return f"{primitive_name}_impl"
+    return f"{primitive_name}_impl_{variant_name}"
+
+
+def _variant_names(
+    specializations: tuple[LoweredSpecialization, ...] | list[LoweredSpecialization],
+) -> tuple[str, ...]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for spec in specializations:
+        for variant in spec.variant_bodies:
+            if variant.name in seen:
+                continue
+            seen.add(variant.name)
+            names.append(variant.name)
+    return tuple(names)
+
+
+def _body_for(spec: LoweredSpecialization, variant_name: str | None):
+    if variant_name is None:
+        return spec.body
+    for variant in spec.variant_bodies:
+        if variant.name == variant_name:
+            return variant.body
+    return None
 
 
 def _cpp_doc(
@@ -387,8 +449,8 @@ def _cpp_template_summary(spec: LoweredSpecialization) -> str:
     if spec.target is not None:
         params.append("ToVec selects the target SIMD vector type")
     params.extend(
-        f"{name} selects an additional SIMD vector type"
-        for name, _ in spec.type_params
+        f"{param.name} selects an additional SIMD vector type"
+        for param in spec.type_params
     )
     params.extend(f"{_axis_name(key)} selects `{key}`" for key, _ in spec.axis)
     if spec.immediate is not None:
@@ -498,3 +560,13 @@ def _result_type(kind: str) -> str:
 
 def _param_type(kind: str, index_type: str | None = None) -> str:
     return DEFAULT_SUPPORT_POLICY.cpp_param_type(kind, index_type=index_type)
+
+
+def _param_type_for(
+    spec: LoweredSpecialization,
+    index: int,
+    kind: str,
+    index_type: str | None = None,
+) -> str:
+    override = spec.effective_param_type_overrides[index]
+    return override if override is not None else _param_type(kind, index_type)
