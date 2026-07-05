@@ -51,6 +51,7 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
         {
             "rustfmt.toml": "# injected rustfmt\n",
             "tsl_core.rs": "// injected core\n",
+            "tsl_algorithm.rs": "// injected algorithm\n",
             "rust_cargo.toml.tmpl": "[features]\n@{features}\n",
         }
     )
@@ -58,6 +59,7 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
     rendered = {artifact.logical_path: artifact.content for artifact in rust_artifacts((), assets)}
 
     assert rendered["rust/src/tsl_core.rs"] == "// injected core\n"
+    assert rendered["rust/src/tsl_algorithm.rs"] == "// injected algorithm\n"
     assert rendered["rust/rustfmt.toml"] == "# injected rustfmt\n"
     assert 'default = ["scalar"]' in rendered["rust/Cargo.toml"]
 

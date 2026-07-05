@@ -43,8 +43,8 @@ rm -rf \
   "$scratch_root/cpp-consumer" \
   "$scratch_root/cpp-build" \
   "$scratch_root/examples-build" \
-  "$scratch_root/rust-consumer"
-mkdir -p "$scratch_root/cpp-consumer" "$scratch_root/rust-consumer/src"
+  "$scratch_root/rust-examples"
+mkdir -p "$scratch_root/cpp-consumer" "$scratch_root/rust-examples"
 
 cat >"$scratch_root/cpp-consumer/CMakeLists.txt" <<EOF
 cmake_minimum_required(VERSION 3.20)
@@ -69,36 +69,31 @@ int main() {
 }
 EOF
 
-cat >"$scratch_root/rust-consumer/Cargo.toml" <<EOF
+cat >"$scratch_root/rust-examples/Cargo.toml" <<EOF
 [package]
-name = "tsl_rust_consumer_check"
+name = "tsl_rust_examples_check"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 [dependencies]
 tsl_generated = { path = "$generated_root/rust", default-features = false, features = ["scalar"] }
+
+[[bin]]
+name = "unary_operator"
+path = "$repo_root/examples/rust/src/bin/unary_operator.rs"
 EOF
 
-cat >"$scratch_root/rust-consumer/src/main.rs" <<'EOF'
-use tsl_generated::tsl_core::{Scalar, Simd};
-use tsl_generated::tsl_scalar::add;
-
-fn main() {
-    let result = add::<Simd<i32, Scalar>>(1, 2);
-    assert_eq!(result, 3);
-}
-EOF
-
-# Cargo probes rustc with `rustc -`. Run the Rust consumer before the verbose
+# Cargo probes rustc with `rustc -`. Run the Rust examples before the verbose
 # C++ build/test phase so PTY-backed callers cannot leak build-log bytes into
 # that probe as inherited source input.
-cargo run --quiet --manifest-path "$scratch_root/rust-consumer/Cargo.toml" </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin unary_operator </dev/null
 
 cmake -S "$scratch_root/cpp-consumer" -B "$scratch_root/cpp-build"
 cmake --build "$scratch_root/cpp-build" --target tsl_cpp_consumer
 
 cmake \
-  -S "$repo_root/examples" \
+  -S "$repo_root/examples/cpp" \
   -B "$scratch_root/examples-build" \
   -DTSL_GENERATED_ROOT_DIR="$generated_root" \
   -DTSL_PROFILE=scalar

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(tsl_examples CXX)
+project(tsl_cpp_examples CXX)
 
 include(FetchContent)
 
@@ -15,14 +15,14 @@ set(
 
 set(
   TSL_GENERATED_ROOT_DIR
-  "${CMAKE_CURRENT_LIST_DIR}/../tslctmp/examples/generated"
+  "${CMAKE_CURRENT_LIST_DIR}/../../tslctmp/examples/generated"
   CACHE PATH
   "Path to a generated TSL output root containing cpp/CMakeLists.txt"
 )
 
 set(
   TSL_GENERATED_CPP_DIR
-  "${CMAKE_CURRENT_LIST_DIR}/../tslctmp/examples/generated/cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/../../tslctmp/examples/generated/cpp"
   CACHE PATH
   "Legacy path to the generated TSL C++ project directory containing CMakeLists.txt"
 )

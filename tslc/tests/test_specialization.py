@@ -54,6 +54,7 @@ def test_artifact_layout(specialization_result) -> None:
         "docs/specializations/specializations.json",
         "cpp/tests/smoke_avx2.cpp",
         "rust/src/tsl_core.rs",
+        "rust/src/tsl_algorithm.rs",
         "rust/src/tsl_avx2.rs",
         "rust/src/lib.rs",
     } <= paths
@@ -220,6 +221,36 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "inline void compress_store(" in avx2
     assert "inline std::size_t mask_population_count(" in avx2
     assert "inline typename Vec::mask_type mask_binary_and(" in avx2
+
+
+def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
+    specialization_artifacts: dict[str, str]
+) -> None:
+    helper = specialization_artifacts["rust/src/tsl_algorithm.rs"]
+    lib = specialization_artifacts["rust/src/lib.rs"]
+    avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
+
+    assert "pub mod tsl_algorithm;" in lib
+    assert "pub mod parallelism" in helper
+    assert "pub struct Native" in helper
+    assert "pub struct Fixed<const N: usize>" in helper
+    assert "pub struct Generic<const N: usize>" in helper
+    assert "pub trait VectorFor<Profile, T>" in helper
+    assert "pub trait UnaryKernel<V: StaticSimdVector>" in helper
+    assert "pub fn transform_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn transform_unary_raw<Profile, Policy, Op, T>" in helper
+
+    assert "pub mod algo" in avx2
+    assert "pub use crate::tsl_algorithm::{parallelism, UnaryKernel};" in avx2
+    assert "impl VectorFor<Profile, i32> for parallelism::Fixed<1>" in avx2
+    assert "type Vec = Simd<i32, Scalar>;" in avx2
+    assert "impl VectorFor<Profile, i32> for parallelism::Fixed<4>" in avx2
+    assert "type Vec = Simd<i32, super::Sse>;" in avx2
+    assert "impl VectorFor<Profile, i32> for parallelism::Fixed<8>" in avx2
+    assert "type Vec = Simd<i32, super::Avx2>;" in avx2
+    assert "impl VectorFor<Profile, i32> for parallelism::Native" in avx2
+    assert "super::load::<Simd<T, super::Avx2>, false>" in avx2
+    assert "super::store::<Simd<T, super::Avx2>, false, _>" in avx2
 
 
 def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) -> None:

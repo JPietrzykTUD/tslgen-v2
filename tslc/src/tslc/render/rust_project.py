@@ -24,7 +24,9 @@ from tslc.render._common import (
     text,
     type_bits,
     used_exts,
+    used_type_specs,
 )
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 if TYPE_CHECKING:
     from tslc.render.project import ProfileRender
@@ -36,6 +38,7 @@ def rust_artifacts(
     backend = RustBackend()
     artifacts = [
         text("rust/src/tsl_core.rs", assets.text("tsl_core.rs")),
+        text("rust/src/tsl_algorithm.rs", assets.text("tsl_algorithm.rs")),
         # Ship the formatter config at the crate root so `rustfmt`/`cargo fmt` finds it and the
         # generated crate is self-contained.
         text("rust/rustfmt.toml", assets.text("rustfmt.toml")),
@@ -65,6 +68,7 @@ def rust_artifacts(
             arch_use=arch_use,
             registrations=registrations,
             bodies=bodies,
+            algorithm=_rust_algorithm_module(by_primitive, profile_render.extensions),
         )
         artifacts.append(text(f"rust/src/tsl_{slug(profile_render.profile.name)}.rs", content))
 
@@ -198,6 +202,196 @@ def _rust_registrations(
     return ("\n".join(lines) + "\n\n") if lines else ""
 
 
+def _rust_algorithm_module(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    extensions: Mapping[str, Extension],
+) -> str:
+    """Profile-local Rust algorithm facade and SIMD policy mappings."""
+
+    if "load" not in by_primitive or "store" not in by_primitive:
+        return ""
+
+    parts = [
+        "pub mod algo {\n"
+        "    pub use crate::tsl_algorithm::{parallelism, UnaryKernel};\n\n"
+        "    use crate::tsl_algorithm::{LoadStore, VectorFor};\n"
+        "    use crate::tsl_core::{Generic, Scalar, Simd, SimdVector, StaticSimdVector};\n"
+        "\n"
+        "    pub struct Profile;"
+    ]
+    parts.append(_rust_algorithm_load_store_impls(by_primitive, extensions))
+    mappings = _rust_algorithm_vector_mappings(by_primitive, extensions)
+    if mappings:
+        parts.append(mappings)
+    parts.append(_RUST_ALGORITHM_TRANSFORM_WRAPPERS)
+    return "\n\n" + "\n\n".join(part for part in parts if part) + "\n}\n"
+
+
+def _rust_algorithm_load_store_impls(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    extensions: Mapping[str, Extension],
+) -> str:
+    registrations = _rust_vector_registrations(by_primitive, extensions)
+    concrete_extensions = sorted(
+        {
+            f"super::{rust_extension_tag(extensions[registration.extension_name])}"
+            for registration in registrations
+            if registration.extension_name in extensions
+        }
+    )
+    parts = [
+        _rust_algorithm_load_store_impl("Scalar"),
+        _rust_algorithm_generic_load_store_impl(),
+    ]
+    parts.extend(
+        _rust_algorithm_load_store_impl(extension)
+        for extension in concrete_extensions
+    )
+    return "\n\n".join(parts)
+
+
+def _rust_algorithm_load_store_impl(extension: str) -> str:
+    vector = f"Simd<T, {extension}>"
+    return (
+        f"    impl<T> LoadStore<{vector}> for Profile\n"
+        "    where\n"
+        f"        {vector}: StaticSimdVector<BaseType = T>\n"
+        "            + super::detail::primitives::LoadImpl<false>,\n"
+        f"        <{vector} as SimdVector>::RegisterType:\n"
+        f"            super::detail::primitives::StoreImplArg<{vector}, false>,\n"
+        "    {\n"
+        f"        unsafe fn load_unaligned(ptr: *const T) -> <{vector} as SimdVector>::RegisterType {{\n"
+        f"            unsafe {{ super::load::<{vector}, false>(ptr) }}\n"
+        "        }\n\n"
+        f"        unsafe fn store_unaligned(ptr: *mut T, value: <{vector} as SimdVector>::RegisterType) {{\n"
+        f"            unsafe {{ super::store::<{vector}, false, _>(ptr, value) }}\n"
+        "        }\n"
+        "    }"
+    )
+
+
+def _rust_algorithm_generic_load_store_impl() -> str:
+    vector = "Simd<T, Generic<N>>"
+    return (
+        f"    impl<T, const N: usize> LoadStore<{vector}> for Profile\n"
+        "    where\n"
+        f"        {vector}: StaticSimdVector<BaseType = T>\n"
+        "            + super::detail::primitives::LoadImpl<false>,\n"
+        f"        <{vector} as SimdVector>::RegisterType:\n"
+        f"            super::detail::primitives::StoreImplArg<{vector}, false>,\n"
+        "    {\n"
+        f"        unsafe fn load_unaligned(ptr: *const T) -> <{vector} as SimdVector>::RegisterType {{\n"
+        f"            unsafe {{ super::load::<{vector}, false>(ptr) }}\n"
+        "        }\n\n"
+        f"        unsafe fn store_unaligned(ptr: *mut T, value: <{vector} as SimdVector>::RegisterType) {{\n"
+        f"            unsafe {{ super::store::<{vector}, false, _>(ptr, value) }}\n"
+        "        }\n"
+        "    }"
+    )
+
+
+def _rust_algorithm_vector_mappings(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    extensions: Mapping[str, Extension],
+) -> str:
+    fixed: dict[tuple[str, int], tuple[tuple[int, int, str], str]] = {}
+    native: dict[str, tuple[tuple[int, int, str], str]] = {}
+
+    for ext_name, type_tag, base in used_type_specs(by_primitive):
+        extension = extensions.get(ext_name)
+        if not _rust_algorithm_vector_is_mappable(extension):
+            continue
+        lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
+        if lane_count is None:
+            continue
+        preference = (
+            extension.metadata.native_sort_order or 0,
+            extension.vector_bits,
+            extension.isa_name,
+        )
+        vector = _rust_algorithm_vector_type(extension, base)
+        fixed_key = (base, lane_count)
+        current_fixed = fixed.get(fixed_key)
+        if current_fixed is None or preference > current_fixed[0]:
+            fixed[fixed_key] = (preference, vector)
+        current_native = native.get(base)
+        if current_native is None or preference > current_native[0]:
+            native[base] = (preference, vector)
+
+    lines: list[str] = []
+    for (base, lane_count), (_preference, vector) in sorted(fixed.items()):
+        lines.append(
+            f"    impl VectorFor<Profile, {base}> for parallelism::Fixed<{lane_count}> {{\n"
+            f"        type Vec = {vector};\n"
+            "    }"
+        )
+    for base, (_preference, vector) in sorted(native.items()):
+        lines.append(
+            f"    impl VectorFor<Profile, {base}> for parallelism::Native {{\n"
+            f"        type Vec = {vector};\n"
+            "    }"
+        )
+    return "\n\n".join(lines)
+
+
+def _rust_algorithm_vector_is_mappable(extension: Extension | None) -> bool:
+    if extension is None:
+        return False
+    if DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
+        return False
+    if extension.family == "generic_like":
+        return False
+    return extension.supports_backend("rust")
+
+
+def _rust_algorithm_vector_type(extension: Extension, base: str) -> str:
+    if extension.family == "scalar":
+        return f"Simd<{base}, Scalar>"
+    return f"Simd<{base}, super::{rust_extension_tag(extension)}>"
+
+
+_RUST_ALGORITHM_TRANSFORM_WRAPPERS = """    pub fn transform_unary<Policy, Op, T>(
+        policy: Policy,
+        op: &mut Op,
+        input: &[T],
+        output: &mut [T],
+    ) where
+        Policy: VectorFor<Profile, T>,
+        <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
+        Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
+        Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec>
+            + LoadStore<Simd<T, Scalar>>,
+        Op: UnaryKernel<<Policy as VectorFor<Profile, T>>::Vec>
+            + UnaryKernel<Simd<T, Scalar>>,
+    {
+        crate::tsl_algorithm::transform_unary::<Profile, Policy, Op, T>(
+            policy, op, input, output,
+        );
+    }
+
+    pub unsafe fn transform_unary_raw<Policy, Op, T>(
+        policy: Policy,
+        op: &mut Op,
+        input: *const T,
+        output: *mut T,
+        count: usize,
+    ) where
+        Policy: VectorFor<Profile, T>,
+        <Policy as VectorFor<Profile, T>>::Vec: StaticSimdVector<BaseType = T>,
+        Simd<T, Scalar>: StaticSimdVector<BaseType = T>,
+        Profile: LoadStore<<Policy as VectorFor<Profile, T>>::Vec>
+            + LoadStore<Simd<T, Scalar>>,
+        Op: UnaryKernel<<Policy as VectorFor<Profile, T>>::Vec>
+            + UnaryKernel<Simd<T, Scalar>>,
+    {
+        unsafe {
+            crate::tsl_algorithm::transform_unary_raw::<Profile, Policy, Op, T>(
+                policy, op, input, output, count,
+            );
+        }
+    }"""
+
+
 def _rust_vector_registrations(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     extensions: Mapping[str, Extension],
@@ -287,6 +481,7 @@ def _rust_lib(profiles: tuple[ProfileRender, ...]) -> str:
         "#![allow(non_upper_case_globals)]",
         "",
         "pub mod tsl_core;",
+        "pub mod tsl_algorithm;",
         "pub mod tsl_test_core;",
         "",
     ]

@@ -58,6 +58,10 @@ _CPP_ALGORITHM_SUPPORT_PRIMITIVES = (
     "mask_population_count",
     "mask_binary_and",
 )
+_RUST_ALGORITHM_SUPPORT_PRIMITIVES = (
+    "load",
+    "store",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +228,11 @@ class _GenerationSession:
             worklist.extend(
                 (name, frozenset({"cpp"}))
                 for name in _cpp_algorithm_support_primitives(self.inputs.catalog)
+            )
+        if "rust" in all_backend_ids:
+            worklist.extend(
+                (name, frozenset({"rust"}))
+                for name in _rust_algorithm_support_primitives(self.inputs.catalog)
             )
         processed: dict[str, set[str]] = {}
         while worklist:
@@ -565,6 +574,14 @@ def _cpp_algorithm_support_primitives(catalog: Catalog) -> tuple[str, ...]:
     return tuple(
         primitive
         for primitive in _CPP_ALGORITHM_SUPPORT_PRIMITIVES
+        if catalog.primitives_named(primitive, unmasked=False)
+    )
+
+
+def _rust_algorithm_support_primitives(catalog: Catalog) -> tuple[str, ...]:
+    return tuple(
+        primitive
+        for primitive in _RUST_ALGORITHM_SUPPORT_PRIMITIVES
         if catalog.primitives_named(primitive, unmasked=False)
     )
 
