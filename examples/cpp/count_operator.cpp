@@ -79,7 +79,7 @@ std::size_t expected_selected_count(
     return produced;
 }
 
-template <std::size_t ParallelN>
+template <class Parallelism>
 bool run_dense_count_cases() {
     constexpr std::size_t count = 1003;
     std::vector<std::int32_t> left(count);
@@ -87,7 +87,7 @@ bool run_dense_count_cases() {
     fill_inputs(left, right);
 
     const auto unary = tsl::algo::count_unary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned>(
         negative_op{},
         left.data(),
@@ -97,7 +97,7 @@ bool run_dense_count_cases() {
     }
 
     const auto binary = tsl::algo::count_binary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned>(
         less_than_op{},
         left.data(),
@@ -108,7 +108,7 @@ bool run_dense_count_cases() {
         return false;
     }
 
-    const auto range_binary = tsl::algo::count_binary<ParallelN>(
+    const auto range_binary = tsl::algo::count_binary<Parallelism>(
         less_than_op{},
         left,
         right);
@@ -116,7 +116,7 @@ bool run_dense_count_cases() {
            expected_count(count, [&](std::size_t i) { return left[i] < right[i]; });
 }
 
-template <class MaskLayout, std::size_t ParallelN>
+template <class MaskLayout, class Parallelism>
 bool run_masked_count_cases() {
     constexpr std::size_t count = 1003;
     std::vector<std::int32_t> left(count);
@@ -124,13 +124,13 @@ bool run_masked_count_cases() {
     fill_inputs(left, right);
 
     using mask_type =
-        tsl::algo::fixed_mask_storage_type<MaskLayout, ParallelN, std::int32_t>;
+        tsl::algo::mask_storage_type<MaskLayout, Parallelism, std::int32_t>;
     const auto mask_count =
-        tsl::algo::mask_chunk_count<MaskLayout, ParallelN, std::int32_t>(count);
+        tsl::algo::mask_chunk_count<MaskLayout, Parallelism, std::int32_t>(count);
     std::unique_ptr<mask_type[]> masks(new mask_type[mask_count]);
 
     const auto masks_produced = tsl::algo::predicate_binary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned,
         MaskLayout>(
         less_than_op{},
@@ -143,7 +143,7 @@ bool run_masked_count_cases() {
     }
 
     const auto unary = tsl::algo::count_masked_unary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned,
         MaskLayout>(
         negative_op{},
@@ -159,7 +159,7 @@ bool run_masked_count_cases() {
     }
 
     const auto binary = tsl::algo::count_masked_binary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned,
         MaskLayout>(
         left_negative_binary_op{},
@@ -220,24 +220,24 @@ bool run_selected_count_cases() {
                                });
 }
 
-template <std::size_t ParallelN>
+template <class Parallelism, std::size_t SelectedN>
 bool run_count_cases() {
-    return run_dense_count_cases<ParallelN>() &&
-           run_masked_count_cases<tsl::algo::mask_layout::integral, ParallelN>() &&
-           run_masked_count_cases<tsl::algo::mask_layout::native, ParallelN>() &&
-           run_masked_count_cases<tsl::algo::mask_layout::bytes, ParallelN>() &&
-           run_masked_count_cases<tsl::algo::mask_layout::bits, ParallelN>() &&
-           run_selected_count_cases<ParallelN>();
+    return run_dense_count_cases<Parallelism>() &&
+           run_masked_count_cases<tsl::algo::mask_layout::integral, Parallelism>() &&
+           run_masked_count_cases<tsl::algo::mask_layout::native, Parallelism>() &&
+           run_masked_count_cases<tsl::algo::mask_layout::bytes, Parallelism>() &&
+           run_masked_count_cases<tsl::algo::mask_layout::bits, Parallelism>() &&
+           run_selected_count_cases<SelectedN>();
 }
 
 int main() {
-    if (!run_count_cases<1>()) {
+    if (!run_count_cases<tsl::dataparallel::fixed<1>, 1>()) {
         return 1;
     }
-    if (!run_count_cases<4>()) {
+    if (!run_count_cases<tsl::dataparallel::generic<4>, 4>()) {
         return 2;
     }
-    if (!run_count_cases<16>()) {
+    if (!run_count_cases<tsl::dataparallel::generic<16>, 16>()) {
         return 3;
     }
     return 0;

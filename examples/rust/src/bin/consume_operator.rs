@@ -1,16 +1,16 @@
-use tsl_generated::tsl_core::StaticSimdVector;
-use tsl_generated::tsl_scalar as tsl;
+use tsl::tsl_core::StaticSimdVector;
+use tsl::profile;
 
 struct SumSink {
     total: i64,
 }
 
-impl<V> tsl::algo::UnaryConsumeKernel<V> for SumSink
+impl<V> profile::algo::UnaryConsumeKernel<V> for SumSink
 where
-    V: StaticSimdVector<BaseType = i32> + tsl::detail::primitives::HaddImpl,
+    V: StaticSimdVector<BaseType = i32> + profile::detail::primitives::HaddImpl,
 {
     fn consume(&mut self, value: V::RegisterType) {
-        self.total += i64::from(tsl::hadd::<V>(value));
+        self.total += i64::from(profile::hadd::<V>(value));
     }
 }
 
@@ -18,15 +18,15 @@ struct PairSumSink {
     total: i64,
 }
 
-impl<V> tsl::algo::BinaryConsumeKernel<V> for PairSumSink
+impl<V> profile::algo::BinaryConsumeKernel<V> for PairSumSink
 where
     V: StaticSimdVector<BaseType = i32>
-        + tsl::detail::primitives::AddImpl
-        + tsl::detail::primitives::HaddImpl,
+        + profile::detail::primitives::AddImpl
+        + profile::detail::primitives::HaddImpl,
 {
     fn consume(&mut self, left: V::RegisterType, right: V::RegisterType) {
-        let sum = tsl::add::<V>(left, right);
-        self.total += i64::from(tsl::hadd::<V>(sum));
+        let sum = profile::add::<V>(left, right);
+        self.total += i64::from(profile::hadd::<V>(sum));
     }
 }
 
@@ -59,17 +59,17 @@ fn main() {
     macro_rules! run_policy {
         ($policy:expr) => {{
             let mut unary = SumSink { total: 0 };
-            tsl::algo::consume_unary($policy, &mut unary, &left);
+            profile::algo::consume_unary($policy, &mut unary, &left);
             assert_eq!(unary.total, expected_unary);
 
             let mut binary = PairSumSink { total: 0 };
-            tsl::algo::consume_binary($policy, &mut binary, &left, &right);
+            profile::algo::consume_binary($policy, &mut binary, &left, &right);
             assert_eq!(binary.total, expected_binary);
         }};
     }
 
-    run_policy!(tsl::algo::parallelism::native());
-    run_policy!(tsl::algo::parallelism::fixed::<1>());
-    run_policy!(tsl::algo::parallelism::generic::<4>());
-    run_policy!(tsl::algo::parallelism::generic::<16>());
+    run_policy!(tsl::dataparallel::native());
+    run_policy!(tsl::dataparallel::fixed::<1>());
+    run_policy!(tsl::dataparallel::generic::<4>());
+    run_policy!(tsl::dataparallel::generic::<16>());
 }

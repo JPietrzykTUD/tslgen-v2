@@ -1,39 +1,39 @@
-use tsl_generated::tsl_core::StaticSimdVector;
-use tsl_generated::tsl_scalar as tsl;
+use tsl::tsl_core::StaticSimdVector;
+use tsl::profile;
 
 struct LessThan;
 
-impl<V> tsl::algo::BinaryPredicateKernel<V> for LessThan
+impl<V> profile::algo::BinaryPredicateKernel<V> for LessThan
 where
-    V: StaticSimdVector<BaseType = i32> + tsl::detail::primitives::Less_thanImpl,
+    V: StaticSimdVector<BaseType = i32> + profile::detail::primitives::Less_thanImpl,
 {
     fn test(&mut self, left: V::RegisterType, right: V::RegisterType) -> V::MaskType {
-        tsl::less_than::<V>(left, right)
+        profile::less_than::<V>(left, right)
     }
 }
 
 struct SquareOrOriginal;
 
-impl<V> tsl::algo::MaskedUnaryKernel<V> for SquareOrOriginal
+impl<V> profile::algo::MaskedUnaryKernel<V> for SquareOrOriginal
 where
     V: StaticSimdVector<BaseType = i32>
-        + tsl::detail::primitives::BlendImpl
-        + tsl::detail::primitives::MulImpl,
+        + profile::detail::primitives::BlendImpl
+        + profile::detail::primitives::MulImpl,
     V::RegisterType: Copy,
 {
     fn apply(&mut self, active: V::MaskType, value: V::RegisterType) -> V::RegisterType {
-        let squared = tsl::mul::<V>(value, value);
-        tsl::blend::<V>(active, value, squared)
+        let squared = profile::mul::<V>(value, value);
+        profile::blend::<V>(active, value, squared)
     }
 }
 
 struct AddOrLeft;
 
-impl<V> tsl::algo::MaskedBinaryKernel<V> for AddOrLeft
+impl<V> profile::algo::MaskedBinaryKernel<V> for AddOrLeft
 where
     V: StaticSimdVector<BaseType = i32>
-        + tsl::detail::primitives::AddImpl
-        + tsl::detail::primitives::BlendImpl,
+        + profile::detail::primitives::AddImpl
+        + profile::detail::primitives::BlendImpl,
     V::RegisterType: Copy,
 {
     fn apply(
@@ -42,8 +42,8 @@ where
         left: V::RegisterType,
         right: V::RegisterType,
     ) -> V::RegisterType {
-        let sum = tsl::add::<V>(left, right);
-        tsl::blend::<V>(active, left, sum)
+        let sum = profile::add::<V>(left, right);
+        profile::blend::<V>(active, left, sum)
     }
 }
 
@@ -62,17 +62,17 @@ fn main() {
     macro_rules! run_policy {
         ($policy:expr) => {{
             let policy = $policy;
-            let mask_count = tsl::algo::integral_mask_chunk_count::<_, i32>(policy, left.len());
+            let mask_count = profile::algo::integral_mask_chunk_count::<_, i32>(policy, left.len());
             let mut masks = vec![0u64; mask_count];
             let mut less_than = LessThan;
             let produced =
-                tsl::algo::predicate_binary(policy, &mut less_than, &left, &right, &mut masks);
+                profile::algo::predicate_binary(policy, &mut less_than, &left, &right, &mut masks);
             assert_eq!(produced, masks.len());
 
             let unary_sentinel = -777777;
             let mut unary_output = vec![unary_sentinel; left.len()];
             let mut square = SquareOrOriginal;
-            tsl::algo::transform_masked_unary(
+            profile::algo::transform_masked_unary(
                 policy,
                 &mut square,
                 &left,
@@ -93,7 +93,7 @@ fn main() {
             let binary_sentinel = -888888;
             let mut binary_output = vec![binary_sentinel; left.len()];
             let mut add = AddOrLeft;
-            tsl::algo::transform_masked_binary(
+            profile::algo::transform_masked_binary(
                 policy,
                 &mut add,
                 &left,
@@ -114,8 +114,8 @@ fn main() {
         }};
     }
 
-    run_policy!(tsl::algo::parallelism::native());
-    run_policy!(tsl::algo::parallelism::fixed::<1>());
-    run_policy!(tsl::algo::parallelism::generic::<4>());
-    run_policy!(tsl::algo::parallelism::generic::<16>());
+    run_policy!(tsl::dataparallel::native());
+    run_policy!(tsl::dataparallel::fixed::<1>());
+    run_policy!(tsl::dataparallel::generic::<4>());
+    run_policy!(tsl::dataparallel::generic::<16>());
 }

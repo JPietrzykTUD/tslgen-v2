@@ -83,7 +83,7 @@ std::int64_t expected_masked_pair_sum(
     return total;
 }
 
-template <class MaskLayout, std::size_t ParallelN>
+template <class MaskLayout, class Parallelism>
 bool run_masked_aggregation_cases() {
     constexpr std::size_t count = 1003;
     std::vector<std::int32_t> left(count);
@@ -91,13 +91,13 @@ bool run_masked_aggregation_cases() {
     fill_inputs(left, right);
 
     using mask_type =
-        tsl::algo::fixed_mask_storage_type<MaskLayout, ParallelN, std::int32_t>;
+        tsl::algo::mask_storage_type<MaskLayout, Parallelism, std::int32_t>;
     const auto mask_count =
-        tsl::algo::mask_chunk_count<MaskLayout, ParallelN, std::int32_t>(count);
+        tsl::algo::mask_chunk_count<MaskLayout, Parallelism, std::int32_t>(count);
     std::unique_ptr<mask_type[]> masks(new mask_type[mask_count]);
 
     const auto produced = tsl::algo::predicate_binary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned,
         MaskLayout>(
         less_than_op{},
@@ -110,7 +110,7 @@ bool run_masked_aggregation_cases() {
     }
 
     const auto unary_result = tsl::algo::aggregate_masked_unary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned,
         MaskLayout>(
         masked_sum_op{},
@@ -122,7 +122,7 @@ bool run_masked_aggregation_cases() {
     }
 
     const auto binary_result = tsl::algo::aggregate_masked_binary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned,
         MaskLayout>(
         masked_pair_sum_op{},
@@ -133,30 +133,30 @@ bool run_masked_aggregation_cases() {
     return binary_result == expected_masked_pair_sum(left, right);
 }
 
-template <std::size_t ParallelN>
+template <class Parallelism>
 bool run_layout_cases() {
     return run_masked_aggregation_cases<
                tsl::algo::mask_layout::integral,
-               ParallelN>() &&
+               Parallelism>() &&
            run_masked_aggregation_cases<
                tsl::algo::mask_layout::native,
-               ParallelN>() &&
+               Parallelism>() &&
            run_masked_aggregation_cases<
                tsl::algo::mask_layout::bytes,
-               ParallelN>() &&
+               Parallelism>() &&
            run_masked_aggregation_cases<
                tsl::algo::mask_layout::bits,
-               ParallelN>();
+               Parallelism>();
 }
 
 int main() {
-    if (!run_layout_cases<1>()) {
+    if (!run_layout_cases<tsl::dataparallel::fixed<1>>()) {
         return 1;
     }
-    if (!run_layout_cases<4>()) {
+    if (!run_layout_cases<tsl::dataparallel::generic<4>>()) {
         return 2;
     }
-    if (!run_layout_cases<16>()) {
+    if (!run_layout_cases<tsl::dataparallel::generic<16>>()) {
         return 3;
     }
     return 0;

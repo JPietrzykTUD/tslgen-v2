@@ -238,10 +238,10 @@ def test_sve_profile_registers_scalable_cpp_simd_types(
     assert "static constexpr std::size_t vector_element_count =" not in sve_i32_registration
     assert "static std::size_t lane_count() noexcept" in sve_i32_registration
     assert "return svcntb() / sizeof(int32_t);" in sve_i32_registration
-    assert "struct native_simd<int32_t>" in cpp
+    assert "struct simd_for<native, int32_t>" in cpp
     assert "using type = ::tsl::simd<int32_t, ::tsl::sve>;" in cpp
     inferred_i32_blocks = [
-        block for block in cpp.split("template <>") if "struct inferred_simd<int32_t," in block
+        block for block in cpp.split("template <>") if "struct simd_for<fixed<" in block
     ]
     assert inferred_i32_blocks
     assert all("::tsl::sve" not in block for block in inferred_i32_blocks)

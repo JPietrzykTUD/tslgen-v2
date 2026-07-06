@@ -1,27 +1,27 @@
-use tsl_generated::tsl_core::StaticSimdVector;
-use tsl_generated::tsl_scalar as tsl;
+use tsl::tsl_core::StaticSimdVector;
+use tsl::profile;
 
 struct Negative;
 
-impl<V> tsl::algo::UnaryPredicateKernel<V> for Negative
+impl<V> profile::algo::UnaryPredicateKernel<V> for Negative
 where
     V: StaticSimdVector<BaseType = i32>
-        + tsl::detail::primitives::Less_thanImpl
-        + tsl::detail::primitives::Set1Impl,
+        + profile::detail::primitives::Less_thanImpl
+        + profile::detail::primitives::Set1Impl,
 {
     fn test(&mut self, value: V::RegisterType) -> V::MaskType {
-        tsl::less_than::<V>(value, tsl::set1::<V>(0))
+        profile::less_than::<V>(value, profile::set1::<V>(0))
     }
 }
 
 struct LessThan;
 
-impl<V> tsl::algo::BinaryPredicateKernel<V> for LessThan
+impl<V> profile::algo::BinaryPredicateKernel<V> for LessThan
 where
-    V: StaticSimdVector<BaseType = i32> + tsl::detail::primitives::Less_thanImpl,
+    V: StaticSimdVector<BaseType = i32> + profile::detail::primitives::Less_thanImpl,
 {
     fn test(&mut self, left: V::RegisterType, right: V::RegisterType) -> V::MaskType {
-        tsl::less_than::<V>(left, right)
+        profile::less_than::<V>(left, right)
     }
 }
 
@@ -70,7 +70,7 @@ fn main() {
             fill_input(&mut input);
             let mut output = vec![i32::MAX; input.len()];
             let mut negative = Negative;
-            let produced = tsl::algo::select_unary(policy, &mut negative, &input, &mut output);
+            let produced = profile::algo::select_unary(policy, &mut negative, &input, &mut output);
             verify_selected(
                 &output,
                 produced,
@@ -86,7 +86,7 @@ fn main() {
             output.fill(i32::MAX);
             let mut less_than = LessThan;
             let produced =
-                tsl::algo::select_binary(policy, &mut less_than, &left, &right, &mut output);
+                profile::algo::select_binary(policy, &mut less_than, &left, &right, &mut output);
             verify_selected(
                 &output,
                 produced,
@@ -97,8 +97,8 @@ fn main() {
         }};
     }
 
-    run_policy!(tsl::algo::parallelism::native());
-    run_policy!(tsl::algo::parallelism::fixed::<1>());
-    run_policy!(tsl::algo::parallelism::generic::<4>());
-    run_policy!(tsl::algo::parallelism::generic::<16>());
+    run_policy!(tsl::dataparallel::native());
+    run_policy!(tsl::dataparallel::fixed::<1>());
+    run_policy!(tsl::dataparallel::generic::<4>());
+    run_policy!(tsl::dataparallel::generic::<16>());
 }

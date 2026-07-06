@@ -144,6 +144,7 @@ bool verify_transform_binary(
 }
 
 bool run_range_case() {
+    using parallelism = tsl::dataparallel::generic<4>;
     constexpr std::size_t count = 1003;
     std::vector<std::int32_t> left(count);
     std::vector<std::int32_t> right(count);
@@ -151,23 +152,23 @@ bool run_range_case() {
     std::vector<std::int32_t> selected(count, 1234567);
     fill_inputs(left, right);
 
-    tsl::algo::transform_unary<4, tsl::algo::alignment::unaligned>(
+    tsl::algo::transform_unary<parallelism, tsl::algo::alignment::unaligned>(
         square_op{}, left, output);
     if (!verify_transform_unary(left, output)) {
         return false;
     }
 
-    tsl::algo::transform_binary<4, tsl::algo::alignment::unaligned>(
+    tsl::algo::transform_binary<parallelism, tsl::algo::alignment::unaligned>(
         add_op{}, left, right, output);
     if (!verify_transform_binary(left, right, output)) {
         return false;
     }
 
-    using mask_type = tsl::algo::fixed_integral_mask_type<4, std::int32_t>;
+    using mask_type = tsl::algo::integral_mask_type<parallelism, std::int32_t>;
     std::vector<mask_type> masks(
-        tsl::algo::integral_mask_chunk_count<4, std::int32_t>(count));
+        tsl::algo::integral_mask_chunk_count<parallelism, std::int32_t>(count));
     const auto mask_chunks = tsl::algo::predicate_binary<
-        4,
+        parallelism,
         tsl::algo::alignment::unaligned>(
         less_than_op{},
         left,
@@ -178,7 +179,7 @@ bool run_range_case() {
     }
 
     const auto produced = tsl::algo::select_masked_unary<
-        4,
+        parallelism,
         tsl::algo::alignment::unaligned>(
         negative_op{},
         left,
@@ -198,7 +199,7 @@ bool run_range_case() {
     }
 
     const auto aggregate = tsl::algo::aggregate_masked_binary<
-        4,
+        parallelism,
         tsl::algo::alignment::unaligned>(
         masked_pair_sum_op{},
         left,
@@ -209,7 +210,7 @@ bool run_range_case() {
     }
 
     masked_sum_sink sink;
-    tsl::algo::consume_masked_unary<4, tsl::algo::alignment::unaligned>(
+    tsl::algo::consume_masked_unary<parallelism, tsl::algo::alignment::unaligned>(
         sink,
         left,
         masks);
@@ -225,7 +226,7 @@ bool run_range_case() {
     }
 
     chunk_sum_op chunk_sum{left.data()};
-    tsl::algo::for_each_chunk<4>(chunk_sum, left);
+    tsl::algo::for_each_chunk<parallelism>(chunk_sum, left);
     return chunk_sum.metadata_ok &&
            (chunk_sum.visited == left.size()) &&
            (chunk_sum.total == sum_values(left));

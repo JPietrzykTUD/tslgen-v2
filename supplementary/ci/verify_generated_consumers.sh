@@ -77,7 +77,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-tsl_generated = { path = "$generated_root/rust", default-features = false, features = ["scalar"] }
+tsl = { path = "$generated_root/rust", default-features = false, features = ["scalar"] }
 
 [[bin]]
 name = "unary_operator"

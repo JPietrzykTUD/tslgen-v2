@@ -1,6 +1,6 @@
 use crate::tsl_core::{Generic as GenericExtension, Scalar, Simd, SimdVector, StaticSimdVector};
 
-pub mod parallelism {
+pub mod dataparallel {
     #[derive(Clone, Copy, Debug, Default)]
     pub struct Native;
 
@@ -41,7 +41,21 @@ pub trait VectorFor<Profile, T> {
     type Vec: StaticSimdVector<BaseType = T>;
 }
 
-impl<Profile, T, const N: usize> VectorFor<Profile, T> for parallelism::Generic<N>
+pub trait RebindBase<ToBase>: SimdVector {
+    type Vec: StaticSimdVector<BaseType = ToBase>;
+}
+
+impl<V, ToBase> RebindBase<ToBase> for V
+where
+    V: SimdVector,
+    V::WithBaseType<ToBase>: StaticSimdVector<BaseType = ToBase>,
+{
+    type Vec = V::WithBaseType<ToBase>;
+}
+
+pub type ReboundBase<V, ToBase> = <V as RebindBase<ToBase>>::Vec;
+
+impl<Profile, T, const N: usize> VectorFor<Profile, T> for dataparallel::Generic<N>
 where
     Simd<T, GenericExtension<N>>: StaticSimdVector<BaseType = T>,
 {

@@ -43,7 +43,7 @@ void fill_inputs(
     }
 }
 
-template <std::size_t ParallelN>
+template <class Parallelism>
 bool run_where_unary_case() {
     constexpr std::size_t count = 1000;
     constexpr std::int32_t preserved = -123456;
@@ -52,17 +52,17 @@ bool run_where_unary_case() {
     std::vector<std::int32_t> output(count, preserved);
     fill_inputs(input, threshold);
 
-    using mask_type = tsl::algo::fixed_integral_mask_type<ParallelN, std::int32_t>;
+    using mask_type = tsl::algo::integral_mask_type<Parallelism, std::int32_t>;
     std::vector<mask_type> masks(
-        tsl::algo::integral_mask_chunk_count<ParallelN, std::int32_t>(count));
+        tsl::algo::integral_mask_chunk_count<Parallelism, std::int32_t>(count));
 
-    tsl::algo::predicate_binary<ParallelN, tsl::algo::alignment::unaligned>(
+    tsl::algo::predicate_binary<Parallelism, tsl::algo::alignment::unaligned>(
         less_than_op{},
         input.data(),
         threshold.data(),
         masks.data(),
         count);
-    tsl::algo::transform_where_unary<ParallelN, tsl::algo::alignment::unaligned>(
+    tsl::algo::transform_where_unary<Parallelism, tsl::algo::alignment::unaligned>(
         square_where_op{},
         input.data(),
         masks.data(),
@@ -79,7 +79,7 @@ bool run_where_unary_case() {
     return true;
 }
 
-template <std::size_t ParallelN>
+template <class Parallelism>
 bool run_where_binary_case() {
     constexpr std::size_t count = 1000;
     constexpr std::int32_t preserved = -654321;
@@ -88,17 +88,17 @@ bool run_where_binary_case() {
     std::vector<std::int32_t> output(count, preserved);
     fill_inputs(left, right);
 
-    using mask_type = tsl::algo::fixed_integral_mask_type<ParallelN, std::int32_t>;
+    using mask_type = tsl::algo::integral_mask_type<Parallelism, std::int32_t>;
     std::vector<mask_type> masks(
-        tsl::algo::integral_mask_chunk_count<ParallelN, std::int32_t>(count));
+        tsl::algo::integral_mask_chunk_count<Parallelism, std::int32_t>(count));
 
-    tsl::algo::predicate_binary<ParallelN, tsl::algo::alignment::unaligned>(
+    tsl::algo::predicate_binary<Parallelism, tsl::algo::alignment::unaligned>(
         less_than_op{},
         left.data(),
         right.data(),
         masks.data(),
         count);
-    tsl::algo::transform_where_binary<ParallelN, tsl::algo::alignment::unaligned>(
+    tsl::algo::transform_where_binary<Parallelism, tsl::algo::alignment::unaligned>(
         add_where_op{},
         left.data(),
         right.data(),
@@ -116,19 +116,20 @@ bool run_where_binary_case() {
     return true;
 }
 
-template <std::size_t ParallelN>
+template <class Parallelism>
 bool run_where_cases() {
-    return run_where_unary_case<ParallelN>() && run_where_binary_case<ParallelN>();
+    return run_where_unary_case<Parallelism>() &&
+           run_where_binary_case<Parallelism>();
 }
 
 int main() {
-    if (!run_where_cases<1>()) {
+    if (!run_where_cases<tsl::dataparallel::fixed<1>>()) {
         return 1;
     }
-    if (!run_where_cases<4>()) {
+    if (!run_where_cases<tsl::dataparallel::generic<4>>()) {
         return 2;
     }
-    if (!run_where_cases<16>()) {
+    if (!run_where_cases<tsl::dataparallel::generic<16>>()) {
         return 3;
     }
     return 0;

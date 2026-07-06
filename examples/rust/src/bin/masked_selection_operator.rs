@@ -1,40 +1,40 @@
-use tsl_generated::tsl_core::StaticSimdVector;
-use tsl_generated::tsl_scalar as tsl;
+use tsl::tsl_core::StaticSimdVector;
+use tsl::profile;
 
 struct LessThan;
 
-impl<V> tsl::algo::BinaryPredicateKernel<V> for LessThan
+impl<V> profile::algo::BinaryPredicateKernel<V> for LessThan
 where
-    V: StaticSimdVector<BaseType = i32> + tsl::detail::primitives::Less_thanImpl,
+    V: StaticSimdVector<BaseType = i32> + profile::detail::primitives::Less_thanImpl,
 {
     fn test(&mut self, left: V::RegisterType, right: V::RegisterType) -> V::MaskType {
-        tsl::less_than::<V>(left, right)
+        profile::less_than::<V>(left, right)
     }
 }
 
 struct Negative;
 
-impl<V> tsl::algo::UnaryPredicateKernel<V> for Negative
+impl<V> profile::algo::UnaryPredicateKernel<V> for Negative
 where
     V: StaticSimdVector<BaseType = i32>
-        + tsl::detail::primitives::Less_thanImpl
-        + tsl::detail::primitives::Set1Impl,
+        + profile::detail::primitives::Less_thanImpl
+        + profile::detail::primitives::Set1Impl,
 {
     fn test(&mut self, value: V::RegisterType) -> V::MaskType {
-        tsl::less_than::<V>(value, tsl::set1::<V>(0))
+        profile::less_than::<V>(value, profile::set1::<V>(0))
     }
 }
 
 struct LeftNegative;
 
-impl<V> tsl::algo::BinaryPredicateKernel<V> for LeftNegative
+impl<V> profile::algo::BinaryPredicateKernel<V> for LeftNegative
 where
     V: StaticSimdVector<BaseType = i32>
-        + tsl::detail::primitives::Less_thanImpl
-        + tsl::detail::primitives::Set1Impl,
+        + profile::detail::primitives::Less_thanImpl
+        + profile::detail::primitives::Set1Impl,
 {
     fn test(&mut self, left: V::RegisterType, _right: V::RegisterType) -> V::MaskType {
-        tsl::less_than::<V>(left, tsl::set1::<V>(0))
+        profile::less_than::<V>(left, profile::set1::<V>(0))
     }
 }
 
@@ -82,7 +82,7 @@ fn main() {
             let mut masks = vec![$init; mask_count];
 
             let mut less_than_for_mask = LessThan;
-            let masks_produced = tsl::algo::predicate_binary_mask_layout::<_, $layout, _, i32>(
+            let masks_produced = profile::algo::predicate_binary_mask_layout::<_, $layout, _, i32>(
                 policy,
                 &mut less_than_for_mask,
                 &input,
@@ -93,7 +93,7 @@ fn main() {
 
             let mut output = vec![i32::MAX; input.len()];
             let mut negative = Negative;
-            let produced = tsl::algo::select_masked_unary_mask_layout::<_, $layout, _, i32>(
+            let produced = profile::algo::select_masked_unary_mask_layout::<_, $layout, _, i32>(
                 policy,
                 &mut negative,
                 &input,
@@ -109,7 +109,7 @@ fn main() {
             );
 
             let mut left_negative_for_mask = LeftNegative;
-            let masks_produced = tsl::algo::predicate_binary_mask_layout::<_, $layout, _, i32>(
+            let masks_produced = profile::algo::predicate_binary_mask_layout::<_, $layout, _, i32>(
                 policy,
                 &mut left_negative_for_mask,
                 &input,
@@ -120,7 +120,7 @@ fn main() {
 
             output.fill(i32::MAX);
             let mut less_than = LessThan;
-            let produced = tsl::algo::select_masked_binary_mask_layout::<_, $layout, _, i32>(
+            let produced = profile::algo::select_masked_binary_mask_layout::<_, $layout, _, i32>(
                 policy,
                 &mut less_than,
                 &input,
@@ -143,33 +143,33 @@ fn main() {
             let policy = $policy;
             run_layout!(
                 policy,
-                tsl::algo::mask_layout::Integral,
-                tsl::algo::integral_mask_chunk_count::<_, i32>(policy, input.len()),
+                profile::algo::mask_layout::Integral,
+                profile::algo::integral_mask_chunk_count::<_, i32>(policy, input.len()),
                 Default::default()
             );
             run_layout!(
                 policy,
-                tsl::algo::mask_layout::Native,
-                tsl::algo::native_mask_chunk_count::<_, i32>(policy, input.len()),
+                profile::algo::mask_layout::Native,
+                profile::algo::native_mask_chunk_count::<_, i32>(policy, input.len()),
                 Default::default()
             );
             run_layout!(
                 policy,
-                tsl::algo::mask_layout::Bytes,
-                tsl::algo::byte_mask_count::<_, i32>(policy, input.len()),
+                profile::algo::mask_layout::Bytes,
+                profile::algo::byte_mask_count::<_, i32>(policy, input.len()),
                 0u8
             );
             run_layout!(
                 policy,
-                tsl::algo::mask_layout::Bits,
-                tsl::algo::bit_mask_count::<_, i32>(policy, input.len()),
+                profile::algo::mask_layout::Bits,
+                profile::algo::bit_mask_count::<_, i32>(policy, input.len()),
                 0xFFu8
             );
         }};
     }
 
-    run_policy!(tsl::algo::parallelism::native());
-    run_policy!(tsl::algo::parallelism::fixed::<1>());
-    run_policy!(tsl::algo::parallelism::generic::<4>());
-    run_policy!(tsl::algo::parallelism::generic::<16>());
+    run_policy!(tsl::dataparallel::native());
+    run_policy!(tsl::dataparallel::fixed::<1>());
+    run_policy!(tsl::dataparallel::generic::<4>());
+    run_policy!(tsl::dataparallel::generic::<16>());
 }

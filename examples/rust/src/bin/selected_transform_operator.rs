@@ -1,26 +1,26 @@
-use tsl_generated::tsl_core::StaticSimdVector;
-use tsl_generated::tsl_scalar as tsl;
+use tsl::tsl_core::StaticSimdVector;
+use tsl::profile;
 
 struct Square;
 
-impl<V> tsl::algo::UnaryKernel<V> for Square
+impl<V> profile::algo::UnaryKernel<V> for Square
 where
-    V: StaticSimdVector<BaseType = i32> + tsl::detail::primitives::MulImpl,
+    V: StaticSimdVector<BaseType = i32> + profile::detail::primitives::MulImpl,
     V::RegisterType: Copy,
 {
     fn apply(&mut self, value: V::RegisterType) -> V::RegisterType {
-        tsl::mul::<V>(value, value)
+        profile::mul::<V>(value, value)
     }
 }
 
 struct Add;
 
-impl<V> tsl::algo::BinaryKernel<V> for Add
+impl<V> profile::algo::BinaryKernel<V> for Add
 where
-    V: StaticSimdVector<BaseType = i32> + tsl::detail::primitives::AddImpl,
+    V: StaticSimdVector<BaseType = i32> + profile::detail::primitives::AddImpl,
 {
     fn apply(&mut self, left: V::RegisterType, right: V::RegisterType) -> V::RegisterType {
-        tsl::add::<V>(left, right)
+        profile::add::<V>(left, right)
     }
 }
 
@@ -74,12 +74,12 @@ fn main() {
 
             let mut output = vec![SENTINEL; COUNT];
             let mut square = Square;
-            tsl::algo::transform_selected_unary(policy, &mut square, &left, &indices, &mut output);
+            profile::algo::transform_selected_unary(policy, &mut square, &left, &indices, &mut output);
             verify_unary(&left, &indices, &output, SENTINEL);
 
             output.fill(SENTINEL);
             let mut add = Add;
-            tsl::algo::transform_selected_binary(
+            profile::algo::transform_selected_binary(
                 policy,
                 &mut add,
                 &left,
@@ -92,7 +92,7 @@ fn main() {
             output.fill(SENTINEL);
             let mut scaled_square = Square;
             unsafe {
-                tsl::algo::transform_selected_unary_scaled_raw::<4, _, _, _>(
+                profile::algo::transform_selected_unary_scaled_raw::<4, _, _, _>(
                     policy,
                     &mut scaled_square,
                     left.as_ptr(),
@@ -105,8 +105,8 @@ fn main() {
         }};
     }
 
-    run_policy!(tsl::algo::parallelism::native());
-    run_policy!(tsl::algo::parallelism::fixed::<1>());
-    run_policy!(tsl::algo::parallelism::generic::<4>());
-    run_policy!(tsl::algo::parallelism::generic::<16>());
+    run_policy!(tsl::dataparallel::native());
+    run_policy!(tsl::dataparallel::fixed::<1>());
+    run_policy!(tsl::dataparallel::generic::<4>());
+    run_policy!(tsl::dataparallel::generic::<16>());
 }

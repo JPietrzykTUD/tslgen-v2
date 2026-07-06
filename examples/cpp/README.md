@@ -70,15 +70,16 @@ struct square_op {
 ```
 
 The example allocates 1000 `std::int32_t` values, fills them, and verifies the
-same operation through native and exact data-parallel policies:
+same operation through native, exact scalar, and portable generic policies:
 
-- `transform_unary(...)` defaults to `parallelism::native`, the selected
+- `transform_unary(...)` defaults to `dataparallel::native`, the selected
   profile's natural vector shape for the element type.
-- `transform_unary<1>`, `transform_unary<4>`, and `transform_unary<128>`
-  request exact lane counts. They forward to `parallelism::fixed<N>` internally,
-  using a matching static native vector when available or the portable
-  `tsl::generic<N>` vector otherwise.
-- `transform_unary<128>` demonstrates a large portable generic vector and why
+- `transform_unary<1>` requests the exact scalar lane count and forwards to
+  `dataparallel::fixed<1>` internally.
+- `transform_unary<tsl::dataparallel::generic<4>>` demonstrates a portable
+  four-lane generic vector without requiring a matching hardware mapping.
+- `transform_unary<tsl::dataparallel::generic<128>>` demonstrates a large
+  portable generic vector and why
   operations should accept values through
   `tsl::reg_param<Vec>::type`.
 - `alignment::peel_to_aligned` can be requested explicitly when matching input
@@ -95,6 +96,48 @@ or partial input/output overlap is not part of the dense transform contract.
 names the generated-library parameter-passing convention for that object:
 native/scalar registers are passed by value, while array-backed generic
 registers are passed by `const&` to avoid large copies.
+
+The example also demonstrates the generated primitive policy facade for a pure
+binary register transform:
+
+```cpp
+auto squared = tsl::mul<tsl::dataparallel::generic<8>, std::int32_t>(
+    values,
+    values);
+```
+
+The canonical primitive call remains `tsl::mul<Vec>(...)`; the policy facade is
+a thin convenience wrapper that maps `(Policy, T)` to `Vec` and forwards.
+
+The same example uses policy facades for plain contiguous memory access:
+
+```cpp
+auto values =
+    tsl::load<tsl::dataparallel::generic<8>, std::int32_t, false>(input);
+tsl::store<tsl::dataparallel::generic<8>, std::int32_t, false>(
+    output,
+    values);
+```
+
+The final `false` is the compile-time alignment promise. Unmasked `load` and
+register `store` are covered; masked/gather/compress forms remain explicit
+primitive/helper contracts.
+
+It also demonstrates target-base conversion facades:
+
+```cpp
+auto casted =
+    tsl::cast<tsl::dataparallel::generic<8>, std::int32_t, std::uint32_t>(
+        values);
+auto bits =
+    tsl::reinterpret<
+        tsl::dataparallel::generic<8>,
+        std::int32_t,
+        std::uint32_t>(values);
+```
+
+These map the source vector from `(Policy, FromT)` and rebind its base type for
+the target vector.
 
 ### `binary_operator.cpp`
 
@@ -113,9 +156,21 @@ struct add_op {
 
 The example allocates two 1000-element `std::int32_t` inputs, fills them, and
 verifies the native default plus direct `transform_binary<1>`,
-`transform_binary<4>`, and `transform_binary<128>` exact-lane overloads. It
+`transform_binary<tsl::dataparallel::generic<4>>`, and
+`transform_binary<tsl::dataparallel::generic<128>>` policies. It
 exercises the same helper-owned loop, alignment, load, tail, and store mechanics
 as the unary example, but for two contiguous input columns.
+
+It also demonstrates the generated primitive policy facade:
+
+```cpp
+auto sum = tsl::add<tsl::dataparallel::generic<8>, std::int32_t>(
+    left_values,
+    right_values);
+```
+
+The canonical primitive call remains `tsl::add<Vec>(...)`; the policy facade is
+a thin convenience wrapper that maps `(Policy, T)` to `Vec` and forwards.
 
 The example also calls `alignment::peel_to_aligned` on shifted input and output
 regions, demonstrating the explicit scalar-prologue policy for dense transforms.
@@ -134,7 +189,8 @@ type inference and chunk/tail enumeration, but the operation owns memory effects
 
 The example receives `(chunk_ptr, offset, count)`, verifies the metadata, loads
 the chunk itself with `tsl::load<Vec, false>`, and sums the values. It verifies
-the native default plus exact-lane overloads `1`, `4`, and `16`.
+the native default, exact scalar `fixed<1>`, and portable generic widths `4`
+and `16`.
 
 ### `range_operator.cpp`
 
@@ -165,10 +221,33 @@ struct less_than_op {
 
 The unary case marks negative input values, and the binary case marks
 `left < right`. The helper stores one `Vec::imask_type` per vector chunk and
-returns the number of produced mask chunks. The example verifies exact lane
-counts `1`, `4`, and `16`. It intentionally does not use `128` lanes because
+returns the number of produced mask chunks. The example verifies exact scalar
+`fixed<1>` plus portable generic widths `4` and `16`. It intentionally does
+not use `128` lanes because
 the current integral mask contract requires `Vec::imask_type` to have at least
 one bit per lane.
+
+The example also demonstrates generated primitive policy facades for unmasked
+predicates and mask-only operations:
+
+```cpp
+auto mask = tsl::less_than<tsl::dataparallel::generic<4>, std::int32_t>(
+    left_values,
+    right_values);
+auto all = tsl::mask_true<tsl::dataparallel::generic<4>, std::int32_t>();
+auto active =
+    tsl::mask_binary_and<tsl::dataparallel::generic<4>, std::int32_t>(
+        all,
+        mask);
+```
+
+Predicate facades return the selected vector's native `mask_type`. The example
+uses `tsl::to_integral<Vec>(mask)` before checking lanes, so the verification
+is independent of whether the native mask is a scalar boolean, an integral
+bitset, or a hardware mask register. Mask-operation facades consume and produce
+that same native `mask_type`; they do not materialize helper-owned mask streams.
+The example also calls `tsl::mask_population_count<Policy, T>` on a native mask
+and compares it with the expected active-lane count.
 
 ### `where_operator.cpp`
 
@@ -211,10 +290,10 @@ Demonstrates `tsl::algo::mask_layout::native` for predicate, where, and masked
 full-store helpers. The helper stores one `Vec::mask_type` per vector chunk
 instead of one integral `Vec::imask_type`.
 
-The example uses `fixed_native_mask_type` and `native_mask_chunk_count` to
-allocate caller-owned native mask storage. It verifies exact lane counts `1`,
-`4`, and `16`, including a non-multiple input length so the native tail path is
-exercised.
+The example uses `native_mask_type` and `native_mask_chunk_count` to allocate
+caller-owned native mask storage. It verifies exact scalar `fixed<1>` plus
+portable generic widths `4` and `16`, including a non-multiple input length so
+the native tail path is exercised.
 
 ### `byte_mask_operator.cpp`
 
@@ -222,10 +301,10 @@ Demonstrates `tsl::algo::mask_layout::bytes` for predicate, where, and masked
 full-store helpers. The helper stores one `std::uint8_t` activity value per
 input row, using `0` for inactive and `1` for active.
 
-The example uses `fixed_byte_mask_type` and `byte_mask_count` for caller-owned
-byte mask storage. It verifies byte materialization, exact lane counts `1`,
-`4`, and `16`, and a non-multiple input length so scalar tail handling is
-covered.
+The example uses `byte_mask_type` and `byte_mask_count` for caller-owned byte
+mask storage. It verifies byte materialization, exact scalar `fixed<1>` plus
+portable generic widths `4` and `16`, and a non-multiple input length so scalar
+tail handling is covered.
 
 ### `bit_mask_operator.cpp`
 
@@ -234,9 +313,9 @@ full-store helpers. The helper stores one activity bit per row using
 little-endian bit order inside each byte: row `i` is stored in byte `i / 8`,
 bit `i % 8`.
 
-The example uses `fixed_bit_mask_type` and `bit_mask_count` for caller-owned
-packed mask storage. It verifies the packed representation, including that bits
-beyond the logical row count are cleared in the final byte.
+The example uses `bit_mask_type` and `bit_mask_count` for caller-owned packed
+mask storage. It verifies the packed representation, including that bits beyond
+the logical row count are cleared in the final byte.
 
 ### `selection_operator.cpp`
 
@@ -261,8 +340,8 @@ both masks are active.
 The example builds input masks with `predicate_unary` and `predicate_binary`,
 then selects left-input values from the active rows. It verifies compacted
 order, the returned produced count, untouched output positions after
-`produced`, exact-lane overloads `1`, `4`, and `16`, and integral, native,
-byte, and packed-bit mask layouts.
+`produced`, exact scalar `fixed<1>` plus portable generic widths `4` and `16`,
+and integral, native, byte, and packed-bit mask layouts.
 
 ### `selection_vector_operator.cpp`
 
@@ -302,7 +381,7 @@ original row ids whose selected rows passed the predicate.
 Like other selected-row helpers, refinement uses `gather_narrow` for 32-bit and
 64-bit pointer-backed row-id streams, falling back to scalar or portable
 generic loading where needed. The example verifies pointer and range overloads
-for exact lane counts `1`, `4`, and `16`, including that output order follows
+for selected-row widths `1`, `4`, and `16`, including that output order follows
 the input selection vector.
 
 ### `selected_aggregate_consume_operator.cpp`
@@ -316,7 +395,7 @@ value or update a stateful sink.
 Like selected transforms, these helpers use `gather_narrow` for 32-bit and
 64-bit pointer-backed row-id streams, falling back to scalar or portable
 generic loading where needed. The example checks pointer and range overloads
-for exact lane counts `1`, `4`, and `16`.
+for selected-row widths `1`, `4`, and `16`.
 
 ### `count_operator.cpp`
 
@@ -329,9 +408,10 @@ values, or row ids.
 The masked helpers combine the input mask with the operation-produced predicate
 mask before counting. The selected helpers count matching rows from an existing
 selection vector using the same selected-row loading policy as selected
-transforms. The example verifies pointer and range overloads for exact lane
-counts `1`, `4`, and `16`, and covers integral, native, byte, and packed-bit
-mask layouts.
+transforms. The example verifies exact scalar `fixed<1>` plus portable generic
+widths `4` and `16` for dense/masked counts, selected-row widths `1`, `4`, and
+`16` for selected counts, and covers integral, native, byte, and packed-bit mask
+layouts.
 
 ### `aggregation_operator.cpp`
 
@@ -342,8 +422,18 @@ and returns the final value through `finalize()`.
 
 The example sums 1000 `std::int32_t` values with unary and binary operations
 that call `tsl::hadd<Vec>` for each chunk and accumulate into a
-`std::int64_t` scalar. It verifies the native default plus direct exact-lane
-overloads `1`, `4`, and `16`.
+`std::int64_t` scalar. It verifies the native default, exact scalar `fixed<1>`,
+and portable generic widths `4` and `16`.
+
+It also demonstrates generated primitive policy facades for reductions:
+
+```cpp
+auto sum = tsl::hadd<tsl::dataparallel::generic<4>, std::int32_t>(values);
+auto matches =
+    tsl::count_matches<tsl::dataparallel::generic<4>, std::int32_t>(
+        values,
+        needle);
+```
 
 ### `masked_aggregation_operator.cpp`
 
@@ -354,8 +444,9 @@ accept the activity mask, ignore inactive lanes in its accumulator state, and
 return the final value through `finalize()`.
 
 The example builds masks with `predicate_binary`, then sums only active rows
-for integral, native, byte, and packed-bit mask layouts. It verifies exact-lane
-overloads `1`, `4`, and `16` with a non-multiple input length.
+for integral, native, byte, and packed-bit mask layouts. It verifies exact
+scalar `fixed<1>` plus portable generic widths `4` and `16` with a non-multiple
+input length.
 
 ### `consume_operator.cpp`
 
@@ -375,7 +466,8 @@ value loading, and scalar tail handling, but produce no helper-owned output.
 
 The example passes mask-aware stateful sinks by lvalue and verifies that only
 active lanes contribute to the observed state. It covers integral, native,
-byte, and packed-bit mask layouts with exact-lane overloads `1`, `4`, and `16`.
+byte, and packed-bit mask layouts with exact scalar `fixed<1>` plus portable
+generic widths `4` and `16`.
 
 ## CI Integration
 
