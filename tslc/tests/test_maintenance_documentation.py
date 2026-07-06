@@ -85,6 +85,30 @@ def test_document_generated_writes_assets_and_runs_tools(
     assert "cargo doc --no-deps" in log_text
     assert "npm ci --no-audit --no-fund" in log_text
     assert "npm run build" in log_text
+    assert "VITE_TSLC_GIT_BRANCH=" in log_text
+    assert "VITE_TSLC_GIT_HASH=" in log_text
+
+
+def test_document_generated_site_only_skips_backend_docs_and_npm_ci(tmp_path) -> None:
+    output_root = _generated_project(tmp_path / "generated")
+
+    report = document_generated(
+        output_root,
+        ("cpp", "rust"),
+        site_only=True,
+        npm_ci=False,
+        dry_run=True,
+    )
+
+    assert report.errors == ()
+    assert [(c.backend_id, c.step) for c in report.commands] == [
+        ("site", "npm-build"),
+        ("site", "sphinx"),
+    ]
+    assert output_root / "docs/site" in report.outputs
+    assert output_root / "docs/site/specializations" in report.outputs
+    assert output_root / "docs/site/rust" in report.outputs
+    assert not (output_root / "cpp/docs/doxygen/Doxyfile").exists()
 
 
 def test_document_generated_reports_missing_generated_projects(tmp_path) -> None:
@@ -197,7 +221,16 @@ import sys
 from pathlib import Path
 
 log = Path(os.environ["TSLC_DOC_FAKE_LOG"])
-log.write_text(log.read_text() + Path(sys.argv[0]).name + " " + " ".join(sys.argv[1:]) + "\\n" if log.exists() else Path(sys.argv[0]).name + " " + " ".join(sys.argv[1:]) + "\\n")
+env_note = ""
+if Path(sys.argv[0]).name == "npm" and sys.argv[1:3] == ["run", "build"]:
+    env_note = (
+        " VITE_TSLC_GIT_BRANCH="
+        + os.environ.get("VITE_TSLC_GIT_BRANCH", "")
+        + " VITE_TSLC_GIT_HASH="
+        + os.environ.get("VITE_TSLC_GIT_HASH", "")
+    )
+line = Path(sys.argv[0]).name + " " + " ".join(sys.argv[1:]) + env_note + "\\n"
+log.write_text(log.read_text() + line if log.exists() else line)
 name = Path(sys.argv[0]).name
 if name == "doxygen":
     doxyfile = Path(sys.argv[1])

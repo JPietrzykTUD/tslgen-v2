@@ -11,9 +11,9 @@ the profile yields its own specialization slot (the extension is part of the
 
 An implementation body is usable only if the `requires` clause that applies to the
 type has its target features ⊆ the profile's feature set. Extension variants such
-as `avx2_vl` become candidates through `active_when.target_features` and hide
-their bases through explicit `supersedes`; base extension bodies self-gate via
-`requires`.
+as `avx2_vl` become candidates through `active_when` profile capabilities and
+hide their bases through explicit `supersedes`; base extension bodies self-gate
+via `requires`.
 """
 
 from __future__ import annotations
@@ -224,10 +224,10 @@ class Selector:
         Base extensions usually have no activation guard; their individual bodies
         self-gate via `requires` (e.g. avx2's 256-bit *float* add needs only `avx`,
         so it appears on an avx-only profile while its 256-bit *integer* add does not).
-        Extension variants (e.g. `avx2_vl`) use `active_when.target_features` to
-        become candidates and explicit `supersedes` entries to hide bases on profiles
-        where the variant should replace them. Candidates with no usable body for any
-        type drop out later in `_best_body`.
+        Extension variants (e.g. `avx2_vl`) use `active_when` to become candidates
+        and explicit `supersedes` entries to hide bases on profiles where the variant
+        should replace them. Candidates with no usable body for any type drop out later
+        in `_best_body`.
         """
 
         active: dict[str, Extension] = {}
@@ -246,7 +246,10 @@ class Selector:
                 # `requires []` body (the scalar-store) from registering an extension substrate
                 # on a profile family that did not declare it.
                 continue
-            if not ext.active_when.is_satisfied_by(profile.features):
+            if not ext.active_when.is_satisfied_by(
+                profile.features,
+                profile.compile_modes,
+            ):
                 continue
             active[name] = ext
 

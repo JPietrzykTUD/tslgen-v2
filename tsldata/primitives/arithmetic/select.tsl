@@ -1,7 +1,7 @@
 description "Selective operations"
 
 prim<v:=(v,v)> max(vec_a, vec_b):
-  brief_description "Compares two vectors and returns the maximum of each element."
+  brief_description "Selects the lane-wise maximum of two vector registers."
   detailed_description """
     Compares two vector registers lane-wise and returns the greater lane value.
     Each output lane depends only on the corresponding lanes of `vec_a` and
@@ -53,7 +53,7 @@ prim<v:=(v,v)> max(vec_a, vec_b):
           """
 
 prim<v:=(v,v)> min(vec_a, vec_b):
-  brief_description "Compares two vectors and returns the minimum of each element."
+  brief_description "Selects the lane-wise minimum of two vector registers."
   detailed_description """
     Compares two vector registers lane-wise and returns the smaller lane value.
     Each output lane depends only on the corresponding lanes of `vec_a` and

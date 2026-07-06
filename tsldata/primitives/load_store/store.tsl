@@ -1,5 +1,5 @@
 prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
-  brief_description "Store 128-bits of integer data from \"a\" into memory."
+  brief_description "Stores a vector register to contiguous memory."
   detailed_description """
     Stores one full vector register to contiguous memory. The `aligned`
     attribute selects whether the pointer is promised to satisfy the selected
@@ -157,7 +157,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
     ptr:
       "if packed=true" "type(vector::imask) *"
       "if packed=false" "type(base::unsigned_of(type(base::in))) *"
-  brief_description "Stores a mask to aligned memory."
+  brief_description "Stores a mask value to memory using the selected mask representation."
   detailed_description """
     Stores a mask value to memory. With `packed=true`, memory receives the
     compact integral mask representation. With `packed=false`, memory receives
@@ -395,7 +395,7 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
             }
           """
 prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
-  brief_description "Stores a scalar mask to aligned memory."
+  brief_description "Stores one scalar value to memory."
   detailed_description """
     Stores one scalar value to memory. The `aligned` attribute selects whether
     the pointer is promised to satisfy the scalar storage alignment expected by
@@ -468,7 +468,7 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
           tsil "*ptr = scalar;"
 
 prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
-  brief_description "Store packed 8-bit integers from \"a\" into memory using writemask \"k\".\n\t\"mem_addr\" does not need to be aligned on any particular boundary."
+  brief_description "Stores active mask lanes of a vector register to contiguous memory and leaves inactive lanes untouched."
   detailed_description """
     Stores mask-selected vector lanes to contiguous memory and leaves inactive
     memory lanes unchanged. The `aligned` attribute selects whether the pointer

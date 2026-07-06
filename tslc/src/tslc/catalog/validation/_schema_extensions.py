@@ -11,8 +11,8 @@ from tslc.catalog.validation._schema_common import (
     validate_backend_key_fields,
     validate_known_fields,
 )
-from tslc.catalog.validation.source_spans import child, children, field_text
-from tslc.diagnostics import Diagnostic
+from tslc.catalog.validation.source_spans import child, children, field_text, source_span
+from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.syntax.ast import ParsedBlockDeclaration, ParsedTslField
 
@@ -57,6 +57,7 @@ KNOWN_EXTENSION_FIELDS = EXTENSION_METADATA_FIELDS | frozenset(
 KNOWN_EXTENSION_BACKEND_FIELDS = frozenset(
     {
         "arch_module",
+        "compile_guards",
         "generation_support",
         "header_guard",
         "headers",
@@ -142,7 +143,7 @@ def validate_extension_block(
     if active_when is not None:
         validate_known_fields(
             children(active_when),
-            frozenset({"target_features"}),
+            frozenset({"target_features", "compile_modes"}),
             diagnostics,
             owner="active_when",
         )
@@ -179,6 +180,11 @@ def validate_extension_block(
             diagnostics,
             label=f"extension backend {backend_id} field",
         )
+        _validate_compile_guards(
+            child(backend, "compile_guards"),
+            diagnostics,
+            backend_id,
+        )
     for backend_map_name in (
         "runtime_lane_count",
         "test_runtime_lanes",
@@ -198,6 +204,45 @@ def validate_extension_block(
                 diagnostics,
                 owner=backend_map_name,
             )
+
+
+def _validate_compile_guards(
+    field: ParsedTslField | None,
+    diagnostics: list[Diagnostic],
+    backend_id: str,
+) -> None:
+    if field is None:
+        return
+    diagnose_duplicate_fields(
+        children(field),
+        diagnostics,
+        label=f"{backend_id} compile guard",
+    )
+    for guard in children(field):
+        validate_known_fields(
+            children(guard),
+            frozenset({"macro", "equals", "hint_flag", "diagnostic"}),
+            diagnostics,
+            owner=f"{backend_id} compile guard {guard.key.text!r}",
+        )
+        diagnose_duplicate_fields(
+            children(guard),
+            diagnostics,
+            label=f"{backend_id} compile guard {guard.key.text!r} field",
+        )
+        for required in ("macro", "equals"):
+            if field_text(child(guard, required)) is None:
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-MALFORMED-COMPILE-GUARD",
+                        message=(
+                            f"{backend_id} compile guard {guard.key.text!r} "
+                            f"requires scalar field {required!r}"
+                        ),
+                        source=source_span(guard.source),
+                    )
+                )
 
 
 def _validate_policy_block(

@@ -1,7 +1,7 @@
 description "Range compare operations"
 
 prim<m:=(v,v,v)> between_inclusive(x, left, right):
-  brief_description "Checks if the values of \"x\" are within an inclusive range (left <= x <= right)."
+  brief_description "Tests whether each lane of x lies in the inclusive range left <= x <= right."
   detailed_description """
     Checks each lane of `x` against the inclusive range bounded by `left` and
     `right`, returning a mask for lanes where `left <= x <= right`. Signedness
@@ -234,7 +234,7 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
           """
 
 prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
-  brief_description "Checks if the values of \"x\" are within a left-inclusive range (left <= x < right)."
+  brief_description "Tests whether each lane of x lies in the left-inclusive range left <= x < right."
   detailed_description """
     Checks each lane of `x` against the range with an inclusive left bound and
     exclusive right bound, returning a mask for lanes where `left <= x < right`.
@@ -467,7 +467,7 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
           """
 
 prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
-  brief_description "Checks if the values of \"x\" are within a right-inclusive range (left < x <= right)."
+  brief_description "Tests whether each lane of x lies in the right-inclusive range left < x <= right."
   detailed_description """
     Checks each lane of `x` against the range with an exclusive left bound and
     inclusive right bound, returning a mask for lanes where `left < x <= right`.
@@ -700,7 +700,7 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
           """
 
 prim<m:=(v,v,v)> between_exclusive(x, left, right):
-  brief_description "Checks if the values of \"x\" are within an exclusive range (left < x < right)."
+  brief_description "Tests whether each lane of x lies in the exclusive range left < x < right."
   detailed_description """
     Checks each lane of `x` against the exclusive range bounded by `left` and
     `right`, returning a mask for lanes where `left < x < right`. Signedness
@@ -933,7 +933,7 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
           """
 
 prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
-  brief_description "Checks if the values of \"x\" are within an inclusive range only on active lanes of \"mask\", clearing inactive lanes in the result."
+  brief_description "Tests active lanes for the inclusive range left <= x <= right and clears inactive lanes in the result mask."
   detailed_description """
     Checks active lanes of `x` against the inclusive range bounded by `left` and
     `right`, clearing inactive lanes in the result mask. Active lanes are true
@@ -1176,7 +1176,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
           """
 
 prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
-  brief_description "Checks if the values of \"x\" are within a left-inclusive range only on active lanes of \"mask\", clearing inactive lanes in the result."
+  brief_description "Tests active lanes for the left-inclusive range left <= x < right and clears inactive lanes in the result mask."
   detailed_description """
     Checks active lanes of `x` against a range with an inclusive left bound and
     exclusive right bound, clearing inactive lanes in the result mask. Active
@@ -1419,7 +1419,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
           """
 
 prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
-  brief_description "Checks if the values of \"x\" are within a right-inclusive range only on active lanes of \"mask\", clearing inactive lanes in the result."
+  brief_description "Tests active lanes for the right-inclusive range left < x <= right and clears inactive lanes in the result mask."
   detailed_description """
     Checks active lanes of `x` against a range with an exclusive left bound and
     inclusive right bound, clearing inactive lanes in the result mask. Active
@@ -1662,7 +1662,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
           """
 
 prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
-  brief_description "Checks if the values of \"x\" are within an exclusive range only on active lanes of \"mask\", clearing inactive lanes in the result."
+  brief_description "Tests active lanes for the exclusive range left < x < right and clears inactive lanes in the result mask."
   detailed_description """
     Checks active lanes of `x` against the exclusive range bounded by `left` and
     `right`, clearing inactive lanes in the result mask. Active lanes are true

@@ -465,6 +465,166 @@ extension sve:
   integral_mask_type_policy:
     kind "same_as_mask_type"
 
+# Fixed-width SVE variants reuse scalable SVE primitive bodies through `inherits`,
+# but `supersedes ["sve"]` makes each fixed profile emit one SVE model instead
+# of both scalable and fixed SVE. The fixed width is a compiler mode, not a
+# hardware target feature: machine profiles pair target_features ["sve"] with a
+# compile_modes entry such as "sve_vector_bits_512" and the matching
+# -msve-vector-bits flag. C++ accepts scalable SVE plus the selected fixed width
+# in one translation unit, but not several fixed SVE widths at once.
+extension sve128:
+  vendor "arm"
+  extension_name "sve128"
+  inherits "sve"
+  vector_bits 128
+  native_sort_order 710
+  autodetect false
+  active_when:
+    target_features ["sve"]
+    compile_modes ["sve_vector_bits_128"]
+  supersedes ["sve"]
+  mask_repr "vector"
+  mask_width "lanes"
+  mask_vector_loadable false
+  runtime_lanes false
+  default_test_target true
+  cpp:
+    compile_guards:
+      sve_vector_bits:
+        macro "__ARM_FEATURE_SVE_BITS"
+        equals 128
+        hint_flag "-msve-vector-bits=128"
+        diagnostic "TSL sve128 profile requires -msve-vector-bits=128"
+  vector_register_types:
+    si8:
+      cpp "svint8_t __attribute__((arm_sve_vector_bits(128)))"
+    ui8:
+      cpp "svuint8_t __attribute__((arm_sve_vector_bits(128)))"
+    si16:
+      cpp "svint16_t __attribute__((arm_sve_vector_bits(128)))"
+    ui16:
+      cpp "svuint16_t __attribute__((arm_sve_vector_bits(128)))"
+    si32:
+      cpp "svint32_t __attribute__((arm_sve_vector_bits(128)))"
+    ui32:
+      cpp "svuint32_t __attribute__((arm_sve_vector_bits(128)))"
+    si64:
+      cpp "svint64_t __attribute__((arm_sve_vector_bits(128)))"
+    ui64:
+      cpp "svuint64_t __attribute__((arm_sve_vector_bits(128)))"
+    f32:
+      cpp "svfloat32_t __attribute__((arm_sve_vector_bits(128)))"
+    f64:
+      cpp "svfloat64_t __attribute__((arm_sve_vector_bits(128)))"
+  mask_type_policy:
+    kind "native_predicate"
+    backend_spelling:
+      cpp "svbool_t __attribute__((arm_sve_vector_bits(128)))"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
+
+extension sve256:
+  vendor "arm"
+  extension_name "sve256"
+  inherits "sve"
+  vector_bits 256
+  native_sort_order 720
+  autodetect false
+  active_when:
+    target_features ["sve"]
+    compile_modes ["sve_vector_bits_256"]
+  supersedes ["sve"]
+  mask_repr "vector"
+  mask_width "lanes"
+  mask_vector_loadable false
+  runtime_lanes false
+  default_test_target true
+  cpp:
+    compile_guards:
+      sve_vector_bits:
+        macro "__ARM_FEATURE_SVE_BITS"
+        equals 256
+        hint_flag "-msve-vector-bits=256"
+        diagnostic "TSL sve256 profile requires -msve-vector-bits=256"
+  vector_register_types:
+    si8:
+      cpp "svint8_t __attribute__((arm_sve_vector_bits(256)))"
+    ui8:
+      cpp "svuint8_t __attribute__((arm_sve_vector_bits(256)))"
+    si16:
+      cpp "svint16_t __attribute__((arm_sve_vector_bits(256)))"
+    ui16:
+      cpp "svuint16_t __attribute__((arm_sve_vector_bits(256)))"
+    si32:
+      cpp "svint32_t __attribute__((arm_sve_vector_bits(256)))"
+    ui32:
+      cpp "svuint32_t __attribute__((arm_sve_vector_bits(256)))"
+    si64:
+      cpp "svint64_t __attribute__((arm_sve_vector_bits(256)))"
+    ui64:
+      cpp "svuint64_t __attribute__((arm_sve_vector_bits(256)))"
+    f32:
+      cpp "svfloat32_t __attribute__((arm_sve_vector_bits(256)))"
+    f64:
+      cpp "svfloat64_t __attribute__((arm_sve_vector_bits(256)))"
+  mask_type_policy:
+    kind "native_predicate"
+    backend_spelling:
+      cpp "svbool_t __attribute__((arm_sve_vector_bits(256)))"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
+
+extension sve512:
+  vendor "arm"
+  extension_name "sve512"
+  inherits "sve"
+  vector_bits 512
+  native_sort_order 730
+  autodetect false
+  active_when:
+    target_features ["sve"]
+    compile_modes ["sve_vector_bits_512"]
+  supersedes ["sve"]
+  mask_repr "vector"
+  mask_width "lanes"
+  mask_vector_loadable false
+  runtime_lanes false
+  default_test_target true
+  cpp:
+    compile_guards:
+      sve_vector_bits:
+        macro "__ARM_FEATURE_SVE_BITS"
+        equals 512
+        hint_flag "-msve-vector-bits=512"
+        diagnostic "TSL sve512 profile requires -msve-vector-bits=512"
+  vector_register_types:
+    si8:
+      cpp "svint8_t __attribute__((arm_sve_vector_bits(512)))"
+    ui8:
+      cpp "svuint8_t __attribute__((arm_sve_vector_bits(512)))"
+    si16:
+      cpp "svint16_t __attribute__((arm_sve_vector_bits(512)))"
+    ui16:
+      cpp "svuint16_t __attribute__((arm_sve_vector_bits(512)))"
+    si32:
+      cpp "svint32_t __attribute__((arm_sve_vector_bits(512)))"
+    ui32:
+      cpp "svuint32_t __attribute__((arm_sve_vector_bits(512)))"
+    si64:
+      cpp "svint64_t __attribute__((arm_sve_vector_bits(512)))"
+    ui64:
+      cpp "svuint64_t __attribute__((arm_sve_vector_bits(512)))"
+    f32:
+      cpp "svfloat32_t __attribute__((arm_sve_vector_bits(512)))"
+    f64:
+      cpp "svfloat64_t __attribute__((arm_sve_vector_bits(512)))"
+  mask_type_policy:
+    kind "native_predicate"
+    backend_spelling:
+      cpp "svbool_t __attribute__((arm_sve_vector_bits(512)))"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
+
 extension scalar:
   vendor ""
   extension_name "scalar"

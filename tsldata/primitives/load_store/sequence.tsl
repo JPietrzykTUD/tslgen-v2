@@ -1,6 +1,6 @@
 prim<v:=()> sequence():
   cross_lane true
-  brief_description "Creates a sequence [0..SIMD-Reg-Element-Count]."
+  brief_description "Creates a vector register containing lane indices starting at zero."
   detailed_description """
     Constructs a vector whose lanes contain their zero-based lane indexes.
     """
@@ -427,7 +427,7 @@ prim<v:=()> sequence():
 
 prim<v:=(s,s)> custom_sequence(start, stepwidth):
   cross_lane true
-  brief_description "Creates a sequence with start and stepwidth."
+  brief_description "Creates a vector register containing an arithmetic sequence from the supplied start and step values."
   detailed_description """
     Constructs an arithmetic lane sequence beginning at `start` and increasing
     by `stepwidth` for each subsequent lane.

@@ -1,6 +1,6 @@
 description "Special operations"
 prim<m:=v>[value=zero] unequal_zero(data):
-  brief_description "Returns a mask with lanes set where the input is not zero."
+  brief_description "Returns a mask with lanes active where the input lane is nonzero."
   detailed_description """
     Compares each lane with zero and returns a mask with true lanes where the
     input lane is not equal to zero. Floating-point unordered cases follow the
@@ -113,7 +113,7 @@ prim<m:=v>[value=zero] unequal_zero(data):
           tsil "complete(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
 
 prim<s:=(v,s)> count_matches(data, value):
-  brief_description "Counts number of matches of a chosen value within a vector register."
+  brief_description "Counts lanes whose value equals the supplied scalar value."
   detailed_description """
     Broadcasts the scalar value, compares it against each lane of the vector,
     and returns the number of lanes that compare equal. Floating-point unordered

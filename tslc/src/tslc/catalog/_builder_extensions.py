@@ -14,6 +14,7 @@ from tslc.catalog._builder_common import (
     _opt_int,
 )
 from tslc.catalog.model import (
+    BackendCompileGuard,
     BackendExtensionMetadata,
     Extension,
     ExtensionActivation,
@@ -182,7 +183,8 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
 
 def _extension_activation(field: ParsedTslField | None) -> ExtensionActivation:
     return ExtensionActivation(
-        target_features=_list_text_set(_child(field, "target_features"))
+        target_features=_list_text_set(_child(field, "target_features")),
+        compile_modes=_list_text_set(_child(field, "compile_modes")),
     )
 
 
@@ -241,6 +243,7 @@ def _backend_extension_metadata(
         metadata = BackendExtensionMetadata(
             headers=_list_text(_child(backend, "headers")),
             header_guard=_field_text(_child(backend, "header_guard")),
+            compile_guards=_backend_compile_guards(_child(backend, "compile_guards")),
             test_suite_name=_field_text(_child(backend, "test_suite_name")),
             test_support_header=_field_text(_child(backend, "test_support_header")),
             type_name=_field_text(_child(backend, "type_name")),
@@ -250,6 +253,27 @@ def _backend_extension_metadata(
         if metadata != BackendExtensionMetadata():
             result[backend_id] = metadata
     return result
+
+
+def _backend_compile_guards(
+    field: ParsedTslField | None,
+) -> tuple[BackendCompileGuard, ...]:
+    guards: list[BackendCompileGuard] = []
+    for guard in _children(field):
+        macro = _field_text(_child(guard, "macro"))
+        equals = _field_text(_child(guard, "equals"))
+        if macro is None or equals is None:
+            continue
+        guards.append(
+            BackendCompileGuard(
+                name=guard.key.text,
+                macro=macro,
+                equals=equals,
+                hint_flag=_field_text(_child(guard, "hint_flag")),
+                diagnostic=_field_text(_child(guard, "diagnostic")),
+            )
+        )
+    return tuple(guards)
 
 
 def _backend_supported(fields: dict[str, ParsedTslField]) -> dict[str, bool]:
@@ -322,6 +346,10 @@ def _merge_backend_metadata(
         merged[backend_id] = BackendExtensionMetadata(
             headers=child_meta.headers or parent_meta.headers,
             header_guard=child_meta.header_guard or parent_meta.header_guard,
+            compile_guards=_merge_backend_compile_guards(
+                parent_meta.compile_guards,
+                child_meta.compile_guards,
+            ),
             test_suite_name=child_meta.test_suite_name or parent_meta.test_suite_name,
             test_support_header=(
                 child_meta.test_support_header or parent_meta.test_support_header
@@ -333,6 +361,15 @@ def _merge_backend_metadata(
             ),
         )
     return merged
+
+
+def _merge_backend_compile_guards(
+    parent: tuple[BackendCompileGuard, ...],
+    child: tuple[BackendCompileGuard, ...],
+) -> tuple[BackendCompileGuard, ...]:
+    guards = {guard.name: guard for guard in parent}
+    guards.update({guard.name: guard for guard in child})
+    return tuple(guards[name] for name in sorted(guards))
 
 
 

@@ -1,5 +1,5 @@
 prim<s[]:=v> to_array(a):
-  brief_description "Stores SIMD register to array."
+  brief_description "Copies the lanes of a vector register into an array value."
   detailed_description """
     Materializes the lanes of a vector register into an array-like value in
     increasing lane order. The returned array has one element per lane of the
@@ -193,7 +193,7 @@ prim<s[]:=v> to_array(a):
                complete(temp) ;
             """
 prim<v:=s[]> from_array(data):
-  brief_description "Loads SIMD register from array."
+  brief_description "Builds a vector register from an array of lane values."
   detailed_description """
     Constructs a vector register from an array-like value in increasing lane
     order. Each vector lane receives the element with the same lane index.
@@ -257,7 +257,7 @@ prim<v:=s[]> from_array(data):
             complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
           """
 prim<s:=v[idx]> extract_value(a):
-  brief_description "Extracts a value at a given index."
+  brief_description "Returns the scalar lane value at the compile-time index."
   detailed_description """
     Extracts one scalar lane from a vector register. The lane index is a
     generation-time immediate selected by the specialization.

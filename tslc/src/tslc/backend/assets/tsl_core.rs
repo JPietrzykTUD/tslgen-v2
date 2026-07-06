@@ -8,6 +8,30 @@
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ImplementationState {
+    Native,
+    Composed,
+    Fallback,
+    Unknown,
+}
+
+pub trait ImplementationStateOf<Primitive, Vec, Args = ()> {
+    const VALUE: ImplementationState;
+}
+
+pub struct BoolArg<const VALUE: bool>;
+pub struct I8Arg<const VALUE: i8>;
+pub struct I16Arg<const VALUE: i16>;
+pub struct I32Arg<const VALUE: i32>;
+pub struct I64Arg<const VALUE: i64>;
+pub struct ISizeArg<const VALUE: isize>;
+pub struct U8Arg<const VALUE: u8>;
+pub struct U16Arg<const VALUE: u16>;
+pub struct U32Arg<const VALUE: u32>;
+pub struct U64Arg<const VALUE: u64>;
+pub struct USizeArg<const VALUE: usize>;
+
 pub trait SimdVector {
     type BaseType;
     type Extension;

@@ -22,6 +22,27 @@
 
 namespace tsl {
 
+enum class implementation_state {
+    native,
+    composed,
+    fallback,
+    unknown,
+};
+
+template <auto Value>
+struct value_arg {
+    static constexpr auto value = Value;
+};
+
+template <class Primitive, class... Args>
+struct implementation_state_of {
+    static constexpr implementation_state value = implementation_state::unknown;
+};
+
+template <class Primitive, class... Args>
+inline constexpr implementation_state implementation_state_v =
+    implementation_state_of<Primitive, Args...>::value;
+
 // Type-punning bit reinterpret (`cast<bitcast>`): copy the object representation into a
 // same-sized destination type. `std::bit_cast` needs C++20; this `memcpy` form is C++17 and
 // the optimizer lowers it to a register move (used e.g. to read a SIMD register as another).

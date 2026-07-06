@@ -11,7 +11,7 @@ from tslc.backend.target_capability import (
     is_x86_register_extension,
 )
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import Extension
+from tslc.catalog.model import BackendCompileGuard, Extension
 from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
@@ -53,6 +53,7 @@ def cpp_artifacts(
         text(f"cpp/include/{header}", assets.text(header))
         for header in _CPP_STATIC_HEADERS
     ] + [
+        text("cpp/include/tsl_primitives.hpp", _cpp_primitive_tags(profiles)),
         # Ship the formatter config at the C++ project root so `clang-format` (ascending from
         # include/ and tests/) finds it and the generated project is self-contained.
         text("cpp/.clang-format", assets.text(".clang-format")),
@@ -92,6 +93,11 @@ def cpp_artifacts(
             includes=includes,
             registrations=registrations,
             bodies=bodies,
+        )
+        content = _guard_cpp_profile(
+            content,
+            used_exts(by_primitive),
+            profile_render.extensions,
         )
         profile_slug = slug(profile_render.profile.name)
         artifacts.append(text(f"cpp/include/tsl_{profile_slug}.hpp", content))
@@ -164,6 +170,7 @@ def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
 def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) -> str:
     lines = [
         '#include "tsl_core.hpp"',
+        '#include "tsl_primitives.hpp"',
         '#include "tsl_dataparallel.hpp"',
         '#include "tsl_inferred_simd.hpp"',
     ]
@@ -179,6 +186,82 @@ def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) 
     )
     lines.extend(f"#include <{header}>" for header in headers)
     return "\n".join(lines) + "\n"
+
+
+def _cpp_primitive_tags(profiles: tuple[ProfileRender, ...]) -> str:
+    names = sorted(
+        {
+            primitive
+            for profile_render in profiles
+            for primitive in profile_render.specializations("cpp")
+        }
+    )
+    lines = [
+        "#pragma once",
+        "namespace tsl::primitive {",
+        *(f"struct {name} {{}};" for name in names),
+        "}  // namespace tsl::primitive",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _guard_cpp_profile(
+    content: str,
+    emitted_exts: Sequence[str],
+    extensions: Mapping[str, Extension],
+) -> str:
+    guards = _cpp_compile_guards(emitted_exts, extensions)
+    if not guards:
+        return content
+    condition = _cpp_compile_guard_condition(guards)
+    diagnostic = "; ".join(_cpp_compile_guard_diagnostic(guard) for guard in guards)
+    return (
+        f"#if {condition}\n"
+        f"{content}"
+        "#else\n"
+        f'#  error "{diagnostic}"\n'
+        "#endif\n"
+    )
+
+
+def _cpp_compile_guards(
+    emitted_exts: Sequence[str],
+    extensions: Mapping[str, Extension],
+) -> tuple[BackendCompileGuard, ...]:
+    guards: dict[str, BackendCompileGuard] = {}
+    macro_values: dict[str, str] = {}
+    for ext in emitted_exts:
+        extension = extensions.get(ext)
+        metadata = None if extension is None else extension.metadata.backend.get("cpp")
+        for guard in () if metadata is None else metadata.compile_guards:
+            existing = guards.get(guard.name)
+            if existing is not None and existing != guard:
+                raise ValueError(f"conflicting C++ compile guard {guard.name!r}")
+            required = macro_values.get(guard.macro)
+            if required is not None and required != guard.equals:
+                raise ValueError(
+                    f"conflicting C++ compile guard values for {guard.macro}: "
+                    f"{required} and {guard.equals}"
+                )
+            guards[guard.name] = guard
+            macro_values[guard.macro] = guard.equals
+    return tuple(guards[name] for name in sorted(guards))
+
+
+def _cpp_compile_guard_condition(guards: Sequence[BackendCompileGuard]) -> str:
+    return " && ".join(
+        f"defined({guard.macro}) && {guard.macro} == {guard.equals}"
+        for guard in guards
+    )
+
+
+def _cpp_compile_guard_diagnostic(guard: BackendCompileGuard) -> str:
+    if guard.diagnostic:
+        return guard.diagnostic
+    if guard.hint_flag:
+        return f"TSL profile requires {guard.hint_flag}"
+    return f"TSL profile requires {guard.macro} == {guard.equals}"
 
 
 def _cpp_registration(ext: str, extension: Extension | None) -> str:
@@ -636,7 +719,7 @@ def _cpp_profile_detection(
         profile_slug = slug(profile.name)
         if profile_slug == fallback_profile and not profile.features:
             continue
-        source = _cpp_profile_detection_source(profile, profile_render.profile_family)
+        source = _cpp_profile_detection_source(profile_render)
         if source is None:
             continue
         variable = "TSL_CPU_HAS_" + profile_slug.upper()
@@ -675,23 +758,33 @@ def _profile_family_sort_order(profile: ProfileRender) -> int:
 
 
 def _cpp_profile_detection_source(
-    profile: MachineProfile,
-    capability: ProfileFamilyCapability | None,
+    profile_render: ProfileRender,
 ) -> str | None:
+    profile = profile_render.profile
+    capability = profile_render.profile_family
     capability = capability or ProfileFamilyCapability(profile.family)
     if capability.cpp_detection is None:
         return None
     renderer = _CPP_DETECTION_RENDERERS.get(capability.cpp_detection)
     if renderer is None:
         return None
-    return renderer(profile)
+    guards = _cpp_compile_guards(
+        used_exts(profile_render.specializations("cpp")),
+        profile_render.extensions,
+    )
+    return renderer(profile, guards)
 
 
-def _x86_profile_detection_source(profile: MachineProfile) -> str:
-    checks = tuple(
+def _x86_profile_detection_source(
+    profile: MachineProfile,
+    guards: Sequence[BackendCompileGuard] = (),
+) -> str:
+    checks = [
         f'__builtin_cpu_supports("{feature_spelling(feature, profile.alternatives)}")'
         for feature in sorted(profile.features)
-    )
+    ]
+    if guards:
+        checks.append(_cpp_compile_guard_condition(guards))
     condition = " && ".join(checks) if checks else "1"
     return "\n".join(
         (
@@ -707,8 +800,14 @@ def _x86_profile_detection_source(profile: MachineProfile) -> str:
     )
 
 
-def _aarch64_profile_detection_source(profile: MachineProfile) -> str | None:
+def _aarch64_profile_detection_source(
+    profile: MachineProfile,
+    guards: Sequence[BackendCompileGuard] = (),
+) -> str | None:
     if "sve" in profile.features:
+        guard_condition = (
+            f" && {_cpp_compile_guard_condition(guards)}" if guards else ""
+        )
         return "\n".join(
             (
                 "#if defined(__linux__) && defined(__aarch64__)",
@@ -716,7 +815,10 @@ def _aarch64_profile_detection_source(profile: MachineProfile) -> str | None:
                 "#  include <asm/hwcap.h>",
                 "#endif",
                 "int main() {",
-                "#if defined(__linux__) && defined(__aarch64__) && defined(HWCAP_SVE)",
+                (
+                    "#if defined(__linux__) && defined(__aarch64__) "
+                    f"&& defined(HWCAP_SVE){guard_condition}"
+                ),
                 "  return (getauxval(AT_HWCAP) & HWCAP_SVE) ? 0 : 1;",
                 "#else",
                 "  return 1;",

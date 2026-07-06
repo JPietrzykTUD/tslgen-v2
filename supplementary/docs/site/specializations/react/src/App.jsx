@@ -2,20 +2,22 @@ import React, { useEffect, useMemo, useState } from "react";
 
 const SAFETY_FILTERS = ["safe", "internal_unsafe", "caller_unsafe"];
 const NO_REQUIREMENT = "__no_requirement__";
-const GROUP_OPTIONS = [
-  ["profile", "Profile"],
-  ["width", "Width"],
-  ["backend", "Backend"],
-  ["extension", "Extension"],
-  ["safety", "Safety"],
-];
+const BUILD_BRANCH = import.meta.env.VITE_TSLC_GIT_BRANCH ?? "";
+const BUILD_HASH = import.meta.env.VITE_TSLC_GIT_HASH ?? "";
 
 function App() {
   const [payload, setPayload] = useState(null);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [devMode, setDevMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("dev") === "1";
+  });
   const [selectedPrimitive, setSelectedPrimitive] = useState(null);
+  const [selectedBackend, setSelectedBackend] = useState(null);
+  const [activeCell, setActiveCell] = useState(null);
+  const [enabledProfiles, setEnabledProfiles] = useState(null);
   const [enabledRequirements, setEnabledRequirements] = useState(null);
   const [enabledFamilies, setEnabledFamilies] = useState(null);
   const [enabledTypes, setEnabledTypes] = useState(null);
@@ -32,10 +34,13 @@ function App() {
         const decoded = decodePayload(data);
         setPayload(decoded);
         setSelectedPrimitive(null);
+        setSelectedBackend(decoded.backends[0]?.id ?? null);
+        setActiveCell(null);
+        setEnabledProfiles(new Set(decoded.profiles.map((profile) => profile.name)));
         setEnabledRequirements(new Set(decoded.requirements));
         setEnabledFamilies(new Set(decoded.families));
         setEnabledTypes(new Set(decoded.types));
-        setEnabledBackends(new Set(decoded.backends));
+        setEnabledBackends(new Set(decoded.backends.map((backend) => backend.id)));
       })
       .catch((caught) => {
         setError(`Could not load specialization data: ${caught.message}`);
@@ -44,8 +49,20 @@ function App() {
 
   const activeSearch = search.trim().toLowerCase();
   const visibleBackends = useMemo(
-    () => sortedValues(enabledBackends ?? []),
-    [enabledBackends]
+    () =>
+      payload
+        ? payload.backends
+            .filter((backend) => enabledBackends?.has(backend.id))
+            .map((backend) => backend.id)
+        : [],
+    [enabledBackends, payload]
+  );
+  const visibleProfiles = useMemo(
+    () =>
+      payload
+        ? payload.profiles.filter((profile) => enabledProfiles?.has(profile.name))
+        : [],
+    [payload, enabledProfiles]
   );
   const visibleRequirements = useMemo(
     () =>
@@ -75,14 +92,16 @@ function App() {
     return payload.records.filter(
       (record) =>
         recordRequirementsVisible(record, enabledRequirements) &&
+        enabledProfiles?.has(record.profile) &&
         enabledFamilies?.has(record.family) &&
-        recordTypeVisible(record, enabledTypes) &&
+        recordTypeVisible(record, enabledTypes, payload.typeByTag) &&
         enabledBackends?.has(record.backend) &&
         enabledSafety.has(safetyKind(record.safety))
     );
   }, [
     enabledBackends,
     enabledFamilies,
+    enabledProfiles,
     enabledRequirements,
     enabledSafety,
     enabledTypes,
@@ -94,17 +113,37 @@ function App() {
       primitiveMatchesSearch(primitive, payload.records, activeSearch)
     );
   }, [activeSearch, payload]);
-  const activePrimitive = visiblePrimitives.some(
-    (primitive) => primitive.name === selectedPrimitive
-  )
-    ? selectedPrimitive
-    : null;
+  const activePrimitive =
+    payload?.primitiveByName.get(selectedPrimitive) ?? visiblePrimitives[0] ?? null;
+  const activePrimitiveRecords = activePrimitive
+    ? filteredRecords.filter((record) => record.primitive === activePrimitive.name)
+    : [];
+  const setDeveloperMode = (enabled) => {
+    setDevMode(enabled);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (enabled) url.searchParams.set("dev", "1");
+    else url.searchParams.delete("dev");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  };
+  const setProfileSelection = (profiles) => {
+    setEnabledProfiles(profiles);
+    if (payload) {
+      setEnabledRequirements(requirementsForProfiles(profiles, payload));
+    }
+    setActiveCell(null);
+  };
 
   if (error) {
-    return <div className="page"><div className="errorBox">{error}</div></div>;
+    return (
+      <main className="page">
+        <div className="errorBox">{error}</div>
+      </main>
+    );
   }
   if (
     !payload ||
+    !enabledProfiles ||
     !enabledRequirements ||
     !enabledFamilies ||
     !enabledTypes ||
@@ -120,71 +159,596 @@ function App() {
   return (
     <main className="page">
       <header className="pageHeader">
-        <h1>SIMD Specialization Inventory</h1>
-        <p>
-          Search primitives globally, then use the collapsible filter rail to
-          control which requirements, families, data types, backends, and
-          safety classes are visible.
-        </p>
+        <div>
+          <div className="docMeta">
+            <span>Generated docs</span>
+            {(BUILD_BRANCH || BUILD_HASH) && (
+              <span
+                data-tooltip={`Generated from ${
+                  BUILD_BRANCH || "unknown"
+                } ${BUILD_HASH}`}
+              >
+                {BUILD_BRANCH || "unknown"} {BUILD_HASH}
+              </span>
+            )}
+          </div>
+          <h1>TSL Primitive Specialization Reference</h1>
+          <p>
+            Profile capabilities are shown separately from the selected
+            implementation requirements, so a narrower implementation inside a
+            broader machine profile still shows only the features it actually
+            requires.
+          </p>
+        </div>
+        <div className="headerControls">
+          <DeveloperModeToggle devMode={devMode} setDevMode={setDeveloperMode} />
+          <Legend />
+        </div>
       </header>
 
-      <input
-        className="searchInput"
-        type="search"
-        placeholder="Search primitive, requirement, family, type, backend, register..."
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-      />
+      <div className="explorerLayout">
+        <aside className="leftColumn">
+          <PrimitiveBrowser
+            primitives={visiblePrimitives}
+            records={payload.records}
+            filteredRecords={filteredRecords}
+            search={search}
+            setSearch={setSearch}
+            selectedPrimitive={activePrimitive?.name ?? null}
+            setSelectedPrimitive={(name) => {
+              setSelectedPrimitive(name);
+              setActiveCell(null);
+            }}
+          />
+        </aside>
 
-      <div
-        className={
-          filtersOpen
-            ? "explorerLayout filtersOpen"
-            : "explorerLayout filtersClosed"
-        }
-      >
-        <FilterPanel
-          filtersOpen={filtersOpen}
-          setFiltersOpen={setFiltersOpen}
-          enabledRequirements={enabledRequirements}
-          setEnabledRequirements={setEnabledRequirements}
-          enabledFamilies={enabledFamilies}
-          setEnabledFamilies={setEnabledFamilies}
-          enabledTypes={enabledTypes}
-          setEnabledTypes={setEnabledTypes}
-          enabledBackends={enabledBackends}
-          setEnabledBackends={setEnabledBackends}
-          enabledSafety={enabledSafety}
-          setEnabledSafety={setEnabledSafety}
-          requirements={payload.requirements}
-          families={payload.families}
-          types={payload.types}
-          backends={payload.backends}
-          visibleRequirements={visibleRequirements}
-          visibleFamilies={visibleFamilies}
-          visibleTypes={visibleTypes}
-          visibleBackends={visibleBackends}
-        />
+        <section className="mainColumn">
+          {activePrimitive ? (
+            <>
+              <PrimitiveHero
+                primitive={activePrimitive}
+                backends={payload.backends}
+                selectedBackend={selectedBackend}
+                setSelectedBackend={setSelectedBackend}
+              />
+              {devMode && (
+                <PrimitiveStatus
+                  records={activePrimitiveRecords}
+                  backends={payload.backends}
+                />
+              )}
+              {devMode && <ProfileRollup records={activePrimitiveRecords} />}
+              <TypeHeatmap
+                primitive={activePrimitive}
+                records={activePrimitiveRecords}
+                visibleProfiles={visibleProfiles}
+                visibleTypes={visibleTypes}
+                visibleBackends={visibleBackends}
+                typeByTag={payload.typeByTag}
+                activeCell={activeCell}
+                setActiveCell={setActiveCell}
+              />
+            </>
+          ) : (
+            <div className="emptyPanel">No primitive matches the search.</div>
+          )}
+        </section>
 
-        <section className="contentPanel">
-          <ActiveFilterSummary
+        <aside className="rightColumn">
+          <FilterPanel
+            filtersOpen={filtersOpen}
+            setFiltersOpen={setFiltersOpen}
+            enabledRequirements={enabledRequirements}
+            setEnabledRequirements={setEnabledRequirements}
+            enabledProfiles={enabledProfiles}
+            setEnabledProfiles={setProfileSelection}
+            enabledFamilies={enabledFamilies}
+            setEnabledFamilies={setEnabledFamilies}
+            enabledTypes={enabledTypes}
+            setEnabledTypes={setEnabledTypes}
+            enabledBackends={enabledBackends}
+            setEnabledBackends={setEnabledBackends}
+            enabledSafety={enabledSafety}
+            setEnabledSafety={setEnabledSafety}
+            requirements={payload.requirements}
+            profiles={payload.profiles}
+            families={payload.families}
+            types={payload.types}
+            typeByTag={payload.typeByTag}
+            backends={payload.backends.map((backend) => backend.id)}
+            backendLabels={payload.backendLabels}
+            visibleProfiles={visibleProfiles}
             visibleRequirements={visibleRequirements}
             visibleFamilies={visibleFamilies}
             visibleTypes={visibleTypes}
             visibleBackends={visibleBackends}
-            setFiltersOpen={setFiltersOpen}
           />
-
-          <PrimitiveList
-            primitives={visiblePrimitives}
-            records={payload.records}
-            filteredRecords={filteredRecords}
-            selectedPrimitive={activePrimitive}
-            setSelectedPrimitive={setSelectedPrimitive}
+          <Drilldown
+            primitive={activePrimitive}
+            records={activePrimitiveRecords}
+            activeCell={activeCell}
+            visibleBackends={visibleBackends}
+            typeByTag={payload.typeByTag}
           />
-        </section>
+        </aside>
       </div>
     </main>
+  );
+}
+
+function PrimitiveBrowser({
+  primitives,
+  records,
+  filteredRecords,
+  search,
+  setSearch,
+  selectedPrimitive,
+  setSelectedPrimitive,
+}) {
+  return (
+    <section className="primitiveList">
+      <div className="panelHeading">
+        <span className="eyebrow">Primitives</span>
+        <strong>Search and select</strong>
+      </div>
+      <label className="primitiveSearch">
+        <span>Search primitive</span>
+        <input
+          type="search"
+          placeholder="add, gather, mask, fallback..."
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+      </label>
+      <div className="primitiveCards">
+        {primitives.length === 0 ? (
+          <div className="emptyList">No primitive matches.</div>
+        ) : (
+          primitives.map((primitive) => {
+            const totalCount = specializationCount(
+              records.filter((record) => record.primitive === primitive.name)
+            );
+            const visibleCount = specializationCount(
+              filteredRecords.filter((record) => record.primitive === primitive.name)
+            );
+            const available = visibleCount > 0;
+            return (
+              <button
+                type="button"
+                className={
+                  selectedPrimitive === primitive.name
+                    ? "primitiveCard selected"
+                    : "primitiveCard"
+                }
+                key={primitive.name}
+                onClick={() => setSelectedPrimitive(primitive.name)}
+              >
+                <span>
+                  <strong>{primitive.name}</strong>
+                  {primitive.brief && <small>{primitive.brief}</small>}
+                </span>
+                <span
+                  className={available ? "scoreBadge available" : "scoreBadge none"}
+                  data-tooltip={
+                    `${visibleCount} visible emitted specializations under current filters; ` +
+                    `${totalCount} emitted across all profiles`
+                  }
+                >
+                  {available ? "available" : "none"}
+                </span>
+              </button>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
+function PrimitiveHero({ primitive, backends, selectedBackend, setSelectedBackend }) {
+  const activeExpression = selectedExpression(primitive, selectedBackend);
+  const expressionBackends = backends.filter((backend) =>
+    primitive.expressions.some((expression) => expression.backend === backend.id)
+  );
+  return (
+    <section className="primitiveHero">
+      <div className="primitiveHeroHeader">
+        <div>
+          <span className="eyebrow">Primitive</span>
+          <h1>{primitive.name}</h1>
+          {primitive.brief && <p>{primitive.brief}</p>}
+        </div>
+        <div className="tagRow">
+          <span>{primitive.source_name}</span>
+        </div>
+      </div>
+      <div className="primitiveHeroBody">
+        {activeExpression && (
+          <div className="facadePanel">
+            <div className="facadeHeader">
+              <span className="eyebrow">Callable facade</span>
+              <LanguageSelector
+                backends={expressionBackends}
+                selectedBackend={activeExpression.backend}
+                setSelectedBackend={setSelectedBackend}
+              />
+            </div>
+            <pre className="facadeCode">
+              <strong>{activeExpression.label}</strong>
+              {"\n"}
+              {activeExpression.facade}
+            </pre>
+          </div>
+        )}
+        <div className="primitiveInfoGrid">
+          {primitive.detailed && (
+            <div className="detailText">
+              <span className="eyebrow">Details</span>
+              <p>{primitive.detailed}</p>
+            </div>
+          )}
+          {primitive.semantics && (
+            <div className="semanticsBox">
+              <span className="eyebrow">Semantics</span>
+              <pre>{primitive.semantics}</pre>
+            </div>
+          )}
+        </div>
+        {activeExpression && (
+          <details className="expressionBox">
+            <summary>
+              <span className="eyebrow">Expression</span>
+              <span>{activeExpression.label} call example</span>
+            </summary>
+            <ExpressionCard
+              label={`${activeExpression.label} example`}
+              expression={activeExpression.example}
+            />
+          </details>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function LanguageSelector({ backends, selectedBackend, setSelectedBackend }) {
+  if (backends.length <= 1) return null;
+  return (
+    <div className="languageSelector" aria-label="Expression language">
+      {backends.map((backend) => (
+        <button
+          type="button"
+          key={backend.id}
+          className={selectedBackend === backend.id ? "active" : ""}
+          aria-pressed={selectedBackend === backend.id}
+          onClick={() => setSelectedBackend(backend.id)}
+        >
+          {backend.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ExpressionCard({ label, expression }) {
+  if (!expression) return null;
+  return (
+    <pre>
+      <strong>{label}</strong>
+      {"\n"}
+      {expression}
+    </pre>
+  );
+}
+
+function PrimitiveStatus({ records, backends }) {
+  const states = uniqueValues(records, "implementation_state");
+  const safetyKinds = sortedValues(
+    new Set(records.map((record) => safetyLabel(safetyKind(record.safety))))
+  );
+  const missingBackends = backends.filter(
+    (backend) => !records.some((record) => record.backend === backend.id)
+  );
+  return (
+    <section className="statusGrid">
+      <article className="statusCard">
+        <span className="eyebrow">Emitted</span>
+        <strong>{specializationCount(records)}</strong>
+        <p>{uniqueValues(records, "overviewTargetKey").length} target groups visible</p>
+      </article>
+      <article className="statusCard">
+        <span className="eyebrow">Implementation</span>
+        <strong>{joinShort(states.map(implementationLabel))}</strong>
+        <p>State comes from lowered implementation_state facts.</p>
+      </article>
+      <article className="statusCard">
+        <span className="eyebrow">Attention</span>
+        <strong>
+          {missingBackends.length
+            ? joinShort(missingBackends.map((backend) => backend.label))
+            : "none"}
+        </strong>
+        <p>Safety: {joinShort(safetyKinds)}</p>
+      </article>
+    </section>
+  );
+}
+
+function ProfileRollup({ records }) {
+  const groups = profileCapabilityRollups(records);
+  if (groups.length === 0) {
+    return <section className="rollupSection emptyPanel">No visible profile groups.</section>;
+  }
+  return (
+    <section className="rollupSection">
+      <div className="sectionHeader">
+        <div>
+          <span className="eyebrow">Profile rollup</span>
+          <h2>Profile capabilities, not selected requirements</h2>
+        </div>
+        <p>
+          These cards describe what the machine profiles can run. Per-cell
+          drilldown below shows what the selected implementation actually needs.
+        </p>
+      </div>
+      <div className="rollupGrid">
+        {groups.map((group) => (
+          <details className="rollupCard" key={group.key}>
+            <summary>
+              <span>
+                <strong>{group.label}</strong>
+                <small>{group.widths.join(", ")} · {group.family}</small>
+              </span>
+              <span className="scoreBadge">{group.count}</span>
+            </summary>
+            <p>{group.description}</p>
+            <div className="profileOverview">
+              <div className="profileOverviewTitle">Included profiles</div>
+              <div className="profileOverviewList">
+                {group.profiles.map((profile) => (
+                  <div className="profileOverviewItem" key={profile.name}>
+                    <strong>{profile.name}</strong>
+                    <span>{featureSummary(profile.features)}</span>
+                    {profile.emulator_kind && (
+                      <small>Emulator profile: {profile.emulator_profile}</small>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </details>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TypeHeatmap({
+  primitive,
+  records,
+  visibleProfiles,
+  visibleTypes,
+  visibleBackends,
+  typeByTag,
+  activeCell,
+  setActiveCell,
+}) {
+  const rows = sortedValues(visibleProfiles, profileSortKey);
+  if (rows.length === 0 || visibleTypes.length === 0) {
+    return <section className="heatmapSection emptyPanel">No visible records.</section>;
+  }
+  return (
+    <section className="heatmapSection">
+      <div className="sectionHeader">
+        <div>
+          <span className="eyebrow">Profile x type heatmap</span>
+          <h2>Selected implementation coverage by profile</h2>
+        </div>
+        <p>
+          Rows are machine profiles. Columns are data types. Cell details show
+          concrete implementation targets, requirements, widths, and state. The
+          short dash repeats the cell state color for fast scanning.
+        </p>
+      </div>
+      <div className="heatmapWrap">
+        <table className="heatmap">
+          <thead>
+            <tr>
+              <th>profile</th>
+              {visibleTypes.map((typeTag) => (
+                <th key={typeTag}>
+                  <span>{shortTypeLabel(typeTag, typeByTag)}</span>
+                  <small>{typeLabel(typeTag, typeByTag)}</small>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((profile) => (
+              <tr key={profile.name}>
+                <th>
+                  <span>{profile.name}</span>
+                  <Tooltip content={profileFeatureTooltip(profile)}>
+                    <small>{profileClassSummary(profile, 2)}</small>
+                  </Tooltip>
+                </th>
+                {visibleTypes.map((typeTag) => {
+                  const cellRecords = records.filter(
+                    (record) =>
+                      record.type_tag === typeTag &&
+                      record.profile === profile.name
+                  );
+                  const summary = summarizeCell(cellRecords, visibleBackends);
+                  const tooltip = heatCellTooltip(
+                    primitive,
+                    profile,
+                    typeTag,
+                    typeByTag,
+                    summary,
+                    cellRecords,
+                    visibleBackends
+                  );
+                  const selected =
+                    activeCell?.primitive === primitive.name &&
+                    activeCell?.typeTag === typeTag &&
+                    activeCell?.profile === profile.name;
+                  return (
+                    <td key={typeTag}>
+                      <button
+                        type="button"
+                        className={
+                          selected
+                            ? `heatCell ${summary.state} activeCell`
+                            : `heatCell ${summary.state}`
+                        }
+                        data-tooltip={tooltip}
+                        aria-label={tooltip}
+                        onClick={() =>
+                          setActiveCell({
+                            primitive: primitive.name,
+                            profile: profile.name,
+                            typeTag,
+                          })
+                        }
+                      >
+                        <span>{summary.label}</span>
+                        <i />
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function Drilldown({ primitive, records, activeCell, visibleBackends, typeByTag }) {
+  if (!primitive || !activeCell) {
+    return (
+      <section className="drilldownPanel">
+        <span className="eyebrow">Drilldown</span>
+        <h2>Select a heatmap cell</h2>
+        <p>
+          The panel will show concrete profiles, selected extensions,
+          implementation requirements, and implementation state.
+        </p>
+      </section>
+    );
+  }
+  const cellRecords = records.filter(
+    (record) =>
+      record.type_tag === activeCell.typeTag &&
+      record.profile === activeCell.profile
+  );
+  const first = cellRecords[0];
+  if (!first) {
+    return (
+      <section className="drilldownPanel">
+        <span className="eyebrow">Drilldown</span>
+        <h2>{primitive.name} · {shortTypeLabel(activeCell.typeTag, typeByTag)}</h2>
+        <p>No emitted specialization matches this filtered cell.</p>
+      </section>
+    );
+  }
+
+  const profileRows = supportedProfileRows(cellRecords, visibleBackends);
+  return (
+    <section className="drilldownPanel">
+      <span className="eyebrow">Drilldown</span>
+      <h2>
+        {primitive.name} · {shortTypeLabel(activeCell.typeTag, typeByTag)} ·{" "}
+        {first.profile}
+      </h2>
+      <div className="metaGrid">
+        <div>
+          <strong>Profile</strong>
+          <span>{first.profile}</span>
+        </div>
+        <div>
+          <strong>Profile class</strong>
+          <span>{profileClassSummary(first.profileInfo)}</span>
+        </div>
+        <div>
+          <strong>Data type</strong>
+          <span>{typeLabel(activeCell.typeTag, typeByTag)}</span>
+        </div>
+      </div>
+
+      <section className="supportedOn">
+        <div className="supportedOnHeader">
+          <span className="eyebrow">Supported on</span>
+          <small>{profileRows.length} concrete profiles</small>
+        </div>
+        <div className="supportedProfileList">
+          {profileRows.map((row) => (
+            <article className="supportedProfile" key={row.profile.name}>
+              <strong>{row.profile.name}</strong>
+              <small className="profileClassSummary">
+                {profileClassSummary(row.profile)}
+              </small>
+              {visibleBackends.map((backend) => (
+                <BackendSupportLine
+                  key={backend}
+                  backend={backend}
+                  records={row.records.filter((record) => record.backend === backend)}
+                />
+              ))}
+            </article>
+          ))}
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function BackendSupportLine({ backend, records }) {
+  if (records.length === 0) {
+    return (
+      <div className="backendSupportLine">
+        <span className="supportPill no">{backend}: missing</span>
+        <span className="implementationPill unknown">unknown</span>
+      </div>
+    );
+  }
+  return (
+    <div className="backendSupportLine">
+      <span className="supportPill yes">{backend}: emitted</span>
+      {records.map((record, index) => (
+        <span
+          className={`implementationPill ${record.implementation_state}`}
+          key={`${record.extension}:${index}`}
+        >
+          <strong className="implementationState">
+            {implementationLabel(record.implementation_state)}
+          </strong>
+          <span>{record.displayWidth} · {record.extension}</span>
+          <span className="implementationRequires">
+            requires {featureSummary(record.required_features)}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function DeveloperModeToggle({ devMode, setDevMode }) {
+  return (
+    <button
+      type="button"
+      className={devMode ? "developerToggle active" : "developerToggle"}
+      role="switch"
+      aria-checked={devMode}
+      data-tooltip="Toggle developer details"
+      onClick={() => setDevMode(!devMode)}
+    >
+      <span>Dev</span>
+      <i aria-hidden="true" />
+      <strong>{devMode ? "On" : "Off"}</strong>
+    </button>
   );
 }
 
@@ -193,6 +757,8 @@ function FilterPanel({
   setFiltersOpen,
   enabledRequirements,
   setEnabledRequirements,
+  enabledProfiles,
+  setEnabledProfiles,
   enabledFamilies,
   setEnabledFamilies,
   enabledTypes,
@@ -202,213 +768,226 @@ function FilterPanel({
   enabledSafety,
   setEnabledSafety,
   requirements,
+  profiles,
   families,
   types,
+  typeByTag,
   backends,
+  backendLabels,
   visibleRequirements,
   visibleFamilies,
   visibleTypes,
   visibleBackends,
+  visibleProfiles,
 }) {
+  const activeCount =
+    visibleProfiles.length +
+    visibleRequirements.length +
+    visibleFamilies.length +
+    visibleTypes.length +
+    visibleBackends.length +
+    enabledSafety.size;
+  if (!filtersOpen) {
+    return (
+      <section className="filterPanel collapsed">
+        <button
+          type="button"
+          className="filterToggle collapsed"
+          onClick={() => setFiltersOpen(true)}
+          aria-expanded="false"
+        >
+          <span>
+            <span className="eyebrow">Filters</span>
+            <strong>Show filters</strong>
+          </span>
+          <span className="filterCount">{activeCount}</span>
+        </button>
+      </section>
+    );
+  }
   return (
-    <aside className={filtersOpen ? "filterPanel open" : "filterPanel closed"}>
-      {!filtersOpen ? (
-        <div className="collapsedFilterRail">
-          <button
-            type="button"
-            className="railToggleButton"
-            onClick={() => setFiltersOpen(true)}
-            aria-label="Open filters"
-          >
-            ☰
-          </button>
-
-          <div className="railBadges">
-            <RailBadge label="R" value={visibleRequirements.length} />
-            <RailBadge label="F" value={visibleFamilies.length} />
-            <RailBadge label="D" value={visibleTypes.length} />
-            <RailBadge label="B" value={visibleBackends.length} />
-          </div>
+    <section className="filterPanel expanded">
+      <div className="filterHeader">
+        <div className="panelHeading">
+          <span className="eyebrow">Filters</span>
+          <strong>Read support at the level you need</strong>
         </div>
-      ) : (
-        <div className="filterPanelContent">
-          <div className="filterPanelHeader">
-            <div>
-              <div className="filterPanelTitle">Filters</div>
-              <div className="filterPanelSubtitle">Control visible axes</div>
-            </div>
-            <button
-              type="button"
-              className="closeFiltersButton"
-              onClick={() => setFiltersOpen(false)}
-              aria-label="Collapse filters"
+        <button
+          type="button"
+          className="filterToggle"
+          onClick={() => setFiltersOpen(false)}
+          aria-expanded="true"
+        >
+          Hide
+        </button>
+      </div>
+
+      <FilterSection
+        title="Profile"
+        actions={
+          <>
+            <FilterAction
+              onClick={() => {
+                setEnabledProfiles(new Set(profiles.map((profile) => profile.name)));
+              }}
             >
-              ←
-            </button>
-          </div>
+              All
+            </FilterAction>
+            <FilterAction onClick={() => setEnabledProfiles(new Set())}>
+              None
+            </FilterAction>
+          </>
+        }
+      >
+        <ProfileChipGroups
+          groups={profileFilterGroups(profiles)}
+          active={enabledProfiles}
+          onClick={(value) => setEnabledProfiles(toggledSet(enabledProfiles, value))}
+        />
+      </FilterSection>
 
-          <FilterSection
-            title="Requirements"
-            actions={
-              <>
-                <FilterAction
-                  onClick={() =>
-                    setEnabledRequirements(new Set(requirements))
-                  }
-                >
-                  All
-                </FilterAction>
-                <FilterAction onClick={() => setEnabledRequirements(new Set())}>
-                  None
-                </FilterAction>
-              </>
-            }
-          >
-            <div className="toggleGroup">
-              {requirements.map((requirement) => (
-                <ToggleChip
-                  key={requirement}
-                  active={enabledRequirements.has(requirement)}
-                  onClick={() =>
-                    toggleSetValue(setEnabledRequirements, requirement)
-                  }
-                >
-                  {requirementLabel(requirement)}
-                </ToggleChip>
-              ))}
-            </div>
-          </FilterSection>
+      <FilterSection
+        title="Requirements"
+        actions={
+          <>
+            <FilterAction onClick={() => setEnabledRequirements(new Set(requirements))}>
+              All
+            </FilterAction>
+            <FilterAction onClick={() => setEnabledRequirements(new Set())}>
+              None
+            </FilterAction>
+          </>
+        }
+      >
+        <ChipGroup
+          values={requirements}
+          active={enabledRequirements}
+          label={requirementLabel}
+          onClick={(value) => toggleSetValue(setEnabledRequirements, value)}
+        />
+      </FilterSection>
 
-          <FilterSection
-            title="Families"
-            actions={
-              <>
-                <FilterAction onClick={() => setEnabledFamilies(new Set(families))}>
-                  All
-                </FilterAction>
-                <FilterAction onClick={() => setEnabledFamilies(new Set())}>
-                  None
-                </FilterAction>
-              </>
-            }
-          >
-            <div className="toggleGroup">
-              {families.map((family) => (
-                <ToggleChip
-                  key={family}
-                  active={enabledFamilies.has(family)}
-                  onClick={() => toggleSetValue(setEnabledFamilies, family)}
-                >
-                  {familyLabel(family)}
-                </ToggleChip>
-              ))}
-            </div>
-          </FilterSection>
+      <FilterSection
+        title="Families"
+        actions={
+          <>
+            <FilterAction onClick={() => setEnabledFamilies(new Set(families))}>
+              All
+            </FilterAction>
+            <FilterAction onClick={() => setEnabledFamilies(new Set())}>
+              None
+            </FilterAction>
+          </>
+        }
+      >
+        <ChipGroup
+          values={families}
+          active={enabledFamilies}
+          label={familyLabel}
+          onClick={(value) => toggleSetValue(setEnabledFamilies, value)}
+        />
+      </FilterSection>
 
-          <FilterSection
-            title="Data types"
-            actions={
-              <>
-                <FilterAction onClick={() => setEnabledTypes(new Set(types))}>
-                  All
-                </FilterAction>
-                <FilterAction onClick={() => setEnabledTypes(new Set())}>
-                  None
-                </FilterAction>
-              </>
-            }
-          >
-            <div className="toggleGroup">
-              {types.map((typeTag) => (
-                <ToggleChip
-                  key={typeTag}
-                  active={enabledTypes.has(typeTag)}
-                  onClick={() => toggleSetValue(setEnabledTypes, typeTag)}
-                >
-                  {typeLabel(typeTag)}
-                </ToggleChip>
-              ))}
-            </div>
-          </FilterSection>
+      <FilterSection
+        title="Data types"
+        actions={
+          <>
+            <FilterAction onClick={() => setEnabledTypes(new Set(types))}>
+              All
+            </FilterAction>
+            <FilterAction onClick={() => setEnabledTypes(new Set())}>
+              None
+            </FilterAction>
+          </>
+        }
+      >
+        <ChipGroup
+          values={types}
+          active={enabledTypes}
+          label={(value) => shortTypeLabel(value, typeByTag)}
+          onClick={(value) => toggleSetValue(setEnabledTypes, value)}
+        />
+      </FilterSection>
 
-          <FilterSection
-            title="Backends"
-            actions={
-              <>
-                <FilterAction onClick={() => setEnabledBackends(new Set(backends))}>
-                  All
-                </FilterAction>
-                <FilterAction onClick={() => setEnabledBackends(new Set())}>
-                  None
-                </FilterAction>
-              </>
-            }
-          >
-            <div className="toggleGroup">
-              {backends.map((backend) => (
-                <ToggleChip
-                  key={backend}
-                  active={enabledBackends.has(backend)}
-                  onClick={() => toggleSetValue(setEnabledBackends, backend)}
-                >
-                  {backend}
-                </ToggleChip>
-              ))}
-            </div>
-          </FilterSection>
+      <FilterSection
+        title="Backends"
+        actions={
+          <>
+            <FilterAction onClick={() => setEnabledBackends(new Set(backends))}>
+              All
+            </FilterAction>
+            <FilterAction onClick={() => setEnabledBackends(new Set())}>
+              None
+            </FilterAction>
+          </>
+        }
+      >
+        <ChipGroup
+          values={backends}
+          active={enabledBackends}
+          label={(value) => backendLabels.get(value) ?? value}
+          onClick={(value) => toggleSetValue(setEnabledBackends, value)}
+        />
+      </FilterSection>
 
-          <FilterSection
-            title="Safety"
-            actions={
-              <>
-                <FilterAction
-                  onClick={() => setEnabledSafety(new Set(SAFETY_FILTERS))}
-                >
-                  All
-                </FilterAction>
-                <FilterAction onClick={() => setEnabledSafety(new Set())}>
-                  None
-                </FilterAction>
-              </>
-            }
-          >
-            <div className="toggleGroup">
-              {SAFETY_FILTERS.map((value) => (
-                <ToggleChip
-                  key={value}
-                  active={enabledSafety.has(value)}
-                  onClick={() => toggleSetValue(setEnabledSafety, value)}
-                >
-                  {safetyLabel(value)}
-                </ToggleChip>
-              ))}
-            </div>
-          </FilterSection>
-        </div>
-      )}
-    </aside>
+      <FilterSection
+        title="Safety"
+        actions={
+          <>
+            <FilterAction onClick={() => setEnabledSafety(new Set(SAFETY_FILTERS))}>
+              All
+            </FilterAction>
+            <FilterAction onClick={() => setEnabledSafety(new Set())}>
+              None
+            </FilterAction>
+          </>
+        }
+      >
+        <ChipGroup
+          values={SAFETY_FILTERS}
+          active={enabledSafety}
+          label={safetyLabel}
+          onClick={(value) => toggleSetValue(setEnabledSafety, value)}
+        />
+      </FilterSection>
+    </section>
   );
 }
 
-function RailBadge({ label, value }) {
+function ChipGroup({ values, active, label, onClick, tooltip }) {
   return (
-    <div className="railBadge">
-      <strong>{value}</strong>
-      <span>{label}</span>
+    <div className="chipRow">
+      {values.map((value) => (
+        <button
+          type="button"
+          key={value}
+          className={active.has(value) ? "chip active" : "chip"}
+          data-tooltip={tooltip ? tooltip(value) : undefined}
+          onClick={() => onClick(value)}
+        >
+          {label(value)}
+        </button>
+      ))}
     </div>
   );
 }
 
-function ToggleChip({ active, children, onClick }) {
+function ProfileChipGroups({ groups, active, onClick }) {
   return (
-    <button
-      type="button"
-      className={active ? "toggleChip activeToggleChip" : "toggleChip"}
-      aria-pressed={active}
-      onClick={onClick}
-    >
-      {children}
-    </button>
+    <div className="profileFilterGroups">
+      {groups.map((group) => (
+        <div className="profileFilterGroup" key={group.label}>
+          <div className="profileFilterGroupLabel">{group.label}</div>
+          <ChipGroup
+            values={group.profiles.map((profile) => profile.name)}
+            active={active}
+            label={(value) => value}
+            tooltip={(value) => profileFilterTitle(group.profiles, value)}
+            onClick={onClick}
+          />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -422,391 +1001,52 @@ function FilterAction({ children, onClick }) {
 
 function FilterSection({ title, children, actions }) {
   return (
-    <section className="filterSection">
+    <section className="filterGroup">
       <div className="filterSectionHeader">
         <h3>{title}</h3>
-        {actions && <div className="filterActions">{actions}</div>}
+        <div className="filterActions">{actions}</div>
       </div>
       {children}
     </section>
   );
 }
 
-function ActiveFilterSummary({
-  visibleRequirements,
-  visibleFamilies,
-  visibleTypes,
-  visibleBackends,
-  setFiltersOpen,
-}) {
+function Legend() {
   return (
-    <div className="activeFilterSummary">
-      <span>
-        Showing <strong>{visibleRequirements.length}</strong> requirements,{" "}
-        <strong>{visibleFamilies.length}</strong> families,{" "}
-        <strong>{visibleTypes.length}</strong> data types,{" "}
-        <strong>{visibleBackends.length}</strong> backends
-      </span>
-
-      <button
-        type="button"
-        className="summaryFilterButton"
-        onClick={() => setFiltersOpen(true)}
-      >
-        Edit filters
-      </button>
+    <div className="legend">
+      <span><i className="legendYes" /> native selected backends</span>
+      <span><i className="legendDegraded" /> composed or fallback</span>
+      <span><i className="legendMixed" /> backend split</span>
+      <span><i className="legendNo" /> no visible emission</span>
     </div>
   );
 }
 
-function PrimitiveList({
-  primitives,
-  records,
-  filteredRecords,
-  selectedPrimitive,
-  setSelectedPrimitive,
-}) {
+function Tooltip({ content, children }) {
+  if (!content) return children;
   return (
-    <section className="operationList">
-      {primitives.length === 0 ? (
-        <div className="empty">No matching primitives.</div>
-      ) : (
-        primitives.map((primitive) => {
-          const count = specializationCount(
-            records.filter((record) => record.primitive === primitive.name)
-          );
-          const selected = selectedPrimitive === primitive.name;
-          const primitiveRecords = filteredRecords.filter(
-            (record) => record.primitive === primitive.name
-          );
-          return (
-            <div className="operationRowGroup" key={primitive.name}>
-              <button
-                type="button"
-                className="operationRow"
-                onClick={() =>
-                  setSelectedPrimitive((current) =>
-                    current === primitive.name ? null : primitive.name
-                  )
-                }
-              >
-                <span>{primitive.name}</span>
-                <span className="operationMeta">
-                  {count} <span className="chevron">{selected ? "▾" : "▸"}</span>
-                </span>
-              </button>
-              {selected && (
-                <div className="operationDetails">
-                  {primitive.brief && <p>{primitive.brief}</p>}
-                  <PrimitiveDocumentation primitive={primitive} />
-                  <SpecializationSummary records={primitiveRecords} />
-                  <SpecializationInventory records={primitiveRecords} />
-                </div>
-              )}
-            </div>
-          );
-        })
-      )}
-    </section>
+    <span className="tooltipAnchor" data-tooltip={content}>
+      {children}
+    </span>
   );
-}
-
-function PrimitiveDocumentation({ primitive }) {
-  if (!primitive.detailed && !primitive.semantics && !primitive.expressions) return null;
-  return (
-    <section className="primitiveNarrativeInline">
-      {primitive.detailed && <p>{primitive.detailed}</p>}
-      {primitive.semantics && (
-        <>
-          <h2>Semantics</h2>
-          <pre>{primitive.semantics}</pre>
-        </>
-      )}
-      {primitive.expressions && <ExpressionExamples examples={primitive.expressions} />}
-    </section>
-  );
-}
-
-function ExpressionExamples({ examples }) {
-  return (
-    <div className="expressionExamples">
-      <h2>Expression</h2>
-      <div className="expressionGrid">
-        <ExpressionCard language="C++" expression={examples.cpp} />
-        <ExpressionCard language="Rust" expression={examples.rust} />
-      </div>
-    </div>
-  );
-}
-
-function ExpressionCard({ language, expression }) {
-  if (!expression) return null;
-  return (
-    <div className="expressionCard">
-      <div className="expressionCardHeader">{language}</div>
-      <pre>{expression}</pre>
-    </div>
-  );
-}
-
-function SpecializationSummary({ records }) {
-  const safetyKinds = sortedValues(new Set(records.map((record) => safetyKind(record.safety))));
-  return (
-    <section className="specializationSummary">
-      <SummaryPill label="Emitted" value={specializationCount(records)} />
-      <SummaryPill label="Backends" value={joinShort(uniqueValues(records, "backend"))} />
-      <SummaryPill label="Families" value={joinShort(uniqueValues(records, "family"))} />
-      <SummaryPill label="Widths" value={joinShort(uniqueValues(records, "displayWidth"))} />
-      <SummaryPill label="Types" value={uniqueValues(records, "type_tag").length} />
-      <SummaryPill label="Safety" value={joinShort(safetyKinds.map(safetyLabel))} />
-    </section>
-  );
-}
-
-function SummaryPill({ label, value }) {
-  return (
-    <div className="summaryPill">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function SpecializationInventory({ records }) {
-  const [groupBy, setGroupBy] = useState("profile");
-  const [expandedRow, setExpandedRow] = useState(null);
-  const groups = useMemo(() => groupInventory(records, groupBy), [records, groupBy]);
-
-  if (records.length === 0) {
-    return (
-      <section className="specializationInventory">
-        <div className="inventoryEmpty">
-          No emitted specializations match the active filters.
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="specializationInventory">
-      <div className="inventoryToolbar">
-        <div>
-          <strong>Specializations</strong>
-          <div className="inventorySubtitle">
-            Grouped emitted records. Expand a row for concrete backend details.
-          </div>
-        </div>
-        <div className="segmentedControl" aria-label="Group specializations by">
-          {GROUP_OPTIONS.map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              className={groupBy === value ? "segmentButton activeSegment" : "segmentButton"}
-              onClick={() => {
-                setGroupBy(value);
-                setExpandedRow(null);
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="inventoryGroups">
-        {groups.map((group) => (
-          <section className="inventoryGroup" key={group.key}>
-            <div className="inventoryGroupHeader">
-              <strong>{group.label}</strong>
-              <span>{specializationCount(group.records)} emitted</span>
-            </div>
-
-            {aggregateInventoryRows(group.records, groupBy).map((row) => {
-              const expanded = expandedRow === row.key;
-              return (
-                <div className="inventoryRowGroup" key={row.key}>
-                  <button
-                    type="button"
-                    className="inventoryRow"
-                    onClick={() =>
-                      setExpandedRow((current) => (current === row.key ? null : row.key))
-                    }
-                  >
-                    <span className="inventoryTarget">{row.target}</span>
-                    <span>{row.backendLabel}</span>
-                    <span>{row.typeLabel}</span>
-                    <span>{row.extensionLabel}</span>
-                    <span>{row.safetyLabel}</span>
-                    <strong>{row.count}</strong>
-                    <span className="chevron">{expanded ? "▾" : "▸"}</span>
-                  </button>
-
-                  {expanded && <InventoryDetails records={row.records} />}
-                </div>
-              );
-            })}
-          </section>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function InventoryDetails({ records }) {
-  return (
-    <div className="inventoryDetails">
-      {records.slice(0, 80).map((record, index) => (
-        <div
-          className="inventoryDetailRow"
-          key={`${record.backend}:${record.profile}:${record.extension}:${record.type_tag}:${record.register_type}:${index}`}
-        >
-          <span>{record.backend}</span>
-          <span>{record.profile}</span>
-          <span>{record.displayWidth}</span>
-          <span>{record.extension}</span>
-          <span>{familyLabel(record.family)}</span>
-          <span>{typeLabel(record.type_tag)}</span>
-          <span>{record.register_type}</span>
-          <span>{record.required_features.join(", ") || "no features"}</span>
-          <span>{safetySummary(record.safety)}</span>
-          <strong>{record.count}</strong>
-        </div>
-      ))}
-      {records.length > 80 && (
-        <div className="inventoryDetailOverflow">
-          Showing first 80 of {records.length} grouped rows.
-        </div>
-      )}
-    </div>
-  );
-}
-
-function groupInventory(records, groupBy) {
-  const groups = new Map();
-  for (const record of records) {
-    const label = inventoryGroupLabel(record, groupBy);
-    const key = `${groupBy}\u0000${label}`;
-    if (!groups.has(key)) {
-      groups.set(key, {
-        key,
-        label,
-        rank: inventoryGroupRank(record, groupBy),
-        records: [],
-      });
-    }
-    groups.get(key).records.push(record);
-  }
-  return [...groups.values()].sort((left, right) => {
-    if (left.rank !== right.rank) return left.rank - right.rank;
-    return left.label.localeCompare(right.label);
-  });
-}
-
-function aggregateInventoryRows(records, groupBy) {
-  const grouped = new Map();
-  for (const record of records) {
-    const key = inventoryRowKey(record, groupBy);
-    const row = grouped.get(key) ?? [];
-    row.push(record);
-    grouped.set(key, row);
-  }
-  return [...grouped.entries()]
-    .map(([key, rowRecords]) => {
-      const sorted = sortRecords(rowRecords);
-      const first = sorted[0];
-      const typeCount = uniqueValues(sorted, "type_tag").length;
-      return {
-        key,
-        target: inventoryRowTarget(first, groupBy),
-        backendLabel: joinShort(uniqueValues(sorted, "backend")),
-        typeLabel: `${typeCount} ${typeCount === 1 ? "type" : "types"}`,
-        extensionLabel: joinShort(uniqueValues(sorted, "extension")),
-        safetyLabel: joinShort(
-          sortedValues(new Set(sorted.map((record) => safetyLabel(safetyKind(record.safety)))))
-        ),
-        count: specializationCount(sorted),
-        records: sorted,
-        rank: first.displayRank,
-      };
-    })
-    .sort((left, right) => {
-      if (left.rank !== right.rank) return left.rank - right.rank;
-      if (left.target !== right.target) return left.target.localeCompare(right.target);
-      if (left.backendLabel !== right.backendLabel) {
-        return left.backendLabel.localeCompare(right.backendLabel);
-      }
-      return left.extensionLabel.localeCompare(right.extensionLabel);
-    });
-}
-
-function inventoryGroupLabel(record, groupBy) {
-  if (groupBy === "width") return record.displayWidth;
-  if (groupBy === "backend") return record.backend;
-  if (groupBy === "extension") return record.extension;
-  if (groupBy === "safety") return safetyLabel(safetyKind(record.safety));
-  return record.profile;
-}
-
-function inventoryGroupRank(record, groupBy) {
-  if (groupBy === "width") return record.displayRank;
-  if (groupBy === "safety") return SAFETY_FILTERS.indexOf(safetyKind(record.safety));
-  return 0;
-}
-
-function inventoryRowKey(record, groupBy) {
-  const groupPrefix = `${groupBy}\u0000${inventoryGroupLabel(record, groupBy)}`;
-  if (groupBy === "profile") return `${groupPrefix}\u0000${record.displayTargetKey}`;
-  if (groupBy === "width") return `${groupPrefix}\u0000${record.profile}`;
-  if (groupBy === "backend") {
-    return `${groupPrefix}\u0000${record.profile}\u0000${record.displayWidth}\u0000${record.extension}`;
-  }
-  if (groupBy === "extension") {
-    return `${groupPrefix}\u0000${record.profile}\u0000${record.displayWidth}\u0000${record.backend}`;
-  }
-  if (groupBy === "safety") {
-    return `${groupPrefix}\u0000${record.profile}\u0000${record.displayWidth}\u0000${record.backend}\u0000${record.extension}`;
-  }
-  return `${groupPrefix}\u0000${record.displayTargetKey}`;
-}
-
-function inventoryRowTarget(record, groupBy) {
-  if (groupBy === "profile") return record.displayWidth;
-  if (groupBy === "width") return record.profile;
-  return `${record.profile} / ${record.displayWidth}`;
-}
-
-function sortRecords(records) {
-  return [...records].sort((left, right) => {
-    const leftKey = [
-      left.profile,
-      left.displayRank.toString().padStart(5, "0"),
-      left.displayWidth,
-      left.backend,
-      left.extension,
-      left.type_tag,
-      left.register_type,
-    ].join("\u0000");
-    const rightKey = [
-      right.profile,
-      right.displayRank.toString().padStart(5, "0"),
-      right.displayWidth,
-      right.backend,
-      right.extension,
-      right.type_tag,
-      right.register_type,
-    ].join("\u0000");
-    return leftKey.localeCompare(rightKey);
-  });
 }
 
 function decodePayload(payload) {
-  if (payload.schema_version !== 4) {
+  if (payload.schema_version !== 8) {
     throw new Error(`unsupported specialization schema ${payload.schema_version}`);
   }
 
   const strings = payload.strings;
   const featureSets = payload.features.map((featureSet) =>
     featureSet.map((index) => strings[index])
+  );
+  const expressionSets = payload.expressions.map((expressionSet) =>
+    expressionSet.map(([backend, label, facade, example]) => ({
+      backend: strings[backend],
+      label: strings[label],
+      facade: strings[facade],
+      example: strings[example],
+    }))
   );
   const safetyStates = payload.safeties.map(
     ([callerUnsafe, internalUnsafe, reasons]) => ({
@@ -815,17 +1055,49 @@ function decodePayload(payload) {
       reasons: reasons.map((index) => strings[index]),
     })
   );
+  const backends = payload.backends.map(([id, label, rank]) => ({
+    id: strings[id],
+    label: strings[label],
+    rank: strings[rank],
+  }));
+  const types = payload.types.map(([tag, shortLabel, label, rank]) => ({
+    tag: strings[tag],
+    shortLabel: strings[shortLabel],
+    label: strings[label],
+    rank: strings[rank],
+  }));
+  const typeByTag = new Map(types.map((type) => [type.tag, type]));
+  const profiles = payload.profiles.map((row) => ({
+    name: strings[row[0]],
+    family: strings[row[1]],
+    features: featureSets[row[2]],
+    emulator_kind: strings[row[3]],
+    emulator_profile: strings[row[4]],
+    group_key: strings[row[5]],
+    group_label: strings[row[6]],
+    group_rank: strings[row[7]],
+    summary: strings[row[8]],
+    tooltip: strings[row[9]],
+    sort_key: strings[row[10]],
+  }));
+  const profileByName = new Map(profiles.map((profile) => [profile.name, profile]));
   const primitives = payload.primitives.map(
-    ([name, sourceName, brief, detailed, semantics, cppExpression, rustExpression]) => ({
+    ([
+      name,
+      sourceName,
+      brief,
+      detailed,
+      semantics,
+      signature,
+      expressionSet,
+    ]) => ({
       name: strings[name],
       source_name: strings[sourceName],
       brief: strings[brief],
       detailed: strings[detailed],
       semantics: strings[semantics],
-      expressions: {
-        cpp: strings[cppExpression],
-        rust: strings[rustExpression],
-      },
+      signature: strings[signature],
+      expressions: expressionSets[expressionSet] ?? [],
     })
   );
 
@@ -833,44 +1105,65 @@ function decodePayload(payload) {
   for (const [primitive, rows] of payload.specialization_groups) {
     for (const row of rows) {
       const profile = strings[row[1]];
-      const extension = strings[row[2]];
-      const family = strings[row[3]] || "unclassified";
+      const profileInfo = profileByName.get(profile) ?? emptyProfile(profile);
       const baseRecord = {
         primitive: strings[primitive],
         backend: strings[row[0]],
         profile,
-        extension,
-        family,
+        profileInfo,
+        extension: strings[row[2]],
+        family: strings[row[3]] || "unclassified",
         type_tag: strings[row[4]],
         register_type: strings[row[5]],
         required_features: featureSets[row[6]],
         safety: safetyStates[row[7]],
-        count: row[8] ?? 1,
+        implementation_state: strings[row[8]],
+        displayWidth: strings[row[9]],
+        displayRank: strings[row[10]],
+        extensionGroup: strings[row[11]],
+        extensionRank: strings[row[12]],
+        familyRank: strings[row[13]],
+        count: row[14] ?? 1,
       };
-      const width = targetWidthForRecord(baseRecord);
       records.push({
         ...baseRecord,
-        displayTargetKey: displayTargetKey(profile, width.label),
-        displayWidth: width.label,
-        displayRank: width.rank,
+        displayTargetLabel: `${profileInfo.group_label} / ${baseRecord.displayWidth}`,
+        overviewTargetKey: implementationTargetKey(baseRecord),
+        overviewTargetLabel: implementationTargetLabel(baseRecord),
+        overviewRequirementLabel: requirementSummary(baseRecord.required_features),
+        overviewRank: implementationTargetRank(baseRecord),
+        profileGroup: profileInfo.group_label,
       });
     }
   }
 
   return {
-    backends: sortedValues(new Set(records.map((record) => record.backend))),
+    backends,
+    backendLabels: new Map(backends.map((backend) => [backend.id, backend.label])),
     primitiveByName: new Map(primitives.map((primitive) => [primitive.name, primitive])),
     primitives,
+    profiles,
     records,
     requirements: uniqueRequirements(records),
     families: sortedValues(new Set(records.map((record) => record.family))),
-    types: sortedValues(
-      new Set(
-        records
-          .map((record) => record.type_tag)
-          .filter((typeTag) => isSpecializedDataType(typeTag))
-      )
-    ),
+    typeByTag,
+    types: types.map((type) => type.tag),
+  };
+}
+
+function emptyProfile(name) {
+  return {
+    name,
+    family: "",
+    features: [],
+    emulator_kind: "",
+    emulator_profile: "",
+    group_key: "unclassified",
+    group_label: "unclassified",
+    group_rank: "unclassified",
+    summary: "unclassified",
+    tooltip: `${name}\nClass: unclassified\nFeatures: none`,
+    sort_key: `unclassified:${name}`,
   };
 }
 
@@ -885,25 +1178,163 @@ function uniqueRequirements(records) {
   ];
 }
 
-function targetWidthForRecord(record) {
-  const spelling = record.register_type.toLowerCase();
-  const x86Width = /__m(128|256|512)/.exec(spelling);
-  if (x86Width) {
-    const bits = Number(x86Width[1]);
-    return { label: `${bits}-bit`, rank: bits };
+function profileClassSummary(profile) {
+  return profile.summary;
+}
+
+function profileFilterGroups(profiles) {
+  const groups = new Map();
+  for (const profile of sortedValues(profiles, profileSortKey)) {
+    const descriptor = {
+      key: profile.group_key,
+      label: profile.group_label,
+      rank: profile.group_rank,
+    };
+    if (!groups.has(descriptor.key)) {
+      groups.set(descriptor.key, { ...descriptor, profiles: [] });
+    }
+    groups.get(descriptor.key).profiles.push(profile);
   }
-  const neonWidth = /(?:int|uint|float)(8|16|32|64)x([0-9]+)_t/.exec(spelling);
-  if (neonWidth) {
-    const bits = Number(neonWidth[1]) * Number(neonWidth[2]);
-    return { label: `${bits}-bit`, rank: bits };
+  return sortedValues(groups.values(), (group) => group.rank);
+}
+
+function profileSortKey(profile) {
+  return profile.sort_key;
+}
+
+function profileFilterTitle(profiles, profileName) {
+  const profile = profiles.find((candidate) => candidate.name === profileName);
+  return profile ? profileFeatureTooltip(profile) : "";
+}
+
+function profileFeatureTooltip(profile) {
+  return profile.tooltip;
+}
+
+function profileCapabilityRollups(records) {
+  const groups = new Map();
+  for (const record of records) {
+    const key = `${record.profileGroup}\u0000${record.profileInfo.family}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        label: record.profileGroup,
+        family: record.profileInfo.family || "unclassified",
+        profilesByName: new Map(),
+        widths: new Set(),
+        count: 0,
+      });
+    }
+    const group = groups.get(key);
+    group.profilesByName.set(record.profileInfo.name, record.profileInfo);
+    group.widths.add(record.displayWidth);
+    group.count += record.count;
   }
-  if (/\bsv/.test(spelling) || spelling.includes("svbool")) {
-    return { label: "scalable", rank: 10_000 };
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      profiles: sortedValues(group.profilesByName.values(), (profile) => profile.name),
+      widths: sortedValues(group.widths),
+      description:
+        "The profile feature list is capability metadata. Selected implementation requirements are shown in the drilldown.",
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function summarizeCell(records, visibleBackends) {
+  if (visibleBackends.length === 0) return { state: "no", label: "off" };
+  const visibleRecords = records.filter((record) =>
+    visibleBackends.includes(record.backend)
+  );
+  if (visibleRecords.length === 0) return { state: "no", label: "∅" };
+  const recordsByBackend = new Map();
+  for (const record of visibleRecords) {
+    const backendRecords = recordsByBackend.get(record.backend) ?? [];
+    backendRecords.push(record);
+    recordsByBackend.set(record.backend, backendRecords);
   }
-  if (spelling.includes("array_type") || spelling.includes("lanes")) {
-    return { label: "generic lanes", rank: 1 };
+  if (!visibleBackends.every((backend) => recordsByBackend.has(backend))) {
+    return { state: "mixed", label: "part" };
   }
-  return { label: "scalar", rank: 0 };
+  const allBackendsHaveNative = visibleBackends.every((backend) =>
+    recordsByBackend
+      .get(backend)
+      .some((record) => record.implementation_state === "native")
+  );
+  if (allBackendsHaveNative) return { state: "yes", label: "nat" };
+  if (visibleRecords.some((record) => record.implementation_state === "fallback")) {
+    return { state: "degraded", label: "fb" };
+  }
+  if (visibleRecords.some((record) => record.implementation_state === "composed")) {
+    return { state: "degraded", label: "cmp" };
+  }
+  return { state: "degraded", label: "emit" };
+}
+
+function heatCellTooltip(
+  primitive,
+  profile,
+  typeTag,
+  typeByTag,
+  summary,
+  records,
+  visibleBackends
+) {
+  const backendLines = visibleBackends.map((backend) => {
+    const backendRecords = records.filter((record) => record.backend === backend);
+    if (backendRecords.length === 0) return `${backend}: no emission`;
+    const states = sortedValues(
+      new Set(backendRecords.map((record) => implementationLabel(record.implementation_state)))
+    );
+    const targets = sortedValues(
+      new Set(
+        backendRecords.map(
+          (record) =>
+            `${record.displayWidth} ${record.extension} (${requirementSummary(
+              record.required_features
+            )})`
+        )
+      )
+    );
+    return `${backend}: ${joinShort(states, 2)} · ${joinShort(targets, 2)}`;
+  });
+  return [
+    `${primitive.name} · ${profile.name} · ${typeLabel(typeTag, typeByTag)}`,
+    `Cell state: ${cellStateDescription(summary)}`,
+    ...backendLines,
+  ].join("\n");
+}
+
+function cellStateDescription(summary) {
+  if (summary.label === "nat") return "native implementation for selected backends";
+  if (summary.label === "fb") return "fallback implementation participates";
+  if (summary.label === "cmp") return "composed implementation participates";
+  if (summary.label === "part") return "only part of the selected backend set emits";
+  if (summary.label === "∅") return "no visible emitted specialization";
+  if (summary.label === "off") return "no backend selected";
+  return "emitted specialization";
+}
+
+function supportedProfileRows(records, visibleBackends) {
+  const grouped = new Map();
+  for (const record of records) {
+    if (!visibleBackends.includes(record.backend)) continue;
+    const row = grouped.get(record.profile) ?? {
+      profile: record.profileInfo,
+      records: [],
+    };
+    row.records.push(record);
+    grouped.set(record.profile, row);
+  }
+  return sortedValues(grouped.values(), (row) => row.profile.name);
+}
+
+function selectedExpression(primitive, backend) {
+  return (
+    primitive.expressions.find((expression) => expression.backend === backend) ??
+    primitive.expressions[0] ??
+    null
+  );
 }
 
 function primitiveMatchesSearch(primitive, records, query) {
@@ -914,8 +1345,10 @@ function primitiveMatchesSearch(primitive, records, query) {
     primitive.brief,
     primitive.detailed,
     primitive.semantics,
-    primitive.expressions?.cpp,
-    primitive.expressions?.rust,
+    ...primitive.expressions.flatMap((expression) => [
+      expression.facade,
+      expression.example,
+    ]),
   ]
     .filter(Boolean)
     .join(" ")
@@ -932,12 +1365,18 @@ function recordMatchesSearch(record, query) {
     record.primitive,
     record.backend,
     record.profile,
+    record.profileGroup,
     record.extension,
     record.family,
     record.type_tag,
     record.register_type,
     record.displayWidth,
+    record.displayTargetLabel,
+    record.overviewTargetLabel,
+    record.overviewRequirementLabel,
     record.required_features.join(" "),
+    record.profileInfo.features.join(" "),
+    record.implementation_state,
     safetySummary(record.safety),
   ]
     .join(" ")
@@ -955,13 +1394,9 @@ function recordRequirementsVisible(record, enabledRequirements) {
   );
 }
 
-function recordTypeVisible(record, enabledTypes) {
+function recordTypeVisible(record, enabledTypes, typeByTag) {
   if (!enabledTypes) return false;
-  return !isSpecializedDataType(record.type_tag) || enabledTypes.has(record.type_tag);
-}
-
-function isSpecializedDataType(typeTag) {
-  return typeTag !== "ptr";
+  return !typeByTag.has(record.type_tag) || enabledTypes.has(record.type_tag);
 }
 
 function requirementLabel(requirement) {
@@ -972,13 +1407,41 @@ function familyLabel(family) {
   return family || "unclassified";
 }
 
+function implementationLabel(value) {
+  return value || "unknown";
+}
+
+function shortTypeLabel(typeTag, typeByTag) {
+  return typeByTag?.get(typeTag)?.shortLabel ?? typeTag;
+}
+
+function typeLabel(typeTag, typeByTag) {
+  return typeByTag?.get(typeTag)?.label ?? typeTag;
+}
+
 function toggleSetValue(setter, value) {
   setter((current) => {
-    const next = new Set(current);
-    if (next.has(value)) next.delete(value);
-    else next.add(value);
-    return next;
+    return toggledSet(current, value);
   });
+}
+
+function toggledSet(current, value) {
+  const next = new Set(current);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  return next;
+}
+
+function requirementsForProfiles(selectedProfiles, payload) {
+  if (selectedProfiles.size === payload.profiles.length) {
+    return new Set(payload.requirements);
+  }
+  const requirements = new Set([NO_REQUIREMENT]);
+  for (const profile of payload.profiles) {
+    if (!selectedProfiles.has(profile.name)) continue;
+    for (const feature of profile.features) requirements.add(feature);
+  }
+  return requirements;
 }
 
 function specializationCount(records) {
@@ -1003,17 +1466,16 @@ function safetyLabel(value) {
   return "safe";
 }
 
-function typeLabel(typeTag) {
-  if (typeTag === "f32") return "float";
-  if (typeTag === "f64") return "double";
-  const match = /^(s|u)i(8|16|32|64)$/.exec(typeTag);
-  if (!match) return typeTag;
-  const signedness = match[1] === "s" ? "signed" : "unsigned";
-  return `${signedness} int${match[2]}`;
+function featureSummary(features, limit = 5) {
+  if (!features || features.length === 0) return "none";
+  if (features.length <= limit) return features.join(", ");
+  return `${features.slice(0, limit).join(", ")} +${features.length - limit}`;
 }
 
 function sortedValues(values, key = (value) => value) {
-  return [...values].sort((left, right) => key(left).localeCompare(key(right)));
+  return [...values].sort((left, right) =>
+    String(key(left)).localeCompare(String(key(right)))
+  );
 }
 
 function uniqueValues(records, field) {
@@ -1028,8 +1490,30 @@ function joinShort(values, limit = 3) {
   return `${values.slice(0, limit).join(", ")} +${values.length - limit}`;
 }
 
-function displayTargetKey(profile, width) {
-  return `${profile}\u0000${width}`;
+function implementationTargetKey(record) {
+  return [
+    record.family,
+    record.extensionGroup,
+    ...record.required_features,
+  ].join("\u0000");
+}
+
+function implementationTargetLabel(record) {
+  return record.extensionGroup;
+}
+
+function requirementSummary(features) {
+  return features.length === 0 ? "no extra requirements" : featureSummary(features);
+}
+
+function implementationTargetRank(record) {
+  return [
+    record.familyRank,
+    record.extensionRank,
+    String(record.required_features.length).padStart(4, "0"),
+    record.required_features.join("|"),
+    record.extensionGroup,
+  ].join(":");
 }
 
 export default App;

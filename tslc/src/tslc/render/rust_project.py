@@ -69,7 +69,13 @@ def rust_artifacts(
             for name in sorted(by_primitive)
         )
         bodies = "\n\n".join(
-            part for part in (backend.render_primitive_module(internal), public) if part
+            part
+            for part in (
+                backend.render_primitive_module(internal),
+                public,
+                backend.render_implementation_state_queries(by_primitive),
+            )
+            if part
         )
         # Arch modules are imported for intrinsic constants left verbatim in bodies.
         # Intrinsics themselves stay fully qualified by lowering.
@@ -1010,6 +1016,10 @@ def _rust_primitive_trait_name(primitive_name: str) -> str:
     return f"{primitive_name[:1].upper()}{primitive_name[1:]}Impl"
 
 
+def _rust_primitive_tag_name(primitive_name: str) -> str:
+    return "".join(part[:1].upper() + part[1:] for part in primitive_name.split("_"))
+
+
 def _rust_algorithm_vector_is_mappable(extension: Extension | None) -> bool:
     if extension is None:
         return False
@@ -1115,6 +1125,7 @@ def _rust_lib(profiles: tuple[ProfileRender, ...]) -> str:
     # as a lowercase const-generic, matching the body that uses it.
     lines = [
         "#![allow(dead_code)]",
+        "#![allow(non_camel_case_types)]",
         "#![allow(non_upper_case_globals)]",
         "",
         "pub mod tsl_core;",
@@ -1123,6 +1134,9 @@ def _rust_lib(profiles: tuple[ProfileRender, ...]) -> str:
         "pub use tsl_algorithm::dataparallel;",
         "",
     ]
+    primitive_tags = _rust_primitive_tags(profiles)
+    if primitive_tags:
+        lines.extend([primitive_tags, ""])
     profile_slugs = tuple(slug(profile_render.profile.name) for profile_render in profiles)
     for profile_slug in profile_slugs:
         lines.append(f'#[cfg(feature = "{profile_slug}")]')
@@ -1130,6 +1144,24 @@ def _rust_lib(profiles: tuple[ProfileRender, ...]) -> str:
         lines.append(f"#[cfg({_rust_selected_profile_cfg(profile_slug, profile_slugs)})]")
         lines.append(f"pub use crate::tsl_{profile_slug} as profile;")
         lines.append("")
+    return "\n".join(lines)
+
+
+def _rust_primitive_tags(profiles: tuple[ProfileRender, ...]) -> str:
+    names = sorted(
+        {
+            primitive
+            for profile_render in profiles
+            for primitive in profile_render.specializations("rust")
+        }
+    )
+    if not names:
+        return ""
+    lines = [
+        "pub mod primitive {",
+        *(f"    pub struct {_rust_primitive_tag_name(name)};" for name in names),
+        "}",
+    ]
     return "\n".join(lines)
 
 

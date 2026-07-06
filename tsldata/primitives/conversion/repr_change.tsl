@@ -1,6 +1,6 @@
 description "Operations that change the extension / representation"
 prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
-  brief_description "Extracts a smaller SIMD register with the same underlying base type from a larger SIMD register."
+  brief_description "Extracts one target-width vector chunk from a larger source vector register."
   detailed_description """
     Selects one same-base chunk from a larger vector register and returns it as
     the target extension's register type. The immediate `index` chooses the
@@ -258,7 +258,7 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
                   complete(call<primitive=from_array[OutVec]>(result));
                 """
 prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
-  brief_description "Inserts a smaller SIMD register with the same underlying base type into a larger SIMD register."
+  brief_description "Inserts a target-width vector chunk into a larger vector register at the compile-time chunk index."
   detailed_description """
     Replaces one same-base chunk of a larger destination register with the lanes
     from a smaller source register. The immediate `index` chooses the chunk
@@ -433,7 +433,7 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
                   complete(call<primitive=from_array[OutVec]>(result));
                 """
 prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
-  brief_description "Converts one chunk of a SIMD register to a same-width register with larger-base-type lanes."
+  brief_description "Converts one source vector chunk to a target vector with wider lane types."
   detailed_description """
     Selects one chunk of source lanes and converts those lanes to a larger
     target base type, producing a same-width target register with fewer lanes.
@@ -1674,7 +1674,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
               complete(call<primitive=from_array[OutVec]>(result));
             """
 prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
-  brief_description "Converts one chunk of a same-width SIMD register with larger-base-type lanes into a zero-filled destination register (using saturation)."
+  brief_description "Converts one source vector chunk to a target vector with narrower lane types and zero-fills unused lanes."
   detailed_description """
     Converts lanes from a wider source base type to a narrower target base type
     and writes the converted chunk into a zero-filled destination register. The

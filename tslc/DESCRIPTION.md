@@ -78,6 +78,12 @@ prim<v:=(v,v)> add(left, right):
 - **Extension fallback**: extensions form `inherits` chains (e.g. `avx2_vl →
   avx2`); an active variant can explicitly `supersedes` another extension while
   still borrowing fallback bodies from its inheritance chain.
+- **Fixed-width SVE**: `sve128`/`sve256`/`sve512` inherit scalable `sve` bodies
+  but supersede `sve` in their fixed profiles, so one profile emits one SVE
+  model. The fixed width is a compile mode (`sve_vector_bits_N`) plus C++ flags
+  such as `-msve-vector-bits=N`, not a separate hardware target feature.
+  Scalable `sve` remains available through the separate `sve` profile; fixed
+  profiles make `dataparallel::native` resolve to the selected fixed SVE model.
 - **Mask policies**: `[mask=zero]` (zeroing) and `[mask=pass_through]` (merge).
 - `requires`, `safety` (internal/caller unsafe), and boolean attribute wildcards
   (e.g. `[aligned=*]`, expanded at catalog-build time).

@@ -1,6 +1,6 @@
 description "Type cast operations"
 prim<v:=v>[cast=reinterpret] reinterpret(data):
-  brief_description "Cast vector of type __m128 to type __m128i. This intrinsic is only used for compilation and does not generate any instructions, thus it has zero latency."
+  brief_description "Reinterprets a vector register as another vector type with the same register width."
   detailed_description """
     Reinterprets the source register as the target vector type without changing
     the underlying bits. The lane grouping and target scalar interpretation are
@@ -162,13 +162,7 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
             implementation:
               tsil "complete(cast<bitcast>(type(register::generic(ToType)), data));"
 prim<v:=v>[cast=convert] cast(data):
-  brief_description """
-      Casts a SIMD register to another type (same register width). If size of FromType < size of ToType, data will be lost.
-      Example given: 128-bit wide registers --> 4 32-bit lanes or 2 64-bit lanes.
-      i32 -> f32: [1,2,3,4] -> [1.0f, 2.0f, 3.0f, 4.0f]
-      i32 -> f64: [1,2,3,4] -> [1.0f, 2.0f]
-      f64 -> i32: [1.0f, 2.0f] -> [1, 2, 0, 0]
-    """
+  brief_description "Numerically converts vector lanes to the target base type."
   detailed_description """
     Converts lanes from the source vector type to the target vector base type.
     When the target vector has fewer lanes, only the representable leading

@@ -1,5 +1,5 @@
 prim<im:=m> to_integral(mask):
-  brief_description "Create mask from the most significant bit of each 8-bit element in \"a\", and store the result in \"dst\"."
+  brief_description "Converts a mask value to its integral mask representation."
   detailed_description """
     Converts a mask value to its compact integral mask representation. Each
     active lane contributes a set bit at that lane's position, and each inactive
@@ -246,7 +246,7 @@ prim<im:=m> to_integral(mask):
                complete(result) ;
             """
 prim<v:=m> to_vector(mask):
-  brief_description "Broadcast 8-bit integer \"a\" to all elements of \"dst\" using zeromask \"k\" (elements are zeroed out when the corresponding mask bit is not set)."
+  brief_description "Converts a mask value to a vector register whose active lanes are all-true lane values."
   detailed_description """
     Expands a mask into a vector whose active lanes contain the lane all-true
     value and whose inactive lanes contain zero. Floating-point lane types use
@@ -414,7 +414,7 @@ prim<v:=m> to_vector(mask):
                complete(result) ;
             """
 prim<m:=im> to_mask(mask):
-  brief_description "Forms a mask type from an integral mask scalar."
+  brief_description "Converts an integral mask representation to the backend mask type."
   detailed_description """
     Converts an integral mask representation into the target mask type. A set
     bit at lane position `i` activates lane `i`; a cleared bit deactivates that

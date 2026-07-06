@@ -1,6 +1,6 @@
 description "Fundamental comparison operations"
 prim<m:=(v,v)> equal(left, right):
-  brief_description "Compare packed 8-bit integers in \"a\" and \"b\" for equality, and store the results in \"dst\"."
+  brief_description "Compares corresponding lanes for equality and returns the comparison mask."
   detailed_description """
     Compares two vectors lane-wise for equality and returns a mask. Each true
     comparison lane is represented by the target mask true value, and each false
@@ -224,7 +224,7 @@ prim<m:=(v,v)> equal(left, right):
             );
           """
 prim<m:=(v,v)> nequal(left, right):
-  brief_description "Compare packed signed 8-bit integers in \"a\" and \"b\" for not-equal, and store the results in mask vector \"k\"."
+  brief_description "Compares corresponding lanes for inequality and returns the comparison mask."
   detailed_description """
     Compares two vectors lane-wise for inequality and returns a mask. Each true
     comparison lane is represented by the target mask true value, and each false
@@ -431,7 +431,7 @@ prim<m:=(v,v)> nequal(left, right):
             );
           """
 prim<m:=(v,v)> less_than(left, right):
-  brief_description "Compare packed signed 8-bit integers in \"a\" and \"b\" for less-than, and store the results in \"dst\". Note: This intrinsic emits the pcmpgtb instruction with the order of the operands switched."
+  brief_description "Compares whether each left lane is less than the corresponding right lane."
   detailed_description """
     Compares two vectors lane-wise and returns a mask indicating whether the
     left lane is less than the right lane. Signedness follows the selected lane
@@ -743,7 +743,7 @@ prim<m:=(v,v)> less_than(left, right):
             );
           """
 prim<m:=(v,v)> greater_than(left, right):
-  brief_description "Compare packed signed 8-bit integers in \"a\" and \"b\" for greater-than, and store the results in \"dst\"."
+  brief_description "Compares whether each left lane is greater than the corresponding right lane."
   detailed_description """
     Compares two vectors lane-wise and returns a mask indicating whether the
     left lane is greater than the right lane. Signedness follows the selected
@@ -1037,7 +1037,7 @@ prim<m:=(v,v)> greater_than(left, right):
             );
           """
 prim<m:=(v,v)> less_than_or_equal(left, right):
-  brief_description "Compare packed single-precision (32-bit) floating-point elements in \"a\" and \"b\" for less-than-or-equal, and store the results in \"dst\"."
+  brief_description "Compares whether each left lane is less than or equal to the corresponding right lane."
   detailed_description """
     Compares two vectors lane-wise and returns a mask indicating whether the
     left lane is less than or equal to the right lane. Signedness follows the
@@ -1260,7 +1260,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
             );
           """
 prim<m:=(v,v)> greater_than_or_equal(left, right):
-  brief_description "Compare packed single-precision (32-bit) floating-point elements in \"a\" and \"b\" for greater-than-or-equal, and store the results in \"dst\"."
+  brief_description "Compares whether each left lane is greater than or equal to the corresponding right lane."
   detailed_description """
     Compares two vectors lane-wise and returns a mask indicating whether the
     left lane is greater than or equal to the right lane. Signedness follows the
@@ -1484,7 +1484,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           """
 
 prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
-  brief_description "Todo"
+  brief_description "Compares active lanes for equality and clears inactive lanes in the result mask."
   detailed_description """
     Compares active lanes for equality and clears inactive lanes in the result
     mask. Each active true comparison lane is represented by the target mask
@@ -1707,7 +1707,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
             );
           """
 prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
-  brief_description "Compare packed elements in \"left\" and \"right\" for inequality only on active lanes of \"mask\", clearing inactive lanes in the result."
+  brief_description "Compares active lanes for inequality and clears inactive lanes in the result mask."
   detailed_description """
     Compares active lanes for inequality and clears inactive lanes in the result
     mask. Each active true comparison lane is represented by the target mask
@@ -1930,7 +1930,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
             );
           """
 prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
-  brief_description "Compare packed elements in \"left\" and \"right\" for less-than only on active lanes of \"mask\", clearing inactive lanes in the result."
+  brief_description "Compares active lanes for less-than and clears inactive lanes in the result mask."
   detailed_description """
     Compares active lanes and marks whether the left lane is less than the
     right lane, clearing inactive lanes in the result mask. Signedness follows
@@ -2152,7 +2152,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
             );
           """
 prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
-  brief_description "Compare packed elements in \"left\" and \"right\" for greater-than only on active lanes of \"mask\", clearing inactive lanes in the result."
+  brief_description "Compares active lanes for greater-than and clears inactive lanes in the result mask."
   detailed_description """
     Compares active lanes and marks whether the left lane is greater than the
     right lane, clearing inactive lanes in the result mask. Signedness follows
@@ -2374,7 +2374,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
             );
           """
 prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
-  brief_description "Compare packed elements in \"left\" and \"right\" for less-than-or-equal only on active lanes of \"mask\", clearing inactive lanes in the result."
+  brief_description "Compares active lanes for less-than-or-equal and clears inactive lanes in the result mask."
   detailed_description """
     Compares active lanes and marks whether the left lane is less than or equal
     to the right lane, clearing inactive lanes in the result mask. Signedness
@@ -2596,7 +2596,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
             );
           """
 prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
-  brief_description "Compare packed elements in \"left\" and \"right\" for greater-than-or-equal only on active lanes of \"mask\", clearing inactive lanes in the result."
+  brief_description "Compares active lanes for greater-than-or-equal and clears inactive lanes in the result mask."
   detailed_description """
     Compares active lanes and marks whether the left lane is greater than or
     equal to the right lane, clearing inactive lanes in the result mask.

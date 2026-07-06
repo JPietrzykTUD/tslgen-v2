@@ -164,6 +164,32 @@ def test_extension_inheritance_activation_and_supersession(catalog: Catalog) -> 
     assert avx2_vl.metadata.backend["rust"].arch_module == "x86_64"
     assert catalog.extension_chain("avx2_vl") == ("avx2_vl", "avx2")
 
+    sve512 = catalog.extensions["sve512"]
+    assert sve512.inherits == "sve"
+    assert sve512.isa_name == "sve512"
+    assert sve512.family == "arm"
+    assert sve512.vector_bits == 512
+    assert sve512.vector_bits_kind == "fixed"
+    assert sve512.metadata.runtime_lanes is False
+    assert sve512.active_when.target_features == frozenset({"sve"})
+    assert sve512.active_when.compile_modes == frozenset({"sve_vector_bits_512"})
+    assert sve512.supersedes == frozenset({"sve"})
+    assert catalog.extension_chain("sve512") == ("sve512", "sve")
+    compile_guards = sve512.metadata.backend["cpp"].compile_guards
+    assert len(compile_guards) == 1
+    assert compile_guards[0].name == "sve_vector_bits"
+    assert compile_guards[0].macro == "__ARM_FEATURE_SVE_BITS"
+    assert compile_guards[0].equals == "512"
+    assert compile_guards[0].hint_flag == "-msve-vector-bits=512"
+    assert (
+        sve512.direct_vector_register_type("cpp", "si32")
+        == "svint32_t __attribute__((arm_sve_vector_bits(512)))"
+    )
+    assert (
+        sve512.mask_policy.spelling("cpp")
+        == "svbool_t __attribute__((arm_sve_vector_bits(512)))"
+    )
+
 
 def test_extension_backend_support_is_explicit_and_inherited(catalog: Catalog) -> None:
     avx2_vl = catalog.extensions["avx2_vl"]
@@ -261,6 +287,14 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     assert machine_profiles["neon"].cpp_flags == ()
     assert machine_profiles["sve"].features == frozenset({"sve"})
     assert machine_profiles["sve"].cpp_flags == ("-mcpu=a64fx",)
+    assert machine_profiles["sve512"].features == frozenset({"sve"})
+    assert machine_profiles["sve512"].compile_modes == frozenset(
+        {"sve_vector_bits_512"}
+    )
+    assert machine_profiles["sve512"].cpp_flags == (
+        "-mcpu=a64fx",
+        "-msve-vector-bits=512",
+    )
 
 
 def test_target_families_promoted(catalog: Catalog) -> None:

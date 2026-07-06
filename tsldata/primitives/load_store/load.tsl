@@ -1,6 +1,6 @@
 description "Load primitives"
 prim<v:=cptr>[aligned=*] load(ptr):
-  brief_description "Load 128-bits of integer data from memory into \"dst\". \n\t\"mem_addr\" must be aligned on a 16-byte boundary or a general-protection exception may be generated."
+  brief_description "Loads a vector register from contiguous memory."
   detailed_description """
     Loads one full vector register from contiguous memory. The `aligned`
     attribute selects whether the pointer is promised to satisfy the selected
@@ -164,7 +164,7 @@ prim<v:=cptr>[aligned=*] load(ptr):
             """
 
 prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
-  brief_description "TODO"
+  brief_description "Loads active mask lanes from contiguous memory and writes zero to inactive lanes."
   detailed_description """
     Loads mask-selected lanes from contiguous memory and writes zero to inactive
     lanes. The `aligned` attribute selects whether the pointer is promised to
@@ -321,7 +321,7 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
             }
           """
 prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
-  brief_description "Masked load with pass-through semantics: lanes enabled by the mask are loaded from memory, and disabled lanes are taken from data."
+  brief_description "Loads active mask lanes from contiguous memory and keeps the pass-through lane where the mask is inactive."
   detailed_description """
     Loads mask-selected lanes from contiguous memory and preserves inactive
     lanes from the pass-through vector. The `aligned` attribute selects whether
@@ -488,7 +488,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
     ptr:
       "if packed=true" "type(vector::imask) const*"
       "if packed=false" "type(base::unsigned_of(type(base::in))) const*"
-  brief_description "Loads data from memory to a mask."
+  brief_description "Loads a mask value from memory using the selected mask representation."
   detailed_description """
     Loads a mask value from memory. With `packed=true`, memory contains the
     compact integral mask representation. With `packed=false`, memory contains
@@ -659,7 +659,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
           """
 
 prim<s:=cptr>[aligned=false] load_scalar(ptr):
-  brief_description "Loads a scalar mask from memory."
+  brief_description "Loads one scalar value from memory."
   detailed_description """
     Loads one scalar value from memory. This primitive always uses the unaligned
     pointer form.
