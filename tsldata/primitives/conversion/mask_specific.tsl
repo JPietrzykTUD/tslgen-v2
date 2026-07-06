@@ -1,5 +1,5 @@
 prim<im:=m> to_integral(mask):
-  brief_description "[Example: sse + si8]: Create mask from the most significant bit of each 8-bit element in \"a\", and store the result in \"dst\"."
+  brief_description "Create mask from the most significant bit of each 8-bit element in \"a\", and store the result in \"dst\"."
   detailed_description """
     Converts a mask value to its compact integral mask representation. Each
     active lane contributes a set bit at that lane's position, and each inactive
@@ -14,7 +14,6 @@ prim<im:=m> to_integral(mask):
         result = result | (1 << i)
     return result
     """
-  operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[j] := a[i+7]\nENDFOR\ndst[MAX:16] := 0"
   tests:
     - {tags [basic], type "ui8", case {inputs [10], expected 10}}
     - {tags [basic], type "si8", case {inputs [10], expected 10}}
@@ -247,7 +246,7 @@ prim<im:=m> to_integral(mask):
                complete(result) ;
             """
 prim<v:=m> to_vector(mask):
-  brief_description "[Example: avx512 + si8]: Broadcast 8-bit integer \"a\" to all elements of \"dst\" using zeromask \"k\" (elements are zeroed out when the corresponding mask bit is not set)."
+  brief_description "Broadcast 8-bit integer \"a\" to all elements of \"dst\" using zeromask \"k\" (elements are zeroed out when the corresponding mask bit is not set)."
   detailed_description """
     Expands a mask into a vector whose active lanes contain the lane all-true
     value and whose inactive lanes contain zero. Floating-point lane types use
@@ -262,7 +261,6 @@ prim<v:=m> to_vector(mask):
         result[i] = 0
     return result
     """
-  operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[7:0]\n\tELSE\n\t\tdst[i+7:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
     - {tags [basic], type "ui8", case {inputs [43690], expected [0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255]}}
     - {tags [edge], type "ui8", case {inputs [65535], expected [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255]}}
@@ -429,7 +427,6 @@ prim<m:=im> to_mask(mask):
       result[i] = ((mask >> i) & 1) != 0
     return mask result
     """
-  operation ""
   tests:
     - {tags [basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170], expected 170}}
     - {tags [edge], extension "avx512", type "ui8", lane_count 64, case {inputs [9223372036854775809], expected 9223372036854775809}}

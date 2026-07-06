@@ -1,5 +1,5 @@
 prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
-  brief_description "[Example: avx512 + si8]: Blend packed 8-bit integers from \"a\" and \"b\" using control mask \"k\", and store the results in \"dst\"."
+  brief_description "Blend packed 8-bit integers from \"a\" and \"b\" using control mask \"k\", and store the results in \"dst\"."
   detailed_description """
     Selects lanes from two input vectors according to a mask. Active mask lanes
     take the corresponding lane from `right`; inactive mask lanes take the
@@ -14,7 +14,6 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
         result[i] = left[i]
     return result
     """
-  operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := b[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := a[i+7:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
     - {tags [basic], type "ui8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]], expected [1, 102, 3, 104, 5, 106, 7, 108, 9, 110, 11, 112, 13, 114, 15, 116]}}
     - {tags [edge], type "ui8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]], expected [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]}}
@@ -226,7 +225,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
             );
           """
 prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
-  brief_description "[Example: avx512 + si8]: Move packed 8-bit integers from \"a\" into \"dst\" using zeromask \"k\" (elements are zeroed out when the corresponding mask bit is not set)."
+  brief_description "Move packed 8-bit integers from \"a\" into \"dst\" using zeromask \"k\" (elements are zeroed out when the corresponding mask bit is not set)."
   detailed_description """
     Keeps source lanes selected by the mask and writes zero to inactive lanes.
     """
@@ -239,7 +238,6 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
         result[i] = 0
     return result
     """
-  operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
     - {tags [maskz, basic], type "ui8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [0, 2, 0, 4, 0, 6, 0, 8, 0, 10, 0, 12, 0, 14, 0, 16]}}
     - {tags [maskz, edge], type "ui8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
@@ -348,7 +346,7 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
             """
 
 prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
-  brief_description "[Example: avx512 + si8]: Move packed 8-bit integers from \"a\" into \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
+  brief_description "Move packed 8-bit integers from \"a\" into \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
   detailed_description """
     Copies lanes from `data` where the mask is active and preserves lanes from
     `src` where the mask is inactive.
@@ -362,7 +360,6 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
         result[i] = src[i]
     return result
     """
-  operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tdst[i+7:i] := a[i+7:i]\n\tELSE\n\t\tdst[i+7:i] := src[i+7:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
     - {tags [mask, basic], type "ui8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]], expected [1, 102, 3, 104, 5, 106, 7, 108, 9, 110, 11, 112, 13, 114, 15, 116]}}
     - {tags [mask, edge], type "ui8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]], expected [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116]}}

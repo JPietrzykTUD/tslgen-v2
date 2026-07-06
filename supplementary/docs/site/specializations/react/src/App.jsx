@@ -31,7 +31,7 @@ function App() {
       .then((data) => {
         const decoded = decodePayload(data);
         setPayload(decoded);
-        setSelectedPrimitive(decoded.primitives[0]?.name ?? null);
+        setSelectedPrimitive(null);
         setEnabledRequirements(new Set(decoded.requirements));
         setEnabledFamilies(new Set(decoded.families));
         setEnabledTypes(new Set(decoded.types));
@@ -512,7 +512,7 @@ function PrimitiveList({
 }
 
 function PrimitiveDocumentation({ primitive }) {
-  if (!primitive.detailed && !primitive.semantics) return null;
+  if (!primitive.detailed && !primitive.semantics && !primitive.expressions) return null;
   return (
     <section className="primitiveNarrativeInline">
       {primitive.detailed && <p>{primitive.detailed}</p>}
@@ -522,7 +522,30 @@ function PrimitiveDocumentation({ primitive }) {
           <pre>{primitive.semantics}</pre>
         </>
       )}
+      {primitive.expressions && <ExpressionExamples examples={primitive.expressions} />}
     </section>
+  );
+}
+
+function ExpressionExamples({ examples }) {
+  return (
+    <div className="expressionExamples">
+      <h2>Expression</h2>
+      <div className="expressionGrid">
+        <ExpressionCard language="C++" expression={examples.cpp} />
+        <ExpressionCard language="Rust" expression={examples.rust} />
+      </div>
+    </div>
+  );
+}
+
+function ExpressionCard({ language, expression }) {
+  if (!expression) return null;
+  return (
+    <div className="expressionCard">
+      <div className="expressionCardHeader">{language}</div>
+      <pre>{expression}</pre>
+    </div>
   );
 }
 
@@ -777,7 +800,7 @@ function sortRecords(records) {
 }
 
 function decodePayload(payload) {
-  if (payload.schema_version !== 3) {
+  if (payload.schema_version !== 4) {
     throw new Error(`unsupported specialization schema ${payload.schema_version}`);
   }
 
@@ -793,12 +816,16 @@ function decodePayload(payload) {
     })
   );
   const primitives = payload.primitives.map(
-    ([name, sourceName, brief, detailed, semantics]) => ({
+    ([name, sourceName, brief, detailed, semantics, cppExpression, rustExpression]) => ({
       name: strings[name],
       source_name: strings[sourceName],
       brief: strings[brief],
       detailed: strings[detailed],
       semantics: strings[semantics],
+      expressions: {
+        cpp: strings[cppExpression],
+        rust: strings[rustExpression],
+      },
     })
   );
 
@@ -887,6 +914,8 @@ function primitiveMatchesSearch(primitive, records, query) {
     primitive.brief,
     primitive.detailed,
     primitive.semantics,
+    primitive.expressions?.cpp,
+    primitive.expressions?.rust,
   ]
     .filter(Boolean)
     .join(" ")

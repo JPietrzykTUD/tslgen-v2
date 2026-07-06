@@ -12,7 +12,6 @@ prim<m:=v>[value=zero] unequal_zero(data):
       result[i] = data[i] != 0
     return mask result
     """
-  operation ""
   tests:
     - {tags [zero, basic], type "ui32", case {inputs [[0, 0, 0, 0, 0, 0, 0, 0]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
     - {tags [zero, edge], type "ui32", case {inputs [[0, 0, 0, 0, 0, 1, 0, 0]], expected [0, 0, 0, 0, 0, 4294967295, 0, 0]}}
@@ -128,7 +127,6 @@ prim<s:=(v,s)> count_matches(data, value):
         count = count + 1
     return count
     """
-  operation ""
   tests:
     - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 2, 1, 2, 4, 2], 2], expected 4}}
     - {tags [edge], type "ui32", case {inputs [[0, 0, 0, 0, 0, 0, 0, 0], 1], expected 0}}

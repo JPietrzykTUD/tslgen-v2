@@ -1,6 +1,6 @@
 prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
   cross_lane true
-  brief_description "[Example: avx512 + si8]: Contiguously store the active 8-bit integers in \"a\" (those with their respective bit set in writemask \"k\") to unaligned memory at \"base_addr\"."
+  brief_description "Contiguously store the active 8-bit integers in \"a\" (those with their respective bit set in writemask \"k\") to unaligned memory at \"base_addr\"."
   detailed_description """
     Packs mask-selected lanes from the source vector toward the beginning of the
     output memory region. Lanes whose mask bit is inactive are skipped and do
@@ -14,7 +14,6 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
         ptr[out_idx] = a[i]
         out_idx = out_idx + 1
     """
-  operation "[Example: avx512 + si8]: size := 8\nm := base_addr\nFOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tMEM[m+size-1:m] := a[i+7:i]\n\t\tm := m + size\n\tFI\nENDFOR"
   tests:
     - {tags [store, zero], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
     - {tags [store, all], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
@@ -200,7 +199,6 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
         result[i] = 0
     return result
     """
-  operation ""
   tests:
     - {tags [load, zero], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
     - {tags [load, all], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
@@ -377,7 +375,6 @@ prim<v:=cptr+> load_convert_up(ptr):
       result[i] = cast_to_ToBase(ptr[i])
     return result
     """
-  operation ""
   return_type:
     base: ToBase
   tests:

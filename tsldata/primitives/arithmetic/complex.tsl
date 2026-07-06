@@ -1,6 +1,6 @@
 description "Expensive / complex instructions"
 prim<v:=(v,v)> mul(factor1, factor2):
-  brief_description "[Example: sse + si16]: Multiply the packed 16-bit integers in \"a\" and \"b\", producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in \"dst\"."
+  brief_description "Multiply the packed 16-bit integers in \"a\" and \"b\", producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in \"dst\"."
   detailed_description """
     Computes lane-wise multiplication of two vector registers. Each output lane
     depends only on the corresponding lanes of the input registers. The result is
@@ -13,7 +13,6 @@ prim<v:=(v,v)> mul(factor1, factor2):
       result[i] = factor1[i] * factor2[i]
     return result
     """
-  operation "[Example: sse + si16]: FOR j := 0 to 7\n\ti := j*16\n\ttmp[31:0] := SignExtend32(a[i+15:i]) * SignExtend32(b[i+15:i])\n\tdst[i+15:i] := tmp[15:0]\nENDFOR"
   tests:
     - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [2, 0, -1, -2, 3, -3, 4, -4]], expected [2, 0, -3, -8, 15, -18, 28, -32]}}
     - {tags [zero], type "si32", case {inputs [[0, 1, -1, 0, 2, -2, 0, 3], [5, 0, 7, -8, 0, 9, 0, -10]], expected [0, 0, -7, 0, 0, -18, 0, -30]}}
@@ -284,7 +283,6 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
         result[i] = 0
     return result
     """
-  operation ""
   tests:
     - {tags [maskz, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 4.0, 0.0, 20.25]}}
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [0, 0, 0, -8]}}
@@ -444,7 +442,6 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
         result[i] = factor1[i]
     return result
     """
-  operation ""
   tests:
     - {tags [mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [1.0, 4.0, 3.5, 20.25]}}
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], [2, 0, -1, -2]], expected [1, 0, 3, -8]}}
@@ -588,7 +585,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
         implementation:
           tsil "complete(intrin<svmul, build[post=m]>(mask, factor1, factor2));"
 prim<v:=(v,v)> div(divident, divisor):
-  brief_description "[Example: sse + f32]: Divide packed single-precision (32-bit) floating-point elements in \"a\" by packed elements in \"b\", and store the results in \"dst\"."
+  brief_description "Divide packed single-precision (32-bit) floating-point elements in \"a\" by packed elements in \"b\", and store the results in \"dst\"."
   detailed_description """
     Computes lane-wise division of two vector registers. Each output lane depends
     only on the corresponding lanes of the input registers. Rounding, exceptional
@@ -601,7 +598,6 @@ prim<v:=(v,v)> div(divident, divisor):
       result[i] = divident[i] / divisor[i]
     return result
     """
-  operation "[Example: sse + f32]: FOR j := 0 to 3\n\ti := 32*j\n\tdst[i+31:i] := a[i+31:i] / b[i+31:i]\nENDFOR"
   tests:
     - {tags [basic], type "f32", case {inputs [[8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [4.0, -3.0, -5.0, -3.0]}}
     - {tags [one], type "f32", case {inputs [[1.0, -2.0, 3.0, -4.0], [1.0, -2.0, 3.0, -4.0]], expected [1.0, 1.0, 1.0, 1.0]}}
@@ -705,7 +701,7 @@ prim<v:=(v,v)> div(divident, divisor):
         implementation:
           tsil "complete(intrin<svdiv, build[post=x]>(call<primitive=mask_true[Vec]>(), divident, divisor));"
 prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
-  brief_description "[Example: avx512 + f32]: Divide packed elements in \"a\" by packed elements in \"b\", and store the results in \"dst\" using zeromask \"k\" (elements are zeroed when the corresponding mask bit is not set)."
+  brief_description "Divide packed elements in \"a\" by packed elements in \"b\", and store the results in \"dst\" using zeromask \"k\" (elements are zeroed when the corresponding mask bit is not set)."
   detailed_description """
     Computes lane-wise division for lanes enabled by the mask. Disabled lanes are
     set to zero. Rounding, exceptional floating-point values, integer quotient
@@ -721,7 +717,6 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
         result[i] = 0
     return result
     """
-  operation "[Example: avx512 + f32]: FOR j := 0 to 15\n\ti := 32*j\n\tIF k[j]\n\t\tdst[i+31:i] := a[i+31:i] / b[i+31:i]\n\tELSE\n\t\tdst[i+31:i] := 0\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
     - {tags [maskz, basic], type "f32", case {inputs [10, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [0.0, -3.0, 0.0, -3.0]}}
     - {tags [maskz, zero], type "f32", case {inputs [0, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [0.0, 0.0, 0.0, 0.0]}}
@@ -821,7 +816,7 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
         implementation:
           tsil "complete(intrin<svdiv, build[post=z]>(mask, divident, divisor));"
 prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
-  brief_description "[Example: avx512 + f32]: Divide packed elements in \"a\" by packed elements in \"b\", and store the results in \"dst\" using writemask \"k\" (elements are copied from \"a\" when the corresponding mask bit is not set)."
+  brief_description "Divide packed elements in \"a\" by packed elements in \"b\", and store the results in \"dst\" using writemask \"k\" (elements are copied from \"a\" when the corresponding mask bit is not set)."
   detailed_description """
     Computes lane-wise division for lanes enabled by the mask. Disabled lanes
     keep the corresponding lane from `divident`. Rounding, exceptional
@@ -837,7 +832,6 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
         result[i] = divident[i]
     return result
     """
-  operation "[Example: avx512 + f32]: FOR j := 0 to 15\n\ti := 32*j\n\tIF k[j]\n\t\tdst[i+31:i] := a[i+31:i] / b[i+31:i]\n\tELSE\n\t\tdst[i+31:i] := a[i+31:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   tests:
     - {tags [mask, basic], type "f32", case {inputs [10, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [8.0, -3.0, 10.0, -3.0]}}
     - {tags [mask, zero], type "f32", case {inputs [0, [8.0, -9.0, 10.0, -12.0], [2.0, 3.0, -2.0, 4.0]], expected [8.0, -9.0, 10.0, -12.0]}}
@@ -937,7 +931,7 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
         implementation:
           tsil "complete(intrin<svdiv, build[post=m]>(mask, divident, divisor));"
 prim<v:=(v,sImm)> mul_imm(data, factor):
-  brief_description "[Example: sse + si16]: Multiply the packed 16-bit integers in \"a\" and \"b\", producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in \"dst\"."
+  brief_description "Multiply the packed 16-bit integers in \"a\" and \"b\", producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in \"dst\"."
   detailed_description """
     Multiplies every lane of a vector register by the compile-time scalar
     immediate `factor`. The result is represented in the destination lane type;
@@ -950,7 +944,6 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
       result[i] = data[i] * factor
     return result
     """
-  operation "[Example: sse + si16]: FOR j := 0 to 7\n\ti := j*16\n\ttmp[31:0] := SignExtend32(a[i+15:i]) * SignExtend32(b[i+15:i])\n\tdst[i+15:i] := tmp[15:0]\nENDFOR"
   tests:
     - {tags [basic], type "si32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 3], expected [3, 6, 9, 12, 15, 18, 21, 24]}}
     - {tags [zero], type "si32", case {inputs [[-1, 0, 1, -2, 2, -3, 3, -4], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
@@ -1291,7 +1284,6 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
         result[i] = 0
     return result
     """
-  operation ""
   tests:
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [0, 6, 0, 12]}}
     - {tags [maskz, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.0, -4.0], -2.0], expected [0.0, 4.0, 0.0, 8.0]}}
@@ -1351,7 +1343,6 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
         result[i] = data[i]
     return result
     """
-  operation ""
   tests:
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [1, 6, 3, 12]}}
     - {tags [mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.0, -4.0], -2.0], expected [1.0, 4.0, 3.0, 8.0]}}
@@ -1408,7 +1399,6 @@ prim<v:=(v,v)> mod(dividend, divisor):
       result[i] = dividend[i] % divisor[i]
     return result
     """
-  operation ""
   tests:
     - {tags [basic], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], [3, 4, 5, 2, 3, 2, 3, 2]], expected [1, -1, 3, -1, 0, -1, 1, -1]}}
     - {tags [basic], type "ui32", case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], [3, 4, 5, 2, 3, 2, 3, 2]], expected [1, 1, 3, 1, 0, 1, 1, 1]}}
@@ -1596,7 +1586,6 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
         result[i] = 0
     return result
     """
-  operation ""
   tests:
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], [3, 4, 5, 2]], expected [0, -1, 0, -1]}}
   impls:
@@ -1653,7 +1642,6 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
         result[i] = dividend[i]
     return result
     """
-  operation ""
   tests:
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], [3, 4, 5, 2]], expected [10, -1, 8, -1]}}
   impls:
@@ -1707,7 +1695,6 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
       result[i] = dividend[i] % divisor
     return result
     """
-  operation ""
   tests:
     - {tags [basic], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], 3], expected [1, 0, 2, -1, 0, -2, 1, 0]}}
     - {tags [one], type "si32", case {inputs [[10, -9, 8, -7, 6, -5, 4, -3], 1], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
@@ -1789,7 +1776,6 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
         result[i] = 0
     return result
     """
-  operation ""
   tests:
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [0, 0, 0, -1]}}
   impls:
@@ -1847,7 +1833,6 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
         result[i] = dividend[i]
     return result
     """
-  operation ""
   tests:
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [10, 0, 8, -1]}}
   impls:

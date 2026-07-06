@@ -8,7 +8,6 @@ prim<m:=()>[value=zero] mask_false():
       result[i] = inactive
     return result
     """
-  operation ""
   tests:
     - {tags [false], extension "avx512", type "ui8", lane_count 64, case {inputs [], expected 0}}
     - {tags [false], extension "avx512", type "ui16", lane_count 32, case {inputs [], expected 0}}
@@ -82,7 +81,6 @@ prim<m:=()>[value=all] mask_true():
       result[i] = active
     return result
     """
-  operation ""
   tests:
     - {tags [true], extension "avx512", type "ui8", lane_count 64, case {inputs [], expected 18446744073709551615}}
     - {tags [true], extension "avx512", type "ui16", lane_count 32, case {inputs [], expected 4294967295}}

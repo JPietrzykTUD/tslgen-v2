@@ -1,6 +1,6 @@
 prim<v:=v> conflict(data):
   cross_lane true
-  brief_description "[Example: avx512 + si32]: Test each 32-bit element of \"a\" for equality with all other elements in \"a\" closer to the least significant bit. Each element's comparison forms a zero extended bit vector in \"dst\"."
+  brief_description "Test each 32-bit element of \"a\" for equality with all other elements in \"a\" closer to the least significant bit. Each element's comparison forms a zero extended bit vector in \"dst\"."
   detailed_description """
     For each lane, reports which earlier lanes contain the same value. The
     result lane is an integer bit mask whose bit `k` is set when an earlier lane
@@ -15,7 +15,6 @@ prim<v:=v> conflict(data):
           set bit k in result[i]
     return result
     """
-  operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\ti := j*32\n\tFOR k := 0 to j-1\n\t\tm := k*32\n\t\tdst[i+k] := (a[i+31:i] == a[m+31:m]) ? 1 : 0\n\tENDFOR\n\tdst[i+31:i+j] := 0\nENDFOR\ndst[MAX:512] := 0"
   tests:
     - {tags [basic], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64]], expected [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
     - {tags [edge], type "ui8", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56]], expected [0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 4, 8, 16, 32, 64, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
@@ -171,7 +170,6 @@ prim<m:=(m,v)> conflict_free(mask, data):
       result[i] = mask[i] is active and conflicts[i] == 0
     return result
     """
-  operation ""
   tests:
     - {tags [basic], type "ui8", lane_count 16, case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected 65535}}
     - {tags [edge], type "ui8", lane_count 16, case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8]], expected 255}}

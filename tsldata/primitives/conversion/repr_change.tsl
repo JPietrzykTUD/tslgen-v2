@@ -13,7 +13,6 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
       result[i] = data[start + i]
     return result
     """
-  operation ""
   params:
     index:
       type si32
@@ -274,7 +273,6 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
       result[start + i] = data[i]
     return result
     """
-  operation ""
   params:
     index:
       type si32
@@ -449,7 +447,6 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
       result[i] = numeric_convert(data[start + i], target_base_type)
     return result
     """
-  operation ""
   return_type:
     base: ToBase
   params:
@@ -1693,7 +1690,6 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
       result[start + i] = narrowing_convert(data[i], target_base_type)
     return result
     """
-  operation ""
   return_type:
     base: ToBase
   params:

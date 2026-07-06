@@ -1,5 +1,5 @@
 prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
-  brief_description "[Example: sse + si8]: Store 128-bits of integer data from \"a\" into memory."
+  brief_description "Store 128-bits of integer data from \"a\" into memory."
   detailed_description """
     Stores one full vector register to contiguous memory. The `aligned`
     attribute selects whether the pointer is promised to satisfy the selected
@@ -10,7 +10,6 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
     for each lane i:
       ptr[i] = data[i]
     """
-  operation "[Example: sse + si8]: MEM[mem_addr+127:mem_addr] := a[127:0]"
   tests:
     - {tags [basic], attrs [aligned=false], type "ui32", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
     - {tags [misaligned], attrs [aligned=false], type "ui32", offset 1, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17]], expected [0, 10, 11, 12, 13, 14, 15, 16, 17]}}
@@ -176,7 +175,6 @@ prim<void:=(ptr,m)>[aligned=*, packed=*] store_mask_repr(ptr, mask):
         else:
           ptr[i] = 0
     """
-  operation ""
   tests:
     - {tags [mask, basic], attrs [aligned=true, packed=true], type "ui8", offset 0, case {inputs [12297829382473034410], expected [12297829382473034410, 0, 0]}}
     - {tags [mask, edge], attrs [aligned=true, packed=true], type "ui8", offset 0, case {inputs [18446744073709551615], expected [18446744073709551615, 0, 0]}}
@@ -407,7 +405,6 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
     input: pointer ptr, scalar scalar, attribute aligned
     ptr[0] = scalar
     """
-  operation ""
   tests:
     - {tags [scalar, basic], attrs [aligned=true], type "ui8", offset 0, case {inputs [5], expected [5, 0, 0]}}
     - {tags [scalar, edge], attrs [aligned=true], type "ui8", offset 0, case {inputs [4294967295], expected [4294967295, 0, 0]}}
@@ -471,7 +468,7 @@ prim<void:=(ptr,s)>[aligned=*] store(ptr, scalar):
           tsil "*ptr = scalar;"
 
 prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
-  brief_description "[Example: avx512 + si8]: Store packed 8-bit integers from \"a\" into memory using writemask \"k\".\n\t\"mem_addr\" does not need to be aligned on any particular boundary."
+  brief_description "Store packed 8-bit integers from \"a\" into memory using writemask \"k\".\n\t\"mem_addr\" does not need to be aligned on any particular boundary."
   detailed_description """
     Stores mask-selected vector lanes to contiguous memory and leaves inactive
     memory lanes unchanged. The `aligned` attribute selects whether the pointer
@@ -483,7 +480,6 @@ prim<void:=(m,ptr,v)>[aligned=*,mask=pass_through] store(mask, ptr, data):
       if mask[i] is active:
         ptr[i] = data[i]
     """
-  operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tIF k[j]\n\t\tMEM[mem_addr+i+7:mem_addr+i] := a[i+7:i]\n\tFI\nENDFOR"
   tests:
     - {tags [store, basic], type "ui8", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 43690], expected [0, 1, 0, 3, 0, 5, 0, 7, 0, 9, 0, 11, 0, 13, 0, 15]}}
     - {tags [store, edge], type "ui8", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 65535], expected [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}}

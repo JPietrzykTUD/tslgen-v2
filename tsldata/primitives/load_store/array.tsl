@@ -11,7 +11,6 @@ prim<s[]:=v> to_array(a):
       result[i] = a[i]
     return result
     """
-  operation ""
   tests:
     - {tags [basic], type "ui32", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7]], expected [0, 1, 2, 3, 4, 5, 6, 7]}}
     - {tags [edge], type "si32", case {inputs [[-1, 0, 1, -2, 2, -3, 3, -4]], expected [-1, 0, 1, -2, 2, -3, 3, -4]}}
@@ -205,7 +204,6 @@ prim<v:=s[]> from_array(data):
       result[i] = data[i]
     return result
     """
-  operation ""
   tests:
     - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
     - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected [0.0, -0.0, INFINITY, "-INFINITY"]}}
@@ -268,7 +266,6 @@ prim<s:=v[idx]> extract_value(a):
     input: register a, immediate Index
     return a[Index]
     """
-  operation ""
   generic_params:
     Index {kind int, default 0}
   tests:

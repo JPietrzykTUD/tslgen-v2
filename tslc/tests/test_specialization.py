@@ -977,8 +977,16 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     payload = json.loads(specialization_artifacts["docs/specializations/specializations.json"])
     records = _decode_specialization_records(payload)
 
-    assert payload["schema_version"] == 3
+    assert payload["schema_version"] == 4
     assert sum(record["count"] for record in records) == len(specialization_result.coverage)
+    strings = payload["strings"]
+    primitive_docs = {strings[row[0]]: row for row in payload["primitives"]}
+    add_doc = primitive_docs["add"]
+    assert strings[add_doc[5]] == "auto result = tsl::add<Vec>(left, right);"
+    assert strings[add_doc[6]] == "let result = add::<S>(left, right);"
+    load_doc = primitive_docs["load"]
+    assert "/* aligned */" in strings[load_doc[5]]
+    assert "/* aligned */" in strings[load_doc[6]]
     assert any(
         record["backend"] == "cpp"
         and record["profile"] == "avx2"
@@ -996,6 +1004,7 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     ).read_text(encoding="utf-8")
     assert 'import React, { useEffect, useMemo, useState } from "react";' in app_source
     assert "const [filtersOpen, setFiltersOpen] = useState(false);" in app_source
+    assert "setSelectedPrimitive(null);" in app_source
     assert "current === primitive.name ? null : primitive.name" in app_source
     assert "☰" in app_source
     assert "←" in app_source
@@ -1004,6 +1013,8 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     assert "function PrimitiveList" in app_source
     assert "<SpecializationSummary" in app_source
     assert "<SpecializationInventory" in app_source
+    assert "function ExpressionExamples" in app_source
+    assert "Expression" in app_source
     assert (
         app_source.index("<PrimitiveDocumentation")
         < app_source.index("<SpecializationSummary")

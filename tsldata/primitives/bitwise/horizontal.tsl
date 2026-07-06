@@ -14,7 +14,6 @@ prim<s:=v> hand(vec):
       result_bits = result_bits & bit_pattern(vec[i])
     return scalar_from_bit_pattern(result_bits)
     """
-  operation ""
   tests:
     - {tags [basic], type "ui32", case {inputs [[255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
     - {tags [zero], type "ui32", case {inputs [[255, 127, 0, 31, 15, 7, 3, 1]], expected 0}}
@@ -351,7 +350,6 @@ prim<s:=v> hor(vec):
       result_bits = result_bits | bit_pattern(vec[i])
     return scalar_from_bit_pattern(result_bits)
     """
-  operation ""
   tests:
     - {tags [basic], type "ui32", case {inputs [[1, 2, 4, 8, 16, 32, 64, 128]], expected 255}}
     - {tags [zero], type "ui32", case {inputs [[0, 0, 0, 0, 0, 0, 0, 0]], expected 0}}
@@ -650,7 +648,6 @@ prim<s:=(m,v)> hand(mask, vec):
       return 0
     return scalar_from_bit_pattern(result_bits)
     """
-  operation ""
   tests:
     - {tags [mask, basic], type "ui32", lane_count 8, case {inputs [255, [255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
     - {tags [mask, sparse], type "ui32", lane_count 8, case {inputs [165, [255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
@@ -795,7 +792,6 @@ prim<s:=(m,v)> hor(mask, vec):
         result_bits = result_bits | bit_pattern(vec[i])
     return scalar_from_bit_pattern(result_bits)
     """
-  operation ""
   tests:
     - {tags [mask, basic], type "ui32", lane_count 8, case {inputs [255, [1, 2, 4, 8, 16, 32, 64, 128]], expected 255}}
     - {tags [mask, sparse], type "ui32", lane_count 8, case {inputs [165, [1, 2, 4, 8, 16, 32, 64, 128]], expected 165}}
