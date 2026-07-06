@@ -19,6 +19,7 @@ from tslc.lower.lowerer import (
     effective_param_types,
     varying_positions,
 )
+from tslc.lower.implementation_state import ImplementationState
 from tslc.render._common import feature_spelling
 from tslc.render.model import RenderContext
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
@@ -153,6 +154,7 @@ class RustBackend:
         trait = (
             (f"{doc}\n" if doc else "")
             + f"pub trait {arg_trait}<S: StaticSimdVector{axis_decl}{gp_decl}> {{\n"
+            "    const IMPLEMENTATION_STATE: ImplementationState;\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply(self{fixed_trait}) -> {ret};\n"
             f"}}"
         )
@@ -245,6 +247,8 @@ class RustBackend:
             impls.append(
                 (f"{doc}\n" if doc else "")
                 + f"{impl_prefix} {arg_trait}{trait_args} for {self_ty} {{\n"
+                f"    const IMPLEMENTATION_STATE: ImplementationState = "
+                f"{_rust_implementation_state(_spec_implementation_state(spec, variant_name))};\n"
                 f"    {_unsafe_prefix(caller_unsafe)}fn apply(self{fixed_impl}) -> {ret_impl} {{\n"
                 f"{_indent(method_body, 8)}\n"
                 f"    }}\n"
@@ -326,6 +330,7 @@ class RustBackend:
         return (
             (f"{doc}\n" if doc else "")
             + f"{trait_header} {{\n"
+            "    const IMPLEMENTATION_STATE: ImplementationState;\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret};\n"
             f"}}"
         )
@@ -404,6 +409,8 @@ class RustBackend:
             (f"{doc}\n" if doc else "")
             + f"impl{impl_generics} {_trait_name(trait_primitive)}{trait_args} for {key}"
             f"{_index_where(spec, impl_register=impl_register)} {{\n"
+            f"    const IMPLEMENTATION_STATE: ImplementationState = "
+            f"{_rust_implementation_state(_spec_implementation_state(spec, variant_name))};\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret} {{\n"
             f"{_indent(body, 8)}\n"
             f"    }}\n"
@@ -547,6 +554,27 @@ def _free_function(spec: LoweredSpecialization, *, backend: RustBackend) -> str:
         f"{_indent(body, 4)}\n"
         f"}}"
     )
+
+
+def _spec_implementation_state(
+    spec: LoweredSpecialization,
+    variant_name: str | None,
+) -> ImplementationState:
+    if variant_name is None:
+        return spec.implementation_state
+    for variant in spec.variant_bodies:
+        if variant.name == variant_name:
+            return variant.implementation_state
+    return ImplementationState.UNKNOWN
+
+
+def _rust_implementation_state(state: ImplementationState) -> str:
+    return {
+        ImplementationState.NATIVE: "ImplementationState::Native",
+        ImplementationState.COMPOSED: "ImplementationState::Composed",
+        ImplementationState.FALLBACK: "ImplementationState::Fallback",
+        ImplementationState.UNKNOWN: "ImplementationState::Unknown",
+    }[state]
 
 
 def _free_variant_functions(

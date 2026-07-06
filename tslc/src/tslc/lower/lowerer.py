@@ -52,6 +52,10 @@ from tslc.lower.region_handlers import (
     DEFAULT_REGION_LOWERERS,
     RegionLowerer,
 )
+from tslc.lower.implementation_state import (
+    ImplementationState,
+    infer_direct_implementation_state,
+)
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
 from tslc.render.model import (
     LoweredBody,
@@ -77,6 +81,7 @@ class LoweredImplementationVariant:
 
     name: str
     body: LoweredBody
+    implementation_state: ImplementationState = ImplementationState.UNKNOWN
     safety: ImplementationSafety = field(default_factory=ImplementationSafety)
 
     @property
@@ -147,6 +152,7 @@ class LoweredSpecialization:
     # Feature flags required by this body, including call-graph propagation after
     # dependency pruning.
     required_features: frozenset[str] = frozenset()
+    implementation_state: ImplementationState = ImplementationState.UNKNOWN
     safety: ImplementationSafety = field(default_factory=ImplementationSafety)
     variant_bodies: tuple[LoweredImplementationVariant, ...] = ()
     documentation: PrimitiveDocumentation = field(default_factory=PrimitiveDocumentation)
@@ -458,6 +464,9 @@ class Lowerer:
                         backend_id=backend.backend_id,
                         requires_unsafe=variant_safety.internal_unsafe,
                     ),
+                    implementation_state=infer_direct_implementation_state(
+                        selected, variant_segments
+                    ),
                     safety=variant_safety,
                 )
             )
@@ -521,6 +530,9 @@ class Lowerer:
             mask_policy=selected.primitive.attributes.get("mask"),
             lane_list_params=tuple(context.env.lane_list_params.values()),
             required_features=selected.required_features,
+            implementation_state=infer_direct_implementation_state(
+                selected, segments
+            ),
             safety=effective_safety,
             variant_bodies=tuple(variant_bodies),
             documentation=primitive_documentation(

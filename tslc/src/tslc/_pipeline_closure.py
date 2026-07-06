@@ -11,6 +11,7 @@ from tslc.catalog.model import (
     RESULT_DIM_EXTENSION,
 )
 from tslc.lower.dependencies import CallDependency, VectorIdentity
+from tslc.lower.implementation_state import combine_implementation_states
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.select.selector import SelectedImplementation
 
@@ -173,6 +174,9 @@ def _propagate_transitive_call_facts(
     features_by_key = {
         _safety_key(slot, split_names): slot.spec.required_features for slot in slots
     }
+    state_by_key = {
+        _safety_key(slot, split_names): slot.spec.implementation_state for slot in slots
+    }
     dependency_targets: dict[
         tuple[str, str, str | None, VectorIdentity, VectorIdentity | None],
         list[tuple[
@@ -193,8 +197,10 @@ def _propagate_transitive_call_facts(
             slot_key = _safety_key(slot, split_names)
             safety = safety_by_key[slot_key]
             features = features_by_key[slot_key]
+            state = state_by_key[slot_key]
             propagated = safety
             propagated_features = features
+            propagated_state = state
             for dependency in sorted(
                 slot.callees,
                 key=lambda dependency: (
@@ -226,21 +232,38 @@ def _propagate_transitive_call_facts(
                     dependency_features = features_by_key[dependency_safety_key]
                     if not dependency_features <= propagated_features:
                         propagated_features = propagated_features | dependency_features
-            if propagated != safety or propagated_features != features:
+                    dependency_state = state_by_key[dependency_safety_key]
+                    joined_state = combine_implementation_states(
+                        [propagated_state, dependency_state]
+                    )
+                    if joined_state != propagated_state:
+                        propagated_state = joined_state
+            if (
+                propagated != safety
+                or propagated_features != features
+                or propagated_state != state
+            ):
                 safety_by_key[slot_key] = propagated
                 features_by_key[slot_key] = propagated_features
+                state_by_key[slot_key] = propagated_state
                 changed = True
 
     for slot in slots:
         slot_key = _safety_key(slot, split_names)
         safety = safety_by_key[slot_key]
         features = features_by_key[slot_key]
-        if safety == slot.spec.safety and features == slot.spec.required_features:
+        state = state_by_key[slot_key]
+        if (
+            safety == slot.spec.safety
+            and features == slot.spec.required_features
+            and state == slot.spec.implementation_state
+        ):
             continue
         slot.spec = replace(
             slot.spec,
             safety=safety,
             required_features=features,
+            implementation_state=state,
         )
 
 

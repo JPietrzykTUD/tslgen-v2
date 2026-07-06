@@ -22,6 +22,10 @@ from tslc.lower.lowerer import (
     effective_param_types,
     varying_positions,
 )
+from tslc.lower.implementation_state import (
+    ImplementationState,
+    combine_implementation_states,
+)
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
@@ -76,6 +80,8 @@ class CppBackend:
             f"template <{decl_params}>\nstruct {_impl_name(primitive_name)};\n"
             f"{variant_decls}"
             "}  // namespace detail::primitives"
+            + "\n\n"
+            + _implementation_state_query(primitive_name, specializations)
             + "\n\n"
             + self._wrapper(primitive_name, specializations)
         )
@@ -225,6 +231,8 @@ class CppBackend:
         )
         return (
             f"{head}\nstruct {_impl_name(first.primitive_name, variant_name)}<{key}> {{\n"
+            f"    static constexpr ::tsl::implementation_state implementation_state = "
+            f"{_cpp_implementation_state(_group_implementation_state(group, variant_name))};\n"
             f"    using Vec = {vec};\n" + to_vec + "\n".join(applies) + "\n};"
         )
 
@@ -464,6 +472,65 @@ def _free_function(spec: LoweredSpecialization, *, define: bool) -> str:
         prefix = f"{doc}\n" if doc else ""
         return f"{prefix}{signature};"
     return f"{signature} {{\n    {spec.body_text}\n}}"
+
+
+def _implementation_state_query(
+    primitive_name: str,
+    specializations: tuple[LoweredSpecialization, ...],
+) -> str:
+    shape = specializations[0]
+    params = ["class Vec"]
+    query_args = [f"primitive::{primitive_name}", "Vec"]
+    impl_args = ["Vec"]
+    if shape.target is not None:
+        params.append("class ToVec")
+        query_args.append("ToVec")
+        impl_args.append("ToVec")
+    for param in shape.type_params:
+        params.append(f"class {param.name}")
+        query_args.append(param.name)
+        impl_args.append(param.name)
+    for key, _value in shape.axis:
+        name = _axis_name(key)
+        params.append(f"bool {name}")
+        query_args.append(f"value_arg<{name}>")
+        impl_args.append(name)
+    if shape.immediate is not None:
+        name, typ = shape.immediate
+        params.append(f"{typ} {name}")
+        query_args.append(f"value_arg<{name}>")
+        impl_args.append(name)
+    for name, typ, _default in shape.generic_params:
+        params.append(f"{typ} {name}")
+        query_args.append(f"value_arg<{name}>")
+        impl_args.append(name)
+    return (
+        f"template <{', '.join(params)}>\n"
+        f"struct implementation_state_of<{', '.join(query_args)}> {{\n"
+        f"    static constexpr implementation_state value = "
+        f"detail::primitives::{_impl_name(primitive_name)}"
+        f"<{', '.join(impl_args)}>::implementation_state;\n"
+        f"}};"
+    )
+
+
+def _group_implementation_state(
+    group: list[LoweredSpecialization],
+    variant_name: str | None,
+) -> ImplementationState:
+    states: list[ImplementationState] = []
+    for spec in group:
+        if variant_name is None:
+            states.append(spec.implementation_state)
+            continue
+        for variant in spec.variant_bodies:
+            if variant.name == variant_name:
+                states.append(variant.implementation_state)
+    return combine_implementation_states(states)
+
+
+def _cpp_implementation_state(state: ImplementationState) -> str:
+    return f"::tsl::implementation_state::{state.value}"
 
 
 def _impl_name(primitive_name: str, variant_name: str | None = None) -> str:

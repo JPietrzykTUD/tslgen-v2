@@ -53,6 +53,7 @@ def cpp_artifacts(
         text(f"cpp/include/{header}", assets.text(header))
         for header in _CPP_STATIC_HEADERS
     ] + [
+        text("cpp/include/tsl_primitives.hpp", _cpp_primitive_tags(profiles)),
         # Ship the formatter config at the C++ project root so `clang-format` (ascending from
         # include/ and tests/) finds it and the generated project is self-contained.
         text("cpp/.clang-format", assets.text(".clang-format")),
@@ -169,6 +170,7 @@ def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
 def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) -> str:
     lines = [
         '#include "tsl_core.hpp"',
+        '#include "tsl_primitives.hpp"',
         '#include "tsl_dataparallel.hpp"',
         '#include "tsl_inferred_simd.hpp"',
     ]
@@ -184,6 +186,24 @@ def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) 
     )
     lines.extend(f"#include <{header}>" for header in headers)
     return "\n".join(lines) + "\n"
+
+
+def _cpp_primitive_tags(profiles: tuple[ProfileRender, ...]) -> str:
+    names = sorted(
+        {
+            primitive
+            for profile_render in profiles
+            for primitive in profile_render.specializations("cpp")
+        }
+    )
+    lines = [
+        "#pragma once",
+        "namespace tsl::primitive {",
+        *(f"struct {name} {{}};" for name in names),
+        "}  // namespace tsl::primitive",
+        "",
+    ]
+    return "\n".join(lines)
 
 
 def _guard_cpp_profile(

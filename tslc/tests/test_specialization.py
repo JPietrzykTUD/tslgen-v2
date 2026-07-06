@@ -140,6 +140,7 @@ def test_artifact_layout(specialization_result) -> None:
     # static cores, per-profile headers, top-level dispatch, per-profile smokes.
     assert {
         "cpp/include/tsl_core.hpp",
+        "cpp/include/tsl_primitives.hpp",
         "cpp/include/tsl_dataparallel.hpp",
         "cpp/include/tsl_inferred_simd.hpp",
         "cpp/include/tsl_algorithm_tags.hpp",
@@ -169,6 +170,10 @@ def test_cpp_core_vectors_expose_metadata_constants(
 ) -> None:
     core = specialization_artifacts["cpp/include/tsl_core.hpp"]
 
+    assert "enum class implementation_state" in core
+    assert "template <auto Value>" in core
+    assert "struct implementation_state_of" in core
+    assert "inline constexpr implementation_state implementation_state_v" in core
     assert "static constexpr bool has_static_lane_count_v = true;" in core
     assert "using extension_type = scalar;" in core
     assert "using with_base_type = simd<ToBase, scalar>;" in core
@@ -184,6 +189,54 @@ def test_cpp_core_vectors_expose_metadata_constants(
     assert (
         "static constexpr std::size_t vector_alignment = alignof(register_type);"
         in core
+    )
+
+
+def test_cpp_implementation_state_api(
+    specialization_artifacts: dict[str, str]
+) -> None:
+    tags = specialization_artifacts["cpp/include/tsl_primitives.hpp"]
+    avx2 = specialization_artifacts["cpp/include/tsl_avx2.hpp"]
+    scalar = specialization_artifacts["cpp/include/tsl_scalar.hpp"]
+
+    assert "struct add {};" in tags
+    assert "struct add_mask {};" in tags
+    assert '#include "tsl_primitives.hpp"' in avx2
+    assert (
+        "struct implementation_state_of<primitive::add, Vec> {\n"
+        "    static constexpr implementation_state value = "
+        "detail::primitives::add_impl<Vec>::implementation_state;\n"
+        "};"
+        in avx2
+    )
+    assert (
+        "struct implementation_state_of<primitive::load, Vec, value_arg<Aligned>>"
+        in avx2
+    )
+    assert (
+        "struct implementation_state_of<primitive::store, Vec, value_arg<Aligned>>"
+        in avx2
+    )
+    assert (
+        "struct implementation_state_of<primitive::reinterpret, Vec, ToVec>"
+        in avx2
+    )
+    assert (
+        "struct implementation_state_of<primitive::gather_narrow, Vec, "
+        "IndicesType, value_arg<scale>, value_arg<N>>"
+        in avx2
+    )
+    assert (
+        "struct add_impl<tsl::simd<int32_t, tsl::avx2>> {\n"
+        "    static constexpr ::tsl::implementation_state implementation_state = "
+        "::tsl::implementation_state::native;"
+        in avx2
+    )
+    assert (
+        "struct add_impl<tsl::simd<int32_t, tsl::scalar>> {\n"
+        "    static constexpr ::tsl::implementation_state implementation_state = "
+        "::tsl::implementation_state::fallback;"
+        in scalar
     )
 
 
@@ -855,7 +908,7 @@ def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) 
         "inline typename ::tsl::dataparallel::simd_for_t<Policy, T>::register_type hadd("
         not in avx2
     )
-    assert "@brief Add packed 8-bit integers" in avx2
+    assert "@brief Adds the corresponding lanes of two vector registers." in avx2
     assert "@par Semantics" in avx2
     assert "@par API" in avx2
     assert "- Template parameters: Vec selects the SIMD vector type" in avx2
@@ -904,7 +957,13 @@ def test_cpp_profile_specializes_dataparallel_simd_for_registered_vectors(
 def test_rust_specialization_structure(specialization_artifacts: dict[str, str]) -> None:
     avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
     core = specialization_artifacts["rust/src/tsl_core.rs"]
+    lib = specialization_artifacts["rust/src/lib.rs"]
 
+    assert "pub enum ImplementationState" in core
+    assert "pub trait ImplementationStateOf<Primitive, Vec, Args = ()>" in core
+    assert "pub struct BoolArg<const VALUE: bool>;" in core
+    assert "pub struct U32Arg<const VALUE: u32>;" in core
+    assert "pub struct I32Arg<const VALUE: i32>;" in core
     assert "pub trait StaticSimdVector: SimdVector" in core
     assert "type Extension;" in core
     assert "type WithBaseType<ToBase>;" in core
@@ -925,7 +984,12 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
         in core
     )
     assert "pub trait AddImpl: StaticSimdVector {" in avx2
+    assert "const IMPLEMENTATION_STATE: ImplementationState;" in avx2
     assert "impl AddImpl for Simd<i32, Avx2> {" in avx2
+    assert (
+        "const IMPLEMENTATION_STATE: ImplementationState = ImplementationState::Native;"
+        in avx2
+    )
     assert "impl StaticSimdVector for Simd<i32, Avx2>" in avx2
     assert "type Extension = Avx2;" in avx2
     assert "type WithBaseType<ToBase> = Simd<ToBase, Avx2>;" in avx2
@@ -936,8 +1000,43 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "unsafe { return core::arch::x86_64::_mm256_add_epi32(left, right); }" in avx2
     assert "impl AddImpl for Simd<i32, Sse> {" in avx2
     assert "pub mod detail {\n    pub mod primitives {" in avx2
+    assert "pub struct Profile;" in avx2
+    assert "pub mod primitive {\n    pub struct Add;" in lib
+    assert (
+        "impl<S> ImplementationStateOf<crate::primitive::Add, S, ()> for Profile\n"
+        "where\n"
+        "    S: detail::primitives::AddImpl,\n"
+        "{\n"
+        "    const VALUE: ImplementationState = "
+        "<S as detail::primitives::AddImpl>::IMPLEMENTATION_STATE;\n"
+        "}"
+        in avx2
+    )
+    assert (
+        "impl<S, const ALIGNED: bool> "
+        "ImplementationStateOf<crate::primitive::Load, S, (BoolArg<ALIGNED>,)> "
+        "for Profile"
+        in avx2
+    )
+    assert (
+        "impl<S: StaticSimdVector, const ALIGNED: bool, V> "
+        "ImplementationStateOf<crate::primitive::Store, S, (BoolArg<ALIGNED>, V)> "
+        "for Profile"
+        in avx2
+    )
+    assert (
+        "impl<S, ToVec: StaticSimdVector> "
+        "ImplementationStateOf<crate::primitive::Reinterpret, S, (ToVec,)> "
+        "for Profile"
+        in avx2
+    )
+    assert (
+        "ImplementationStateOf<crate::primitive::GatherNarrow, S, "
+        "(IndicesType, U32Arg<scale>, I32Arg<N>)> for Profile"
+        in avx2
+    )
     assert "pub fn add<S: detail::primitives::AddImpl>(" in avx2
-    assert '/// Add packed 8-bit integers' in avx2
+    assert '/// Adds the corresponding lanes of two vector registers.' in avx2
     assert "/// # Semantics" in avx2
     assert "/// # API" in avx2
     assert "/// - Type parameters: S selects the SIMD vector type" in avx2
