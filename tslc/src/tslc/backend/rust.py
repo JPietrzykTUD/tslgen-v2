@@ -615,7 +615,7 @@ def _variant_primitive_name(
 def _qualify_nested_self_receiver(body: str, receiver_type: str) -> str:
     """Nested Rust helper functions cannot capture the outer impl's ``Self``."""
 
-    return body.replace("Self::", f"<{receiver_type} as SimdVector>::")
+    return f"<{receiver_type} as SimdVector>::".join(body.split("Self::"))
 
 
 def _variant_names(
@@ -698,10 +698,10 @@ def _doc_block(
         facts.append(("Immediate", f"{spec.immediate[0]}: {spec.immediate[1]}"))
     if spec.required_features:
         facts.append(
-            ("Required CPU features", ", ".join(sorted(spec.required_features)))
+            ("Required target features", ", ".join(sorted(spec.required_features)))
         )
     else:
-        facts.append(("Required CPU features", "none"))
+        facts.append(("Required target features", "none"))
     facts.append(("Safety", safety_fact(spec.safety)))
     return documentation_block(
         spec.documentation,

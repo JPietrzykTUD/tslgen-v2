@@ -7,6 +7,7 @@ import pytest
 from tslc.backend.cpp import CppBackend
 from tslc.backend.rust import RustBackend
 from tslc.backend.translation import create_backend_dialect
+from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
     Catalog,
     Extension,
@@ -63,8 +64,9 @@ def test_unknown_primitive_is_error(catalog: Catalog, machine_profiles) -> None:
 
 def test_profile_reachability(catalog: Catalog, machine_profiles) -> None:
     # scalar profile: the scalar extension plus the always-available `generic` portable vector
-    # (a base extension with no feature flags). Target-family data routes scalar/generic_like to
-    # every profile while keeping ISA-specific and non-emitted families out.
+    # (a base extension with no activation features). Target-family data routes
+    # scalar/generic_like to every profile while keeping ISA-specific and non-emitted
+    # families out.
     scalar = {s.extension.name for s in _slots(catalog, machine_profiles["scalar"], "add")}
     assert scalar == {"scalar", "generic"}
 
@@ -89,6 +91,19 @@ def test_profile_reachability(catalog: Catalog, machine_profiles) -> None:
     neon = {s.extension.name for s in _slots(catalog, machine_profiles["neon"], "add")}
     assert "neon" in neon
     assert "sve" not in neon
+
+
+def test_inheritance_does_not_imply_supersession(catalog: Catalog) -> None:
+    profile = MachineProfile(
+        name="fpga-dev",
+        family="generic",
+        features=frozenset({"oneapi_fpga_device"}),
+        alternatives={},
+    )
+
+    emitted = {s.extension.name for s in _slots(catalog, profile, "add")}
+
+    assert {"generic", "oneapi_fpga"} <= emitted
 
 
 def test_type_group_specificity_resolves_hadd(catalog: Catalog, machine_profiles) -> None:

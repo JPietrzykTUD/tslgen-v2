@@ -61,11 +61,11 @@ prim<m:=()>[value=zero] mask_false():
           reasons []
         implementation:
           tsil "complete(mask<zero>());"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -175,11 +175,11 @@ prim<m:=()>[value=all] mask_true():
           reasons []
         implementation:
           tsil "complete(mask<all>());"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false

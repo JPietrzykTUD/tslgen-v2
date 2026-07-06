@@ -6,8 +6,8 @@ running the rest. Where ``explain`` tells the *narrative* of one slot across all
 *one stage* broadly, for reading, scripting, or diffing across a refactor:
 
   --stage catalog     the typed model the builder produced — primitives (signature, attrs, impls),
-                      extensions (isa/family/inherits/bits/flags), type-groups. "Did my primitive
-                      parse the way I think?"
+                      extensions (isa/family/inherits/bits/activation/supersedes),
+                      type-groups. "Did my primitive parse the way I think?"
   --stage segments    the scanned TSIL segment tree of a primitive's bodies (RawText vs Region).
                       "Did `loop<…>` get captured, or leak through as raw text?"
   --stage selection   the slots a profile selects (primitive × extension × type [× target]) and the
@@ -205,10 +205,12 @@ def _primitive_json(prim: Primitive) -> dict:
 
 
 def _extension_line(ext: Extension) -> str:
+    activation = ", ".join(sorted(ext.active_when.target_features))
+    supersedes = ", ".join(sorted(ext.supersedes))
     return (
         f"extension {ext.name}  isa={ext.isa_name}  family={ext.family}  "
         f"inherits={ext.inherits or '-'}  vector_bits={ext.vector_bits}  "
-        f"flags=[{', '.join(sorted(ext.lscpu_flags))}]"
+        f"active_when=[{activation}]  supersedes=[{supersedes}]"
     )
 
 
@@ -219,7 +221,10 @@ def _extension_json(ext: Extension) -> dict:
         "family": ext.family,
         "inherits": ext.inherits,
         "vector_bits": ext.vector_bits,
-        "lscpu_flags": sorted(ext.lscpu_flags),
+        "active_when": {
+            "target_features": sorted(ext.active_when.target_features),
+        },
+        "supersedes": sorted(ext.supersedes),
     }
 
 

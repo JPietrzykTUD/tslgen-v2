@@ -114,7 +114,7 @@ prim<v:=v> conflict(data):
               std::free(result_values);
               complete(result);
             """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga]:
       ?i?:
         requires:
           avx512 [avx512f]
@@ -124,7 +124,7 @@ prim<v:=v> conflict(data):
           sse_vl [sse2]
           neon [neon]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -190,12 +190,12 @@ prim<m:=(m,v)> conflict_free(mask, data):
     - {tags [basic], type "si64", lane_count 4, case {inputs [15, [-1, 2, -3, 4]], expected 15}}
     - {tags [edge], type "si64", lane_count 4, case {inputs [15, [-1, 2, -1, 2]], expected 3}}
   impls:
-    [scalar, generic, oneAPIfpga, avx512, avx2, avx2_vl, sse, sse_vl, neon, sve]:
+    [scalar, generic, oneapi_fpga, avx512, avx2, avx2_vl, sse, sse_vl, neon, sve]:
       ?i?:
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx512 [avx512f]
           avx2 [avx2]
           avx2_vl [avx]

@@ -52,11 +52,11 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
                 complete(left);
               }
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -318,7 +318,7 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
                 )
               );
             """
-    [avx2, sse, neon, sve, generic, oneAPIfpga]:
+    [avx2, sse, neon, sve, generic, oneapi_fpga]:
       arith:
         requires:
           avx2:
@@ -331,7 +331,7 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
           neon [neon]
           sve [sve]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -441,7 +441,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
                 )
               );
             """
-    [avx2, sse, neon, sve, generic, oneAPIfpga]:
+    [avx2, sse, neon, sve, generic, oneapi_fpga]:
       arith:
         requires:
           avx2:
@@ -454,7 +454,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
           neon [neon]
           sve [sve]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false

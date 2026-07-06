@@ -86,14 +86,14 @@ prim<v:=v> popcnt(data):
               )
             );
           """
-    [avx2, sse, neon, generic, oneAPIfpga]:
+    [avx2, sse, neon, generic, oneapi_fpga]:
       ?i?:
         requires:
           avx2 [avx]
           sse [sse2]
           neon [neon]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -159,18 +159,18 @@ prim<usize:=s> lzc_scalar(data):
                mem<copy>(cast<reinterpret, type=ptr>(void, &bits), cast<reinterpret, type=const_ptr>(void, &data), value(type::size_bytes(type(base::in)))) ;
                complete(cast<static>(type(scalar::size), helper<clz>(bits))) ;
             """
-    oneAPIfpga:
+    oneapi_fpga:
       ?i?:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
           reasons []
         implementation:
           tsil "complete(cast<static>(type(scalar::size), helper<clz_recursive, type(base::in), type(vector::offset_base)::apply>(data)));"
-    oneAPIfpgaRTL:
+    oneapi_fpga_rtl:
       ?i?:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -275,11 +275,11 @@ prim<v:=v> lzc(data):
               }
                complete(call<primitive=from_array[Vec]>(data_arr)) ;
             """
-    [oneAPIfpga, oneAPIfpgaRTL]:
+    [oneapi_fpga, oneapi_fpga_rtl]:
       ?i?:
         requires:
-          oneAPIfpga [oneAPIfpgaDev]
-          oneAPIfpgaRTL [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga_rtl [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -324,11 +324,11 @@ prim<usize:=m> lzc_imask(value):
           reasons []
         implementation:
           tsil "complete(cast<static>(type(scalar::size), helper<clz>(call<primitive=to_integral[Vec]>(value))));"
-    [oneAPIfpga, oneAPIfpgaRTL]:
+    [oneapi_fpga, oneapi_fpga_rtl]:
       ?i?:
         requires:
-          oneAPIfpga [oneAPIfpgaDev]
-          oneAPIfpgaRTL [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga_rtl [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false

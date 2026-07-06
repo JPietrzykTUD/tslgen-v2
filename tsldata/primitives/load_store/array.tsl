@@ -157,11 +157,11 @@ prim<s[]:=v> to_array(a):
               intrin<svst1>(pg, tmp.data(), a);
                complete(tmp) ;
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -219,11 +219,11 @@ prim<v:=s[]> from_array(data):
           reasons []
         implementation:
           tsil "complete(data[0]);"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -355,11 +355,11 @@ prim<s:=v[idx]> extract_value(a):
                std::free(values);
                complete(result);
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false

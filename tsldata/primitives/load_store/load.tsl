@@ -44,11 +44,11 @@ prim<v:=cptr>[aligned=*] load(ptr):
           reasons [raw_pointer]
         implementation:
           tsil "complete(*ptr);"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -205,11 +205,11 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
           tsil """
             complete(call<primitive=mov, attrs[mask=zero]>(mask, *ptr));
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -367,11 +367,11 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
               complete(data);
             }
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -531,11 +531,11 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               );
             }
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -695,7 +695,7 @@ prim<s:=cptr>[aligned=false] load_scalar(ptr):
     - {tags [scalar, basic], type "f64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
     - {tags [scalar, edge], type "f64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
   impls:
-    [scalar, generic, avx512, avx2, sse, neon, sve, oneAPIfpga]:
+    [scalar, generic, avx512, avx2, sse, neon, sve, oneapi_fpga]:
       arith:
         requires:
           generic []
@@ -704,7 +704,7 @@ prim<s:=cptr>[aligned=false] load_scalar(ptr):
           sse [sse]
           neon [neon]
           sve [sve]
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true

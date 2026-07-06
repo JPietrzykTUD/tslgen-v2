@@ -148,11 +148,11 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
                     complete(intrin<svreinterpret_, build[infix=to_type_suffix, suffix=base::in]>(data));
                   }
                 """
-    [generic, oneAPIfpga, scalar]:
+    [generic, oneapi_fpga, scalar]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           scalar []
         ToBase:
           arith:

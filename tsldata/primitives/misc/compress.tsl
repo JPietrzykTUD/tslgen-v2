@@ -293,14 +293,14 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
               std::free(result_values);
               complete(result);
             """
-    [avx2, sse, neon, generic, oneAPIfpga]:
+    [avx2, sse, neon, generic, oneapi_fpga]:
       arith:
         requires:
           avx2 [avx2]
           sse [sse2]
           neon [neon]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false

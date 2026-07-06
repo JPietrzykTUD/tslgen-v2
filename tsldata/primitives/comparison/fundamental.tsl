@@ -65,9 +65,9 @@ prim<m:=(v,v)> equal(left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -290,9 +290,9 @@ prim<m:=(v,v)> nequal(left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -496,9 +496,9 @@ prim<m:=(v,v)> less_than(left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -809,9 +809,9 @@ prim<m:=(v,v)> greater_than(left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1104,9 +1104,9 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1328,9 +1328,9 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1551,9 +1551,9 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1775,9 +1775,9 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1998,9 +1998,9 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2221,9 +2221,9 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2444,9 +2444,9 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2667,9 +2667,9 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false

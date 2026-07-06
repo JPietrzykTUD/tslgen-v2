@@ -450,7 +450,7 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
             var<const_infer>(loaded, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result));
             complete(loaded);
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -460,7 +460,7 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
           sse_vl [sse2]
           neon [neon]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -587,7 +587,7 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
                 }
               }
             """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga]:
       [bword, dword]:
         requires:
           avx512:
@@ -599,7 +599,7 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
           sse_vl [sse, sse2]
           neon [neon]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -692,7 +692,7 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
     - {tags [basic], type "si32", index_type "si64", scale 4, case {inputs [[-10, -20, -30, -40], [1, 2, 3, 0]], expected [-20, -30, -40, -10]}}
     - {tags [basic], type "f32", index_type "si64", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [2, 0, 3, 1]], expected [3.5, 1.0, -4.5, -2.0]}}
   impls:
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga]:
       [bword, dword]:
         requires:
           avx512:
@@ -704,7 +704,7 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
           sse_vl [sse, sse2]
           neon [neon]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -1025,7 +1025,7 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
               }
             }
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneAPIfpga]:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneapi_fpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1036,7 +1036,7 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
           neon [neon]
           sve [sve]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -1365,7 +1365,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
               *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
             }
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1375,7 +1375,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           sse_vl [sse2]
           neon [neon]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -1701,7 +1701,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               }
             }
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneAPIfpga]:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneapi_fpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1712,7 +1712,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           neon [neon]
           sve [sve]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true

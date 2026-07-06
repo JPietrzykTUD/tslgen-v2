@@ -56,11 +56,11 @@ prim<v:=(v,sImm)> shift_left(data, shift):
               var<const_infer>(ures, ua << cast<static>(type(base::unsigned_of(type(base::in))), shift));
               complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -288,11 +288,11 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
               var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
               complete(call<primitive=blend>(mask, data, shifted));
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -421,11 +421,11 @@ prim<v:=(v,s)> shift_left(data, shift):
               var<const_infer>(ures, ua << cast<static>(type(base::unsigned_of(type(base::in))), shift));
               complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -624,11 +624,11 @@ prim<v:=(v,v)> shift_left(data, shift):
               var<const_infer>(ures, ua << cast<static>(type(base::unsigned_of(type(base::in))), shift));
               complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -886,11 +886,11 @@ prim<v:=(v,sImm)> shift_right(data, shift):
                 complete(call<primitive=reinterpret[Vec<type(base::signed_of(type(base::in)))>, Vec]>(ures));
               }
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1310,11 +1310,11 @@ prim<v:=(v,s)> shift_right(data, shift):
               var<const_infer>(ures, ua >> cast<static>(type(base::unsigned_of(type(base::in))), shift));
               complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1829,11 +1829,11 @@ prim<v:=(v,v)> shift_right(data, shift):
               var<const_infer>(ures, ua >> cast<static>(type(base::unsigned_of(type(base::in))), shift));
               complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false

@@ -150,11 +150,14 @@ def test_nested_requires_promoted_per_type_group(catalog: Catalog) -> None:
     assert clauses["bword"] == frozenset({"avx512f", "avx512bw"})
 
 
-def test_extension_inheritance_and_lscpu(catalog: Catalog) -> None:
+def test_extension_inheritance_activation_and_supersession(catalog: Catalog) -> None:
     avx2_vl = catalog.extensions["avx2_vl"]
     assert avx2_vl.inherits == "avx2"
     assert avx2_vl.isa_name == "avx2"  # emitted as avx2; _vl is internal only
-    assert {"avx512vl", "avx512f"} <= avx2_vl.lscpu_flags
+    assert avx2_vl.active_when.target_features == frozenset(
+        {"avx2", "avx512f", "avx512vl"}
+    )
+    assert avx2_vl.supersedes == frozenset({"avx2"})
     # compose metadata is inherited (flattened) from avx2.
     assert avx2_vl.compose_prefix["cpp"] == "_mm256_"
     assert avx2_vl.family == "x86"
@@ -165,7 +168,7 @@ def test_extension_inheritance_and_lscpu(catalog: Catalog) -> None:
 def test_extension_backend_support_is_explicit_and_inherited(catalog: Catalog) -> None:
     avx2_vl = catalog.extensions["avx2_vl"]
     sve = catalog.extensions["sve"]
-    rtl = catalog.extensions["oneAPIfpgaRTL"]
+    rtl = catalog.extensions["oneapi_fpga_rtl"]
 
     assert avx2_vl.supports_backend("cpp")
     assert avx2_vl.supports_backend("rust")

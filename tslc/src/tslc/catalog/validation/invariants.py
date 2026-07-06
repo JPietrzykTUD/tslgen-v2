@@ -226,11 +226,12 @@ def validate_extension_inheritance(
     parsed: OuterTslParseResult | None,
 ) -> None:
     inherit_sources = _inherit_sources(parsed) if parsed is not None else {}
+    supersedes_sources = (
+        _extension_field_sources(parsed, "supersedes") if parsed is not None else {}
+    )
     for name, extension in catalog.extensions.items():
         parent = extension.inherits
-        if parent is None:
-            continue
-        if parent not in catalog.extensions:
+        if parent is not None and parent not in catalog.extensions:
             diagnostics.append(
                 diagnostic_at(
                     severity="error",
@@ -239,6 +240,19 @@ def validate_extension_inheritance(
                     source=inherit_sources.get(name),
                 )
             )
+        for superseded in sorted(extension.supersedes):
+            if superseded not in catalog.extensions:
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-UNKNOWN-SUPERSEDES",
+                        message=(
+                            f"extension {name!r} supersedes unknown extension "
+                            f"{superseded!r}"
+                        ),
+                        source=supersedes_sources.get(name),
+                    )
+                )
 
     reported_cycles: set[tuple[str, ...]] = set()
     for name in catalog.extensions:
@@ -336,6 +350,13 @@ def _type_member_sources(
 
 
 def _inherit_sources(parsed: OuterTslParseResult | None) -> dict[str, SourceSpan]:
+    return _extension_field_sources(parsed, "inherits")
+
+
+def _extension_field_sources(
+    parsed: OuterTslParseResult | None,
+    field_name: str,
+) -> dict[str, SourceSpan]:
     if parsed is None:
         return {}
     sources: dict[str, SourceSpan] = {}
@@ -343,9 +364,9 @@ def _inherit_sources(parsed: OuterTslParseResult | None) -> dict[str, SourceSpan
         for declaration in document.declarations:
             if not isinstance(declaration, ParsedBlockDeclaration) or declaration.kind != "extension":
                 continue
-            inherit = child_from_sequence(declaration.fields, "inherits")
-            if declaration.name is not None and inherit is not None:
-                sources[declaration.name] = source_span(inherit.source)
+            field = child_from_sequence(declaration.fields, field_name)
+            if declaration.name is not None and field is not None:
+                sources[declaration.name] = source_span(field.source)
     return sources
 
 

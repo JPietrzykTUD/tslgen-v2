@@ -83,11 +83,11 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           reasons []
         implementation:
           tsil "complete(mask_a & mask_b);"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -187,11 +187,11 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
           reasons []
         implementation:
           tsil "complete(mask_a | mask_b);"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -291,11 +291,11 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
           reasons []
         implementation:
           tsil "complete(mask_a ^ mask_b);"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -398,11 +398,11 @@ prim<m:=m> mask_binary_not(mask):
           reasons []
         implementation:
           tsil "complete(!mask);"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -520,11 +520,11 @@ prim<usize:=m> mask_population_count(mask):
           reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type(scalar::size), intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -563,7 +563,7 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
       kind bool
       default true
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneAPIfpga]:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneapi_fpga]:
       ?i?:
         requires:
           avx512 [avx512f]
@@ -574,7 +574,7 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
           neon [neon]
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -597,7 +597,7 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
           neon [neon]
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false

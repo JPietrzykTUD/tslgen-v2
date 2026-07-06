@@ -50,8 +50,15 @@ def test_coverage_reports_full_emission_when_no_gaps_remain(
 
 def test_report_text_is_actionable(representative_coverage_result) -> None:
     report = format_coverage_report(representative_coverage_result)
+    attempted = len(representative_coverage_result.coverage) + len(
+        representative_coverage_result.skipped
+    )
     assert "add" in report and "emitted" in report
-    assert "4270 emitted / 4270 attempted" in report
+    summary = (
+        f"{len(representative_coverage_result.coverage)} emitted / "
+        f"{attempted} attempted"
+    )
+    assert summary in report
     assert "compress_store" in report
     assert "gather_narrow" in report
     assert "mask_population_count" in report

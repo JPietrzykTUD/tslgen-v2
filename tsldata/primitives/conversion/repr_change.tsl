@@ -188,9 +188,9 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
                   }
                   complete(call<primitive=from_array[OutVec]>(result));
                 """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         ToExtension:
           where:
             family same_as
@@ -412,9 +412,9 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
                   }
                   complete(call<primitive=from_array[OutVec]>(result));
                 """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         ToExtension:
           where:
             family same_as
@@ -1645,7 +1645,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                     }
                   }
                 """
-    [avx512, avx2, sse, neon, generic, oneAPIfpga, scalar]:
+    [avx512, avx2, sse, neon, generic, oneapi_fpga, scalar]:
       arith:
         # Monomorphize the sized (generic) software body over the extension's `size_bits`: one
         # concrete `generic<N>` specialization per size, so the width-changed output is a concrete
@@ -1658,7 +1658,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
           sse [sse2]
           neon [neon]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           scalar []
         safety:
           internal_unsafe false
@@ -2209,7 +2209,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               std::free(out_values);
               complete(result);
             """
-    [avx512, avx2, sse, neon, generic, oneAPIfpga, scalar]:
+    [avx512, avx2, sse, neon, generic, oneapi_fpga, scalar]:
       arith:
         # Monomorphize the sized (generic) software body over `size_bits` (see convert_up) so the
         # width-changed output is a concrete `generic<N>`; fixed-width extensions ignore it.
@@ -2220,7 +2220,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           sse [sse2]
           neon [neon]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           scalar []
         safety:
           internal_unsafe false

@@ -130,11 +130,11 @@ prim<v:=s> set1(value):
           reasons []
         implementation:
           tsil "complete(value);"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -224,11 +224,11 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
                  )
                );
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -300,11 +300,11 @@ prim<v:=()>[value=zero] set_zero():
           reasons []
         implementation:
           tsil "complete(cast<static>(type(base::in), 0));"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -403,11 +403,11 @@ prim<v:=()>[value=undef] set_undef():
               var<typed>(type(base::in), result, value(uninit::scalar));
               complete(result);
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -626,13 +626,13 @@ prim<v:=(lanes<s>)> set(values):
               )
             );
           """
-    [neon, sve, generic, oneAPIfpga]:
+    [neon, sve, generic, oneapi_fpga]:
       arith:
         requires:
           neon [neon]
           sve [sve]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false

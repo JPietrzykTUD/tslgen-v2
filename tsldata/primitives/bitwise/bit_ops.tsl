@@ -58,11 +58,11 @@ prim<v:=(v,v)> binary_and(left, right):
               var<const_infer>(ures, ua & ub);
               complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -258,11 +258,11 @@ prim<v:=(v,v)> binary_andnot(left, right):
             var<const_infer>(ures, op<bit_negate>(ua) & ub);
             complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -466,11 +466,11 @@ prim<v:=(v,v)> binary_or(left, right):
               var<const_infer>(ures, ua | ub);
               complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -680,11 +680,11 @@ prim<v:=(v,v)> binary_xor(left, right):
               var<const_infer>(ures, ua ^ ub);
               complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -876,11 +876,11 @@ prim<v:=v> inv(data):
           reasons []
         implementation:
           tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(mask<lane_true>())));"
-    [generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
+    [generic, oneapi_fpga, avx512, avx2, sse, neon, sve]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx512 [avx512f]
           avx2:
             ?i? [avx2]
@@ -929,11 +929,11 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1091,11 +1091,11 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
             }
             complete(left);
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1256,11 +1256,11 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1419,11 +1419,11 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
             }
             complete(left);
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1553,11 +1553,11 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1715,11 +1715,11 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
             }
             complete(left);
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1879,11 +1879,11 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2041,11 +2041,11 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
             }
             complete(left);
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2210,11 +2210,11 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2392,11 +2392,11 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
             }
             complete(data);
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false

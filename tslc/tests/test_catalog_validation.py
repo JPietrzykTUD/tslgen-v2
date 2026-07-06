@@ -341,6 +341,20 @@ def test_unknown_fields_are_diagnosed() -> None:
     assert diagnostic.location == SourceLocation(Path("catalog_validation_fixture.tsl"), 13, 3)
 
 
+def test_lscpu_flags_is_no_longer_an_extension_field() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension legacy:\n"
+            '  extension_name "legacy"\n'
+            '  family "scalar"\n'
+            "  lscpu_flags []\n"
+        )
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-CATALOG-UNKNOWN-FIELD")
+    assert "lscpu_flags" in diagnostic.message
+
+
 def test_unknown_extension_backend_metadata_fields_are_diagnosed() -> None:
     diagnostics = _diagnostics(
         _base_source(
@@ -360,6 +374,8 @@ def test_unknown_extension_backend_metadata_fields_are_diagnosed() -> None:
 
 def test_extension_backend_field_names_follow_supported_backends() -> None:
     assert {"cpp", "rust"} <= known_extension_fields()
+    assert {"active_when", "supersedes"} <= known_extension_fields()
+    assert "lscpu_flags" not in known_extension_fields()
     assert "zig" in known_extension_fields(("zig",))
     assert "zig" not in known_extension_fields()
 
@@ -521,6 +537,22 @@ def test_bad_extension_inheritance_is_diagnosed() -> None:
     )
 
     assert "TSL-CATALOG-UNKNOWN-INHERITS" in {d.code for d in diagnostics}
+
+
+def test_bad_extension_supersedes_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension child:\n"
+            '  extension_name "child"\n'
+            '  family "scalar"\n'
+            "  supersedes [missing]\n"
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-UNKNOWN-SUPERSEDES"
+    )
+    assert "extension 'child' supersedes unknown extension 'missing'" in diagnostic.message
 
 
 def test_extension_inheritance_cycles_are_diagnosed() -> None:

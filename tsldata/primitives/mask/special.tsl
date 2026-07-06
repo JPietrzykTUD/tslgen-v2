@@ -19,7 +19,7 @@ prim<im:=(im,im)> test_imask(mask, position):
     - {tags [basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 1], expected 1}}
     - {tags [edge], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 0], expected 0}}
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneAPIfpga]:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneapi_fpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -30,7 +30,7 @@ prim<im:=(im,im)> test_imask(mask, position):
           neon [neon]
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -58,7 +58,7 @@ prim<im:=(im,im,im)> insert_imask(mask_a, mask_b, position):
     - {tags [basic], extension "avx512", type "ui64", lane_count 8, case {inputs [15, 3, 4], expected 63}}
     - {tags [edge], extension "avx512", type "ui64", lane_count 8, case {inputs [240, 15, 0], expected 255}}
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneAPIfpga]:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneapi_fpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -69,7 +69,7 @@ prim<im:=(im,im,im)> insert_imask(mask_a, mask_b, position):
           neon [neon]
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -97,7 +97,7 @@ prim<im:=(im,im)> extract_imask(mask, position):
     - {tags [basic], extension "avx512", type "ui64", lane_count 8, case {inputs [176, 4], expected 11}}
     - {tags [edge], extension "avx512", type "ui64", lane_count 8, case {inputs [176, 0], expected 176}}
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneAPIfpga]:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneapi_fpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -108,7 +108,7 @@ prim<im:=(im,im)> extract_imask(mask, position):
           neon [neon]
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false

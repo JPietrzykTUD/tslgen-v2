@@ -3,7 +3,7 @@
 A profile is a named feature-set (e.g. ``avx2`` = {sse, sse2, …, avx, avx2}).
 Loaded from ``supplementary/buildsystem/machine_profiles.json``. An implementation
 body is usable in a profile iff the `requires` clause applying to the type has its
-flags ⊆ the profile's features; the profile thus decides which extensions'
+target features ⊆ the profile's features; the profile thus decides which
 specializations are emitted.
 """
 

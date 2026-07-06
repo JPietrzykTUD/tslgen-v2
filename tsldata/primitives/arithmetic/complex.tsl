@@ -42,11 +42,11 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons []
         implementation:
           tsil "complete(op<mul>(factor1, factor2));"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -303,11 +303,11 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -463,11 +463,11 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
             }
             complete(factor1);
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -617,11 +617,11 @@ prim<v:=(v,v)> div(divident, divisor):
           reasons []
         implementation:
           tsil "complete(divident / divisor);"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -741,11 +741,11 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -857,11 +857,11 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
             }
             complete(divident);
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -967,11 +967,11 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           reasons []
         implementation:
           tsil "complete(helper<arith_mul>(data, cast<static>(type(base::in), factor)));"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1310,11 +1310,11 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
+    [generic, oneapi_fpga, avx512, avx2, sse, neon, sve]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx512 [avx512f]
           avx2 [avx]
           sse [sse]
@@ -1370,11 +1370,11 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
             }
             complete(data);
           """
-    [generic, oneAPIfpga, avx512, avx2, sse, neon, sve]:
+    [generic, oneapi_fpga, avx512, avx2, sse, neon, sve]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx512 [avx512f]
           avx2 [avx]
           sse [sse]

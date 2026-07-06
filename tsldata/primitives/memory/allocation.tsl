@@ -18,7 +18,7 @@ prim<ptr:=(usize)> allocate(count_bytes):
     - {tags [u8, unaligned, value33], type "ptr", lane_count 4, case {inputs [33], expected true}}
     - {tags [u8, unaligned, value65], type "ptr", lane_count 4, case {inputs [65], expected true}}
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, scalar, generic, oneAPIfpga]:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, scalar, generic, oneapi_fpga]:
       ptr:
         requires:
           avx512 [avx512f]
@@ -30,7 +30,7 @@ prim<ptr:=(usize)> allocate(count_bytes):
           sve [sve]
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -61,7 +61,7 @@ prim<ptr:=(usize,usize)> allocate_aligned(count_bytes, alignment):
     - {tags [u8, value16], type "ptr", lane_count 4, case {inputs [128, 16], expected true}}
     - {tags [u8, value64], type "ptr", lane_count 4, case {inputs [128, 64], expected true}}
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, scalar, generic, oneAPIfpga]:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, scalar, generic, oneapi_fpga]:
       ptr:
         requires:
           avx512 [avx512f]
@@ -73,7 +73,7 @@ prim<ptr:=(usize,usize)> allocate_aligned(count_bytes, alignment):
           sve [sve]
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -103,7 +103,7 @@ prim<void:=(ptr)> deallocate(ptr):
     - {tags [aligned, u8, value16], type "ptr", alignment 16, lane_count 4, case {inputs [128], expected true}}
     - {tags [aligned, u8, value64], type "ptr", alignment 64, lane_count 4, case {inputs [128], expected true}}
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, scalar, generic, oneAPIfpga]:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, scalar, generic, oneapi_fpga]:
       ptr:
         requires:
           avx512 [avx512f]
@@ -115,7 +115,7 @@ prim<void:=(ptr)> deallocate(ptr):
           sve [sve]
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true

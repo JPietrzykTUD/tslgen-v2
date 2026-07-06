@@ -205,12 +205,12 @@ prim<s:=v> hadd(vec):
             }
             complete(result);
           """
-    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon]:
       arith:
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]
@@ -381,12 +381,12 @@ prim<s:=v> hmax(vec):
             var<const_infer>(temp, intrin<_mm_max_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
             complete(intrin<_mm_cvtsd_f64>(temp));
           """
-    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon]:
       arith:
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]
@@ -559,12 +559,12 @@ prim<s:=v> hmin(vec):
             var<const_infer>(temp, intrin<_mm_min_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
             complete(intrin<_mm_cvtsd_f64>(temp));
           """
-    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon]:
       arith:
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]
@@ -662,12 +662,12 @@ prim<s:=(m,v)> hadd(mask, vec):
           reasons []
         implementation:
           tsil "complete(call<primitive=hadd>(call<primitive=blend>(mask, call<primitive=set_zero[Vec]>(), vec)));"
-    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon]:
       arith:
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]
@@ -790,12 +790,12 @@ prim<s:=(m,v)> hmax(mask, vec):
             }
             complete(cast<static>(type(base::in), intrin<mask_reduce_max, build>(mask, vec)));
           """
-    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon]:
       arith:
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]
@@ -924,12 +924,12 @@ prim<s:=(m,v)> hmin(mask, vec):
             }
             complete(cast<static>(type(base::in), intrin<mask_reduce_min, build>(mask, vec)));
           """
-    [scalar, generic, oneAPIfpga, avx512, avx2, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon]:
       arith:
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]

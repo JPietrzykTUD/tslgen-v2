@@ -70,7 +70,7 @@ translation rust:
   pub struct Avx512;
   pub struct Neon;
   pub struct Generic<const LANES: usize>;
-  pub struct OneAPIfpga<const BITS: usize>;
+  pub struct OneapiFpga<const BITS: usize>;
   pub struct Scalar;
   pub trait TslTypeInfo {
     const IS_SIGNED: bool;
