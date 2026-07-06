@@ -35,7 +35,6 @@ if TYPE_CHECKING:
 def rust_artifacts(
     profiles: tuple[ProfileRender, ...], assets: RenderAssets
 ) -> list[Artifact]:
-    backend = RustBackend()
     artifacts = [
         text("rust/src/tsl_core.rs", assets.text("tsl_core.rs")),
         text("rust/src/tsl_algorithm.rs", assets.text("tsl_algorithm.rs")),
@@ -44,6 +43,13 @@ def rust_artifacts(
         text("rust/rustfmt.toml", assets.text("rustfmt.toml")),
     ]
     for profile_render in profiles:
+        capability = profile_render.profile_family or ProfileFamilyCapability(
+            profile_render.profile.family
+        )
+        backend = RustBackend(
+            feature_alternatives=profile_render.profile.alternatives,
+            emit_target_features=capability.rust_target_features,
+        )
         by_primitive = profile_render.specializations("rust")
         registrations = _rust_registrations(by_primitive, profile_render.extensions)
         internal = "\n\n".join(

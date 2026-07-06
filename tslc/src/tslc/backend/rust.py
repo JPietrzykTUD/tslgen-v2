@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.target_capability import rust_extension_tag
 from tslc.documentation import (
@@ -17,6 +19,7 @@ from tslc.lower.lowerer import (
     effective_param_types,
     varying_positions,
 )
+from tslc.render._common import feature_spelling
 from tslc.render.model import RenderContext
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
@@ -25,6 +28,15 @@ _PRIMITIVE_TRAIT_PREFIX = "detail::primitives::"
 
 class RustBackend:
     backend_id = "rust"
+
+    def __init__(
+        self,
+        *,
+        feature_alternatives: Mapping[str, str] | None = None,
+        emit_target_features: bool = True,
+    ) -> None:
+        self._feature_alternatives = dict(feature_alternatives or {})
+        self._emit_target_features = emit_target_features
 
     def render_primitive(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
@@ -46,7 +58,7 @@ class RustBackend:
             shape.result_kind,
             shape.param_kinds,
         ):
-            return _free_variant_functions(specializations)
+            return _free_variant_functions(specializations, backend=self)
         # Rust has no fn overloading: a primitive with several signatures (e.g. store's
         # `(ptr,v)`/`(ptr,s)`) dispatches on the varying argument's type via a trait
         # implemented for that type. Single-signature primitives keep the simple trait.
@@ -102,7 +114,7 @@ class RustBackend:
         ):
             # A non-vector primitive (`allocate`/`deallocate`): a plain `pub fn` in the module,
             # not a `SimdVector`-bound trait/impl/wrapper.
-            return _free_function(shape)
+            return _free_function(shape, backend=self)
         caller_unsafe = _any_caller_unsafe(specializations)
         if varying_positions(specializations):
             return self._render_overloaded_wrapper(
@@ -173,6 +185,11 @@ class RustBackend:
             ) + [
                 f"const {name}: {typ}" for name, typ, _ in spec.generic_params
             ]
+            impl_generic_names = (
+                [lane_parameter]
+                if spec.uses_sized_vector and not lane_parameter.isdigit()
+                else []
+            ) + [name for name, _, _ in spec.generic_params]
             vec = _vector_type(spec)
             impl_prefix = f"impl<{', '.join(impl_generics)}>" if impl_generics else "impl"
             self_ty = _rust_concrete(spec, spec.param_kinds[vi])
@@ -187,7 +204,6 @@ class RustBackend:
                 f", {n}: {_rust_concrete_param(spec, k)}" for n, k in fixed
             )
             ret_impl = _rust_concrete_result(spec)
-            bind = f"let {spec.param_names[vi]} = self;\n        "
             body = body_ref.render(
                 RenderContext(
                     backend_id=self.backend_id,
@@ -196,6 +212,28 @@ class RustBackend:
                     current_base=spec.base_type_spelling,
                     current_mask=f"<{vec} as SimdVector>::MaskType",
                     current_imask=f"<{vec} as SimdVector>::ImaskType",
+                )
+            )
+            helper_params = ", ".join(
+                (
+                    f"{spec.param_names[vi]}: {self_ty}",
+                    *(f"{n}: {_rust_concrete_param(spec, k)}" for n, k in fixed),
+                )
+            )
+            helper_args = ", ".join((spec.param_names[vi], *[n for n, _ in fixed]))
+            method_body = "\n".join(
+                (
+                    f"let {spec.param_names[vi]} = self;",
+                    self._target_feature_body(
+                        spec,
+                        body,
+                        params=helper_params,
+                        args=helper_args,
+                        return_type=ret_impl,
+                        generic_decls=impl_generics,
+                        generic_names=impl_generic_names,
+                        receiver_type=vec,
+                    ),
                 )
             )
             doc_context = (
@@ -208,7 +246,7 @@ class RustBackend:
                 (f"{doc}\n" if doc else "")
                 + f"{impl_prefix} {arg_trait}{trait_args} for {self_ty} {{\n"
                 f"    {_unsafe_prefix(caller_unsafe)}fn apply(self{fixed_impl}) -> {ret_impl} {{\n"
-                f"        {bind}{body}\n"
+                f"{_indent(method_body, 8)}\n"
                 f"    }}\n"
                 f"}}"
             )
@@ -305,17 +343,8 @@ class RustBackend:
         # A sized vector's impl is parameterized by its lane const generic; an `sImm` immediate
         # is a further free const generic. A monomorphized slot (numeric `lane_parameter`) is over
         # a concrete `Generic<N>` instead, so it declares no lane generic.
-        impl_parts: list[str] = []
-        if spec.uses_sized_vector and not spec.lane_parameter.isdigit():
-            lane_parameter = spec.lane_parameter
-            impl_parts.append(f"const {lane_parameter}: usize")
+        impl_parts, impl_generic_names = _impl_generic_parts(spec)
         key = _vector_type(spec)
-        if spec.immediate is not None:
-            impl_parts.append(f"const {spec.immediate[0]}: {spec.immediate[1]}")
-        impl_parts += [f"const {name}: {typ}" for name, typ, _ in spec.generic_params]
-        # Free SIMD type params stay generic in the impl (a caller binds them); they precede the
-        # const generics (Rust requires types before consts).
-        impl_parts = _type_param_decls(spec) + impl_parts
         impl_generics = f"<{', '.join(impl_parts)}>" if impl_parts else ""
         targs = _trait_args_by_value(spec)
         ret = _kind_type(spec.result_kind, "Self")
@@ -343,6 +372,27 @@ class RustBackend:
                 current_imask=f"<{key} as SimdVector>::ImaskType",
             )
         )
+        concrete_owner = f"<{key} as SimdVector>"
+        body = self._target_feature_body(
+            spec,
+            body,
+            params=_params(
+                spec,
+                concrete_owner,
+                vt_type=vt_type,
+                vidx_type=vidx_type,
+            ),
+            args=_runtime_names(spec),
+            return_type=(
+                spec.target.register_spelling
+                if spec.target is not None
+                else _kind_type(spec.result_kind, concrete_owner)
+            ),
+            generic_decls=impl_parts,
+            generic_names=impl_generic_names,
+            where_clause=_index_where(spec, impl_register=impl_register),
+            receiver_type=key,
+        )
         doc_context = (
             "Rust specialization"
             if variant_name is None
@@ -355,7 +405,7 @@ class RustBackend:
             + f"impl{impl_generics} {_trait_name(trait_primitive)}{trait_args} for {key}"
             f"{_index_where(spec, impl_register=impl_register)} {{\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret} {{\n"
-            f"        {body}\n"
+            f"{_indent(body, 8)}\n"
             f"    }}\n"
             f"}}"
         )
@@ -423,8 +473,46 @@ class RustBackend:
             f"}}"
         )
 
+    def _target_feature_body(
+        self,
+        spec: LoweredSpecialization,
+        body: str,
+        *,
+        params: str,
+        args: str,
+        return_type: str,
+        generic_decls: list[str] | tuple[str, ...] = (),
+        generic_names: list[str] | tuple[str, ...] = (),
+        where_clause: str = "",
+        receiver_type: str | None = None,
+    ) -> str:
+        attrs = self._target_feature_attrs(spec)
+        if not attrs:
+            return body
+        if receiver_type is not None:
+            body = _qualify_nested_self_receiver(body, receiver_type)
+        decls = f"<{', '.join(generic_decls)}>" if generic_decls else ""
+        call_generics = f"::<{', '.join(generic_names)}>" if generic_names else ""
+        attr_lines = "\n".join(attrs)
+        return (
+            f"{attr_lines}\n"
+            f"unsafe fn __tsl_target_feature_body{decls}({params}) -> {return_type}"
+            f"{where_clause} {{\n"
+            f"{_indent(body, 4)}\n"
+            f"}}\n"
+            f"unsafe {{ __tsl_target_feature_body{call_generics}({args}) }}"
+        )
 
-def _free_function(spec: LoweredSpecialization) -> str:
+    def _target_feature_attrs(self, spec: LoweredSpecialization) -> tuple[str, ...]:
+        if not self._emit_target_features or not spec.required_features:
+            return ()
+        return tuple(
+            f'#[target_feature(enable = "{feature_spelling(feature, self._feature_alternatives)}")]'
+            for feature in sorted(spec.required_features)
+        )
+
+
+def _free_function(spec: LoweredSpecialization, *, backend: RustBackend) -> str:
     """A non-vector primitive (`allocate`/`deallocate`): a plain `pub fn` in the module, with
     concrete pointer/size types (no `SimdVector` projection). The body's `unsafe` framing is
     already applied by the lowered body (raw pointer / allocation access)."""
@@ -438,28 +526,47 @@ def _free_function(spec: LoweredSpecialization) -> str:
         if spec.result_kind == "void"
         else f" -> {_free_kind_type(spec.result_kind, spec.base_type_spelling)}"
     )
+    ret_type = (
+        "()"
+        if spec.result_kind == "void"
+        else _free_kind_type(spec.result_kind, spec.base_type_spelling)
+    )
     unsafe_prefix = _unsafe_prefix(spec.safety.caller_unsafe)
     function_name = rust_raw_identifier(spec.primitive_name)
+    body = backend._target_feature_body(
+        spec,
+        spec.body_text,
+        params=params,
+        args=_runtime_names(spec),
+        return_type=ret_type,
+    )
     doc = _rust_doc(spec, context="Rust free function")
     return (
         (f"{doc}\n" if doc else "")
         + f"pub {unsafe_prefix}fn {function_name}({params}){ret_clause} {{\n"
-        f"    {spec.body_text}\n"
+        f"{_indent(body, 4)}\n"
         f"}}"
     )
 
 
 def _free_variant_functions(
-    specializations: tuple[LoweredSpecialization, ...]
+    specializations: tuple[LoweredSpecialization, ...],
+    *,
+    backend: RustBackend,
 ) -> str:
     rendered: list[str] = []
     for spec in specializations:
         for variant in spec.variant_bodies:
-            rendered.append(_free_function_variant(spec, variant.name))
+            rendered.append(_free_function_variant(spec, variant.name, backend=backend))
     return "\n\n".join(rendered)
 
 
-def _free_function_variant(spec: LoweredSpecialization, variant_name: str) -> str:
+def _free_function_variant(
+    spec: LoweredSpecialization,
+    variant_name: str,
+    *,
+    backend: RustBackend,
+) -> str:
     body = _body_for(spec, variant_name)
     if body is None:
         return ""
@@ -472,15 +579,27 @@ def _free_function_variant(spec: LoweredSpecialization, variant_name: str) -> st
         if spec.result_kind == "void"
         else f" -> {_free_kind_type(spec.result_kind, spec.base_type_spelling)}"
     )
+    ret_type = (
+        "()"
+        if spec.result_kind == "void"
+        else _free_kind_type(spec.result_kind, spec.base_type_spelling)
+    )
     unsafe_prefix = _unsafe_prefix(spec.safety.caller_unsafe)
     function_name = rust_raw_identifier(
         _variant_primitive_name(spec.primitive_name, variant_name)
+    )
+    body_text = backend._target_feature_body(
+        spec,
+        body.render(),
+        params=params,
+        args=_runtime_names(spec),
+        return_type=ret_type,
     )
     doc = _rust_doc(spec, context=f"Rust free function variant {variant_name}")
     return (
         (f"{doc}\n" if doc else "")
         + f"pub {unsafe_prefix}fn {function_name}({params}){ret_clause} {{\n"
-        f"    {body.render()}\n"
+        f"{_indent(body_text, 4)}\n"
         f"}}"
     )
 
@@ -491,6 +610,12 @@ def _variant_primitive_name(
     if variant_name is None:
         return primitive_name
     return f"{primitive_name}_{variant_name}"
+
+
+def _qualify_nested_self_receiver(body: str, receiver_type: str) -> str:
+    """Nested Rust helper functions cannot capture the outer impl's ``Self``."""
+
+    return body.replace("Self::", f"<{receiver_type} as SimdVector>::")
 
 
 def _variant_names(
@@ -707,6 +832,29 @@ def _index_where(shape: LoweredSpecialization, *, impl_register: str | None = No
 
 def _type_param_names(shape: LoweredSpecialization) -> list[str]:
     return [param.name for param in shape.type_params]
+
+
+def _impl_generic_parts(shape: LoweredSpecialization) -> tuple[list[str], list[str]]:
+    """Rust impl generic declarations and the matching turbofish names."""
+
+    const_decls: list[str] = []
+    const_names: list[str] = []
+    if shape.uses_sized_vector and not shape.lane_parameter.isdigit():
+        lane_parameter = shape.lane_parameter
+        const_decls.append(f"const {lane_parameter}: usize")
+        const_names.append(lane_parameter)
+    if shape.immediate is not None:
+        const_decls.append(f"const {shape.immediate[0]}: {shape.immediate[1]}")
+        const_names.append(shape.immediate[0])
+    for name, typ, _default in shape.generic_params:
+        const_decls.append(f"const {name}: {typ}")
+        const_names.append(name)
+    # Free SIMD type params stay generic in the impl; Rust requires type params
+    # before const params, and the helper call uses the same order.
+    return (
+        [*_type_param_decls(shape), *const_decls],
+        [*_type_param_names(shape), *const_names],
+    )
 
 
 def _axis_name(key: str) -> str:
