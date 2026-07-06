@@ -1,6 +1,6 @@
 description "Bitwise horizontal (reduction) operations"
 prim<s:=v> hand(vec):
-  brief_description "Horizontal AND on vector register."
+  brief_description "Reduces all lanes of a vector register with bitwise AND."
   detailed_description """
     Reduces all vector lanes with a bitwise AND and returns the scalar result.
     Integral lanes use their stored integer bit patterns. Floating-point lanes
@@ -336,7 +336,7 @@ prim<s:=v> hand(vec):
           """
 
 prim<s:=v> hor(vec):
-  brief_description "Horizontal OR on vector register."
+  brief_description "Reduces all lanes of a vector register with bitwise OR."
   detailed_description """
     Reduces all vector lanes with a bitwise OR and returns the scalar result.
     Integral lanes use their stored integer bit patterns. Floating-point lanes
@@ -625,7 +625,7 @@ prim<s:=v> hor(vec):
           """
 
 prim<s:=(m,v)> hand(mask, vec):
-  brief_description "Reduces the active elements to their bitwise AND."
+  brief_description "Reduces active mask lanes of a vector register with bitwise AND."
   detailed_description """
     Reduces the mask-selected lanes with a bitwise AND and returns the scalar
     result. Integral lanes use their stored integer bit patterns. Floating-point
@@ -776,7 +776,7 @@ prim<s:=(m,v)> hand(mask, vec):
           """
 
 prim<s:=(m,v)> hor(mask, vec):
-  brief_description "Reduces the active elements to their bitwise OR."
+  brief_description "Reduces active mask lanes of a vector register with bitwise OR."
   detailed_description """
     Reduces the mask-selected lanes with a bitwise OR and returns the scalar
     result. Integral lanes use their stored integer bit patterns. Floating-point

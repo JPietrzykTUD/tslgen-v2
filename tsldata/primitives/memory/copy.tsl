@@ -1,5 +1,5 @@
 prim<void:=(ptr,cptr,s,s)> memory_cp(dst, src, count_bytes, copy_kind):
-  brief_description "Copy memory."
+  brief_description "Copies a runtime-selected number of bytes from one memory region to another."
   detailed_description """
     Copies a contiguous byte range from the source pointer to the destination
     pointer. The copy kind selects the backend-specific copy strategy.

@@ -1,6 +1,6 @@
 description "Expensive / complex instructions"
 prim<v:=(v,v)> mul(factor1, factor2):
-  brief_description "Multiply the packed 16-bit integers in \"a\" and \"b\", producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in \"dst\"."
+  brief_description "Multiplies the corresponding lanes of two vector registers."
   detailed_description """
     Computes lane-wise multiplication of two vector registers. Each output lane
     depends only on the corresponding lanes of the input registers. The result is
@@ -267,7 +267,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
         implementation:
           tsil "complete(intrin<svmul, build[post=x]>(call<primitive=mask_true[Vec]>(), factor1, factor2));"
 prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
-  brief_description "Multiply packed elements and zero inactive lanes."
+  brief_description "Multiplies active lanes of two vector registers and writes zero to inactive mask lanes."
   detailed_description """
     Computes lane-wise multiplication for lanes enabled by the mask. Disabled
     lanes are set to zero. The result is represented in the destination lane
@@ -426,7 +426,7 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
         implementation:
           tsil "complete(intrin<svmul, build[post=z]>(mask, factor1, factor2));"
 prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
-  brief_description "Multiply packed elements and preserve factor1 in inactive lanes."
+  brief_description "Multiplies active lanes of two vector registers and keeps the left lane where the mask is inactive."
   detailed_description """
     Computes lane-wise multiplication for lanes enabled by the mask. Disabled
     lanes keep the corresponding lane from `factor1`. The result is represented
@@ -585,7 +585,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
         implementation:
           tsil "complete(intrin<svmul, build[post=m]>(mask, factor1, factor2));"
 prim<v:=(v,v)> div(divident, divisor):
-  brief_description "Divide packed single-precision (32-bit) floating-point elements in \"a\" by packed elements in \"b\", and store the results in \"dst\"."
+  brief_description "Divides each dividend lane by the corresponding divisor lane."
   detailed_description """
     Computes lane-wise division of two vector registers. Each output lane depends
     only on the corresponding lanes of the input registers. Rounding, exceptional
@@ -701,7 +701,7 @@ prim<v:=(v,v)> div(divident, divisor):
         implementation:
           tsil "complete(intrin<svdiv, build[post=x]>(call<primitive=mask_true[Vec]>(), divident, divisor));"
 prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
-  brief_description "Divide packed elements in \"a\" by packed elements in \"b\", and store the results in \"dst\" using zeromask \"k\" (elements are zeroed when the corresponding mask bit is not set)."
+  brief_description "Divides active dividend lanes by divisor lanes and writes zero to inactive mask lanes."
   detailed_description """
     Computes lane-wise division for lanes enabled by the mask. Disabled lanes are
     set to zero. Rounding, exceptional floating-point values, integer quotient
@@ -816,7 +816,7 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
         implementation:
           tsil "complete(intrin<svdiv, build[post=z]>(mask, divident, divisor));"
 prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
-  brief_description "Divide packed elements in \"a\" by packed elements in \"b\", and store the results in \"dst\" using writemask \"k\" (elements are copied from \"a\" when the corresponding mask bit is not set)."
+  brief_description "Divides active dividend lanes by divisor lanes and keeps the dividend lane where the mask is inactive."
   detailed_description """
     Computes lane-wise division for lanes enabled by the mask. Disabled lanes
     keep the corresponding lane from `divident`. Rounding, exceptional
@@ -931,7 +931,7 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
         implementation:
           tsil "complete(intrin<svdiv, build[post=m]>(mask, divident, divisor));"
 prim<v:=(v,sImm)> mul_imm(data, factor):
-  brief_description "Multiply the packed 16-bit integers in \"a\" and \"b\", producing intermediate 32-bit integers, and store the low 16 bits of the intermediate integers in \"dst\"."
+  brief_description "Multiplies each vector lane by the compile-time scalar factor."
   detailed_description """
     Multiplies every lane of a vector register by the compile-time scalar
     immediate `factor`. The result is represented in the destination lane type;
@@ -1268,7 +1268,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
             );
           """
 prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
-  brief_description "Multiply packed elements by a scalar and zero inactive lanes."
+  brief_description "Multiplies active lanes by the compile-time scalar factor and writes zero to inactive mask lanes."
   detailed_description """
     Multiplies lanes enabled by the mask by the compile-time scalar immediate
     `factor`. Disabled lanes are set to zero. The result is represented in the
@@ -1327,7 +1327,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
             );
           """
 prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
-  brief_description "Multiply packed elements by a scalar and preserve data in inactive lanes."
+  brief_description "Multiplies active lanes by the compile-time scalar factor and keeps the input lane where the mask is inactive."
   detailed_description """
     Multiplies lanes enabled by the mask by the compile-time scalar immediate
     `factor`. Disabled lanes keep the corresponding lane from `data`. The result
@@ -1386,7 +1386,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
             );
           """
 prim<v:=(v,v)> mod(dividend, divisor):
-  brief_description "Computes a modulo for two vectors."
+  brief_description "Computes the lane-wise remainder of each dividend lane divided by the corresponding divisor lane."
   detailed_description """
     Computes the lane-wise remainder of two vector registers. Each output lane
     depends only on the corresponding lanes of the input registers. The exact
@@ -1570,7 +1570,7 @@ prim<v:=(v,v)> mod(dividend, divisor):
             complete(result);
           """
 prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
-  brief_description "Compute modulo and zero inactive lanes."
+  brief_description "Computes the lane-wise remainder for active lanes and writes zero to inactive mask lanes."
   detailed_description """
     Computes the lane-wise remainder for lanes enabled by the mask. Disabled
     lanes are set to zero. The exact remainder sign, floating-point remainder
@@ -1626,7 +1626,7 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
             );
           """
 prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
-  brief_description "Compute modulo and preserve dividend in inactive lanes."
+  brief_description "Computes the lane-wise remainder for active lanes and keeps the dividend lane where the mask is inactive."
   detailed_description """
     Computes the lane-wise remainder for lanes enabled by the mask. Disabled
     lanes keep the corresponding lane from `dividend`. The exact remainder sign,
@@ -1682,7 +1682,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
             );
           """
 prim<v:=(v,sImm)> mod_imm(dividend, divisor):
-  brief_description "Computes a modulo with a scalar value."
+  brief_description "Computes the lane-wise remainder of each dividend lane divided by the compile-time scalar divisor."
   detailed_description """
     Computes the lane-wise remainder of each vector lane divided by the
     compile-time scalar immediate `divisor`. The exact remainder sign,
@@ -1760,7 +1760,7 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
             complete(result);
           """
 prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
-  brief_description "Compute modulo by a scalar and zero inactive lanes."
+  brief_description "Computes the scalar-divisor remainder for active lanes and writes zero to inactive mask lanes."
   detailed_description """
     Computes the lane-wise remainder by the compile-time scalar immediate
     `divisor` for lanes enabled by the mask. Disabled lanes are set to zero. The
@@ -1816,7 +1816,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
             );
           """
 prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
-  brief_description "Compute modulo by a scalar and preserve dividend in inactive lanes."
+  brief_description "Computes the scalar-divisor remainder for active lanes and keeps the dividend lane where the mask is inactive."
   detailed_description """
     Computes the lane-wise remainder by the compile-time scalar immediate
     `divisor` for lanes enabled by the mask. Disabled lanes keep the

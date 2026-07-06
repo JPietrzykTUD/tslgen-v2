@@ -1,5 +1,5 @@
 prim<ptr:=(usize)> allocate(count_bytes):
-  brief_description "Allocates (unaligned) contiguous memory."
+  brief_description "Allocates contiguous memory with default alignment."
   detailed_description """
     Allocates a contiguous byte region with the backend's default allocation
     alignment. The returned pointer is suitable for later deallocation through
@@ -39,7 +39,7 @@ prim<ptr:=(usize)> allocate(count_bytes):
               complete(cast<reinterpret>(type(base::in), mem<alloc>(count_bytes)));
             """
 prim<ptr:=(usize,usize)> allocate_aligned(count_bytes, alignment):
-  brief_description "Allocates aligned contiguous memory."
+  brief_description "Allocates contiguous memory with the requested alignment."
   detailed_description """
     Allocates a contiguous byte region whose base address satisfies the
     requested alignment. The returned pointer is suitable for later deallocation
@@ -81,7 +81,7 @@ prim<ptr:=(usize,usize)> allocate_aligned(count_bytes, alignment):
               complete(cast<reinterpret>(type(base::in), mem<alloc_aligned>(count_bytes, alignment)));
             """
 prim<void:=(ptr)> deallocate(ptr):
-  brief_description "Deallocates (possibly aligned) contiguous memory."
+  brief_description "Releases memory previously returned by a TSL allocation primitive."
   detailed_description """
     Releases a memory region previously returned by the allocation helpers.
     After deallocation, the pointer must not be used for further loads or

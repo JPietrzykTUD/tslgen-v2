@@ -1,5 +1,5 @@
 prim<v:=s> set1(value):
-  brief_description "Broadcast 8-bit integer \"a\" to all elements of \"dst\". This intrinsic may generate \"vpbroadcastb\"."
+  brief_description "Broadcasts a scalar value to every lane of a vector register."
   detailed_description """
     Broadcasts one scalar value to every lane of the selected vector type.
     """
@@ -148,7 +148,7 @@ prim<v:=s> set1(value):
             """
 
 prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
-  brief_description "Partially override a vector with a single value."
+  brief_description "Writes a scalar value to active mask lanes and keeps the existing vector lane where the mask is inactive."
   detailed_description """
     Replaces mask-selected lanes with the supplied scalar value and preserves
     inactive lanes from the input vector.
@@ -258,7 +258,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
                }
             """
 prim<v:=()>[value=zero] set_zero():
-  brief_description "Return vector of type __m128i with all elements set to zero."
+  brief_description "Creates a vector register whose lanes are all zero."
   detailed_description """
     Constructs a vector register whose lanes are all zero for the selected base
     type.
@@ -374,7 +374,7 @@ prim<v:=()>[value=zero] set_zero():
           """
 
 prim<v:=()>[value=undef] set_undef():
-  brief_description "Return vector of type __m128i with undefined elements."
+  brief_description "Creates a vector register with intentionally undefined lane values."
   detailed_description """
     Constructs a vector register with unspecified lane values. This primitive is
     intended for compile-time construction or as an uninitialized temporary; the
@@ -492,7 +492,7 @@ prim<v:=()>[value=undef] set_undef():
           """
 
 prim<v:=(lanes<s>)> set(values):
-  brief_description "Set packed 8-bit integers in \"dst\" with the supplied values."
+  brief_description "Creates a vector register from an explicit list of lane values."
   detailed_description """
     Constructs a vector register from a generation-time lane-list argument. The
     lane-list follows backend set-constructor order: the first supplied value

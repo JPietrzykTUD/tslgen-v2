@@ -1,7 +1,7 @@
 description "Input/Output primitives"
 
 prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
-  brief_description "Writes a vector register to an output stream."
+  brief_description "Writes the lane values of a vector register to an output stream."
   detailed_description """
     Appends a textual representation of the vector register to an output
     stream. The scalar modifier controls backend-specific formatting details

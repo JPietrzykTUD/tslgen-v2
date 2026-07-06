@@ -1,6 +1,6 @@
 description "Bit-counting operations"
 prim<v:=v> popcnt(data):
-  brief_description "Count the number of logical 1 bits in packed 8-bit integers in \"a\", and store the results in \"dst\"."
+  brief_description "Counts set bits independently in each vector lane."
   detailed_description """
     Counts the set bits in each lane's value representation and returns the
     per-lane bit counts. Signed integer lanes are counted by their underlying
@@ -115,7 +115,7 @@ prim<v:=v> popcnt(data):
         implementation:
           tsil "complete(cast<static>(type(base::in), helper<popcount>(data)));"
 prim<usize:=s> lzc_scalar(data):
-  brief_description "Counts leading zeros (scalar)."
+  brief_description "Counts leading zero bits in a scalar value."
   detailed_description """
     Counts leading zero bits in the scalar input's value representation. The
     all-zero input yields the scalar bit width. Floating-point scalar forms use
@@ -176,7 +176,7 @@ prim<usize:=s> lzc_scalar(data):
         implementation:
           tsil "complete(cast<static>(type(scalar::size), helper<clz_recursive, type(base::in), type(vector::offset_base)::apply>(data)));"
 prim<v:=v> lzc(data):
-  brief_description "Counts leading zeros (vector)."
+  brief_description "Counts leading zero bits independently in each vector lane."
   detailed_description """
     Counts leading zero bits independently for every lane. The all-zero lane
     value yields the lane bit width, and signed lanes are interpreted through
@@ -290,7 +290,7 @@ prim<v:=v> lzc(data):
                complete(call<primitive=from_array[Vec]>(data_arr)) ;
             """
 prim<usize:=m> lzc_imask(value):
-  brief_description "Counts leading zeros in an imask."
+  brief_description "Counts leading zero bits in an integral mask value."
   detailed_description """
     Converts the mask to its integral mask representation and counts leading
     zero bits in that representation. A mask with no active bits yields the
@@ -332,7 +332,7 @@ prim<usize:=m> lzc_imask(value):
         implementation:
           tsil "complete(cast<static>(type(scalar::size), helper<clz_recursive, type(vector::imask), type(intrin::vector::imask)::apply>(call<primitive=to_integral[Vec]>(value))));"
 prim<usize:=m> tzc(value):
-  brief_description "Counts trailing zeros in an imask."
+  brief_description "Counts trailing zero bits in an integral mask value."
   detailed_description """
     Converts the mask to its integral mask representation and counts trailing
     zero bits in that representation. A mask with no active bits yields the

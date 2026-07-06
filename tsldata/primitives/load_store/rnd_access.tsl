@@ -1,5 +1,5 @@
 prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
-  brief_description "Gather 32-bit integers from memory using 32-bit indices. 32-bit elements are loaded from addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\"). Gathered elements are merged into \"dst\". \"scale\" should be 1, 2, 4 or 8."
+  brief_description "Gathers vector lanes from memory addresses computed from a base pointer, index vector, and compile-time scale."
   detailed_description """
     Loads vector lanes from non-contiguous memory addresses computed from a base
     pointer, an index vector, and an immediate byte scale.
@@ -493,7 +493,7 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
             complete(*ptr);
           """
 prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
-  brief_description "Gathers narrow memory elements with a wider index vector and zero-fills result lanes without an index."
+  brief_description "Gathers narrow memory elements using a wider index vector and writes zero to result lanes that have no index."
   detailed_description """
     Loads non-contiguous memory elements through a SIMD index vector whose base
     type is wider than the result vector base type. Only lanes covered by the
@@ -661,7 +661,7 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
             complete(*ptr);
           """
 prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
-  brief_description "Gathers narrow memory elements using a pointer to wider indices."
+  brief_description "Gathers a full vector of narrow memory elements using scalar indices loaded from memory."
   detailed_description """
     Loads non-contiguous memory elements through a pointer to integral indices
     whose type is selected by `IndicesType`. Unlike `gather_narrow_partial`, the
@@ -752,7 +752,7 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
             complete(*ptr);
           """
 prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, source, scale):
-  brief_description "Gather 32-bit integers from memory using 32-bit indices. 32-bit elements are loaded from addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\"). Gathered elements are merged into \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set). \"scale\" should be 1, 2, 4 or 8."
+  brief_description "Gathers active mask lanes from indexed memory addresses and keeps the source lane where the mask is inactive."
   detailed_description """
     Loads mask-selected lanes from non-contiguous memory addresses and preserves
     inactive lanes from the source vector.
@@ -1073,7 +1073,7 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
             complete(source);
           """
 prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
-  brief_description "Scatter 32-bit integers from \"a\" into memory using 32-bit indices. 32-bit elements are stored at addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\"). \"scale\" should be 1, 2, 4 or 8."
+  brief_description "Scatters vector lanes to memory addresses computed from a base pointer, index vector, and compile-time scale."
   detailed_description """
     Stores vector lanes to non-contiguous memory addresses computed from a base
     pointer, an index vector, and an immediate byte scale.
@@ -1405,7 +1405,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
             *ptr = a;
           """
 prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, scale):
-  brief_description "Scatter 32-bit integers from \"a\" into memory using 32-bit indices. 32-bit elements are stored at addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\") subject to mask \"k\" (elements are not stored when the corresponding mask bit is not set). \"scale\" should be 1, 2, 4 or 8."
+  brief_description "Scatters active mask lanes to indexed memory addresses and leaves inactive lanes untouched."
   detailed_description """
     Stores mask-selected vector lanes to non-contiguous memory addresses.
     Inactive mask lanes do not write to memory.

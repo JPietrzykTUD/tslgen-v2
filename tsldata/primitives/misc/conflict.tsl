@@ -1,6 +1,6 @@
 prim<v:=v> conflict(data):
   cross_lane true
-  brief_description "Test each 32-bit element of \"a\" for equality with all other elements in \"a\" closer to the least significant bit. Each element's comparison forms a zero extended bit vector in \"dst\"."
+  brief_description "Reports prior-lane equality conflicts for each lane of a vector register."
   detailed_description """
     For each lane, reports which earlier lanes contain the same value. The
     result lane is an integer bit mask whose bit `k` is set when an earlier lane
@@ -158,7 +158,7 @@ prim<v:=v> conflict(data):
             """
 prim<m:=(m,v)> conflict_free(mask, data):
   cross_lane true
-  brief_description "Checks whether all active elements are unique and returns the semantic mask of conflict-free lanes."
+  brief_description "Returns active mask lanes whose vector values have no equal earlier active lane."
   detailed_description """
     Keeps active lanes whose value has no matching earlier lane in the same
     vector. Inactive input mask lanes remain inactive in the result.

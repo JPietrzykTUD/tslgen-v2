@@ -1,5 +1,5 @@
 prim<m:=()>[value=zero] mask_false():
-  brief_description "Creates a mask with all lanes inactive."
+  brief_description "Creates a mask with every lane inactive."
   detailed_description """
     Constructs a mask value in which every lane is inactive.
     """
@@ -72,7 +72,7 @@ prim<m:=()>[value=zero] mask_false():
         implementation:
           tsil "complete(mask<zero>());"
 prim<m:=()>[value=all] mask_true():
-  brief_description "Creates a mask with all lanes active."
+  brief_description "Creates a mask with every lane active."
   detailed_description """
     Constructs a mask value in which every lane is active.
     """

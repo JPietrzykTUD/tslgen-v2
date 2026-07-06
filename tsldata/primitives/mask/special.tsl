@@ -1,5 +1,5 @@
 prim<im:=(im,im)> test_imask(mask, position):
-  brief_description "Tests whether a specific mask bit is set."
+  brief_description "Tests whether the mask bit at the supplied position is active."
   detailed_description """
     Extracts the bit at a runtime position from an integral mask value and
     returns it as an integral truth value.
@@ -37,7 +37,7 @@ prim<im:=(im,im)> test_imask(mask, position):
         implementation:
           tsil "complete(cast<static>(type(vector::imask), mask<test, imask>(mask, position)));"
 prim<im:=(im,im,im)> insert_imask(mask_a, mask_b, position):
-  brief_description "Merges two masks at a runtime position."
+  brief_description "Inserts one integral mask value into another at the supplied bit position."
   detailed_description """
     Combines one integral mask with another integral mask shifted left by a
     runtime position.
@@ -75,7 +75,7 @@ prim<im:=(im,im,im)> insert_imask(mask_a, mask_b, position):
         implementation:
           tsil "complete(mask_a | (mask_b << position));"
 prim<im:=(im,im)> extract_imask(mask, position):
-  brief_description "Extracts a sub-mask by shifting at a runtime position."
+  brief_description "Extracts a sub-mask from an integral mask value by shifting from the supplied bit position."
   detailed_description """
     Shifts an integral mask right by a runtime position, making the selected
     bit range start at bit zero.

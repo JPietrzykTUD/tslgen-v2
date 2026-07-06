@@ -1,6 +1,6 @@
 description "Horizontal arithmetic operations"
 prim<s:=v> hadd(vec):
-  brief_description "Reduces the elements to their sum."
+  brief_description "Reduces all lanes of a vector register to their sum."
   detailed_description """
     Adds all lanes of the vector and returns the scalar reduction result.
     Overflow, floating-point rounding, and the exact reduction association
@@ -229,7 +229,7 @@ prim<s:=v> hadd(vec):
           """
 
 prim<s:=v> hmax(vec):
-  brief_description "Reduces the elements to their maximum."
+  brief_description "Reduces all lanes of a vector register to their maximum value."
   detailed_description """
     Compares all lanes of the vector and returns the greatest lane value as a
     scalar. Floating-point unordered cases and signed-zero behavior follow the
@@ -406,7 +406,7 @@ prim<s:=v> hmax(vec):
           """
 
 prim<s:=v> hmin(vec):
-  brief_description "Reduces the elements to their minimum."
+  brief_description "Reduces all lanes of a vector register to their minimum value."
   detailed_description """
     Compares all lanes of the vector and returns the smallest lane value as a
     scalar. Floating-point unordered cases and signed-zero behavior follow the
@@ -583,7 +583,7 @@ prim<s:=v> hmin(vec):
           """
 
 prim<s:=(m,v)> hadd(mask, vec):
-  brief_description "Reduces the active elements to their sum."
+  brief_description "Reduces active mask lanes of a vector register to their sum."
   detailed_description """
     Adds only the mask-selected vector lanes and returns the scalar reduction
     result. Inactive lanes contribute zero. If the mask selects no lanes, the
@@ -686,7 +686,7 @@ prim<s:=(m,v)> hadd(mask, vec):
           """
 
 prim<s:=(m,v)> hmax(mask, vec):
-  brief_description "Reduces the active elements to their maximum."
+  brief_description "Reduces active mask lanes of a vector register to their maximum value."
   detailed_description """
     Compares only the mask-selected vector lanes and returns the greatest active
     lane value as a scalar. If the mask selects no lanes, the result is zero.
@@ -819,7 +819,7 @@ prim<s:=(m,v)> hmax(mask, vec):
           """
 
 prim<s:=(m,v)> hmin(mask, vec):
-  brief_description "Reduces the active elements to their minimum."
+  brief_description "Reduces active mask lanes of a vector register to their minimum value."
   detailed_description """
     Compares only the mask-selected vector lanes and returns the smallest active
     lane value as a scalar. If the mask selects no lanes, the result is zero.

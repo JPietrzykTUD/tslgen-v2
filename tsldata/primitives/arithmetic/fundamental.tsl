@@ -1,6 +1,6 @@
 description "Fundamental arithmetic operations"
 prim<v:=(v,v)> add(left, right):
-  brief_description "Add packed 8-bit integers in \"a\" and \"b\", and store the results in \"dst\"."
+  brief_description "Adds the corresponding lanes of two vector registers."
   detailed_description """
     Computes lane-wise addition of two vector registers. Each output lane depends
     only on the corresponding lanes of the input registers. Integer results follow
@@ -154,7 +154,7 @@ prim<v:=(v,v)> add(left, right):
         implementation:
           tsil "complete(intrin<svadd, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
 prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
-  brief_description "Add packed 8-bit integers in \"a\" and \"b\", and store the results in \"dst\" using zeromask \"k\" (elements are zeroed when the corresponding mask bit is not set)."
+  brief_description "Adds the corresponding lanes of two vector registers and writes zero to inactive mask lanes."
   detailed_description """
     Computes lane-wise addition for lanes enabled by the mask. Disabled lanes are
     set to zero. Integer results follow the selected backend and lane type behavior
@@ -282,7 +282,7 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
         implementation:
           tsil "complete(intrin<svadd, build[post=z]>(mask, left, right));"
 prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
-  brief_description "Add packed 8-bit integers in \"a\" and \"b\", and store the results in \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
+  brief_description "Adds active lanes of two vector registers and keeps the pass-through lane value where the mask is inactive."
   detailed_description """
     Computes lane-wise addition for lanes enabled by the mask. Disabled lanes keep
     the corresponding lane from the pass-through input, which is `left` for this
@@ -413,7 +413,7 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
         implementation:
           tsil "complete(intrin<svadd, build[post=m]>(mask, left, right));"
 prim<v:=(v,v)> sub(left, right):
-  brief_description "Subtract packed 8-bit integers in \"b\" from packed 8-bit integers in \"a\", and store the results in \"dst\"."
+  brief_description "Subtracts the corresponding right lane from each left lane."
   detailed_description """
     Computes lane-wise subtraction of two vector registers. Each output lane
     depends only on the corresponding lanes of the input registers. Integer results
@@ -567,7 +567,7 @@ prim<v:=(v,v)> sub(left, right):
         implementation:
           tsil "complete(intrin<svsub, build[post=x]>(call<primitive=mask_true[Vec]>(), left, right));"
 prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
-  brief_description "Subtract packed 8-bit integers in \"b\" from packed 8-bit integers in \"a\", and store the results in \"dst\" using zeromask \"k\" (elements are zeroed when the corresponding mask bit is not set)."
+  brief_description "Subtracts active right lanes from left lanes and writes zero to inactive mask lanes."
   detailed_description """
     Computes lane-wise subtraction for lanes enabled by the mask. Disabled lanes
     are set to zero. Integer results follow the selected backend and lane type
@@ -695,7 +695,7 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
         implementation:
           tsil "complete(intrin<svsub, build[post=z]>(mask, left, right));"
 prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
-  brief_description "Subtract packed 8-bit integers in \"b\" from packed 8-bit integers in \"a\", and store the results in \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set)."
+  brief_description "Subtracts active right lanes from left lanes and keeps the pass-through lane value where the mask is inactive."
   detailed_description """
     Computes lane-wise subtraction for lanes enabled by the mask. Disabled lanes
     keep the corresponding lane from the pass-through input, which is `left` for
@@ -822,7 +822,7 @@ prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
         implementation:
           tsil "complete(intrin<svsub, build[post=m]>(mask, left, right));"
 prim<v:=(m,v,v,v)>[mask=pass_through] blend_add(mask, left, right, adder):
-  brief_description "Blends two registers or adds right and adder depending on mask."
+  brief_description "Keeps lanes from left where the mask is inactive and writes right plus adder where the mask is active."
   detailed_description """
     Selects between the `left` lane and the lane-wise sum of `right` and `adder`.
     For lanes enabled by the mask, the result keeps `left`; disabled lanes receive

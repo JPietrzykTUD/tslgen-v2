@@ -1,6 +1,6 @@
 prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
   cross_lane true
-  brief_description "Contiguously store the active 8-bit integers in \"a\" (those with their respective bit set in zeromask \"k\") to \"dst\", and set the remaining elements to zero."
+  brief_description "Packs active mask lanes into the low lanes of the result and fills remaining lanes with zero."
   detailed_description """
     Packs mask-selected lanes from the source vector toward the beginning of the
     result and fills all remaining result lanes with zero.

@@ -1,5 +1,5 @@
 prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
-  brief_description "Bitwise AND on masks."
+  brief_description "Computes the bitwise AND of two masks."
   detailed_description """
     Computes the lane-wise conjunction of two mask values. A lane is active in
     the result only when it is active in both input masks.
@@ -103,7 +103,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
               complete(result);
             """
 prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
-  brief_description "Bitwise OR on masks."
+  brief_description "Computes the bitwise OR of two masks."
   detailed_description """
     Computes the lane-wise disjunction of two mask values. A lane is active in
     the result when it is active in either input mask.
@@ -206,7 +206,7 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
               complete(result);
             """
 prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
-  brief_description "Bitwise XOR on masks."
+  brief_description "Computes the bitwise XOR of two masks."
   detailed_description """
     Computes the lane-wise exclusive-or of two mask values. A lane is active in
     the result when exactly one input mask has that lane active.
@@ -309,7 +309,7 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
               complete(result);
             """
 prim<m:=m> mask_binary_not(mask):
-  brief_description "Bitwise NOT on masks."
+  brief_description "Computes the bitwise inversion of a mask."
   detailed_description """
     Inverts the active state of each lane in a mask value.
     """
@@ -415,7 +415,7 @@ prim<m:=m> mask_binary_not(mask):
               complete(result);
             """
 prim<usize:=m> mask_population_count(mask):
-  brief_description "Counts bits set in a mask scalar."
+  brief_description "Counts active lanes in a mask."
   detailed_description """
     Counts the number of active lanes in a mask value and returns that count as
     a scalar size value.
@@ -536,7 +536,7 @@ prim<usize:=m> mask_population_count(mask):
               complete(count);
             """
 prim<im:=(im,s)> shift_right_imask(data, shift):
-  brief_description "Arithmetic shift of an imask to the right by n bits."
+  brief_description "Shifts an integral mask value right by a scalar shift count."
   detailed_description """
     Shifts an integral mask value right by a runtime scalar amount. The
     `PreserveSign` generic parameter controls whether signed integral masks keep
