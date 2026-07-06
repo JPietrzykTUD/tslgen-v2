@@ -465,6 +465,13 @@ extension sve:
   integral_mask_type_policy:
     kind "same_as_mask_type"
 
+# Fixed-width SVE variants reuse scalable SVE primitive bodies through `inherits`,
+# but `supersedes ["sve"]` makes each fixed profile emit one SVE model instead
+# of both scalable and fixed SVE. The fixed width is a compiler mode, not a
+# hardware target feature: machine profiles pair target_features ["sve"] with a
+# compile_modes entry such as "sve_vector_bits_512" and the matching
+# -msve-vector-bits flag. C++ accepts scalable SVE plus the selected fixed width
+# in one translation unit, but not several fixed SVE widths at once.
 extension sve128:
   vendor "arm"
   extension_name "sve128"

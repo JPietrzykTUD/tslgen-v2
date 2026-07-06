@@ -982,8 +982,18 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     strings = payload["strings"]
     primitive_docs = {strings[row[0]]: row for row in payload["primitives"]}
     add_doc = primitive_docs["add"]
-    assert strings[add_doc[5]] == "auto result = tsl::add<Vec>(left, right);"
-    assert strings[add_doc[6]] == "let result = add::<S>(left, right);"
+    add_cpp = strings[add_doc[5]]
+    add_rust = strings[add_doc[6]]
+    assert "using Vec = tsl::simd<" in add_cpp
+    assert "tsl::dataparallel::native" in add_cpp
+    assert "tsl::dataparallel::fixed<" in add_cpp
+    assert "tsl::dataparallel::generic<" in add_cpp
+    assert "auto result = tsl::add<Vec>(left, right);" in add_cpp
+    assert "type S = Simd<" in add_rust
+    assert "dataparallel::Native" in add_rust
+    assert "dataparallel::Fixed<" in add_rust
+    assert "dataparallel::Generic<" in add_rust
+    assert "let result = add::<S>(left, right);" in add_rust
     load_doc = primitive_docs["load"]
     assert "/* aligned */" in strings[load_doc[5]]
     assert "/* aligned */" in strings[load_doc[6]]

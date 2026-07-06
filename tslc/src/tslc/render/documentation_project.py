@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from tslc.backend.cpp import CppBackend
+from tslc.backend.target_capability import rust_extension_tag
 from tslc.backend.rust_translation import rust_raw_identifier
+from tslc.catalog.model import Extension
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
@@ -15,6 +18,12 @@ if TYPE_CHECKING:
     from tslc.render.project import ProfileRender
 
 _CPP_BACKEND = CppBackend()
+
+
+@dataclass(frozen=True, slots=True)
+class _DocSpec:
+    spec: LoweredSpecialization
+    extension: Extension | None
 
 
 def documentation_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
@@ -31,23 +40,17 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
     strings = _StringTable()
     features = _IndexedTuples()
     safeties = _IndexedTuples()
-    primitive_docs: dict[str, list[int]] = {}
+    primitive_specs: dict[str, list[_DocSpec]] = {}
     grouped: dict[int, dict[tuple[int, ...], int]] = {}
     for profile in profiles:
         for backend_id, by_primitive in profile.specializations_by_backend.items():
             for primitive_name in sorted(by_primitive):
                 for spec in by_primitive[primitive_name]:
-                    primitive_docs.setdefault(
-                        primitive_name,
-                        [
-                            strings.id(primitive_name),
-                            strings.id(spec.source_primitive_name),
-                            strings.id(spec.documentation.brief),
-                            strings.id(spec.documentation.detailed),
-                            strings.id(spec.documentation.semantics),
-                            strings.id(_cpp_expression(spec)),
-                            strings.id(_rust_expression(spec)),
-                        ],
+                    primitive_specs.setdefault(primitive_name, []).append(
+                        _DocSpec(
+                            spec=spec,
+                            extension=profile.extensions.get(spec.extension_name),
+                        )
                     )
                     primitive_id = strings.id(spec.primitive_name)
                     row = _specialization_row(
@@ -61,6 +64,10 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
                     )
                     primitive_rows = grouped.setdefault(primitive_id, {})
                     primitive_rows[row] = primitive_rows.get(row, 0) + 1
+    primitive_docs = {
+        name: _primitive_doc_row(name, specs, strings)
+        for name, specs in sorted(primitive_specs.items())
+    }
     payload = {
         "schema_version": 4,
         "columns": [
@@ -95,6 +102,54 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
         ],
     }
     return json.dumps(payload, separators=(",", ":"), sort_keys=True) + "\n"
+
+
+def _primitive_doc_row(
+    primitive_name: str,
+    specs: list[_DocSpec],
+    strings: _StringTable,
+) -> list[int]:
+    doc_spec = _representative_spec(specs)
+    cpp_spec = _representative_spec(specs, backend_id="cpp")
+    rust_spec = _representative_spec(specs, backend_id="rust")
+    assert doc_spec is not None
+    return [
+        strings.id(primitive_name),
+        strings.id(doc_spec.spec.source_primitive_name),
+        strings.id(doc_spec.spec.documentation.brief),
+        strings.id(doc_spec.spec.documentation.detailed),
+        strings.id(doc_spec.spec.documentation.semantics),
+        strings.id(_cpp_expression(cpp_spec) if cpp_spec is not None else ""),
+        strings.id(_rust_expression(rust_spec) if rust_spec is not None else ""),
+    ]
+
+
+def _representative_spec(
+    specs: list[_DocSpec],
+    *,
+    backend_id: str | None = None,
+) -> _DocSpec | None:
+    candidates = [
+        doc for doc in specs if backend_id is None or doc.spec.backend_id == backend_id
+    ]
+    if not candidates:
+        return None
+    return sorted(candidates, key=_representative_rank)[0]
+
+
+def _representative_rank(doc: _DocSpec) -> tuple[int, int, str, str, str]:
+    spec = doc.spec
+    lane_count = _static_lane_count(doc)
+    lane_rank = 2
+    if lane_count is not None:
+        lane_rank = 0 if lane_count > 1 else 1
+    return (
+        1 if _is_free_function(spec) else 0,
+        lane_rank,
+        spec.extension_name,
+        spec.type_tag,
+        spec.primitive_name,
+    )
 
 
 class _StringTable:
@@ -171,7 +226,9 @@ def _register_type(spec: LoweredSpecialization, backend_id: str) -> str:
     return spec.register_spelling
 
 
-def _cpp_expression(spec: LoweredSpecialization) -> str:
+def _cpp_expression(doc: _DocSpec) -> str:
+    spec = doc.spec
+    lines = list(_cpp_alias_lines(doc))
     call = _format_call(
         f"tsl::{spec.primitive_name}",
         _cpp_template_args(spec),
@@ -180,11 +237,15 @@ def _cpp_expression(spec: LoweredSpecialization) -> str:
         template_close=">",
     )
     if spec.result_kind == "void":
-        return f"{call};"
-    return f"auto result = {call};"
+        lines.append(f"{call};")
+    else:
+        lines.append(f"auto result = {call};")
+    return "\n".join(lines)
 
 
-def _rust_expression(spec: LoweredSpecialization) -> str:
+def _rust_expression(doc: _DocSpec) -> str:
+    spec = doc.spec
+    lines = list(_rust_alias_lines(doc))
     call = _format_call(
         rust_raw_identifier(spec.primitive_name),
         _rust_generic_args(spec),
@@ -195,8 +256,68 @@ def _rust_expression(spec: LoweredSpecialization) -> str:
     if spec.safety.caller_unsafe:
         call = f"unsafe {{ {call} }}"
     if spec.result_kind == "void":
-        return f"{call};"
-    return f"let result = {call};"
+        lines.append(f"{call};")
+    else:
+        lines.append(f"let result = {call};")
+    return "\n".join(lines)
+
+
+def _cpp_alias_lines(doc: _DocSpec) -> tuple[str, ...]:
+    spec = doc.spec
+    if _is_free_function(spec):
+        return ()
+    lines = [
+        f"using Value = {spec.base_type_spelling};",
+        f"using Vec = {_cpp_vector_type(spec)};",
+    ]
+    if spec.target is not None:
+        lines.append(f"using ToVec = {_strip_global_scope(spec.target.vector_spelling)};")
+    lines.append(
+        "using NativeVec = "
+        "tsl::dataparallel::simd_for_t<tsl::dataparallel::native, Value>;"
+    )
+    lane_count = _static_lane_count(doc)
+    if lane_count is not None:
+        lines.extend(
+            [
+                "using FixedVec = "
+                f"tsl::dataparallel::simd_for_t<"
+                f"tsl::dataparallel::fixed<{lane_count}>, Value>;",
+                "using GenericVec = "
+                f"tsl::dataparallel::simd_for_t<"
+                f"tsl::dataparallel::generic<{lane_count}>, Value>;",
+            ]
+        )
+    return tuple(lines)
+
+
+def _rust_alias_lines(doc: _DocSpec) -> tuple[str, ...]:
+    spec = doc.spec
+    if _is_free_function(spec):
+        return ()
+    lines = [
+        f"type Value = {spec.base_type_spelling};",
+        f"type S = {_rust_vector_type(spec)};",
+    ]
+    if spec.target is not None:
+        lines.append(f"type T = {spec.target.vector_spelling};")
+    lines.append(
+        "type NativeVec = "
+        "<dataparallel::Native as VectorFor<profile::algo::Profile, Value>>::Vec;"
+    )
+    lane_count = _static_lane_count(doc)
+    if lane_count is not None:
+        lines.extend(
+            [
+                "type FixedVec = "
+                f"<dataparallel::Fixed<{lane_count}> "
+                "as VectorFor<profile::algo::Profile, Value>>::Vec;",
+                "type GenericVec = "
+                f"<dataparallel::Generic<{lane_count}> "
+                "as VectorFor<profile::algo::Profile, Value>>::Vec;",
+            ]
+        )
+    return tuple(lines)
 
 
 def _cpp_template_args(spec: LoweredSpecialization) -> tuple[str, ...]:
@@ -259,6 +380,40 @@ def _format_call(
 
 def _commented_arg(name: str, value: str) -> str:
     return f"/* {name} */ {value}"
+
+
+def _cpp_vector_type(spec: LoweredSpecialization) -> str:
+    if spec.vector_spelling is not None:
+        return _strip_global_scope(spec.vector_spelling)
+    return f"tsl::simd<{spec.base_type_spelling}, {_cpp_extension_type(spec)}>"
+
+
+def _cpp_extension_type(spec: LoweredSpecialization) -> str:
+    if spec.uses_sized_vector:
+        return f"tsl::generic<{spec.lane_parameter or 'LANES'}>"
+    return f"tsl::{spec.extension_name}"
+
+
+def _rust_vector_type(spec: LoweredSpecialization) -> str:
+    if spec.vector_spelling is not None:
+        return spec.vector_spelling
+    if spec.uses_sized_vector:
+        return f"Simd<{spec.base_type_spelling}, Generic<{spec.lane_parameter or 'LANES'}>>"
+    return f"Simd<{spec.base_type_spelling}, {rust_extension_tag(spec.extension_name)}>"
+
+
+def _static_lane_count(doc: _DocSpec) -> int | None:
+    spec = doc.spec
+    lane_parameter = spec.lane_parameter
+    if lane_parameter is not None and lane_parameter.isdigit():
+        return int(lane_parameter)
+    if doc.extension is not None:
+        return DEFAULT_SUPPORT_POLICY.lane_count(doc.extension, spec.type_tag)
+    return None
+
+
+def _strip_global_scope(spelling: str) -> str:
+    return spelling.replace("::tsl::", "tsl::").removeprefix("::")
 
 
 def _is_free_function(spec: LoweredSpecialization) -> bool:

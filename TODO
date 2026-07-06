@@ -23,3 +23,24 @@ The inconsistencies I would watch:
 5. `complete` is slightly non-obvious compared with `return`, but I’d keep it. It avoids collision with raw target-language `return` and means “finish the primitive body,” which is exactly the abstraction.
 
 So: no emergency. The root vocabulary is okay. The real human burden is the **selector/query mini-language**, especially nested `type(...)` / `value(...)` queries. I would add a short “selector conventions” section to the doc and make a rule: new TSIL syntax should use comma-separated selector terms plus named `[...]` option bags; no new colon micro-syntax.
+
+
+
+
+
+@BENCHMARK_PLAN.md
+@WASM_SUPPORT_PLAN.md
+
+
+
+Oneapi:
+source /opt/intel/oneapi/setvars.sh --force
+icpx -std=c++20 -fsycl -fintelfpga -DFPGA_EMULATOR main.cpp -o main.fpga_emu
+CL_CONFIG_CPU_EMULATE_DEVICES=1 ./main.fpga_emu
+
+@PARALLEL_FACADE.md (DONE)
+@EXTENSION_REWORK.md (DONE)
+@IMPLEMENTATION_VARIANTS_PLAN.md (DONE)
+@RUST_ALGORITHM_PLAN.md (DONE)
+@CPP_ALGORITHM_HELPER_PLAN.md (DONE)
+@RUST_ALGORITHM_HELPER_PLAN.md (DONE)
