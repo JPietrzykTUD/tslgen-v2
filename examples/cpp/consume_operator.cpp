@@ -51,39 +51,14 @@ std::int64_t expected_binary_sum(
     return total;
 }
 
-template <std::size_t ParallelN>
-bool run_fixed_cases(
+template <class Parallelism>
+bool run_policy_cases(
     const std::vector<std::int32_t>& left,
     const std::vector<std::int32_t>& right,
     std::int64_t expected_unary,
     std::int64_t expected_binary) {
     sum_sink unary;
-    tsl::algo::consume_unary<ParallelN, tsl::algo::alignment::unaligned>(
-        unary,
-        left.data(),
-        left.size());
-    if (unary.total != expected_unary) {
-        return false;
-    }
-
-    pair_sum_sink binary;
-    tsl::algo::consume_binary<ParallelN, tsl::algo::alignment::unaligned>(
-        binary,
-        left.data(),
-        right.data(),
-        left.size());
-    return binary.total == expected_binary;
-}
-
-bool run_native_cases(
-    const std::vector<std::int32_t>& left,
-    const std::vector<std::int32_t>& right,
-    std::int64_t expected_unary,
-    std::int64_t expected_binary) {
-    sum_sink unary;
-    tsl::algo::consume_unary<
-        tsl::algo::parallelism::native,
-        tsl::algo::alignment::unaligned>(
+    tsl::algo::consume_unary<Parallelism, tsl::algo::alignment::unaligned>(
         unary,
         left.data(),
         left.size());
@@ -93,7 +68,7 @@ bool run_native_cases(
 
     pair_sum_sink binary;
     tsl::algo::consume_binary<
-        tsl::algo::parallelism::native,
+        Parallelism,
         tsl::algo::alignment::unaligned>(
         binary,
         left.data(),
@@ -111,16 +86,20 @@ int main() {
     const auto expected_unary = expected_unary_sum(left);
     const auto expected_binary = expected_binary_sum(left, right);
 
-    if (!run_native_cases(left, right, expected_unary, expected_binary)) {
+    if (!run_policy_cases<tsl::dataparallel::native>(
+            left, right, expected_unary, expected_binary)) {
         return 1;
     }
-    if (!run_fixed_cases<1>(left, right, expected_unary, expected_binary)) {
+    if (!run_policy_cases<tsl::dataparallel::fixed<1>>(
+            left, right, expected_unary, expected_binary)) {
         return 2;
     }
-    if (!run_fixed_cases<4>(left, right, expected_unary, expected_binary)) {
+    if (!run_policy_cases<tsl::dataparallel::generic<4>>(
+            left, right, expected_unary, expected_binary)) {
         return 3;
     }
-    if (!run_fixed_cases<16>(left, right, expected_unary, expected_binary)) {
+    if (!run_policy_cases<tsl::dataparallel::generic<16>>(
+            left, right, expected_unary, expected_binary)) {
         return 4;
     }
     return 0;

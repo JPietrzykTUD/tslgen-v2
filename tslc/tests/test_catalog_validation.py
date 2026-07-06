@@ -341,6 +341,20 @@ def test_unknown_fields_are_diagnosed() -> None:
     assert diagnostic.location == SourceLocation(Path("catalog_validation_fixture.tsl"), 13, 3)
 
 
+def test_lscpu_flags_is_no_longer_an_extension_field() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension legacy:\n"
+            '  extension_name "legacy"\n'
+            '  family "scalar"\n'
+            "  lscpu_flags []\n"
+        )
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-CATALOG-UNKNOWN-FIELD")
+    assert "lscpu_flags" in diagnostic.message
+
+
 def test_unknown_extension_backend_metadata_fields_are_diagnosed() -> None:
     diagnostics = _diagnostics(
         _base_source(
@@ -360,6 +374,8 @@ def test_unknown_extension_backend_metadata_fields_are_diagnosed() -> None:
 
 def test_extension_backend_field_names_follow_supported_backends() -> None:
     assert {"cpp", "rust"} <= known_extension_fields()
+    assert {"active_when", "supersedes"} <= known_extension_fields()
+    assert "lscpu_flags" not in known_extension_fields()
     assert "zig" in known_extension_fields(("zig",))
     assert "zig" not in known_extension_fields()
 
@@ -521,6 +537,22 @@ def test_bad_extension_inheritance_is_diagnosed() -> None:
     )
 
     assert "TSL-CATALOG-UNKNOWN-INHERITS" in {d.code for d in diagnostics}
+
+
+def test_bad_extension_supersedes_is_diagnosed() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension child:\n"
+            '  extension_name "child"\n'
+            '  family "scalar"\n'
+            "  supersedes [missing]\n"
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-UNKNOWN-SUPERSEDES"
+    )
+    assert "extension 'child' supersedes unknown extension 'missing'" in diagnostic.message
 
 
 def test_extension_inheritance_cycles_are_diagnosed() -> None:
@@ -859,11 +891,11 @@ def test_machine_profile_validation_reports_shape_errors(tmp_path: Path) -> None
     path.write_text(
         '{\n'
         '  "x86": [\n'
-        '    {"name": "dup", "flags": "sse", "extra": true},\n'
-        '    {"name": "dup", "flags": "avx"}\n'
+        '    {"name": "dup", "target_features": "sse", "extra": true},\n'
+        '    {"name": "dup", "target_features": "avx"}\n'
         '  ],\n'
         '  "strange": [],\n'
-        '  "generic": [{"name": "scalar", "flags": "NOSIMD-INVALID", "alternatives": []}]\n'
+        '  "generic": [{"name": "scalar", "target_features": "NOSIMD-INVALID", "alternatives": []}]\n'
         '}\n',
         encoding="utf-8",
     )
@@ -882,7 +914,7 @@ def test_machine_profile_validation_reports_shape_errors(tmp_path: Path) -> None
 def test_machine_profile_duplicate_json_keys_are_diagnosed(tmp_path: Path) -> None:
     path = tmp_path / "machine_profiles.json"
     path.write_text(
-        '{"x86": [{"name": "first", "name": "second", "flags": "sse"}]}\n',
+        '{"x86": [{"name": "first", "name": "second", "target_features": "sse"}]}\n',
         encoding="utf-8",
     )
 
@@ -891,13 +923,27 @@ def test_machine_profile_duplicate_json_keys_are_diagnosed(tmp_path: Path) -> No
     assert "TSL-PROFILE-DUPLICATE-KEY" in {d.code for d in result.diagnostics}
 
 
+def test_machine_profile_target_features_are_validated(tmp_path: Path) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{"x86": [{"name": "bad", "target_features": ["sse"]}]}\n',
+        encoding="utf-8",
+    )
+
+    result = load_machine_profiles_checked(path, _target_family_catalog())
+
+    assert "TSL-PROFILE-MALFORMED-TARGET-FEATURES" in {
+        d.code for d in result.diagnostics
+    }
+
+
 def test_machine_profile_cpp_flags_are_validated(tmp_path: Path) -> None:
     path = tmp_path / "machine_profiles.json"
     path.write_text(
         '{\n'
         '  "aarch64": [\n'
-        '    {"name": "neon", "flags": "neon", "cpp_flags": []},\n'
-        '    {"name": "bad", "flags": "sve", "cpp_flags": "-march=armv8-a+sve"}\n'
+        '    {"name": "neon", "target_features": "neon", "cpp_flags": []},\n'
+        '    {"name": "bad", "target_features": "sve", "cpp_flags": "-march=armv8-a+sve"}\n'
         '  ]\n'
         '}\n',
         encoding="utf-8",
@@ -914,9 +960,9 @@ def test_machine_profile_emulator_metadata_is_validated(tmp_path: Path) -> None:
     path.write_text(
         '{\n'
         '  "x86": [\n'
-        '    {"name": "avx2", "flags": "avx avx2", '
+        '    {"name": "avx2", "target_features": "avx avx2", '
         '"emulator": {"kind": "sde", "profile": "-hsw"}},\n'
-        '    {"name": "bad", "flags": "avx", "emulator": []}\n'
+        '    {"name": "bad", "target_features": "avx", "emulator": []}\n'
         '  ]\n'
         '}\n',
         encoding="utf-8",
@@ -935,7 +981,7 @@ def test_machine_profile_emulator_kinds_come_from_target_families(tmp_path: Path
     path.write_text(
         '{\n'
         '  "x86": [\n'
-        '    {"name": "bad", "flags": "sse", '
+        '    {"name": "bad", "target_features": "sse", '
         '"emulator": {"kind": "qemu-aarch64", "profile": "cortex-a76"}}\n'
         '  ]\n'
         '}\n',

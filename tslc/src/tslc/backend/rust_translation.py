@@ -11,9 +11,11 @@ from tslc.backend.target_capability import (
 )
 from tslc.catalog.model import Catalog, Extension
 from tslc.render.model import (
+    RenderContext,
     RenderField,
     RenderPlaceholder,
     RenderText,
+    as_render_text,
     literal_text,
     render_sequence,
     render_text,
@@ -192,7 +194,13 @@ class _RustSyntax:
     borrowed_call_arg_prefix: str | None = "&"
 
     def frame_return(self, value: RenderField) -> RenderText:
-        return common.frame_return(self.catalog, self.backend_id, value)
+        return common.template_application(
+            self.catalog,
+            self.backend_id,
+            "complete",
+            "return {value}",
+            value=_RustReturnValue(value),
+        )
 
     def render_call(
         self,
@@ -295,6 +303,56 @@ class _RustSyntax:
             )
         parts.append(literal_text("}"))
         return render_sequence(tuple(parts))
+
+
+@dataclass(frozen=True, slots=True)
+class _RustReturnValue:
+    value: RenderField
+
+    def render(self, context: RenderContext | None = None) -> str:
+        return _strip_redundant_return_parentheses(
+            as_render_text(self.value).render(context)
+        )
+
+
+def _strip_redundant_return_parentheses(value: str) -> str:
+    text = value.strip()
+    if not _is_wrapped_by_outer_parentheses(text):
+        return text
+    inner = text[1:-1].strip()
+    if _has_top_level_comma(inner):
+        return text
+    return inner
+
+
+def _is_wrapped_by_outer_parentheses(text: str) -> bool:
+    if len(text) < 2 or text[0] != "(" or text[-1] != ")":
+        return False
+    depth = 0
+    for index, char in enumerate(text):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth < 0:
+                return False
+            if depth == 0 and index != len(text) - 1:
+                return False
+    return depth == 0
+
+
+def _has_top_level_comma(text: str) -> bool:
+    depth = 0
+    for char in text:
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth < 0:
+                return False
+        elif char == "," and depth == 0:
+            return True
+    return False
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,6 +1,6 @@
 description "Load primitives"
 prim<v:=cptr>[aligned=*] load(ptr):
-  brief_description "[Example: sse + si8]: Load 128-bits of integer data from memory into \"dst\". \n\t\"mem_addr\" must be aligned on a 16-byte boundary or a general-protection exception may be generated."
+  brief_description "Load 128-bits of integer data from memory into \"dst\". \n\t\"mem_addr\" must be aligned on a 16-byte boundary or a general-protection exception may be generated."
   detailed_description """
     Loads one full vector register from contiguous memory. The `aligned`
     attribute selects whether the pointer is promised to satisfy the selected
@@ -12,7 +12,6 @@ prim<v:=cptr>[aligned=*] load(ptr):
       result[i] = ptr[i]
     return result
     """
-  operation "[Example: sse + si8]: dst[127:0] := MEM[mem_addr+127:mem_addr]"
   tests:
     - {tags [basic], type "ui32", offset 0, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
     - {tags [misaligned], attrs [aligned=false], type "ui32", offset 1, case {inputs [[10, 11, 12, 13, 14, 15, 16, 17]], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
@@ -44,11 +43,11 @@ prim<v:=cptr>[aligned=*] load(ptr):
           reasons [raw_pointer]
         implementation:
           tsil "complete(*ptr);"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -180,7 +179,6 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
         result[i] = 0
     return result
     """
-  operation "TODO"
   tests:
     - {tags [mask, zero, all], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
     - {tags [mask, zero, none], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
@@ -205,11 +203,11 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
           tsil """
             complete(call<primitive=mov, attrs[mask=zero]>(mask, *ptr));
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -338,7 +336,6 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
         result[i] = data[i]
     return result
     """
-  operation "TODO"
   tests:
     - {tags [mask, merge, all], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [100, 101, 102, 103, 104, 105, 106, 107], 255], expected [10, 11, 12, 13, 14, 15, 16, 17]}}
     - {tags [mask, merge, none], type "ui32", case {inputs [[10, 11, 12, 13, 14, 15, 16, 17], [100, 101, 102, 103, 104, 105, 106, 107], 0], expected [100, 101, 102, 103, 104, 105, 106, 107]}}
@@ -367,11 +364,11 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
               complete(data);
             }
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -506,7 +503,6 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
       result[i] = ptr[i] != 0
     return result
     """
-  operation ""
   tests:
     - {tags [mask, none], attrs [aligned=false, packed=true], type "ui32", offset 1, case {inputs [[0, 0, 0]], expected 0}}
     - {tags [mask, none], attrs [aligned=false, packed=false], type "ui32", offset 0, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected 0}}
@@ -531,11 +527,11 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               );
             }
           """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -672,7 +668,6 @@ prim<s:=cptr>[aligned=false] load_scalar(ptr):
     input: const pointer ptr
     return ptr[0]
     """
-  operation ""
   tests:
     - {tags [scalar, basic], type "ui8", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
     - {tags [scalar, edge], type "ui8", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
@@ -695,7 +690,7 @@ prim<s:=cptr>[aligned=false] load_scalar(ptr):
     - {tags [scalar, basic], type "f64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
     - {tags [scalar, edge], type "f64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
   impls:
-    [scalar, generic, avx512, avx2, sse, neon, sve, oneAPIfpga]:
+    [scalar, generic, avx512, avx2, sse, neon, sve, oneapi_fpga]:
       arith:
         requires:
           generic []
@@ -704,7 +699,7 @@ prim<s:=cptr>[aligned=false] load_scalar(ptr):
           sse [sse]
           neon [neon]
           sve [sve]
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true

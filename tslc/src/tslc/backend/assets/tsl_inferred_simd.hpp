@@ -1,26 +1,22 @@
-// tslc SIMD inference helper. Profile headers add the concrete specializations
-// for fixed-width SIMD types they actually register; otherwise inference falls
-// back to the portable generic vector.
+// tslc SIMD inference compatibility helpers. New code should prefer
+// `tsl::dataparallel::simd_for_t<Policy, T>`; these aliases preserve the older
+// generated helper vocabulary.
 #pragma once
 #include <cstddef>
 
-#include "tsl_core.hpp"
+#include "tsl_dataparallel.hpp"
 
 namespace tsl::detail {
 
 template <class T, std::size_t ParallelN>
 struct inferred_simd {
-    using type = ::tsl::simd<T, ::tsl::generic<ParallelN>>;
-};
-
-template <class T>
-struct inferred_simd<T, 1> {
-    using type = ::tsl::simd<T, ::tsl::scalar>;
+    using type =
+        ::tsl::dataparallel::simd_for_t<::tsl::dataparallel::fixed<ParallelN>, T>;
 };
 
 template <class T>
 struct native_simd {
-    using type = ::tsl::simd<T, ::tsl::scalar>;
+    using type = ::tsl::dataparallel::simd_for_t<::tsl::dataparallel::native, T>;
 };
 
 }  // namespace tsl::detail

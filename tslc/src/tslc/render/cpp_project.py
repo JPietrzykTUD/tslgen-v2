@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 
 _CPP_STATIC_HEADERS = (
     "tsl_core.hpp",
+    "tsl_dataparallel.hpp",
     "tsl_inferred_simd.hpp",
     "tsl_algorithm_tags.hpp",
     "tsl_algorithm_detail_core.hpp",
@@ -161,7 +162,11 @@ def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
 
 
 def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) -> str:
-    lines = ['#include "tsl_core.hpp"', '#include "tsl_inferred_simd.hpp"']
+    lines = [
+        '#include "tsl_core.hpp"',
+        '#include "tsl_dataparallel.hpp"',
+        '#include "tsl_inferred_simd.hpp"',
+    ]
     if any(is_x86_register_extension(extensions.get(ext)) for ext in emitted_exts):
         lines.append('#include "tsl_x86_traits.hpp"')
     headers = sorted(
@@ -320,6 +325,8 @@ def _cpp_inferred_simd_registrations(
         lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
         if lane_count is None:
             continue
+        if lane_count == 1:
+            continue
         key = (base, lane_count)
         current = candidates.get(key)
         if current is None or preference > current[0]:
@@ -328,22 +335,22 @@ def _cpp_inferred_simd_registrations(
     if not candidates and not native_candidates:
         return ""
 
-    lines = ["namespace detail {\n"]
+    lines = ["namespace dataparallel {\n"]
     for (base, lane_count), (_preference, ext) in sorted(candidates.items()):
         lines.append(
             f"template <>\n"
-            f"struct inferred_simd<{base}, {lane_count}> {{\n"
+            f"struct simd_for<fixed<{lane_count}>, {base}> {{\n"
             f"    using type = ::tsl::simd<{base}, ::tsl::{ext}>;\n"
             f"}};\n\n"
         )
     for base, (_preference, ext) in sorted(native_candidates.items()):
         lines.append(
             f"template <>\n"
-            f"struct native_simd<{base}> {{\n"
+            f"struct simd_for<native, {base}> {{\n"
             f"    using type = ::tsl::simd<{base}, ::tsl::{ext}>;\n"
             f"}};\n\n"
         )
-    lines.append("}  // namespace detail\n\n")
+    lines.append("}  // namespace dataparallel\n\n")
     return "".join(lines)
 
 

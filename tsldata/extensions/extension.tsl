@@ -6,7 +6,6 @@ extension avx512:
   vector_bits 512
   native_sort_order 500
   autodetect true
-  lscpu_flags ["avx512f"]
   mask_repr "bitset"
   mask_width "lanes"
   mask_vector_loadable false
@@ -72,7 +71,6 @@ extension avx2:
   vector_bits 256
   native_sort_order 300
   autodetect true
-  lscpu_flags ["avx2"]
   mask_repr "lane_bitmask"
   mask_width "lanes"
   mask_vector_loadable false
@@ -132,7 +130,9 @@ extension avx2_vl:
   vector_bits 256
   native_sort_order 400
   autodetect true
-  lscpu_flags ["avx2", "avx512f", "avx512vl"]
+  active_when:
+    target_features ["avx2", "avx512f", "avx512vl"]
+  supersedes ["avx2"]
   mask_repr "bitset"
   mask_width "lanes"
   mask_vector_loadable false
@@ -169,7 +169,6 @@ extension sse:
   vector_bits 128
   native_sort_order 100
   autodetect true
-  lscpu_flags ["sse2"]
   mask_repr "lane_bitmask"
   mask_width "lanes"
   mask_vector_loadable false
@@ -229,7 +228,9 @@ extension sse_vl:
   vector_bits 128
   native_sort_order 200
   autodetect true
-  lscpu_flags ["sse2", "avx512f", "avx512vl"]
+  active_when:
+    target_features ["sse2", "avx512f", "avx512vl"]
+  supersedes ["sse"]
   mask_repr "bitset"
   mask_width "lanes"
   mask_vector_loadable false
@@ -262,7 +263,6 @@ extension cuda:
   family "cuda"
   intrinsic_style "cuda"
   autodetect true
-  lscpu_flags ["cuda"]
   mask_repr "vector"
   mask_width 32
   mask_vector_loadable false
@@ -273,16 +273,17 @@ extension cuda:
   rust:
     supported false
 
-extension oneAPIfpga:
+extension oneapi_fpga:
   vendor "intel"
-  extension_name "oneAPIfpga"
+  extension_name "oneapi_fpga"
   inherits "generic"
   family "generic_like"
   intrinsic_style "generic"
   vector_bits "sized"
   native_sort_order 0
   autodetect false
-  lscpu_flags ["oneAPIfpgaDev"]
+  active_when:
+    target_features ["oneapi_fpga_device"]
   mask_repr "lane_bitmask"
   mask_width "lanes"
   mask_vector_loadable false
@@ -290,18 +291,19 @@ extension oneAPIfpga:
   default_test_target false
   cpp:
     supported true
-    test_suite_name "TslOneAPIfpga"
+    test_suite_name "TslOneapiFpga"
     test_support_header "tests/scalar_support.hpp"
   rust:
     supported true
-    type_name "OneAPIfpga"
+    type_name "OneapiFpga"
     generation_support []
   test_sizes_bits [128]
 
-extension oneAPIfpgaRTL:
+extension oneapi_fpga_rtl:
   vendor "intel"
-  extension_name "oneAPIfpgaRTL"
-  lscpu_flags ["oneAPIfpgaDev"]
+  extension_name "oneapi_fpga_rtl"
+  active_when:
+    target_features ["oneapi_fpga_device"]
   mask_repr "vector"
   mask_width 32
   mask_vector_loadable false
@@ -315,7 +317,6 @@ extension neon:
   vector_bits 128
   native_sort_order 600
   autodetect true
-  lscpu_flags ["neon"]
   mask_repr "lane_bitmask"
   mask_width "lanes"
   mask_vector_loadable false
@@ -398,7 +399,6 @@ extension sve:
   vector_bits "scalable"
   native_sort_order 700
   autodetect true
-  lscpu_flags ["sve"]
   mask_repr "vector"
   mask_width "lanes"
   mask_vector_loadable false
@@ -473,7 +473,6 @@ extension scalar:
   vector_bits 0
   native_sort_order 0
   autodetect false
-  lscpu_flags []
   mask_repr "scalar"
   mask_width 64
   mask_vector_loadable false
@@ -508,7 +507,6 @@ extension generic:
   vector_bits "sized"
   native_sort_order 0
   autodetect false
-  lscpu_flags []
   mask_repr "lane_bitmask"
   mask_width "lanes"
   mask_vector_loadable false

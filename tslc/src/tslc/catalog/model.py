@@ -389,8 +389,21 @@ class ExtensionMetadata:
 
 
 @dataclass(frozen=True, slots=True)
+class ExtensionActivation:
+    """Profile target features that make an extension variant a selection candidate."""
+
+    target_features: frozenset[str] = frozenset()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "target_features", frozenset(self.target_features))
+
+    def is_satisfied_by(self, features: frozenset[str]) -> bool:
+        return self.target_features <= features
+
+
+@dataclass(frozen=True, slots=True)
 class Extension:
-    """Hardware target metadata needed for backend translation.
+    """Target extension metadata needed for backend translation.
 
     Identity is the TSL block name (`avx2` and `avx2_vl` are distinct extensions
     even though they share an ISA spelling). Native register types and backend
@@ -412,7 +425,8 @@ class Extension:
     backend_supported: Mapping[str, bool] = field(default_factory=dict)
     intrinsic_style: str = ""
     inherits: str | None = None  # extension this one borrows impls/metadata from
-    lscpu_flags: frozenset[str] = frozenset()  # features that make this extension available
+    active_when: ExtensionActivation = field(default_factory=ExtensionActivation)
+    supersedes: frozenset[str] = frozenset()
     vector_bits: int = 0  # register width (sse=128, avx2=256, avx512=512); 0 for scalar
     vector_bits_kind: str = "fixed"  # fixed | sized | scalable | ""
     size_parameter_name: str | None = None
@@ -466,6 +480,7 @@ class Extension:
         object.__setattr__(
             self, "backend_supported", MappingProxyType(dict(self.backend_supported))
         )
+        object.__setattr__(self, "supersedes", frozenset(self.supersedes))
         object.__setattr__(
             self,
             "runtime_lane_count",

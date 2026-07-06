@@ -47,7 +47,7 @@ bool packed_mask_active(const std::vector<std::uint8_t>& masks, std::size_t row)
     return ((masks[row / 8] >> (row % 8)) & std::uint8_t{1}) != 0;
 }
 
-template <std::size_t ParallelN>
+template <class Parallelism>
 bool run_bit_where_case() {
     constexpr std::size_t count = 1003;
     constexpr std::int32_t preserved = -567890;
@@ -56,13 +56,13 @@ bool run_bit_where_case() {
     std::vector<std::int32_t> output(count, preserved);
     fill_inputs(input, threshold);
 
-    using mask_type = tsl::algo::fixed_bit_mask_type<ParallelN, std::int32_t>;
+    using mask_type = tsl::algo::bit_mask_type<Parallelism, std::int32_t>;
     std::vector<mask_type> masks(
-        tsl::algo::bit_mask_count<ParallelN, std::int32_t>(count),
+        tsl::algo::bit_mask_count<Parallelism, std::int32_t>(count),
         std::uint8_t{0xFF});
 
     const auto produced = tsl::algo::predicate_binary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned,
         tsl::algo::mask_layout::bits>(
         less_than_op{},
@@ -87,7 +87,7 @@ bool run_bit_where_case() {
     }
 
     tsl::algo::transform_where_unary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned,
         tsl::algo::mask_layout::bits>(
         square_where_op{},
@@ -106,7 +106,7 @@ bool run_bit_where_case() {
     return true;
 }
 
-template <std::size_t ParallelN>
+template <class Parallelism>
 bool run_bit_masked_case() {
     constexpr std::size_t count = 1003;
     std::vector<std::int32_t> left(count);
@@ -114,12 +114,12 @@ bool run_bit_masked_case() {
     std::vector<std::int32_t> output(count, 0);
     fill_inputs(left, right);
 
-    using mask_type = tsl::algo::fixed_bit_mask_type<ParallelN, std::int32_t>;
+    using mask_type = tsl::algo::bit_mask_type<Parallelism, std::int32_t>;
     std::vector<mask_type> masks(
-        tsl::algo::bit_mask_count<ParallelN, std::int32_t>(count));
+        tsl::algo::bit_mask_count<Parallelism, std::int32_t>(count));
 
     tsl::algo::predicate_binary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned,
         tsl::algo::mask_layout::bits>(
         less_than_op{},
@@ -128,7 +128,7 @@ bool run_bit_masked_case() {
         masks.data(),
         count);
     tsl::algo::transform_masked_binary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned,
         tsl::algo::mask_layout::bits>(
         add_or_left_op{},
@@ -148,20 +148,20 @@ bool run_bit_masked_case() {
     return true;
 }
 
-template <std::size_t ParallelN>
+template <class Parallelism>
 bool run_bit_mask_cases() {
-    return run_bit_where_case<ParallelN>() &&
-           run_bit_masked_case<ParallelN>();
+    return run_bit_where_case<Parallelism>() &&
+           run_bit_masked_case<Parallelism>();
 }
 
 int main() {
-    if (!run_bit_mask_cases<1>()) {
+    if (!run_bit_mask_cases<tsl::dataparallel::fixed<1>>()) {
         return 1;
     }
-    if (!run_bit_mask_cases<4>()) {
+    if (!run_bit_mask_cases<tsl::dataparallel::generic<4>>()) {
         return 2;
     }
-    if (!run_bit_mask_cases<16>()) {
+    if (!run_bit_mask_cases<tsl::dataparallel::generic<16>>()) {
         return 3;
     }
     return 0;

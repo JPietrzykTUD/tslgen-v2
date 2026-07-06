@@ -18,6 +18,7 @@ from tslc.syntax.ast import ParsedBlockDeclaration, ParsedTslField
 
 EXTENSION_METADATA_FIELDS = frozenset(
     {
+        "active_when",
         "autodetect",
         "default_test_target",
         "extension_name",
@@ -26,7 +27,6 @@ EXTENSION_METADATA_FIELDS = frozenset(
         "integral_mask_type_policy",
         "intrinsic_compose",
         "intrinsic_style",
-        "lscpu_flags",
         "mask_repr",
         "mask_type_policy",
         "mask_vector_loadable",
@@ -37,6 +37,7 @@ EXTENSION_METADATA_FIELDS = frozenset(
         "signature_support",
         "size_bits",
         "size_parameter",
+        "supersedes",
         "test_filter",
         "test_mask_check",
         "test_mask_from_bits",
@@ -137,6 +138,19 @@ def validate_extension_block(
                 diagnostics,
                 owner="intrinsic suffix",
             )
+    active_when = fields.get("active_when")
+    if active_when is not None:
+        validate_known_fields(
+            children(active_when),
+            frozenset({"target_features"}),
+            diagnostics,
+            owner="active_when",
+        )
+        diagnose_duplicate_fields(
+            children(active_when),
+            diagnostics,
+            label="active_when field",
+        )
     signature_support = fields.get("signature_support")
     if signature_support is not None:
         validate_known_fields(

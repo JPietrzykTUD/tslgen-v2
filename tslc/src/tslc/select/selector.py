@@ -6,13 +6,14 @@ the profile yields its own specialization slot (the extension is part of the
 `(extension, type)` slot the body is chosen by the confirmed order:
 
     1. most specific type-group (fewest members)
-    2. tie -> most hardware flags (most specialized)
+    2. tie -> most required target features (most specialized)
     3. tie -> first occurrence (source order)
 
 An implementation body is usable only if the `requires` clause that applies to the
-type has its flags ⊆ the profile's feature set. A *derived* extension (`avx2_vl`
-inherits `avx2`) is only active when its `lscpu_flags ⊆ features`, and then
-supersedes its base; a base extension's bodies self-gate via `requires`.
+type has its target features ⊆ the profile's feature set. Extension variants such
+as `avx2_vl` become candidates through `active_when.target_features` and hide
+their bases through explicit `supersedes`; base extension bodies self-gate via
+`requires`.
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ class SelectedImplementation:
     implementation: Implementation
     extension: Extension
     type_tag: str
-    # The concrete feature flags selected for this implementation body after
+    # The concrete target features selected for this implementation body after
     # applying extension/type-scoped `requires` clauses.
     required_features: frozenset[str] = frozenset()
     # For a representation-change primitive (`result_target`), the concrete target this slot
@@ -77,7 +78,7 @@ class RankedCandidate:
     required_features: frozenset[str]
     distance: int  # (a) position in the extension chain; own extension (0) before inherited
     specificity: int  # (b) type-group member count; fewer = more specific
-    flag_count: int  # (c) applicable hardware-flag count; more = more specialized
+    flag_count: int  # (c) applicable target-feature count; more = more specialized
     source_order: int  # (d) first occurrence in source
 
     @property
@@ -107,7 +108,7 @@ class CandidateEvaluation:
 RANKING_KEYS: tuple[tuple[str, str], ...] = (
     ("distance", "own extension before an inherited one"),
     ("specificity", "more specific type-group (fewer members)"),
-    ("flag_count", "more required hardware flags (more specialized)"),
+    ("flag_count", "more required target features (more specialized)"),
     ("source_order", "earlier in source (arbitrary final tiebreak)"),
 )
 
@@ -220,23 +221,16 @@ class Selector:
     def _emit_extensions(self, catalog: Catalog, profile: MachineProfile) -> list[str]:
         """Extensions to emit for a profile.
 
-        A *base* extension (no `inherits`) is always a candidate; its individual
-        bodies self-gate via their `requires` (e.g. avx2's 256-bit *float* add needs
-        only `avx`, so it appears on an avx-only profile while its 256-bit *integer*
-        add does not). A *derived* extension (e.g. `avx2_vl`, which `inherits avx2`)
-        is a candidate only when genuinely active — its `lscpu_flags ⊆ features` —
-        and then it *supersedes* its base (avx512vl profiles use `_vl`, not the base).
-        Candidates with no usable body for any type drop out later in `_best_body`.
+        Base extensions usually have no activation guard; their individual bodies
+        self-gate via `requires` (e.g. avx2's 256-bit *float* add needs only `avx`,
+        so it appears on an avx-only profile while its 256-bit *integer* add does not).
+        Extension variants (e.g. `avx2_vl`) use `active_when.target_features` to
+        become candidates and explicit `supersedes` entries to hide bases on profiles
+        where the variant should replace them. Candidates with no usable body for any
+        type drop out later in `_best_body`.
         """
 
-        active_derived = [
-            name
-            for name, ext in catalog.extensions.items()
-            if ext.inherits is not None and ext.lscpu_flags <= profile.features
-        ]
-        superseded = {catalog.extensions[name].inherits for name in active_derived}
-
-        emit: list[str] = []
+        active: dict[str, Extension] = {}
         for name, ext in catalog.extensions.items():
             if not self.support.supports_extension(ext, catalog.target_families):
                 # Unsupported extension substrates stay source-visible but are not generated in
@@ -252,12 +246,16 @@ class Selector:
                 # `requires []` body (the scalar-store) from registering an extension substrate
                 # on a profile family that did not declare it.
                 continue
-            if name in superseded:
+            if not ext.active_when.is_satisfied_by(profile.features):
                 continue
-            if ext.inherits is not None and not (ext.lscpu_flags <= profile.features):
-                continue  # inactive derived extension
-            emit.append(name)
-        return sorted(emit)
+            active[name] = ext
+
+        superseded = {
+            superseded_name
+            for ext in active.values()
+            for superseded_name in ext.supersedes
+        }
+        return sorted(name for name in active if name not in superseded)
 
     def evaluate_candidates(
         self,
@@ -365,10 +363,10 @@ class Selector:
         best_impl = best.implementation
         # Ambiguity guard: warn only when the pick is genuinely *arbitrary* — two candidate
         # bodies on the same extension that tie on every principled key (a) distance,
-        # (b) type-group specificity, and (c) hardware-flag count, yet are keyed to *different*
+        # (b) type-group specificity, and (c) target-feature count, yet are keyed to *different*
         # type-groups. Equal-size different groups are necessarily incomparable (a proper
         # subset has strictly fewer members), so neither is more type-specific; equal flag
-        # counts mean hardware-specialization doesn't separate them either — so only
+        # counts mean target-feature specialization doesn't separate them either — so only
         # `source_order` (d) decides, which is arbitrary. A flag-count difference IS a
         # principled tiebreak (more required features = more specialized), so it does not warn.
         rival_groups = {

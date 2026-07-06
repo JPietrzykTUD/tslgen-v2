@@ -1,5 +1,5 @@
 prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
-  brief_description "[Example: avx2 + si32]: Gather 32-bit integers from memory using 32-bit indices. 32-bit elements are loaded from addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\"). Gathered elements are merged into \"dst\". \"scale\" should be 1, 2, 4 or 8."
+  brief_description "Gather 32-bit integers from memory using 32-bit indices. 32-bit elements are loaded from addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\"). Gathered elements are merged into \"dst\". \"scale\" should be 1, 2, 4 or 8."
   detailed_description """
     Loads vector lanes from non-contiguous memory addresses computed from a base
     pointer, an index vector, and an immediate byte scale.
@@ -11,7 +11,6 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
       result[i] = load element at address
     return result
     """
-  operation "[Example: avx2 + si32]: FOR j := 0 to 7\n\ti := j*32\n\tm := j*32\n\taddr := base_addr + SignExtend64(vindex[m+31:m]) * ZeroExtend64(scale) * 8\n\tdst[i+31:i] := MEM[addr+31:addr]\nENDFOR\ndst[MAX:256] := 0"
   generic_params:
     IndicesType {kind simd_type}
     N {kind int, default 1}
@@ -450,7 +449,7 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
             var<const_infer>(loaded, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result));
             complete(loaded);
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -460,7 +459,7 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
           sse_vl [sse2]
           neon [neon]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -587,7 +586,7 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
                 }
               }
             """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga]:
       [bword, dword]:
         requires:
           avx512:
@@ -599,7 +598,7 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
           sse_vl [sse, sse2]
           neon [neon]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -692,7 +691,7 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
     - {tags [basic], type "si32", index_type "si64", scale 4, case {inputs [[-10, -20, -30, -40], [1, 2, 3, 0]], expected [-20, -30, -40, -10]}}
     - {tags [basic], type "f32", index_type "si64", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [2, 0, 3, 1]], expected [3.5, 1.0, -4.5, -2.0]}}
   impls:
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga]:
       [bword, dword]:
         requires:
           avx512:
@@ -704,7 +703,7 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
           sse_vl [sse, sse2]
           neon [neon]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -753,7 +752,7 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
             complete(*ptr);
           """
 prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, source, scale):
-  brief_description "[Example: avx512 + si32]: Gather 32-bit integers from memory using 32-bit indices. 32-bit elements are loaded from addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\"). Gathered elements are merged into \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set). \"scale\" should be 1, 2, 4 or 8."
+  brief_description "Gather 32-bit integers from memory using 32-bit indices. 32-bit elements are loaded from addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\"). Gathered elements are merged into \"dst\" using writemask \"k\" (elements are copied from \"src\" when the corresponding mask bit is not set). \"scale\" should be 1, 2, 4 or 8."
   detailed_description """
     Loads mask-selected lanes from non-contiguous memory addresses and preserves
     inactive lanes from the source vector.
@@ -768,7 +767,6 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
         result[i] = source[i]
     return result
     """
-  operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\ti := j*32\n\tm := j*32\n\tIF k[j]\n\t\taddr := base_addr + SignExtend64(vindex[m+31:m]) * ZeroExtend64(scale) * 8\n\t\tdst[i+31:i] := MEM[addr+31:addr]\n\tELSE\n\t\tdst[i+31:i] := src[i+31:i]\n\tFI\nENDFOR\ndst[MAX:512] := 0"
   generic_params:
     IndicesType {kind simd_type}
     N {kind int, default 1}
@@ -1025,7 +1023,7 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
               }
             }
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneAPIfpga]:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneapi_fpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1036,7 +1034,7 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
           neon [neon]
           sve [sve]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -1075,7 +1073,7 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
             complete(source);
           """
 prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
-  brief_description "[Example: avx512 + si32]: Scatter 32-bit integers from \"a\" into memory using 32-bit indices. 32-bit elements are stored at addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\"). \"scale\" should be 1, 2, 4 or 8."
+  brief_description "Scatter 32-bit integers from \"a\" into memory using 32-bit indices. 32-bit elements are stored at addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\"). \"scale\" should be 1, 2, 4 or 8."
   detailed_description """
     Stores vector lanes to non-contiguous memory addresses computed from a base
     pointer, an index vector, and an immediate byte scale.
@@ -1086,7 +1084,6 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
       address = base_ptr + index[i] * scale bytes
       store a[i] at address
     """
-  operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\ti := j*32\n\tm := j*32\n\taddr := base_addr + SignExtend64(vindex[m+31:m]) * ZeroExtend64(scale) * 8\n\tMEM[addr+31:addr] := a[i+31:i]\nENDFOR"
   generic_params:
     IndicesType {kind simd_type}
     N {kind int, default 1}
@@ -1365,7 +1362,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
               *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
             }
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneAPIfpga]:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1375,7 +1372,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           sse_vl [sse2]
           neon [neon]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -1408,7 +1405,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
             *ptr = a;
           """
 prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, scale):
-  brief_description "[Example: avx512 + si32]: Scatter 32-bit integers from \"a\" into memory using 32-bit indices. 32-bit elements are stored at addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\") subject to mask \"k\" (elements are not stored when the corresponding mask bit is not set). \"scale\" should be 1, 2, 4 or 8."
+  brief_description "Scatter 32-bit integers from \"a\" into memory using 32-bit indices. 32-bit elements are stored at addresses starting at \"base_addr\" and offset by each 32-bit element in \"vindex\" (each index is scaled by the factor in \"scale\") subject to mask \"k\" (elements are not stored when the corresponding mask bit is not set). \"scale\" should be 1, 2, 4 or 8."
   detailed_description """
     Stores mask-selected vector lanes to non-contiguous memory addresses.
     Inactive mask lanes do not write to memory.
@@ -1420,7 +1417,6 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
         address = base_ptr + index[i] * scale bytes
         store a[i] at address
     """
-  operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\ti := j*32\n\tm := j*32\n\tIF k[j]\n\t\taddr := base_addr + SignExtend64(vindex[m+31:m]) * ZeroExtend64(scale) * 8\n\t\tMEM[addr+31:addr] := a[i+31:i]\n\tFI\nENDFOR"
   generic_params:
     IndicesType {kind simd_type}
     N {kind int, default 1}
@@ -1701,7 +1697,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               }
             }
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneAPIfpga]:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneapi_fpga]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1712,7 +1708,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           neon [neon]
           sve [sve]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe true

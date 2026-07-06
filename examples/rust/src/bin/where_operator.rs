@@ -1,34 +1,34 @@
-use tsl_generated::tsl_core::StaticSimdVector;
-use tsl_generated::tsl_scalar as tsl;
+use tsl::tsl_core::StaticSimdVector;
+use tsl::profile;
 
 struct LessThan;
 
-impl<V> tsl::algo::BinaryPredicateKernel<V> for LessThan
+impl<V> profile::algo::BinaryPredicateKernel<V> for LessThan
 where
-    V: StaticSimdVector<BaseType = i32> + tsl::detail::primitives::Less_thanImpl,
+    V: StaticSimdVector<BaseType = i32> + profile::detail::primitives::Less_thanImpl,
 {
     fn test(&mut self, left: V::RegisterType, right: V::RegisterType) -> V::MaskType {
-        tsl::less_than::<V>(left, right)
+        profile::less_than::<V>(left, right)
     }
 }
 
 struct SquareWhere;
 
-impl<V> tsl::algo::MaskedUnaryKernel<V> for SquareWhere
+impl<V> profile::algo::MaskedUnaryKernel<V> for SquareWhere
 where
-    V: StaticSimdVector<BaseType = i32> + tsl::detail::primitives::MulImpl,
+    V: StaticSimdVector<BaseType = i32> + profile::detail::primitives::MulImpl,
     V::RegisterType: Copy,
 {
     fn apply(&mut self, _active: V::MaskType, value: V::RegisterType) -> V::RegisterType {
-        tsl::mul::<V>(value, value)
+        profile::mul::<V>(value, value)
     }
 }
 
 struct AddWhere;
 
-impl<V> tsl::algo::MaskedBinaryKernel<V> for AddWhere
+impl<V> profile::algo::MaskedBinaryKernel<V> for AddWhere
 where
-    V: StaticSimdVector<BaseType = i32> + tsl::detail::primitives::AddImpl,
+    V: StaticSimdVector<BaseType = i32> + profile::detail::primitives::AddImpl,
 {
     fn apply(
         &mut self,
@@ -36,7 +36,7 @@ where
         left: V::RegisterType,
         right: V::RegisterType,
     ) -> V::RegisterType {
-        tsl::add::<V>(left, right)
+        profile::add::<V>(left, right)
     }
 }
 
@@ -55,17 +55,17 @@ fn main() {
     macro_rules! run_policy {
         ($policy:expr) => {{
             let policy = $policy;
-            let mask_count = tsl::algo::integral_mask_chunk_count::<_, i32>(policy, left.len());
+            let mask_count = profile::algo::integral_mask_chunk_count::<_, i32>(policy, left.len());
             let mut masks = vec![0u64; mask_count];
             let mut less_than = LessThan;
             let produced =
-                tsl::algo::predicate_binary(policy, &mut less_than, &left, &right, &mut masks);
+                profile::algo::predicate_binary(policy, &mut less_than, &left, &right, &mut masks);
             assert_eq!(produced, masks.len());
 
             let unary_preserved = -123456;
             let mut unary_output = vec![unary_preserved; left.len()];
             let mut square = SquareWhere;
-            tsl::algo::transform_where_unary(policy, &mut square, &left, &masks, &mut unary_output);
+            profile::algo::transform_where_unary(policy, &mut square, &left, &masks, &mut unary_output);
 
             for (i, actual) in unary_output.iter().enumerate() {
                 let expected = if left[i] < right[i] {
@@ -79,7 +79,7 @@ fn main() {
             let binary_preserved = -654321;
             let mut binary_output = vec![binary_preserved; left.len()];
             let mut add = AddWhere;
-            tsl::algo::transform_where_binary(
+            profile::algo::transform_where_binary(
                 policy,
                 &mut add,
                 &left,
@@ -99,8 +99,8 @@ fn main() {
         }};
     }
 
-    run_policy!(tsl::algo::parallelism::native());
-    run_policy!(tsl::algo::parallelism::fixed::<1>());
-    run_policy!(tsl::algo::parallelism::generic::<4>());
-    run_policy!(tsl::algo::parallelism::generic::<16>());
+    run_policy!(tsl::dataparallel::native());
+    run_policy!(tsl::dataparallel::fixed::<1>());
+    run_policy!(tsl::dataparallel::generic::<4>());
+    run_policy!(tsl::dataparallel::generic::<16>());
 }

@@ -29,14 +29,4 @@ struct bytes {};
 struct bits {};
 }  // namespace mask_layout
 
-namespace parallelism {
-struct native {};
-
-template <std::size_t N>
-struct fixed {
-    static_assert(N > 0, "tsl::algo::parallelism::fixed<N> requires N > 0");
-    static constexpr std::size_t lanes = N;
-};
-}  // namespace parallelism
-
 }  // namespace tsl::algo

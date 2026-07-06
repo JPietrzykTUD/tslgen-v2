@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tslc.backend.primitive_facade import (
+    DataparallelPrimitiveFacade,
+    DataparallelPrimitiveFacadeKind,
+    classify_dataparallel_primitive_facade,
+)
 from tslc.documentation import (
     DocumentationBlock,
     documentation_block,
@@ -229,7 +234,7 @@ class CppBackend:
         signature = _wrapper_signature(specializations)
         doc = _cpp_doc(specializations[0], context="C++ wrapper", concrete=False)
         prefix = f"{doc}\n" if doc else ""
-        return (
+        vector_wrapper = (
             prefix
             + f"template <{', '.join(signature.template_params)}>\n"
             f"inline {signature.result_type} {primitive_name}({signature.params}) {{\n"
@@ -238,6 +243,12 @@ class CppBackend:
             f"{signature.argument_names});\n"
             f"}}"
         )
+        policy_wrapper = _dataparallel_primitive_facade_wrapper(
+            primitive_name, specializations, define=True
+        )
+        if policy_wrapper:
+            return vector_wrapper + "\n\n" + policy_wrapper
+        return vector_wrapper
 
     def _wrapper_declaration(
         self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
@@ -245,11 +256,17 @@ class CppBackend:
         signature = _wrapper_signature(specializations)
         doc = _cpp_doc(specializations[0], context="C++ wrapper", concrete=False)
         prefix = f"{doc}\n" if doc else ""
-        return (
+        vector_declaration = (
             prefix
             + f"template <{', '.join(signature.template_params)}>\n"
             f"{signature.result_type} {primitive_name}({signature.params});"
         )
+        policy_declaration = _dataparallel_primitive_facade_wrapper(
+            primitive_name, specializations, define=False
+        )
+        if policy_declaration:
+            return vector_declaration + "\n\n" + policy_declaration
+        return vector_declaration
 
 
 @dataclass(frozen=True, slots=True)
@@ -319,6 +336,114 @@ def _wrapper_signature(
         impl_args=impl_args,
         result_type=result_type,
     )
+
+
+def _dataparallel_primitive_facade_wrapper(
+    primitive_name: str,
+    specializations: tuple[LoweredSpecialization, ...],
+    *,
+    define: bool,
+) -> str:
+    facade = classify_dataparallel_primitive_facade(primitive_name, specializations)
+    if facade is None:
+        return ""
+    if facade.kind is DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY:
+        return _dataparallel_memory_facade_wrapper(facade, define=define)
+
+    shape = facade.shape
+    source_type = "FromT" if shape.target is not None else "T"
+    vec = f"::tsl::dataparallel::simd_for_t<Policy, {source_type}>"
+    target_vec = (
+        f"::tsl::dataparallel::rebind_base_t<{vec}, ToT>"
+        if shape.target is not None
+        else None
+    )
+    result_type = _dataparallel_facade_result_type(
+        shape.result_kind, target_vec or vec
+    )
+    params = ", ".join(
+        f"{_dataparallel_facade_param_type(kind, vec, target_vec)} {name}"
+        for name, kind in zip(shape.param_names, shape.param_kinds)
+    )
+    template_params = (
+        "class Policy, class FromT, class ToT"
+        if shape.target is not None
+        else "class Policy, class T"
+    )
+    impl_args = vec + (f", {target_vec}" if target_vec is not None else "")
+    signature = (
+        f"template <{template_params}>\n"
+        f"inline {result_type} {primitive_name}({params})"
+    )
+    if not define:
+        return signature + ";"
+    return (
+        signature
+        + " {\n"
+        f"    return ::tsl::{primitive_name}<{impl_args}>({', '.join(shape.param_names)});\n"
+        "}"
+    )
+
+
+def _dataparallel_memory_facade_wrapper(
+    facade: DataparallelPrimitiveFacade,
+    *,
+    define: bool,
+) -> str:
+    shape = facade.shape
+    primitive_name = facade.primitive_name
+    vec = "::tsl::dataparallel::simd_for_t<Policy, T>"
+    axis_name = _axis_name(shape.axis[0][0])
+    result_type = _dataparallel_facade_result_type(shape.result_kind, vec)
+    params = ", ".join(
+        f"{_dataparallel_facade_param_type(kind, vec, None)} {name}"
+        for name, kind in zip(shape.param_names, shape.param_kinds)
+    )
+    signature = (
+        f"template <class Policy, class T, bool {axis_name} = false>\n"
+        f"inline {result_type} {primitive_name}({params})"
+    )
+    if not define:
+        return signature + ";"
+    call = (
+        f"::tsl::{primitive_name}<{vec}, {axis_name}>"
+        f"({', '.join(shape.param_names)})"
+    )
+    if shape.result_kind == "void":
+        return signature + " {\n" f"    {call};\n" "}"
+    return signature + " {\n" f"    return {call};\n" "}"
+
+
+def _dataparallel_facade_result_type(result_kind: str, vec: str) -> str:
+    if result_kind == "v":
+        return f"typename {vec}::register_type"
+    if result_kind == "m":
+        return f"typename {vec}::mask_type"
+    if result_kind == "s":
+        return f"typename {vec}::base_type"
+    if result_kind == "usize":
+        return "std::size_t"
+    if result_kind == "void":
+        return "void"
+    raise AssertionError(f"unsupported dataparallel facade result kind: {result_kind}")
+
+
+def _dataparallel_facade_param_type(
+    param_kind: str, vec: str, target_vec: str | None
+) -> str:
+    if param_kind == "v":
+        return f"typename ::tsl::reg_param<{vec}>::type"
+    if param_kind == "vt" and target_vec is not None:
+        return f"typename ::tsl::reg_param<{target_vec}>::type"
+    if param_kind == "m":
+        return f"typename {vec}::mask_type"
+    if param_kind == "s":
+        return f"typename {vec}::base_type"
+    if param_kind == "cptr":
+        return f"typename {vec}::base_type const*"
+    if param_kind == "ptr":
+        return f"typename {vec}::base_type*"
+    raise AssertionError(f"unsupported dataparallel facade parameter kind: {param_kind}")
 
 
 def _free_function(spec: LoweredSpecialization, *, define: bool) -> str:
@@ -420,10 +545,10 @@ def _doc_block(
         facts.append(("Immediate", f"{spec.immediate[0]}: {spec.immediate[1]}"))
     if spec.required_features:
         facts.append(
-            ("Required CPU features", ", ".join(sorted(spec.required_features)))
+            ("Required target features", ", ".join(sorted(spec.required_features)))
         )
     else:
-        facts.append(("Required CPU features", "none"))
+        facts.append(("Required target features", "none"))
     facts.append(("Safety", safety_fact(spec.safety)))
     return documentation_block(
         spec.documentation,

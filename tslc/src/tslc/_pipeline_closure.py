@@ -104,7 +104,7 @@ def _profile_with_required_features(
     profile: MachineProfile,
     grouped: dict[str, dict[str, list[LoweredSpecialization]]],
 ) -> MachineProfile:
-    """Profile plus the transitive feature flags required by live lowered specs."""
+    """Profile plus the transitive target features required by live lowered specs."""
 
     required = set(profile.features)
     for by_primitive in grouped.values():
@@ -162,7 +162,7 @@ def _propagate_transitive_call_facts(
     """Propagate unsafe callee metadata and required features through live calls.
 
     A caller that reaches unsafe callee metadata records an internal unsafe
-    dependency for review/diagnostics. Required feature flags propagate
+    dependency for review/diagnostics. Required target features propagate
     bottom-up as well, so a profile gets every feature needed by the bodies that
     remain live after dependency pruning.
     """

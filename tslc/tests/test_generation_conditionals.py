@@ -391,10 +391,15 @@ def test_mask_test_imask_lowers_integral_mask_bit_test(
     catalog: Catalog, machine_profiles
 ) -> None:
     cpp = _spec(catalog, machine_profiles, "avx2", "test_imask", "avx2", "ui32")
+    rust = _spec(
+        catalog, machine_profiles, "scalar", "to_mask", "scalar", "ui32", backend="rust"
+    )
 
     assert cpp is not None
     assert "static_cast<std::uint64_t>(mask)" in cpp.body_text
     assert "mask<test" not in cpp.body_text
+    assert rust is not None
+    assert rust.body_text == "return (((mask) as u64 >> 0) & 1u64) != 0;"
 
 
 # --- masked-variant selection: native blend (first mask-consuming primitive) --

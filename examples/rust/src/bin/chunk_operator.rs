@@ -1,5 +1,5 @@
-use tsl_generated::tsl_core::StaticSimdVector;
-use tsl_generated::tsl_scalar as tsl;
+use tsl::tsl_core::StaticSimdVector;
+use tsl::profile;
 
 struct ChunkSum {
     base: *const i32,
@@ -23,11 +23,11 @@ impl ChunkSum {
     }
 }
 
-impl<V> tsl::algo::ChunkKernel<V> for ChunkSum
+impl<V> profile::algo::ChunkKernel<V> for ChunkSum
 where
     V: StaticSimdVector<BaseType = i32>
-        + tsl::detail::primitives::LoadImpl<false>
-        + tsl::detail::primitives::HaddImpl,
+        + profile::detail::primitives::LoadImpl<false>
+        + profile::detail::primitives::HaddImpl,
 {
     unsafe fn apply(&mut self, ptr: *const V::BaseType, offset: usize, count: usize) {
         let expected_ptr = unsafe { self.base.add(offset) };
@@ -35,8 +35,8 @@ where
             self.metadata_ok = false;
         }
 
-        let values = unsafe { tsl::load::<V, false>(ptr) };
-        self.total += i64::from(tsl::hadd::<V>(values));
+        let values = unsafe { profile::load::<V, false>(ptr) };
+        self.total += i64::from(profile::hadd::<V>(values));
         self.visited += count;
     }
 }
@@ -57,24 +57,24 @@ fn main() {
     let expected = expected_sum(&input);
 
     let mut native = ChunkSum::new(&input);
-    tsl::algo::for_each_chunk(tsl::algo::parallelism::native(), &mut native, &input);
+    profile::algo::for_each_chunk(tsl::dataparallel::native(), &mut native, &input);
     assert!(native.is_valid(expected, input.len()));
 
     let mut fixed = ChunkSum::new(&input);
-    tsl::algo::for_each_chunk(tsl::algo::parallelism::fixed::<1>(), &mut fixed, &input);
+    profile::algo::for_each_chunk(tsl::dataparallel::fixed::<1>(), &mut fixed, &input);
     assert!(fixed.is_valid(expected, input.len()));
 
     let mut generic4 = ChunkSum::new(&input);
-    tsl::algo::for_each_chunk(
-        tsl::algo::parallelism::generic::<4>(),
+    profile::algo::for_each_chunk(
+        tsl::dataparallel::generic::<4>(),
         &mut generic4,
         &input,
     );
     assert!(generic4.is_valid(expected, input.len()));
 
     let mut generic16 = ChunkSum::new(&input);
-    tsl::algo::for_each_chunk(
-        tsl::algo::parallelism::generic::<16>(),
+    profile::algo::for_each_chunk(
+        tsl::dataparallel::generic::<16>(),
         &mut generic16,
         &input,
     );

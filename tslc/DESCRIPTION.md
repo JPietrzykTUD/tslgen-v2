@@ -75,9 +75,9 @@ prim<v:=(v,v)> add(left, right):
   (presence makes it a free function), `lanes<s>` a lane list.
 - **Type-group keys**: `?i?` (any int), `f?` (any float), `arith` (all), plus
   concrete tags. Ranked by **specificity** — `si32` beats `?i?` beats `arith`.
-- **Extension fallback**: extensions form `inherits` chains (e.g. `avx512_vl →
-  avx512`); a *derived* extension supersedes its base only when the profile's
-  CPU flags activate it.
+- **Extension fallback**: extensions form `inherits` chains (e.g. `avx2_vl →
+  avx2`); an active variant can explicitly `supersedes` another extension while
+  still borrowing fallback bodies from its inheritance chain.
 - **Mask policies**: `[mask=zero]` (zeroing) and `[mask=pass_through]` (merge).
 - `requires`, `safety` (internal/caller unsafe), and boolean attribute wildcards
   (e.g. `[aligned=*]`, expanded at catalog-build time).
@@ -112,7 +112,7 @@ type/extension being specialized.
 The [Lowerer](src/tslc/lower/lowerer.py) walks the segments for one
 `(primitive, extension, type, backend)` slot → a `LoweredSpecialization`
 (concrete type spellings, register type, body text, mask policy, safety,
-required CPU features). Region handlers
+required target features). Region handlers
 ([lower/region_handlers/](src/tslc/lower/region_handlers/)) translate each
 keyword; a query evaluator ([lower/queries.py](src/tslc/lower/queries.py))
 resolves the `<...>` selectors.
@@ -122,7 +122,7 @@ requested primitives it follows `call<...>` edges
 ([lower/dependencies.py](src/tslc/lower/dependencies.py)), lowers callees, and
 **prunes to a fixpoint** any specialization whose callees aren't themselves
 emitted for the same `simd<type,ext>` (else the generated call wouldn't link).
-It also **propagates bottom-up** unsafe-ness and required CPU feature flags
+It also **propagates bottom-up** unsafe-ness and required target features
 through the live call graph
 ([pipeline.py](src/tslc/pipeline.py), `_propagate_transitive_call_facts`).
 

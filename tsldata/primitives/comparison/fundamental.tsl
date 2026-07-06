@@ -1,6 +1,6 @@
 description "Fundamental comparison operations"
 prim<m:=(v,v)> equal(left, right):
-  brief_description "[Example: sse + si8]: Compare packed 8-bit integers in \"a\" and \"b\" for equality, and store the results in \"dst\"."
+  brief_description "Compare packed 8-bit integers in \"a\" and \"b\" for equality, and store the results in \"dst\"."
   detailed_description """
     Compares two vectors lane-wise for equality and returns a mask. Each true
     comparison lane is represented by the target mask true value, and each false
@@ -13,7 +13,6 @@ prim<m:=(v,v)> equal(left, right):
       result[i] = left[i] == right[i]
     return mask result
     """
-  operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[i+7:i] := ( a[i+7:i] == b[i+7:i] ) ? 0xFF : 0\nENDFOR"
   tests:
     - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 0, 3, 0, 5, 0, 7, 0]], expected [4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
     - {tags [edge], type "ui32", case {inputs [[0, 0, 4294967295, 2147483648, 123, 456, 789, 0], [0, 1, 4294967295, 2147483648, 0, 456, 0, 1]], expected [4294967295, 0, 4294967295, 4294967295, 0, 4294967295, 0, 0]}}
@@ -65,9 +64,9 @@ prim<m:=(v,v)> equal(left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -225,7 +224,7 @@ prim<m:=(v,v)> equal(left, right):
             );
           """
 prim<m:=(v,v)> nequal(left, right):
-  brief_description "[Example: avx512 + si8]: Compare packed signed 8-bit integers in \"a\" and \"b\" for not-equal, and store the results in mask vector \"k\"."
+  brief_description "Compare packed signed 8-bit integers in \"a\" and \"b\" for not-equal, and store the results in mask vector \"k\"."
   detailed_description """
     Compares two vectors lane-wise for inequality and returns a mask. Each true
     comparison lane is represented by the target mask true value, and each false
@@ -238,7 +237,6 @@ prim<m:=(v,v)> nequal(left, right):
       result[i] = left[i] != right[i]
     return mask result
     """
-  operation "[Example: avx512 + si8]: FOR j := 0 to 63\n\ti := j*8\n\tk[j] := ( a[i+7:i] != b[i+7:i] ) ? 1 : 0\nENDFOR\nk[MAX:64] := 0"
   tests:
     - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 0, 3, 0, 5, 0, 7, 0]], expected [0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
     - {tags [edge], type "ui32", case {inputs [[0, 0, 4294967295, 2147483648, 123, 456, 789, 0], [0, 1, 4294967295, 2147483648, 0, 456, 0, 1]], expected [0, 4294967295, 0, 0, 4294967295, 0, 4294967295, 4294967295]}}
@@ -290,9 +288,9 @@ prim<m:=(v,v)> nequal(left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -433,7 +431,7 @@ prim<m:=(v,v)> nequal(left, right):
             );
           """
 prim<m:=(v,v)> less_than(left, right):
-  brief_description "[Example: sse + si8]: Compare packed signed 8-bit integers in \"a\" and \"b\" for less-than, and store the results in \"dst\". Note: This intrinsic emits the pcmpgtb instruction with the order of the operands switched."
+  brief_description "Compare packed signed 8-bit integers in \"a\" and \"b\" for less-than, and store the results in \"dst\". Note: This intrinsic emits the pcmpgtb instruction with the order of the operands switched."
   detailed_description """
     Compares two vectors lane-wise and returns a mask indicating whether the
     left lane is less than the right lane. Signedness follows the selected lane
@@ -446,7 +444,6 @@ prim<m:=(v,v)> less_than(left, right):
       result[i] = left[i] < right[i]
     return mask result
     """
-  operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[i+7:i] := ( a[i+7:i] < b[i+7:i] ) ? 0xFF : 0\nENDFOR"
   tests:
     - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 4, 4, 6, 5, 8, 7]], expected [0, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
     - {tags [edge], type "ui32", case {inputs [[0, 1, 4294967295, 2147483648, 0, 100, 200, 300], [1, 1, 0, 4294967295, 0, 50, 200, 400]], expected [4294967295, 0, 0, 4294967295, 0, 0, 0, 4294967295]}}
@@ -496,9 +493,9 @@ prim<m:=(v,v)> less_than(left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -746,7 +743,7 @@ prim<m:=(v,v)> less_than(left, right):
             );
           """
 prim<m:=(v,v)> greater_than(left, right):
-  brief_description "[Example: sse + si8]: Compare packed signed 8-bit integers in \"a\" and \"b\" for greater-than, and store the results in \"dst\"."
+  brief_description "Compare packed signed 8-bit integers in \"a\" and \"b\" for greater-than, and store the results in \"dst\"."
   detailed_description """
     Compares two vectors lane-wise and returns a mask indicating whether the
     left lane is greater than the right lane. Signedness follows the selected
@@ -759,7 +756,6 @@ prim<m:=(v,v)> greater_than(left, right):
       result[i] = left[i] > right[i]
     return mask result
     """
-  operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[i+7:i] := ( a[i+7:i] > b[i+7:i] ) ? 0xFF : 0\nENDFOR"
   tests:
     - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 4, 4, 6, 5, 8, 7]], expected [0, 4294967295, 0, 0, 0, 4294967295, 0, 4294967295]}}
     - {tags [edge], type "ui32", case {inputs [[0, 1, 4294967295, 2147483648, 0, 100, 200, 300], [1, 1, 0, 4294967295, 0, 50, 200, 400]], expected [0, 0, 4294967295, 0, 0, 4294967295, 0, 0]}}
@@ -809,9 +805,9 @@ prim<m:=(v,v)> greater_than(left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1041,7 +1037,7 @@ prim<m:=(v,v)> greater_than(left, right):
             );
           """
 prim<m:=(v,v)> less_than_or_equal(left, right):
-  brief_description "[Example: sse + f32]: Compare packed single-precision (32-bit) floating-point elements in \"a\" and \"b\" for less-than-or-equal, and store the results in \"dst\"."
+  brief_description "Compare packed single-precision (32-bit) floating-point elements in \"a\" and \"b\" for less-than-or-equal, and store the results in \"dst\"."
   detailed_description """
     Compares two vectors lane-wise and returns a mask indicating whether the
     left lane is less than or equal to the right lane. Signedness follows the
@@ -1054,7 +1050,6 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
       result[i] = left[i] <= right[i]
     return mask result
     """
-  operation "[Example: sse + f32]: FOR j := 0 to 3\n\ti := j*32\n\tdst[i+31:i] := ( a[i+31:i] <= b[i+31:i] ) ? 0xFFFFFFFF : 0\nENDFOR"
   tests:
     - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 4, 4, 6, 5, 8, 7]], expected [4294967295, 0, 4294967295, 4294967295, 4294967295, 0, 4294967295, 0]}}
     - {tags [edge], type "ui32", case {inputs [[0, 1, 4294967295, 2147483648, 0, 100, 200, 300], [1, 1, 0, 4294967295, 0, 50, 200, 400]], expected [4294967295, 4294967295, 0, 4294967295, 4294967295, 0, 4294967295, 4294967295]}}
@@ -1104,9 +1099,9 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1265,7 +1260,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
             );
           """
 prim<m:=(v,v)> greater_than_or_equal(left, right):
-  brief_description "[Example: sse + f32]: Compare packed single-precision (32-bit) floating-point elements in \"a\" and \"b\" for greater-than-or-equal, and store the results in \"dst\"."
+  brief_description "Compare packed single-precision (32-bit) floating-point elements in \"a\" and \"b\" for greater-than-or-equal, and store the results in \"dst\"."
   detailed_description """
     Compares two vectors lane-wise and returns a mask indicating whether the
     left lane is greater than or equal to the right lane. Signedness follows the
@@ -1278,7 +1273,6 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
       result[i] = left[i] >= right[i]
     return mask result
     """
-  operation "[Example: sse + f32]: FOR j := 0 to 3\n\ti := j*32\n\tdst[i+31:i] := ( a[i+31:i] >= b[i+31:i] ) ? 0xFFFFFFFF : 0\nENDFOR"
   tests:
     - {tags [basic], type "ui32", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 4, 4, 6, 5, 8, 7]], expected [4294967295, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
     - {tags [edge], type "ui32", case {inputs [[0, 1, 4294967295, 2147483648, 0, 100, 200, 300], [1, 1, 0, 4294967295, 0, 50, 200, 400]], expected [0, 4294967295, 4294967295, 0, 4294967295, 4294967295, 4294967295, 0]}}
@@ -1328,9 +1322,9 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1551,9 +1545,9 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1730,7 +1724,6 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         result[i] = false
     return mask result
     """
-  operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\tk[j] := ( mask[j] && ( left[j] != right[j] ) ) ? 1 : 0\nENDFOR\nk[MAX:16] := 0"
   tests:
     - {tags [nequal, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [1, 0, 3, 0, 5, 0, 7, 0]], expected [0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
     - {tags [nequal, mask, none], type "ui32", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], [0, 0, 0, 0, 0, 0, 0, 0]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
@@ -1775,9 +1768,9 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1953,7 +1946,6 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         result[i] = false
     return mask result
     """
-  operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\tk[j] := ( mask[j] && ( left[j] < right[j] ) ) ? 1 : 0\nENDFOR\nk[MAX:16] := 0"
   tests:
     - {tags [less, than, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [0, 3, 3, 5, 4, 7, 7, 9]], expected [0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
     - {tags [less, than, mask, none], type "ui32", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], [9, 9, 9, 9, 9, 9, 9, 9]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
@@ -1998,9 +1990,9 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2176,7 +2168,6 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         result[i] = false
     return mask result
     """
-  operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\tk[j] := ( mask[j] && ( left[j] > right[j] ) ) ? 1 : 0\nENDFOR\nk[MAX:16] := 0"
   tests:
     - {tags [greater, than, mask, basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 3, 3, 5, 5, 7, 7]], expected [0, 4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295]}}
     - {tags [greater, than, mask, none], type "ui32", case {inputs [0, [9, 9, 9, 9, 9, 9, 9, 9], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
@@ -2221,9 +2212,9 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2399,7 +2390,6 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         result[i] = false
     return mask result
     """
-  operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\tk[j] := ( mask[j] && ( left[j] <= right[j] ) ) ? 1 : 0\nENDFOR\nk[MAX:16] := 0"
   tests:
     - {tags [less, than, or, equal, mask, basic], type "ui32", case {inputs [85, [1, 2, 3, 4, 5, 6, 7, 8], [1, 1, 4, 4, 6, 5, 8, 7]], expected [4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
     - {tags [less, than, or, equal, mask, none], type "ui32", case {inputs [0, [1, 2, 3, 4, 5, 6, 7, 8], [9, 9, 9, 9, 9, 9, 9, 9]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
@@ -2444,9 +2434,9 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2622,7 +2612,6 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         result[i] = false
     return mask result
     """
-  operation "[Example: avx512 + si32]: FOR j := 0 to 15\n\tk[j] := ( mask[j] && ( left[j] >= right[j] ) ) ? 1 : 0\nENDFOR\nk[MAX:16] := 0"
   tests:
     - {tags [mask, basic], type "ui32", case {inputs [85, [1, 2, 3, 4, 5, 6, 7, 8], [1, 3, 3, 5, 5, 7, 7, 9]], expected [4294967295, 0, 4294967295, 0, 4294967295, 0, 4294967295, 0]}}
     - {tags [mask, none], type "ui32", case {inputs [0, [9, 9, 9, 9, 9, 9, 9, 9], [1, 2, 3, 4, 5, 6, 7, 8]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
@@ -2667,9 +2656,9 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
             }
             complete(result);
           """
-    oneAPIfpga:
+    oneapi_fpga:
       arith:
-        requires [oneAPIfpgaDev]
+        requires [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false

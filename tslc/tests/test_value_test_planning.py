@@ -1366,8 +1366,8 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
     assert "rust_value_tests_profile.rs.tmpl" in render_rust
     assert "#![cfg(feature = \"value_tests\")]" not in render_rust
     assert "#![cfg(feature = \"value_tests\")]" in rust_values_template
-    assert "tsl_generated::tsl_core" not in render_rust
-    assert "tsl_generated::tsl_core" in rust_profile_template
+    assert "tsl::tsl_core" not in render_rust
+    assert "tsl::tsl_core" in rust_profile_template
     assert "Catalog" not in render_rust
     assert "Primitive" not in render_rust
     assert "value_test_warnings=self.request.value_test_warnings" in pipeline

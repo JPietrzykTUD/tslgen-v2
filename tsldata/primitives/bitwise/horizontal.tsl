@@ -14,7 +14,6 @@ prim<s:=v> hand(vec):
       result_bits = result_bits & bit_pattern(vec[i])
     return scalar_from_bit_pattern(result_bits)
     """
-  operation ""
   tests:
     - {tags [basic], type "ui32", case {inputs [[255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
     - {tags [zero], type "ui32", case {inputs [[255, 127, 0, 31, 15, 7, 3, 1]], expected 0}}
@@ -287,12 +286,12 @@ prim<s:=v> hand(vec):
             mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(type(base::in))));
             complete(out);
           """
-    [scalar, generic, oneAPIfpga, neon]:
+    [scalar, generic, oneapi_fpga, neon]:
       ?i?:
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           neon [neon]
         safety:
           internal_unsafe false
@@ -307,12 +306,12 @@ prim<s:=v> hand(vec):
             }
             complete(result);
           """
-    [scalar, generic, oneAPIfpga, avx2, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx2, sse, neon]:
       f?:
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx2 [avx2]
           sse [sse2]
           neon [neon]
@@ -351,7 +350,6 @@ prim<s:=v> hor(vec):
       result_bits = result_bits | bit_pattern(vec[i])
     return scalar_from_bit_pattern(result_bits)
     """
-  operation ""
   tests:
     - {tags [basic], type "ui32", case {inputs [[1, 2, 4, 8, 16, 32, 64, 128]], expected 255}}
     - {tags [zero], type "ui32", case {inputs [[0, 0, 0, 0, 0, 0, 0, 0]], expected 0}}
@@ -580,12 +578,12 @@ prim<s:=v> hor(vec):
             mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(type(base::in))));
             complete(out);
           """
-    [scalar, generic, oneAPIfpga, neon]:
+    [scalar, generic, oneapi_fpga, neon]:
       ?i?:
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           neon [neon]
         safety:
           internal_unsafe false
@@ -600,12 +598,12 @@ prim<s:=v> hor(vec):
             }
             complete(result);
           """
-    [scalar, generic, oneAPIfpga]:
+    [scalar, generic, oneapi_fpga]:
       f?:
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -650,7 +648,6 @@ prim<s:=(m,v)> hand(mask, vec):
       return 0
     return scalar_from_bit_pattern(result_bits)
     """
-  operation ""
   tests:
     - {tags [mask, basic], type "ui32", lane_count 8, case {inputs [255, [255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
     - {tags [mask, sparse], type "ui32", lane_count 8, case {inputs [165, [255, 127, 63, 31, 15, 7, 3, 1]], expected 1}}
@@ -703,12 +700,12 @@ prim<s:=(m,v)> hand(mask, vec):
             }
             complete(cast<static>(type(base::in), intrin<mask_reduce_and, build[suffix=base::signed_of(base::in)]>(mask, vec)));
           """
-    [scalar, generic, oneAPIfpga, avx512, avx2_vl, avx2, sse_vl, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2_vl, avx2, sse_vl, sse, neon]:
       ?i?:
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx512 [avx512f]
           avx2_vl [avx512bw, avx512vl]
           avx2 [avx2]
@@ -741,7 +738,7 @@ prim<s:=(m,v)> hand(mask, vec):
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx512 [avx512f]
           avx2_vl [avx512bw, avx512vl]
           avx2 [avx2]
@@ -795,7 +792,6 @@ prim<s:=(m,v)> hor(mask, vec):
         result_bits = result_bits | bit_pattern(vec[i])
     return scalar_from_bit_pattern(result_bits)
     """
-  operation ""
   tests:
     - {tags [mask, basic], type "ui32", lane_count 8, case {inputs [255, [1, 2, 4, 8, 16, 32, 64, 128]], expected 255}}
     - {tags [mask, sparse], type "ui32", lane_count 8, case {inputs [165, [1, 2, 4, 8, 16, 32, 64, 128]], expected 165}}
@@ -830,12 +826,12 @@ prim<s:=(m,v)> hor(mask, vec):
           reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type(base::in), intrin<mask_reduce_or, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
-    [scalar, generic, oneAPIfpga, avx512, avx2_vl, avx2, sse_vl, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2_vl, avx2, sse_vl, sse, neon]:
       ?i?:
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx512 [avx512f]
           avx2_vl [avx512bw, avx512vl]
           avx2 [avx2]
@@ -862,7 +858,7 @@ prim<s:=(m,v)> hor(mask, vec):
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx512 [avx512f]
           avx2_vl [avx512bw, avx512vl]
           avx2 [avx2]
@@ -926,12 +922,12 @@ prim<s:=(m,v)> hor(mask, vec):
             mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(type(base::in))));
             complete(out);
           """
-    [scalar, generic, oneAPIfpga, neon]:
+    [scalar, generic, oneapi_fpga, neon]:
       ?i?:
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           neon [neon]
         safety:
           internal_unsafe false
@@ -946,12 +942,12 @@ prim<s:=(m,v)> hor(mask, vec):
             }
             complete(result);
           """
-    [scalar, generic, oneAPIfpga, avx2, sse, neon, sve]:
+    [scalar, generic, oneapi_fpga, avx2, sse, neon, sve]:
       f?:
         requires:
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           avx2 [avx2]
           sse [sse2]
           neon [neon]

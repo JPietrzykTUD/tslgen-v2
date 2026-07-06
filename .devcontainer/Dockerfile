@@ -11,7 +11,7 @@ RUN apt-get update -y && \
     sudo \
     build-essential gdb cmake clang clang-format ninja-build doxygen \
     g++-aarch64-linux-gnu \
-    git curl xz-utils unzip pkg-config ca-certificates nodejs npm jq \
+    git curl gnupg xz-utils unzip pkg-config ca-certificates nodejs npm jq \
     python3 python3-pip python3-venv \
     qemu-user qemu-user-binfmt && \
     python3 -m venv /opt/venv && \
@@ -63,7 +63,7 @@ RUN ACCEPT_INTEL_SDE_LICENSE=yes \
 ENV PATH="/opt/intel-sde:${PATH}"
 
 # prepare oneapi repository
-RUN wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+RUN curl -fsSL https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
         | gpg --dearmor \
         > /usr/share/keyrings/oneapi-archive-keyring.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \

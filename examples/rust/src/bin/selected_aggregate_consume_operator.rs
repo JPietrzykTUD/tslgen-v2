@@ -1,18 +1,18 @@
-use tsl_generated::tsl_core::StaticSimdVector;
-use tsl_generated::tsl_scalar as tsl;
+use tsl::tsl_core::StaticSimdVector;
+use tsl::profile;
 
 struct SumOp {
     total: i64,
 }
 
-impl<V> tsl::algo::UnaryAggregateKernel<V> for SumOp
+impl<V> profile::algo::UnaryAggregateKernel<V> for SumOp
 where
-    V: StaticSimdVector<BaseType = i32> + tsl::detail::primitives::HaddImpl,
+    V: StaticSimdVector<BaseType = i32> + profile::detail::primitives::HaddImpl,
 {
     type Output = i64;
 
     fn accumulate(&mut self, value: V::RegisterType) {
-        self.total += i64::from(tsl::hadd::<V>(value));
+        self.total += i64::from(profile::hadd::<V>(value));
     }
 
     fn finalize(&self) -> Self::Output {
@@ -20,12 +20,12 @@ where
     }
 }
 
-impl<V> tsl::algo::UnaryConsumeKernel<V> for SumOp
+impl<V> profile::algo::UnaryConsumeKernel<V> for SumOp
 where
-    V: StaticSimdVector<BaseType = i32> + tsl::detail::primitives::HaddImpl,
+    V: StaticSimdVector<BaseType = i32> + profile::detail::primitives::HaddImpl,
 {
     fn consume(&mut self, value: V::RegisterType) {
-        self.total += i64::from(tsl::hadd::<V>(value));
+        self.total += i64::from(profile::hadd::<V>(value));
     }
 }
 
@@ -33,17 +33,17 @@ struct PairSumOp {
     total: i64,
 }
 
-impl<V> tsl::algo::BinaryAggregateKernel<V> for PairSumOp
+impl<V> profile::algo::BinaryAggregateKernel<V> for PairSumOp
 where
     V: StaticSimdVector<BaseType = i32>
-        + tsl::detail::primitives::AddImpl
-        + tsl::detail::primitives::HaddImpl,
+        + profile::detail::primitives::AddImpl
+        + profile::detail::primitives::HaddImpl,
 {
     type Output = i64;
 
     fn accumulate(&mut self, left: V::RegisterType, right: V::RegisterType) {
-        let sum = tsl::add::<V>(left, right);
-        self.total += i64::from(tsl::hadd::<V>(sum));
+        let sum = profile::add::<V>(left, right);
+        self.total += i64::from(profile::hadd::<V>(sum));
     }
 
     fn finalize(&self) -> Self::Output {
@@ -51,15 +51,15 @@ where
     }
 }
 
-impl<V> tsl::algo::BinaryConsumeKernel<V> for PairSumOp
+impl<V> profile::algo::BinaryConsumeKernel<V> for PairSumOp
 where
     V: StaticSimdVector<BaseType = i32>
-        + tsl::detail::primitives::AddImpl
-        + tsl::detail::primitives::HaddImpl,
+        + profile::detail::primitives::AddImpl
+        + profile::detail::primitives::HaddImpl,
 {
     fn consume(&mut self, left: V::RegisterType, right: V::RegisterType) {
-        let sum = tsl::add::<V>(left, right);
-        self.total += i64::from(tsl::hadd::<V>(sum));
+        let sum = profile::add::<V>(left, right);
+        self.total += i64::from(profile::hadd::<V>(sum));
     }
 }
 
@@ -108,11 +108,11 @@ fn main() {
 
             let mut unary_aggregate = SumOp { total: 0 };
             let unary_result =
-                tsl::algo::aggregate_selected_unary(policy, &mut unary_aggregate, &left, &indices);
+                profile::algo::aggregate_selected_unary(policy, &mut unary_aggregate, &left, &indices);
             assert_eq!(unary_result, expected_unary);
 
             let mut binary_aggregate = PairSumOp { total: 0 };
-            let binary_result = tsl::algo::aggregate_selected_binary(
+            let binary_result = profile::algo::aggregate_selected_binary(
                 policy,
                 &mut binary_aggregate,
                 &left,
@@ -122,11 +122,11 @@ fn main() {
             assert_eq!(binary_result, expected_binary);
 
             let mut unary_consume = SumOp { total: 0 };
-            tsl::algo::consume_selected_unary(policy, &mut unary_consume, &left, &indices);
+            profile::algo::consume_selected_unary(policy, &mut unary_consume, &left, &indices);
             assert_eq!(unary_consume.total, expected_unary);
 
             let mut binary_consume = PairSumOp { total: 0 };
-            tsl::algo::consume_selected_binary(
+            profile::algo::consume_selected_binary(
                 policy,
                 &mut binary_consume,
                 &left,
@@ -137,7 +137,7 @@ fn main() {
 
             let mut scaled_binary = PairSumOp { total: 0 };
             let scaled_result = unsafe {
-                tsl::algo::aggregate_selected_binary_scaled_raw::<4, _, _, _>(
+                profile::algo::aggregate_selected_binary_scaled_raw::<4, _, _, _>(
                     policy,
                     &mut scaled_binary,
                     left.as_ptr(),
@@ -150,8 +150,8 @@ fn main() {
         }};
     }
 
-    run_policy!(tsl::algo::parallelism::native());
-    run_policy!(tsl::algo::parallelism::fixed::<1>());
-    run_policy!(tsl::algo::parallelism::generic::<4>());
-    run_policy!(tsl::algo::parallelism::generic::<16>());
+    run_policy!(tsl::dataparallel::native());
+    run_policy!(tsl::dataparallel::fixed::<1>());
+    run_policy!(tsl::dataparallel::generic::<4>());
+    run_policy!(tsl::dataparallel::generic::<16>());
 }

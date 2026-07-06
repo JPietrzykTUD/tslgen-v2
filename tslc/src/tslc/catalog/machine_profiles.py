@@ -1,9 +1,9 @@
-"""Machine feature profiles (the new notion of a generation 'profile').
+"""Machine target-feature profiles (the notion of a generation 'profile').
 
 A profile is a named feature-set (e.g. ``avx2`` = {sse, sse2, …, avx, avx2}).
 Loaded from ``supplementary/buildsystem/machine_profiles.json``. An implementation
 body is usable in a profile iff the `requires` clause applying to the type has its
-flags ⊆ the profile's features; the profile thus decides which extensions'
+target features ⊆ the profile's features; the profile thus decides which
 specializations are emitted.
 """
 
@@ -19,7 +19,7 @@ from typing import Any
 from tslc.catalog.target_families import TargetFamilyCatalog
 from tslc.diagnostics import Diagnostic, SourceLocation, sort_diagnostics
 
-# Sentinel used by the generic/scalar profile to mean "no SIMD features".
+# Sentinel used by the generic/scalar profile to mean "no target features".
 _NO_SIMD = "NOSIMD-INVALID"
 
 
@@ -165,7 +165,7 @@ def load_machine_profiles_checked(
             fields = _object_fields(entry, path, diagnostics)
             _unknown_fields(
                 fields,
-                {"name", "flags", "alternatives", "cpp_flags", "emulator"},
+                {"name", "target_features", "alternatives", "cpp_flags", "emulator"},
                 path,
                 diagnostics,
                 owner=f"profile entry under {family!r}",
@@ -189,21 +189,21 @@ def load_machine_profiles_checked(
                         f"duplicate machine profile name {name!r}",
                     )
                 )
-            flags_value = fields.get("flags", "")
-            if not isinstance(flags_value, str):
+            target_features_value = fields.get("target_features", "")
+            if not isinstance(target_features_value, str):
                 diagnostics.append(
                     _diagnostic(
                         path,
-                        "TSL-PROFILE-MALFORMED-FLAGS",
-                        f"machine profile {name!r} flags must be a string",
+                        "TSL-PROFILE-MALFORMED-TARGET-FEATURES",
+                        f"machine profile {name!r} target_features must be a string",
                     )
                 )
                 continue
-            flags_text = flags_value
+            target_features_text = target_features_value
             features = (
                 frozenset()
-                if flags_text.strip() == _NO_SIMD
-                else frozenset(flags_text.split())
+                if target_features_text.strip() == _NO_SIMD
+                else frozenset(target_features_text.split())
             )
             alternatives_value = fields.get("alternatives", _JsonObject(()))
             alternatives = _alternatives(name, alternatives_value, path, diagnostics)

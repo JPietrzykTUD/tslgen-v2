@@ -16,6 +16,7 @@ from tslc.catalog._builder_common import (
 from tslc.catalog.model import (
     BackendExtensionMetadata,
     Extension,
+    ExtensionActivation,
     ExtensionMetadata,
     ImaskPolicy,
     MaskPolicy,
@@ -78,7 +79,7 @@ def _resolve_extension_inheritance(
             vector_register_type_policy=(
                 ext.vector_register_type_policy or parent.vector_register_type_policy
             ),
-            # A sized extension inheriting another (oneAPIfpga inherits generic) shares its size
+            # A sized extension inheriting another (oneapi_fpga inherits generic) shares its size
             # ladder / unroll default unless it states its own.
             size_bits=ext.size_bits if "size_bits" in declared_fields else parent.size_bits,
             unroll_variants=(
@@ -146,7 +147,8 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
         backend_headers=_backend_headers(fields),
         backend_supported=_backend_supported(fields),
         inherits=_field_text(fields.get("inherits")),
-        lscpu_flags=_list_text_set(fields.get("lscpu_flags")),
+        active_when=_extension_activation(fields.get("active_when")),
+        supersedes=_list_text_set(fields.get("supersedes")),
         vector_bits=_int_text(fields.get("vector_bits")),
         vector_bits_kind=_vector_bits_kind(fields.get("vector_bits")),
         size_parameter_name=_field_text(_child(fields.get("size_parameter"), "name")),
@@ -175,6 +177,12 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
             if n is not None
         ),
         unroll_variants=(_field_text(fields.get("unroll_variants")) or "").lower() == "true",
+    )
+
+
+def _extension_activation(field: ParsedTslField | None) -> ExtensionActivation:
+    return ExtensionActivation(
+        target_features=_list_text_set(_child(field, "target_features"))
     )
 
 

@@ -37,7 +37,7 @@ void fill_inputs(
     }
 }
 
-template <std::size_t ParallelN>
+template <class Parallelism>
 bool run_unary_selection_case() {
     constexpr std::size_t count = 1000;
     constexpr std::int32_t sentinel = 1234567;
@@ -46,7 +46,7 @@ bool run_unary_selection_case() {
     fill_input(input);
 
     const auto produced = tsl::algo::select_unary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned>(
         negative_op{},
         input.data(),
@@ -73,7 +73,7 @@ bool run_unary_selection_case() {
     return true;
 }
 
-template <std::size_t ParallelN>
+template <class Parallelism>
 bool run_binary_selection_case() {
     constexpr std::size_t count = 1003;
     constexpr std::int32_t sentinel = 7654321;
@@ -83,7 +83,7 @@ bool run_binary_selection_case() {
     fill_inputs(left, right);
 
     const auto produced = tsl::algo::select_binary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned>(
         less_than_op{},
         left.data(),
@@ -110,7 +110,7 @@ bool run_binary_selection_case() {
     }
 
     output.assign(count, sentinel);
-    const auto range_produced = tsl::algo::select_binary<ParallelN>(
+    const auto range_produced = tsl::algo::select_binary<Parallelism>(
         less_than_op{},
         left,
         right,
@@ -135,20 +135,20 @@ bool run_binary_selection_case() {
     return true;
 }
 
-template <std::size_t ParallelN>
+template <class Parallelism>
 bool run_selection_cases() {
-    return run_unary_selection_case<ParallelN>() &&
-           run_binary_selection_case<ParallelN>();
+    return run_unary_selection_case<Parallelism>() &&
+           run_binary_selection_case<Parallelism>();
 }
 
 int main() {
-    if (!run_selection_cases<1>()) {
+    if (!run_selection_cases<tsl::dataparallel::fixed<1>>()) {
         return 1;
     }
-    if (!run_selection_cases<4>()) {
+    if (!run_selection_cases<tsl::dataparallel::generic<4>>()) {
         return 2;
     }
-    if (!run_selection_cases<16>()) {
+    if (!run_selection_cases<tsl::dataparallel::generic<16>>()) {
         return 3;
     }
     return 0;

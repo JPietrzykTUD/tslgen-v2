@@ -1,6 +1,6 @@
 description "Type cast operations"
 prim<v:=v>[cast=reinterpret] reinterpret(data):
-  brief_description "[Example: sse + f32]: Cast vector of type __m128 to type __m128i. This intrinsic is only used for compilation and does not generate any instructions, thus it has zero latency."
+  brief_description "Cast vector of type __m128 to type __m128i. This intrinsic is only used for compilation and does not generate any instructions, thus it has zero latency."
   detailed_description """
     Reinterprets the source register as the target vector type without changing
     the underlying bits. The lane grouping and target scalar interpretation are
@@ -11,7 +11,6 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
     bits = register_bit_pattern(data)
     return register_from_bit_pattern(bits, target_vector_type)
     """
-  operation ""
   return_type:
     base: ToBase
   tests:
@@ -148,11 +147,11 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
                     complete(intrin<svreinterpret_, build[infix=to_type_suffix, suffix=base::in]>(data));
                   }
                 """
-    [generic, oneAPIfpga, scalar]:
+    [generic, oneapi_fpga, scalar]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
           scalar []
         ToBase:
           arith:
@@ -187,7 +186,6 @@ prim<v:=v>[cast=convert] cast(data):
         result[i] = implementation_defined_fill_value
     return result
     """
-  operation ""
   return_type:
     base: ToBase
   tests:

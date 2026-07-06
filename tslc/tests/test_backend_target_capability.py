@@ -83,7 +83,7 @@ def test_rust_target_presentation_capabilities_derive_from_metadata(
     assert rust_extension_tag(None) == "Generic<1>"
     assert rust_extension_tag(avx2) == "Avx2"
     assert rust_extension_tag(custom) == "X86Demo"
-    assert rust_extension_tag("oneAPIfpga") == "OneAPIfpga"
+    assert rust_extension_tag("oneapi_fpga") == "OneapiFpga"
 
 
 def test_rust_register_spelling_uses_source_register_metadata(catalog: Catalog) -> None:

@@ -44,16 +44,10 @@ std::int64_t expected_sum(const std::vector<std::int32_t>& input) {
     return total;
 }
 
-template <std::size_t ParallelN>
-bool run_fixed_case(const std::vector<std::int32_t>& input, std::int64_t expected) {
+template <class Parallelism>
+bool run_policy_case(const std::vector<std::int32_t>& input, std::int64_t expected) {
     chunk_sum_op op{input.data()};
-    tsl::algo::for_each_chunk<ParallelN>(op, input.data(), input.size());
-    return op.metadata_ok && (op.visited == input.size()) && (op.total == expected);
-}
-
-bool run_native_case(const std::vector<std::int32_t>& input, std::int64_t expected) {
-    chunk_sum_op op{input.data()};
-    tsl::algo::for_each_chunk<tsl::algo::parallelism::native>(
+    tsl::algo::for_each_chunk<Parallelism>(
         op,
         input.data(),
         input.size());
@@ -66,16 +60,16 @@ int main() {
     fill_input(input);
     const auto expected = expected_sum(input);
 
-    if (!run_native_case(input, expected)) {
+    if (!run_policy_case<tsl::dataparallel::native>(input, expected)) {
         return 1;
     }
-    if (!run_fixed_case<1>(input, expected)) {
+    if (!run_policy_case<tsl::dataparallel::fixed<1>>(input, expected)) {
         return 2;
     }
-    if (!run_fixed_case<4>(input, expected)) {
+    if (!run_policy_case<tsl::dataparallel::generic<4>>(input, expected)) {
         return 3;
     }
-    if (!run_fixed_case<16>(input, expected)) {
+    if (!run_policy_case<tsl::dataparallel::generic<16>>(input, expected)) {
         return 4;
     }
     return 0;

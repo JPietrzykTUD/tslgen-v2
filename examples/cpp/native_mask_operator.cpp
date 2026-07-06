@@ -44,7 +44,7 @@ void fill_inputs(
     }
 }
 
-template <std::size_t ParallelN>
+template <class Parallelism>
 bool run_native_where_case() {
     constexpr std::size_t count = 1003;
     constexpr std::int32_t preserved = -345678;
@@ -53,13 +53,13 @@ bool run_native_where_case() {
     std::vector<std::int32_t> output(count, preserved);
     fill_inputs(input, threshold);
 
-    using mask_type = tsl::algo::fixed_native_mask_type<ParallelN, std::int32_t>;
+    using mask_type = tsl::algo::native_mask_type<Parallelism, std::int32_t>;
     const auto mask_chunks =
-        tsl::algo::native_mask_chunk_count<ParallelN, std::int32_t>(count);
+        tsl::algo::native_mask_chunk_count<Parallelism, std::int32_t>(count);
     std::unique_ptr<mask_type[]> masks(new mask_type[mask_chunks]);
 
     const auto produced = tsl::algo::predicate_binary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned,
         tsl::algo::mask_layout::native>(
         less_than_op{},
@@ -72,7 +72,7 @@ bool run_native_where_case() {
     }
 
     tsl::algo::transform_where_unary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned,
         tsl::algo::mask_layout::native>(
         square_where_op{},
@@ -91,7 +91,7 @@ bool run_native_where_case() {
     return true;
 }
 
-template <std::size_t ParallelN>
+template <class Parallelism>
 bool run_native_masked_case() {
     constexpr std::size_t count = 1003;
     std::vector<std::int32_t> left(count);
@@ -99,13 +99,13 @@ bool run_native_masked_case() {
     std::vector<std::int32_t> output(count, 0);
     fill_inputs(left, right);
 
-    using mask_type = tsl::algo::fixed_native_mask_type<ParallelN, std::int32_t>;
+    using mask_type = tsl::algo::native_mask_type<Parallelism, std::int32_t>;
     const auto mask_chunks =
-        tsl::algo::native_mask_chunk_count<ParallelN, std::int32_t>(count);
+        tsl::algo::native_mask_chunk_count<Parallelism, std::int32_t>(count);
     std::unique_ptr<mask_type[]> masks(new mask_type[mask_chunks]);
 
     tsl::algo::predicate_binary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned,
         tsl::algo::mask_layout::native>(
         less_than_op{},
@@ -114,7 +114,7 @@ bool run_native_masked_case() {
         masks.get(),
         count);
     tsl::algo::transform_masked_binary<
-        ParallelN,
+        Parallelism,
         tsl::algo::alignment::unaligned,
         tsl::algo::mask_layout::native>(
         add_or_left_op{},
@@ -134,20 +134,20 @@ bool run_native_masked_case() {
     return true;
 }
 
-template <std::size_t ParallelN>
+template <class Parallelism>
 bool run_native_mask_cases() {
-    return run_native_where_case<ParallelN>() &&
-           run_native_masked_case<ParallelN>();
+    return run_native_where_case<Parallelism>() &&
+           run_native_masked_case<Parallelism>();
 }
 
 int main() {
-    if (!run_native_mask_cases<1>()) {
+    if (!run_native_mask_cases<tsl::dataparallel::fixed<1>>()) {
         return 1;
     }
-    if (!run_native_mask_cases<4>()) {
+    if (!run_native_mask_cases<tsl::dataparallel::generic<4>>()) {
         return 2;
     }
-    if (!run_native_mask_cases<16>()) {
+    if (!run_native_mask_cases<tsl::dataparallel::generic<16>>()) {
         return 3;
     }
     return 0;

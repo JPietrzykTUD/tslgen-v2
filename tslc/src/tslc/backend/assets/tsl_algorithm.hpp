@@ -24,15 +24,15 @@ using bit_mask_type = mask_storage_type<mask_layout::bits, Parallelism, T>;
 
 template <std::size_t ParallelN, class T>
 using fixed_integral_mask_type =
-    integral_mask_type<parallelism::fixed<ParallelN>, T>;
+    integral_mask_type<::tsl::dataparallel::fixed<ParallelN>, T>;
 
 template <std::size_t ParallelN, class T>
 using fixed_native_mask_type =
-    native_mask_type<parallelism::fixed<ParallelN>, T>;
+    native_mask_type<::tsl::dataparallel::fixed<ParallelN>, T>;
 
 template <class MaskLayout, std::size_t ParallelN, class T>
 using fixed_mask_storage_type =
-    mask_storage_type<MaskLayout, parallelism::fixed<ParallelN>, T>;
+    mask_storage_type<MaskLayout, ::tsl::dataparallel::fixed<ParallelN>, T>;
 
 template <std::size_t ParallelN, class T>
 using fixed_byte_mask_type =
@@ -52,7 +52,7 @@ inline std::size_t integral_mask_chunk_count(std::size_t count) {
 
 template <std::size_t ParallelN, class T>
 inline std::size_t integral_mask_chunk_count(std::size_t count) {
-    return integral_mask_chunk_count<parallelism::fixed<ParallelN>, T>(count);
+    return integral_mask_chunk_count<::tsl::dataparallel::fixed<ParallelN>, T>(count);
 }
 
 template <class Parallelism, class T>
@@ -65,7 +65,7 @@ inline std::size_t native_mask_chunk_count(std::size_t count) {
 
 template <std::size_t ParallelN, class T>
 inline std::size_t native_mask_chunk_count(std::size_t count) {
-    return native_mask_chunk_count<parallelism::fixed<ParallelN>, T>(count);
+    return native_mask_chunk_count<::tsl::dataparallel::fixed<ParallelN>, T>(count);
 }
 
 template <class MaskLayout, class Parallelism, class T>
@@ -83,7 +83,7 @@ inline std::size_t mask_chunk_count(std::size_t count) {
 
 template <class MaskLayout, std::size_t ParallelN, class T>
 inline std::size_t mask_chunk_count(std::size_t count) {
-    return mask_chunk_count<MaskLayout, parallelism::fixed<ParallelN>, T>(count);
+    return mask_chunk_count<MaskLayout, ::tsl::dataparallel::fixed<ParallelN>, T>(count);
 }
 
 template <class Parallelism, class T>
@@ -93,7 +93,7 @@ inline std::size_t byte_mask_count(std::size_t count) {
 
 template <std::size_t ParallelN, class T>
 inline std::size_t byte_mask_count(std::size_t count) {
-    return byte_mask_count<parallelism::fixed<ParallelN>, T>(count);
+    return byte_mask_count<::tsl::dataparallel::fixed<ParallelN>, T>(count);
 }
 
 template <class Parallelism, class T>
@@ -103,11 +103,11 @@ inline std::size_t bit_mask_count(std::size_t count) {
 
 template <std::size_t ParallelN, class T>
 inline std::size_t bit_mask_count(std::size_t count) {
-    return bit_mask_count<parallelism::fixed<ParallelN>, T>(count);
+    return bit_mask_count<::tsl::dataparallel::fixed<ParallelN>, T>(count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Op,
     class T>
 inline void for_each_chunk(Op&& op, T* data, std::size_t count) {
@@ -123,12 +123,12 @@ template <
     class Op,
     class T>
 inline void for_each_chunk(Op&& op, T* data, std::size_t count) {
-    for_each_chunk<parallelism::fixed<ParallelN>>(
+    for_each_chunk<::tsl::dataparallel::fixed<ParallelN>>(
         std::forward<Op>(op), data, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Op,
     class Range>
 inline void for_each_chunk(Op&& op, Range& data) {
@@ -143,11 +143,11 @@ template <
     class Op,
     class Range>
 inline void for_each_chunk(Op&& op, Range& data) {
-    for_each_chunk<parallelism::fixed<ParallelN>>(std::forward<Op>(op), data);
+    for_each_chunk<::tsl::dataparallel::fixed<ParallelN>>(std::forward<Op>(op), data);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class T>
@@ -216,7 +216,7 @@ inline void transform_unary(Op&& op, const T* input, T* output, std::size_t coun
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class InputRange,
@@ -235,7 +235,7 @@ template <
     class Op,
     class T>
 inline void transform_unary(Op&& op, const T* input, T* output, std::size_t count) {
-    transform_unary<parallelism::fixed<ParallelN>, Alignment>(
+    transform_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), input, output, count);
 }
 
@@ -246,12 +246,12 @@ template <
     class InputRange,
     class OutputRange>
 inline void transform_unary(Op&& op, const InputRange& input, OutputRange& output) {
-    transform_unary<parallelism::fixed<ParallelN>, Alignment>(
+    transform_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), input, output);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class T>
@@ -304,7 +304,7 @@ inline void transform_binary(
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class LeftRange,
@@ -334,7 +334,7 @@ inline void transform_binary(
     const T* right,
     T* output,
     std::size_t count) {
-    transform_binary<parallelism::fixed<ParallelN>, Alignment>(
+    transform_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), left, right, output, count);
 }
 
@@ -350,12 +350,12 @@ inline void transform_binary(
     const LeftRange& left,
     const RightRange& right,
     OutputRange& output) {
-    transform_binary<parallelism::fixed<ParallelN>, Alignment>(
+    transform_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), left, right, output);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -416,12 +416,12 @@ inline std::size_t predicate_unary(
     const T* input,
     fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
     std::size_t count) {
-    return predicate_unary<parallelism::fixed<ParallelN>, Alignment, MaskLayout>(
+    return predicate_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), input, masks, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -450,14 +450,14 @@ inline std::size_t predicate_unary(
     const InputRange& input,
     MaskRange& masks) {
     return predicate_unary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(op), input, masks);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -510,12 +510,12 @@ inline std::size_t predicate_binary(
     const T* right,
     fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
     std::size_t count) {
-    return predicate_binary<parallelism::fixed<ParallelN>, Alignment, MaskLayout>(
+    return predicate_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), left, right, masks, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -549,14 +549,14 @@ inline std::size_t predicate_binary(
     const RightRange& right,
     MaskRange& masks) {
     return predicate_binary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(op), left, right, masks);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -638,12 +638,12 @@ inline void transform_where_unary(
     const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
     T* output,
     std::size_t count) {
-    transform_where_unary<parallelism::fixed<ParallelN>, Alignment, MaskLayout>(
+    transform_where_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), input, masks, output, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -677,14 +677,14 @@ inline void transform_where_unary(
     const MaskRange& masks,
     OutputRange& output) {
     transform_where_unary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(op), input, masks, output);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -741,12 +741,12 @@ inline void transform_where_binary(
     const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
     T* output,
     std::size_t count) {
-    transform_where_binary<parallelism::fixed<ParallelN>, Alignment, MaskLayout>(
+    transform_where_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), left, right, masks, output, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -785,14 +785,14 @@ inline void transform_where_binary(
     const MaskRange& masks,
     OutputRange& output) {
     transform_where_binary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(op), left, right, masks, output);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -874,12 +874,12 @@ inline void transform_masked_unary(
     const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
     T* output,
     std::size_t count) {
-    transform_masked_unary<parallelism::fixed<ParallelN>, Alignment, MaskLayout>(
+    transform_masked_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), input, masks, output, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -913,14 +913,14 @@ inline void transform_masked_unary(
     const MaskRange& masks,
     OutputRange& output) {
     transform_masked_unary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(op), input, masks, output);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -977,12 +977,12 @@ inline void transform_masked_binary(
     const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
     T* output,
     std::size_t count) {
-    transform_masked_binary<parallelism::fixed<ParallelN>, Alignment, MaskLayout>(
+    transform_masked_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), left, right, masks, output, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -1021,14 +1021,14 @@ inline void transform_masked_binary(
     const MaskRange& masks,
     OutputRange& output) {
     transform_masked_binary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(op), left, right, masks, output);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class T>
@@ -1069,12 +1069,12 @@ inline std::size_t count_unary(
     Op&& predicate,
     const T* input,
     std::size_t count) {
-    return count_unary<parallelism::fixed<ParallelN>, Alignment>(
+    return count_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), input, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class InputRange>
@@ -1091,12 +1091,12 @@ template <
     class Op,
     class InputRange>
 inline std::size_t count_unary(Op&& predicate, const InputRange& input) {
-    return count_unary<parallelism::fixed<ParallelN>, Alignment>(
+    return count_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), input);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class T>
@@ -1141,12 +1141,12 @@ inline std::size_t count_binary(
     const T* left,
     const T* right,
     std::size_t count) {
-    return count_binary<parallelism::fixed<ParallelN>, Alignment>(
+    return count_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), left, right, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class LeftRange,
@@ -1172,12 +1172,12 @@ inline std::size_t count_binary(
     Op&& predicate,
     const LeftRange& left,
     const RightRange& right) {
-    return count_binary<parallelism::fixed<ParallelN>, Alignment>(
+    return count_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), left, right);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -1240,14 +1240,14 @@ inline std::size_t count_masked_unary(
     const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
     std::size_t count) {
     return count_masked_unary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(predicate), input, masks, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -1276,14 +1276,14 @@ inline std::size_t count_masked_unary(
     const InputRange& input,
     const MaskRange& masks) {
     return count_masked_unary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(predicate), input, masks);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -1340,14 +1340,14 @@ inline std::size_t count_masked_binary(
     const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
     std::size_t count) {
     return count_masked_binary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(predicate), left, right, masks, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -1381,14 +1381,14 @@ inline std::size_t count_masked_binary(
     const RightRange& right,
     const MaskRange& masks) {
     return count_masked_binary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(predicate), left, right, masks);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class T>
@@ -1430,12 +1430,12 @@ inline std::size_t select_unary(
     const T* input,
     T* output,
     std::size_t count) {
-    return select_unary<parallelism::fixed<ParallelN>, Alignment>(
+    return select_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), input, output, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class InputRange,
@@ -1461,12 +1461,12 @@ inline std::size_t select_unary(
     Op&& predicate,
     const InputRange& input,
     OutputRange& output) {
-    return select_unary<parallelism::fixed<ParallelN>, Alignment>(
+    return select_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), input, output);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class T>
@@ -1512,12 +1512,12 @@ inline std::size_t select_binary(
     const T* right,
     T* output,
     std::size_t count) {
-    return select_binary<parallelism::fixed<ParallelN>, Alignment>(
+    return select_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), left, right, output, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class LeftRange,
@@ -1548,12 +1548,12 @@ inline std::size_t select_binary(
     const LeftRange& left,
     const RightRange& right,
     OutputRange& output) {
-    return select_binary<parallelism::fixed<ParallelN>, Alignment>(
+    return select_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), left, right, output);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -1617,14 +1617,14 @@ inline std::size_t select_masked_unary(
     T* output,
     std::size_t count) {
     return select_masked_unary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(predicate), input, masks, output, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -1658,14 +1658,14 @@ inline std::size_t select_masked_unary(
     const MaskRange& masks,
     OutputRange& output) {
     return select_masked_unary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(predicate), input, masks, output);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -1723,14 +1723,14 @@ inline std::size_t select_masked_binary(
     T* output,
     std::size_t count) {
     return select_masked_binary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(predicate), left, right, masks, output, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -1769,14 +1769,14 @@ inline std::size_t select_masked_binary(
     const MaskRange& masks,
     OutputRange& output) {
     return select_masked_binary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(predicate), left, right, masks, output);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class T,
@@ -1823,12 +1823,12 @@ inline std::size_t select_indices_unary(
     const T* input,
     IndexT* indices,
     std::size_t count) {
-    return select_indices_unary<parallelism::fixed<ParallelN>, Alignment>(
+    return select_indices_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), input, indices, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class InputRange,
@@ -1854,12 +1854,12 @@ inline std::size_t select_indices_unary(
     Op&& predicate,
     const InputRange& input,
     IndexRange& indices) {
-    return select_indices_unary<parallelism::fixed<ParallelN>, Alignment>(
+    return select_indices_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), input, indices);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class T,
@@ -1908,12 +1908,12 @@ inline std::size_t select_indices_binary(
     const T* right,
     IndexT* indices,
     std::size_t count) {
-    return select_indices_binary<parallelism::fixed<ParallelN>, Alignment>(
+    return select_indices_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), left, right, indices, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class LeftRange,
@@ -1944,12 +1944,12 @@ inline std::size_t select_indices_binary(
     const LeftRange& left,
     const RightRange& right,
     IndexRange& indices) {
-    return select_indices_binary<parallelism::fixed<ParallelN>, Alignment>(
+    return select_indices_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(predicate), left, right, indices);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -2016,14 +2016,14 @@ inline std::size_t select_masked_indices_unary(
     IndexT* indices,
     std::size_t count) {
     return select_masked_indices_unary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(predicate), input, masks, indices, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -2057,14 +2057,14 @@ inline std::size_t select_masked_indices_unary(
     const MaskRange& masks,
     IndexRange& indices) {
     return select_masked_indices_unary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(predicate), input, masks, indices);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -2125,14 +2125,14 @@ inline std::size_t select_masked_indices_binary(
     IndexT* indices,
     std::size_t count) {
     return select_masked_indices_binary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(predicate), left, right, masks, indices, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -2171,7 +2171,7 @@ inline std::size_t select_masked_indices_binary(
     const MaskRange& masks,
     IndexRange& indices) {
     return select_masked_indices_binary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(predicate), left, right, masks, indices);
@@ -2636,7 +2636,7 @@ inline void consume_selected_binary(
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class T>
@@ -2676,12 +2676,12 @@ inline auto aggregate_unary(
     Op&& op,
     const T* input,
     std::size_t count) {
-    return aggregate_unary<parallelism::fixed<ParallelN>, Alignment>(
+    return aggregate_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), input, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class InputRange>
@@ -2698,12 +2698,12 @@ template <
     class Op,
     class InputRange>
 inline auto aggregate_unary(Op&& op, const InputRange& input) {
-    return aggregate_unary<parallelism::fixed<ParallelN>, Alignment>(
+    return aggregate_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), input);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class T>
@@ -2745,12 +2745,12 @@ inline auto aggregate_binary(
     const T* left,
     const T* right,
     std::size_t count) {
-    return aggregate_binary<parallelism::fixed<ParallelN>, Alignment>(
+    return aggregate_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), left, right, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class LeftRange,
@@ -2776,12 +2776,12 @@ inline auto aggregate_binary(
     Op&& op,
     const LeftRange& left,
     const RightRange& right) {
-    return aggregate_binary<parallelism::fixed<ParallelN>, Alignment>(
+    return aggregate_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), left, right);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -2839,14 +2839,14 @@ inline auto aggregate_masked_unary(
     const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
     std::size_t count) {
     return aggregate_masked_unary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(op), input, masks, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -2875,14 +2875,14 @@ inline auto aggregate_masked_unary(
     const InputRange& input,
     const MaskRange& masks) {
     return aggregate_masked_unary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(op), input, masks);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -2936,14 +2936,14 @@ inline auto aggregate_masked_binary(
     const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
     std::size_t count) {
     return aggregate_masked_binary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(op), left, right, masks, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -2977,14 +2977,14 @@ inline auto aggregate_masked_binary(
     const RightRange& right,
     const MaskRange& masks) {
     return aggregate_masked_binary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(op), left, right, masks);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class T>
@@ -3025,12 +3025,12 @@ inline void consume_unary(
     Op&& op,
     const T* input,
     std::size_t count) {
-    consume_unary<parallelism::fixed<ParallelN>, Alignment>(
+    consume_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), input, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class InputRange>
@@ -3047,12 +3047,12 @@ template <
     class Op,
     class InputRange>
 inline void consume_unary(Op&& op, const InputRange& input) {
-    consume_unary<parallelism::fixed<ParallelN>, Alignment>(
+    consume_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), input);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class T>
@@ -3093,12 +3093,12 @@ inline void consume_binary(
     const T* left,
     const T* right,
     std::size_t count) {
-    consume_binary<parallelism::fixed<ParallelN>, Alignment>(
+    consume_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), left, right, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class Op,
     class LeftRange,
@@ -3124,12 +3124,12 @@ inline void consume_binary(
     Op&& op,
     const LeftRange& left,
     const RightRange& right) {
-    consume_binary<parallelism::fixed<ParallelN>, Alignment>(
+    consume_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>(
         std::forward<Op>(op), left, right);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -3187,12 +3187,12 @@ inline void consume_masked_unary(
     const T* input,
     const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
     std::size_t count) {
-    consume_masked_unary<parallelism::fixed<ParallelN>, Alignment, MaskLayout>(
+    consume_masked_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), input, masks, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -3221,14 +3221,14 @@ inline void consume_masked_unary(
     const InputRange& input,
     const MaskRange& masks) {
     consume_masked_unary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(op), input, masks);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -3281,12 +3281,12 @@ inline void consume_masked_binary(
     const T* right,
     const fixed_mask_storage_type<MaskLayout, ParallelN, T>* masks,
     std::size_t count) {
-    consume_masked_binary<parallelism::fixed<ParallelN>, Alignment, MaskLayout>(
+    consume_masked_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment, MaskLayout>(
         std::forward<Op>(op), left, right, masks, count);
 }
 
 template <
-    class Parallelism = parallelism::native,
+    class Parallelism = ::tsl::dataparallel::native,
     class Alignment = alignment::detect,
     class MaskLayout = mask_layout::integral,
     class Op,
@@ -3320,7 +3320,7 @@ inline void consume_masked_binary(
     const RightRange& right,
     const MaskRange& masks) {
     consume_masked_binary<
-        parallelism::fixed<ParallelN>,
+        ::tsl::dataparallel::fixed<ParallelN>,
         Alignment,
         MaskLayout>(
         std::forward<Op>(op), left, right, masks);

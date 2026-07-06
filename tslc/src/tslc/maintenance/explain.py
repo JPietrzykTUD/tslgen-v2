@@ -142,7 +142,7 @@ def explain(
         f"# explain  {primitive}<{extension or '*'}, {type_tag}>  "
         f"profile={profile}  backend={backend}"
     )
-    out.line(f"  profile features: {_format_flags(machine_profile.features)}")
+    out.line(f"  profile target features: {_format_flags(machine_profile.features)}")
     out.blank()
 
     selector = Selector()
@@ -268,14 +268,17 @@ def _print_ranking(out: "_Writer", evaluation: CandidateEvaluation) -> None:
         out.line("    no usable body — every on-chain candidate was rejected:")
         _print_rejections(out, evaluation)
         return
-    out.line("    ranked candidates (winner first; keys = distance, specificity, flags, order):")
+    out.line(
+        "    ranked candidates "
+        "(winner first; keys = distance, specificity, target_features, order):"
+    )
     for index, candidate in enumerate(ranked):
         marker = "==>" if index == 0 else "   "
         impl = candidate.implementation
         out.line(
             f"    {marker} #{index} {impl.extension}:{impl.type_group}  "
             f"keys=(dist={candidate.distance}, spec={candidate.specificity}, "
-            f"flags={candidate.flag_count}, order={candidate.source_order})  "
+            f"target_features={candidate.flag_count}, order={candidate.source_order})  "
             f"requires={_format_flags(candidate.required_features)}"
         )
         out.line(f"          {_format_source(impl.selector_source or impl.source)}")

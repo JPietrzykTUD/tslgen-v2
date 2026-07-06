@@ -1,5 +1,5 @@
 prim<v:=s> set1(value):
-  brief_description "[Example: sse + si8]: Broadcast 8-bit integer \"a\" to all elements of \"dst\". This intrinsic may generate \"vpbroadcastb\"."
+  brief_description "Broadcast 8-bit integer \"a\" to all elements of \"dst\". This intrinsic may generate \"vpbroadcastb\"."
   detailed_description """
     Broadcasts one scalar value to every lane of the selected vector type.
     """
@@ -9,7 +9,6 @@ prim<v:=s> set1(value):
       result[i] = value
     return result
     """
-  operation "[Example: sse + si8]: FOR j := 0 to 15\n\ti := j*8\n\tdst[i+7:i] := a[7:0]\nENDFOR"
   tests:
     - {tags [basic], type "ui32", case {inputs [7], expected [7, 7, 7, 7, 7, 7, 7, 7]}}
     - {tags [edge], type "si32", case {inputs [-1], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
@@ -130,11 +129,11 @@ prim<v:=s> set1(value):
           reasons []
         implementation:
           tsil "complete(value);"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -163,7 +162,6 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
         result[i] = data[i]
     return result
     """
-  operation ""
   tests:
     - {tags [masked, set1, basic], type "ui8", case {inputs [43690, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 200], expected [0, 200, 2, 200, 4, 200, 6, 200, 8, 200, 10, 200, 12, 200, 14, 200]}}
     - {tags [masked, set1, edge], type "ui8", case {inputs [65535, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], 200], expected [200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200]}}
@@ -224,11 +222,11 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
                  )
                );
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -260,7 +258,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
                }
             """
 prim<v:=()>[value=zero] set_zero():
-  brief_description "[Example: sse + si8]: Return vector of type __m128i with all elements set to zero."
+  brief_description "Return vector of type __m128i with all elements set to zero."
   detailed_description """
     Constructs a vector register whose lanes are all zero for the selected base
     type.
@@ -270,7 +268,6 @@ prim<v:=()>[value=zero] set_zero():
       result[i] = 0
     return result
     """
-  operation "[Example: sse + si8]: dst[MAX:0] := 0"
   tests:
     - {tags [set, zero, basic], type "ui32", case {inputs [], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
     - {tags [set, zero, basic], type "si32", case {inputs [], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
@@ -300,11 +297,11 @@ prim<v:=()>[value=zero] set_zero():
           reasons []
         implementation:
           tsil "complete(cast<static>(type(base::in), 0));"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -377,7 +374,7 @@ prim<v:=()>[value=zero] set_zero():
           """
 
 prim<v:=()>[value=undef] set_undef():
-  brief_description "[Example: sse + si8]: Return vector of type __m128i with undefined elements."
+  brief_description "Return vector of type __m128i with undefined elements."
   detailed_description """
     Constructs a vector register with unspecified lane values. This primitive is
     intended for compile-time construction or as an uninitialized temporary; the
@@ -387,7 +384,6 @@ prim<v:=()>[value=undef] set_undef():
     result = vector_with_unspecified_lane_values
     return result
     """
-  operation ""
   tests:
     - {role "compile", tags [compile], type "si32", lane_count 4, case {inputs [], expected []}}
   impls:
@@ -403,11 +399,11 @@ prim<v:=()>[value=undef] set_undef():
               var<typed>(type(base::in), result, value(uninit::scalar));
               complete(result);
             """
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -496,7 +492,7 @@ prim<v:=()>[value=undef] set_undef():
           """
 
 prim<v:=(lanes<s>)> set(values):
-  brief_description "[Example: sse + si8]: Set packed 8-bit integers in \"dst\" with the supplied values."
+  brief_description "Set packed 8-bit integers in \"dst\" with the supplied values."
   detailed_description """
     Constructs a vector register from a generation-time lane-list argument. The
     lane-list follows backend set-constructor order: the first supplied value
@@ -509,7 +505,6 @@ prim<v:=(lanes<s>)> set(values):
       result[i] = values[lane_count - 1 - i]
     return result
     """
-  operation "[Example: sse + si8]: dst[7:0] := e0\ndst[15:8] := e1\ndst[23:16] := e2\ndst[31:24] := e3\ndst[39:32] := e4\ndst[47:40] := e5\ndst[55:48] := e6\ndst[63:56] := e7\ndst[71:64] := e8\ndst[79:72] := e9\ndst[87:80] := e10\ndst[95:88] := e11\ndst[103:96] := e12\ndst[111:104] := e13\ndst[119:112] := e14\ndst[127:120] := e15"
   tests:
     - {tags [basic], type "ui32", case {inputs [0, 1, 2, 3, 4, 5, 6, 7], expected [7, 6, 5, 4, 3, 2, 1, 0]}}
     - {tags [edge], type "si32", case {inputs [-1, 0, 1, -2, 2, -3, 3, -4], expected [-4, 3, -3, 2, -2, 1, 0, -1]}}
@@ -626,13 +621,13 @@ prim<v:=(lanes<s>)> set(values):
               )
             );
           """
-    [neon, sve, generic, oneAPIfpga]:
+    [neon, sve, generic, oneapi_fpga]:
       arith:
         requires:
           neon [neon]
           sve [sve]
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false

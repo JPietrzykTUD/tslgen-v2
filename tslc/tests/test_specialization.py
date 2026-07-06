@@ -8,14 +8,36 @@ from pathlib import Path
 import pytest
 
 from tslc.api import generate_project
+from tslc.backend.primitive_facade import (
+    DataparallelPrimitiveFacadeKind,
+    classify_dataparallel_primitive_facade,
+)
 from tslc.diagnostics import has_errors
+from tslc.lower.lowerer import LoweredSpecialization
+from tslc.lower.target_vectors import TargetVector
+from tslc.render.model import LoweredBody
 
 
 def _generate(data_root: Path, machine_profiles_path: Path):
     return generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["add", "hadd"],
+        primitives=[
+            "add",
+            "mul",
+            "hadd",
+            "count_matches",
+            "load",
+            "store",
+            "cast",
+            "reinterpret",
+            "less_than",
+            "unequal_zero",
+            "mask_true",
+            "mask_binary_not",
+            "mask_binary_and",
+            "mask_population_count",
+        ],
         profiles=["scalar", "sse2", "avx", "avx2", "skylake"],
     )
 
@@ -33,6 +55,84 @@ def specialization_artifacts(specialization_result) -> dict[str, str]:
     }
 
 
+def _facade_spec(
+    primitive_name: str,
+    result_kind: str,
+    param_kinds: tuple[str, ...],
+    *,
+    extension_name: str = "avx2",
+    axis: tuple[tuple[str, str], ...] = (),
+    target: TargetVector | None = None,
+) -> LoweredSpecialization:
+    return LoweredSpecialization(
+        backend_id="cpp",
+        primitive_name=primitive_name,
+        source_primitive_name=primitive_name,
+        extension_name=extension_name,
+        type_tag="si32",
+        base_type_spelling="int32_t",
+        register_spelling="__m256i",
+        result_kind=result_kind,
+        param_names=tuple(f"p{i}" for i in range(len(param_kinds))),
+        param_kinds=param_kinds,
+        body=LoweredBody.from_text("", backend_id="cpp"),
+        axis=axis,
+        target=target,
+    )
+
+
+def test_dataparallel_primitive_facade_descriptor_classifies_shared_policy_shapes() -> None:
+    add = classify_dataparallel_primitive_facade(
+        "add", (_facade_spec("add", "v", ("v", "v")),)
+    )
+    assert add is not None
+    assert add.kind is DataparallelPrimitiveFacadeKind.REGISTER_MASK_OR_REDUCTION
+    assert add.shape.param_kinds == ("v", "v")
+
+    store = classify_dataparallel_primitive_facade(
+        "store",
+        (
+            _facade_spec(
+                "store", "void", ("ptr", "s"), axis=(("aligned", "false"),)
+            ),
+            _facade_spec(
+                "store", "void", ("ptr", "v"), axis=(("aligned", "true"),)
+            ),
+        ),
+    )
+    assert store is not None
+    assert store.kind is DataparallelPrimitiveFacadeKind.CONTIGUOUS_MEMORY
+    assert store.shape.param_kinds == ("ptr", "v")
+
+    cast = classify_dataparallel_primitive_facade(
+        "cast",
+        (
+            _facade_spec(
+                "cast",
+                "v",
+                ("v",),
+                extension_name="avx2",
+                target=TargetVector(
+                    vector_spelling="Simd<uint32_t, avx2>",
+                    register_spelling="__m256i",
+                    extension_isa="avx2",
+                    base_tag="ui32",
+                    base_spelling="uint32_t",
+                ),
+            ),
+        ),
+    )
+    assert cast is not None
+    assert cast.kind is DataparallelPrimitiveFacadeKind.TARGET_BASE_CONVERSION
+
+    assert (
+        classify_dataparallel_primitive_facade(
+            "blend", (_facade_spec("blend", "v", ("m", "v", "v")),)
+        )
+        is None
+    )
+
+
 def test_artifact_layout(specialization_result) -> None:
     result = specialization_result
     assert not has_errors(result.diagnostics), result.diagnostics
@@ -40,6 +140,7 @@ def test_artifact_layout(specialization_result) -> None:
     # static cores, per-profile headers, top-level dispatch, per-profile smokes.
     assert {
         "cpp/include/tsl_core.hpp",
+        "cpp/include/tsl_dataparallel.hpp",
         "cpp/include/tsl_inferred_simd.hpp",
         "cpp/include/tsl_algorithm_tags.hpp",
         "cpp/include/tsl_algorithm_detail_core.hpp",
@@ -86,20 +187,32 @@ def test_cpp_core_vectors_expose_metadata_constants(
     )
 
 
-def test_cpp_inferred_simd_helper_has_generic_fallback(
+def test_cpp_dataparallel_helper_owns_policy_vocabulary(
     specialization_artifacts: dict[str, str]
 ) -> None:
-    helper = specialization_artifacts["cpp/include/tsl_inferred_simd.hpp"]
+    dataparallel = specialization_artifacts["cpp/include/tsl_dataparallel.hpp"]
+    inferred = specialization_artifacts["cpp/include/tsl_inferred_simd.hpp"]
 
-    assert "template <class T, std::size_t ParallelN>" in helper
-    assert "using type = ::tsl::simd<T, ::tsl::generic<ParallelN>>;" in helper
-    assert "struct inferred_simd<T, 1>" in helper
-    assert "using type = ::tsl::simd<T, ::tsl::scalar>;" in helper
-    assert "struct native_simd" in helper
-    assert "using native_simd_t = typename detail::native_simd" in helper
-    assert "using inferred_simd_t = typename detail::inferred_simd" in helper
-    assert "tsl::avx2" not in helper
-    assert "tsl::sse" not in helper
+    assert "namespace tsl::dataparallel" in dataparallel
+    assert "struct native" in dataparallel
+    assert "struct fixed" in dataparallel
+    assert "struct generic" in dataparallel
+    assert "tsl::dataparallel::fixed<N> requires N > 0" in dataparallel
+    assert "tsl::dataparallel::generic<N> requires N > 0" in dataparallel
+    assert "template <class Policy, class T>\nstruct simd_for;" in dataparallel
+    assert "struct simd_for<native, T>" in dataparallel
+    assert "struct simd_for<fixed<1>, T>" in dataparallel
+    assert "struct simd_for<generic<N>, T>" in dataparallel
+    assert "using simd_for_t = typename simd_for<Policy, T>::type;" in dataparallel
+    assert "using register_t = typename simd_for_t<Policy, T>::register_type;" in dataparallel
+    assert "using rebind_base_t = typename Vec::template with_base_type<ToT>;" in dataparallel
+    assert "using rebind_simd_for_t = rebind_base_t<simd_for_t<Policy, FromT>, ToT>;" in dataparallel
+    assert "tsl::avx2" not in dataparallel
+    assert "tsl::sse" not in dataparallel
+
+    assert "`tsl::dataparallel::simd_for_t<Policy, T>`" in inferred
+    assert "using native_simd_t = typename detail::native_simd" in inferred
+    assert "using inferred_simd_t = typename detail::inferred_simd" in inferred
 
 
 def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
@@ -109,6 +222,7 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     helper = "\n".join(
         specialization_artifacts[f"cpp/include/{header}"]
         for header in (
+            "tsl_dataparallel.hpp",
             "tsl_algorithm_tags.hpp",
             "tsl_algorithm_detail_core.hpp",
             "tsl_algorithm_detail_mask.hpp",
@@ -123,11 +237,12 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "namespace tsl::algo" in helper
     assert "#include <iterator>" in helper
     assert "template <class Vec>\nstruct vector_tag" in helper
-    assert "namespace parallelism" in helper
+    assert "namespace tsl::dataparallel" in helper
     assert "struct native" in helper
     assert "struct fixed" in helper
-    assert "parallelism::fixed<N> requires N > 0" in helper
-    assert "vector_for_parallelism<parallelism::native" in helper
+    assert "struct generic" in helper
+    assert "tsl::dataparallel::fixed<N> requires N > 0" in helper
+    assert "dataparallel::simd_for_t<Parallelism, T>" in helper
     assert "class Alignment = alignment::detect" in helper
     assert "struct peel_to_aligned {};" in helper
     assert "struct assume_inputs_aligned {};" in helper
@@ -144,11 +259,11 @@ def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(
     assert "alignment::assume_inputs_aligned" in helper
     assert "alignment::assume_output_aligned" in helper
     assert "std::size_t ParallelN" in helper
-    assert "transform_unary<parallelism::fixed<ParallelN>, Alignment>" in helper
+    assert "transform_unary<::tsl::dataparallel::fixed<ParallelN>, Alignment>" in helper
     assert "void transform_binary(" in helper
     assert "transform_binary_loop" in helper
     assert "transform_binary_loop_peel_to_aligned" in helper
-    assert "transform_binary<parallelism::fixed<ParallelN>, Alignment>" in helper
+    assert "transform_binary<::tsl::dataparallel::fixed<ParallelN>, Alignment>" in helper
     assert "namespace mask_layout" in helper
     assert (
         "struct integral {};\nstruct native {};\nstruct bytes {};\nstruct bits {};"
@@ -228,10 +343,16 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
 ) -> None:
     helper = specialization_artifacts["rust/src/tsl_algorithm.rs"]
     lib = specialization_artifacts["rust/src/lib.rs"]
+    cargo = specialization_artifacts["rust/Cargo.toml"]
     avx2 = specialization_artifacts["rust/src/tsl_avx2.rs"]
 
+    assert 'name = "tsl"' in cargo
     assert "pub mod tsl_algorithm;" in lib
-    assert "pub mod parallelism" in helper
+    assert "pub use tsl_algorithm::dataparallel;" in lib
+    assert "pub mod tsl_avx2;" in lib
+    assert '#[cfg(all(feature = "avx2", not(any(' in lib
+    assert "pub use crate::tsl_avx2 as profile;" in lib
+    assert "pub mod dataparallel" in helper
     assert "pub struct Native" in helper
     assert "pub struct Fixed<const N: usize>" in helper
     assert "pub struct Generic<const N: usize>" in helper
@@ -240,6 +361,8 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "pub struct Bytes" in helper
     assert "pub struct Bits" in helper
     assert "pub trait VectorFor<Profile, T>" in helper
+    assert "pub trait RebindBase<ToBase>: SimdVector" in helper
+    assert "pub type ReboundBase<V, ToBase> = <V as RebindBase<ToBase>>::Vec;" in helper
     assert "pub trait SelectedLoad<V: StaticSimdVector, const SCALE: u32>" in helper
     assert "pub trait IntegralMaskWord" in helper
     assert "pub trait IntegralMask<V: StaticSimdVector>" in helper
@@ -443,13 +566,146 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "pub fn aggregate_binary<Policy, Op, T>" in avx2
     assert "pub fn aggregate_masked_unary<Policy, Op, T>" in avx2
     assert "pub fn aggregate_masked_binary<Policy, Op, T>" in avx2
-    assert "impl VectorFor<Profile, i32> for parallelism::Fixed<1>" in avx2
+    assert "pub use crate::tsl_algorithm::{" in avx2
+    assert "mask_layout, BinaryAggregateKernel" in avx2
+    assert "parallelism" not in avx2
+    assert "impl VectorFor<Profile, i32> for dataparallel::Fixed<1>" in avx2
     assert "type Vec = Simd<i32, Scalar>;" in avx2
-    assert "impl VectorFor<Profile, i32> for parallelism::Fixed<4>" in avx2
+    assert "impl VectorFor<Profile, i32> for dataparallel::Fixed<4>" in avx2
     assert "type Vec = Simd<i32, super::Sse>;" in avx2
-    assert "impl VectorFor<Profile, i32> for parallelism::Fixed<8>" in avx2
+    assert "impl VectorFor<Profile, i32> for dataparallel::Fixed<8>" in avx2
     assert "type Vec = Simd<i32, super::Avx2>;" in avx2
-    assert "impl VectorFor<Profile, i32> for parallelism::Native" in avx2
+    assert "impl VectorFor<Profile, i32> for dataparallel::Native" in avx2
+    assert "pub fn add<Policy, T>(" in avx2
+    assert "_policy: Policy" in avx2
+    assert "Policy: VectorFor<Profile, T>" in avx2
+    assert (
+        "<Policy as VectorFor<Profile, T>>::Vec: super::detail::primitives::AddImpl"
+        in avx2
+    )
+    assert (
+        "super::add::<<Policy as VectorFor<Profile, T>>::Vec>(left, right)"
+        in avx2
+    )
+    assert "pub fn mul<Policy, T>(" in avx2
+    assert (
+        "<Policy as VectorFor<Profile, T>>::Vec: super::detail::primitives::MulImpl"
+        in avx2
+    )
+    assert (
+        "super::mul::<<Policy as VectorFor<Profile, T>>::Vec>(factor1, factor2)"
+        in avx2
+    )
+    assert "pub fn less_than<Policy, T>(" in avx2
+    assert (
+        ") -> <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::MaskType"
+        in avx2
+    )
+    assert (
+        "<Policy as VectorFor<Profile, T>>::Vec: super::detail::primitives::Less_thanImpl"
+        in avx2
+    )
+    assert (
+        "super::less_than::<<Policy as VectorFor<Profile, T>>::Vec>(left, right)"
+        in avx2
+    )
+    assert "pub fn unequal_zero<Policy, T>(" in avx2
+    assert (
+        "<Policy as VectorFor<Profile, T>>::Vec: super::detail::primitives::Unequal_zeroImpl"
+        in avx2
+    )
+    assert "super::unequal_zero::<<Policy as VectorFor<Profile, T>>::Vec>(data)" in avx2
+    assert "pub fn mask_true<Policy, T>(" in avx2
+    assert (
+        "<Policy as VectorFor<Profile, T>>::Vec: super::detail::primitives::Mask_trueImpl"
+        in avx2
+    )
+    assert "super::mask_true::<<Policy as VectorFor<Profile, T>>::Vec>()" in avx2
+    assert "pub fn mask_binary_not<Policy, T>(" in avx2
+    assert (
+        "mask: <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::MaskType,"
+        in avx2
+    )
+    assert (
+        "<Policy as VectorFor<Profile, T>>::Vec: super::detail::primitives::Mask_binary_notImpl"
+        in avx2
+    )
+    assert "super::mask_binary_not::<<Policy as VectorFor<Profile, T>>::Vec>(mask)" in avx2
+    assert "pub fn mask_binary_and<Policy, T>(" in avx2
+    assert (
+        "mask_a: <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::MaskType,"
+        in avx2
+    )
+    assert (
+        "mask_b: <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::MaskType,"
+        in avx2
+    )
+    assert (
+        "<Policy as VectorFor<Profile, T>>::Vec: super::detail::primitives::Mask_binary_andImpl"
+        in avx2
+    )
+    assert (
+        "super::mask_binary_and::<<Policy as VectorFor<Profile, T>>::Vec>(mask_a, mask_b)"
+        in avx2
+    )
+    assert "pub fn hadd<Policy, T>(" in avx2
+    assert ") -> <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::BaseType" in avx2
+    assert (
+        "<Policy as VectorFor<Profile, T>>::Vec: super::detail::primitives::HaddImpl"
+        in avx2
+    )
+    assert "super::hadd::<<Policy as VectorFor<Profile, T>>::Vec>(vec)" in avx2
+    assert "pub fn count_matches<Policy, T>(" in avx2
+    assert (
+        "value: <<Policy as VectorFor<Profile, T>>::Vec as SimdVector>::BaseType,"
+        in avx2
+    )
+    assert (
+        "<Policy as VectorFor<Profile, T>>::Vec: super::detail::primitives::Count_matchesImpl"
+        in avx2
+    )
+    assert "super::count_matches::<<Policy as VectorFor<Profile, T>>::Vec>(data, value)" in avx2
+    assert "pub fn mask_population_count<Policy, T>(" in avx2
+    assert (
+        "<Policy as VectorFor<Profile, T>>::Vec: super::detail::primitives::Mask_population_countImpl"
+        in avx2
+    )
+    assert (
+        "super::mask_population_count::<<Policy as VectorFor<Profile, T>>::Vec>(mask)"
+        in avx2
+    )
+    assert "pub fn cast<Policy, FromT, ToT>(" in avx2
+    assert (
+        ") -> <ReboundBase<<Policy as VectorFor<Profile, FromT>>::Vec, ToT> as SimdVector>::RegisterType"
+        in avx2
+    )
+    assert (
+        "<Policy as VectorFor<Profile, FromT>>::Vec: RebindBase<ToT>"
+        in avx2
+    )
+    assert "super::detail::primitives::CastImpl<" in avx2
+    assert "ReboundBase<<Policy as VectorFor<Profile, FromT>>::Vec, ToT>" in avx2
+    assert "super::cast::<" in avx2
+    assert "pub fn reinterpret<Policy, FromT, ToT>(" in avx2
+    assert "super::detail::primitives::ReinterpretImpl<" in avx2
+    assert "super::reinterpret::<" in avx2
+    assert "pub unsafe fn load<Policy, T, const ALIGNED: bool>(" in avx2
+    assert "super::detail::primitives::LoadImpl<ALIGNED>" in avx2
+    assert (
+        "unsafe { super::load::<<Policy as VectorFor<Profile, T>>::Vec, ALIGNED>(ptr) }"
+        in avx2
+    )
+    assert "pub unsafe fn store<Policy, T, const ALIGNED: bool>(" in avx2
+    assert (
+        "super::detail::primitives::StoreImplArg<\n"
+        "                <Policy as VectorFor<Profile, T>>::Vec,\n"
+        "                ALIGNED,"
+        in avx2
+    )
+    assert (
+        "unsafe { super::store::<<Policy as VectorFor<Profile, T>>::Vec, ALIGNED, _>(ptr, data) }"
+        in avx2
+    )
     assert "super::load::<Simd<T, super::Avx2>, false>" in avx2
     assert "super::store::<Simd<T, super::Avx2>, false, _>" in avx2
     assert "impl<T> MaskedStore<Simd<T, super::Avx2>> for Profile" in avx2
@@ -503,7 +759,103 @@ def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) 
     assert "struct add_impl<tsl::simd<int32_t, tsl::sse>>" in avx2
     assert "return _mm_add_epi32(left, right);" in avx2
     assert "inline typename Vec::register_type add(" in avx2
-    assert "@brief [Example: sse + si8]: Add packed 8-bit integers" in avx2
+    assert (
+        "template <class Policy, class T>\n"
+        "inline typename ::tsl::dataparallel::simd_for_t<Policy, T>::register_type add("
+        in avx2
+    )
+    resolved_vec = "::tsl::dataparallel::simd_for_t<Policy, T>"
+    assert (
+        "template <class Policy, class T, bool Aligned = false>\n"
+        "inline typename ::tsl::dataparallel::simd_for_t<Policy, T>::register_type load("
+        in avx2
+    )
+    assert (
+        f"return ::tsl::load<{resolved_vec}, Aligned>(ptr);"
+        in avx2
+    )
+    assert (
+        "template <class Policy, class T, bool Aligned = false>\n"
+        "inline void store("
+        in avx2
+    )
+    assert (
+        "typename ::tsl::dataparallel::simd_for_t<Policy, T>::base_type* ptr"
+        in avx2
+    )
+    assert (
+        f"::tsl::store<{resolved_vec}, Aligned>(ptr, data);"
+        in avx2
+    )
+    assert f"return ::tsl::add<{resolved_vec}>(left, right);" in avx2
+    assert (
+        "template <class Policy, class T>\n"
+        "inline typename ::tsl::dataparallel::simd_for_t<Policy, T>::register_type mul("
+        in avx2
+    )
+    assert f"return ::tsl::mul<{resolved_vec}>(factor1, factor2);" in avx2
+    assert (
+        "template <class Policy, class T>\n"
+        "inline typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type less_than("
+        in avx2
+    )
+    assert f"return ::tsl::less_than<{resolved_vec}>(left, right);" in avx2
+    assert (
+        "template <class Policy, class T>\n"
+        "inline typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type unequal_zero("
+        in avx2
+    )
+    assert f"return ::tsl::unequal_zero<{resolved_vec}>(data);" in avx2
+    assert (
+        "template <class Policy, class T>\n"
+        "inline typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type mask_true()"
+        in avx2
+    )
+    assert f"return ::tsl::mask_true<{resolved_vec}>();" in avx2
+    assert (
+        "template <class Policy, class T>\n"
+        "inline typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type mask_binary_not("
+        in avx2
+    )
+    assert "typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type mask" in avx2
+    assert f"return ::tsl::mask_binary_not<{resolved_vec}>(mask);" in avx2
+    assert (
+        "template <class Policy, class T>\n"
+        "inline typename ::tsl::dataparallel::simd_for_t<Policy, T>::mask_type mask_binary_and("
+        in avx2
+    )
+    assert f"return ::tsl::mask_binary_and<{resolved_vec}>(mask_a, mask_b);" in avx2
+    assert (
+        "template <class Policy, class T>\n"
+        "inline typename ::tsl::dataparallel::simd_for_t<Policy, T>::base_type hadd("
+        in avx2
+    )
+    assert f"return ::tsl::hadd<{resolved_vec}>(vec);" in avx2
+    assert (
+        "template <class Policy, class T>\n"
+        "inline typename ::tsl::dataparallel::simd_for_t<Policy, T>::base_type count_matches("
+        in avx2
+    )
+    assert f"return ::tsl::count_matches<{resolved_vec}>(data, value);" in avx2
+    assert (
+        "template <class Policy, class T>\n"
+        "inline std::size_t mask_population_count("
+        in avx2
+    )
+    assert f"return ::tsl::mask_population_count<{resolved_vec}>(mask);" in avx2
+    assert "template <class Policy, class FromT, class ToT>" in avx2
+    assert "inline typename ::tsl::dataparallel::rebind_base_t<" in avx2
+    assert "cast(typename ::tsl::reg_param<" in avx2
+    assert "return ::tsl::cast<" in avx2
+    assert "::tsl::dataparallel::simd_for_t<Policy, FromT>" in avx2
+    assert "::tsl::dataparallel::rebind_base_t<" in avx2
+    assert "reinterpret(typename ::tsl::reg_param<" in avx2
+    assert "return ::tsl::reinterpret<" in avx2
+    assert (
+        "inline typename ::tsl::dataparallel::simd_for_t<Policy, T>::register_type hadd("
+        not in avx2
+    )
+    assert "@brief Add packed 8-bit integers" in avx2
     assert "@par Semantics" in avx2
     assert "@par API" in avx2
     assert "- Template parameters: Vec selects the SIMD vector type" in avx2
@@ -521,30 +873,29 @@ def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) 
     assert "struct hadd_impl<tsl::simd<double, tsl::avx2>>" in avx2
 
 
-def test_cpp_profile_specializes_inferred_simd_from_registered_vectors(
+def test_cpp_profile_specializes_dataparallel_simd_for_registered_vectors(
     specialization_artifacts: dict[str, str]
 ) -> None:
     avx2 = specialization_artifacts["cpp/include/tsl_avx2.hpp"]
 
-    assert "struct inferred_simd<int32_t, 1>" in avx2
-    assert "using type = ::tsl::simd<int32_t, ::tsl::scalar>;" in avx2
-    assert "struct inferred_simd<int32_t, 4>" in avx2
+    assert "struct simd_for<fixed<1>, int32_t>" not in avx2
+    assert "struct simd_for<fixed<4>, int32_t>" in avx2
     assert "using type = ::tsl::simd<int32_t, ::tsl::sse>;" in avx2
-    assert "struct inferred_simd<int32_t, 8>" in avx2
+    assert "struct simd_for<fixed<8>, int32_t>" in avx2
     assert "using type = ::tsl::simd<int32_t, ::tsl::avx2>;" in avx2
-    assert "struct inferred_simd<float, 4>" in avx2
+    assert "struct simd_for<fixed<4>, float>" in avx2
     assert "using type = ::tsl::simd<float, ::tsl::sse>;" in avx2
-    assert "struct inferred_simd<float, 8>" in avx2
+    assert "struct simd_for<fixed<8>, float>" in avx2
     assert "using type = ::tsl::simd<float, ::tsl::avx2>;" in avx2
-    assert "struct native_simd<int32_t>" in avx2
+    assert "struct simd_for<native, int32_t>" in avx2
     assert (
-        "struct native_simd<int32_t> {\n"
+        "struct simd_for<native, int32_t> {\n"
         "    using type = ::tsl::simd<int32_t, ::tsl::avx2>;"
         in avx2
     )
-    assert "struct native_simd<float>" in avx2
+    assert "struct simd_for<native, float>" in avx2
     assert (
-        "struct native_simd<float> {\n"
+        "struct simd_for<native, float> {\n"
         "    using type = ::tsl::simd<float, ::tsl::avx2>;"
         in avx2
     )
@@ -586,7 +937,7 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "impl AddImpl for Simd<i32, Sse> {" in avx2
     assert "pub mod detail {\n    pub mod primitives {" in avx2
     assert "pub fn add<S: detail::primitives::AddImpl>(" in avx2
-    assert '/// [Example: sse + si8]: Add packed 8-bit integers' in avx2
+    assert '/// Add packed 8-bit integers' in avx2
     assert "/// # Semantics" in avx2
     assert "/// # API" in avx2
     assert "/// - Type parameters: S selects the SIMD vector type" in avx2
@@ -609,6 +960,8 @@ def test_cpp_documentation_facade_contains_api_declarations_only(
     assert "namespace tsl {" in facade
     assert "template <class Vec>" in facade
     assert "typename Vec::register_type add(" in facade
+    assert "template <class Policy, class T>" in facade
+    assert "tsl::dataparallel::simd_for_t<Policy, T>" in facade
     assert "return _mm256_add_epi32" not in facade
     assert '#include "tsl_avx2.hpp"' not in facade
     assert '#include "tsl.hpp"' not in facade
@@ -624,8 +977,16 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     payload = json.loads(specialization_artifacts["docs/specializations/specializations.json"])
     records = _decode_specialization_records(payload)
 
-    assert payload["schema_version"] == 3
+    assert payload["schema_version"] == 4
     assert sum(record["count"] for record in records) == len(specialization_result.coverage)
+    strings = payload["strings"]
+    primitive_docs = {strings[row[0]]: row for row in payload["primitives"]}
+    add_doc = primitive_docs["add"]
+    assert strings[add_doc[5]] == "auto result = tsl::add<Vec>(left, right);"
+    assert strings[add_doc[6]] == "let result = add::<S>(left, right);"
+    load_doc = primitive_docs["load"]
+    assert "/* aligned */" in strings[load_doc[5]]
+    assert "/* aligned */" in strings[load_doc[6]]
     assert any(
         record["backend"] == "cpp"
         and record["profile"] == "avx2"
@@ -643,6 +1004,7 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     ).read_text(encoding="utf-8")
     assert 'import React, { useEffect, useMemo, useState } from "react";' in app_source
     assert "const [filtersOpen, setFiltersOpen] = useState(false);" in app_source
+    assert "setSelectedPrimitive(null);" in app_source
     assert "current === primitive.name ? null : primitive.name" in app_source
     assert "☰" in app_source
     assert "←" in app_source
@@ -651,6 +1013,8 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     assert "function PrimitiveList" in app_source
     assert "<SpecializationSummary" in app_source
     assert "<SpecializationInventory" in app_source
+    assert "function ExpressionExamples" in app_source
+    assert "Expression" in app_source
     assert (
         app_source.index("<PrimitiveDocumentation")
         < app_source.index("<SpecializationSummary")

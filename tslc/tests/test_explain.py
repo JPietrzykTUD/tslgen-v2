@@ -156,7 +156,7 @@ def test_decisive_tiebreak_names_the_first_differing_key() -> None:
     runner = _candidate(distance=0, specificity=8, flag_count=0)
     assert "won on specificity" in _decisive_tiebreak(winner, runner)
 
-    # tie on distance + specificity -> more hardware flags wins
+    # tie on distance + specificity -> more required target features wins
     winner = _candidate(distance=0, specificity=8, flag_count=3)
     runner = _candidate(distance=0, specificity=8, flag_count=1)
     message = _decisive_tiebreak(winner, runner)

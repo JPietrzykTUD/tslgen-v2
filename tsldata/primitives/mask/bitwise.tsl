@@ -10,7 +10,6 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
       result[i] = mask_a[i] is active and mask_b[i] is active
     return result
     """
-  operation ""
   tests:
     - {tags [mask, and, basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170, 204], expected 136}}
     - {tags [mask, and, basic], extension "avx512", type "ui16", lane_count 32, case {inputs [43690, 52428], expected 34952}}
@@ -83,11 +82,11 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           reasons []
         implementation:
           tsil "complete(mask_a & mask_b);"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -115,7 +114,6 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
       result[i] = mask_a[i] is active or mask_b[i] is active
     return result
     """
-  operation ""
   tests:
     - {tags [mask, or, basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170, 204], expected 238}}
     - {tags [mask, or, basic], extension "avx512", type "ui16", lane_count 32, case {inputs [43690, 52428], expected 61166}}
@@ -187,11 +185,11 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
           reasons []
         implementation:
           tsil "complete(mask_a | mask_b);"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -219,7 +217,6 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
       result[i] = mask_a[i] active state differs from mask_b[i]
     return result
     """
-  operation ""
   tests:
     - {tags [mask, xor, basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170, 204], expected 102}}
     - {tags [mask, xor, basic], extension "avx512", type "ui16", lane_count 32, case {inputs [43690, 52428], expected 26214}}
@@ -291,11 +288,11 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
           reasons []
         implementation:
           tsil "complete(mask_a ^ mask_b);"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -322,7 +319,6 @@ prim<m:=m> mask_binary_not(mask):
       result[i] = not mask[i]
     return result
     """
-  operation ""
   tests:
     - {tags [mask, not, basic], extension "avx512", type "ui8", lane_count 64, case {inputs [170], expected 18446744073709551445}}
     - {tags [mask, not, basic], extension "avx512", type "ui16", lane_count 32, case {inputs [43690], expected 4294923605}}
@@ -398,11 +394,11 @@ prim<m:=m> mask_binary_not(mask):
           reasons []
         implementation:
           tsil "complete(!mask);"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -432,7 +428,6 @@ prim<usize:=m> mask_population_count(mask):
         count = count + 1
     return count
     """
-  operation ""
   tests:
     - {tags [mask, popcnt, basic], extension "avx512", type "ui8", expected_rule "popcnt", lane_count 64, case {inputs [12297829382473034410], expected 32}}
     - {tags [mask, popcnt, edge], extension "avx512", type "ui8", expected_rule "popcnt", lane_count 64, case {inputs [18446744073709551615], expected 64}}
@@ -520,11 +515,11 @@ prim<usize:=m> mask_population_count(mask):
           reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type(scalar::size), intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
-    [generic, oneAPIfpga]:
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -554,7 +549,6 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
       return unsigned(data) >> shift
     return data >> shift
     """
-  operation ""
   tests:
     - {tags [basic], type "ui32", lane_count 16, case {inputs [240, 4], expected 15}}
     - {tags [zero], type "ui32", lane_count 16, case {inputs [0, 4], expected 0}}
@@ -563,7 +557,7 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
       kind bool
       default true
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneAPIfpga]:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneapi_fpga]:
       ?i?:
         requires:
           avx512 [avx512f]
@@ -574,7 +568,7 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
           neon [neon]
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -597,7 +591,7 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
           neon [neon]
           scalar []
           generic []
-          oneAPIfpga [oneAPIfpgaDev]
+          oneapi_fpga [oneapi_fpga_device]
         safety:
           internal_unsafe false
           caller_unsafe false

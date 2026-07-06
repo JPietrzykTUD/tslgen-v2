@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tsl_algorithm_tags.hpp"
+#include "tsl_dataparallel.hpp"
 
 namespace tsl::algo::detail {
 
@@ -43,21 +44,14 @@ inline std::size_t lane_count() noexcept {
 }
 
 template <class Parallelism, class T>
-struct vector_for_parallelism;
-
-template <class T>
-struct vector_for_parallelism<parallelism::native, T> {
-    using type = ::tsl::native_simd_t<T>;
-};
-
-template <std::size_t N, class T>
-struct vector_for_parallelism<parallelism::fixed<N>, T> {
-    using type = ::tsl::inferred_simd_t<T, N>;
+struct vector_for_parallelism {
+    using type = ::tsl::dataparallel::simd_for_t<Parallelism, T>;
 };
 
 template <std::size_t N, class T>
 struct vector_for_selected_rows {
-    using type = ::tsl::inferred_simd_t<T, N>;
+    using type =
+        ::tsl::dataparallel::simd_for_t<::tsl::dataparallel::generic<N>, T>;
 };
 
 template <class T>
@@ -429,13 +423,13 @@ inline void validate_vector_for_parallelism() {
     static_assert(
         std::is_same<T, typename Vec::base_type>::value,
         "selected SIMD vector must preserve T as Vec::base_type");
-    if constexpr (!std::is_same<Parallelism, parallelism::native>::value) {
+    if constexpr (!std::is_same<Parallelism, ::tsl::dataparallel::native>::value) {
         static_assert(
             Vec::has_static_lane_count_v,
-            "tsl::algo::parallelism::fixed<N> requires a static-lane SIMD vector");
+            "tsl::dataparallel fixed/generic policies require a static-lane SIMD vector");
         static_assert(
             Vec::vector_element_count == Parallelism::lanes,
-            "tsl::algo::parallelism::fixed<N> must produce exactly N lanes");
+            "tsl::dataparallel fixed/generic policies must produce exactly N lanes");
     }
 }
 
