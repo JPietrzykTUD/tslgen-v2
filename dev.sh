@@ -13,18 +13,24 @@ Modes:
   ./${self} build      generate + build-verify both backends                [default]
   ./${self} test       generate + build + run the value tests (SDE / qemu-aarch64 when present)
   ./${self} document   generate + format + build C++/Rust API docs
+  ./${self} document-site
+                       rebuild only the docs website from existing generated docs/data
   ./${self} explain    diagnose ONE primitive/profile/backend/ext/type slot (no compiler needed)
   ./${self} ratchet    coverage regression gate vs the committed baseline   (no compiler needed)
   ./${self} dump       dump one pipeline stage (catalog/segments/selection/lowered) (no compiler)
 
-Extra flags pass through after the mode, e.g.:
+Extra flags pass through after generator modes; document-site honors --output-root
+and --backends for the existing tree, e.g.:
   ./${self} document --profiles avx2 --primitives add
+  ./${self} document-site
+  ./${self} document-site --output-root ./tslctmp/verify --backends cpp,rust
   ./${self} test    --profiles skylake --primitives add,convert_up
   ./${self} explain --primitive add --profile avx2 --type si32 --backend cpp
   ./${self} ratchet --update
   ./${self} dump    --stage segments --primitive add
 
-generate/build/test/document drive \`python -m tslc.cli\`; explain/ratchet/dump
+generate/build/test/document drive \`python -m tslc.cli\`; document-site rebuilds
+the website from an existing output tree; explain/ratchet/dump
 drive the \`tslc.maintenance\` tools directly and need no toolchain.
 
 Env knobs (build/test only): TSLC_OUTPUT_ROOT TSLC_SOURCES TSLC_MACHINE_PROFILES
@@ -40,9 +46,9 @@ EOF
 mode="build"
 if (( $# > 0 )); then
   case "$1" in
-    generate|build|test|document|explain|ratchet|dump) mode="$1"; shift ;;
+    generate|build|test|document|document-site|explain|ratchet|dump) mode="$1"; shift ;;
     -h|--help|help) usage; exit 0 ;;
-    *) echo "usage: $0 [generate|build|test|document|explain|ratchet|dump] [extra flags...]" >&2; exit 2 ;;
+    *) echo "usage: $0 [generate|build|test|document|document-site|explain|ratchet|dump] [extra flags...]" >&2; exit 2 ;;
   esac
 fi
 extra_args=("$@")
@@ -136,6 +142,20 @@ if [[ "$(compiler_basename "${CXX:-}")" == "zig" ]]; then
 fi
 if [[ "$(compiler_basename "${CC:-}")" == "zig" ]]; then
   export CC="${TSLC_HOST_CC:-cc}"
+fi
+
+if [[ "$mode" == "document-site" ]]; then
+  echo "tslc ${mode} -> ${effective_output_root}"
+  python -m tslc.maintenance.documentation \
+    --output-root "$effective_output_root" \
+    --backends "$document_backends" \
+    --project-name "$document_project" \
+    --sphinx-build "$sphinx_build" \
+    --npm "$npm_doc" \
+    --site-only \
+    --skip-npm-ci
+  echo "${self} ${mode}: OK"
+  exit 0
 fi
 
 # Fail fast with a clear message if a compiling mode has no working toolchain.

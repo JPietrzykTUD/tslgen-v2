@@ -21,7 +21,7 @@ import os
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,6 +56,8 @@ def document_generated(
     sphinx_build: str = "sphinx-build",
     cargo: str = "cargo",
     npm: str = "npm",
+    site_only: bool = False,
+    npm_ci: bool = True,
     dry_run: bool = False,
     runner: CommandRunner | None = None,
 ) -> DocumentationReport:
@@ -76,7 +78,18 @@ def document_generated(
 
     cpp_xml: Path | None = None
     rust_doc: Path | None = None
-    if "cpp" in requested:
+    if site_only:
+        if "cpp" in requested:
+            cpp_xml = _optional_existing_output(
+                root / "cpp" / "docs" / "doxygen" / "xml",
+                dry_run=dry_run,
+            )
+        if "rust" in requested:
+            rust_doc = _optional_existing_output(
+                root / "rust" / "docs" / "target" / "doc",
+                dry_run=dry_run,
+            )
+    elif "cpp" in requested:
         cpp_xml = _document_cpp(
             root,
             project_name=project_name,
@@ -87,7 +100,7 @@ def document_generated(
             outputs=outputs,
             errors=errors,
         )
-    if "rust" in requested:
+    if not site_only and "rust" in requested:
         rust_doc = _document_rust(
             root,
             cargo=cargo,
@@ -97,7 +110,7 @@ def document_generated(
             outputs=outputs,
             errors=errors,
         )
-    if not errors and (cpp_xml is not None or rust_doc is not None):
+    if not errors and (site_only or cpp_xml is not None or rust_doc is not None):
         _document_site(
             root,
             project_name=project_name,
@@ -105,6 +118,7 @@ def document_generated(
             rust_doc=rust_doc,
             sphinx_build=sphinx_build,
             npm=npm,
+            npm_ci=npm_ci,
             dry_run=dry_run,
             runner=run,
             commands=commands,
@@ -144,6 +158,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cargo", default="cargo", help="Cargo executable")
     parser.add_argument("--npm", default="npm", help="npm executable")
     parser.add_argument(
+        "--site-only",
+        action="store_true",
+        help="rebuild only the Sphinx/specialization site from existing docs",
+    )
+    parser.add_argument(
+        "--skip-npm-ci",
+        action="store_true",
+        help="skip npm ci before rebuilding the specialization explorer",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="write assets and print commands without running external tools",
@@ -158,6 +182,8 @@ def main(argv: list[str] | None = None) -> int:
         sphinx_build=args.sphinx_build,
         cargo=args.cargo,
         npm=args.npm,
+        site_only=args.site_only,
+        npm_ci=not args.skip_npm_ci,
         dry_run=args.dry_run,
     )
     for command in report.commands:
@@ -271,6 +297,7 @@ def _document_site(
     rust_doc: Path | None,
     sphinx_build: str,
     npm: str,
+    npm_ci: bool,
     dry_run: bool,
     runner: CommandRunner,
     commands: list[DocumentationCommand],
@@ -288,6 +315,7 @@ def _document_site(
         specializations_dist = _document_specializations_app(
             root,
             npm=npm,
+            npm_ci=npm_ci,
             dry_run=dry_run,
             runner=runner,
             commands=commands,
@@ -348,6 +376,7 @@ def _document_specializations_app(
     root: Path,
     *,
     npm: str,
+    npm_ci: bool,
     dry_run: bool,
     runner: CommandRunner,
     commands: list[DocumentationCommand],
@@ -361,17 +390,27 @@ def _document_specializations_app(
         return None
     dist = root / "docs" / "specializations" / "react-dist"
     dist.mkdir(parents=True, exist_ok=True)
-    install_command = _command(
-        "site",
-        "npm-ci",
-        npm,
-        ("ci", "--no-audit", "--no-fund"),
-        cwd=react_root,
-        dry_run=dry_run,
-        commands=commands,
-        errors=errors,
-    )
-    if install_command is None or not _execute(install_command, runner, dry_run, errors):
+    if npm_ci:
+        install_command = _command(
+            "site",
+            "npm-ci",
+            npm,
+            ("ci", "--no-audit", "--no-fund"),
+            cwd=react_root,
+            dry_run=dry_run,
+            commands=commands,
+            errors=errors,
+        )
+        if install_command is None or not _execute(
+            install_command, runner, dry_run, errors
+        ):
+            return None
+    elif not dry_run and not (react_root / "node_modules").is_dir():
+        errors.append(
+            "React specialization explorer dependencies not found: "
+            f"{react_root / 'node_modules'}; run './dev.sh document' once "
+            "or omit --skip-npm-ci"
+        )
         return None
     build_command = _command(
         "site",
@@ -390,9 +429,19 @@ def _document_specializations_app(
         commands=commands,
         errors=errors,
     )
-    if build_command is None or not _execute(build_command, runner, dry_run, errors):
+    if build_command is None or not _execute(
+        build_command,
+        runner,
+        dry_run,
+        errors,
+        extra_env=_specialization_build_env(repo_root),
+    ):
         return None
     return dist
+
+
+def _optional_existing_output(path: Path, *, dry_run: bool) -> Path | None:
+    return path if dry_run or path.exists() else None
 
 
 def _render_cpp_assets(
@@ -557,10 +606,24 @@ def _execute(
     runner: CommandRunner,
     dry_run: bool,
     errors: list[str],
+    *,
+    extra_env: Mapping[str, str] | None = None,
 ) -> bool:
     if dry_run:
         return True
-    completed = runner(command.argv, command.cwd)
+    if extra_env:
+        previous = {key: os.environ.get(key) for key in extra_env}
+        os.environ.update(extra_env)
+        try:
+            completed = runner(command.argv, command.cwd)
+        finally:
+            for key, old_value in previous.items():
+                if old_value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = old_value
+    else:
+        completed = runner(command.argv, command.cwd)
     if completed.returncode == 0:
         return True
     errors.append(
@@ -608,6 +671,33 @@ def _run_subprocess(
         text=True,
         check=False,
     )
+
+
+def _specialization_build_env(repo_root: Path) -> dict[str, str]:
+    branch = _git_output(repo_root, ("rev-parse", "--abbrev-ref", "HEAD"))
+    if branch == "HEAD":
+        branch = _git_output(repo_root, ("branch", "--show-current")) or "detached"
+    short_hash = _git_output(repo_root, ("rev-parse", "--short=12", "HEAD"))
+    return {
+        "VITE_TSLC_GIT_BRANCH": branch or "unknown",
+        "VITE_TSLC_GIT_HASH": short_hash or "unknown",
+    }
+
+
+def _git_output(repo_root: Path, args: tuple[str, ...]) -> str:
+    git = shutil.which("git")
+    if git is None:
+        return ""
+    completed = subprocess.run(
+        [git, *args],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return ""
+    return completed.stdout.strip()
 
 
 def _template(path: Path, values: dict[str, str]) -> str:
