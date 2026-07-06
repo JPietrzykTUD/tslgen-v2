@@ -61,6 +61,14 @@ _CPP_ALGORITHM_SUPPORT_PRIMITIVES = (
 _RUST_ALGORITHM_SUPPORT_PRIMITIVES = (
     "load",
     "store",
+    "set_zero",
+    "to_array",
+    "from_array",
+    "gather_narrow",
+    "compress_store",
+    "mask_population_count",
+    "to_integral",
+    "to_mask",
 )
 
 

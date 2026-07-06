@@ -235,13 +235,214 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "pub struct Native" in helper
     assert "pub struct Fixed<const N: usize>" in helper
     assert "pub struct Generic<const N: usize>" in helper
+    assert "pub mod mask_layout" in helper
+    assert "pub struct Integral" in helper
+    assert "pub struct Bytes" in helper
+    assert "pub struct Bits" in helper
     assert "pub trait VectorFor<Profile, T>" in helper
+    assert "pub trait SelectedLoad<V: StaticSimdVector, const SCALE: u32>" in helper
+    assert "pub trait IntegralMaskWord" in helper
+    assert "pub trait IntegralMask<V: StaticSimdVector>" in helper
+    assert "pub trait MaskFromIntegral<V: StaticSimdVector>" in helper
+    assert "pub trait MaskLayout<Profile, V: StaticSimdVector>" in helper
+    assert "pub trait MaskedStore<V: StaticSimdVector>" in helper
+    assert "pub trait CompressStore<V: StaticSimdVector>" in helper
+    assert "pub trait MaskPopulationCount<V: StaticSimdVector>" in helper
     assert "pub trait UnaryKernel<V: StaticSimdVector>" in helper
+    assert "pub trait BinaryKernel<V: StaticSimdVector>" in helper
+    assert "pub trait UnaryPredicateKernel<V: StaticSimdVector>" in helper
+    assert "pub trait BinaryPredicateKernel<V: StaticSimdVector>" in helper
+    assert "pub trait MaskedUnaryKernel<V: StaticSimdVector>" in helper
+    assert "pub trait MaskedBinaryKernel<V: StaticSimdVector>" in helper
+    assert "pub trait UnaryConsumeKernel<V: StaticSimdVector>" in helper
+    assert "pub trait BinaryConsumeKernel<V: StaticSimdVector>" in helper
+    assert "pub trait MaskedUnaryConsumeKernel<V: StaticSimdVector>" in helper
+    assert "pub trait MaskedBinaryConsumeKernel<V: StaticSimdVector>" in helper
+    assert "pub trait UnaryAggregateKernel<V: StaticSimdVector>" in helper
+    assert "pub trait BinaryAggregateKernel<V: StaticSimdVector>" in helper
+    assert "pub trait MaskedUnaryAggregateKernel<V: StaticSimdVector>" in helper
+    assert "pub trait MaskedBinaryAggregateKernel<V: StaticSimdVector>" in helper
+    assert "pub trait ChunkKernel<V: StaticSimdVector>" in helper
+    assert "pub fn for_each_chunk<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn for_each_chunk_raw<Profile, Policy, Op, T>" in helper
     assert "pub fn transform_unary<Profile, Policy, Op, T>" in helper
     assert "pub unsafe fn transform_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn transform_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn integral_mask_chunk_count<Profile, Policy, T>" in helper
+    assert "pub fn mask_chunk_count<Profile, Policy, Layout, T>" in helper
+    assert "pub fn native_mask_chunk_count<Profile, Policy, T>" in helper
+    assert "pub fn byte_mask_count<Profile, Policy, T>" in helper
+    assert "pub fn bit_mask_count<Profile, Policy, T>" in helper
+    assert "pub fn predicate_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn predicate_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn predicate_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn predicate_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn predicate_binary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub unsafe fn predicate_binary_mask_layout_raw<" in helper
+    assert "pub fn count_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn count_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn count_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn count_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn count_masked_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn count_masked_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn count_masked_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn count_masked_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn count_masked_unary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub unsafe fn count_masked_unary_mask_layout_raw<" in helper
+    assert "pub fn count_masked_binary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub unsafe fn count_masked_binary_mask_layout_raw<" in helper
+    assert "pub fn count_selected_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn count_selected_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn count_selected_unary_scaled_raw<" in helper
+    assert "pub fn count_selected_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn count_selected_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn count_selected_binary_scaled_raw<" in helper
+    assert "pub fn select_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn select_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn select_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_masked_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn select_masked_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_masked_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn select_masked_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_masked_unary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub unsafe fn select_masked_unary_mask_layout_raw<" in helper
+    assert "pub fn select_masked_binary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub unsafe fn select_masked_binary_mask_layout_raw<" in helper
+    assert "pub fn select_indices_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn select_indices_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_indices_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn select_indices_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_masked_indices_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn select_masked_indices_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_masked_indices_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn select_masked_indices_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn select_masked_indices_unary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub unsafe fn select_masked_indices_unary_mask_layout_raw<" in helper
+    assert "pub fn select_masked_indices_binary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub unsafe fn select_masked_indices_binary_mask_layout_raw<" in helper
+    assert "pub fn select_selected_indices_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn select_selected_indices_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn select_selected_indices_unary_scaled_raw<" in helper
+    assert "pub fn select_selected_indices_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn select_selected_indices_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn select_selected_indices_binary_scaled_raw<" in helper
+    assert "pub fn transform_selected_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn transform_selected_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn transform_selected_unary_scaled_raw<" in helper
+    assert "pub fn transform_selected_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn transform_selected_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn transform_selected_binary_scaled_raw<" in helper
+    assert "pub fn consume_selected_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn consume_selected_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn consume_selected_unary_scaled_raw<" in helper
+    assert "pub fn consume_selected_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn consume_selected_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn consume_selected_binary_scaled_raw<" in helper
+    assert "pub fn aggregate_selected_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn aggregate_selected_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn aggregate_selected_unary_scaled_raw<" in helper
+    assert "pub fn aggregate_selected_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn aggregate_selected_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn aggregate_selected_binary_scaled_raw<" in helper
+    assert "pub fn transform_where_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn transform_where_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_where_unary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub unsafe fn transform_where_unary_mask_layout_raw<" in helper
+    assert "pub fn transform_where_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn transform_where_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_masked_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn transform_masked_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_masked_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn transform_masked_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn transform_masked_binary_mask_layout<Profile, Policy, Layout, Op, T>" in helper
+    assert "pub unsafe fn transform_masked_binary_mask_layout_raw<" in helper
+    assert "pub fn consume_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn consume_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn consume_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn consume_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn consume_masked_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn consume_masked_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn consume_masked_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn consume_masked_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn aggregate_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn aggregate_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn aggregate_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn aggregate_binary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn aggregate_masked_unary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn aggregate_masked_unary_raw<Profile, Policy, Op, T>" in helper
+    assert "pub fn aggregate_masked_binary<Profile, Policy, Op, T>" in helper
+    assert "pub unsafe fn aggregate_masked_binary_raw<Profile, Policy, Op, T>" in helper
 
     assert "pub mod algo" in avx2
-    assert "pub use crate::tsl_algorithm::{parallelism, UnaryKernel};" in avx2
+    assert "BinaryAggregateKernel" in avx2
+    assert "BinaryConsumeKernel" in avx2
+    assert "UnaryAggregateKernel" in avx2
+    assert "UnaryConsumeKernel" in avx2
+    assert "BinaryPredicateKernel" in avx2
+    assert "UnaryPredicateKernel" in avx2
+    assert "MaskedBinaryKernel" in avx2
+    assert "MaskedUnaryKernel" in avx2
+    assert "MaskedBinaryAggregateKernel" in avx2
+    assert "MaskedUnaryAggregateKernel" in avx2
+    assert "MaskedBinaryConsumeKernel" in avx2
+    assert "MaskedUnaryConsumeKernel" in avx2
+    assert "ChunkKernel" in avx2
+    assert "mask_layout" in avx2
+    assert "MaskLayout" in avx2
+    assert "SelectedLoad" in avx2
+    assert "pub fn for_each_chunk<Policy, Op, T>" in avx2
+    assert "pub fn transform_binary<Policy, Op, T>" in avx2
+    assert "pub fn integral_mask_chunk_count<Policy, T>" in avx2
+    assert "pub fn native_mask_chunk_count<Policy, T>" in avx2
+    assert "pub fn byte_mask_count<Policy, T>" in avx2
+    assert "pub fn bit_mask_count<Policy, T>" in avx2
+    assert "pub fn predicate_unary<Policy, Op, T>" in avx2
+    assert "pub fn predicate_binary<Policy, Op, T>" in avx2
+    assert "pub fn predicate_binary_mask_layout<Policy, Layout, Op, T>" in avx2
+    assert "pub fn count_unary<Policy, Op, T>" in avx2
+    assert "pub fn count_binary<Policy, Op, T>" in avx2
+    assert "pub fn count_masked_unary<Policy, Op, T>" in avx2
+    assert "pub fn count_masked_binary<Policy, Op, T>" in avx2
+    assert "pub fn count_masked_unary_mask_layout<Policy, Layout, Op, T>" in avx2
+    assert "pub fn count_masked_binary_mask_layout<Policy, Layout, Op, T>" in avx2
+    assert "pub fn count_selected_unary<Policy, Op, T>" in avx2
+    assert "pub fn count_selected_binary<Policy, Op, T>" in avx2
+    assert "pub fn select_unary<Policy, Op, T>" in avx2
+    assert "pub fn select_binary<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_unary<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_binary<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_unary_mask_layout<Policy, Layout, Op, T>" in avx2
+    assert "pub fn select_masked_binary_mask_layout<Policy, Layout, Op, T>" in avx2
+    assert "pub fn select_indices_unary<Policy, Op, T>" in avx2
+    assert "pub fn select_indices_binary<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_indices_unary<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_indices_binary<Policy, Op, T>" in avx2
+    assert "pub fn select_masked_indices_unary_mask_layout<Policy, Layout, Op, T>" in avx2
+    assert "pub fn select_masked_indices_binary_mask_layout<Policy, Layout, Op, T>" in avx2
+    assert "pub fn select_selected_indices_unary<Policy, Op, T>" in avx2
+    assert "pub fn select_selected_indices_binary<Policy, Op, T>" in avx2
+    assert "pub fn transform_selected_unary<Policy, Op, T>" in avx2
+    assert "pub fn transform_selected_binary<Policy, Op, T>" in avx2
+    assert "pub fn consume_selected_unary<Policy, Op, T>" in avx2
+    assert "pub fn consume_selected_binary<Policy, Op, T>" in avx2
+    assert "pub fn aggregate_selected_unary<Policy, Op, T>" in avx2
+    assert "pub fn aggregate_selected_binary<Policy, Op, T>" in avx2
+    assert "pub fn transform_where_unary<Policy, Op, T>" in avx2
+    assert "pub fn transform_where_unary_mask_layout<Policy, Layout, Op, T>" in avx2
+    assert "pub fn transform_where_binary<Policy, Op, T>" in avx2
+    assert "pub fn transform_masked_unary<Policy, Op, T>" in avx2
+    assert "pub fn transform_masked_binary<Policy, Op, T>" in avx2
+    assert "pub fn transform_masked_binary_mask_layout<Policy, Layout, Op, T>" in avx2
+    assert "pub fn consume_unary<Policy, Op, T>" in avx2
+    assert "pub fn consume_binary<Policy, Op, T>" in avx2
+    assert "pub fn consume_masked_unary<Policy, Op, T>" in avx2
+    assert "pub fn consume_masked_binary<Policy, Op, T>" in avx2
+    assert "pub fn aggregate_unary<Policy, Op, T>" in avx2
+    assert "pub fn aggregate_binary<Policy, Op, T>" in avx2
+    assert "pub fn aggregate_masked_unary<Policy, Op, T>" in avx2
+    assert "pub fn aggregate_masked_binary<Policy, Op, T>" in avx2
     assert "impl VectorFor<Profile, i32> for parallelism::Fixed<1>" in avx2
     assert "type Vec = Simd<i32, Scalar>;" in avx2
     assert "impl VectorFor<Profile, i32> for parallelism::Fixed<4>" in avx2
@@ -251,6 +452,35 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "impl VectorFor<Profile, i32> for parallelism::Native" in avx2
     assert "super::load::<Simd<T, super::Avx2>, false>" in avx2
     assert "super::store::<Simd<T, super::Avx2>, false, _>" in avx2
+    assert "impl<T> MaskedStore<Simd<T, super::Avx2>> for Profile" in avx2
+    assert "super::store_mask::<Simd<T, super::Avx2>, false>" in avx2
+    assert "impl<T> IntegralMask<Simd<T, super::Avx2>> for Profile" in avx2
+    assert "super::to_integral::<Simd<T, super::Avx2>>(mask)" in avx2
+    assert "impl<T> MaskFromIntegral<Simd<T, super::Avx2>> for Profile" in avx2
+    assert "super::to_mask::<Simd<T, super::Avx2>>(mask)" in avx2
+    assert "impl<T> MaskFromIntegral<Simd<T, Scalar>> for Profile" in avx2
+    assert "super::to_mask::<Simd<T, Scalar>>(mask)" in avx2
+    assert "impl<T> CompressStore<Simd<T, super::Avx2>> for Profile" in avx2
+    assert "super::compress_store::<Simd<T, super::Avx2>, true>" in avx2
+    assert "impl<T> MaskPopulationCount<Simd<T, super::Avx2>> for Profile" in avx2
+    assert "super::mask_population_count::<Simd<T, super::Avx2>>(mask)" in avx2
+    assert "impl<const SCALE: u32> SelectedLoad<Simd<i32, super::Avx2>, SCALE> for Profile" in avx2
+    assert (
+        "super::detail::primitives::Gather_narrowImpl<Simd<usize, Generic<8>>, 4, 1>"
+        in avx2
+    )
+    assert (
+        "super::detail::primitives::Gather_narrowImpl<Simd<usize, Generic<8>>, SCALE, 1>"
+        in avx2
+    )
+    assert (
+        "super::gather_narrow::<Simd<i32, super::Avx2>, Simd<usize, Generic<8>>, 4, 1>"
+        in avx2
+    )
+    assert (
+        "super::gather_narrow::<Simd<i32, super::Avx2>, Simd<usize, Generic<8>>, SCALE, 1>"
+        in avx2
+    )
 
 
 def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) -> None:

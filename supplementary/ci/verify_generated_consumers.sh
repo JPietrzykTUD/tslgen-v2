@@ -82,12 +82,112 @@ tsl_generated = { path = "$generated_root/rust", default-features = false, featu
 [[bin]]
 name = "unary_operator"
 path = "$repo_root/examples/rust/src/bin/unary_operator.rs"
+
+[[bin]]
+name = "binary_operator"
+path = "$repo_root/examples/rust/src/bin/binary_operator.rs"
+
+[[bin]]
+name = "chunk_operator"
+path = "$repo_root/examples/rust/src/bin/chunk_operator.rs"
+
+[[bin]]
+name = "range_operator"
+path = "$repo_root/examples/rust/src/bin/range_operator.rs"
+
+[[bin]]
+name = "predicate_operator"
+path = "$repo_root/examples/rust/src/bin/predicate_operator.rs"
+
+[[bin]]
+name = "where_operator"
+path = "$repo_root/examples/rust/src/bin/where_operator.rs"
+
+[[bin]]
+name = "masked_operator"
+path = "$repo_root/examples/rust/src/bin/masked_operator.rs"
+
+[[bin]]
+name = "native_mask_operator"
+path = "$repo_root/examples/rust/src/bin/native_mask_operator.rs"
+
+[[bin]]
+name = "byte_mask_operator"
+path = "$repo_root/examples/rust/src/bin/byte_mask_operator.rs"
+
+[[bin]]
+name = "bit_mask_operator"
+path = "$repo_root/examples/rust/src/bin/bit_mask_operator.rs"
+
+[[bin]]
+name = "consume_operator"
+path = "$repo_root/examples/rust/src/bin/consume_operator.rs"
+
+[[bin]]
+name = "masked_consume_operator"
+path = "$repo_root/examples/rust/src/bin/masked_consume_operator.rs"
+
+[[bin]]
+name = "aggregation_operator"
+path = "$repo_root/examples/rust/src/bin/aggregation_operator.rs"
+
+[[bin]]
+name = "masked_aggregation_operator"
+path = "$repo_root/examples/rust/src/bin/masked_aggregation_operator.rs"
+
+[[bin]]
+name = "count_operator"
+path = "$repo_root/examples/rust/src/bin/count_operator.rs"
+
+[[bin]]
+name = "selection_operator"
+path = "$repo_root/examples/rust/src/bin/selection_operator.rs"
+
+[[bin]]
+name = "masked_selection_operator"
+path = "$repo_root/examples/rust/src/bin/masked_selection_operator.rs"
+
+[[bin]]
+name = "selection_vector_operator"
+path = "$repo_root/examples/rust/src/bin/selection_vector_operator.rs"
+
+[[bin]]
+name = "selected_transform_operator"
+path = "$repo_root/examples/rust/src/bin/selected_transform_operator.rs"
+
+[[bin]]
+name = "selected_refinement_operator"
+path = "$repo_root/examples/rust/src/bin/selected_refinement_operator.rs"
+
+[[bin]]
+name = "selected_aggregate_consume_operator"
+path = "$repo_root/examples/rust/src/bin/selected_aggregate_consume_operator.rs"
 EOF
 
 # Cargo probes rustc with `rustc -`. Run the Rust examples before the verbose
 # C++ build/test phase so PTY-backed callers cannot leak build-log bytes into
 # that probe as inherited source input.
 cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin unary_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin binary_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin chunk_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin range_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin predicate_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin where_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin masked_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin native_mask_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin byte_mask_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin bit_mask_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin consume_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin masked_consume_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin aggregation_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin masked_aggregation_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin count_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin selection_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin masked_selection_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin selection_vector_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin selected_transform_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin selected_refinement_operator </dev/null
+cargo run --quiet --manifest-path "$scratch_root/rust-examples/Cargo.toml" --bin selected_aggregate_consume_operator </dev/null
 
 cmake -S "$scratch_root/cpp-consumer" -B "$scratch_root/cpp-build"
 cmake --build "$scratch_root/cpp-build" --target tsl_cpp_consumer

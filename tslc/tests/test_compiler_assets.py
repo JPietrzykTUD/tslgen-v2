@@ -6,6 +6,7 @@ import pytest
 
 from tslc.compiler_assets import (
     RenderAssets,
+    load_default_render_assets,
     load_default_tsl_grammar,
 )
 from tslc.render.rust_project import rust_artifacts
@@ -62,6 +63,15 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
     assert rendered["rust/src/tsl_algorithm.rs"] == "// injected algorithm\n"
     assert rendered["rust/rustfmt.toml"] == "# injected rustfmt\n"
     assert 'default = ["scalar"]' in rendered["rust/Cargo.toml"]
+
+
+def test_rust_algorithm_facade_wrappers_are_static_render_asset() -> None:
+    assets = load_default_render_assets()
+
+    wrappers = assets.text("rust_algo_wrappers.rs")
+
+    assert "pub fn transform_unary<Policy, Op, T>" in wrappers
+    assert "crate::tsl_algorithm::transform_unary::<Profile, Policy, Op, T>" in wrappers
 
 
 def test_package_resource_reads_stay_in_compiler_asset_boundary() -> None:

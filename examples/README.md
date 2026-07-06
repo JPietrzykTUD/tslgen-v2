@@ -12,6 +12,15 @@ The generated-package CI consumer check runs both language example sets through
 `supplementary/ci/verify_generated_consumers.sh` after producing generated TSL
 artifacts.
 
-Rust helper coverage currently starts with `transform_unary`, so the Rust tree
-has a real unary example first. Add Rust examples alongside new generated Rust
-helper APIs as those APIs reach parity with the C++ helper surface.
+Rust helper coverage currently includes dense unary/binary transforms,
+slice/range-style composition, chunk enumeration, integral predicate
+materialization, integral-mask where transforms, integral-mask masked
+full-store transforms, native/byte/packed-bit mask predicate and transform
+examples, dense consume helpers,
+integral-mask masked consume helpers, dense aggregate helpers, and
+integral-mask masked aggregate helpers, dense/mask-layout/selected-row count helpers, and
+dense/mask-layout compacting selection helpers, plus dense/mask-layout
+selection-vector production helpers, selected-row transform consumers, and
+selected-row refinement consumers, plus selected-row aggregate and consume
+sinks. The Rust README tracks remaining C++ parity with a helper-by-helper
+matrix.
