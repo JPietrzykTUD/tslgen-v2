@@ -855,7 +855,7 @@ def test_cpp_specialization_structure(specialization_artifacts: dict[str, str]) 
         "inline typename ::tsl::dataparallel::simd_for_t<Policy, T>::register_type hadd("
         not in avx2
     )
-    assert "@brief [Example: sse + si8]: Add packed 8-bit integers" in avx2
+    assert "@brief Add packed 8-bit integers" in avx2
     assert "@par Semantics" in avx2
     assert "@par API" in avx2
     assert "- Template parameters: Vec selects the SIMD vector type" in avx2
@@ -937,7 +937,7 @@ def test_rust_specialization_structure(specialization_artifacts: dict[str, str])
     assert "impl AddImpl for Simd<i32, Sse> {" in avx2
     assert "pub mod detail {\n    pub mod primitives {" in avx2
     assert "pub fn add<S: detail::primitives::AddImpl>(" in avx2
-    assert '/// [Example: sse + si8]: Add packed 8-bit integers' in avx2
+    assert '/// Add packed 8-bit integers' in avx2
     assert "/// # Semantics" in avx2
     assert "/// # API" in avx2
     assert "/// - Type parameters: S selects the SIMD vector type" in avx2
