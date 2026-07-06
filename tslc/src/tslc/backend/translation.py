@@ -89,6 +89,13 @@ class BackendSyntaxDialect(Protocol):
     def render_pointer_cast(
         self, inner: RenderField, *, is_const: bool, expr: RenderField
     ) -> RenderText: ...
+    def render_param_type(
+        self,
+        value: RenderField,
+        *,
+        is_pointer: bool = False,
+        is_const: bool = False,
+    ) -> RenderText: ...
     def render_assume_aligned(self, expr: RenderField, alignment: str) -> RenderText: ...
     def render_compile_switch(
         self, selector: RenderField, arms: tuple[tuple[str, RenderField], ...]

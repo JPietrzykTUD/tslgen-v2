@@ -10,6 +10,7 @@ from tslc.diagnostics import Diagnostic, SourceLocation
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
 from tslc.value_tests._case_conversion import FUZZ_ITERATIONS
+from tslc.value_tests._pattern_base import unplanned_case_reason
 from tslc.value_tests.case_plans import compile_only_case
 from tslc.value_tests.coverage import (
     CoverageIdentity,
@@ -124,23 +125,20 @@ class ValueTestPlanner:
                     continue
                 if _representation_case_unselected(test_case, specs):
                     continue
+                case_context = {
+                    "backend": backend,
+                    "emitted_name": emitted_name,
+                    "index": index,
+                    "case": test_case,
+                    "specs": specs,
+                    "catalog": self._catalog,
+                    "harness": harness,
+                }
                 if test_case.role == "compile":
                     plan = compile_only_case(emitted_name, index, test_case, specs)
                     planned = (plan,) if plan is not None else ()
                 else:
-                    planned = (
-                        pattern.plan_case(
-                            backend=backend,
-                            emitted_name=emitted_name,
-                            index=index,
-                            case=test_case,
-                            specs=specs,
-                            catalog=self._catalog,
-                            harness=harness,
-                        )
-                        if pattern is not None
-                        else ()
-                    )
+                    planned = pattern.plan_case(**case_context) if pattern is not None else ()
                 supported = self._supported_cases(planned, backend)
                 cases.extend(supported)
                 entry = case_coverage(
@@ -150,6 +148,9 @@ class ValueTestPlanner:
                     case_name=test_case.name,
                     planned=planned,
                     supported=supported,
+                    unplanned_reason=unplanned_case_reason(
+                        pattern, planned, **case_context
+                    ),
                 )
                 coverage.append(entry)
                 coverage_locations.setdefault(

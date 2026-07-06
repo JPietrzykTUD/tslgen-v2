@@ -192,6 +192,18 @@ class _CppSyntax:
             )
         )
 
+    def render_param_type(
+        self,
+        value: RenderField,
+        *,
+        is_pointer: bool = False,
+        is_const: bool = False,
+    ) -> RenderText:
+        if not is_pointer:
+            return literal_text(value) if isinstance(value, str) else value
+        qualifier = " const" if is_const else ""
+        return render_sequence((value, literal_text(f"{qualifier} *")))
+
     def render_assume_aligned(self, expr: RenderField, alignment: str) -> RenderText:
         return render_sequence(
             (

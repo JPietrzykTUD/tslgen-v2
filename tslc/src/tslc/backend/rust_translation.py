@@ -261,6 +261,22 @@ class _RustSyntax:
             )
         )
 
+    def render_param_type(
+        self,
+        value: RenderField,
+        *,
+        is_pointer: bool = False,
+        is_const: bool = False,
+    ) -> RenderText:
+        if not is_pointer:
+            return literal_text(value) if isinstance(value, str) else value
+        return render_sequence(
+            (
+                literal_text(f"*{'const' if is_const else 'mut'} "),
+                value,
+            )
+        )
+
     def render_assume_aligned(self, expr: RenderField, alignment: str) -> RenderText:
         del alignment
         return literal_text(expr) if isinstance(expr, str) else expr

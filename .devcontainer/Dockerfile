@@ -3,6 +3,9 @@ FROM ubuntu:26.04
 ARG ZIG_VERSION=0.16.0
 ARG ZIG_ARCH=x86_64-linux
 
+ENV DEBIAN_FRONTEND=noninteractive
+ENV ONEAPI_ROOT=/opt/intel/oneapi
+
 RUN apt-get update -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     sudo \
@@ -58,6 +61,22 @@ RUN ACCEPT_INTEL_SDE_LICENSE=yes \
     rm -rf /tmp/sde
 
 ENV PATH="/opt/intel-sde:${PATH}"
+
+# prepare oneapi repository
+RUN wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+        | gpg --dearmor \
+        > /usr/share/keyrings/oneapi-archive-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
+        > /etc/apt/sources.list.d/oneAPI.list
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        intel-oneapi-compiler-dpcpp-cpp-2025.0 \
+        intel-compiler-fpga-addon-2025.0 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN echo 'source /opt/intel/oneapi/setvars.sh --force >/dev/null 2>&1' \
+        > /etc/profile.d/oneapi.sh
+
 # codon-jit
 # RUN yes | /bin/bash -c "$(curl -fsSL https://exaloop.io/install.sh)"
 

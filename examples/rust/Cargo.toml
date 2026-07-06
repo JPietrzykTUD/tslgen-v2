@@ -1,0 +1,92 @@
+[package]
+name = "tsl_rust_examples"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+tsl_generated = { path = "../../tslctmp/examples/generated/rust", default-features = false, features = ["scalar"] }
+
+[[bin]]
+name = "unary_operator"
+path = "src/bin/unary_operator.rs"
+
+[[bin]]
+name = "binary_operator"
+path = "src/bin/binary_operator.rs"
+
+[[bin]]
+name = "chunk_operator"
+path = "src/bin/chunk_operator.rs"
+
+[[bin]]
+name = "range_operator"
+path = "src/bin/range_operator.rs"
+
+[[bin]]
+name = "predicate_operator"
+path = "src/bin/predicate_operator.rs"
+
+[[bin]]
+name = "where_operator"
+path = "src/bin/where_operator.rs"
+
+[[bin]]
+name = "masked_operator"
+path = "src/bin/masked_operator.rs"
+
+[[bin]]
+name = "native_mask_operator"
+path = "src/bin/native_mask_operator.rs"
+
+[[bin]]
+name = "byte_mask_operator"
+path = "src/bin/byte_mask_operator.rs"
+
+[[bin]]
+name = "bit_mask_operator"
+path = "src/bin/bit_mask_operator.rs"
+
+[[bin]]
+name = "consume_operator"
+path = "src/bin/consume_operator.rs"
+
+[[bin]]
+name = "masked_consume_operator"
+path = "src/bin/masked_consume_operator.rs"
+
+[[bin]]
+name = "aggregation_operator"
+path = "src/bin/aggregation_operator.rs"
+
+[[bin]]
+name = "masked_aggregation_operator"
+path = "src/bin/masked_aggregation_operator.rs"
+
+[[bin]]
+name = "count_operator"
+path = "src/bin/count_operator.rs"
+
+[[bin]]
+name = "selection_vector_operator"
+path = "src/bin/selection_vector_operator.rs"
+
+[[bin]]
+name = "selected_transform_operator"
+path = "src/bin/selected_transform_operator.rs"
+
+[[bin]]
+name = "selected_refinement_operator"
+path = "src/bin/selected_refinement_operator.rs"
+
+[[bin]]
+name = "selected_aggregate_consume_operator"
+path = "src/bin/selected_aggregate_consume_operator.rs"
+
+[[bin]]
+name = "selection_operator"
+path = "src/bin/selection_operator.rs"
+
+[[bin]]
+name = "masked_selection_operator"
+path = "src/bin/masked_selection_operator.rs"

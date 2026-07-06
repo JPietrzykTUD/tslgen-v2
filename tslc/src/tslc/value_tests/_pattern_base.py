@@ -12,6 +12,7 @@ from tslc.value_tests.model import (
     ValueTestCasePlan,
 )
 
+
 class CasePlanBuilder(Protocol):
     def __call__(
         self,
@@ -21,6 +22,7 @@ class CasePlanBuilder(Protocol):
         specs: tuple[LoweredSpecialization, ...],
     ) -> ValueTestCasePlan | None:
         ...
+
 
 class PointerLayoutCasePlanBuilder(Protocol):
     def __call__(
@@ -32,6 +34,7 @@ class PointerLayoutCasePlanBuilder(Protocol):
         primitive: Primitive,
     ) -> ValueTestCasePlan | None:
         ...
+
 
 class ValueTestPattern(Protocol):
     """A typed test-shape planner."""
@@ -60,6 +63,7 @@ class ValueTestPattern(Protocol):
     ) -> tuple[ValueTestCasePlan, ...]:
         ...
 
+
 class _BasePattern:
     def source_primitive(
         self,
@@ -69,9 +73,25 @@ class _BasePattern:
     ) -> Primitive | None:
         return catalog.primitive(source_name, unmasked=True)
 
+    def unplanned_reason(self, **_kwargs) -> str | None:  # noqa: ANN003
+        return None
+
+
+def unplanned_case_reason(
+    pattern: ValueTestPattern | None,
+    planned: tuple[ValueTestCasePlan, ...],
+    **kwargs,  # noqa: ANN003
+) -> str | None:
+    if pattern is None or planned:
+        return None
+    reason_builder = getattr(pattern, "unplanned_reason", None)
+    return reason_builder(**kwargs) if reason_builder is not None else None
+
+
 __all__ = (
     "CasePlanBuilder",
     "PointerLayoutCasePlanBuilder",
     "ValueTestPattern",
     "_BasePattern",
+    "unplanned_case_reason",
 )

@@ -271,6 +271,42 @@ def test_rust_backend_formats_caller_unsafe_contract() -> None:
     )
 
 
+def test_rust_backend_emits_target_features_on_impl_body() -> None:
+    spec = _spec(
+        "needs_features",
+        body="return Self::lane_count() as i32;",
+        required_features=frozenset({"avx2", "sse4_1"}),
+    )
+
+    rendered = RustBackend(
+        feature_alternatives={"sse4_1": "sse4.1"}
+    ).render_primitive("needs_features", (spec,))
+
+    assert "    fn apply(data: Self::RegisterType)" in rendered
+    assert '#[target_feature(enable = "avx2")]' in rendered
+    assert '#[target_feature(enable = "sse4.1")]' in rendered
+    assert "unsafe fn __tsl_target_feature_body(" in rendered
+    assert "data: <Simd<i32, Scalar> as SimdVector>::RegisterType" in rendered
+    assert "return <Simd<i32, Scalar> as SimdVector>::lane_count() as i32;" in rendered
+    assert "return Self::lane_count() as i32;" not in rendered
+    assert "unsafe { __tsl_target_feature_body(data) }" in rendered
+
+
+def test_rust_backend_can_disable_target_feature_emission() -> None:
+    spec = _spec(
+        "needs_features",
+        required_features=frozenset({"avx2"}),
+    )
+
+    rendered = RustBackend(
+        emit_target_features=False
+    ).render_primitive("needs_features", (spec,))
+
+    assert "#[target_feature" not in rendered
+    assert "unsafe fn __tsl_target_feature_body" not in rendered
+    assert "return data;" in rendered
+
+
 def test_source_call_to_caller_unsafe_primitive_uses_local_unsafe(
     catalog: Catalog,
     machine_profiles,

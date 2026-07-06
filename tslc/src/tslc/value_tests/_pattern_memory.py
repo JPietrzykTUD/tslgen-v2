@@ -20,6 +20,8 @@ from tslc.value_tests._pattern_base import (
     PointerLayoutCasePlanBuilder,
 )
 from tslc.value_tests.model import ValueTestCasePlan
+from tslc.value_tests.param_layouts import unsupported_param_layout_reason
+
 
 @dataclass(frozen=True, slots=True)
 class _PointerLayoutShapePattern(_BasePattern):
@@ -60,6 +62,17 @@ class _PointerLayoutShapePattern(_BasePattern):
             primitive,
         )
         return (plan,) if plan is not None else ()
+
+    def unplanned_reason(self, **kwargs) -> str | None:  # noqa: ANN003
+        specs = kwargs["specs"]
+        primitive = self.source_primitive(
+            kwargs["catalog"],
+            specs[0].source_primitive_name,
+            specs[0],
+        )
+        if primitive is None:
+            return None
+        return unsupported_param_layout_reason(primitive, "ptr", kwargs["case"], specs)
 
 
 class _MaskStorePattern(_BasePattern):
@@ -106,6 +119,18 @@ class _MaskStorePattern(_BasePattern):
         )
         return tuple(plans)
 
+    def unplanned_reason(self, **kwargs) -> str | None:  # noqa: ANN003
+        specs = kwargs["specs"]
+        primitive = self.source_primitive(
+            kwargs["catalog"],
+            specs[0].source_primitive_name,
+            specs[0],
+        )
+        if primitive is None:
+            return None
+        return unsupported_param_layout_reason(primitive, "ptr", kwargs["case"], specs)
+
+
 class _PointerFreePattern(_BasePattern):
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
         spec = specs[0]
@@ -120,6 +145,7 @@ class _PointerFreePattern(_BasePattern):
         )
         return (plan,) if plan is not None else ()
 
+
 class _PointerLifetimePattern(_BasePattern):
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
         spec = specs[0]
@@ -133,6 +159,7 @@ class _PointerLifetimePattern(_BasePattern):
             kwargs["specs"],
         )
         return (plan,) if plan is not None else ()
+
 
 @dataclass(frozen=True, slots=True)
 class _IndexedMemoryPattern(_BasePattern):
@@ -177,6 +204,7 @@ class _IndexedMemoryPattern(_BasePattern):
             index_base_spelling,
         )
         return (plan,) if plan is not None else ()
+
 
 def _index_base_spelling(
     catalog: Catalog,

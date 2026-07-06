@@ -30,6 +30,7 @@ from tslc.value_tests.model import (
     ValueTestCoverageEntry,
     ValueTestProfilePlan,
 )
+from tslc.value_tests.param_layouts import scalar_type_tag_from_expr
 from tslc.value_tests.renderer_capability import ValueTestRendererCapability
 from tslc.value_tests._render_cpp_dispatch import CPP_VALUE_TEST_RENDERER
 from tslc.value_tests.render_cpp import CPP_VALUE_TEST_SUPPORT, render_cpp_values_runner
@@ -310,6 +311,67 @@ def test_pointer_layout_planning_consumes_param_types() -> None:
     assert cases[0].kind == "mask_store"
     assert cases[0].expected_type_tag == "si32"
     assert cases[0].target_base_spelling == "std::int32_t"
+
+
+def test_pointer_layout_scalar_resolver_uses_param_type_expression_parser() -> None:
+    assert scalar_type_tag_from_expr("type(base::in) *", "si32") == "si32"
+    assert (
+        scalar_type_tag_from_expr(
+            "type(base::unsigned_of(type(base::in))) const*",
+            "si32",
+        )
+        == "ui32"
+    )
+
+
+def test_pointer_layout_warning_names_unsupported_param_types_expression() -> None:
+    primitive = Primitive(
+        "store_mask_repr",
+        "void:=(ptr,m)",
+        ("ptr", "mask"),
+        (),
+        (),
+        attributes={"packed": "false"},
+        param_type_rules=(
+            ParamTypeRule(
+                parameter_name="ptr",
+                attribute_name="packed",
+                attribute_value="false",
+                type_expr="type(vector::imask) *",
+            ),
+        ),
+        tests=(
+            TslTestCase(
+                name="store_mask_repr_layout",
+                type_tag="si32",
+                tags=("layout",),
+                lanes=4,
+                inputs=(TslTestArg("mask", mask_bits="5"),),
+                expected=("1", "0", "1", "0"),
+                attrs={"packed": "false"},
+            ),
+        ),
+    )
+    catalog = _catalog(primitive, *_harness_primitives())
+    spec = _spec(
+        "store_mask_repr",
+        "store_mask_repr",
+        param_kinds=("ptr", "m"),
+        result_kind="void",
+        axis=(("packed", "false"),),
+    )
+    profile = _profile(cpp={"store_mask_repr": (spec,)})
+
+    plan = ValueTestPlanner(catalog, _VALUE_TEST_SUPPORTS).plan(_inputs(profile))
+
+    assert plan.profiles_for("cpp")[0].cases == ()
+    warning = next(
+        diagnostic
+        for diagnostic in plan.diagnostics
+        if diagnostic.code == "TSL-VALUE-TEST-UNSUPPORTED-CASE"
+    )
+    assert "unsupported param_types layout expression" in warning.message
+    assert "type(vector::imask) *" in warning.message
 
 
 def test_planner_warns_for_each_unsupported_authored_case() -> None:
