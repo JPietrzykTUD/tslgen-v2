@@ -28,6 +28,27 @@ _STATE_RANK = {
     ImplementationState.FALLBACK: 3,
 }
 
+_SPECIAL_KEYWORDS = frozenset({"intrin", "call", "loop"})
+_NEUTRAL_KEYWORDS = frozenset({"complete", "let", "type", "value"})
+_COMPOSITION_KEYWORDS = frozenset(
+    {
+        "assume_aligned",
+        "cast",
+        "helper",
+        "if",
+        "io",
+        "lanes",
+        "mask",
+        "mem",
+        "op",
+        "switch",
+        "var",
+    }
+)
+IMPLEMENTATION_STATE_CLASSIFIED_KEYWORDS = (
+    _SPECIAL_KEYWORDS | _NEUTRAL_KEYWORDS | _COMPOSITION_KEYWORDS
+)
+
 
 def combine_implementation_states(
     states: tuple[ImplementationState, ...] | list[ImplementationState],
@@ -52,6 +73,8 @@ def infer_direct_implementation_state(
     facts.visit(segments)
     if facts.fallback:
         return ImplementationState.FALLBACK
+    if facts.unknown:
+        return ImplementationState.UNKNOWN
     if facts.intrinsics == 1 and facts.calls == 0 and facts.composition_markers == 0:
         return ImplementationState.NATIVE
     if facts.intrinsics > 0 or facts.calls > 0 or facts.composition_markers > 0:
@@ -65,6 +88,7 @@ class _BodyStateFacts:
     calls: int = 0
     composition_markers: int = 0
     fallback: bool = False
+    unknown: bool = False
 
     def visit(self, segments: tuple[Segment, ...] | None) -> None:
         if segments is None:
@@ -93,17 +117,12 @@ class _BodyStateFacts:
             else:
                 self.composition_markers += 1
             return
-        if region.keyword in {
-            "cast",
-            "helper",
-            "if",
-            "io",
-            "mask",
-            "mem",
-            "op",
-            "switch",
-        }:
+        if region.keyword in _COMPOSITION_KEYWORDS:
             self.composition_markers += 1
+            return
+        if region.keyword in _NEUTRAL_KEYWORDS:
+            return
+        self.unknown = True
 
 
 def _loop_is_backend_fallback(selector_text: str) -> bool:

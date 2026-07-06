@@ -397,20 +397,6 @@ button {
   line-height: 1.5;
 }
 
-.signatureSummary {
-  max-width: 920px;
-  margin-top: 11px;
-  border: 1px solid #ded9d4;
-  border-radius: 8px;
-  padding: 9px 10px;
-  background: #fbfaf8;
-  color: #2d2623;
-  font-size: 0.84rem;
-  font-weight: 720;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-
 .tagRow,
 .chipRow {
   display: flex;
@@ -472,6 +458,58 @@ button {
   min-width: 0;
 }
 
+.facadePanel {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.facadeHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.languageSelector {
+  display: inline-flex;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  padding: 3px;
+}
+
+.languageSelector button {
+  min-width: 0;
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+.languageSelector button:hover {
+  color: var(--ink);
+}
+
+.languageSelector button.active {
+  background: #4c372d;
+  color: #fffaf5;
+  box-shadow: 0 1px 2px rgba(45, 38, 35, 0.12);
+}
+
+.facadeCode {
+  margin-top: 0;
+  border-color: #d8d1ca;
+  background: #fffdfb;
+}
+
 .primitiveInfoGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -496,8 +534,7 @@ button {
   border-color: #ded9d4;
 }
 
-.expressionBox,
-.expressionColumns > pre {
+.expressionBox {
   min-width: 0;
 }
 
@@ -571,15 +608,8 @@ pre strong {
   content: "-";
 }
 
-.expressionColumns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+.expressionBox > pre {
   margin-top: 10px;
-}
-
-.expressionColumns > pre {
-  height: auto;
 }
 
 .statusGrid {

@@ -22,7 +22,7 @@ from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
 from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.compiler_assets import RenderAssets
-from tslc.lower.lowerer import LoweredSpecialization, varying_positions
+from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyEmulator, VerifyProfile
 from tslc.render._common import (
@@ -73,7 +73,7 @@ def rust_artifacts(
             for part in (
                 backend.render_primitive_module(internal),
                 public,
-                _rust_implementation_state_queries(by_primitive),
+                backend.render_implementation_state_queries(by_primitive),
             )
             if part
         )
@@ -1018,197 +1018,6 @@ def _rust_primitive_trait_name(primitive_name: str) -> str:
 
 def _rust_primitive_tag_name(primitive_name: str) -> str:
     return "".join(part[:1].upper() + part[1:] for part in primitive_name.split("_"))
-
-
-def _rust_implementation_state_queries(
-    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
-) -> str:
-    parts: list[str] = []
-    for primitive_name in sorted(by_primitive):
-        specs = by_primitive[primitive_name]
-        if not specs or DEFAULT_SUPPORT_POLICY.is_free_function_signature(
-            specs[0].result_kind,
-            specs[0].param_kinds,
-        ):
-            continue
-        rendered = (
-            _rust_overloaded_implementation_state_query(primitive_name, specs)
-            if varying_positions(specs)
-            else _rust_ordinary_implementation_state_query(primitive_name, specs[0])
-        )
-        if rendered:
-            parts.append(rendered)
-    return "\n\n".join(parts)
-
-
-def _rust_ordinary_implementation_state_query(
-    primitive_name: str,
-    shape: LoweredSpecialization,
-) -> str:
-    trait_name = _rust_primitive_trait_name(primitive_name)
-    tag_name = _rust_primitive_tag_name(primitive_name)
-    generics = _rust_query_generics(shape)
-    trait_args = _rust_trait_args_for_shape(shape)
-    args = _rust_query_args(shape)
-    where_clauses = [
-        f"S: detail::primitives::{trait_name}{_rust_generic_args(trait_args)}",
-        *_rust_query_where_clauses(shape),
-    ]
-    return (
-        f"impl<{', '.join(generics)}> "
-        f"ImplementationStateOf<crate::primitive::{tag_name}, S, {_rust_tuple_type(args)}> "
-        "for Profile\n"
-        "where\n"
-        f"{_rust_where_clause_lines(where_clauses)}\n"
-        "{\n"
-        "    const VALUE: ImplementationState = "
-        f"<S as detail::primitives::{trait_name}{_rust_generic_args(trait_args)}>"
-        "::IMPLEMENTATION_STATE;\n"
-        "}"
-    )
-
-
-def _rust_overloaded_implementation_state_query(
-    primitive_name: str,
-    specs: tuple[LoweredSpecialization, ...],
-) -> str:
-    shape = specs[0]
-    trait_name = f"{_rust_primitive_trait_name(primitive_name)}Arg"
-    tag_name = _rust_primitive_tag_name(primitive_name)
-    generics = ["S: StaticSimdVector", *_rust_query_const_generics(shape), "V"]
-    trait_args = ["S", *_rust_trait_const_args_for_shape(shape)]
-    args = [*_rust_query_const_args(shape), "V"]
-    where_clauses = [
-        f"V: detail::primitives::{trait_name}{_rust_generic_args(trait_args)}",
-        *_rust_query_where_clauses(shape),
-    ]
-    return (
-        f"impl<{', '.join(generics)}> "
-        f"ImplementationStateOf<crate::primitive::{tag_name}, S, {_rust_tuple_type(args)}> "
-        "for Profile\n"
-        "where\n"
-        f"{_rust_where_clause_lines(where_clauses)}\n"
-        "{\n"
-        "    const VALUE: ImplementationState = "
-        f"<V as detail::primitives::{trait_name}{_rust_generic_args(trait_args)}>"
-        "::IMPLEMENTATION_STATE;\n"
-        "}"
-    )
-
-
-def _rust_query_generics(shape: LoweredSpecialization) -> list[str]:
-    generics = ["S"]
-    if shape.target is not None:
-        generics.append("ToVec: StaticSimdVector")
-    generics.extend(_type_param_decls_for_query(shape))
-    generics.extend(_rust_query_const_generics(shape))
-    return generics
-
-
-def _type_param_decls_for_query(shape: LoweredSpecialization) -> list[str]:
-    decls: list[str] = []
-    for param in shape.type_params:
-        traits = [
-            "StaticSimdVector",
-            *(f"detail::primitives::{_rust_primitive_trait_name(bound)}" for bound in param.bounds),
-        ]
-        decls.append(f"{param.name}: {' + '.join(traits)}")
-    return decls
-
-
-def _rust_query_const_generics(shape: LoweredSpecialization) -> list[str]:
-    generics = [f"const {_rust_axis_name(key)}: bool" for key, _ in shape.axis]
-    if shape.immediate is not None:
-        generics.append(f"const {shape.immediate[0]}: {shape.immediate[1]}")
-    generics.extend(f"const {name}: {typ}" for name, typ, _ in shape.generic_params)
-    return generics
-
-
-def _rust_trait_args_for_shape(shape: LoweredSpecialization) -> list[str]:
-    args: list[str] = []
-    if shape.target is not None:
-        args.append("ToVec")
-    args.extend(param.name for param in shape.type_params)
-    args.extend(_rust_trait_const_args_for_shape(shape))
-    return args
-
-
-def _rust_trait_const_args_for_shape(shape: LoweredSpecialization) -> list[str]:
-    args = [_rust_axis_name(key) for key, _ in shape.axis]
-    if shape.immediate is not None:
-        args.append(shape.immediate[0])
-    args.extend(name for name, _typ, _default in shape.generic_params)
-    return args
-
-
-def _rust_query_args(shape: LoweredSpecialization) -> list[str]:
-    args: list[str] = []
-    if shape.target is not None:
-        args.append("ToVec")
-    args.extend(param.name for param in shape.type_params)
-    args.extend(_rust_query_const_args(shape))
-    return args
-
-
-def _rust_query_const_args(shape: LoweredSpecialization) -> list[str]:
-    args = [f"BoolArg<{_rust_axis_name(key)}>" for key, _ in shape.axis]
-    if shape.immediate is not None:
-        args.append(_rust_const_arg_type(shape.immediate[1], shape.immediate[0]))
-    args.extend(_rust_const_arg_type(typ, name) for name, typ, _default in shape.generic_params)
-    return args
-
-
-def _rust_axis_name(key: str) -> str:
-    return key.upper()
-
-
-def _rust_const_arg_type(typ: str, name: str) -> str:
-    wrappers = {
-        "bool": "BoolArg",
-        "i8": "I8Arg",
-        "i16": "I16Arg",
-        "i32": "I32Arg",
-        "i64": "I64Arg",
-        "isize": "ISizeArg",
-        "u8": "U8Arg",
-        "u16": "U16Arg",
-        "u32": "U32Arg",
-        "u64": "U64Arg",
-        "usize": "USizeArg",
-    }
-    wrapper = wrappers.get(typ)
-    if wrapper is None:
-        raise ValueError(f"unsupported Rust const arg type for implementation-state query: {typ!r}")
-    return f"{wrapper}<{name}>"
-
-
-def _rust_query_where_clauses(shape: LoweredSpecialization) -> list[str]:
-    clauses: list[str] = []
-    if shape.type_params and (
-        DEFAULT_SUPPORT_POLICY.index_vector_kind in shape.param_kinds
-        or any(
-            override is not None and f"{shape.type_params[0].name}::BaseType" in override
-            for override in shape.effective_param_type_overrides
-        )
-    ):
-        clauses.append(f"{shape.type_params[0].name}::BaseType: IndexBase")
-    return clauses
-
-
-def _rust_generic_args(args: list[str]) -> str:
-    return f"<{', '.join(args)}>" if args else ""
-
-
-def _rust_tuple_type(args: list[str]) -> str:
-    if not args:
-        return "()"
-    if len(args) == 1:
-        return f"({args[0]},)"
-    return f"({', '.join(args)})"
-
-
-def _rust_where_clause_lines(clauses: list[str]) -> str:
-    return "\n".join(f"    {clause}," for clause in clauses)
 
 
 def _rust_algorithm_vector_is_mappable(extension: Extension | None) -> bool:

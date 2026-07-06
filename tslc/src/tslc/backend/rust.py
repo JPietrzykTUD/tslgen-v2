@@ -123,6 +123,12 @@ class RustBackend:
             )
         return self._wrapper(primitive_name, shape, caller_unsafe=caller_unsafe)
 
+    def render_implementation_state_queries(
+        self,
+        by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    ) -> str:
+        return _implementation_state_queries(by_primitive)
+
     def _render_overloaded_internal(
         self,
         primitive_name: str,
@@ -577,6 +583,176 @@ def _rust_implementation_state(state: ImplementationState) -> str:
     }[state]
 
 
+def _implementation_state_queries(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+) -> str:
+    parts: list[str] = []
+    for primitive_name in sorted(by_primitive):
+        specs = by_primitive[primitive_name]
+        if not specs or DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            specs[0].result_kind,
+            specs[0].param_kinds,
+        ):
+            continue
+        rendered = (
+            _overloaded_implementation_state_query(primitive_name, specs)
+            if varying_positions(specs)
+            else _ordinary_implementation_state_query(primitive_name, specs[0])
+        )
+        if rendered:
+            parts.append(rendered)
+    return "\n\n".join(parts)
+
+
+def _ordinary_implementation_state_query(
+    primitive_name: str,
+    shape: LoweredSpecialization,
+) -> str:
+    trait_name = _trait_name(primitive_name)
+    tag_name = _primitive_tag_name(primitive_name)
+    generics = _query_generics(shape)
+    trait_args = _query_trait_args(shape)
+    args = _query_args(shape)
+    where_clauses = [
+        f"S: detail::primitives::{trait_name}{_generic_args(trait_args)}",
+        *_query_where_clauses(shape),
+    ]
+    return (
+        f"impl<{', '.join(generics)}> "
+        f"ImplementationStateOf<crate::primitive::{tag_name}, S, {_tuple_type(args)}> "
+        "for Profile\n"
+        "where\n"
+        f"{_where_clause_lines(where_clauses)}\n"
+        "{\n"
+        "    const VALUE: ImplementationState = "
+        f"<S as detail::primitives::{trait_name}{_generic_args(trait_args)}>"
+        "::IMPLEMENTATION_STATE;\n"
+        "}"
+    )
+
+
+def _overloaded_implementation_state_query(
+    primitive_name: str,
+    specs: tuple[LoweredSpecialization, ...],
+) -> str:
+    shape = specs[0]
+    trait_name = f"{_trait_name(primitive_name)}Arg"
+    tag_name = _primitive_tag_name(primitive_name)
+    generics = ["S: StaticSimdVector", *_query_const_generics(shape), "V"]
+    trait_args = ["S", *_query_trait_const_args(shape)]
+    args = [*_query_const_args(shape), "V"]
+    where_clauses = [
+        f"V: detail::primitives::{trait_name}{_generic_args(trait_args)}",
+        *_query_where_clauses(shape),
+    ]
+    return (
+        f"impl<{', '.join(generics)}> "
+        f"ImplementationStateOf<crate::primitive::{tag_name}, S, {_tuple_type(args)}> "
+        "for Profile\n"
+        "where\n"
+        f"{_where_clause_lines(where_clauses)}\n"
+        "{\n"
+        "    const VALUE: ImplementationState = "
+        f"<V as detail::primitives::{trait_name}{_generic_args(trait_args)}>"
+        "::IMPLEMENTATION_STATE;\n"
+        "}"
+    )
+
+
+def _query_generics(shape: LoweredSpecialization) -> list[str]:
+    generics = ["S"]
+    if shape.target is not None:
+        generics.append("ToVec: StaticSimdVector")
+    generics.extend(_type_param_decls(shape, trait_prefix="detail::primitives::"))
+    generics.extend(_query_const_generics(shape))
+    return generics
+
+
+def _query_const_generics(shape: LoweredSpecialization) -> list[str]:
+    generics = [f"const {_axis_name(key)}: bool" for key, _ in shape.axis]
+    if shape.immediate is not None:
+        generics.append(f"const {shape.immediate[0]}: {shape.immediate[1]}")
+    generics.extend(f"const {name}: {typ}" for name, typ, _ in shape.generic_params)
+    return generics
+
+
+def _query_trait_args(shape: LoweredSpecialization) -> list[str]:
+    args: list[str] = []
+    if shape.target is not None:
+        args.append("ToVec")
+    args.extend(param.name for param in shape.type_params)
+    args.extend(_query_trait_const_args(shape))
+    return args
+
+
+def _query_trait_const_args(shape: LoweredSpecialization) -> list[str]:
+    args = [_axis_name(key) for key, _ in shape.axis]
+    if shape.immediate is not None:
+        args.append(shape.immediate[0])
+    args.extend(name for name, _typ, _default in shape.generic_params)
+    return args
+
+
+def _query_args(shape: LoweredSpecialization) -> list[str]:
+    args: list[str] = []
+    if shape.target is not None:
+        args.append("ToVec")
+    args.extend(param.name for param in shape.type_params)
+    args.extend(_query_const_args(shape))
+    return args
+
+
+def _query_const_args(shape: LoweredSpecialization) -> list[str]:
+    args = [f"BoolArg<{_axis_name(key)}>" for key, _ in shape.axis]
+    if shape.immediate is not None:
+        args.append(_const_arg_type(shape.immediate[1], shape.immediate[0]))
+    args.extend(_const_arg_type(typ, name) for name, typ, _default in shape.generic_params)
+    return args
+
+
+def _const_arg_type(typ: str, name: str) -> str:
+    wrappers = {
+        "bool": "BoolArg",
+        "i8": "I8Arg",
+        "i16": "I16Arg",
+        "i32": "I32Arg",
+        "i64": "I64Arg",
+        "isize": "ISizeArg",
+        "u8": "U8Arg",
+        "u16": "U16Arg",
+        "u32": "U32Arg",
+        "u64": "U64Arg",
+        "usize": "USizeArg",
+    }
+    wrapper = wrappers.get(typ)
+    if wrapper is None:
+        raise ValueError(
+            f"unsupported Rust const arg type for implementation-state query: {typ!r}"
+        )
+    return f"{wrapper}<{name}>"
+
+
+def _query_where_clauses(shape: LoweredSpecialization) -> list[str]:
+    constraint = _index_base_constraint(shape)
+    return [constraint] if constraint is not None else []
+
+
+def _generic_args(args: list[str]) -> str:
+    return f"<{', '.join(args)}>" if args else ""
+
+
+def _tuple_type(args: list[str]) -> str:
+    if not args:
+        return "()"
+    if len(args) == 1:
+        return f"({args[0]},)"
+    return f"({', '.join(args)})"
+
+
+def _where_clause_lines(clauses: list[str]) -> str:
+    return "\n".join(f"    {clause}," for clause in clauses)
+
+
 def _free_variant_functions(
     specializations: tuple[LoweredSpecialization, ...],
     *,
@@ -807,6 +983,10 @@ def _trait_name(primitive_name: str) -> str:
     return f"{primitive_name[:1].upper()}{primitive_name[1:]}Impl"
 
 
+def _primitive_tag_name(primitive_name: str) -> str:
+    return "".join(part[:1].upper() + part[1:] for part in primitive_name.split("_"))
+
+
 def _type_param_decls(
     shape: LoweredSpecialization, *, trait_prefix: str = ""
 ) -> list[str]:
@@ -840,22 +1020,33 @@ def _index_where(shape: LoweredSpecialization, *, impl_register: str | None = No
     knowledge. Emitted on the trait/impl/wrapper so each constraint holds where the body needs it;
     empty for non-`vidx` primitives."""
 
-    if not shape.type_params:
+    index_base_constraint = _index_base_constraint(shape)
+    if index_base_constraint is None:
         return ""
     index = shape.type_params[0].name
-    needs_index_base = (
+    clauses = [index_base_constraint]
+    if impl_register is not None:
+        clauses.insert(0, f"{index}: SimdVector<RegisterType = {impl_register}>")
+    return " where " + ", ".join(clause for clause in clauses if clause is not None)
+
+
+def _index_base_constraint(shape: LoweredSpecialization) -> str | None:
+    if not _needs_index_base_constraint(shape):
+        return None
+    return f"{shape.type_params[0].name}::BaseType: IndexBase"
+
+
+def _needs_index_base_constraint(shape: LoweredSpecialization) -> bool:
+    if not shape.type_params:
+        return False
+    index = shape.type_params[0].name
+    return (
         DEFAULT_SUPPORT_POLICY.index_vector_kind in shape.param_kinds
         or any(
             override is not None and f"{index}::BaseType" in override
             for override in shape.effective_param_type_overrides
         )
     )
-    if not needs_index_base:
-        return ""
-    clauses = [f"{index}::BaseType: IndexBase"]
-    if impl_register is not None:
-        clauses.insert(0, f"{index}: SimdVector<RegisterType = {impl_register}>")
-    return " where " + ", ".join(clauses)
 
 
 def _type_param_names(shape: LoweredSpecialization) -> list[str]:

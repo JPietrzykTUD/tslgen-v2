@@ -1076,7 +1076,7 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     payload = json.loads(specialization_artifacts["docs/specializations/specializations.json"])
     records = _decode_specialization_records(payload)
 
-    assert payload["schema_version"] == 7
+    assert payload["schema_version"] == 8
     assert "profiles" in payload
     assert "backends" in payload
     assert "types" in payload
@@ -1090,12 +1090,20 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     add_doc = primitive_docs["add"]
     add_signature = strings[add_doc[5]]
     add_expressions = {
-        strings[row[0]]: {"label": strings[row[1]], "code": strings[row[2]]}
+        strings[row[0]]: {
+            "label": strings[row[1]],
+            "facade": strings[row[2]],
+            "example": strings[row[3]],
+        }
         for row in payload["expressions"][add_doc[6]]
     }
-    add_cpp = add_expressions["cpp"]["code"]
-    add_rust = add_expressions["rust"]["code"]
+    add_cpp_facade = add_expressions["cpp"]["facade"]
+    add_rust_facade = add_expressions["rust"]["facade"]
+    add_cpp = add_expressions["cpp"]["example"]
+    add_rust = add_expressions["rust"]["example"]
     assert add_signature == "(SIMD register, SIMD register) => SIMD register"
+    assert add_cpp_facade == "tsl::add<Vec>(left, right) -> typename Vec::register_type"
+    assert add_rust_facade == "add::<S>(left, right) -> S::RegisterType"
     assert "using Vec = tsl::simd<" in add_cpp
     assert "tsl::dataparallel::native" in add_cpp
     assert "tsl::dataparallel::fixed<" in add_cpp
@@ -1109,11 +1117,16 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     load_doc = primitive_docs["load"]
     assert strings[load_doc[5]] == "(const pointer) => SIMD register"
     load_expressions = {
-        strings[row[0]]: strings[row[2]]
+        strings[row[0]]: {
+            "facade": strings[row[2]],
+            "example": strings[row[3]],
+        }
         for row in payload["expressions"][load_doc[6]]
     }
-    assert "/* aligned */" in load_expressions["cpp"]
-    assert "/* aligned */" in load_expressions["rust"]
+    assert "/* aligned */" in load_expressions["cpp"]["facade"]
+    assert "/* aligned */" in load_expressions["cpp"]["example"]
+    assert "/* aligned */" in load_expressions["rust"]["facade"]
+    assert "/* aligned */" in load_expressions["rust"]["example"]
     assert any(
         record["backend"] == "cpp"
         and record["profile"] == "avx2"
@@ -1186,8 +1199,14 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     assert "VITE_TSLC_GIT_BRANCH" in app_source
     assert "VITE_TSLC_GIT_HASH" in app_source
     assert "docMeta" in app_source
-    assert "signatureSummary" in app_source
     assert "signature: strings[signature]" in app_source
+    assert "selectedBackend" in app_source
+    assert "function LanguageSelector" in app_source
+    assert "Expression language" in app_source
+    assert "Callable facade" in app_source
+    assert "facade: strings[facade]" in app_source
+    assert "example: strings[example]" in app_source
+    assert "facadeCode" in app_source
     assert "Profile x type heatmap" in app_source
     assert "Rows are machine profiles. Columns are data types." in app_source
     assert "short dash repeats the cell state color" in app_source
@@ -1201,7 +1220,7 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     assert 'state: "degraded", label: "cmp"' in app_source
     assert "legendDegraded" in app_source
     assert "<details className=\"expressionBox\">" in app_source
-    assert "Call examples" in app_source
+    assert "call example" in app_source
     assert "Expression" in app_source
     assert (
         app_source.index("<PrimitiveHero")
@@ -1242,6 +1261,7 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     assert "targetWidthForRecord" not in app_source
     assert "expressions?.cpp" not in app_source
     assert "expressions?.rust" not in app_source
+    assert "expression.code" not in app_source
     assert "AVX" not in app_source
     assert "SSE" not in app_source
     assert "NEON" not in app_source

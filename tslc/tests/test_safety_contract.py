@@ -15,6 +15,7 @@ from tslc.catalog.validation import validate_catalog
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import Diagnostic
 from tslc.lower.dependencies import CallDependency, VectorIdentity
+from tslc.lower.implementation_state import ImplementationState
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc.pipeline import (
     CallDependencyOrigin,
@@ -192,6 +193,70 @@ def test_call_facts_propagate_bottom_up_recursively() -> None:
     assert "unsafe_callee" in root.spec.safety.reasons
     assert middle.spec.body.requires_unsafe is False
     assert root.spec.body.requires_unsafe is False
+
+
+def test_call_facts_propagate_implementation_state_bottom_up() -> None:
+    fallback_leaf = _slot(
+        "fallback_leaf",
+        implementation_state=ImplementationState.FALLBACK,
+    )
+    unknown_leaf = _slot(
+        "unknown_leaf",
+        implementation_state=ImplementationState.UNKNOWN,
+    )
+    fallback_caller = _slot(
+        "fallback_caller",
+        implementation_state=ImplementationState.COMPOSED,
+        callees=frozenset(
+            {
+                CallDependency(
+                    primitive="fallback_leaf",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                )
+            }
+        ),
+    )
+    unknown_caller = _slot(
+        "unknown_caller",
+        implementation_state=ImplementationState.COMPOSED,
+        callees=frozenset(
+            {
+                CallDependency(
+                    primitive="unknown_leaf",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                )
+            }
+        ),
+    )
+    root = _slot(
+        "root",
+        implementation_state=ImplementationState.NATIVE,
+        callees=frozenset(
+            {
+                CallDependency(
+                    primitive="fallback_caller",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                ),
+                CallDependency(
+                    primitive="unknown_caller",
+                    mask_policy=None,
+                    source=VectorIdentity("si32", "scalar"),
+                ),
+            }
+        ),
+    )
+
+    _propagate_transitive_call_facts(
+        [root, fallback_caller, unknown_caller, fallback_leaf, unknown_leaf],
+        frozenset(),
+    )
+
+    assert fallback_caller.spec.implementation_state is ImplementationState.FALLBACK
+    assert unknown_caller.spec.implementation_state is ImplementationState.UNKNOWN
+    assert root.spec.implementation_state is ImplementationState.FALLBACK
 
 
 def test_pruned_variant_dependency_keeps_variant_origin() -> None:
@@ -546,6 +611,7 @@ def _slot(
     body: str = "return data;",
     safety: ImplementationSafety = ImplementationSafety(),
     required_features: frozenset[str] = frozenset(),
+    implementation_state: ImplementationState = ImplementationState.UNKNOWN,
     param_kinds: tuple[str, ...] = ("v",),
     immediate: tuple[str, str] | None = None,
     callees: frozenset[CallDependency] = frozenset(),
@@ -558,6 +624,7 @@ def _slot(
             body=body,
             safety=safety,
             required_features=required_features,
+            implementation_state=implementation_state,
             param_kinds=param_kinds,
             immediate=immediate,
         ),
@@ -572,6 +639,7 @@ def _spec(
     body: str = "return data;",
     safety: ImplementationSafety = ImplementationSafety(),
     required_features: frozenset[str] = frozenset(),
+    implementation_state: ImplementationState = ImplementationState.UNKNOWN,
     param_kinds: tuple[str, ...] = ("v",),
     immediate: tuple[str, str] | None = None,
 ) -> LoweredSpecialization:
@@ -595,5 +663,6 @@ def _spec(
         immediate=immediate,
         register_is_base=True,
         required_features=required_features,
+        implementation_state=implementation_state,
         safety=safety,
     )

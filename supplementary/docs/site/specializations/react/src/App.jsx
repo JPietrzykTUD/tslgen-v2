@@ -15,6 +15,7 @@ function App() {
     return new URLSearchParams(window.location.search).get("dev") === "1";
   });
   const [selectedPrimitive, setSelectedPrimitive] = useState(null);
+  const [selectedBackend, setSelectedBackend] = useState(null);
   const [activeCell, setActiveCell] = useState(null);
   const [enabledProfiles, setEnabledProfiles] = useState(null);
   const [enabledRequirements, setEnabledRequirements] = useState(null);
@@ -33,6 +34,7 @@ function App() {
         const decoded = decodePayload(data);
         setPayload(decoded);
         setSelectedPrimitive(null);
+        setSelectedBackend(decoded.backends[0]?.id ?? null);
         setActiveCell(null);
         setEnabledProfiles(new Set(decoded.profiles.map((profile) => profile.name)));
         setEnabledRequirements(new Set(decoded.requirements));
@@ -203,7 +205,12 @@ function App() {
         <section className="mainColumn">
           {activePrimitive ? (
             <>
-              <PrimitiveHero primitive={activePrimitive} />
+              <PrimitiveHero
+                primitive={activePrimitive}
+                backends={payload.backends}
+                selectedBackend={selectedBackend}
+                setSelectedBackend={setSelectedBackend}
+              />
               {devMode && (
                 <PrimitiveStatus
                   records={activePrimitiveRecords}
@@ -338,7 +345,11 @@ function PrimitiveBrowser({
   );
 }
 
-function PrimitiveHero({ primitive }) {
+function PrimitiveHero({ primitive, backends, selectedBackend, setSelectedBackend }) {
+  const activeExpression = selectedExpression(primitive, selectedBackend);
+  const expressionBackends = backends.filter((backend) =>
+    primitive.expressions.some((expression) => expression.backend === backend.id)
+  );
   return (
     <section className="primitiveHero">
       <div className="primitiveHeroHeader">
@@ -346,15 +357,29 @@ function PrimitiveHero({ primitive }) {
           <span className="eyebrow">Primitive</span>
           <h1>{primitive.name}</h1>
           {primitive.brief && <p>{primitive.brief}</p>}
-          {primitive.signature && (
-            <div className="signatureSummary">{primitive.signature}</div>
-          )}
         </div>
         <div className="tagRow">
           <span>{primitive.source_name}</span>
         </div>
       </div>
       <div className="primitiveHeroBody">
+        {activeExpression && (
+          <div className="facadePanel">
+            <div className="facadeHeader">
+              <span className="eyebrow">Callable facade</span>
+              <LanguageSelector
+                backends={expressionBackends}
+                selectedBackend={activeExpression.backend}
+                setSelectedBackend={setSelectedBackend}
+              />
+            </div>
+            <pre className="facadeCode">
+              <strong>{activeExpression.label}</strong>
+              {"\n"}
+              {activeExpression.facade}
+            </pre>
+          </div>
+        )}
         <div className="primitiveInfoGrid">
           {primitive.detailed && (
             <div className="detailText">
@@ -369,25 +394,39 @@ function PrimitiveHero({ primitive }) {
             </div>
           )}
         </div>
-        {primitive.expressions.length > 0 && (
+        {activeExpression && (
           <details className="expressionBox">
             <summary>
               <span className="eyebrow">Expression</span>
-              <span>Call examples</span>
+              <span>{activeExpression.label} call example</span>
             </summary>
-            <div className="expressionColumns">
-              {primitive.expressions.map((expression) => (
-                <ExpressionCard
-                  key={expression.backend}
-                  label={expression.label}
-                  expression={expression.code}
-                />
-              ))}
-            </div>
+            <ExpressionCard
+              label={`${activeExpression.label} example`}
+              expression={activeExpression.example}
+            />
           </details>
         )}
       </div>
     </section>
+  );
+}
+
+function LanguageSelector({ backends, selectedBackend, setSelectedBackend }) {
+  if (backends.length <= 1) return null;
+  return (
+    <div className="languageSelector" aria-label="Expression language">
+      {backends.map((backend) => (
+        <button
+          type="button"
+          key={backend.id}
+          className={selectedBackend === backend.id ? "active" : ""}
+          aria-pressed={selectedBackend === backend.id}
+          onClick={() => setSelectedBackend(backend.id)}
+        >
+          {backend.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -993,7 +1032,7 @@ function Tooltip({ content, children }) {
 }
 
 function decodePayload(payload) {
-  if (payload.schema_version !== 7) {
+  if (payload.schema_version !== 8) {
     throw new Error(`unsupported specialization schema ${payload.schema_version}`);
   }
 
@@ -1002,10 +1041,11 @@ function decodePayload(payload) {
     featureSet.map((index) => strings[index])
   );
   const expressionSets = payload.expressions.map((expressionSet) =>
-    expressionSet.map(([backend, label, code]) => ({
+    expressionSet.map(([backend, label, facade, example]) => ({
       backend: strings[backend],
       label: strings[label],
-      code: strings[code],
+      facade: strings[facade],
+      example: strings[example],
     }))
   );
   const safetyStates = payload.safeties.map(
@@ -1289,6 +1329,14 @@ function supportedProfileRows(records, visibleBackends) {
   return sortedValues(grouped.values(), (row) => row.profile.name);
 }
 
+function selectedExpression(primitive, backend) {
+  return (
+    primitive.expressions.find((expression) => expression.backend === backend) ??
+    primitive.expressions[0] ??
+    null
+  );
+}
+
 function primitiveMatchesSearch(primitive, records, query) {
   if (query === "") return true;
   const directText = [
@@ -1297,7 +1345,10 @@ function primitiveMatchesSearch(primitive, records, query) {
     primitive.brief,
     primitive.detailed,
     primitive.semantics,
-    ...primitive.expressions.map((expression) => expression.code),
+    ...primitive.expressions.flatMap((expression) => [
+      expression.facade,
+      expression.example,
+    ]),
   ]
     .filter(Boolean)
     .join(" ")

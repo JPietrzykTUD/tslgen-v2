@@ -79,7 +79,7 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
         for name, specs in sorted(primitive_specs.items())
     }
     payload = {
-        "schema_version": 7,
+        "schema_version": 8,
         "columns": [
             "backend",
             "profile",
@@ -409,18 +409,28 @@ def _expression_row(
     specs: list[_DocSpec],
     backend_id: str,
     strings: _StringTable,
-) -> tuple[int, int, int] | None:
+) -> tuple[int, int, int, int] | None:
     doc = _representative_spec(specs, backend_id=backend_id)
     if doc is None:
         return None
+    facade = _backend_facade(doc)
     expression = _backend_expression(doc)
-    if expression is None:
+    if facade is None or expression is None:
         return None
     return (
         strings.id(backend_id),
         strings.id(_backend_label(backend_id)),
+        strings.id(facade),
         strings.id(expression),
     )
+
+
+def _backend_facade(doc: _DocSpec) -> str | None:
+    if doc.spec.backend_id == "cpp":
+        return _cpp_facade(doc)
+    if doc.spec.backend_id == "rust":
+        return _rust_facade(doc)
+    return None
 
 
 def _backend_expression(doc: _DocSpec) -> str | None:
@@ -429,6 +439,18 @@ def _backend_expression(doc: _DocSpec) -> str | None:
     if doc.spec.backend_id == "rust":
         return _rust_expression(doc)
     return None
+
+
+def _cpp_facade(doc: _DocSpec) -> str:
+    spec = doc.spec
+    call = _format_call(
+        f"tsl::{spec.primitive_name}",
+        _cpp_template_args(spec),
+        _runtime_args(spec),
+        template_open="<",
+        template_close=">",
+    )
+    return f"{call} -> {_cpp_facade_result_type(spec)}"
 
 
 def _cpp_expression(doc: _DocSpec) -> str:
@@ -448,6 +470,20 @@ def _cpp_expression(doc: _DocSpec) -> str:
     return "\n".join(lines)
 
 
+def _rust_facade(doc: _DocSpec) -> str:
+    spec = doc.spec
+    call = _format_call(
+        rust_raw_identifier(spec.primitive_name),
+        _rust_generic_args(spec),
+        _runtime_args(spec),
+        template_open="::<",
+        template_close=">",
+    )
+    if spec.safety.caller_unsafe:
+        call = f"unsafe {{ {call} }}"
+    return f"{call} -> {_rust_facade_result_type(spec)}"
+
+
 def _rust_expression(doc: _DocSpec) -> str:
     spec = doc.spec
     lines = list(_rust_alias_lines(doc))
@@ -465,6 +501,28 @@ def _rust_expression(doc: _DocSpec) -> str:
     else:
         lines.append(f"let result = {call};")
     return "\n".join(lines)
+
+
+def _cpp_facade_result_type(spec: LoweredSpecialization) -> str:
+    if _is_free_function(spec):
+        return DEFAULT_SUPPORT_POLICY.cpp_free_type(
+            spec.result_kind,
+            base_type=spec.base_type_spelling,
+        )
+    if spec.target is not None:
+        return "typename ToVec::register_type"
+    return DEFAULT_SUPPORT_POLICY.cpp_result_type(spec.result_kind)
+
+
+def _rust_facade_result_type(spec: LoweredSpecialization) -> str:
+    if _is_free_function(spec):
+        return DEFAULT_SUPPORT_POLICY.rust_free_type(
+            spec.result_kind,
+            base_type=spec.base_type_spelling,
+        )
+    if spec.target is not None:
+        return "T::RegisterType"
+    return DEFAULT_SUPPORT_POLICY.rust_owner_type(spec.result_kind, owner="S")
 
 
 def _signature_summary(spec: LoweredSpecialization) -> str:
