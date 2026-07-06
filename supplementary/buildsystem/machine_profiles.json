@@ -124,6 +124,27 @@
       "target_features": "sve",
       "cpp_flags": ["-mcpu=a64fx"],
       "emulator": {"kind": "qemu-aarch64", "profile": "a64fx"}
+    },
+    {
+      "name": "sve128",
+      "target_features": "sve",
+      "compile_modes": "sve_vector_bits_128",
+      "cpp_flags": ["-mcpu=a64fx", "-msve-vector-bits=128"],
+      "emulator": {"kind": "qemu-aarch64", "profile": "a64fx"}
+    },
+    {
+      "name": "sve256",
+      "target_features": "sve",
+      "compile_modes": "sve_vector_bits_256",
+      "cpp_flags": ["-mcpu=a64fx", "-msve-vector-bits=256"],
+      "emulator": {"kind": "qemu-aarch64", "profile": "a64fx"}
+    },
+    {
+      "name": "sve512",
+      "target_features": "sve",
+      "compile_modes": "sve_vector_bits_512",
+      "cpp_flags": ["-mcpu=a64fx", "-msve-vector-bits=512"],
+      "emulator": {"kind": "qemu-aarch64", "profile": "a64fx"}
     }
   ]
 }

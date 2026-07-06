@@ -354,20 +354,37 @@ class ImaskPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class BackendCompileGuard:
+    """Backend compile-time condition required by an extension's declarations."""
+
+    name: str
+    macro: str
+    equals: str
+    hint_flag: str | None = None
+    diagnostic: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class BackendExtensionMetadata:
     """Backend-specific descriptive extension metadata.
 
-    These are source-owned facts preserved for documentation, test naming, or future build
-    tooling. They are intentionally inert for selection/lowering semantics.
+    These are source-owned facts used by rendering, documentation, test naming, or future build
+    tooling. Selection/lowering semantics remain on the extension and implementation records.
     """
 
     headers: tuple[str, ...] = ()
     header_guard: str | None = None
+    compile_guards: tuple[BackendCompileGuard, ...] = ()
     test_suite_name: str | None = None
     test_support_header: str | None = None
     type_name: str | None = None
     arch_module: str | None = None
     generation_support: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "headers", tuple(self.headers))
+        object.__setattr__(self, "compile_guards", tuple(self.compile_guards))
+        object.__setattr__(self, "generation_support", tuple(self.generation_support))
 
 
 @dataclass(frozen=True, slots=True)
@@ -390,15 +407,24 @@ class ExtensionMetadata:
 
 @dataclass(frozen=True, slots=True)
 class ExtensionActivation:
-    """Profile target features that make an extension variant a selection candidate."""
+    """Profile capabilities that make an extension variant a selection candidate."""
 
     target_features: frozenset[str] = frozenset()
+    compile_modes: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "target_features", frozenset(self.target_features))
+        object.__setattr__(self, "compile_modes", frozenset(self.compile_modes))
 
-    def is_satisfied_by(self, features: frozenset[str]) -> bool:
-        return self.target_features <= features
+    def is_satisfied_by(
+        self,
+        target_features: frozenset[str],
+        compile_modes: frozenset[str] = frozenset(),
+    ) -> bool:
+        return (
+            self.target_features <= target_features
+            and self.compile_modes <= compile_modes
+        )
 
 
 @dataclass(frozen=True, slots=True)

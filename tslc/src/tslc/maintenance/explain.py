@@ -143,6 +143,8 @@ def explain(
         f"profile={profile}  backend={backend}"
     )
     out.line(f"  profile target features: {_format_flags(machine_profile.features)}")
+    if machine_profile.compile_modes:
+        out.line(f"  profile compile modes: {_format_flags(machine_profile.compile_modes)}")
     out.blank()
 
     selector = Selector()

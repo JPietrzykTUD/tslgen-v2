@@ -145,6 +145,15 @@ def test_rust_profile_toolchain_is_profile_family_owned() -> None:
         ProfileFamilyCapability("generic", rust_target_features=False),
     ) == ()
 
+    fixed_sve = MachineProfile(
+        name="sve512",
+        family="aarch64",
+        features=frozenset({"sve"}),
+        alternatives={},
+        compile_modes=frozenset({"sve_vector_bits_512"}),
+    )
+    assert rust_target_features(fixed_sve, capability) == ("+sve",)
+
 
 def test_omitted_profiles_use_all_loaded_profiles(
     data_root: Path,
@@ -209,6 +218,57 @@ def test_neon_profile_registers_native_simd_types(
     assert "fn lane_count() -> usize { 4 }" in rust
     assert "type RegisterType = core::arch::aarch64::int32x4_t;" in rust
     assert "return core::arch::aarch64::vaddq_s32(left, right);" in rust
+
+
+@pytest.mark.parametrize(("width", "lanes"), [(128, 4), (256, 8), (512, 16)])
+def test_fixed_sve_profile_registers_guarded_static_cpp_simd_types(
+    width: int,
+    lanes: int,
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    profile = f"sve{width}"
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["add"],
+        profiles=[profile],
+        backends=["cpp"],
+    )
+    assert result.rendered is not None
+    by_path = {artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts}
+
+    cpp = by_path[f"cpp/include/tsl_{profile}.hpp"]
+    cmake = by_path["cpp/CMakeLists.txt"]
+    dispatch = by_path["cpp/include/tsl.hpp"]
+    assert cpp.startswith(
+        f"#if defined(__ARM_FEATURE_SVE_BITS) && __ARM_FEATURE_SVE_BITS == {width}\n"
+    )
+    assert (
+        f'#  error "TSL {profile} profile requires -msve-vector-bits={width}"'
+        in cpp
+    )
+    assert f"struct {profile} {{}};" in cpp
+    assert "struct sve {};" not in cpp
+    assert f"struct simd<int32_t, {profile}>" in cpp
+    assert (
+        "using register_type = "
+        f"svint32_t __attribute__((arm_sve_vector_bits({width})));"
+    ) in cpp
+    assert (
+        "using mask_type = "
+        f"svbool_t __attribute__((arm_sve_vector_bits({width})));"
+    ) in cpp
+    assert "static constexpr bool has_static_lane_count_v = true;" in cpp
+    assert f"static constexpr std::size_t lane_count_v = {lanes};" in cpp
+    assert "return svadd_s32_x(::tsl::mask_true<Vec>(), left, right);" in cpp
+    assert f"#if defined(TSL_PROFILE_SVE{width})" in dispatch
+    assert (
+        f"target_compile_options(tsl_profile_sve{width} INTERFACE "
+        "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-mcpu=a64fx> "
+        f"$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-msve-vector-bits={width}>)"
+    ) in cmake
+    assert f"__ARM_FEATURE_SVE_BITS == {width}" in cmake
 
 
 def test_sve_profile_registers_scalable_cpp_simd_types(

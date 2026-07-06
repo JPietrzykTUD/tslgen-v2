@@ -1,10 +1,11 @@
-"""Machine target-feature profiles (the notion of a generation 'profile').
+"""Machine target-feature and compile-mode profiles.
 
 A profile is a named feature-set (e.g. ``avx2`` = {sse, sse2, …, avx, avx2}).
 Loaded from ``supplementary/buildsystem/machine_profiles.json``. An implementation
 body is usable in a profile iff the `requires` clause applying to the type has its
 target features ⊆ the profile's features; the profile thus decides which
-specializations are emitted.
+specializations are emitted. Extension activation may additionally require a
+compiler mode such as a fixed SVE vector width.
 """
 
 from __future__ import annotations
@@ -45,6 +46,8 @@ class MachineProfile:
     # feature -> its compiler/target-feature spelling when it differs from the token
     # (e.g. avx512_vpclmulqdq -> vpclmulqdq, neon -> asimd).
     alternatives: Mapping[str, str]
+    # Compiler-selected modes that are not hardware target features, e.g. fixed SVE width.
+    compile_modes: frozenset[str] = frozenset()
     # Extra C++ compiler flags owned by this machine profile. These are full
     # compiler arguments, not feature-token spellings.
     cpp_flags: tuple[str, ...] = ()
@@ -53,6 +56,8 @@ class MachineProfile:
     emulator: MachineProfileEmulator | None = None
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "features", frozenset(self.features))
+        object.__setattr__(self, "compile_modes", frozenset(self.compile_modes))
         object.__setattr__(self, "alternatives", MappingProxyType(dict(self.alternatives)))
         object.__setattr__(self, "cpp_flags", tuple(self.cpp_flags))
 
@@ -165,7 +170,14 @@ def load_machine_profiles_checked(
             fields = _object_fields(entry, path, diagnostics)
             _unknown_fields(
                 fields,
-                {"name", "target_features", "alternatives", "cpp_flags", "emulator"},
+                {
+                    "name",
+                    "target_features",
+                    "compile_modes",
+                    "alternatives",
+                    "cpp_flags",
+                    "emulator",
+                },
                 path,
                 diagnostics,
                 owner=f"profile entry under {family!r}",
@@ -189,22 +201,27 @@ def load_machine_profiles_checked(
                         f"duplicate machine profile name {name!r}",
                     )
                 )
-            target_features_value = fields.get("target_features", "")
-            if not isinstance(target_features_value, str):
-                diagnostics.append(
-                    _diagnostic(
-                        path,
-                        "TSL-PROFILE-MALFORMED-TARGET-FEATURES",
-                        f"machine profile {name!r} target_features must be a string",
-                    )
-                )
-                continue
-            target_features_text = target_features_value
-            features = (
-                frozenset()
-                if target_features_text.strip() == _NO_SIMD
-                else frozenset(target_features_text.split())
+            features = _token_set_field(
+                name,
+                fields.get("target_features", ""),
+                "target_features",
+                "TSL-PROFILE-MALFORMED-TARGET-FEATURES",
+                path,
+                diagnostics,
+                allow_no_simd=True,
             )
+            if features is None:
+                continue
+            compile_modes = _token_set_field(
+                name,
+                fields.get("compile_modes", ""),
+                "compile_modes",
+                "TSL-PROFILE-MALFORMED-COMPILE-MODES",
+                path,
+                diagnostics,
+            )
+            if compile_modes is None:
+                continue
             alternatives_value = fields.get("alternatives", _JsonObject(()))
             alternatives = _alternatives(name, alternatives_value, path, diagnostics)
             cpp_flags = _string_list_field(
@@ -227,6 +244,7 @@ def load_machine_profiles_checked(
                 family=family,
                 features=features,
                 alternatives=alternatives,
+                compile_modes=compile_modes,
                 cpp_flags=cpp_flags,
                 emulator=emulator,
             )
@@ -312,6 +330,30 @@ def _alternatives(
             continue
         alternatives[key] = spelling
     return alternatives
+
+
+def _token_set_field(
+    profile_name: str,
+    value: Any,
+    field_name: str,
+    code: str,
+    path: Path,
+    diagnostics: list[Diagnostic],
+    *,
+    allow_no_simd: bool = False,
+) -> frozenset[str] | None:
+    if not isinstance(value, str):
+        diagnostics.append(
+            _diagnostic(
+                path,
+                code,
+                f"machine profile {profile_name!r} {field_name} must be a string",
+            )
+        )
+        return None
+    if allow_no_simd and value.strip() == _NO_SIMD:
+        return frozenset()
+    return frozenset(value.split())
 
 
 def _string_list_field(

@@ -206,11 +206,13 @@ def _primitive_json(prim: Primitive) -> dict:
 
 def _extension_line(ext: Extension) -> str:
     activation = ", ".join(sorted(ext.active_when.target_features))
+    compile_modes = ", ".join(sorted(ext.active_when.compile_modes))
     supersedes = ", ".join(sorted(ext.supersedes))
     return (
         f"extension {ext.name}  isa={ext.isa_name}  family={ext.family}  "
         f"inherits={ext.inherits or '-'}  vector_bits={ext.vector_bits}  "
-        f"active_when=[{activation}]  supersedes=[{supersedes}]"
+        f"active_when=[{activation}]  compile_modes=[{compile_modes}]  "
+        f"supersedes=[{supersedes}]"
     )
 
 
@@ -223,6 +225,7 @@ def _extension_json(ext: Extension) -> dict:
         "vector_bits": ext.vector_bits,
         "active_when": {
             "target_features": sorted(ext.active_when.target_features),
+            "compile_modes": sorted(ext.active_when.compile_modes),
         },
         "supersedes": sorted(ext.supersedes),
     }

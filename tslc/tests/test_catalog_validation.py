@@ -380,6 +380,31 @@ def test_extension_backend_field_names_follow_supported_backends() -> None:
     assert "zig" not in known_extension_fields()
 
 
+def test_extension_backend_compile_guards_are_validated() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension guarded:\n"
+            '  extension_name "guarded"\n'
+            '  family "x86"\n'
+            "  active_when:\n"
+            "    target_features [sse]\n"
+            "    compile_modes [demo_mode]\n"
+            "  cpp:\n"
+            "    supported true\n"
+            "    compile_guards:\n"
+            "      demo:\n"
+            '        macro "TSL_DEMO"\n'
+            "        typo true\n"
+            "      broken:\n"
+            "        equals 1\n"
+        )
+    )
+
+    codes = {diagnostic.code for diagnostic in diagnostics}
+    assert "TSL-CATALOG-UNKNOWN-FIELD" in codes
+    assert "TSL-CATALOG-MALFORMED-COMPILE-GUARD" in codes
+
+
 def test_scalable_cpp_extension_requires_runtime_lane_count() -> None:
     diagnostics = _diagnostics(
         _base_source(
@@ -933,6 +958,20 @@ def test_machine_profile_target_features_are_validated(tmp_path: Path) -> None:
     result = load_machine_profiles_checked(path, _target_family_catalog())
 
     assert "TSL-PROFILE-MALFORMED-TARGET-FEATURES" in {
+        d.code for d in result.diagnostics
+    }
+
+
+def test_machine_profile_compile_modes_are_validated(tmp_path: Path) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{"x86": [{"name": "bad", "target_features": "sse", "compile_modes": ["mode"]}]}\n',
+        encoding="utf-8",
+    )
+
+    result = load_machine_profiles_checked(path, _target_family_catalog())
+
+    assert "TSL-PROFILE-MALFORMED-COMPILE-MODES" in {
         d.code for d in result.diagnostics
     }
 
