@@ -891,11 +891,11 @@ def test_machine_profile_validation_reports_shape_errors(tmp_path: Path) -> None
     path.write_text(
         '{\n'
         '  "x86": [\n'
-        '    {"name": "dup", "flags": "sse", "extra": true},\n'
-        '    {"name": "dup", "flags": "avx"}\n'
+        '    {"name": "dup", "target_features": "sse", "extra": true},\n'
+        '    {"name": "dup", "target_features": "avx"}\n'
         '  ],\n'
         '  "strange": [],\n'
-        '  "generic": [{"name": "scalar", "flags": "NOSIMD-INVALID", "alternatives": []}]\n'
+        '  "generic": [{"name": "scalar", "target_features": "NOSIMD-INVALID", "alternatives": []}]\n'
         '}\n',
         encoding="utf-8",
     )
@@ -914,7 +914,7 @@ def test_machine_profile_validation_reports_shape_errors(tmp_path: Path) -> None
 def test_machine_profile_duplicate_json_keys_are_diagnosed(tmp_path: Path) -> None:
     path = tmp_path / "machine_profiles.json"
     path.write_text(
-        '{"x86": [{"name": "first", "name": "second", "flags": "sse"}]}\n',
+        '{"x86": [{"name": "first", "name": "second", "target_features": "sse"}]}\n',
         encoding="utf-8",
     )
 
@@ -923,13 +923,27 @@ def test_machine_profile_duplicate_json_keys_are_diagnosed(tmp_path: Path) -> No
     assert "TSL-PROFILE-DUPLICATE-KEY" in {d.code for d in result.diagnostics}
 
 
+def test_machine_profile_target_features_are_validated(tmp_path: Path) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{"x86": [{"name": "bad", "target_features": ["sse"]}]}\n',
+        encoding="utf-8",
+    )
+
+    result = load_machine_profiles_checked(path, _target_family_catalog())
+
+    assert "TSL-PROFILE-MALFORMED-TARGET-FEATURES" in {
+        d.code for d in result.diagnostics
+    }
+
+
 def test_machine_profile_cpp_flags_are_validated(tmp_path: Path) -> None:
     path = tmp_path / "machine_profiles.json"
     path.write_text(
         '{\n'
         '  "aarch64": [\n'
-        '    {"name": "neon", "flags": "neon", "cpp_flags": []},\n'
-        '    {"name": "bad", "flags": "sve", "cpp_flags": "-march=armv8-a+sve"}\n'
+        '    {"name": "neon", "target_features": "neon", "cpp_flags": []},\n'
+        '    {"name": "bad", "target_features": "sve", "cpp_flags": "-march=armv8-a+sve"}\n'
         '  ]\n'
         '}\n',
         encoding="utf-8",
@@ -946,9 +960,9 @@ def test_machine_profile_emulator_metadata_is_validated(tmp_path: Path) -> None:
     path.write_text(
         '{\n'
         '  "x86": [\n'
-        '    {"name": "avx2", "flags": "avx avx2", '
+        '    {"name": "avx2", "target_features": "avx avx2", '
         '"emulator": {"kind": "sde", "profile": "-hsw"}},\n'
-        '    {"name": "bad", "flags": "avx", "emulator": []}\n'
+        '    {"name": "bad", "target_features": "avx", "emulator": []}\n'
         '  ]\n'
         '}\n',
         encoding="utf-8",
@@ -967,7 +981,7 @@ def test_machine_profile_emulator_kinds_come_from_target_families(tmp_path: Path
     path.write_text(
         '{\n'
         '  "x86": [\n'
-        '    {"name": "bad", "flags": "sse", '
+        '    {"name": "bad", "target_features": "sse", '
         '"emulator": {"kind": "qemu-aarch64", "profile": "cortex-a76"}}\n'
         '  ]\n'
         '}\n',
