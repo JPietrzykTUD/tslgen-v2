@@ -289,6 +289,10 @@ class LoweringEffects:
     def mark_unsafe(self) -> None:
         self.mark_internal_unsafe("unsafe_operation")
 
+    def mark_implementation_direct(self) -> None:
+        if self._implementation_state_suppression_depth == 0:
+            self.implementation_state_facts.mark_direct()
+
     def mark_implementation_intrinsic(self) -> None:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_intrinsic()

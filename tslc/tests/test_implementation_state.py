@@ -2,8 +2,14 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from tslc.catalog.model import (
+    Extension,
+    ImaskPolicy,
+    Implementation,
+    MaskPolicy,
+    Primitive,
+)
 from tslc.catalog.signatures import parse_signature
-from tslc.catalog.model import Extension, Implementation, Primitive
 from tslc.ir.region_registry import TSIL_REGION_KEYWORDS
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region
@@ -34,7 +40,60 @@ def test_direct_state_classifies_intrinsic_call_composition_and_fallback() -> No
     assert _state("scalar", "complete(op<add>(left, right));") is (
         ImplementationState.FALLBACK
     )
+    assert _state("native", "complete(data);") is ImplementationState.NATIVE
     assert _state("native", "complete(left + right);") is ImplementationState.UNKNOWN
+
+
+def test_direct_state_classifies_mask_vector_identity_from_extension_policy() -> None:
+    lane_bitmask = _selected(
+        "native",
+        "complete(mask);",
+        signature="v := m",
+        parameters=("mask",),
+        mask_policy=MaskPolicy(kind="lane_bitmask"),
+    )
+    native_predicate = _selected(
+        "native",
+        "complete(mask);",
+        signature="v := m",
+        parameters=("mask",),
+        mask_policy=MaskPolicy(kind="native_predicate"),
+    )
+
+    assert infer_direct_implementation_state(
+        lane_bitmask,
+        scan(lane_bitmask.implementation.body_text),
+    ) is ImplementationState.NATIVE
+    assert infer_direct_implementation_state(
+        native_predicate,
+        scan(native_predicate.implementation.body_text),
+    ) is ImplementationState.UNKNOWN
+
+
+def test_direct_state_classifies_mask_imask_identity_from_extension_policy() -> None:
+    same_as_mask = _selected(
+        "native",
+        "complete(mask);",
+        signature="im := m",
+        parameters=("mask",),
+        imask_policy=ImaskPolicy(kind="same_as_mask_type"),
+    )
+    lane_bitmask = _selected(
+        "native",
+        "complete(mask);",
+        signature="im := m",
+        parameters=("mask",),
+        imask_policy=ImaskPolicy(kind="lane_bitmask"),
+    )
+
+    assert infer_direct_implementation_state(
+        same_as_mask,
+        scan(same_as_mask.implementation.body_text),
+    ) is ImplementationState.NATIVE
+    assert infer_direct_implementation_state(
+        lane_bitmask,
+        scan(lane_bitmask.implementation.body_text),
+    ) is ImplementationState.UNKNOWN
 
 
 def test_classifier_covers_registered_tsil_keywords() -> None:
@@ -98,6 +157,24 @@ def test_rendered_state_ignores_unselected_literal_switch_arm() -> None:
     assert result is ImplementationState.NATIVE
 
 
+def test_rendered_state_classifies_direct_identity_return() -> None:
+    selected = _selected("native", "complete(data);")
+
+    assert _render_state(selected) is ImplementationState.NATIVE
+
+
+def test_rendered_state_classifies_direct_mask_vector_identity() -> None:
+    selected = _selected(
+        "native",
+        "complete(mask);",
+        signature="v := m",
+        parameters=("mask",),
+        mask_policy=MaskPolicy(kind="lane_bitmask"),
+    )
+
+    assert _render_state(selected) is ImplementationState.NATIVE
+
+
 def _state(family: str, body: str) -> ImplementationState:
     return infer_direct_implementation_state(_selected(family, body), scan(body))
 
@@ -134,12 +211,20 @@ def _render_state(selected: SelectedImplementation) -> ImplementationState:
     return result.implementation_state
 
 
-def _selected(family: str, body: str) -> SelectedImplementation:
+def _selected(
+    family: str,
+    body: str,
+    *,
+    signature: str = "v := v",
+    parameters: tuple[str, ...] = ("data",),
+    mask_policy: MaskPolicy | None = None,
+    imask_policy: ImaskPolicy | None = None,
+) -> SelectedImplementation:
     return SelectedImplementation(
         primitive=Primitive(
             name="id",
-            signature="v := v",
-            parameters=("data",),
+            signature=signature,
+            parameters=parameters,
             attribute_keys=(),
             implementations=(),
         ),
@@ -155,6 +240,8 @@ def _selected(family: str, body: str) -> SelectedImplementation:
             family=family,
             compose_prefix={},
             compose_suffix_by_type={},
+            mask_policy=mask_policy or MaskPolicy(),
+            imask_policy=imask_policy or ImaskPolicy(),
         ),
         type_tag="si32",
     )
