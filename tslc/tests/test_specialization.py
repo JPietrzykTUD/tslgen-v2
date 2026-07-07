@@ -141,7 +141,6 @@ def test_artifact_layout(specialization_result) -> None:
         "cpp/include/tsl_core.hpp",
         "cpp/include/tsl_primitives.hpp",
         "cpp/include/tsl_dataparallel.hpp",
-        "cpp/include/tsl_inferred_simd.hpp",
         "cpp/include/tsl_algorithm_tags.hpp",
         "cpp/include/tsl_algorithm_detail_core.hpp",
         "cpp/include/tsl_algorithm_detail_mask.hpp",
@@ -243,7 +242,6 @@ def test_cpp_dataparallel_helper_owns_policy_vocabulary(
     specialization_artifacts: dict[str, str]
 ) -> None:
     dataparallel = specialization_artifacts["cpp/include/tsl_dataparallel.hpp"]
-    inferred = specialization_artifacts["cpp/include/tsl_inferred_simd.hpp"]
 
     assert "namespace tsl::dataparallel" in dataparallel
     assert "struct native" in dataparallel
@@ -259,12 +257,10 @@ def test_cpp_dataparallel_helper_owns_policy_vocabulary(
     assert "using register_t = typename simd_for_t<Policy, T>::register_type;" in dataparallel
     assert "using rebind_base_t = typename Vec::template with_base_type<ToT>;" in dataparallel
     assert "using rebind_simd_for_t = rebind_base_t<simd_for_t<Policy, FromT>, ToT>;" in dataparallel
+    assert "inferred_simd_t" not in dataparallel
+    assert "native_simd_t" not in dataparallel
     assert "tsl::avx2" not in dataparallel
     assert "tsl::sse" not in dataparallel
-
-    assert "`tsl::dataparallel::simd_for_t<Policy, T>`" in inferred
-    assert "using native_simd_t = typename detail::native_simd" in inferred
-    assert "using inferred_simd_t = typename detail::inferred_simd" in inferred
 
 
 def test_cpp_algorithm_helper_is_shipped_through_dispatch_header(

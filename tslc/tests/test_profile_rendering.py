@@ -70,17 +70,20 @@ def test_profile_name_sanitized_to_valid_identifiers(
     data_root: Path, machine_profiles_path: Path
 ) -> None:
     result = _gen(
-        data_root, machine_profiles_path, primitives=["add"], profiles=["icelake-rockerlake"]
+        data_root,
+        machine_profiles_path,
+        primitives=["add"],
+        profiles=["icelake_rockerlake-oneapi"],
     )
     by = {a.logical_path: a.content for a in result.artifacts.artifacts}
     # No raw hyphen leaks into any generated C++ or Rust source.
     for path, content in by.items():
         if path.endswith((".hpp", ".cpp", ".rs")):
-            assert "icelake-rockerlake" not in content, path
-    assert "#if defined(TSL_PROFILE_ICELAKE_ROCKERLAKE)" in by["cpp/include/tsl.hpp"]
-    assert "cpp/include/tsl_icelake_rockerlake.hpp" in by
-    assert "pub mod tsl_icelake_rockerlake;" in by["rust/src/lib.rs"]
-    assert "icelake_rockerlake = []" in by["rust/Cargo.toml"]
+            assert "icelake_rockerlake-oneapi" not in content, path
+    assert "#if defined(TSL_PROFILE_ICELAKE_ROCKERLAKE_ONEAPI)" in by["cpp/include/tsl.hpp"]
+    assert "cpp/include/tsl_icelake_rockerlake_oneapi.hpp" in by
+    assert "pub mod tsl_icelake_rockerlake_oneapi;" in by["rust/src/lib.rs"]
+    assert "icelake_rockerlake_oneapi = []" in by["rust/Cargo.toml"]
 
 
 def test_feature_flag_spelling(data_root: Path, machine_profiles_path: Path) -> None:

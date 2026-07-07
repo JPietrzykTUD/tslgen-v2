@@ -330,8 +330,8 @@ This asset should not know profile-specific mappings. It only owns vocabulary.
 C++ already has helper-oriented mapping machinery:
 
 ```cpp
-tsl::inferred_simd_t<T, N>
-tsl::native_simd_t<T>
+tsl::dataparallel::simd_for_t<tsl::dataparallel::fixed<N>, T>
+tsl::dataparallel::simd_for_t<tsl::dataparallel::native, T>
 ```
 
 Those facts should become first-class data-parallel mapping facts rather than
@@ -376,18 +376,8 @@ struct tsl::dataparallel::simd_for<
 };
 ```
 
-The existing `inferred_simd_t<T, N>` and `native_simd_t<T>` names can remain as
-compatibility aliases:
-
-```cpp
-template <class T, std::size_t N>
-using inferred_simd_t =
-    dataparallel::simd_for_t<dataparallel::fixed<N>, T>;
-
-template <class T>
-using native_simd_t =
-    dataparallel::simd_for_t<dataparallel::native, T>;
-```
+The older compatibility aliases are not part of the current generated API;
+callers use `tsl::dataparallel::simd_for_t<Policy, T>` directly.
 
 ### Primitive Convenience Wrapper Shape
 
@@ -819,7 +809,7 @@ generated TSL data-parallel support.
 C++:
 
 - add `tsl::dataparallel::simd_for_t<Policy, T>`;
-- keep `inferred_simd_t<T, N>` and `native_simd_t<T>` as aliases.
+- keep the mapping facts owned by `tsl::dataparallel::simd_for_t<Policy, T>`.
 
 Rust:
 

@@ -102,10 +102,13 @@ def test_profile_reachability(catalog: Catalog, machine_profiles) -> None:
     assert "avx2" not in wasm
 
 
-def test_oneapi_fpga_is_not_emitted_by_stock_profiles(
+def test_oneapi_fpga_is_not_emitted_without_compile_mode(
     catalog: Catalog, machine_profiles
 ) -> None:
     for profile in machine_profiles.values():
+        if "oneapi_fpga" in profile.compile_modes:
+            continue
+
         emitted = {s.extension.name for s in _slots(catalog, profile, "add")}
 
         assert "oneapi_fpga" not in emitted

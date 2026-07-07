@@ -94,18 +94,19 @@ specializations such as:
 
 ```cpp
 template <>
-struct inferred_simd<int32_t, 8> {
+struct simd_for<fixed<8>, int32_t> {
     using type = ::tsl::simd<int32_t, ::tsl::avx2>;
 };
 
 template <>
-struct native_simd<int32_t> {
+struct simd_for<native, int32_t> {
     using type = ::tsl::simd<int32_t, ::tsl::avx2>;
 };
 ```
 
 The static C++ algorithm helper can then ask for
-`tsl::inferred_simd_t<T, ParallelN>` or `tsl::native_simd_t<T>`.
+`tsl::dataparallel::simd_for_t<tsl::dataparallel::fixed<ParallelN>, T>` or
+`tsl::dataparallel::simd_for_t<tsl::dataparallel::native, T>`.
 
 Rust does not have stable trait specialization or C++-style partial
 specialization fallback. The Rust equivalent must be an explicit generated trait

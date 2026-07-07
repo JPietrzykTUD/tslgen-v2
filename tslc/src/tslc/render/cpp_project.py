@@ -35,7 +35,6 @@ if TYPE_CHECKING:
 _CPP_STATIC_HEADERS = (
     "tsl_core.hpp",
     "tsl_dataparallel.hpp",
-    "tsl_inferred_simd.hpp",
     "tsl_algorithm_tags.hpp",
     "tsl_algorithm_detail_core.hpp",
     "tsl_algorithm_detail_mask.hpp",
@@ -172,7 +171,6 @@ def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) 
         '#include "tsl_core.hpp"',
         '#include "tsl_primitives.hpp"',
         '#include "tsl_dataparallel.hpp"',
-        '#include "tsl_inferred_simd.hpp"',
     ]
     if any(is_x86_register_extension(extensions.get(ext)) for ext in emitted_exts):
         lines.append('#include "tsl_x86_traits.hpp"')

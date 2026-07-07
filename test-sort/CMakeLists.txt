@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "Export compile_commands.json")
 project(tsl_release_fetch_content_sort LANGUAGES CXX)
 
 if(POLICY CMP0135)

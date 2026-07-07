@@ -206,8 +206,8 @@ template <std::size_t N> struct fixed {}; // exactly N elements per vector chunk
 The mapping is internal:
 
 ```cpp
-parallelism::native   -> tsl::native_simd_t<T>
-parallelism::fixed<N> -> tsl::inferred_simd_t<T, N>
+parallelism::native   -> tsl::dataparallel::simd_for_t<tsl::dataparallel::native, T>
+parallelism::fixed<N> -> tsl::dataparallel::simd_for_t<tsl::dataparallel::fixed<N>, T>
 ```
 
 The helper should assert that fixed parallelism produces a static lane count
