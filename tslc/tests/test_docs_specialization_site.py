@@ -89,11 +89,22 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     assert "tsl::dataparallel::fixed<" in add_cpp
     assert "tsl::dataparallel::generic<" in add_cpp
     assert "auto result = tsl::add<Vec>(left, right);" in add_cpp
+    assert "use explicit extension identifier for the vector type" in add_cpp
+    assert 'using "native" facade to select the available extension' in add_cpp
+    assert "auto result = tsl::add<NativeVec>(left, right);" in add_cpp
+    assert "auto result = tsl::add<FixedVec>(left, right);" in add_cpp
+    assert "auto result = tsl::add<GenericVec>(left, right);" in add_cpp
     assert "type S = Simd<" in add_rust
     assert "dataparallel::Native" in add_rust
     assert "dataparallel::Fixed<" in add_rust
     assert "dataparallel::Generic<" in add_rust
     assert "let result = add::<S>(left, right);" in add_rust
+    assert "type Profile = profile::algo::Profile;" in add_rust
+    assert "<dataparallel::Fixed<8> as VectorFor<Profile, Value>>::Vec" in add_rust
+    assert "let result = add::<NativeVec>(left, right);" in add_rust
+    assert "let result = add::<FixedVec>(left, right);" in add_rust
+    assert "let result = add::<GenericVec>(left, right);" in add_rust
+    assert "VectorFor<profile::algo::Profile, Value>" not in add_rust
     load_doc = primitive_docs["load"]
     assert strings[load_doc[5]] == "(const pointer) => SIMD register"
     load_expressions = {
@@ -237,6 +248,10 @@ def test_specialization_explorer_react_source_keeps_expected_views() -> None:
     assert '<details className="expressionBox">' in app_source
     assert "call example" in app_source
     assert "Expression" in app_source
+    assert '<CodeBlock code={primitive.semantics} className="syntaxCode" />' in app_source
+    assert "function CodeBlock" in app_source
+    assert "function highlightCode" in app_source
+    assert "codeTokenClass" in app_source
     assert (
         app_source.index("<PrimitiveHero")
         < app_source.index("<PrimitiveStatus")
@@ -303,6 +318,9 @@ def test_specialization_explorer_react_source_keeps_expected_views() -> None:
     assert "--highlight: #bccf00;" in styles
     assert "--focus: #84cfed;" in styles
     assert ".brandLogo" in styles
+    assert ".syntaxCode .codeToken.keyword" in styles
+    assert ".syntaxCode .codeToken.comment" in styles
+    assert ".syntaxCode .codeToken.type" in styles
 
 
 def _decode_specialization_records(payload: dict) -> list[dict]:

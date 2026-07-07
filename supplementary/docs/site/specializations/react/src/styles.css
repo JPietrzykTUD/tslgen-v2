@@ -589,6 +589,34 @@ pre strong {
   text-transform: uppercase;
 }
 
+.syntaxCode .codeToken.keyword {
+  color: #7f3d8f;
+  font-weight: 760;
+}
+
+.syntaxCode .codeToken.type {
+  color: var(--blue);
+  font-weight: 780;
+}
+
+.syntaxCode .codeToken.string {
+  color: #177245;
+}
+
+.syntaxCode .codeToken.number {
+  color: #9a4d00;
+  font-weight: 720;
+}
+
+.syntaxCode .codeToken.comment {
+  color: #64748b;
+  font-style: italic;
+}
+
+.syntaxCode .codeToken.punctuation {
+  color: #596579;
+}
+
 .expressionBox {
   grid-column: 1 / -1;
   border-top: 1px solid var(--line);
