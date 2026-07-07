@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Protocol
 
 from tslc.catalog.model import Catalog, Primitive, TestCase
@@ -11,6 +12,27 @@ from tslc.value_tests.model import (
     ValueTestBackendSupport,
     ValueTestCasePlan,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class ValueTestCaseContext:
+    backend: ValueTestBackendSupport
+    emitted_name: str
+    index: int
+    case: TestCase
+    specs: tuple[LoweredSpecialization, ...]
+    catalog: Catalog
+    harness: HarnessPrimitiveNames
+
+
+@dataclass(frozen=True, slots=True)
+class ValueTestFuzzContext:
+    backend: ValueTestBackendSupport
+    emitted_name: str
+    specs: tuple[LoweredSpecialization, ...]
+    catalog: Catalog
+    harness: HarnessPrimitiveNames
+    iterations: int
 
 
 class CasePlanBuilder(Protocol):
@@ -50,17 +72,7 @@ class ValueTestPattern(Protocol):
     ) -> Primitive | None:
         ...
 
-    def plan_case(
-        self,
-        *,
-        backend: ValueTestBackendSupport,
-        emitted_name: str,
-        index: int,
-        case: TestCase,
-        specs: tuple[LoweredSpecialization, ...],
-        catalog: Catalog,
-        harness: HarnessPrimitiveNames,
-    ) -> tuple[ValueTestCasePlan, ...]:
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         ...
 
 
@@ -73,24 +85,27 @@ class _BasePattern:
     ) -> Primitive | None:
         return catalog.primitive(source_name, unmasked=True)
 
-    def unplanned_reason(self, **_kwargs) -> str | None:  # noqa: ANN003
+    def unplanned_reason(self, context: ValueTestCaseContext) -> str | None:
+        del context
         return None
 
 
 def unplanned_case_reason(
     pattern: ValueTestPattern | None,
     planned: tuple[ValueTestCasePlan, ...],
-    **kwargs,  # noqa: ANN003
+    context: ValueTestCaseContext,
 ) -> str | None:
     if pattern is None or planned:
         return None
     reason_builder = getattr(pattern, "unplanned_reason", None)
-    return reason_builder(**kwargs) if reason_builder is not None else None
+    return reason_builder(context) if reason_builder is not None else None
 
 
 __all__ = (
     "CasePlanBuilder",
     "PointerLayoutCasePlanBuilder",
+    "ValueTestCaseContext",
+    "ValueTestFuzzContext",
     "ValueTestPattern",
     "_BasePattern",
     "unplanned_case_reason",

@@ -10,7 +10,11 @@ from tslc.diagnostics import Diagnostic, SourceLocation
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
 from tslc.value_tests._case_conversion import FUZZ_ITERATIONS
-from tslc.value_tests._pattern_base import unplanned_case_reason
+from tslc.value_tests._pattern_base import (
+    ValueTestCaseContext,
+    ValueTestFuzzContext,
+    unplanned_case_reason,
+)
 from tslc.value_tests.case_plans import compile_only_case
 from tslc.value_tests.coverage import (
     CoverageIdentity,
@@ -35,16 +39,12 @@ from tslc.value_tests.support_headers import support_headers_for_cases
 
 @dataclass(frozen=True, slots=True)
 class ValueTestBackendProfileInput:
-    """Finalized lowered specializations for one backend/profile pair."""
-
     backend_id: str
     profile_name: str
     specializations: Mapping[str, tuple[LoweredSpecialization, ...]]
 
 
 class ValueTestPlanner:
-    """Create typed value-test plans from finalized profile render data."""
-
     def __init__(
         self,
         catalog: Catalog,
@@ -104,8 +104,7 @@ class ValueTestPlanner:
             fuzz_builder = getattr(pattern, "fuzz_cases", None) if self._fuzz else None
             if fuzz_builder is not None:
                 fuzz_planned = fuzz_builder(
-                    backend=backend, emitted_name=emitted_name, specs=specs,
-                    catalog=self._catalog, harness=harness, iterations=self._fuzz_iterations,
+                    self._fuzz_context(backend, emitted_name, specs, harness)
                 )
                 cases.extend(self._supported_cases(fuzz_planned, backend))
             if not primitive.tests:
@@ -125,20 +124,14 @@ class ValueTestPlanner:
                     continue
                 if _representation_case_unselected(test_case, specs):
                     continue
-                case_context = {
-                    "backend": backend,
-                    "emitted_name": emitted_name,
-                    "index": index,
-                    "case": test_case,
-                    "specs": specs,
-                    "catalog": self._catalog,
-                    "harness": harness,
-                }
+                case_context = self._case_context(
+                    backend, emitted_name, index, test_case, specs, harness
+                )
                 if test_case.role == "compile":
                     plan = compile_only_case(emitted_name, index, test_case, specs)
                     planned = (plan,) if plan is not None else ()
                 else:
-                    planned = pattern.plan_case(**case_context) if pattern is not None else ()
+                    planned = pattern.plan_case(case_context) if pattern is not None else ()
                 supported = self._supported_cases(planned, backend)
                 cases.extend(supported)
                 entry = case_coverage(
@@ -148,9 +141,7 @@ class ValueTestPlanner:
                     case_name=test_case.name,
                     planned=planned,
                     supported=supported,
-                    unplanned_reason=unplanned_case_reason(
-                        pattern, planned, **case_context
-                    ),
+                    unplanned_reason=unplanned_case_reason(pattern, planned, case_context),
                 )
                 coverage.append(entry)
                 coverage_locations.setdefault(
@@ -168,17 +159,23 @@ class ValueTestPlanner:
             support_headers=support_headers_for_cases(cases, self._catalog, profile.backend_id),
         )
 
+    def _case_context(self, backend, emitted_name, index, case, specs, harness):  # noqa: ANN001
+        return ValueTestCaseContext(
+            backend, emitted_name, index, case, specs, self._catalog, harness
+        )
+
+    def _fuzz_context(self, backend, emitted_name, specs, harness):  # noqa: ANN001
+        return ValueTestFuzzContext(
+            backend, emitted_name, specs, self._catalog, harness, self._fuzz_iterations
+        )
+
     def _pattern_for(self, specs: tuple[LoweredSpecialization, ...]) -> ValueTestPattern | None:
         for pattern in self._patterns:
             if pattern.matches(specs):
                 return pattern
         return None
 
-    def _supported_cases(
-        self,
-        cases: tuple[ValueTestCasePlan, ...],
-        backend: ValueTestBackendSupport,
-    ) -> tuple[ValueTestCasePlan, ...]:
+    def _supported_cases(self, cases, backend):  # noqa: ANN001
         return tuple(case for case in cases if case.kind in backend.case_kinds)
 
 
@@ -240,10 +237,7 @@ def _case_extension_unselected(
 ) -> bool:  # noqa: ANN001
     if case.extension is None:
         return False
-    return not any(
-        spec.extension_name == case.extension and spec.type_tag == case.type_tag
-        for spec in specs
-    )
+    return not any(spec.extension_name == case.extension and spec.type_tag == case.type_tag for spec in specs)
 
 
 __all__ = ("ValueTestBackendProfileInput", "ValueTestPlanner")

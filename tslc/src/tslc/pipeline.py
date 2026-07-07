@@ -45,31 +45,6 @@ _DEFAULT_BACKENDS = DEFAULT_SUPPORT_POLICY.default_backend_ids
 GenerationMode = Literal["partial", "strict"]
 SkipStatus = Literal["coverage_gap", "policy_deferred"]
 _TYPE_ORDER = SCALAR_TYPE_ORDER
-_CPP_ALGORITHM_SUPPORT_PRIMITIVES = (
-    "load",
-    "store",
-    # The helper calls the emitted wrapper `store_mask`; selecting `store`
-    # also selects its pass-through masked form, which is split to that name
-    # during C++ emitted-name finalization.
-    "to_integral",
-    "to_mask",
-    "gather_narrow",
-    "compress_store",
-    "mask_population_count",
-    "mask_binary_and",
-)
-_RUST_ALGORITHM_SUPPORT_PRIMITIVES = (
-    "load",
-    "store",
-    "set_zero",
-    "to_array",
-    "from_array",
-    "gather_narrow",
-    "compress_store",
-    "mask_population_count",
-    "to_integral",
-    "to_mask",
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,15 +207,10 @@ class _GenerationSession:
                 )
                 if name is not None
             )
-        if "cpp" in all_backend_ids:
+        for capability in self.backends:
             worklist.extend(
-                (name, frozenset({"cpp"}))
-                for name in _cpp_algorithm_support_primitives(self.inputs.catalog)
-            )
-        if "rust" in all_backend_ids:
-            worklist.extend(
-                (name, frozenset({"rust"}))
-                for name in _rust_algorithm_support_primitives(self.inputs.catalog)
+                (name, frozenset({capability.backend_id}))
+                for name in capability.closure_seed_primitives(self.inputs.catalog)
             )
         processed: dict[str, set[str]] = {}
         while worklist:
@@ -576,22 +546,6 @@ def _requested_primitives(
     if request.primitives is not None:
         return request.primitives
     return tuple(sorted({primitive.name for primitive in catalog.primitives}))
-
-
-def _cpp_algorithm_support_primitives(catalog: Catalog) -> tuple[str, ...]:
-    return tuple(
-        primitive
-        for primitive in _CPP_ALGORITHM_SUPPORT_PRIMITIVES
-        if catalog.primitives_named(primitive, unmasked=False)
-    )
-
-
-def _rust_algorithm_support_primitives(catalog: Catalog) -> tuple[str, ...]:
-    return tuple(
-        primitive
-        for primitive in _RUST_ALGORITHM_SUPPORT_PRIMITIVES
-        if catalog.primitives_named(primitive, unmasked=False)
-    )
 
 
 def _finalize(

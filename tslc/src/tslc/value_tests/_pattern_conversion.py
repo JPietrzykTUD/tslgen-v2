@@ -13,7 +13,7 @@ from tslc.value_tests._case_conversion import (
     load_convert_case,
     repr_cast_case,
 )
-from tslc.value_tests._pattern_base import _BasePattern
+from tslc.value_tests._pattern_base import _BasePattern, ValueTestCaseContext
 from tslc.value_tests.model import ValueTestCasePlan
 
 class _LoadConvertPattern(_BasePattern):
@@ -25,13 +25,13 @@ class _LoadConvertPattern(_BasePattern):
             for spec in specs
         )
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = load_convert_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
-            kwargs["harness"],
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
+            context.harness,
         )
         return (plan,) if plan is not None else ()
 
@@ -49,12 +49,12 @@ class _ConvertPattern(_BasePattern):
             for spec in specs
         )
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = convert_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
         )
         return (plan,) if plan is not None else ()
 
@@ -69,13 +69,13 @@ class _ReprCastPattern(_BasePattern):
             for spec in specs
         )
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = repr_cast_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
-            kwargs["harness"],
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
+            context.harness,
         )
         return (plan,) if plan is not None else ()
 
@@ -94,16 +94,18 @@ class _ExtensionReprPattern(_BasePattern):
             for spec in specs
         )
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
-        harness = kwargs["harness"]
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
+        harness = context.harness
         if not harness.round_trip_ready:
             return ()
-        specs = kwargs["specs"]
-        case = kwargs["case"]
+        specs = context.specs
+        case = context.case
         if not extension_harness_available(case, specs):
             return ()
         kind = "extension_insert" if "vt" in specs[0].param_kinds else "extension_extract"
-        plan = extension_repr_case(kind, kwargs["emitted_name"], kwargs["index"], case, specs, harness)
+        plan = extension_repr_case(
+            kind, context.emitted_name, context.index, case, specs, harness
+        )
         return (plan,) if plan is not None else ()
 
 __all__ = (

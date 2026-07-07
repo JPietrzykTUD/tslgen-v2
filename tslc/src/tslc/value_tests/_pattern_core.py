@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from tslc.catalog.model import Catalog, Primitive, TestCase
+from tslc.catalog.model import Catalog, Primitive
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import SupportPolicy
 from tslc.value_tests._case_conversion import differential_cases, differential_fuzz_cases
@@ -20,10 +20,13 @@ from tslc.value_tests._case_scalable import (
     scalable_masked_cases,
 )
 from tslc.value_tests._case_scalable_masks import scalable_mask_result_cases
-from tslc.value_tests._pattern_base import _BasePattern, CasePlanBuilder
+from tslc.value_tests._pattern_base import (
+    _BasePattern,
+    CasePlanBuilder,
+    ValueTestCaseContext,
+    ValueTestFuzzContext,
+)
 from tslc.value_tests.model import (
-    HarnessPrimitiveNames,
-    ValueTestBackendSupport,
     ValueTestCasePlan,
 )
 
@@ -42,64 +45,62 @@ class _GenericGoldenPattern(_BasePattern):
             and not spec.type_params
         )
 
-    def plan_case(
-        self,
-        *,
-        backend: ValueTestBackendSupport,
-        emitted_name: str,
-        index: int,
-        case: TestCase,
-        specs: tuple[LoweredSpecialization, ...],
-        catalog: Catalog,
-        harness: HarnessPrimitiveNames,
-    ) -> tuple[ValueTestCasePlan, ...]:
-        plan = generic_golden_case(emitted_name, index, case, specs)
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
+        plan = generic_golden_case(
+            context.emitted_name, context.index, context.case, context.specs
+        )
         if plan is None:
             return ()
         plans = [plan]
         plans.extend(
             scalable_golden_cases(
-                emitted_name,
-                index,
-                case,
-                specs,
-                catalog,
-                harness,
-                backend,
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
             )
         )
         plans.extend(
             scalable_mask_result_cases(
-                emitted_name,
-                index,
-                case,
-                specs,
-                catalog,
-                harness,
-                backend,
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
             )
         )
-        if backend.supports_differential and harness.round_trip_ready:
-            plans.extend(differential_cases(emitted_name, index, case, specs, catalog, harness))
+        if context.backend.supports_differential and context.harness.round_trip_ready:
+            plans.extend(
+                differential_cases(
+                    context.emitted_name,
+                    context.index,
+                    context.case,
+                    context.specs,
+                    context.catalog,
+                    context.harness,
+                )
+            )
         return tuple(plans)
 
-    def fuzz_cases(
-        self,
-        *,
-        backend: ValueTestBackendSupport,
-        emitted_name: str,
-        specs: tuple[LoweredSpecialization, ...],
-        catalog: Catalog,
-        harness: HarnessPrimitiveNames,
-        iterations: int,
-    ) -> tuple[ValueTestCasePlan, ...]:
+    def fuzz_cases(self, context: ValueTestFuzzContext) -> tuple[ValueTestCasePlan, ...]:
         """Random-input differential cases for this primitive — independent of authored tests, so
         even an untested all-vector primitive gets a runtime hardware-vs-generic sweep."""
 
-        if not (backend.supports_differential and harness.round_trip_ready):
+        if not (context.backend.supports_differential and context.harness.round_trip_ready):
             return ()
         return tuple(
-            differential_fuzz_cases(emitted_name, specs, catalog, harness, iterations)
+            differential_fuzz_cases(
+                context.emitted_name,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.iterations,
+            )
         )
 
 class _MaskedPattern(_BasePattern):
@@ -128,33 +129,23 @@ class _MaskedPattern(_BasePattern):
                 return primitive
         return None
 
-    def plan_case(
-        self,
-        *,
-        backend: ValueTestBackendSupport,
-        emitted_name: str,
-        index: int,
-        case: TestCase,
-        specs: tuple[LoweredSpecialization, ...],
-        catalog: Catalog,
-        harness: HarnessPrimitiveNames,
-    ) -> tuple[ValueTestCasePlan, ...]:
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = masked_case(
-            emitted_name,
-            index,
-            case,
-            specs,
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
         )
         plans = [plan] if plan is not None else []
         plans.extend(
             scalable_masked_cases(
-                emitted_name,
-                index,
-                case,
-                specs,
-                catalog,
-                harness,
-                backend,
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
             )
         )
         return tuple(plans)
@@ -174,12 +165,12 @@ class _VectorConstantPattern(_BasePattern):
             and not spec.type_params
         )
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = generic_golden_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
         )
         return (plan,) if plan is not None else ()
 
@@ -194,14 +185,14 @@ class _SimpleShapePattern(_BasePattern):
     def matches(self, specs: tuple[LoweredSpecialization, ...]) -> bool:
         return bool(self._matching_specs(specs))
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
-        specs = self._matching_specs(kwargs["specs"])
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
+        specs = self._matching_specs(context.specs)
         if not specs:
             return ()
         plan = self.build_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
+            context.emitted_name,
+            context.index,
+            context.case,
             specs,
         )
         return (plan,) if plan is not None else ()
@@ -238,12 +229,12 @@ class _IndexedScalarPattern(_BasePattern):
             and not spec.type_params
         )
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = scalar_result_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
         )
         return (plan,) if plan is not None else ()
 
@@ -272,12 +263,12 @@ class _MaskedScalarVectorPattern(_BasePattern):
                 return primitive
         return None
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = scalar_vector_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
         )
         return (plan,) if plan is not None else ()
 
@@ -298,12 +289,12 @@ class _ImmediatePattern(_BasePattern):
             and not spec.type_params
         )
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = immediate_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
         )
         return (plan,) if plan is not None else ()
 
