@@ -14,7 +14,7 @@ from tslc.catalog.model import Catalog
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.render.cpp_project import _cpp_native_registration, _cpp_registration
 from tslc.render.model import LoweredBody
-from tslc.render.rust_project import _rust_registrations
+from tslc.render.rust_vectors import rust_registrations
 
 
 def test_x86_register_capabilities_derive_from_extension_facts(
@@ -129,7 +129,7 @@ def test_rust_registration_uses_source_tag_and_lowered_register(
         vector_spelling="Simd<i32, X86Demo>",
     )
 
-    rendered = _rust_registrations({"add": (spec,)}, {"x86_demo": extension})
+    rendered = rust_registrations({"add": (spec,)}, {"x86_demo": extension})
 
     assert "pub struct X86Demo;" in rendered
     assert "impl SimdVector for Simd<i32, X86Demo>" in rendered
