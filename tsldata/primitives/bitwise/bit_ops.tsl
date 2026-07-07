@@ -61,7 +61,7 @@ prim<v:=(v,v)> binary_and(left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -273,7 +273,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -493,7 +493,7 @@ prim<v:=(v,v)> binary_or(left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -719,7 +719,7 @@ prim<v:=(v,v)> binary_xor(left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -927,7 +927,7 @@ prim<v:=v> inv(data):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2:
             ?i? [avx2]
@@ -992,7 +992,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1153,7 +1153,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1317,7 +1317,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1479,7 +1479,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1612,7 +1612,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1773,7 +1773,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1936,7 +1936,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2097,7 +2097,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2265,7 +2265,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2446,7 +2446,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false

@@ -102,11 +102,22 @@ def test_profile_reachability(catalog: Catalog, machine_profiles) -> None:
     assert "avx2" not in wasm
 
 
-def test_inheritance_does_not_imply_supersession(catalog: Catalog) -> None:
+def test_oneapi_fpga_is_not_emitted_by_stock_profiles(
+    catalog: Catalog, machine_profiles
+) -> None:
+    for profile in machine_profiles.values():
+        emitted = {s.extension.name for s in _slots(catalog, profile, "add")}
+
+        assert "oneapi_fpga" not in emitted
+        assert "oneapi_fpga_rtl" not in emitted
+
+
+def test_oneapi_fpga_is_compile_mode_opt_in(catalog: Catalog) -> None:
     profile = MachineProfile(
         name="fpga-dev",
         family="generic",
-        features=frozenset({"oneapi_fpga_device"}),
+        features=frozenset(),
+        compile_modes=frozenset({"oneapi_fpga"}),
         alternatives={},
     )
 

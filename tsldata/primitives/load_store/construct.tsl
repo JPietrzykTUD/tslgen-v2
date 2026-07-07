@@ -160,7 +160,7 @@ prim<v:=s> set1(value):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -253,7 +253,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -328,7 +328,7 @@ prim<v:=()>[value=zero] set_zero():
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -443,7 +443,7 @@ prim<v:=()>[value=undef] set_undef():
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -667,7 +667,7 @@ prim<v:=(lanes<s>)> set(values):
           neon [neon]
           sve [sve]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false

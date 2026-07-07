@@ -291,7 +291,7 @@ prim<s:=v> hand(vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           neon [neon]
         safety:
           internal_unsafe false
@@ -311,7 +311,7 @@ prim<s:=v> hand(vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx2 [avx2]
           sse [sse2]
           neon [neon]
@@ -583,7 +583,7 @@ prim<s:=v> hor(vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           neon [neon]
         safety:
           internal_unsafe false
@@ -603,7 +603,7 @@ prim<s:=v> hor(vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -705,7 +705,7 @@ prim<s:=(m,v)> hand(mask, vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2_vl [avx512bw, avx512vl]
           avx2 [avx2]
@@ -738,7 +738,7 @@ prim<s:=(m,v)> hand(mask, vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2_vl [avx512bw, avx512vl]
           avx2 [avx2]
@@ -831,7 +831,7 @@ prim<s:=(m,v)> hor(mask, vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2_vl [avx512bw, avx512vl]
           avx2 [avx2]
@@ -858,7 +858,7 @@ prim<s:=(m,v)> hor(mask, vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2_vl [avx512bw, avx512vl]
           avx2 [avx2]
@@ -927,7 +927,7 @@ prim<s:=(m,v)> hor(mask, vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           neon [neon]
         safety:
           internal_unsafe false
@@ -947,7 +947,7 @@ prim<s:=(m,v)> hor(mask, vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx2 [avx2]
           sse [sse2]
           neon [neon]

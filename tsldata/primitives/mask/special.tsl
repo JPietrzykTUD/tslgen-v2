@@ -29,7 +29,7 @@ prim<im:=(im,im)> test_imask(mask, position):
           neon [neon]
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -67,7 +67,7 @@ prim<im:=(im,im,im)> insert_imask(mask_a, mask_b, position):
           neon [neon]
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -105,7 +105,7 @@ prim<im:=(im,im)> extract_imask(mask, position):
           neon [neon]
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false

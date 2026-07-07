@@ -29,8 +29,6 @@ after a `.wasm` binary has been produced.
 - No direct WebAssembly text/binary backend in this slice.
 - No browser or JavaScript harness in the first slice.
 - No `wasm32-unknown-unknown` value-test runner in the first slice.
-- No broad rename of existing `lscpu_flags` unless it becomes necessary for a
-  clean implementation.
 
 ## Current Model Notes
 
@@ -38,17 +36,14 @@ after a `.wasm` binary has been produced.
 build rendering. An implementation body is usable only when its applicable
 `requires [...]` flags are a subset of the selected profile's features.
 
-`Extension.lscpu_flags` is currently x86-shaped vocabulary. In actual selector
-logic it only activates inherited/derived extensions such as `avx2_vl` and
-`sse_vl`, which supersede their base extension when their activation flags are
-present. Base extensions self-gate through implementation `requires` clauses.
+Extension variants use `active_when.target_features` and explicit `supersedes`
+for profile-level activation. Base extensions such as `wasm128` do not need
+`active_when`; they self-gate through implementation `requires` clauses.
 
 For Wasm SIMD:
 
 - Add a profile feature token named `simd128`.
 - Put `requires [simd128]` on Wasm SIMD implementation bodies.
-- Make the base `wasm128` extension use `lscpu_flags []` unless a later cleanup
-  renames/generalizes the field.
 - Do not interpret `simd128` as runtime CPU probing. It is a compile/profile
   capability token.
 
@@ -143,7 +138,6 @@ extension wasm128:
   vector_bits 128
   native_sort_order 800
   autodetect false
-  lscpu_flags []
   mask_repr "lane_bitmask"
   mask_width "lanes"
   mask_vector_loadable false

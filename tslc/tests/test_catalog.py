@@ -180,6 +180,10 @@ def test_extension_inheritance_activation_and_supersession(catalog: Catalog) -> 
     assert compile_guards[0].name == "sve_vector_bits"
     assert compile_guards[0].macro == "__ARM_FEATURE_SVE_BITS"
     assert compile_guards[0].equals == "512"
+
+    oneapi = catalog.extensions["oneapi_fpga"]
+    assert oneapi.active_when.target_features == frozenset()
+    assert oneapi.active_when.compile_modes == frozenset({"oneapi_fpga"})
     assert compile_guards[0].hint_flag == "-msve-vector-bits=512"
     assert (
         sve512.direct_vector_register_type("cpp", "si32")

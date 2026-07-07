@@ -360,7 +360,7 @@ extension oneapi_fpga:
   native_sort_order 0
   autodetect false
   active_when:
-    target_features ["oneapi_fpga_device"]
+    compile_modes ["oneapi_fpga"]
   mask_repr "lane_bitmask"
   mask_width "lanes"
   mask_vector_loadable false
@@ -380,7 +380,7 @@ extension oneapi_fpga_rtl:
   vendor "intel"
   extension_name "oneapi_fpga_rtl"
   active_when:
-    target_features ["oneapi_fpga_device"]
+    compile_modes ["oneapi_fpga"]
   mask_repr "vector"
   mask_width 32
   mask_vector_loadable false

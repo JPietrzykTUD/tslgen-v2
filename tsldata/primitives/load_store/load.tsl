@@ -47,7 +47,7 @@ prim<v:=cptr>[aligned=*] load(ptr):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -222,7 +222,7 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -383,7 +383,7 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -546,7 +546,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -714,7 +714,7 @@ prim<s:=cptr>[aligned=false] load_scalar(ptr):
           sse [sse]
           neon [neon]
           sve [sve]
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe true

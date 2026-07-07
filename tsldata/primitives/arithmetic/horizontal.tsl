@@ -209,7 +209,7 @@ prim<s:=v> hadd(vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]
@@ -384,7 +384,7 @@ prim<s:=v> hmax(vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]
@@ -561,7 +561,7 @@ prim<s:=v> hmin(vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]
@@ -663,7 +663,7 @@ prim<s:=(m,v)> hadd(mask, vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]
@@ -790,7 +790,7 @@ prim<s:=(m,v)> hmax(mask, vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]
@@ -923,7 +923,7 @@ prim<s:=(m,v)> hmin(mask, vec):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]

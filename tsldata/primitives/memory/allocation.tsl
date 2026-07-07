@@ -29,7 +29,7 @@ prim<ptr:=(usize)> allocate(count_bytes):
           sve [sve]
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -71,7 +71,7 @@ prim<ptr:=(usize,usize)> allocate_aligned(count_bytes, alignment):
           sve [sve]
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -112,7 +112,7 @@ prim<void:=(ptr)> deallocate(ptr):
           sve [sve]
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe true

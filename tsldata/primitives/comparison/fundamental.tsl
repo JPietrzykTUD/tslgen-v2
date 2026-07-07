@@ -66,7 +66,7 @@ prim<m:=(v,v)> equal(left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -290,7 +290,7 @@ prim<m:=(v,v)> nequal(left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -495,7 +495,7 @@ prim<m:=(v,v)> less_than(left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -807,7 +807,7 @@ prim<m:=(v,v)> greater_than(left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1101,7 +1101,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1324,7 +1324,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1547,7 +1547,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1770,7 +1770,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1992,7 +1992,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2214,7 +2214,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2436,7 +2436,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2658,7 +2658,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false

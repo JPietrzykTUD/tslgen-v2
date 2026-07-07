@@ -51,4 +51,3 @@ flags:
   neon {normalized "neon"}
   sve {normalized "sve"}
   cuda {normalized "cuda"}
-  oneapi_fpga_device {normalized "oneapi_fpga_device"}

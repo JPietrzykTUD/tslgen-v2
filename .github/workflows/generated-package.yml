@@ -133,6 +133,8 @@ jobs:
               release_title="TSL generated ${RELEASE_TAG}"
               release_notes="Generated TSL package for ${RELEASE_TAG} (${GITHUB_SHA})."
               asset_name="tsl-generated-${RELEASE_TAG}.tar.gz"
+              release_asset_path="tslctmp/artifacts/${asset_name}"
+              cp "${ASSET_PATH}" "${release_asset_path}"
 
               gh release view "${RELEASE_TAG}" >/dev/null 2>&1 || \
                 gh release create "${RELEASE_TAG}" \
@@ -142,7 +144,7 @@ jobs:
 
               gh release upload \
                 "${RELEASE_TAG}" \
-                "${ASSET_PATH}#${asset_name}" \
+                "${release_asset_path}" \
                 --clobber
             '
 

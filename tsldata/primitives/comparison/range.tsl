@@ -47,7 +47,7 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -63,7 +63,7 @@ prim<m:=(v,v,v)> between_inclusive(x, left, right):
           """
     oneapi_fpga_rtl:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -280,7 +280,7 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -296,7 +296,7 @@ prim<m:=(v,v,v)> between_left_inclusive(x, left, right):
           """
     oneapi_fpga_rtl:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -513,7 +513,7 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -529,7 +529,7 @@ prim<m:=(v,v,v)> between_right_inclusive(x, left, right):
           """
     oneapi_fpga_rtl:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -746,7 +746,7 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -762,7 +762,7 @@ prim<m:=(v,v,v)> between_exclusive(x, left, right):
           """
     oneapi_fpga_rtl:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -989,7 +989,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1005,7 +1005,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_inclusive(mask, x, left, right):
           """
     oneapi_fpga_rtl:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1232,7 +1232,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1248,7 +1248,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_left_inclusive(mask, x, left, right):
           """
     oneapi_fpga_rtl:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1475,7 +1475,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1491,7 +1491,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_right_inclusive(mask, x, left, right):
           """
     oneapi_fpga_rtl:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1718,7 +1718,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
           """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1734,7 +1734,7 @@ prim<m:=(m,v,v,v)>[mask=zero] between_exclusive(mask, x, left, right):
           """
     oneapi_fpga_rtl:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false

@@ -123,7 +123,7 @@ prim<v:=v> conflict(data):
           sse_vl [sse2]
           neon [neon]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -193,7 +193,7 @@ prim<m:=(m,v)> conflict_free(mask, data):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx2]
           avx2_vl [avx]

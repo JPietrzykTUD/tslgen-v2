@@ -189,7 +189,7 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
                 """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         ToExtension:
           where:
             family same_as
@@ -412,7 +412,7 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
                 """
     oneapi_fpga:
       arith:
-        requires [oneapi_fpga_device]
+        requires []
         ToExtension:
           where:
             family same_as
@@ -1655,7 +1655,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
           sse [sse2]
           neon [neon]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           scalar []
         safety:
           internal_unsafe false
@@ -2216,7 +2216,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           sse [sse2]
           neon [neon]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           scalar []
         safety:
           internal_unsafe false

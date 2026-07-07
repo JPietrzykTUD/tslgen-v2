@@ -101,7 +101,6 @@ extension wasm128:
   vector_bits 128
   native_sort_order 800
   autodetect false
-  lscpu_flags []
   mask_repr "lane_bitmask"
   mask_width "lanes"
   mask_vector_loadable false
@@ -115,6 +114,10 @@ extension wasm128:
     type_name "Wasm128"
     arch_module "wasm32"
 ```
+
+Base WebAssembly SIMD does not need `active_when`: the `wasm32` profile admits
+the extension family, and implementation bodies use `requires [simd128]` for the
+actual target-feature gate.
 
 Then add explicit `vector_register_types`. For `wasm128`, each supported base
 type uses `v128_t` in C++ and `core::arch::wasm32::v128` in Rust. Prefer
