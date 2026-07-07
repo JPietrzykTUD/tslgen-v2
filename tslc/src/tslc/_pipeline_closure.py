@@ -160,22 +160,24 @@ def _propagate_transitive_call_facts(
     slots: list[_LoweredSlot],
     split_names: frozenset[str],
 ) -> None:
-    """Propagate unsafe callee metadata and required features through live calls.
+    """Propagate callee safety, required features, and implementation state.
 
     A caller that reaches unsafe callee metadata records an internal unsafe
     dependency for review/diagnostics. Required target features propagate
     bottom-up as well, so a profile gets every feature needed by the bodies that
-    remain live after dependency pruning.
+    remain live after dependency pruning. Implementation state joins through the
+    same live dependency graph so query APIs report composed/fallback callees.
     """
 
     safety_by_key = {
-        _safety_key(slot, split_names): slot.spec.safety for slot in slots
+        _call_fact_key(slot, split_names): slot.spec.safety for slot in slots
     }
     features_by_key = {
-        _safety_key(slot, split_names): slot.spec.required_features for slot in slots
+        _call_fact_key(slot, split_names): slot.spec.required_features for slot in slots
     }
     state_by_key = {
-        _safety_key(slot, split_names): slot.spec.implementation_state for slot in slots
+        _call_fact_key(slot, split_names): slot.spec.implementation_state
+        for slot in slots
     }
     dependency_targets: dict[
         tuple[str, str, str | None, VectorIdentity, VectorIdentity | None],
@@ -188,13 +190,13 @@ def _propagate_transitive_call_facts(
     ] = {}
     for slot in slots:
         dependency_targets.setdefault(_slot_key(slot, split_names), []).append(
-            _safety_key(slot, split_names)
+            _call_fact_key(slot, split_names)
         )
     changed = True
     while changed:
         changed = False
         for slot in slots:
-            slot_key = _safety_key(slot, split_names)
+            slot_key = _call_fact_key(slot, split_names)
             safety = safety_by_key[slot_key]
             features = features_by_key[slot_key]
             state = state_by_key[slot_key]
@@ -214,10 +216,10 @@ def _propagate_transitive_call_facts(
                     else "",
                 ),
             ):
-                for dependency_safety_key in dependency_targets.get(
+                for dependency_fact_key in dependency_targets.get(
                     _dependency_key(slot, dependency, split_names), []
                 ):
-                    dependency_safety = safety_by_key[dependency_safety_key]
+                    dependency_safety = safety_by_key[dependency_fact_key]
                     if (
                         dependency_safety.internal_unsafe
                         or dependency_safety.caller_unsafe
@@ -229,10 +231,10 @@ def _propagate_transitive_call_facts(
                                 | frozenset({"unsafe_callee"}),
                             )
                         )
-                    dependency_features = features_by_key[dependency_safety_key]
+                    dependency_features = features_by_key[dependency_fact_key]
                     if not dependency_features <= propagated_features:
                         propagated_features = propagated_features | dependency_features
-                    dependency_state = state_by_key[dependency_safety_key]
+                    dependency_state = state_by_key[dependency_fact_key]
                     joined_state = combine_implementation_states(
                         [propagated_state, dependency_state]
                     )
@@ -249,7 +251,7 @@ def _propagate_transitive_call_facts(
                 changed = True
 
     for slot in slots:
-        slot_key = _safety_key(slot, split_names)
+        slot_key = _call_fact_key(slot, split_names)
         safety = safety_by_key[slot_key]
         features = features_by_key[slot_key]
         state = state_by_key[slot_key]
@@ -267,7 +269,7 @@ def _propagate_transitive_call_facts(
         )
 
 
-def _safety_key(
+def _call_fact_key(
     slot: _LoweredSlot,
     split_names: frozenset[str],
 ) -> tuple[
@@ -276,7 +278,7 @@ def _safety_key(
     tuple[str, str] | None,
     tuple[tuple[str, str, str], ...],
 ]:
-    """A lowered-body identity for safety propagation before emitted-name splits."""
+    """A lowered-body identity for transitive call facts before emitted-name splits."""
 
     spec = slot.spec
     return (

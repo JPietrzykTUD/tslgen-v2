@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from tslc.backend.rust_names import (
+    rust_primitive_tag_name,
+    rust_primitive_trait_name,
+)
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.target_capability import rust_extension_tag
 from tslc.documentation import (
@@ -140,7 +144,7 @@ class RustBackend:
         internal_name = _variant_primitive_name(primitive_name, variant_name)
         caller_unsafe = _any_caller_unsafe(specs)
         vi = varying_positions(specs)[0]  # one varying position in scope
-        arg_trait = f"{_trait_name(internal_name)}Arg"
+        arg_trait = f"{rust_primitive_trait_name(internal_name)}Arg"
         fixed = [
             (name, kind)
             for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
@@ -272,7 +276,9 @@ class RustBackend:
     ) -> str:
         shape = specs[0]
         vi = varying_positions(specs)[0]
-        arg_trait = f"{_PRIMITIVE_TRAIT_PREFIX}{_trait_name(primitive_name)}Arg"
+        arg_trait = (
+            f"{_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}Arg"
+        )
         fixed = [
             (name, kind)
             for i, (name, kind) in enumerate(zip(shape.param_names, shape.param_kinds))
@@ -329,7 +335,7 @@ class RustBackend:
         params = _params(shape, "Self", vt_type=vt_type, vidx_type=vidx_type)
         generics = f"<{', '.join(decls)}>" if decls else ""
         trait_header = (
-            f"pub trait {_trait_name(primitive_name)}{generics}: "
+            f"pub trait {rust_primitive_trait_name(primitive_name)}{generics}: "
             f"StaticSimdVector{_index_where(shape)}"
         )
         doc = _rust_doc(shape, context="Rust dispatch trait", concrete=False)
@@ -413,7 +419,8 @@ class RustBackend:
         trait_primitive = _variant_primitive_name(spec.primitive_name, variant_name)
         return (
             (f"{doc}\n" if doc else "")
-            + f"impl{impl_generics} {_trait_name(trait_primitive)}{trait_args} for {key}"
+            + f"impl{impl_generics} {rust_primitive_trait_name(trait_primitive)}"
+            + f"{trait_args} for {key}"
             f"{_index_where(spec, impl_register=impl_register)} {{\n"
             f"    const IMPLEMENTATION_STATE: ImplementationState = "
             f"{_rust_implementation_state(_spec_implementation_state(spec, variant_name))};\n"
@@ -449,7 +456,7 @@ class RustBackend:
             ret = "T::RegisterType"
             vt_type = "T::RegisterType"
             call = (
-                f"<S as {_PRIMITIVE_TRAIT_PREFIX}{_trait_name(primitive_name)}"
+                f"<S as {_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}"
                 f"<{', '.join(targs)}>>::apply({names})"
             )
         # Free SIMD type params: declare them (bounded) and pass them as trait args. The call is
@@ -462,7 +469,7 @@ class RustBackend:
             ) + decl_list
             vidx_type = f"{shape.type_params[0].name}::RegisterType"
             call = (
-                f"<S as {_PRIMITIVE_TRAIT_PREFIX}{_trait_name(primitive_name)}"
+                f"<S as {_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}"
                 f"<{', '.join(targs)}>>::apply({names})"
             )
         else:
@@ -471,7 +478,7 @@ class RustBackend:
         trait_args = f"<{', '.join(targs)}>" if targs else ""
         decls = "".join(f", {d}" for d in decl_list)
         call = (
-            f"<S as {_PRIMITIVE_TRAIT_PREFIX}{_trait_name(primitive_name)}"
+            f"<S as {_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}"
             f"{trait_args}>::apply({names})"
         )
         call = _unsafe_call(call, caller_unsafe)
@@ -479,7 +486,7 @@ class RustBackend:
         return (
             (f"{doc}\n" if doc else "")
             + f"pub {_unsafe_prefix(caller_unsafe)}fn {rust_raw_identifier(primitive_name)}"
-            f"<S: {_PRIMITIVE_TRAIT_PREFIX}{_trait_name(primitive_name)}"
+            f"<S: {_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}"
             f"{trait_args}{decls}>"
             f"({params}) -> {ret}{_index_where(shape)} {{\n"
             f"    {call}\n"
@@ -608,8 +615,8 @@ def _ordinary_implementation_state_query(
     primitive_name: str,
     shape: LoweredSpecialization,
 ) -> str:
-    trait_name = _trait_name(primitive_name)
-    tag_name = _primitive_tag_name(primitive_name)
+    trait_name = rust_primitive_trait_name(primitive_name)
+    tag_name = rust_primitive_tag_name(primitive_name)
     generics = _query_generics(shape)
     trait_args = _query_trait_args(shape)
     args = _query_args(shape)
@@ -636,8 +643,8 @@ def _overloaded_implementation_state_query(
     specs: tuple[LoweredSpecialization, ...],
 ) -> str:
     shape = specs[0]
-    trait_name = f"{_trait_name(primitive_name)}Arg"
-    tag_name = _primitive_tag_name(primitive_name)
+    trait_name = f"{rust_primitive_trait_name(primitive_name)}Arg"
+    tag_name = rust_primitive_tag_name(primitive_name)
     generics = ["S: StaticSimdVector", *_query_const_generics(shape), "V"]
     trait_args = ["S", *_query_trait_const_args(shape)]
     args = [*_query_const_args(shape), "V"]
@@ -979,14 +986,6 @@ def _free_kind_type(kind: str, base_spelling: str) -> str:
     return DEFAULT_SUPPORT_POLICY.rust_free_type(kind, base_type=base_spelling)
 
 
-def _trait_name(primitive_name: str) -> str:
-    return f"{primitive_name[:1].upper()}{primitive_name[1:]}Impl"
-
-
-def _primitive_tag_name(primitive_name: str) -> str:
-    return "".join(part[:1].upper() + part[1:] for part in primitive_name.split("_"))
-
-
 def _type_param_decls(
     shape: LoweredSpecialization, *, trait_prefix: str = ""
 ) -> list[str]:
@@ -1004,7 +1003,7 @@ def _type_param_decls(
     for param in shape.type_params:
         traits = [
             "StaticSimdVector",
-            *(f"{trait_prefix}{_trait_name(b)}" for b in param.bounds),
+            *(f"{trait_prefix}{rust_primitive_trait_name(b)}" for b in param.bounds),
         ]
         decls.append(f"{param.name}: {' + '.join(traits)}")
     return decls

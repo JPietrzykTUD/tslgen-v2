@@ -69,26 +69,50 @@ def infer_direct_implementation_state(
     if selected.extension.family in {"scalar", "generic_like"}:
         return ImplementationState.FALLBACK
 
-    facts = _BodyStateFacts()
+    facts = ImplementationStateFacts()
     facts.visit(segments)
-    if facts.fallback:
-        return ImplementationState.FALLBACK
-    if facts.unknown:
-        return ImplementationState.UNKNOWN
-    if facts.intrinsics == 1 and facts.calls == 0 and facts.composition_markers == 0:
-        return ImplementationState.NATIVE
-    if facts.intrinsics > 0 or facts.calls > 0 or facts.composition_markers > 0:
-        return ImplementationState.COMPOSED
-    return ImplementationState.UNKNOWN
+    return facts.implementation_state(selected)
 
 
 @dataclass(slots=True)
-class _BodyStateFacts:
+class ImplementationStateFacts:
+    """Facts collected while rendering the body paths that survive lowering."""
+
     intrinsics: int = 0
     calls: int = 0
     composition_markers: int = 0
     fallback: bool = False
     unknown: bool = False
+
+    def implementation_state(
+        self, selected: "SelectedImplementation"
+    ) -> ImplementationState:
+        if selected.extension.family in {"scalar", "generic_like"}:
+            return ImplementationState.FALLBACK
+        if self.fallback:
+            return ImplementationState.FALLBACK
+        if self.unknown:
+            return ImplementationState.UNKNOWN
+        if self.intrinsics == 1 and self.calls == 0 and self.composition_markers == 0:
+            return ImplementationState.NATIVE
+        if self.intrinsics > 0 or self.calls > 0 or self.composition_markers > 0:
+            return ImplementationState.COMPOSED
+        return ImplementationState.UNKNOWN
+
+    def mark_intrinsic(self) -> None:
+        self.intrinsics += 1
+
+    def mark_call(self) -> None:
+        self.calls += 1
+
+    def mark_composition(self) -> None:
+        self.composition_markers += 1
+
+    def mark_fallback(self) -> None:
+        self.fallback = True
+
+    def mark_unknown(self) -> None:
+        self.unknown = True
 
     def visit(self, segments: tuple[Segment, ...] | None) -> None:
         if segments is None:
@@ -106,23 +130,23 @@ class _BodyStateFacts:
 
     def _visit_region(self, region: Region) -> None:
         if region.keyword == "intrin":
-            self.intrinsics += 1
+            self.mark_intrinsic()
             return
         if region.keyword == "call":
-            self.calls += 1
+            self.mark_call()
             return
         if region.keyword == "loop":
             if _loop_is_backend_fallback(region.selector_text):
-                self.fallback = True
+                self.mark_fallback()
             else:
-                self.composition_markers += 1
+                self.mark_composition()
             return
         if region.keyword in _COMPOSITION_KEYWORDS:
-            self.composition_markers += 1
+            self.mark_composition()
             return
         if region.keyword in _NEUTRAL_KEYWORDS:
             return
-        self.unknown = True
+        self.mark_unknown()
 
 
 def _loop_is_backend_fallback(selector_text: str) -> bool:

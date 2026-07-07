@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from tslc.backend.rust import RustBackend
+from tslc.backend.rust_names import rust_primitive_tag_name
 from tslc.backend.target_capability import rust_arch_module
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Extension
@@ -20,7 +21,6 @@ from tslc.render._common import (
     used_exts,
 )
 from tslc.render.rust_algorithm import rust_algorithm_module
-from tslc.render.rust_facades import rust_primitive_tag_name
 from tslc.render.rust_vectors import rust_registrations
 
 if TYPE_CHECKING:

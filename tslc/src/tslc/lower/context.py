@@ -16,11 +16,19 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
+from typing import TYPE_CHECKING
 
 from tslc.backend.translation import BackendDialect
 from tslc.catalog.model import Catalog, Extension, ImplementationSafety
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
+from tslc.lower.implementation_state import (
+    ImplementationState,
+    ImplementationStateFacts,
+)
 from tslc.render.model import RenderText, as_render_text
+
+if TYPE_CHECKING:
+    from tslc.select.selector import SelectedImplementation
 
 _MAPPING_PROXY_TYPE = type(MappingProxyType({}))
 
@@ -242,6 +250,10 @@ class LoweringEffects:
     diagnostics: list[Diagnostic] = field(default_factory=list)
     safety: ImplementationSafety = field(default_factory=ImplementationSafety)
     unsupported: bool = False  # a not-yet-supported construct -> skip this specialization
+    implementation_state_facts: ImplementationStateFacts = field(
+        default_factory=ImplementationStateFacts
+    )
+    _implementation_state_suppression_depth: int = 0
 
     def error(
         self, code: str, message: str, *, source: SourceSpan | None = None
@@ -277,6 +289,34 @@ class LoweringEffects:
     def mark_unsafe(self) -> None:
         self.mark_internal_unsafe("unsafe_operation")
 
+    def mark_implementation_intrinsic(self) -> None:
+        if self._implementation_state_suppression_depth == 0:
+            self.implementation_state_facts.mark_intrinsic()
+
+    def mark_implementation_call(self) -> None:
+        if self._implementation_state_suppression_depth == 0:
+            self.implementation_state_facts.mark_call()
+
+    def mark_implementation_composition(self) -> None:
+        if self._implementation_state_suppression_depth == 0:
+            self.implementation_state_facts.mark_composition()
+
+    def mark_implementation_fallback(self) -> None:
+        if self._implementation_state_suppression_depth == 0:
+            self.implementation_state_facts.mark_fallback()
+
+    def mark_implementation_unknown(self) -> None:
+        if self._implementation_state_suppression_depth == 0:
+            self.implementation_state_facts.mark_unknown()
+
+    def implementation_state(
+        self, selected: "SelectedImplementation"
+    ) -> ImplementationState:
+        return self.implementation_state_facts.implementation_state(selected)
+
+    def suppress_implementation_state(self) -> "_ImplementationStateSuppression":
+        return _ImplementationStateSuppression(self)
+
     @property
     def requires_unsafe(self) -> bool:
         return self.safety.internal_unsafe
@@ -284,6 +324,17 @@ class LoweringEffects:
     @property
     def has_errors(self) -> bool:
         return any(diagnostic.severity == "error" for diagnostic in self.diagnostics)
+
+
+class _ImplementationStateSuppression:
+    def __init__(self, effects: LoweringEffects) -> None:
+        self._effects = effects
+
+    def __enter__(self) -> None:
+        self._effects._implementation_state_suppression_depth += 1
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        self._effects._implementation_state_suppression_depth -= 1
 
 
 @dataclass(slots=True)

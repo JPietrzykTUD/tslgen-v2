@@ -10,6 +10,10 @@ from tslc.backend.primitive_facade import (
     DataparallelPrimitiveFacadeKind,
     classify_dataparallel_primitive_facade,
 )
+from tslc.backend.rust_names import (
+    rust_primitive_tag_name,
+    rust_primitive_trait_name,
+)
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.lower.lowerer import LoweredSpecialization
 
@@ -142,14 +146,6 @@ def _rust_facade_param_type(param_kind: str, vec: str, target_vec: str | None) -
     if param_kind == "s":
         return f"{vec}::BaseType"
     raise AssertionError(f"unsupported Rust facade parameter kind: {param_kind}")
-
-
-def rust_primitive_trait_name(primitive_name: str) -> str:
-    return f"{primitive_name[:1].upper()}{primitive_name[1:]}Impl"
-
-
-def rust_primitive_tag_name(primitive_name: str) -> str:
-    return "".join(part[:1].upper() + part[1:] for part in primitive_name.split("_"))
 
 
 __all__ = (

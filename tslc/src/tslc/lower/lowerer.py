@@ -54,7 +54,6 @@ from tslc.lower.region_handlers import (
 )
 from tslc.lower.implementation_state import (
     ImplementationState,
-    infer_direct_implementation_state,
 )
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
 from tslc.render.model import (
@@ -464,9 +463,7 @@ class Lowerer:
                         backend_id=backend.backend_id,
                         requires_unsafe=variant_safety.internal_unsafe,
                     ),
-                    implementation_state=infer_direct_implementation_state(
-                        selected, variant_segments
-                    ),
+                    implementation_state=rendered_variant.implementation_state,
                     safety=variant_safety,
                 )
             )
@@ -530,9 +527,7 @@ class Lowerer:
             mask_policy=selected.primitive.attributes.get("mask"),
             lane_list_params=tuple(context.env.lane_list_params.values()),
             required_features=selected.required_features,
-            implementation_state=infer_direct_implementation_state(
-                selected, segments
-            ),
+            implementation_state=default_body.implementation_state,
             safety=effective_safety,
             variant_bodies=tuple(variant_bodies),
             documentation=primitive_documentation(
