@@ -400,7 +400,7 @@ function PrimitiveHero({ primitive, backends, selectedBackend, setSelectedBacken
           {primitive.semantics && (
             <div className="semanticsBox">
               <span className="eyebrow">Semantics</span>
-              <pre>{primitive.semantics}</pre>
+              <CodeBlock code={primitive.semantics} className="syntaxCode" />
             </div>
           )}
         </div>
@@ -442,11 +442,19 @@ function LanguageSelector({ backends, selectedBackend, setSelectedBackend }) {
 
 function ExpressionCard({ label, expression }) {
   if (!expression) return null;
+  return <CodeBlock label={label} code={expression} className="syntaxCode" />;
+}
+
+function CodeBlock({ label, code, className = "" }) {
   return (
-    <pre>
-      <strong>{label}</strong>
-      {"\n"}
-      {expression}
+    <pre className={className}>
+      {label && (
+        <>
+          <strong>{label}</strong>
+          {"\n"}
+        </>
+      )}
+      {highlightCode(code)}
     </pre>
   );
 }
@@ -1379,6 +1387,44 @@ function selectedExpression(primitive, backend) {
     primitive.expressions[0] ??
     null
   );
+}
+
+const CODE_TOKEN_PATTERN =
+  /(\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b(?:alignas|as|auto|class|const|constexpr|else|false|for|if|let|match|mut|namespace|return|struct|template|true|type|typename|unsafe|using|where)\b|\b(?:GenericVec|FixedVec|NativeVec|Profile|Simd|ToVec|Value|Vec|VectorFor|dataparallel|profile|tsl)\b|\b\d+\b|::|->|=>|[{}()[\]<>;,])/g;
+
+function highlightCode(code) {
+  const parts = [];
+  let cursor = 0;
+  let match;
+  let tokenIndex = 0;
+  CODE_TOKEN_PATTERN.lastIndex = 0;
+  while ((match = CODE_TOKEN_PATTERN.exec(code)) !== null) {
+    if (match.index > cursor) {
+      parts.push(code.slice(cursor, match.index));
+    }
+    const token = match[0];
+    parts.push(
+      <span className={`codeToken ${codeTokenClass(token)}`} key={tokenIndex++}>
+        {token}
+      </span>
+    );
+    cursor = match.index + token.length;
+  }
+  if (cursor < code.length) {
+    parts.push(code.slice(cursor));
+  }
+  return parts;
+}
+
+function codeTokenClass(token) {
+  if (token.startsWith("//")) return "comment";
+  if (token.startsWith('"') || token.startsWith("'")) return "string";
+  if (/^\d+$/.test(token)) return "number";
+  if (/^(GenericVec|FixedVec|NativeVec|Profile|Simd|ToVec|Value|Vec|VectorFor|dataparallel|profile|tsl)$/.test(token)) {
+    return "type";
+  }
+  if (/^[{}()[\]<>;,]$|^(::|->|=>)$/.test(token)) return "punctuation";
+  return "keyword";
 }
 
 function primitiveMatchesSearch(primitive, records, query) {

@@ -17,7 +17,10 @@ from tslc.lower.context import (
     LoweringScope,
     LoweringSession,
 )
-from tslc.lower.implementation_state import ImplementationState
+from tslc.lower.implementation_state import (
+    ImplementationState,
+    direct_return_is_native,
+)
 from tslc.lower.raw_text import render_raw_text
 from tslc.lower.region_handlers import (
     DEFAULT_REGION_LOWERERS,
@@ -110,7 +113,7 @@ def render_body(
             ),
         )
 
-    renderer = ExpressionRenderer(context, region_lowerers)
+    renderer = ExpressionRenderer(context, selected, region_lowerers)
     rendered = renderer.render(segments)
     diagnostics = tuple(context.effects.diagnostics)
     if variant_name is not None:
@@ -140,9 +143,11 @@ class ExpressionRenderer:
     def __init__(
         self,
         context: LoweringSession,
+        selected: SelectedImplementation,
         region_lowerers: tuple[RegionLowerer, ...] = DEFAULT_REGION_LOWERERS,
     ) -> None:
         self._context = context
+        self._selected = selected
         self._lowerers = {lowerer.keyword: lowerer for lowerer in region_lowerers}
 
     def render(self, segments: tuple[Segment, ...]) -> RenderText:
@@ -166,7 +171,7 @@ class ExpressionRenderer:
             )
             self._context.effects.mark_implementation_unknown()
             return literal_text(segment.full_text)
-        _record_rendered_region_state(segment, self._context)
+        _record_rendered_region_state(segment, self._context, self._selected)
         rendered = as_render_text(lowerer.lower(segment, self._context, self.render))
         return _finish_consumed_statement_terminator(segment, lowerer, rendered)
 
@@ -185,7 +190,14 @@ def _finish_consumed_statement_terminator(
     return render_sequence((rendered, literal_text(";")))
 
 
-def _record_rendered_region_state(region: Region, context: LoweringSession) -> None:
+def _record_rendered_region_state(
+    region: Region,
+    context: LoweringSession,
+    selected: SelectedImplementation,
+) -> None:
+    if region.keyword == "complete" and direct_return_is_native(region, selected):
+        context.effects.mark_implementation_direct()
+        return
     if region.keyword == "intrin":
         context.effects.mark_implementation_intrinsic()
         return

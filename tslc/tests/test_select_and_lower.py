@@ -17,6 +17,7 @@ from tslc.catalog.model import (
 )
 from tslc.catalog.target_families import ProfileFamilyCapability, TargetFamilyCatalog
 from tslc.lower import lowerer as lowerer_module
+from tslc.lower.implementation_state import ImplementationState
 from tslc.lower.lowerer import Lowerer
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
 from tslc.select.selector import SelectedImplementation, Selector
@@ -151,6 +152,27 @@ def test_lower_scalar_add_has_no_unsafe(catalog: Catalog, machine_profiles) -> N
     ).specialization
     assert rust.base_type_spelling == "i32"
     assert rust.body_text == "return left.tsl_add(right);"
+
+
+def test_lower_to_vector_lane_bitmask_identity_is_native(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slots = {
+        (s.type_tag, s.extension.name): s
+        for s in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "to_vector", ("si64",))
+        .selected
+    }
+    slot = slots[("si64", "avx2")]
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert cpp.body_text == "return mask;"
+    assert cpp.implementation_state is ImplementationState.NATIVE
 
 
 @pytest.mark.parametrize("backend_id", ("cpp", "rust"))

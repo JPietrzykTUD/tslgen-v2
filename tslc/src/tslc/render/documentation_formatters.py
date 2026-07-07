@@ -45,18 +45,41 @@ class _CppDocumentationFormatter:
 
     def expression(self, doc: DocumentationSpec) -> str:
         spec = doc.spec
-        lines = list(_cpp_alias_lines(doc))
-        call = _format_call(
-            f"tsl::{spec.primitive_name}",
-            _cpp_template_args(spec),
-            _runtime_args(spec),
-            template_open="<",
-            template_close=">",
+        if is_free_function(spec):
+            call = _cpp_call(spec, ())
+            prefix = "" if spec.result_kind == "void" else "auto result = "
+            suffix = ";" if spec.result_kind == "void" else ";"
+            return f"{prefix}{call}{suffix}"
+        lines = [f"using Value = {spec.base_type_spelling};"]
+        lines.append(_cpp_call_block(doc, "Vec", _cpp_vector_type(spec), _CPP_DIRECT_COMMENT))
+        lines.append(
+            _cpp_call_block(
+                doc,
+                "NativeVec",
+                "tsl::dataparallel::simd_for_t<tsl::dataparallel::native, Value>",
+                _NATIVE_COMMENT,
+            )
         )
-        if spec.result_kind == "void":
-            lines.append(f"{call};")
-        else:
-            lines.append(f"auto result = {call};")
+        lane_count = static_lane_count(doc)
+        if lane_count is not None:
+            lines.append(
+                _cpp_call_block(
+                    doc,
+                    "FixedVec",
+                    "tsl::dataparallel::simd_for_t<"
+                    f"tsl::dataparallel::fixed<{lane_count}>, Value>",
+                    _FIXED_COMMENT,
+                )
+            )
+            lines.append(
+                _cpp_call_block(
+                    doc,
+                    "GenericVec",
+                    "tsl::dataparallel::simd_for_t<"
+                    f"tsl::dataparallel::generic<{lane_count}>, Value>",
+                    _GENERIC_COMMENT,
+                )
+            )
         return "\n".join(lines)
 
 
@@ -79,20 +102,45 @@ class _RustDocumentationFormatter:
 
     def expression(self, doc: DocumentationSpec) -> str:
         spec = doc.spec
-        lines = list(_rust_alias_lines(doc))
-        call = _format_call(
-            rust_raw_identifier(spec.primitive_name),
-            _rust_generic_args(spec),
-            _runtime_args(spec),
-            template_open="::<",
-            template_close=">",
+        if is_free_function(spec):
+            call = _rust_call(spec, ())
+            if spec.safety.caller_unsafe:
+                call = f"unsafe {{ {call} }}"
+            prefix = "" if spec.result_kind == "void" else "let result = "
+            suffix = ";" if spec.result_kind == "void" else ";"
+            return f"{prefix}{call}{suffix}"
+        lines = [
+            f"type Value = {spec.base_type_spelling};",
+            "// Profile is the generated profile policy used by VectorFor.",
+            "type Profile = profile::algo::Profile;",
+        ]
+        lines.append(_rust_call_block(doc, "S", _rust_vector_type(spec), _RUST_DIRECT_COMMENT))
+        lines.append(
+            _rust_call_block(
+                doc,
+                "NativeVec",
+                "<dataparallel::Native as VectorFor<Profile, Value>>::Vec",
+                _NATIVE_COMMENT,
+            )
         )
-        if spec.safety.caller_unsafe:
-            call = f"unsafe {{ {call} }}"
-        if spec.result_kind == "void":
-            lines.append(f"{call};")
-        else:
-            lines.append(f"let result = {call};")
+        lane_count = static_lane_count(doc)
+        if lane_count is not None:
+            lines.append(
+                _rust_call_block(
+                    doc,
+                    "FixedVec",
+                    f"<dataparallel::Fixed<{lane_count}> as VectorFor<Profile, Value>>::Vec",
+                    _FIXED_COMMENT,
+                )
+            )
+            lines.append(
+                _rust_call_block(
+                    doc,
+                    "GenericVec",
+                    f"<dataparallel::Generic<{lane_count}> as VectorFor<Profile, Value>>::Vec",
+                    _GENERIC_COMMENT,
+                )
+            )
         return "\n".join(lines)
 
 
@@ -143,68 +191,78 @@ def _rust_facade_result_type(spec: LoweredSpecialization) -> str:
     return DEFAULT_SUPPORT_POLICY.rust_owner_type(spec.result_kind, owner="S")
 
 
-def _cpp_alias_lines(doc: DocumentationSpec) -> tuple[str, ...]:
+def _cpp_call_block(
+    doc: DocumentationSpec, vec_alias: str, vec_type: str, comment: str
+) -> str:
     spec = doc.spec
-    if is_free_function(spec):
-        return ()
     lines = [
-        f"using Value = {spec.base_type_spelling};",
-        f"using Vec = {_cpp_vector_type(spec)};",
+        f"{{ // {comment}",
+        f"  using {vec_alias} = {vec_type};",
     ]
     if spec.target is not None:
-        lines.append(f"using ToVec = {_strip_global_scope(spec.target.vector_spelling)};")
-    lines.append(
-        "using NativeVec = "
-        "tsl::dataparallel::simd_for_t<tsl::dataparallel::native, Value>;"
+        lines.append(f"  using ToVec = {_strip_global_scope(spec.target.vector_spelling)};")
+    lines.append(f"  {_cpp_statement(spec, vec_alias)}")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def _cpp_statement(spec: LoweredSpecialization, vec_alias: str) -> str:
+    call = _cpp_call(spec, (vec_alias,))
+    if spec.result_kind == "void":
+        return f"{call};"
+    return f"auto result = {call};"
+
+
+def _cpp_call(spec: LoweredSpecialization, vec_args: tuple[str, ...]) -> str:
+    return _format_call(
+        f"tsl::{spec.primitive_name}",
+        _cpp_template_args(spec, vec_args),
+        _runtime_args(spec),
+        template_open="<",
+        template_close=">",
     )
-    lane_count = static_lane_count(doc)
-    if lane_count is not None:
-        lines.extend(
-            [
-                "using FixedVec = "
-                f"tsl::dataparallel::simd_for_t<"
-                f"tsl::dataparallel::fixed<{lane_count}>, Value>;",
-                "using GenericVec = "
-                f"tsl::dataparallel::simd_for_t<"
-                f"tsl::dataparallel::generic<{lane_count}>, Value>;",
-            ]
-        )
-    return tuple(lines)
 
 
-def _rust_alias_lines(doc: DocumentationSpec) -> tuple[str, ...]:
+def _rust_call_block(
+    doc: DocumentationSpec, vec_alias: str, vec_type: str, comment: str
+) -> str:
     spec = doc.spec
-    if is_free_function(spec):
-        return ()
     lines = [
-        f"type Value = {spec.base_type_spelling};",
-        f"type S = {_rust_vector_type(spec)};",
+        f"{{ // {comment}",
+        f"  type {vec_alias} = {vec_type};",
     ]
     if spec.target is not None:
-        lines.append(f"type T = {spec.target.vector_spelling};")
-    lines.append(
-        "type NativeVec = "
-        "<dataparallel::Native as VectorFor<profile::algo::Profile, Value>>::Vec;"
+        lines.append(f"  type T = {spec.target.vector_spelling};")
+    lines.append(f"  {_rust_statement(spec, vec_alias)}")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def _rust_statement(spec: LoweredSpecialization, vec_alias: str) -> str:
+    call = _rust_call(spec, (vec_alias,))
+    if spec.safety.caller_unsafe:
+        call = f"unsafe {{ {call} }}"
+    if spec.result_kind == "void":
+        return f"{call};"
+    return f"let result = {call};"
+
+
+def _rust_call(spec: LoweredSpecialization, vec_args: tuple[str, ...]) -> str:
+    return _format_call(
+        rust_raw_identifier(spec.primitive_name),
+        _rust_generic_args(spec, vec_args),
+        _runtime_args(spec),
+        template_open="::<",
+        template_close=">",
     )
-    lane_count = static_lane_count(doc)
-    if lane_count is not None:
-        lines.extend(
-            [
-                "type FixedVec = "
-                f"<dataparallel::Fixed<{lane_count}> "
-                "as VectorFor<profile::algo::Profile, Value>>::Vec;",
-                "type GenericVec = "
-                f"<dataparallel::Generic<{lane_count}> "
-                "as VectorFor<profile::algo::Profile, Value>>::Vec;",
-            ]
-        )
-    return tuple(lines)
 
 
-def _cpp_template_args(spec: LoweredSpecialization) -> tuple[str, ...]:
+def _cpp_template_args(
+    spec: LoweredSpecialization, vec_args: tuple[str, ...] = ("Vec",)
+) -> tuple[str, ...]:
     if is_free_function(spec):
         return ()
-    args = ["Vec"]
+    args = list(vec_args)
     if spec.target is not None:
         args.append("ToVec")
     args.extend(param.name for param in spec.type_params)
@@ -218,10 +276,12 @@ def _cpp_template_args(spec: LoweredSpecialization) -> tuple[str, ...]:
     return tuple(args)
 
 
-def _rust_generic_args(spec: LoweredSpecialization) -> tuple[str, ...]:
+def _rust_generic_args(
+    spec: LoweredSpecialization, vec_args: tuple[str, ...] = ("S",)
+) -> tuple[str, ...]:
     if is_free_function(spec):
         return ()
-    args = ["S"]
+    args = list(vec_args)
     args.extend(param.name for param in spec.type_params)
     if spec.target is not None:
         args.append("T")
@@ -285,6 +345,23 @@ def _rust_vector_type(spec: LoweredSpecialization) -> str:
 
 def _strip_global_scope(spelling: str) -> str:
     return spelling.replace("::tsl::", "tsl::").removeprefix("::")
+
+
+_CPP_DIRECT_COMMENT = "use explicit extension identifier for the vector type"
+_RUST_DIRECT_COMMENT = "use explicit extension identifier for the vector type"
+_NATIVE_COMMENT = (
+    'using "native" facade to select the available extension with the highest degree '
+    "of data parallelism (or a scalable extension if available)"
+)
+_FIXED_COMMENT = (
+    'using "fixed" facade to select a specific extension with a fixed degree of data '
+    "parallelism; may not be available on all platforms"
+)
+_GENERIC_COMMENT = (
+    'using "generic" facade to select an array-backed implementation with a fixed '
+    "degree of data parallelism; is always available, but may be less efficient than "
+    "the other facades"
+)
 
 
 CPP_DOCUMENTATION_FORMATTER = _CppDocumentationFormatter()
