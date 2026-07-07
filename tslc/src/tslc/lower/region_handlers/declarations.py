@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Literal
+
 from tslc.ir.segments import Region, Segment
 from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.queries import QueryEvaluator, TypeValue
@@ -14,6 +17,29 @@ from tslc.render.model import (
     render_sequence,
     render_text,
 )
+
+
+VarSelectorKind = Literal["inferred", "typed", "init_register", "runtime_array"]
+
+
+@dataclass(frozen=True, slots=True)
+class VarSelector:
+    variant: str
+    kind: VarSelectorKind
+
+
+def parse_var_selector(selector_text: str, arity: int) -> VarSelector | None:
+    variant = selector_text.strip()
+    if variant in {"infer", "const_infer"} and arity >= 2:
+        return VarSelector(variant, "inferred")
+    if variant in {"typed", "const_typed"} and arity == 3:
+        return VarSelector(variant, "typed")
+    if variant in {"init_register", "const_init_register"} and arity == 1:
+        return VarSelector(variant, "init_register")
+    if variant == "runtime_array" and arity == 3:
+        return VarSelector(variant, "runtime_array")
+    return None
+
 
 class VarLowerer:
     """``var<variant>(...)`` -> the backend's local-declaration template.
@@ -36,26 +62,23 @@ class VarLowerer:
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
-        variant = region.selector_text.strip()
         groups = _split_arg_groups(region.body)
-        if variant in ("typed", "const_typed"):
+        selector = parse_var_selector(region.selector_text, len(groups))
+        if selector is not None and selector.kind == "typed":
             # Both are `(type, name, value)` 3-group forms; `_typed` keys on the variant
             # (`var_typed` / `var_const_typed`), so a const-qualified typed local works too.
-            return self._typed(variant, groups, region, context, render)
-        if variant == "runtime_array":
+            return self._typed(selector.variant, groups, region, context, render)
+        if selector is not None and selector.kind == "runtime_array":
             return self._runtime_array(groups, region, context, render)
-        if variant in ("init_register", "const_init_register"):
+        if selector is not None and selector.kind == "init_register":
             # A zero-initialized register declaration: `var<init_register>(name)`. The type is
             # the vector's register type (C++ template uses it; the Rust template builds
             # `[BaseType::default(); LANES]` and ignores it).
-            key = f"var_{variant}"
-            if (
-                len(groups) != 1
-                or context.env.backend.templates.template(key) is None
-            ):
+            key = f"var_{selector.variant}"
+            if context.env.backend.templates.template(key) is None:
                 context.effects.skip(
                     "TSL-LOWER-UNSUPPORTED-VAR",
-                    f"unsupported var<{variant}>: {region.full_text!r}",
+                    f"unsupported var<{selector.variant}>: {region.full_text!r}",
                     source=region.source,
                 )
                 return region.full_text
@@ -64,17 +87,21 @@ class VarLowerer:
                 type=context.env.backend.types.register_type_spelling(),
                 name=render_text(render(groups[0])).strip(),
             )
-        if len(groups) < 2 or context.env.backend.templates.template(f"var_{variant}") is None:
+        if (
+            selector is None
+            or context.env.backend.templates.template(f"var_{selector.variant}") is None
+        ):
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-VAR",
-                f"unsupported var<{variant}> declaration: {region.full_text!r}",
+                f"unsupported var<{region.selector_text.strip()}> declaration: "
+                f"{region.full_text!r}",
                 source=region.source,
             )
             return region.full_text
         name = render_text(render(groups[0])).strip()
         value = _join_rendered(groups[1:], render)
         return context.env.backend.templates.render_template(
-            f"var_{variant}", name=name, value=value
+            f"var_{selector.variant}", name=name, value=value
         )
 
     def _typed(

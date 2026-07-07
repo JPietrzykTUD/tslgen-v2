@@ -59,6 +59,29 @@ def create_cpp_verify_driver() -> VerifyBackendDriver:
     return cpp_verify_driver()
 
 
+_CPP_ALGORITHM_SUPPORT_PRIMITIVES = (
+    "load",
+    "store",
+    # The helper calls the emitted wrapper `store_mask`; selecting `store`
+    # also selects its pass-through masked form, which is split to that name
+    # during C++ emitted-name finalization.
+    "to_integral",
+    "to_mask",
+    "gather_narrow",
+    "compress_store",
+    "mask_population_count",
+    "mask_binary_and",
+)
+
+
+def cpp_closure_seed_primitives(catalog: Catalog) -> tuple[str, ...]:
+    return tuple(
+        primitive
+        for primitive in _CPP_ALGORITHM_SUPPORT_PRIMITIVES
+        if catalog.primitives_named(primitive, unmasked=False)
+    )
+
+
 CPP_BACKEND = BackendCapability(
     backend_id="cpp",
     root_path="cpp",
@@ -68,11 +91,13 @@ CPP_BACKEND = BackendCapability(
     value_test_support_factory=cpp_value_test_support,
     test_artifacts=cpp_value_test_artifacts,
     verify_driver_factory=create_cpp_verify_driver,
+    closure_seed_primitives_factory=cpp_closure_seed_primitives,
 )
 
 
 __all__ = [
     "CPP_BACKEND",
+    "cpp_closure_seed_primitives",
     "cpp_profile_verification",
     "cpp_project_artifacts",
     "cpp_value_test_artifacts",

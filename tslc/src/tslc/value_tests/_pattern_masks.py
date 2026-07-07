@@ -19,7 +19,11 @@ from tslc.value_tests._case_scalable_masks import (
     scalable_mask_logic_cases,
     scalable_masked_mask_result_cases,
 )
-from tslc.value_tests._pattern_base import _BasePattern, CasePlanBuilder
+from tslc.value_tests._pattern_base import (
+    _BasePattern,
+    CasePlanBuilder,
+    ValueTestCaseContext,
+)
 from tslc.value_tests.model import ValueTestCasePlan
 
 
@@ -49,23 +53,23 @@ class _MaskedMaskResultPattern(_BasePattern):
                 return primitive
         return None
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = masked_mask_result_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
         )
         plans = [plan] if plan is not None else []
         plans.extend(
             scalable_masked_mask_result_cases(
-                kwargs["emitted_name"],
-                kwargs["index"],
-                kwargs["case"],
-                kwargs["specs"],
-                kwargs["catalog"],
-                kwargs["harness"],
-                kwargs["backend"],
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
             )
         )
         return tuple(plans)
@@ -86,23 +90,23 @@ class _MaskLogicPattern(_BasePattern):
             and not spec.type_params
         )
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = mask_logic_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
         )
         plans = [plan] if plan is not None else []
         plans.extend(
             scalable_mask_logic_cases(
-                kwargs["emitted_name"],
-                kwargs["index"],
-                kwargs["case"],
-                kwargs["specs"],
-                kwargs["catalog"],
-                kwargs["harness"],
-                kwargs["backend"],
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
             )
         )
         return tuple(plans)
@@ -122,23 +126,23 @@ class _MaskConstantPattern(_BasePattern):
             and not spec.type_params
         )
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = mask_result_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
         )
         plans = [plan] if plan is not None else []
         plans.extend(
             scalable_mask_constant_cases(
-                kwargs["emitted_name"],
-                kwargs["index"],
-                kwargs["case"],
-                kwargs["specs"],
-                kwargs["catalog"],
-                kwargs["harness"],
-                kwargs["backend"],
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
             )
         )
         return tuple(plans)
@@ -163,23 +167,23 @@ class _MaskConversionPattern(_BasePattern):
             and not spec.type_params
         )
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = self.fixed_case_builder(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
         )
         plans = [plan] if plan is not None else []
         plans.extend(
             scalable_mask_conversion_cases(
-                kwargs["emitted_name"],
-                kwargs["index"],
-                kwargs["case"],
-                kwargs["specs"],
-                kwargs["catalog"],
-                kwargs["harness"],
-                kwargs["backend"],
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
             )
         )
         return tuple(plans)
@@ -199,23 +203,23 @@ class _MaskToVectorPattern(_BasePattern):
             and not spec.type_params
         )
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = mask_to_vector_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
         )
         plans = [plan] if plan is not None else []
         plans.extend(
             scalable_masked_cases(
-                kwargs["emitted_name"],
-                kwargs["index"],
-                kwargs["case"],
-                kwargs["specs"],
-                kwargs["catalog"],
-                kwargs["harness"],
-                kwargs["backend"],
+                context.emitted_name,
+                context.index,
+                context.case,
+                context.specs,
+                context.catalog,
+                context.harness,
+                context.backend,
             )
         )
         return tuple(plans)

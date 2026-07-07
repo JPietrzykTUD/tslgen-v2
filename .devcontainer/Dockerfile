@@ -11,6 +11,7 @@ RUN apt-get update -y && \
     sudo \
     build-essential gdb cmake clang clang-format ninja-build doxygen \
     g++-aarch64-linux-gnu \
+    g++-riscv64-linux-gnu binutils-riscv64-linux-gnu \
     git curl gnupg xz-utils unzip pkg-config ca-certificates nodejs npm jq \
     python3 python3-pip python3-venv \
     qemu-user qemu-user-binfmt && \

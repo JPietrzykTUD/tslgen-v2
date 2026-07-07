@@ -3,27 +3,23 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from tslc.backend.cpp import CppBackend
-from tslc.backend.target_capability import rust_extension_tag
-from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.catalog.model import Extension
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
+from tslc.render.documentation_formatters import (
+    DocumentationSpec as _DocSpec,
+    documentation_formatter,
+    is_free_function,
+    static_lane_count,
+)
 
 if TYPE_CHECKING:
     from tslc.render.project import ProfileRender
 
 _CPP_BACKEND = CppBackend()
-
-
-@dataclass(frozen=True, slots=True)
-class _DocSpec:
-    spec: LoweredSpecialization
-    extension: Extension | None
 
 
 def documentation_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
@@ -41,6 +37,7 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
     features = _IndexedTuples()
     safeties = _IndexedTuples()
     expressions = _IndexedTuples()
+    target_classes = _IndexedTargetClasses(strings)
     profile_rows = [
         _profile_row(profile, strings=strings, features=features)
         for profile in profiles
@@ -71,6 +68,7 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
                         strings=strings,
                         features=features,
                         safeties=safeties,
+                        target_classes=target_classes,
                     )
                     primitive_rows = grouped.setdefault(primitive_id, {})
                     primitive_rows[row] = primitive_rows.get(row, 0) + 1
@@ -79,12 +77,13 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
         for name, specs in sorted(primitive_specs.items())
     }
     payload = {
-        "schema_version": 8,
+        "schema_version": 9,
         "columns": [
             "backend",
             "profile",
             "extension",
             "family",
+            "target_class",
             "type_tag",
             "register_type",
             "features",
@@ -110,6 +109,13 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
             "tooltip",
             "sort_key",
         ],
+        "target_class_columns": [
+            "key",
+            "label",
+            "family",
+            "width_label",
+            "sort_key",
+        ],
         "backends": [
             _backend_row(backend_id, strings)
             for backend_id in sorted(backend_ids)
@@ -126,6 +132,7 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
             [caller, internal, list(reasons)]
             for caller, internal, reasons in safeties.values
         ],
+        "target_classes": target_classes.values,
         "profiles": profile_rows,
         "primitives": [
             primitive_docs[name] for name in sorted(primitive_docs)
@@ -183,12 +190,12 @@ def _representative_spec(
 
 def _representative_rank(doc: _DocSpec) -> tuple[int, int, str, str, str]:
     spec = doc.spec
-    lane_count = _static_lane_count(doc)
+    lane_count = static_lane_count(doc)
     lane_rank = 2
     if lane_count is not None:
         lane_rank = 0 if lane_count > 1 else 1
     return (
-        1 if _is_free_function(spec) else 0,
+        1 if is_free_function(spec) else 0,
         lane_rank,
         spec.extension_name,
         spec.type_tag,
@@ -281,6 +288,7 @@ def _specialization_row(
     strings: _StringTable,
     features: _IndexedTuples,
     safeties: _IndexedTuples,
+    target_classes: "_IndexedTargetClasses",
 ) -> tuple[int, ...]:
     feature_id = features.id(
         tuple(strings.id(feature) for feature in sorted(spec.required_features))
@@ -297,6 +305,7 @@ def _specialization_row(
         strings.id(profile_name),
         strings.id(spec.extension_name),
         strings.id(extension_family),
+        target_classes.id(spec, extension),
         strings.id(spec.type_tag),
         strings.id(_register_type(spec, backend_id)),
         feature_id,
@@ -308,6 +317,102 @@ def _specialization_row(
         strings.id(_extension_rank(spec, extension_family, extension)),
         strings.id(_text_rank(extension_family)),
     )
+
+
+class _IndexedTargetClasses:
+    def __init__(self, strings: _StringTable) -> None:
+        self._strings = strings
+        self._ids: dict[str, int] = {}
+        self.values: list[list[int]] = []
+
+    def id(self, spec: LoweredSpecialization, extension: Extension | None) -> int:
+        row = _target_class_row(spec, extension, self._strings)
+        key = self._strings.values[row[0]]
+        existing = self._ids.get(key)
+        if existing is not None:
+            return existing
+        identifier = len(self.values)
+        self._ids[key] = identifier
+        self.values.append(row)
+        return identifier
+
+
+def _target_class_row(
+    spec: LoweredSpecialization,
+    extension: Extension | None,
+    strings: _StringTable,
+) -> list[int]:
+    family, width = _target_class_parts(spec, extension)
+    key = _target_class_key(family, width)
+    label = _target_class_label(family, width)
+    return [
+        strings.id(key),
+        strings.id(label),
+        strings.id(family),
+        strings.id(width),
+        strings.id(_target_class_sort_key(family, width)),
+    ]
+
+
+def _target_class_parts(
+    spec: LoweredSpecialization,
+    extension: Extension | None,
+) -> tuple[str, str]:
+    if extension is None:
+        return ("unknown", "unknown")
+    family = _public_target_family(extension.family or "unclassified")
+    if family == "scalar":
+        return ("scalar", "scalar")
+    if family == "aarch64" and extension.name.startswith("sve"):
+        return (family, "SVE")
+    if extension.vector_bits_kind == "scalable":
+        return (family, "scalable")
+    if spec.uses_sized_vector:
+        return ("generic", "lanes")
+    if extension.vector_bits > 0:
+        return (family, f"{extension.vector_bits}-bit")
+    return (family, "scalar")
+
+
+def _public_target_family(family: str) -> str:
+    return "aarch64" if family == "arm" else family
+
+
+def _target_class_key(family: str, width: str) -> str:
+    return (
+        f"{family}_{width}"
+        .casefold()
+        .replace(" ", "_")
+        .replace("-", "_")
+    )
+
+
+def _target_class_label(family: str, width: str) -> str:
+    if family == "scalar":
+        return "scalar"
+    if family == "generic":
+        return "generic lanes"
+    return f"{family} {width}"
+
+
+def _target_class_sort_key(family: str, width: str) -> str:
+    family_order = {
+        "scalar": "00",
+        "generic": "01",
+        "x86": "10",
+        "aarch64": "20",
+    }.get(family, f"90-{family}")
+    width_order = {
+        "scalar": "0000",
+        "lanes": "0001",
+        "128-bit": "0128",
+        "256-bit": "0256",
+        "512-bit": "0512",
+        "SVE": "9998",
+        "scalable": "9999",
+        "unknown": "zzzz",
+    }.get(width, f"z-{width}")
+    return f"{family_order}:{width_order}:{family}:{width}"
 
 
 def _extension_family(profile: ProfileRender, spec: LoweredSpecialization) -> str:
@@ -411,118 +516,17 @@ def _expression_row(
     strings: _StringTable,
 ) -> tuple[int, int, int, int] | None:
     doc = _representative_spec(specs, backend_id=backend_id)
-    if doc is None:
+    formatter = documentation_formatter(backend_id)
+    if doc is None or formatter is None:
         return None
-    facade = _backend_facade(doc)
-    expression = _backend_expression(doc)
-    if facade is None or expression is None:
-        return None
+    facade = formatter.facade(doc)
+    expression = formatter.expression(doc)
     return (
         strings.id(backend_id),
         strings.id(_backend_label(backend_id)),
         strings.id(facade),
         strings.id(expression),
     )
-
-
-def _backend_facade(doc: _DocSpec) -> str | None:
-    if doc.spec.backend_id == "cpp":
-        return _cpp_facade(doc)
-    if doc.spec.backend_id == "rust":
-        return _rust_facade(doc)
-    return None
-
-
-def _backend_expression(doc: _DocSpec) -> str | None:
-    if doc.spec.backend_id == "cpp":
-        return _cpp_expression(doc)
-    if doc.spec.backend_id == "rust":
-        return _rust_expression(doc)
-    return None
-
-
-def _cpp_facade(doc: _DocSpec) -> str:
-    spec = doc.spec
-    call = _format_call(
-        f"tsl::{spec.primitive_name}",
-        _cpp_template_args(spec),
-        _runtime_args(spec),
-        template_open="<",
-        template_close=">",
-    )
-    return f"{call} -> {_cpp_facade_result_type(spec)}"
-
-
-def _cpp_expression(doc: _DocSpec) -> str:
-    spec = doc.spec
-    lines = list(_cpp_alias_lines(doc))
-    call = _format_call(
-        f"tsl::{spec.primitive_name}",
-        _cpp_template_args(spec),
-        _runtime_args(spec),
-        template_open="<",
-        template_close=">",
-    )
-    if spec.result_kind == "void":
-        lines.append(f"{call};")
-    else:
-        lines.append(f"auto result = {call};")
-    return "\n".join(lines)
-
-
-def _rust_facade(doc: _DocSpec) -> str:
-    spec = doc.spec
-    call = _format_call(
-        rust_raw_identifier(spec.primitive_name),
-        _rust_generic_args(spec),
-        _runtime_args(spec),
-        template_open="::<",
-        template_close=">",
-    )
-    if spec.safety.caller_unsafe:
-        call = f"unsafe {{ {call} }}"
-    return f"{call} -> {_rust_facade_result_type(spec)}"
-
-
-def _rust_expression(doc: _DocSpec) -> str:
-    spec = doc.spec
-    lines = list(_rust_alias_lines(doc))
-    call = _format_call(
-        rust_raw_identifier(spec.primitive_name),
-        _rust_generic_args(spec),
-        _runtime_args(spec),
-        template_open="::<",
-        template_close=">",
-    )
-    if spec.safety.caller_unsafe:
-        call = f"unsafe {{ {call} }}"
-    if spec.result_kind == "void":
-        lines.append(f"{call};")
-    else:
-        lines.append(f"let result = {call};")
-    return "\n".join(lines)
-
-
-def _cpp_facade_result_type(spec: LoweredSpecialization) -> str:
-    if _is_free_function(spec):
-        return DEFAULT_SUPPORT_POLICY.cpp_free_type(
-            spec.result_kind,
-            base_type=spec.base_type_spelling,
-        )
-    if spec.target is not None:
-        return "typename ToVec::register_type"
-    return DEFAULT_SUPPORT_POLICY.cpp_result_type(spec.result_kind)
-
-
-def _rust_facade_result_type(spec: LoweredSpecialization) -> str:
-    if _is_free_function(spec):
-        return DEFAULT_SUPPORT_POLICY.rust_free_type(
-            spec.result_kind,
-            base_type=spec.base_type_spelling,
-        )
-    if spec.target is not None:
-        return "T::RegisterType"
-    return DEFAULT_SUPPORT_POLICY.rust_owner_type(spec.result_kind, owner="S")
 
 
 def _signature_summary(spec: LoweredSpecialization) -> str:
@@ -549,160 +553,6 @@ def _signature_kind_phrase(kind: str) -> str:
         "void": "no return value",
     }
     return labels.get(kind, kind)
-
-
-def _cpp_alias_lines(doc: _DocSpec) -> tuple[str, ...]:
-    spec = doc.spec
-    if _is_free_function(spec):
-        return ()
-    lines = [
-        f"using Value = {spec.base_type_spelling};",
-        f"using Vec = {_cpp_vector_type(spec)};",
-    ]
-    if spec.target is not None:
-        lines.append(f"using ToVec = {_strip_global_scope(spec.target.vector_spelling)};")
-    lines.append(
-        "using NativeVec = "
-        "tsl::dataparallel::simd_for_t<tsl::dataparallel::native, Value>;"
-    )
-    lane_count = _static_lane_count(doc)
-    if lane_count is not None:
-        lines.extend(
-            [
-                "using FixedVec = "
-                f"tsl::dataparallel::simd_for_t<"
-                f"tsl::dataparallel::fixed<{lane_count}>, Value>;",
-                "using GenericVec = "
-                f"tsl::dataparallel::simd_for_t<"
-                f"tsl::dataparallel::generic<{lane_count}>, Value>;",
-            ]
-        )
-    return tuple(lines)
-
-
-def _rust_alias_lines(doc: _DocSpec) -> tuple[str, ...]:
-    spec = doc.spec
-    if _is_free_function(spec):
-        return ()
-    lines = [
-        f"type Value = {spec.base_type_spelling};",
-        f"type S = {_rust_vector_type(spec)};",
-    ]
-    if spec.target is not None:
-        lines.append(f"type T = {spec.target.vector_spelling};")
-    lines.append(
-        "type NativeVec = "
-        "<dataparallel::Native as VectorFor<profile::algo::Profile, Value>>::Vec;"
-    )
-    lane_count = _static_lane_count(doc)
-    if lane_count is not None:
-        lines.extend(
-            [
-                "type FixedVec = "
-                f"<dataparallel::Fixed<{lane_count}> "
-                "as VectorFor<profile::algo::Profile, Value>>::Vec;",
-                "type GenericVec = "
-                f"<dataparallel::Generic<{lane_count}> "
-                "as VectorFor<profile::algo::Profile, Value>>::Vec;",
-            ]
-        )
-    return tuple(lines)
-
-
-def _cpp_template_args(spec: LoweredSpecialization) -> tuple[str, ...]:
-    if _is_free_function(spec):
-        return ()
-    args = ["Vec"]
-    if spec.target is not None:
-        args.append("ToVec")
-    args.extend(param.name for param in spec.type_params)
-    args.extend(_commented_arg(key, value) for key, value in spec.axis)
-    if spec.immediate is not None:
-        args.append(_commented_arg(spec.immediate[0], spec.immediate[0]))
-    args.extend(
-        _commented_arg(name, default or name)
-        for name, _typ, default in spec.generic_params
-    )
-    return tuple(args)
-
-
-def _rust_generic_args(spec: LoweredSpecialization) -> tuple[str, ...]:
-    if _is_free_function(spec):
-        return ()
-    args = ["S"]
-    args.extend(param.name for param in spec.type_params)
-    if spec.target is not None:
-        args.append("T")
-    args.extend(_commented_arg(key, value) for key, value in spec.axis)
-    if spec.immediate is not None:
-        args.append(_commented_arg(spec.immediate[0], spec.immediate[0]))
-    args.extend(
-        _commented_arg(name, default or name)
-        for name, _typ, default in spec.generic_params
-    )
-    return tuple(args)
-
-
-def _runtime_args(spec: LoweredSpecialization) -> tuple[str, ...]:
-    return tuple(
-        name
-        for name, kind in zip(spec.param_names, spec.param_kinds)
-        if kind != DEFAULT_SUPPORT_POLICY.immediate_kind
-    )
-
-
-def _format_call(
-    function_name: str,
-    generic_args: tuple[str, ...],
-    runtime_args: tuple[str, ...],
-    *,
-    template_open: str,
-    template_close: str,
-) -> str:
-    generic_part = (
-        f"{template_open}{', '.join(generic_args)}{template_close}"
-        if generic_args
-        else ""
-    )
-    return f"{function_name}{generic_part}({', '.join(runtime_args)})"
-
-
-def _commented_arg(name: str, value: str) -> str:
-    return f"/* {name} */ {value}"
-
-
-def _cpp_vector_type(spec: LoweredSpecialization) -> str:
-    if spec.vector_spelling is not None:
-        return _strip_global_scope(spec.vector_spelling)
-    return f"tsl::simd<{spec.base_type_spelling}, {_cpp_extension_type(spec)}>"
-
-
-def _cpp_extension_type(spec: LoweredSpecialization) -> str:
-    if spec.uses_sized_vector:
-        return f"tsl::generic<{spec.lane_parameter or 'LANES'}>"
-    return f"tsl::{spec.extension_name}"
-
-
-def _rust_vector_type(spec: LoweredSpecialization) -> str:
-    if spec.vector_spelling is not None:
-        return spec.vector_spelling
-    if spec.uses_sized_vector:
-        return f"Simd<{spec.base_type_spelling}, Generic<{spec.lane_parameter or 'LANES'}>>"
-    return f"Simd<{spec.base_type_spelling}, {rust_extension_tag(spec.extension_name)}>"
-
-
-def _static_lane_count(doc: _DocSpec) -> int | None:
-    spec = doc.spec
-    lane_parameter = spec.lane_parameter
-    if lane_parameter is not None and lane_parameter.isdigit():
-        return int(lane_parameter)
-    if doc.extension is not None:
-        return DEFAULT_SUPPORT_POLICY.lane_count(doc.extension, spec.type_tag)
-    return None
-
-
-def _strip_global_scope(spelling: str) -> str:
-    return spelling.replace("::tsl::", "tsl::").removeprefix("::")
 
 
 def _backend_label(backend_id: str) -> str:
@@ -767,13 +617,6 @@ def _human_label(value: str) -> str:
 
 def _text_rank(value: str) -> str:
     return _human_label(value).casefold()
-
-
-def _is_free_function(spec: LoweredSpecialization) -> bool:
-    return DEFAULT_SUPPORT_POLICY.is_free_function_signature(
-        spec.result_kind,
-        spec.param_kinds,
-    )
 
 
 def _artifact(logical_path: str, content: str, media_type: str) -> Artifact:

@@ -59,6 +59,28 @@ def create_rust_verify_driver() -> VerifyBackendDriver:
     return rust_verify_driver()
 
 
+_RUST_ALGORITHM_SUPPORT_PRIMITIVES = (
+    "load",
+    "store",
+    "set_zero",
+    "to_array",
+    "from_array",
+    "gather_narrow",
+    "compress_store",
+    "mask_population_count",
+    "to_integral",
+    "to_mask",
+)
+
+
+def rust_closure_seed_primitives(catalog: Catalog) -> tuple[str, ...]:
+    return tuple(
+        primitive
+        for primitive in _RUST_ALGORITHM_SUPPORT_PRIMITIVES
+        if catalog.primitives_named(primitive, unmasked=False)
+    )
+
+
 RUST_BACKEND = BackendCapability(
     backend_id="rust",
     root_path="rust",
@@ -68,6 +90,7 @@ RUST_BACKEND = BackendCapability(
     value_test_support_factory=rust_value_test_support,
     test_artifacts=rust_value_test_artifacts,
     verify_driver_factory=create_rust_verify_driver,
+    closure_seed_primitives_factory=rust_closure_seed_primitives,
 )
 
 
@@ -75,6 +98,7 @@ __all__ = [
     "RUST_BACKEND",
     "create_rust_dialect",
     "create_rust_verify_driver",
+    "rust_closure_seed_primitives",
     "rust_profile_verification",
     "rust_project_artifacts",
     "rust_value_test_artifacts",

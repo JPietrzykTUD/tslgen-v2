@@ -29,6 +29,12 @@ TestArtifactRenderer = Callable[
 ]
 ValueTestSupportFactory = Callable[[], "ValueTestBackendSupport"]
 VerifyDriverFactory = Callable[[], "VerifyBackendDriver"]
+ClosureSeedPrimitiveFactory = Callable[["Catalog"], tuple[str, ...]]
+
+
+def _no_closure_seed_primitives(catalog: Catalog) -> tuple[str, ...]:
+    del catalog
+    return ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +47,9 @@ class BackendCapability:
     value_test_support_factory: ValueTestSupportFactory
     test_artifacts: TestArtifactRenderer
     verify_driver_factory: VerifyDriverFactory
+    closure_seed_primitives_factory: ClosureSeedPrimitiveFactory = (
+        _no_closure_seed_primitives
+    )
 
     def create_dialect(self, catalog: Catalog) -> BackendDialect:
         return self.dialect_factory(catalog)
@@ -65,5 +74,8 @@ class BackendCapability:
     def verify_driver(self) -> VerifyBackendDriver:
         return self.verify_driver_factory()
 
+    def closure_seed_primitives(self, catalog: Catalog) -> tuple[str, ...]:
+        return self.closure_seed_primitives_factory(catalog)
 
-__all__ = ["BackendCapability"]
+
+__all__ = ["BackendCapability", "ClosureSeedPrimitiveFactory"]

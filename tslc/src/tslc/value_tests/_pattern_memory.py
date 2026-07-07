@@ -18,6 +18,7 @@ from tslc.value_tests._case_scalable_memory import scalable_mask_store_cases
 from tslc.value_tests._pattern_base import (
     _BasePattern,
     PointerLayoutCasePlanBuilder,
+    ValueTestCaseContext,
 )
 from tslc.value_tests.model import ValueTestCasePlan
 from tslc.value_tests.param_layouts import unsupported_param_layout_reason
@@ -45,34 +46,34 @@ class _PointerLayoutShapePattern(_BasePattern):
             return False
         return self.allow_axis or not spec.axis
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
-        specs = kwargs["specs"]
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
+        specs = context.specs
         primitive = self.source_primitive(
-            kwargs["catalog"],
+            context.catalog,
             specs[0].source_primitive_name,
             specs[0],
         )
         if primitive is None:
             return ()
         plan = self.build_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
+            context.emitted_name,
+            context.index,
+            context.case,
             specs,
             primitive,
         )
         return (plan,) if plan is not None else ()
 
-    def unplanned_reason(self, **kwargs) -> str | None:  # noqa: ANN003
-        specs = kwargs["specs"]
+    def unplanned_reason(self, context: ValueTestCaseContext) -> str | None:
+        specs = context.specs
         primitive = self.source_primitive(
-            kwargs["catalog"],
+            context.catalog,
             specs[0].source_primitive_name,
             specs[0],
         )
         if primitive is None:
             return None
-        return unsupported_param_layout_reason(primitive, "ptr", kwargs["case"], specs)
+        return unsupported_param_layout_reason(primitive, "ptr", context.case, specs)
 
 
 class _MaskStorePattern(_BasePattern):
@@ -88,47 +89,47 @@ class _MaskStorePattern(_BasePattern):
             and not spec.type_params
         )
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
-        specs = kwargs["specs"]
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
+        specs = context.specs
         primitive = self.source_primitive(
-            kwargs["catalog"],
+            context.catalog,
             specs[0].source_primitive_name,
             specs[0],
         )
         if primitive is None:
             return ()
         plan = mask_store_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
+            context.emitted_name,
+            context.index,
+            context.case,
             specs,
             primitive,
         )
         plans = [plan] if plan is not None else []
         plans.extend(
             scalable_mask_store_cases(
-                kwargs["emitted_name"],
-                kwargs["index"],
-                kwargs["case"],
+                context.emitted_name,
+                context.index,
+                context.case,
                 specs,
-                kwargs["catalog"],
-                kwargs["harness"],
-                kwargs["backend"],
+                context.catalog,
+                context.harness,
+                context.backend,
                 primitive,
             )
         )
         return tuple(plans)
 
-    def unplanned_reason(self, **kwargs) -> str | None:  # noqa: ANN003
-        specs = kwargs["specs"]
+    def unplanned_reason(self, context: ValueTestCaseContext) -> str | None:
+        specs = context.specs
         primitive = self.source_primitive(
-            kwargs["catalog"],
+            context.catalog,
             specs[0].source_primitive_name,
             specs[0],
         )
         if primitive is None:
             return None
-        return unsupported_param_layout_reason(primitive, "ptr", kwargs["case"], specs)
+        return unsupported_param_layout_reason(primitive, "ptr", context.case, specs)
 
 
 class _PointerFreePattern(_BasePattern):
@@ -136,12 +137,12 @@ class _PointerFreePattern(_BasePattern):
         spec = specs[0]
         return spec.result_kind == "void" and tuple(spec.param_kinds) == ("ptr",)
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = pointer_free_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
         )
         return (plan,) if plan is not None else ()
 
@@ -151,12 +152,12 @@ class _PointerLifetimePattern(_BasePattern):
         spec = specs[0]
         return spec.result_kind == "ptr" and all(kind == "usize" for kind in spec.param_kinds)
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         plan = pointer_lifetime_case(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
         )
         return (plan,) if plan is not None else ()
 
@@ -189,18 +190,18 @@ class _IndexedMemoryPattern(_BasePattern):
                     return primitive
         return super().source_primitive(catalog, source_name, spec)
 
-    def plan_case(self, **kwargs) -> tuple[ValueTestCasePlan, ...]:  # noqa: ANN003
+    def plan_case(self, context: ValueTestCaseContext) -> tuple[ValueTestCasePlan, ...]:
         build = indexed_load_case if self.result_kind == "v" else indexed_store_case
         index_base_spelling = _index_base_spelling(
-            kwargs["catalog"],
-            kwargs["backend"].backend_id,
-            kwargs["case"].index_type,
+            context.catalog,
+            context.backend.backend_id,
+            context.case.index_type,
         )
         plan = build(
-            kwargs["emitted_name"],
-            kwargs["index"],
-            kwargs["case"],
-            kwargs["specs"],
+            context.emitted_name,
+            context.index,
+            context.case,
+            context.specs,
             index_base_spelling,
         )
         return (plan,) if plan is not None else ()

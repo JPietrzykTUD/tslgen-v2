@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+from tslc.catalog.signatures import parse_signature
 from tslc.catalog.model import Extension, Implementation, Primitive
 from tslc.ir.region_registry import TSIL_REGION_KEYWORDS
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region
+from tslc.lower.body_rendering import body_context, render_body
+from tslc.lower.context import LoweringEnv, LoweringScope
 from tslc.lower.implementation_state import (
     IMPLEMENTATION_STATE_CLASSIFIED_KEYWORDS,
     ImplementationState,
     infer_direct_implementation_state,
 )
+from tslc.lower.region_handlers.control import IfLowerer, SwitchLowerer
+from tslc.render.model import render_sequence
 from tslc.select.selector import SelectedImplementation
 
 
@@ -54,8 +61,77 @@ def test_direct_state_fails_closed_for_unclassified_regions() -> None:
     ) is ImplementationState.UNKNOWN
 
 
+def test_rendered_state_ignores_untaken_generation_branch() -> None:
+    selected = _selected(
+        "native",
+        """
+        complete(
+          if<generation>(type::is_same(type(base::in), si32)) {
+            intrin<add, build>(data)
+          } else<generation> {
+            loop<backend>(i, 0, 4, 1) { complete(data); }
+          }
+        );
+        """,
+    )
+
+    result = _render_state(selected)
+
+    assert result is ImplementationState.NATIVE
+
+
+def test_rendered_state_ignores_unselected_literal_switch_arm() -> None:
+    selected = _selected(
+        "native",
+        """
+        complete(
+          switch<compile>(1) {
+            1 => { intrin<add, build>(data); }
+            _ => { loop<backend>(i, 0, 4, 1) { complete(data); } }
+          }
+        );
+        """,
+    )
+
+    result = _render_state(selected)
+
+    assert result is ImplementationState.NATIVE
+
+
 def _state(family: str, body: str) -> ImplementationState:
     return infer_direct_implementation_state(_selected(family, body), scan(body))
+
+
+def _render_state(selected: SelectedImplementation) -> ImplementationState:
+    shape = parse_signature(selected.primitive.signature)
+    assert shape is not None
+    backend = SimpleNamespace(backend_id="cpp", syntax=_FakeSyntax())
+    context = body_context(
+        LoweringEnv(
+            catalog=SimpleNamespace(),
+            backend=backend,
+            extension=selected.extension,
+            type_tag=selected.type_tag,
+        ),
+        LoweringScope(),
+        shape,
+        SimpleNamespace(requires_unsafe_frame=lambda shape: False),
+    )
+    result = render_body(
+        selected=selected,
+        shape=shape,
+        context=context,
+        segments=scan(selected.implementation.body_text),
+        region_lowerers=(
+            _CompleteLowerer(),
+            IfLowerer(),
+            SwitchLowerer(),
+            _IntrinsicLowerer(),
+            _LoopLowerer(),
+        ),
+    )
+    assert result.rendered is not None
+    return result.implementation_state
 
 
 def _selected(family: str, body: str) -> SelectedImplementation:
@@ -82,3 +158,29 @@ def _selected(family: str, body: str) -> SelectedImplementation:
         ),
         type_tag="si32",
     )
+
+
+class _CompleteLowerer:
+    keyword = "complete"
+
+    def lower(self, region, context, render):
+        return render(region.body)
+
+
+class _IntrinsicLowerer:
+    keyword = "intrin"
+
+    def lower(self, region, context, render):
+        return "native(data)"
+
+
+class _LoopLowerer:
+    keyword = "loop"
+
+    def lower(self, region, context, render):
+        return "for (...) { fallback(data); }"
+
+
+class _FakeSyntax:
+    def render_compile_switch(self, selector, arms):
+        return render_sequence(tuple(body for _label, body in arms))

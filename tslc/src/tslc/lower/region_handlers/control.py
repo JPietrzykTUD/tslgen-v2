@@ -131,6 +131,7 @@ class IfLowerer:
         if selector == "compile":
             rendered = self._render_condition(condition, context)
             if rendered is not None:
+                context.effects.mark_implementation_composition()
                 header = context.env.backend.templates.render_template(
                     "flow_if_static", "if constexpr ({cond})", cond=rendered
                 )
@@ -161,6 +162,7 @@ class IfLowerer:
     ) -> RenderField:
         """A native runtime ``if``: emit the condition + branches verbatim for the target."""
 
+        context.effects.mark_implementation_composition()
         then = render(region.block) if region.block is not None else ""
         header = render_sequence(
             (
@@ -458,5 +460,34 @@ class SwitchLowerer:
             )
             return region.full_text
         selector = render_text(render(region.body)).strip()
-        arms = tuple((label, render(body)) for label, body in region.arms)
+        selected_label = _selected_switch_label(selector, region.arms)
+        if selected_label is None:
+            context.effects.mark_implementation_composition()
+        arms = tuple(
+            (
+                label,
+                (
+                    render(body)
+                    if selected_label is None or label == selected_label
+                    else _render_without_state(context, render, body)
+                ),
+            )
+            for label, body in region.arms
+        )
         return context.env.backend.syntax.render_compile_switch(selector, arms)
+
+
+def _selected_switch_label(
+    selector: str, arms: tuple[tuple[str, tuple[Segment, ...]], ...]
+) -> str | None:
+    labels = tuple(label for label, _body in arms)
+    if selector in labels:
+        return selector
+    return "_" if "_" in labels else None
+
+
+def _render_without_state(
+    context: LoweringSession, render: RenderBody, body: tuple[Segment, ...]
+):
+    with context.effects.suppress_implementation_state():
+        return render(body)

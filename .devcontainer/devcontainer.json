@@ -1,7 +1,8 @@
 {
   "name": "Granforge Demo Environment",
   "build": {
-    "dockerfile": "Dockerfile"
+    "dockerfile": "Dockerfile",
+    "context": ".."
   },
   "runArgs": ["--privileged"],
   "remoteUser": "root",

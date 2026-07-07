@@ -504,10 +504,13 @@ def _render_site_assets(
             _template(asset_root / "specializations.rst.in", values),
             encoding="utf-8",
         )
-    shutil.copyfile(
-        asset_root / "_static" / "tslc.css",
-        sphinx_source / "_static" / "tslc.css",
-    )
+    _copy_static_assets(asset_root / "_static", sphinx_source / "_static")
+
+
+def _copy_static_assets(source: Path, target: Path) -> None:
+    for path in sorted(source.iterdir(), key=lambda item: item.name):
+        if path.is_file():
+            shutil.copyfile(path, target / path.name)
 
 
 def _cpp_asset_values(

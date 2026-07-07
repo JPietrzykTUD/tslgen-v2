@@ -17,6 +17,7 @@ from tslc.lower.context import (
     LoweringScope,
     LoweringSession,
 )
+from tslc.lower.implementation_state import ImplementationState
 from tslc.lower.raw_text import render_raw_text
 from tslc.lower.region_handlers import (
     DEFAULT_REGION_LOWERERS,
@@ -40,6 +41,7 @@ from tslc.support_policy import SupportPolicy
 class RenderedBodyResult:
     rendered: RenderText | None
     safety: ImplementationSafety
+    implementation_state: ImplementationState
     diagnostics: tuple[Diagnostic, ...] = ()
 
 
@@ -77,6 +79,7 @@ def render_body(
             return RenderedBodyResult(
                 rendered=None,
                 safety=context.effects.safety,
+                implementation_state=context.effects.implementation_state(selected),
                 diagnostics=(
                     diagnostic_at(
                         severity="error",
@@ -93,6 +96,7 @@ def render_body(
         return RenderedBodyResult(
             rendered=None,
             safety=context.effects.safety,
+            implementation_state=context.effects.implementation_state(selected),
             diagnostics=(
                 diagnostic_at(
                     severity="info",
@@ -119,11 +123,13 @@ def render_body(
         return RenderedBodyResult(
             rendered=None,
             safety=context.effects.safety,
+            implementation_state=context.effects.implementation_state(selected),
             diagnostics=diagnostics,
         )
     return RenderedBodyResult(
         rendered=rendered,
         safety=context.effects.safety,
+        implementation_state=context.effects.implementation_state(selected),
         diagnostics=diagnostics,
     )
 
@@ -158,7 +164,9 @@ class ExpressionRenderer:
                 f"region {segment.keyword!r} is not supported yet: {segment.full_text!r}",
                 source=segment.source,
             )
+            self._context.effects.mark_implementation_unknown()
             return literal_text(segment.full_text)
+        _record_rendered_region_state(segment, self._context)
         rendered = as_render_text(lowerer.lower(segment, self._context, self.render))
         return _finish_consumed_statement_terminator(segment, lowerer, rendered)
 
@@ -175,6 +183,40 @@ def _finish_consumed_statement_terminator(
     if isinstance(lowerer, StatementFinalizer):
         return as_render_text(lowerer.finish_statement(rendered, region))
     return render_sequence((rendered, literal_text(";")))
+
+
+def _record_rendered_region_state(region: Region, context: LoweringSession) -> None:
+    if region.keyword == "intrin":
+        context.effects.mark_implementation_intrinsic()
+        return
+    if region.keyword == "call":
+        context.effects.mark_implementation_call()
+        return
+    if region.keyword == "loop":
+        selector = region.selector_text.split(",", 1)[0].strip()
+        if selector == "backend":
+            context.effects.mark_implementation_fallback()
+        elif selector != "generation":
+            context.effects.mark_implementation_composition()
+        return
+    if region.keyword in {"if", "switch"}:
+        return
+    if region.keyword in {"complete", "let", "type", "value"}:
+        return
+    if region.keyword in {
+        "assume_aligned",
+        "cast",
+        "helper",
+        "io",
+        "lanes",
+        "mask",
+        "mem",
+        "op",
+        "var",
+    }:
+        context.effects.mark_implementation_composition()
+        return
+    context.effects.mark_implementation_unknown()
 
 
 def _clone_scope(scope: LoweringScope) -> LoweringScope:

@@ -14,7 +14,9 @@ from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower._text import split_selector_terms, split_top_level
 from tslc.lower.calls import parse_call_selector
 from tslc.lower.cast_selectors import parse_cast_selector
+from tslc.lower.region_handlers.declarations import parse_var_selector
 from tslc.lower.region_handlers.intrinsics import IntrinsicSelector
+from tslc.lower.region_handlers.masks import parse_mask_selector
 from tslc.syntax.ast import OuterTslParseResult, ParsedImplementationBodyEnvelope
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -192,21 +194,8 @@ def _validate_mask_region(
     region: Region,
     diagnostics: list[Diagnostic],
 ) -> None:
-    selector_terms = split_selector_terms(region.selector_text)
-    selector = tuple(selector_terms)
     arity = len(split_top_level(_segments_text(region.body)))
-    expected_arity = {
-        ("lane_true",): 0,
-        ("lane_false",): 0,
-        ("zero",): 0,
-        ("all",): 0,
-        ("test",): 2,
-        ("test", "imask"): 2,
-        ("set",): 2,
-        ("clear",): 2,
-        ("set_to",): 3,
-    }.get(selector)
-    if expected_arity == arity:
+    if parse_mask_selector(region.selector_text, arity) is not None:
         return
     diagnostics.append(
         diagnostic_at(
@@ -231,21 +220,12 @@ def _validate_var_region(
     region: Region,
     diagnostics: list[Diagnostic],
 ) -> None:
-    variant = region.selector_text.strip()
     groups = split_top_level(_segments_text(region.body))
-    is_valid = False
-    if variant in {"infer", "const_infer"}:
-        is_valid = len(groups) >= 2
-    elif variant in {"typed", "const_typed"}:
-        is_valid = len(groups) == 3
-    elif variant in {"init_register", "const_init_register"}:
-        is_valid = len(groups) == 1
-    elif variant == "runtime_array":
-        is_valid = (
-            len(groups) == 3
-            and _IDENTIFIER.fullmatch(groups[1].strip()) is not None
-        )
-    if is_valid:
+    selector = parse_var_selector(region.selector_text, len(groups))
+    if selector is not None and (
+        selector.kind != "runtime_array"
+        or _IDENTIFIER.fullmatch(groups[1].strip()) is not None
+    ):
         return
     diagnostics.append(
         diagnostic_at(
