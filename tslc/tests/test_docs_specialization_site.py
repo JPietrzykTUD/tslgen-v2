@@ -31,7 +31,7 @@ def docs_specialization_result(data_root: Path, machine_profiles_path: Path):
             "mask_binary_and",
             "mask_population_count",
         ],
-        profiles=["scalar", "sse2", "avx", "avx2", "skylake"],
+        profiles=["scalar", "sse2", "avx", "avx2", "skylake", "neon", "sve"],
     )
 
 
@@ -52,12 +52,14 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
     )
     records = _decode_specialization_records(payload)
 
-    assert payload["schema_version"] == 8
+    assert payload["schema_version"] == 9
     assert "profiles" in payload
+    assert "target_classes" in payload
     assert "backends" in payload
     assert "types" in payload
     assert "expressions" in payload
     assert "implementation_state" in payload["columns"]
+    assert "target_class" in payload["columns"]
     assert "width_label" in payload["columns"]
     assert "extension_rank" in payload["columns"]
     assert sum(record["count"] for record in records) == len(
@@ -111,6 +113,7 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
         and record["primitive"] == "add"
         and record["extension"] == "avx2"
         and record["family"] == "x86"
+        and record["target_class"] == "x86_256_bit"
         and record["type_tag"] == "si32"
         and record["register_type"] == "__m256i"
         and record["required_features"] == ["avx", "avx2"]
@@ -144,6 +147,34 @@ def test_specialization_explorer_data_contains_all_selected_specializations(
         for row in payload["types"]
     }
     assert type_rows["si32"] == {"short": "i32", "label": "signed int32"}
+    target_class_rows = {
+        strings[row[0]]: {
+            "label": strings[row[1]],
+            "family": strings[row[2]],
+            "width": strings[row[3]],
+            "sort_key": strings[row[4]],
+        }
+        for row in payload["target_classes"]
+    }
+    assert target_class_rows["x86_256_bit"] == {
+        "label": "x86 256-bit",
+        "family": "x86",
+        "width": "256-bit",
+        "sort_key": "10:0256:x86:256-bit",
+    }
+    assert target_class_rows["aarch64_128_bit"] == {
+        "label": "aarch64 128-bit",
+        "family": "aarch64",
+        "width": "128-bit",
+        "sort_key": "20:0128:aarch64:128-bit",
+    }
+    assert target_class_rows["aarch64_sve"] == {
+        "label": "aarch64 SVE",
+        "family": "aarch64",
+        "width": "SVE",
+        "sort_key": "20:9998:aarch64:SVE",
+    }
+    assert not any(key.startswith("arm_") for key in target_class_rows)
     assert any(
         record["profile"] == "skylake"
         and record["primitive"] == "add"
@@ -181,6 +212,8 @@ def test_specialization_explorer_react_source_keeps_expected_views() -> None:
     assert "VITE_TSLC_GIT_BRANCH" in app_source
     assert "VITE_TSLC_GIT_HASH" in app_source
     assert "docMeta" in app_source
+    assert 'src="../_static/tsl_repo_logo_wide.png"' in app_source
+    assert 'className="brandLogo"' in app_source
     assert "signature: strings[signature]" in app_source
     assert "selectedBackend" in app_source
     assert "function LanguageSelector" in app_source
@@ -189,10 +222,10 @@ def test_specialization_explorer_react_source_keeps_expected_views() -> None:
     assert "facade: strings[facade]" in app_source
     assert "example: strings[example]" in app_source
     assert "facadeCode" in app_source
-    assert "Profile x type heatmap" in app_source
-    assert "Rows are machine profiles. Columns are data types." in app_source
-    assert "short dash repeats the cell state color" in app_source
-    assert "profileClassSummary(profile, 2)" in app_source
+    assert "Target class x type heatmap" in app_source
+    assert "Rows are architecture and vector-width classes. Columns are data types." in app_source
+    assert "short dash repeats" in app_source
+    assert "targetClassTooltip(targetClass)" in app_source
     assert "function profileFeatureTooltip" in app_source
     assert 'record.implementation_state === "native"' in app_source
     assert 'state: "yes", label: "nat"' in app_source
@@ -217,8 +250,9 @@ def test_specialization_explorer_react_source_keeps_expected_views() -> None:
     assert "Profile capabilities are shown separately" in app_source
     assert "function typeLabel" in app_source
     assert "function targetWidthForRecord" not in app_source
-    assert "record.profile === profile.name" in app_source
-    assert "activeCell?.profile === profile.name" in app_source
+    assert "record.target_class === targetClass.key" in app_source
+    assert "activeCell?.targetClass === targetClass.key" in app_source
+    assert "function targetClassSortKey" in app_source
     assert "function implementationTargetRank" in app_source
     assert "profileCapabilityGroup" not in app_source
     assert "implementation_state" in app_source
@@ -260,6 +294,16 @@ def test_specialization_explorer_react_source_keeps_expected_views() -> None:
     assert "3D support matrix" not in app_source
     assert "getSupportValue" not in app_source
 
+    styles = (
+        Path(__file__).parents[2]
+        / "supplementary/docs/site/specializations/react/src/styles.css"
+    ).read_text(encoding="utf-8")
+    assert "--primary: #2b608b;" in styles
+    assert "--accent: #009ba4;" in styles
+    assert "--highlight: #bccf00;" in styles
+    assert "--focus: #84cfed;" in styles
+    assert ".brandLogo" in styles
+
 
 def _decode_specialization_records(payload: dict) -> list[dict]:
     strings = payload["strings"]
@@ -285,17 +329,18 @@ def _decode_specialization_records(payload: dict) -> list[dict]:
                     "profile": strings[row[1]],
                     "extension": strings[row[2]],
                     "family": strings[row[3]],
-                    "type_tag": strings[row[4]],
-                    "register_type": strings[row[5]],
-                    "required_features": feature_sets[row[6]],
-                    "safety": safeties[row[7]],
-                    "implementation_state": strings[row[8]],
-                    "width_label": strings[row[9]],
-                    "width_rank": strings[row[10]],
-                    "extension_group": strings[row[11]],
-                    "extension_rank": strings[row[12]],
-                    "family_rank": strings[row[13]],
-                    "count": row[14] if len(row) > 14 else 1,
+                    "target_class": strings[payload["target_classes"][row[4]][0]],
+                    "type_tag": strings[row[5]],
+                    "register_type": strings[row[6]],
+                    "required_features": feature_sets[row[7]],
+                    "safety": safeties[row[8]],
+                    "implementation_state": strings[row[9]],
+                    "width_label": strings[row[10]],
+                    "width_rank": strings[row[11]],
+                    "extension_group": strings[row[12]],
+                    "extension_rank": strings[row[13]],
+                    "family_rank": strings[row[14]],
+                    "count": row[15] if len(row) > 15 else 1,
                 }
             )
     return records

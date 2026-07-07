@@ -37,6 +37,7 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
     features = _IndexedTuples()
     safeties = _IndexedTuples()
     expressions = _IndexedTuples()
+    target_classes = _IndexedTargetClasses(strings)
     profile_rows = [
         _profile_row(profile, strings=strings, features=features)
         for profile in profiles
@@ -67,6 +68,7 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
                         strings=strings,
                         features=features,
                         safeties=safeties,
+                        target_classes=target_classes,
                     )
                     primitive_rows = grouped.setdefault(primitive_id, {})
                     primitive_rows[row] = primitive_rows.get(row, 0) + 1
@@ -75,12 +77,13 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
         for name, specs in sorted(primitive_specs.items())
     }
     payload = {
-        "schema_version": 8,
+        "schema_version": 9,
         "columns": [
             "backend",
             "profile",
             "extension",
             "family",
+            "target_class",
             "type_tag",
             "register_type",
             "features",
@@ -106,6 +109,13 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
             "tooltip",
             "sort_key",
         ],
+        "target_class_columns": [
+            "key",
+            "label",
+            "family",
+            "width_label",
+            "sort_key",
+        ],
         "backends": [
             _backend_row(backend_id, strings)
             for backend_id in sorted(backend_ids)
@@ -122,6 +132,7 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
             [caller, internal, list(reasons)]
             for caller, internal, reasons in safeties.values
         ],
+        "target_classes": target_classes.values,
         "profiles": profile_rows,
         "primitives": [
             primitive_docs[name] for name in sorted(primitive_docs)
@@ -277,6 +288,7 @@ def _specialization_row(
     strings: _StringTable,
     features: _IndexedTuples,
     safeties: _IndexedTuples,
+    target_classes: "_IndexedTargetClasses",
 ) -> tuple[int, ...]:
     feature_id = features.id(
         tuple(strings.id(feature) for feature in sorted(spec.required_features))
@@ -293,6 +305,7 @@ def _specialization_row(
         strings.id(profile_name),
         strings.id(spec.extension_name),
         strings.id(extension_family),
+        target_classes.id(spec, extension),
         strings.id(spec.type_tag),
         strings.id(_register_type(spec, backend_id)),
         feature_id,
@@ -304,6 +317,102 @@ def _specialization_row(
         strings.id(_extension_rank(spec, extension_family, extension)),
         strings.id(_text_rank(extension_family)),
     )
+
+
+class _IndexedTargetClasses:
+    def __init__(self, strings: _StringTable) -> None:
+        self._strings = strings
+        self._ids: dict[str, int] = {}
+        self.values: list[list[int]] = []
+
+    def id(self, spec: LoweredSpecialization, extension: Extension | None) -> int:
+        row = _target_class_row(spec, extension, self._strings)
+        key = self._strings.values[row[0]]
+        existing = self._ids.get(key)
+        if existing is not None:
+            return existing
+        identifier = len(self.values)
+        self._ids[key] = identifier
+        self.values.append(row)
+        return identifier
+
+
+def _target_class_row(
+    spec: LoweredSpecialization,
+    extension: Extension | None,
+    strings: _StringTable,
+) -> list[int]:
+    family, width = _target_class_parts(spec, extension)
+    key = _target_class_key(family, width)
+    label = _target_class_label(family, width)
+    return [
+        strings.id(key),
+        strings.id(label),
+        strings.id(family),
+        strings.id(width),
+        strings.id(_target_class_sort_key(family, width)),
+    ]
+
+
+def _target_class_parts(
+    spec: LoweredSpecialization,
+    extension: Extension | None,
+) -> tuple[str, str]:
+    if extension is None:
+        return ("unknown", "unknown")
+    family = _public_target_family(extension.family or "unclassified")
+    if family == "scalar":
+        return ("scalar", "scalar")
+    if family == "aarch64" and extension.name.startswith("sve"):
+        return (family, "SVE")
+    if extension.vector_bits_kind == "scalable":
+        return (family, "scalable")
+    if spec.uses_sized_vector:
+        return ("generic", "lanes")
+    if extension.vector_bits > 0:
+        return (family, f"{extension.vector_bits}-bit")
+    return (family, "scalar")
+
+
+def _public_target_family(family: str) -> str:
+    return "aarch64" if family == "arm" else family
+
+
+def _target_class_key(family: str, width: str) -> str:
+    return (
+        f"{family}_{width}"
+        .casefold()
+        .replace(" ", "_")
+        .replace("-", "_")
+    )
+
+
+def _target_class_label(family: str, width: str) -> str:
+    if family == "scalar":
+        return "scalar"
+    if family == "generic":
+        return "generic lanes"
+    return f"{family} {width}"
+
+
+def _target_class_sort_key(family: str, width: str) -> str:
+    family_order = {
+        "scalar": "00",
+        "generic": "01",
+        "x86": "10",
+        "aarch64": "20",
+    }.get(family, f"90-{family}")
+    width_order = {
+        "scalar": "0000",
+        "lanes": "0001",
+        "128-bit": "0128",
+        "256-bit": "0256",
+        "512-bit": "0512",
+        "SVE": "9998",
+        "scalable": "9999",
+        "unknown": "zzzz",
+    }.get(width, f"z-{width}")
+    return f"{family_order}:{width_order}:{family}:{width}"
 
 
 def _extension_family(profile: ProfileRender, spec: LoweredSpecialization) -> str:

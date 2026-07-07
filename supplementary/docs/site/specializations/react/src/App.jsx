@@ -113,6 +113,11 @@ function App() {
       primitiveMatchesSearch(primitive, payload.records, activeSearch)
     );
   }, [activeSearch, payload]);
+  const visibleTargetClasses = useMemo(() => {
+    if (!payload) return [];
+    const visibleKeys = new Set(filteredRecords.map((record) => record.target_class));
+    return payload.targetClasses.filter((targetClass) => visibleKeys.has(targetClass.key));
+  }, [filteredRecords, payload]);
   const activePrimitive =
     payload?.primitiveByName.get(selectedPrimitive) ?? visiblePrimitives[0] ?? null;
   const activePrimitiveRecords = activePrimitive
@@ -159,7 +164,12 @@ function App() {
   return (
     <main className="page">
       <header className="pageHeader">
-        <div>
+        <div className="brandHeader">
+          <img
+            className="brandLogo"
+            src="../_static/tsl_repo_logo_wide.png"
+            alt="TSL"
+          />
           <div className="docMeta">
             <span>Generated docs</span>
             {(BUILD_BRANCH || BUILD_HASH) && (
@@ -221,7 +231,7 @@ function App() {
               <TypeHeatmap
                 primitive={activePrimitive}
                 records={activePrimitiveRecords}
-                visibleProfiles={visibleProfiles}
+                visibleTargetClasses={visibleTargetClasses}
                 visibleTypes={visibleTypes}
                 visibleBackends={visibleBackends}
                 typeByTag={payload.typeByTag}
@@ -526,14 +536,14 @@ function ProfileRollup({ records }) {
 function TypeHeatmap({
   primitive,
   records,
-  visibleProfiles,
+  visibleTargetClasses,
   visibleTypes,
   visibleBackends,
   typeByTag,
   activeCell,
   setActiveCell,
 }) {
-  const rows = sortedValues(visibleProfiles, profileSortKey);
+  const rows = sortedValues(visibleTargetClasses, targetClassSortKey);
   if (rows.length === 0 || visibleTypes.length === 0) {
     return <section className="heatmapSection emptyPanel">No visible records.</section>;
   }
@@ -541,20 +551,21 @@ function TypeHeatmap({
     <section className="heatmapSection">
       <div className="sectionHeader">
         <div>
-          <span className="eyebrow">Profile x type heatmap</span>
-          <h2>Selected implementation coverage by profile</h2>
+          <span className="eyebrow">Target class x type heatmap</span>
+          <h2>Selected implementation coverage by target class</h2>
         </div>
         <p>
-          Rows are machine profiles. Columns are data types. Cell details show
-          concrete implementation targets, requirements, widths, and state. The
-          short dash repeats the cell state color for fast scanning.
+          Rows are architecture and vector-width classes. Columns are data types.
+          Cell details show concrete profiles, selected implementation targets,
+          requirements, widths, and state. The short dash repeats the cell state
+          color for fast scanning.
         </p>
       </div>
       <div className="heatmapWrap">
         <table className="heatmap">
           <thead>
             <tr>
-              <th>profile</th>
+              <th>target class</th>
               {visibleTypes.map((typeTag) => (
                 <th key={typeTag}>
                   <span>{shortTypeLabel(typeTag, typeByTag)}</span>
@@ -564,24 +575,24 @@ function TypeHeatmap({
             </tr>
           </thead>
           <tbody>
-            {rows.map((profile) => (
-              <tr key={profile.name}>
+            {rows.map((targetClass) => (
+              <tr key={targetClass.key}>
                 <th>
-                  <span>{profile.name}</span>
-                  <Tooltip content={profileFeatureTooltip(profile)}>
-                    <small>{profileClassSummary(profile, 2)}</small>
+                  <span>{targetClass.label}</span>
+                  <Tooltip content={targetClassTooltip(targetClass)}>
+                    <small>{targetClass.width_label}</small>
                   </Tooltip>
                 </th>
                 {visibleTypes.map((typeTag) => {
                   const cellRecords = records.filter(
                     (record) =>
                       record.type_tag === typeTag &&
-                      record.profile === profile.name
+                      record.target_class === targetClass.key
                   );
                   const summary = summarizeCell(cellRecords, visibleBackends);
                   const tooltip = heatCellTooltip(
                     primitive,
-                    profile,
+                    targetClass,
                     typeTag,
                     typeByTag,
                     summary,
@@ -591,7 +602,7 @@ function TypeHeatmap({
                   const selected =
                     activeCell?.primitive === primitive.name &&
                     activeCell?.typeTag === typeTag &&
-                    activeCell?.profile === profile.name;
+                    activeCell?.targetClass === targetClass.key;
                   return (
                     <td key={typeTag}>
                       <button
@@ -606,7 +617,7 @@ function TypeHeatmap({
                         onClick={() =>
                           setActiveCell({
                             primitive: primitive.name,
-                            profile: profile.name,
+                            targetClass: targetClass.key,
                             typeTag,
                           })
                         }
@@ -642,7 +653,7 @@ function Drilldown({ primitive, records, activeCell, visibleBackends, typeByTag 
   const cellRecords = records.filter(
     (record) =>
       record.type_tag === activeCell.typeTag &&
-      record.profile === activeCell.profile
+      record.target_class === activeCell.targetClass
   );
   const first = cellRecords[0];
   if (!first) {
@@ -656,21 +667,22 @@ function Drilldown({ primitive, records, activeCell, visibleBackends, typeByTag 
   }
 
   const profileRows = supportedProfileRows(cellRecords, visibleBackends);
+  const targetClass = first.targetClass;
   return (
     <section className="drilldownPanel">
       <span className="eyebrow">Drilldown</span>
       <h2>
         {primitive.name} · {shortTypeLabel(activeCell.typeTag, typeByTag)} ·{" "}
-        {first.profile}
+        {targetClass.label}
       </h2>
       <div className="metaGrid">
         <div>
-          <strong>Profile</strong>
-          <span>{first.profile}</span>
+          <strong>Target class</strong>
+          <span>{targetClass.label}</span>
         </div>
         <div>
-          <strong>Profile class</strong>
-          <span>{profileClassSummary(first.profileInfo)}</span>
+          <strong>Architecture</strong>
+          <span>{targetClass.family}</span>
         </div>
         <div>
           <strong>Data type</strong>
@@ -1032,7 +1044,7 @@ function Tooltip({ content, children }) {
 }
 
 function decodePayload(payload) {
-  if (payload.schema_version !== 8) {
+  if (payload.schema_version !== 9) {
     throw new Error(`unsupported specialization schema ${payload.schema_version}`);
   }
 
@@ -1081,6 +1093,13 @@ function decodePayload(payload) {
     sort_key: strings[row[10]],
   }));
   const profileByName = new Map(profiles.map((profile) => [profile.name, profile]));
+  const targetClasses = payload.target_classes.map((row) => ({
+    key: strings[row[0]],
+    label: strings[row[1]],
+    family: strings[row[2]],
+    width_label: strings[row[3]],
+    sort_key: strings[row[4]],
+  }));
   const primitives = payload.primitives.map(
     ([
       name,
@@ -1113,17 +1132,19 @@ function decodePayload(payload) {
         profileInfo,
         extension: strings[row[2]],
         family: strings[row[3]] || "unclassified",
-        type_tag: strings[row[4]],
-        register_type: strings[row[5]],
-        required_features: featureSets[row[6]],
-        safety: safetyStates[row[7]],
-        implementation_state: strings[row[8]],
-        displayWidth: strings[row[9]],
-        displayRank: strings[row[10]],
-        extensionGroup: strings[row[11]],
-        extensionRank: strings[row[12]],
-        familyRank: strings[row[13]],
-        count: row[14] ?? 1,
+        target_class: targetClasses[row[4]]?.key ?? "unknown_unknown",
+        targetClass: targetClasses[row[4]] ?? emptyTargetClass("unknown_unknown"),
+        type_tag: strings[row[5]],
+        register_type: strings[row[6]],
+        required_features: featureSets[row[7]],
+        safety: safetyStates[row[8]],
+        implementation_state: strings[row[9]],
+        displayWidth: strings[row[10]],
+        displayRank: strings[row[11]],
+        extensionGroup: strings[row[12]],
+        extensionRank: strings[row[13]],
+        familyRank: strings[row[14]],
+        count: row[15] ?? 1,
       };
       records.push({
         ...baseRecord,
@@ -1143,11 +1164,22 @@ function decodePayload(payload) {
     primitiveByName: new Map(primitives.map((primitive) => [primitive.name, primitive])),
     primitives,
     profiles,
+    targetClasses,
     records,
     requirements: uniqueRequirements(records),
     families: sortedValues(new Set(records.map((record) => record.family))),
     typeByTag,
     types: types.map((type) => type.tag),
+  };
+}
+
+function emptyTargetClass(key) {
+  return {
+    key,
+    label: key,
+    family: "unknown",
+    width_label: "unknown",
+    sort_key: key,
   };
 }
 
@@ -1200,6 +1232,18 @@ function profileFilterGroups(profiles) {
 
 function profileSortKey(profile) {
   return profile.sort_key;
+}
+
+function targetClassSortKey(targetClass) {
+  return targetClass.sort_key;
+}
+
+function targetClassTooltip(targetClass) {
+  return [
+    targetClass.label,
+    `Architecture: ${targetClass.family}`,
+    `Width: ${targetClass.width_label}`,
+  ].join("\n");
 }
 
 function profileFilterTitle(profiles, profileName) {
@@ -1273,7 +1317,7 @@ function summarizeCell(records, visibleBackends) {
 
 function heatCellTooltip(
   primitive,
-  profile,
+  targetClass,
   typeTag,
   typeByTag,
   summary,
@@ -1299,7 +1343,7 @@ function heatCellTooltip(
     return `${backend}: ${joinShort(states, 2)} · ${joinShort(targets, 2)}`;
   });
   return [
-    `${primitive.name} · ${profile.name} · ${typeLabel(typeTag, typeByTag)}`,
+    `${primitive.name} · ${targetClass.label} · ${typeLabel(typeTag, typeByTag)}`,
     `Cell state: ${cellStateDescription(summary)}`,
     ...backendLines,
   ].join("\n");

@@ -60,6 +60,12 @@ def test_document_generated_writes_assets_and_runs_tools(
     site_source = output_root / "docs/sphinx-src"
     assert (site_source / "conf.py").is_file()
     assert "extensions = ['breathe']" in (site_source / "conf.py").read_text()
+    assert 'html_logo = "_static/tsl_repo_logo_wide.png"' in (
+        site_source / "conf.py"
+    ).read_text()
+    assert 'html_favicon = "_static/tsl_logo_small.png"' in (
+        site_source / "conf.py"
+    ).read_text()
     assert str((output_root / "cpp/docs/doxygen/xml").resolve()) in (
         site_source / "conf.py"
     ).read_text()
@@ -68,6 +74,8 @@ def test_document_generated_writes_assets_and_runs_tools(
     assert (site_source / "rust_api.rst").is_file()
     assert (site_source / "specializations.rst").is_file()
     assert (site_source / "_static/tslc.css").is_file()
+    assert (site_source / "_static/tsl_logo_small.png").is_file()
+    assert (site_source / "_static/tsl_repo_logo_wide.png").is_file()
 
     assert (output_root / "cpp/docs/doxygen/xml/index.xml").is_file()
     assert (output_root / "docs/site/index.html").is_file()
