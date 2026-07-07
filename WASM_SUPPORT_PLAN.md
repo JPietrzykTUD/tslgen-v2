@@ -87,7 +87,7 @@ implementation, but the intended facts are:
 profile_families:
   wasm32:
     extension_families [wasm]
-    emulator_kinds [wasmtime]
+    runner_kinds [wasmtime]
     sort_order 30
     cpp_feature_flags true
     rust_target_features true
@@ -100,10 +100,8 @@ Notes:
   becomes `-msimd128`.
 - `rust_target_features true` is useful because profile feature `simd128`
   naturally becomes `+simd128`.
-- The current verifier vocabulary says `emulator_kinds`; for Wasm, `wasmtime`
-  is a runtime, not a CPU emulator. A small naming cleanup may be worthwhile,
-  but a minimal first slice can admit `wasmtime` through the existing typed
-  path.
+- The verifier vocabulary uses `runner_kinds` because Wasmtime is a runtime, not
+  a CPU emulator.
 - Existing C++ cross-target verifier code has a hardcoded aarch64/Linux branch.
   Do not reuse that as-is for Wasm. Add a Wasm/WASI-specific CMake/toolchain
   path.
@@ -121,15 +119,14 @@ Add:
       "name": "wasm32-simd128",
       "target_features": "simd128",
       "cpp_flags": [],
-      "emulator": {"kind": "wasmtime", "profile": "default"}
+      "runner": {"kind": "wasmtime", "profile": "default"}
     }
   ]
 }
 ```
 
 The `profile` value is not semantically important for Wasmtime. It exists only
-because the current `MachineProfileEmulator` model requires it. Prefer a future
-runtime/runner model over adding meaning to this field.
+because the current runner model keeps one shape for SDE, QEMU, and Wasmtime.
 
 ### Extension
 
@@ -342,7 +339,7 @@ RUSTFLAGS="-C target-feature=+simd128"
 
 The existing Rust verifier already has a follow-up flow for cross-target tests:
 build test binaries with `--no-run --message-format=json`, discover the produced
-executables, then run them through an emulator prefix. Extend this to support
+executables, then run them through a runner prefix. Extend this to support
 Wasmtime as the runner.
 
 Avoid `wasm32-unknown-unknown` initially. Rust's own documentation recommends
@@ -357,17 +354,11 @@ Add Wasmtime as a configured runtime.
 Minimal model:
 
 - Add `wasmtime_path` to `BuildVerifierConfig`.
-- Accept `VerifyEmulator(kind="wasmtime", profile="default")` for now.
+- Accept `VerifyRunner(kind="wasmtime", profile="default")`.
 - Add `wasmtime` to configured runner kinds when `wasmtime_path` is set.
-- Make `emulator_prefix(...)` return `(wasmtime_path,)` for Wasmtime.
+- Make `runner_prefix(...)` return `(wasmtime_path,)` for Wasmtime.
 - Make C++ CTest/CMake use Wasmtime for cross-running `.wasm` tests.
 - Make Rust follow-up test commands run `wasmtime <test_binary.wasm>`.
-
-Cleaner future model:
-
-- Rename or generalize `VerifyEmulator` to `VerifyRunner`.
-- Rename `emulator_kinds` to `runner_kinds` or `execution_kinds`.
-- Keep old names as compatibility only if needed.
 
 Value-test code should keep `v128` values inside the Wasm module. Tests should
 materialize vectors from scalar arrays, call generated TSL functions, convert or

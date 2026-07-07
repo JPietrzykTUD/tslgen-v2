@@ -120,6 +120,33 @@ prim<v:=s> set1(value):
               intrin<svdup_n, build>(value)
             );
           """
+    wasm128:
+      ?i?:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<splat, build>(
+                cast<static>(type(base::signed_of(type(base::in))), value)
+              )
+            );
+          """
+      f?:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<splat, build>(value)
+            );
+          """
     scalar:
       arith:
         requires []
@@ -370,6 +397,19 @@ prim<v:=()>[value=zero] set_zero():
             var<const_infer>(undef, call<primitive=set_undef[Vec]>());
             complete(
               call<primitive=binary_xor>(undef, undef)
+            );
+          """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              call<primitive=set1>(cast<static>(type(base::in), 0))
             );
           """
 

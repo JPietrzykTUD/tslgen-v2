@@ -108,6 +108,13 @@ def test_neon_native_arithmetic_bitwise_extract_and_cast_value_tests_build_and_p
         for command in report.commands
     ]
     assert ("cpp", "test") in steps, (report.skipped, command_steps)
+    if any(
+        skip.startswith("rust: profile neon target preflight failed")
+        for skip in report.skipped
+    ):
+        pytest.skip(
+            "Rust NEON value-test gate needs a working aarch64-unknown-linux-musl target"
+        )
     assert ("rust", "test") in steps, (report.skipped, command_steps)
 
 

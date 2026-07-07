@@ -120,6 +120,8 @@ class ValueTestPlanner:
                 coverage_locations.setdefault(coverage_identity(entry), _primitive_location(primitive))
                 continue
             for index, test_case in enumerate(primitive.tests):
+                if not any(spec.type_tag == test_case.type_tag for spec in specs):
+                    continue
                 if _case_extension_unselected(test_case, specs):
                     continue
                 if _representation_case_unselected(test_case, specs):

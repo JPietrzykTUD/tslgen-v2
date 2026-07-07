@@ -184,6 +184,19 @@ prim<v:=(v,v)> binary_and(left, right):
               )
             );
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<v128_and, build[suffix=""]>(left, right)
+            );
+          """
     sve:
       ?i?:
         requires [sve]
@@ -375,6 +388,19 @@ prim<v:=(v,v)> binary_andnot(left, right):
                   call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(left)
                 )
               )
+            );
+          """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<v128_andnot, build[suffix=""]>(right, left)
             );
           """
     sve:
@@ -590,6 +616,19 @@ prim<v:=(v,v)> binary_or(left, right):
               )
             );
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<v128_or, build[suffix=""]>(left, right)
+            );
+          """
     sve:
       ?i?:
         requires [sve]
@@ -803,6 +842,19 @@ prim<v:=(v,v)> binary_xor(left, right):
               )
             );
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<v128_xor, build[suffix=""]>(left, right)
+            );
+          """
     sve:
       ?i?:
         requires [sve]
@@ -889,6 +941,19 @@ prim<v:=v> inv(data):
           reasons []
         implementation:
           tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(mask<lane_true>())));"
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<v128_not, build[suffix=""]>(data)
+            );
+          """
 
 prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
   brief_description "Computes bitwise AND on active mask lanes and writes zero to inactive lanes."

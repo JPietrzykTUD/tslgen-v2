@@ -9,9 +9,9 @@ from pathlib import Path
 from tslc.diagnostics import Diagnostic
 from tslc.output._verify_common import (
     command_failure_diagnostic,
-    emulator_missing_diagnostic,
-    filter_emulator_verifiable_profiles,
+    filter_runner_verifiable_profiles,
     missing_executable,
+    runner_missing_diagnostic,
 )
 from tslc.output.verify_model import (
     BuildCommand,
@@ -86,8 +86,8 @@ __all__ = [
     "VerifyBackendDriver",
     "command_failure_diagnostic",
     "cpp_verify_driver",
-    "emulator_missing_diagnostic",
-    "filter_emulator_verifiable_profiles",
+    "filter_runner_verifiable_profiles",
     "missing_verify_tool",
+    "runner_missing_diagnostic",
     "rust_verify_driver",
 ]

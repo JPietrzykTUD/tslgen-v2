@@ -137,6 +137,21 @@ prim<v:=cptr>[aligned=*] load(ptr):
                 );
               }
             """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            complete(
+              intrin<v128_load, build[suffix=""]>(
+                cast<reinterpret, type=const_ptr>(type(vector::register), ptr)
+              )
+            );
+          """
     sve:
       arith:
         requires [sve]

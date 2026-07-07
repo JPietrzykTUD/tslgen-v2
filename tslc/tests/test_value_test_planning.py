@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from tslc.api import generate_project
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
     Catalog,
@@ -398,6 +399,14 @@ def test_planner_warns_for_each_unsupported_authored_case() -> None:
                 inputs=(TslTestArg("vector", values=("1", "2", "3", "4")),),
                 expected=("-1", "-2", "-3"),
             ),
+            TslTestCase(
+                name="bad_unselected_type",
+                type_tag="ui64",
+                tags=("bad",),
+                lanes=2,
+                inputs=(TslTestArg("vector", values=("1", "2")),),
+                expected=("-1",),
+            ),
         ),
     )
     catalog = _catalog(primitive, *_harness_primitives())
@@ -414,6 +423,7 @@ def test_planner_warns_for_each_unsupported_authored_case() -> None:
     ]
     assert len(warnings) == 1
     assert "bad" in warnings[0].message
+    assert "bad_unselected_type" not in warnings[0].message
 
 
 def test_render_project_surfaces_value_test_warnings_when_requested(
@@ -851,6 +861,32 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
     assert "let result = set_undef::<Vec>();" in rust_compile_source
     assert "let _ = result;" in rust_compile_source
 
+    rust_diff_case = ValueTestCasePlan(
+        kind="differential",
+        function_name="test_diff_wasm128_add_si32_basic",
+        case_name="add_si32_basic",
+        call_name="add",
+        type_tag="si32",
+        base_spelling="i32",
+        lanes=4,
+        vector_inputs=(("1", "2", "3", "4"), ("4", "3", "2", "1")),
+        result_kind="v",
+        param_kinds=("v", "v"),
+        hardware_extension="wasm128",
+        from_array_name="from_array",
+        to_array_name="to_array",
+    )
+    rust_diff_source = render_rust_values_file(
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_diff_case,)),),
+        render_assets,
+    )
+    assert "type Hw = Simd<i32, Wasm128>;" in rust_diff_source
+    assert "type Ref = Simd<i32, Generic<4>>;" in rust_diff_source
+    assert "from_array::<Hw>(&hin0)" in rust_diff_source
+    assert "let hw = to_array::<Hw>(add::<Hw>(" in rust_diff_source
+    assert "let reference = add::<Ref>(r0, r1);" in rust_diff_source
+    assert "hw[i].lane_eq(reference[i])" in rust_diff_source
+
 
 def test_value_test_case_plan_validates_kind_requirements() -> None:
     zero_arg = ValueTestCasePlan(
@@ -942,6 +978,35 @@ def test_value_test_case_plan_validates_kind_requirements() -> None:
             fuzz_seed=1,
             fuzz_iterations=8,
         )
+
+
+def test_wasm_rust_value_tests_render_native_differential_cases(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add"],
+        profiles=["wasm32-simd128"],
+        type_tags=("f32",),
+        backends=("rust",),
+        test_harness=True,
+    )
+
+    assert not [diagnostic for diagnostic in result.diagnostics if diagnostic.severity == "error"]
+    values_source = next(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path == "rust/tests/values.rs"
+    )
+
+    assert "fn test_diff_wasm128_add_f32_basic()" in values_source
+    assert "type Hw = Simd<f32, Wasm128>;" in values_source
+    assert "type Ref = Simd<f32, Generic<4>>;" in values_source
+    assert "from_array::<Hw>(&hin0)" in values_source
+    assert "let hw = to_array::<Hw>(add::<Hw>(" in values_source
+    assert "let reference = add::<Ref>(r0, r1);" in values_source
 
 
 def test_scalable_tiling_is_gated_on_corpus_cross_lane_fact() -> None:

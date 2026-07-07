@@ -129,6 +129,20 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
                 );
               }
             """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+            intrin<v128_store, build[suffix=""]>(
+              cast<reinterpret, type=ptr>(type(vector::register), ptr),
+              data
+            );
+          """
     sve:
       arith:
         requires [sve]

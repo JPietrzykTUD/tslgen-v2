@@ -6,6 +6,7 @@ from tslc.compiler_assets import RenderAssets
 from tslc.render._common import slug
 from tslc.value_tests._render_rust_conversion import (
     _convert,
+    _differential,
     _extension_extract,
     _extension_insert,
     _load_convert,
@@ -76,11 +77,13 @@ def _render_case(case: ValueTestCasePlan) -> str:
 
 RUST_VALUE_TEST_RENDERER = ValueTestRendererCapability(
     backend_id="rust",
+    supports_differential=True,
     case_renderers={
         "array_to_vector": _array_to_vector,
         "broadcast": _broadcast,
         "compile_only": _compile_only,
         "convert": _convert,
+        "differential": _differential,
         "extension_extract": _extension_extract,
         "extension_insert": _extension_insert,
         "generic_golden": _generic_golden,

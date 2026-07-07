@@ -15,9 +15,9 @@ import sys
 from tslc.diagnostics import Diagnostic
 from tslc.output.verify_drivers import (
     command_failure_diagnostic,
-    emulator_missing_diagnostic,
-    filter_emulator_verifiable_profiles,
+    filter_runner_verifiable_profiles,
     missing_verify_tool,
+    runner_missing_diagnostic,
 )
 from tslc.output.verify_model import (
     BuildCommand,
@@ -27,9 +27,9 @@ from tslc.output.verify_model import (
     BuildVerificationReport,
     BuildVerifierConfig,
     VerifyBackend,
-    VerifyEmulator,
     VerifyProfile,
     VerifyProject,
+    VerifyRunner,
 )
 
 
@@ -71,11 +71,11 @@ def verify_generated_project(
     diagnostics: list[Diagnostic] = []
     skipped: list[str] = []
 
-    emulator_missing = emulator_missing_diagnostic(config)
-    if emulator_missing is not None:
+    runner_missing = runner_missing_diagnostic(config)
+    if runner_missing is not None:
         return BuildVerificationReport(
             commands=(),
-            diagnostics=(emulator_missing,),
+            diagnostics=(runner_missing,),
             skipped=(),
     )
 
@@ -91,7 +91,7 @@ def verify_generated_project(
         if missing is not None:
             skipped.append(f"{backend.backend_id}: {missing} not found")
             continue
-        backend, profile_skips = filter_emulator_verifiable_profiles(backend, config)
+        backend, profile_skips = filter_runner_verifiable_profiles(backend, config)
         skipped.extend(profile_skips)
         if not backend.profiles:
             continue
@@ -141,6 +141,9 @@ def _subprocess_env(command: BuildCommand) -> dict[str, str] | None:
     zig_local_cache, zig_global_cache = _zig_cache_dirs(command.cwd)
     environment["ZIG_LOCAL_CACHE_DIR"] = str(zig_local_cache)
     environment["ZIG_GLOBAL_CACHE_DIR"] = str(zig_global_cache)
+    wasmtime_home, xdg_cache_home = _runtime_cache_dirs(command.cwd)
+    environment["WASMTIME_HOME"] = str(wasmtime_home)
+    environment["XDG_CACHE_HOME"] = str(xdg_cache_home)
     for item in command.env:
         environment[item.key] = item.value
     if _is_cargo_command(command):
@@ -160,6 +163,11 @@ def _is_cargo_command(command: BuildCommand) -> bool:
         and bool(command.argv)
         and Path(command.argv[0]).name == "cargo"
     )
+
+
+def _runtime_cache_dirs(command_root: Path) -> tuple[Path, Path]:
+    base = command_root.resolve() / ".tslctmp" / "runtime"
+    return base / "wasmtime-home", base / "xdg-cache"
 
 
 def _rustc_stdin_guard(command_root: Path) -> Path:

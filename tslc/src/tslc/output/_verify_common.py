@@ -22,12 +22,13 @@ def missing_executable(executable: str) -> str | None:
     return executable if shutil.which(executable) is None else None
 
 
-def emulator_missing_diagnostic(config: BuildVerifierConfig) -> Diagnostic | None:
+def runner_missing_diagnostic(config: BuildVerifierConfig) -> Diagnostic | None:
     if not config.run_value_tests:
         return None
     for kind, executable in (
         ("sde", config.sde_path),
         ("qemu-aarch64", config.qemu_aarch64_path),
+        ("wasmtime", config.wasmtime_path),
     ):
         if executable is None:
             continue
@@ -35,36 +36,36 @@ def emulator_missing_diagnostic(config: BuildVerifierConfig) -> Diagnostic | Non
         if missing is not None:
             return Diagnostic(
                 severity="error",
-                code="TSL-BUILD-VERIFY-EMULATOR-MISSING",
-                message=f"{kind} emulator executable {missing} not found",
+                code="TSL-BUILD-VERIFY-RUNNER-MISSING",
+                message=f"{kind} runner executable {missing} not found",
             )
     return None
 
 
-def filter_emulator_verifiable_profiles(
+def filter_runner_verifiable_profiles(
     backend: VerifyBackend,
     config: BuildVerifierConfig,
 ) -> tuple[VerifyBackend, tuple[str, ...]]:
-    configured = configured_emulator_kinds(config)
+    configured = configured_runner_kinds(config)
     if not configured or not config.run_value_tests:
         return backend, ()
 
     profiles: list[VerifyProfile] = []
     skipped: list[str] = []
     for profile in backend.profiles:
-        if profile.emulator is None:
+        if profile.runner is None:
             if profile.family != "generic":
                 skipped.append(
                     f"{backend.backend_id}: profile {profile.profile_name} has no "
-                    "emulator metadata; value-test verification skipped"
+                    "runner metadata; value-test verification skipped"
                 )
             else:
                 profiles.append(profile)
             continue
-        if profile.emulator.kind not in configured:
+        if profile.runner.kind not in configured:
             skipped.append(
                 f"{backend.backend_id}: profile {profile.profile_name} requires "
-                f"{profile.emulator.kind}, but that emulator is not configured; "
+                f"{profile.runner.kind}, but that runner is not configured; "
                 "value-test verification skipped"
             )
             continue
@@ -79,12 +80,14 @@ def filter_emulator_verifiable_profiles(
     )
 
 
-def configured_emulator_kinds(config: BuildVerifierConfig) -> frozenset[str]:
+def configured_runner_kinds(config: BuildVerifierConfig) -> frozenset[str]:
     configured: set[str] = set()
     if config.sde_path is not None:
         configured.add("sde")
     if config.qemu_aarch64_path is not None:
         configured.add("qemu-aarch64")
+    if config.wasmtime_path is not None:
+        configured.add("wasmtime")
     return frozenset(configured)
 
 
@@ -112,37 +115,63 @@ def cmake_cross_emulator(
     profile: VerifyProfile,
     config: BuildVerifierConfig,
 ) -> tuple[str, ...]:
-    if profile.emulator is None or profile.emulator.kind != "qemu-aarch64":
+    if profile.runner is None or profile.runner.kind != "qemu-aarch64":
         return ()
-    return emulator_prefix(profile, config)
+    return runner_prefix(profile, config)
 
 
-def emulator_prefix(
+def runner_prefix(
     profile: VerifyProfile,
     config: BuildVerifierConfig,
 ) -> tuple[str, ...]:
-    emulator = profile.emulator
-    if emulator is None:
+    runner = profile.runner
+    if runner is None:
         return ()
-    if emulator.kind == "sde":
+    if runner.kind == "sde":
         if config.sde_path is None:
             return ()
-        return (config.sde_path, f"-{emulator.profile}", *emulator.args, "--")
-    if emulator.kind == "qemu-aarch64":
+        return (config.sde_path, f"-{runner.profile}", *runner.args, "--")
+    if runner.kind == "qemu-aarch64":
         if config.qemu_aarch64_path is None:
             return ()
-        return (config.qemu_aarch64_path, "-cpu", emulator.profile, *emulator.args)
+        return (config.qemu_aarch64_path, "-cpu", runner.profile, *runner.args)
+    if runner.kind == "wasmtime":
+        if config.wasmtime_path is None:
+            return ()
+        return (config.wasmtime_path, *runner.args)
     return ()
 
 
 def effective_cpp_compiler(
     config: BuildVerifierConfig,
     backend: VerifyBackend | None = None,
+    profile: VerifyProfile | None = None,
 ) -> tuple[str, ...]:
     if config.cpp_compiler is not None:
         return config.cpp_compiler
+    if profile is not None:
+        return _effective_cpp_compiler_for_profile(config, profile)
+    if backend is not None and backend.profiles and all(
+        _is_wasm_cpp_target(candidate, config) for candidate in backend.profiles
+    ):
+        return ("/opt/wasi-sdk/bin/clang++",)
     if backend is not None and any(cpp_target(profile, config) for profile in backend.profiles):
         return ("clang++",)
+    return _native_cpp_compiler()
+
+
+def _effective_cpp_compiler_for_profile(
+    config: BuildVerifierConfig,
+    profile: VerifyProfile,
+) -> tuple[str, ...]:
+    if _is_wasm_cpp_target(profile, config):
+        return ("/opt/wasi-sdk/bin/clang++",)
+    if cpp_target(profile, config) is not None:
+        return ("clang++",)
+    return _native_cpp_compiler()
+
+
+def _native_cpp_compiler() -> tuple[str, ...]:
     parsed = _ambient_cpp_compiler()
     if parsed:
         # The CI/devcontainer environment exposes Zig through CXX for cross
@@ -151,6 +180,11 @@ def effective_cpp_compiler(
         if not _is_zig_driver(parsed[0]):
             return parsed
     return ("c++",)
+
+
+def _is_wasm_cpp_target(profile: VerifyProfile, config: BuildVerifierConfig) -> bool:
+    target = cpp_target(profile, config)
+    return target is not None and target.startswith("wasm32-")
 
 
 def _ambient_cpp_compiler() -> tuple[str, ...]:
@@ -178,10 +212,15 @@ def effective_rust_compiler(config: BuildVerifierConfig) -> str:
 def cpp_environment(
     config: BuildVerifierConfig,
     backend: VerifyBackend | None = None,
+    profile: VerifyProfile | None = None,
 ) -> tuple[BuildCommandEnvironment, ...]:
-    compiler = effective_cpp_compiler(config, backend)
+    compiler = effective_cpp_compiler(config, backend, profile)
     if config.cpp_compiler is None and not (
-        backend is not None and any(cpp_target(profile, config) for profile in backend.profiles)
+        profile is not None and cpp_target(profile, config) is not None
+    ) and not (
+        profile is None
+        and backend is not None
+        and any(cpp_target(candidate, config) for candidate in backend.profiles)
     ):
         ambient = _ambient_cpp_compiler()
         if ambient == compiler:

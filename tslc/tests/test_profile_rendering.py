@@ -176,9 +176,9 @@ def test_omitted_profiles_use_all_loaded_profiles(
     neon_profile = next(profile for profile in actual if profile.profile_name == "neon")
     assert neon_profile.cpp_target == "aarch64-linux-gnu"
     assert neon_profile.cpp_flags == ()
-    assert neon_profile.emulator is not None
-    assert neon_profile.emulator.kind == "qemu-aarch64"
-    assert neon_profile.emulator.profile == "cortex-a76"
+    assert neon_profile.runner is not None
+    assert neon_profile.runner.kind == "qemu-aarch64"
+    assert neon_profile.runner.profile == "cortex-a76"
     assert "cpp/include/tsl_neon.hpp" in {
         artifact.logical_path for artifact in result.artifacts.artifacts
     }

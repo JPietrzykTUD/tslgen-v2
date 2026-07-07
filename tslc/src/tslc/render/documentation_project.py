@@ -100,8 +100,8 @@ def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
             "profile",
             "family",
             "features",
-            "emulator_kind",
-            "emulator_profile",
+            "runner_kind",
+            "runner_profile",
             "group_key",
             "group_label",
             "group_rank",
@@ -240,7 +240,7 @@ def _profile_row(
     strings: _StringTable,
     features: _IndexedTuples,
 ) -> list[int]:
-    emulator = profile.profile.emulator
+    runner = profile.profile.runner
     profile_features = tuple(sorted(profile.profile.features))
     group = _profile_group(profile)
     summary = _profile_summary(profile)
@@ -250,8 +250,8 @@ def _profile_row(
         features.id(
             tuple(strings.id(feature) for feature in profile_features)
         ),
-        strings.id(emulator.kind if emulator is not None else ""),
-        strings.id(emulator.profile if emulator is not None else ""),
+        strings.id(runner.kind if runner is not None else ""),
+        strings.id(runner.profile if runner is not None else ""),
         strings.id(group[0]),
         strings.id(group[1]),
         strings.id(group[2]),

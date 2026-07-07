@@ -25,12 +25,12 @@ _NO_SIMD = "NOSIMD-INVALID"
 
 
 @dataclass(frozen=True, slots=True)
-class MachineProfileEmulator:
-    """Emulator profile metadata for after-write value-test execution.
+class MachineProfileRunner:
+    """Runner metadata for after-write value-test execution.
 
     Executable paths are deliberately not catalog data; the CLI/verifier provide
-    those. This record only says which emulator family and profile/CPU a machine
-    profile should use when tests cannot run natively.
+    those. This record only says which runner family and profile/CPU a machine
+    profile should use when tests cannot run directly.
     """
 
     kind: str
@@ -51,9 +51,9 @@ class MachineProfile:
     # Extra C++ compiler flags owned by this machine profile. These are full
     # compiler arguments, not feature-token spellings.
     cpp_flags: tuple[str, ...] = ()
-    # Optional emulator profile used by the after-write verifier to run value
-    # tests on hosts that do not support the profile's ISA natively.
-    emulator: MachineProfileEmulator | None = None
+    # Optional runner profile used by the after-write verifier to execute value
+    # tests on hosts that cannot run the profile directly.
+    runner: MachineProfileRunner | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "features", frozenset(self.features))
@@ -176,7 +176,7 @@ def load_machine_profiles_checked(
                     "compile_modes",
                     "alternatives",
                     "cpp_flags",
-                    "emulator",
+                    "runner",
                 },
                 path,
                 diagnostics,
@@ -231,10 +231,10 @@ def load_machine_profiles_checked(
                 path,
                 diagnostics,
             )
-            emulator = _emulator(
+            runner = _runner(
                 name,
                 family,
-                fields.get("emulator"),
+                fields.get("runner"),
                 target_families,
                 path,
                 diagnostics,
@@ -246,7 +246,7 @@ def load_machine_profiles_checked(
                 alternatives=alternatives,
                 compile_modes=compile_modes,
                 cpp_flags=cpp_flags,
-                emulator=emulator,
+                runner=runner,
             )
     return MachineProfileLoadResult(
         profiles=MappingProxyType(profiles),
@@ -377,22 +377,22 @@ def _string_list_field(
     return ()
 
 
-def _emulator(
+def _runner(
     profile_name: str,
     family: str,
     value: Any,
     target_families: TargetFamilyCatalog | None,
     path: Path,
     diagnostics: list[Diagnostic],
-) -> MachineProfileEmulator | None:
+) -> MachineProfileRunner | None:
     if value is None:
         return None
     if not isinstance(value, _JsonObject):
         diagnostics.append(
             _diagnostic(
                 path,
-                "TSL-PROFILE-MALFORMED-EMULATOR",
-                f"machine profile {profile_name!r} emulator must be an object",
+                "TSL-PROFILE-MALFORMED-RUNNER",
+                f"machine profile {profile_name!r} runner must be an object",
             )
         )
         return None
@@ -402,21 +402,21 @@ def _emulator(
         {"kind", "profile", "args"},
         path,
         diagnostics,
-        owner=f"emulator for machine profile {profile_name!r}",
+        owner=f"runner for machine profile {profile_name!r}",
     )
     kind_value = fields.get("kind")
     if not isinstance(kind_value, str) or not kind_value.strip():
         diagnostics.append(
             _diagnostic(
                 path,
-                "TSL-PROFILE-MALFORMED-EMULATOR",
-                f"machine profile {profile_name!r} emulator kind must be a non-empty string",
+                "TSL-PROFILE-MALFORMED-RUNNER",
+                f"machine profile {profile_name!r} runner kind must be a non-empty string",
             )
         )
         return None
     kind = kind_value.strip()
     allowed = (
-        target_families.emulator_kinds_for_profile_family(family)
+        target_families.runner_kinds_for_profile_family(family)
         if target_families is not None and target_families.supports_profile_family(family)
         else frozenset()
     )
@@ -424,13 +424,13 @@ def _emulator(
         target_families is not None and target_families.supports_profile_family(family)
     ):
         if kind not in allowed:
-            expected = ", ".join(sorted(allowed)) if allowed else "no emulator"
+            expected = ", ".join(sorted(allowed)) if allowed else "no runner"
             diagnostics.append(
                 _diagnostic(
                     path,
-                    "TSL-PROFILE-UNSUPPORTED-EMULATOR",
+                    "TSL-PROFILE-UNSUPPORTED-RUNNER",
                     (
-                        f"machine profile {profile_name!r} emulator kind {kind!r} is not "
+                        f"machine profile {profile_name!r} runner kind {kind!r} is not "
                         f"declared for family {family!r}; expected {expected}"
                     ),
                 )
@@ -440,8 +440,8 @@ def _emulator(
         diagnostics.append(
             _diagnostic(
                 path,
-                "TSL-PROFILE-MALFORMED-EMULATOR",
-                f"machine profile {profile_name!r} emulator profile must be a non-empty string",
+                "TSL-PROFILE-MALFORMED-RUNNER",
+                f"machine profile {profile_name!r} runner profile must be a non-empty string",
             )
         )
         return None
@@ -455,13 +455,13 @@ def _emulator(
         diagnostics.append(
             _diagnostic(
                 path,
-                "TSL-PROFILE-MALFORMED-EMULATOR",
-                f"machine profile {profile_name!r} emulator args must be a string list",
+                "TSL-PROFILE-MALFORMED-RUNNER",
+                f"machine profile {profile_name!r} runner args must be a string list",
             )
         )
         args = ()
     cleaned_profile = profile_value.strip().lstrip("-") if kind == "sde" else profile_value.strip()
-    return MachineProfileEmulator(kind=kind, profile=cleaned_profile, args=args)
+    return MachineProfileRunner(kind=kind, profile=cleaned_profile, args=args)
 
 
 def _diagnostic(path: Path, code: str, message: str) -> Diagnostic:

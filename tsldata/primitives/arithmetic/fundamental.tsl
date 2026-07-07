@@ -144,6 +144,15 @@ prim<v:=(v,v)> add(left, right):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<vaddq, build>(left, right));"
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<add, build>(left, right));"
     sve:
       arith:
         requires [sve]
@@ -557,6 +566,15 @@ prim<v:=(v,v)> sub(left, right):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<vsubq, build>(left, right));"
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<sub, build>(left, right));"
     sve:
       arith:
         requires [sve]

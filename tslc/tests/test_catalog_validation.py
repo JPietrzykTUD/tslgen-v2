@@ -37,12 +37,12 @@ def _target_family_catalog() -> TargetFamilyCatalog:
             "x86": ProfileFamilyCapability(
                 "x86",
                 frozenset({"x86"}),
-                emulator_kinds=frozenset({"sde"}),
+                runner_kinds=frozenset({"sde"}),
             ),
             "aarch64": ProfileFamilyCapability(
                 "aarch64",
                 frozenset({"arm"}),
-                emulator_kinds=frozenset({"qemu-aarch64"}),
+                runner_kinds=frozenset({"qemu-aarch64"}),
             ),
         },
     )
@@ -994,14 +994,14 @@ def test_machine_profile_cpp_flags_are_validated(tmp_path: Path) -> None:
     assert "TSL-PROFILE-MALFORMED-FIELD" in {d.code for d in result.diagnostics}
 
 
-def test_machine_profile_emulator_metadata_is_validated(tmp_path: Path) -> None:
+def test_machine_profile_runner_metadata_is_validated(tmp_path: Path) -> None:
     path = tmp_path / "machine_profiles.json"
     path.write_text(
         '{\n'
         '  "x86": [\n'
         '    {"name": "avx2", "target_features": "avx avx2", '
-        '"emulator": {"kind": "sde", "profile": "-hsw"}},\n'
-        '    {"name": "bad", "target_features": "avx", "emulator": []}\n'
+        '"runner": {"kind": "sde", "profile": "-hsw"}},\n'
+        '    {"name": "bad", "target_features": "avx", "runner": []}\n'
         '  ]\n'
         '}\n',
         encoding="utf-8",
@@ -1009,19 +1009,19 @@ def test_machine_profile_emulator_metadata_is_validated(tmp_path: Path) -> None:
 
     result = load_machine_profiles_checked(path, _target_family_catalog())
 
-    assert result.profiles["avx2"].emulator is not None
-    assert result.profiles["avx2"].emulator.kind == "sde"
-    assert result.profiles["avx2"].emulator.profile == "hsw"
-    assert "TSL-PROFILE-MALFORMED-EMULATOR" in {d.code for d in result.diagnostics}
+    assert result.profiles["avx2"].runner is not None
+    assert result.profiles["avx2"].runner.kind == "sde"
+    assert result.profiles["avx2"].runner.profile == "hsw"
+    assert "TSL-PROFILE-MALFORMED-RUNNER" in {d.code for d in result.diagnostics}
 
 
-def test_machine_profile_emulator_kinds_come_from_target_families(tmp_path: Path) -> None:
+def test_machine_profile_runner_kinds_come_from_target_families(tmp_path: Path) -> None:
     path = tmp_path / "machine_profiles.json"
     path.write_text(
         '{\n'
         '  "x86": [\n'
         '    {"name": "bad", "target_features": "sse", '
-        '"emulator": {"kind": "qemu-aarch64", "profile": "cortex-a76"}}\n'
+        '"runner": {"kind": "qemu-aarch64", "profile": "cortex-a76"}}\n'
         '  ]\n'
         '}\n',
         encoding="utf-8",
@@ -1030,7 +1030,7 @@ def test_machine_profile_emulator_kinds_come_from_target_families(tmp_path: Path
     result = load_machine_profiles_checked(path, _target_family_catalog())
 
     diagnostic = next(
-        d for d in result.diagnostics if d.code == "TSL-PROFILE-UNSUPPORTED-EMULATOR"
+        d for d in result.diagnostics if d.code == "TSL-PROFILE-UNSUPPORTED-RUNNER"
     )
     assert "declared for family 'x86'" in diagnostic.message
     assert "sde" in diagnostic.message

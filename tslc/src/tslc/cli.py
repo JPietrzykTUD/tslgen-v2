@@ -84,6 +84,16 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--wasmtime",
+        nargs="?",
+        const="wasmtime",
+        default=None,
+        help=(
+            "run value-test executables for Wasm/WASI profiles through Wasmtime; "
+            "optionally pass the executable path"
+        ),
+    )
+    parser.add_argument(
         "--cpp-compiler",
         default=None,
         help="C++ compiler command for build verification, e.g. /usr/bin/c++",
@@ -193,11 +203,13 @@ def main(argv: list[str] | None = None) -> int:
 
         if (args.verify or args.test) and result.rendered is not None:
             if args.test:
-                emulators = _configured_emulator_labels(args.sde, args.qemu_aarch64)
-                if emulators:
+                runners = _configured_runner_labels(
+                    args.sde, args.qemu_aarch64, args.wasmtime
+                )
+                if runners:
                     print(
                         "building and running generated value tests through "
-                        + ", ".join(emulators)
+                        + ", ".join(runners)
                     )
                 else:
                     print("building and running generated value tests")
@@ -209,6 +221,7 @@ def main(argv: list[str] | None = None) -> int:
                 run_value_tests=args.test,
                 sde_path=args.sde,
                 qemu_aarch64_path=args.qemu_aarch64,
+                wasmtime_path=args.wasmtime,
                 cpp_target=args.cpp_target,
                 rust_target=args.rust_target,
                 rust_linker=args.rust_linker,
@@ -233,12 +246,18 @@ def _split(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def _configured_emulator_labels(sde: str | None, qemu_aarch64: str | None) -> list[str]:
+def _configured_runner_labels(
+    sde: str | None,
+    qemu_aarch64: str | None,
+    wasmtime: str | None,
+) -> list[str]:
     labels: list[str] = []
     if sde:
         labels.append(f"Intel SDE: {sde}")
     if qemu_aarch64:
         labels.append(f"qemu-aarch64: {qemu_aarch64}")
+    if wasmtime:
+        labels.append(f"Wasmtime: {wasmtime}")
     return labels
 
 

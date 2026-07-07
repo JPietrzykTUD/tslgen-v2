@@ -208,6 +208,62 @@ def _extension_insert(case: ValueTestCasePlan) -> str:
     )
 
 
+def _differential(case: ValueTestCasePlan) -> str:
+    from_array = _helper_name(case, "from_array_name")
+    to_array = _helper_name(case, "to_array_name")
+    lines = [
+        "    #[test]",
+        f"    fn {case.function_name}() {{",
+        f"        type Hw = Simd<{case.base_spelling}, {rust_extension_tag(case.hardware_extension)}>;",
+        f"        type Ref = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
+    ]
+    hw_args: list[str] = []
+    ref_args: list[str] = []
+    for position, values in enumerate(case.vector_inputs):
+        literals = rust_literal_list(values, case.type_tag)
+        lines.append(
+            f"        let in{position}: [{case.base_spelling}; {case.lanes}] = [{literals}];"
+        )
+        lines.append(
+            f"        let mut hin{position}: <Hw as SimdVector>::Array = Default::default();"
+        )
+        lines.append(
+            f"        let mut r{position}: <Ref as SimdVector>::RegisterType = Default::default();"
+        )
+        lines.append(
+            f"        for i in 0..{case.lanes} {{ "
+            f"hin{position}[i] = in{position}[i]; "
+            f"r{position}[i] = in{position}[i]; }}"
+        )
+        hw_args.append(f"{from_array}::<Hw>(&hin{position})")
+        ref_args.append(f"r{position}")
+    hw_call = (
+        f"{rust_raw_identifier(case.call_name)}::<Hw>({', '.join(hw_args)})"
+    )
+    ref_call = (
+        f"{rust_raw_identifier(case.call_name)}::<Ref>({', '.join(ref_args)})"
+    )
+    if case.result_kind == "m":
+        to_integral = _helper_name(case, "to_integral_name")
+        lines.append(f"        let hw = {to_integral}::<Hw>({hw_call});")
+        lines.append(f"        let reference: <Ref as SimdVector>::MaskType = {ref_call};")
+        lines.append(
+            f"        for i in 0..{case.lanes} {{ assert_eq!("
+            "mask_bit(hw as u64, i), mask_bit(reference as u64, i), "
+            f'"{case.function_name} lane {{}}", i); }}'
+        )
+    else:
+        lines.append(f"        let hw = {to_array}::<Hw>({hw_call});")
+        lines.append(f"        let reference = {ref_call};")
+        lines.append(
+            f"        for i in 0..{case.lanes} {{ assert!(hw[i].lane_eq(reference[i]), "
+            f'"{case.function_name} lane {{}}: expected {{:?}}, got {{:?}}", '
+            "i, reference[i], hw[i]); }"
+        )
+    lines.append("    }")
+    return "\n".join(lines)
+
+
 def _helper_name(case: ValueTestCasePlan, field_name: str) -> str:
     name = getattr(case, field_name)
     if not name:
@@ -219,6 +275,7 @@ def _helper_name(case: ValueTestCasePlan, field_name: str) -> str:
 
 __all__ = (
     "_convert",
+    "_differential",
     "_extension_extract",
     "_extension_insert",
     "_fixed_extension_repr_cast",

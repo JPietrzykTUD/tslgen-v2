@@ -295,6 +295,11 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
         "-mcpu=a64fx",
         "-msve-vector-bits=512",
     )
+    assert machine_profiles["wasm32-simd128"].family == "wasm32"
+    assert machine_profiles["wasm32-simd128"].features == frozenset({"simd128"})
+    assert machine_profiles["wasm32-simd128"].cpp_flags == ()
+    assert machine_profiles["wasm32-simd128"].runner is not None
+    assert machine_profiles["wasm32-simd128"].runner.kind == "wasmtime"
 
 
 def test_target_families_promoted(catalog: Catalog) -> None:
@@ -306,14 +311,19 @@ def test_target_families_promoted(catalog: Catalog) -> None:
         "x86",
         "arm",
         "cuda",
+        "wasm",
     }
     assert families.universal_extension_families == frozenset({"scalar", "generic_like"})
     assert families.profile_families["x86"].extension_families == frozenset({"x86"})
     assert families.profile_families["aarch64"].extension_families == frozenset({"arm"})
-    assert families.profile_families["x86"].emulator_kinds == frozenset({"sde"})
-    assert families.profile_families["aarch64"].emulator_kinds == frozenset(
+    assert families.profile_families["wasm32"].extension_families == frozenset({"wasm"})
+    assert families.profile_families["x86"].runner_kinds == frozenset({"sde"})
+    assert families.profile_families["aarch64"].runner_kinds == frozenset(
         {"qemu-aarch64"}
     )
+    assert families.profile_families["wasm32"].runner_kinds == frozenset({"wasmtime"})
+    assert families.profile_families["wasm32"].cpp_target == "wasm32-wasip1"
+    assert families.profile_families["wasm32"].rust_target == "wasm32-wasip1"
 
 
 def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:

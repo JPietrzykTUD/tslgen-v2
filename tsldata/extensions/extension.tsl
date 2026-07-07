@@ -161,6 +161,83 @@ extension avx2_vl:
   test_filter:
     exclude_templates ["scatter", "masked_scatter"]
 
+extension wasm128:
+  vendor "webassembly"
+  extension_name "wasm128"
+  family "wasm"
+  intrinsic_style "wasm"
+  vector_bits 128
+  native_sort_order 800
+  autodetect false
+  mask_repr "lane_bitmask"
+  mask_width "lanes"
+  mask_vector_loadable false
+  runtime_lanes false
+  default_test_target true
+  cpp:
+    supported true
+    headers ["wasm_simd128.h"]
+    test_suite_name "TslWasm128"
+    test_support_header "tests/scalar_support.hpp"
+  rust:
+    supported true
+    type_name "Wasm128"
+    arch_module "wasm32"
+    generation_support []
+  vector_register_types:
+    si8:
+      cpp "v128_t"
+      rust "core::arch::wasm32::v128"
+    ui8:
+      cpp "v128_t"
+      rust "core::arch::wasm32::v128"
+    si16:
+      cpp "v128_t"
+      rust "core::arch::wasm32::v128"
+    ui16:
+      cpp "v128_t"
+      rust "core::arch::wasm32::v128"
+    si32:
+      cpp "v128_t"
+      rust "core::arch::wasm32::v128"
+    ui32:
+      cpp "v128_t"
+      rust "core::arch::wasm32::v128"
+    si64:
+      cpp "v128_t"
+      rust "core::arch::wasm32::v128"
+    ui64:
+      cpp "v128_t"
+      rust "core::arch::wasm32::v128"
+    f32:
+      cpp "v128_t"
+      rust "core::arch::wasm32::v128"
+    f64:
+      cpp "v128_t"
+      rust "core::arch::wasm32::v128"
+  intrinsic_compose:
+    prefix:
+      cpp "wasm_"
+      rust "core::arch::wasm32::"
+    suffix:
+      by_type:
+        f32 "f32x4"
+        f64 "f64x2"
+        si8 "i8x16"
+        ui8 "i8x16"
+        si16 "i16x8"
+        ui16 "i16x8"
+        si32 "i32x4"
+        ui32 "i32x4"
+        si64 "i64x2"
+        ui64 "i64x2"
+  mask_type_policy:
+    kind "lane_bitmask"
+    width "lanes"
+  integral_mask_type_policy:
+    kind "lane_bitmask"
+    width "lanes"
+
 extension sse:
   vendor "intel"
   extension_name "sse"

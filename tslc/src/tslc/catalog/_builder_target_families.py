@@ -27,7 +27,7 @@ def _build_target_families(fields: list[ParsedTslField]) -> TargetFamilyCatalog:
             profiles[entry.key.text] = ProfileFamilyCapability(
                 name=entry.key.text,
                 extension_families=_list_text_set(_child(entry, "extension_families")),
-                emulator_kinds=_list_text_set(_child(entry, "emulator_kinds")),
+                runner_kinds=_list_text_set(_child(entry, "runner_kinds")),
                 sort_order=_int_field(_child(entry, "sort_order"), default=100),
                 cpp_feature_flags=_bool_field(
                     _child(entry, "cpp_feature_flags"),
