@@ -180,6 +180,7 @@ def _generic_params(declaration: ParsedPrimitiveDeclaration) -> tuple[GenericPar
             kind=_field_text(_child(entry, "kind")) or "bool",
             default=_field_text(_child(entry, "default")) or "false",
             base_type_constraints=_list_text(_child(entry, "base_types")),
+            specialize_base=_bool_field(_child(entry, "specialize_base")),
             source=_source_span(entry.source),
         )
         for entry in _children(fields[0].field)

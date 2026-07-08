@@ -142,7 +142,7 @@ def _validate_generic_params(
         for entry in children(field.field):
             validate_known_fields(
                 children(entry),
-                frozenset({"kind", "default", "base_types"}),
+                frozenset({"kind", "default", "base_types", "specialize_base"}),
                 diagnostics,
                 owner=f"generic parameter {entry.key.text!r}",
             )
@@ -155,7 +155,46 @@ def _validate_generic_params(
                     f"generic parameter kind {kind!r}",
                     sorted(_KNOWN_GENERIC_PARAM_KINDS),
                 )
+            specialize_base = child(entry, "specialize_base")
+            if specialize_base is not None:
+                specialize_value = field_text(specialize_base)
+                if specialize_value not in KNOWN_BOOLEAN_VALUES:
+                    invalid_enum(
+                        diagnostics,
+                        specialize_base,
+                        f"generic parameter {entry.key.text!r} specialize_base value "
+                        f"{specialize_value!r}",
+                        sorted(KNOWN_BOOLEAN_VALUES),
+                    )
+                if kind != "simd_type":
+                    diagnostics.append(
+                        diagnostic_at(
+                            severity="error",
+                            code="TSL-CATALOG-SIMD-TYPE-CONSTRAINT",
+                            message=(
+                                f"generic parameter {entry.key.text!r} uses specialize_base, "
+                                "but specialize_base is allowed only for kind 'simd_type'"
+                            ),
+                            source=source_span(specialize_base.source),
+                        )
+                    )
             base_types = child(entry, "base_types")
+            if (
+                specialize_base is not None
+                and field_text(specialize_base) == "true"
+                and base_types is None
+            ):
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-SIMD-TYPE-CONSTRAINT",
+                        message=(
+                            f"generic parameter {entry.key.text!r} uses specialize_base, "
+                            "but specialized simd_type parameters must declare base_types"
+                        ),
+                        source=source_span(specialize_base.source),
+                    )
+                )
             if base_types is None:
                 continue
             if kind != "simd_type":

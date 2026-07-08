@@ -71,6 +71,11 @@ class CppBackend:
         # `generic_params` (e.g. `PreserveSign`) are free template params too (defaults go on
         # the wrapper, not the primary template).
         decl_params += "".join(f", {typ} {name}" for name, typ, _ in shape.generic_params)
+        decl_params += "".join(
+            f", class {_base_key_param_name(param)} = "
+            f"::tsl::detail::base_type_dispatch_key_t<typename {param.name}::base_type>"
+            for param in _specialized_base_type_params(shape)
+        )
         variant_decls = "".join(
             f"template <{decl_params}>\nstruct {_impl_name(primitive_name, name)};\n"
             for name in _variant_names(specializations)
@@ -109,6 +114,7 @@ class CppBackend:
                 spec.extension_name,
                 spec.axis,
                 spec.target.vector_spelling if spec.target else None,
+                _type_param_base_bindings(spec),
             )
             if key not in groups:
                 groups[key] = []
@@ -187,6 +193,11 @@ class CppBackend:
         if first.immediate is not None:
             key += f", {first.immediate[0]}"
         key += "".join(f", {name}" for name, _, _ in first.generic_params)
+        key += "".join(
+            f", {_cpp_base_dispatch_key_tag(param.base_type_binding)}"
+            for param in _specialized_base_type_params(first)
+            if param.base_type_binding is not None
+        )
         applies: list[str] = []
         seen: set[tuple[str, ...]] = set()
         for spec in group:
@@ -551,6 +562,29 @@ def _variant_names(
             seen.add(variant.name)
             names.append(variant.name)
     return tuple(names)
+
+
+def _specialized_base_type_params(
+    spec: LoweredSpecialization,
+) -> tuple:
+    return tuple(param for param in spec.type_params if param.specialize_base)
+
+
+def _type_param_base_bindings(spec: LoweredSpecialization) -> tuple[tuple[str, str | None], ...]:
+    return tuple(
+        (param.name, param.base_type_binding)
+        for param in _specialized_base_type_params(spec)
+    )
+
+
+def _base_key_param_name(param) -> str:  # noqa: ANN001 - small backend formatting helper
+    return f"{param.name}BaseKey"
+
+
+def _cpp_base_dispatch_key_tag(base_tag: str | None) -> str:
+    if base_tag is None:
+        return "void"
+    return f"::tsl::detail::base_{base_tag}_tag"
 
 
 def _body_for(spec: LoweredSpecialization, variant_name: str | None):

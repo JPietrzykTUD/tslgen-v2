@@ -288,6 +288,9 @@ class BaseGenericQuery:
         if isinstance(arg, VectorValue):
             return TypeValue(arg.base_tag)
         if isinstance(arg, SimdTypeParameterValue):
+            binding = context.env.simd_type_param_base_bindings.get(arg.name)
+            if binding is not None:
+                return TypeValue(binding)
             spelling = _simd_type_param_base_spelling(arg, context)
             return TextValue(spelling) if spelling is not None else None
         return None

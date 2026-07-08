@@ -20,7 +20,7 @@ from tslc.lower import lowerer as lowerer_module
 from tslc.lower.implementation_state import ImplementationState
 from tslc.lower.lowerer import Lowerer
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
-from tslc.select.selector import SelectedImplementation, Selector
+from tslc.select.selector import SelectedImplementation, Selector, SimdTypeBaseBinding
 
 _TYPES = ("si32", "ui32", "f32", "f64")
 
@@ -606,6 +606,63 @@ def test_simd_type_generic_param_queries_lower_from_authored_name(
     assert lowered.specialization.body_text == expected
 
 
+@pytest.mark.parametrize("backend_id", ("cpp", "rust"))
+def test_bound_simd_type_generic_base_folds_generation_condition(
+    catalog: Catalog,
+    backend_id: str,
+) -> None:
+    impl = Implementation(
+        ("avx2", "all"),
+        "avx2",
+        "all",
+        (
+            "complete(value(select("
+            "value(type::same_size(type(base::in), type(base::generic(IndexVec)))), "
+            "\"1\", \"0\")));"
+        ),
+        source_order=0,
+    )
+    primitive = Primitive(
+        name="index_base_width_probe",
+        signature="usize:=vidx",
+        parameters=("index",),
+        attribute_keys=(),
+        generic_params=(
+            GenericParam(
+                "IndexVec",
+                "simd_type",
+                "",
+                base_type_constraints=("?i32",),
+                specialize_base=True,
+            ),
+        ),
+        implementations=(impl,),
+    )
+    slot = SelectedImplementation(
+        primitive=primitive,
+        implementation=impl,
+        extension=catalog.extensions["avx2"],
+        type_tag="si32",
+        simd_type_base_bindings=(SimdTypeBaseBinding("IndexVec", "ui32"),),
+    )
+
+    lowered = Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend_id))
+
+    assert lowered.diagnostics == ()
+    assert lowered.specialization is not None
+    assert lowered.specialization.body_text == "return 1;"
+    expected_spelling = "uint32_t" if backend_id == "cpp" else "u32"
+    assert tuple(
+        (
+            param.name,
+            param.specialize_base,
+            param.base_type_binding,
+            param.base_type_binding_spelling,
+        )
+        for param in lowered.specialization.type_params
+    ) == (("IndexVec", True, "ui32", expected_spelling),)
+
+
 @pytest.mark.parametrize(
     ("backend_id", "expected_call"),
     (
@@ -753,6 +810,28 @@ def test_runtime_array_var_lowers_sve_scratch_storage(
     assert "std::free" not in cpp.body_text
 
 
+def test_simd_type_base_specialization_expands_gather_narrow_slots(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slots = [
+        s
+        for s in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "gather_narrow", ("ui16",))
+        .selected
+        if s.extension.name == "avx2"
+    ]
+
+    assert {
+        tuple((binding.param_name, binding.base_tag) for binding in slot.simd_type_base_bindings)
+        for slot in slots
+    } == {
+        (("IndicesType", "si32"),),
+        (("IndicesType", "ui32"),),
+        (("IndicesType", "si64"),),
+        (("IndicesType", "ui64"),),
+    }
+
+
 def test_param_types_default_overrides_rendered_pointer_type(
     catalog: Catalog, machine_profiles
 ) -> None:
@@ -776,13 +855,19 @@ def test_param_types_default_overrides_rendered_pointer_type(
 
     assert cpp is not None
     assert rust is not None
+    assert cpp.type_params[0].base_type_binding in {"si32", "ui32", "si64", "ui64"}
+    assert rust.type_params[0].base_type_binding == cpp.type_params[0].base_type_binding
     assert cpp.param_type_overrides[1] == "typename IndicesType::base_type const *"
     assert rust.param_type_overrides[1] == "*const IndicesType::BaseType"
     assert recording_syntax.param_type_calls == [(True, True)]
     cpp_source = CppBackend().render_primitive("gather_narrow", (cpp,))
     rust_source = RustBackend().render_primitive("gather_narrow", (rust,))
     assert "typename IndicesType::base_type const * index_ptr" in cpp_source
+    assert "class IndicesTypeBaseKey = ::tsl::detail::base_type_dispatch_key_t" in cpp_source
+    assert "::tsl::detail::base_" in cpp_source
     assert "index_ptr: *const IndicesType::BaseType" in rust_source
+    assert "IndicesTypeBaseKey" in rust_source
+    assert "<IndicesType::BaseType as BaseTypeDispatch>::Key" in rust_source
 
 
 class _RecordingSyntax:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from tslc.catalog.scalar_types import (
     is_signed,
+    same_scalar_width,
     scalar_byte_width_or_default,
     signed_of,
     unsigned_of,
@@ -125,6 +126,17 @@ class SizeBytesQuery:
         if len(args) != 1 or not isinstance(args[0], TypeValue):
             return None
         return TextValue(str(scalar_byte_width_or_default(args[0].type_tag)))
+
+
+class SameSizeQuery:
+    """``type::same_size(a, b)`` -> whether two scalar tags have equal bit width."""
+
+    head = "type::same_size"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 2 or not all(isinstance(arg, TypeValue) for arg in args):
+            return None
+        return BoolValue(same_scalar_width(args[0].type_tag, args[1].type_tag))
 
 
 class IsSignedQuery:

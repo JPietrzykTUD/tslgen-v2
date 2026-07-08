@@ -677,7 +677,10 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
             targs = (
                 [vec]
                 + ([target_spelling] if target_spelling else [])
-                + [vec for _ in spec.type_params]
+                + [
+                    _cpp_type_param_smoke_vector(spec, param, smoke_lanes)
+                    for param in spec.type_params
+                ]
                 + [value for _, value in spec.axis]
                 + (["0"] if spec.immediate is not None else [])
                 + [default for _, _, default in spec.generic_params]
@@ -693,6 +696,15 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
     lines.append("  return 0;")
     lines.append("}")
     return "\n".join(lines) + "\n"
+
+
+def _cpp_type_param_smoke_vector(
+    spec: LoweredSpecialization, param, smoke_lanes: int  # noqa: ANN001
+) -> str:
+    base = param.base_type_binding_spelling or spec.base_type_spelling
+    if spec.uses_sized_vector:
+        return _cpp_sized_vector_type(base, spec.extension_name, smoke_lanes)
+    return f"tsl::simd<{base}, tsl::{spec.extension_name}>"
 
 
 def _concrete_arg_type(vec: str, kind: str) -> str:

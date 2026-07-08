@@ -125,6 +125,11 @@ class LoweringEnv:
     # Free SIMD type parameters from `generic_params` entries with `kind simd_type`.
     # These are queryable by authored name, e.g. `generic::length(IndexVec)`.
     simd_type_param_names: frozenset[str] = frozenset()
+    # Opt-in selected associated-base bindings for SIMD type parameters. A
+    # bound parameter still renders as a public generic type parameter, but
+    # generation-time queries may treat ``base::generic(Name)`` as this
+    # concrete scalar tag.
+    simd_type_param_base_bindings: Mapping[str, str] = field(default_factory=dict)
     # Named first-class lane-list parameters (`lanes<s>`), keyed by source/emitted parameter name.
     lane_list_params: Mapping[str, LaneListParameter] = field(default_factory=dict)
     # When this specialization is monomorphized at a concrete sized lane count (an
@@ -167,6 +172,11 @@ class LoweringEnv:
             self,
             "simd_type_param_names",
             frozenset(self.simd_type_param_names),
+        )
+        object.__setattr__(
+            self,
+            "simd_type_param_base_bindings",
+            _frozen_mapping(self.simd_type_param_base_bindings),
         )
         object.__setattr__(
             self, "lane_list_params", _frozen_mapping(self.lane_list_params)

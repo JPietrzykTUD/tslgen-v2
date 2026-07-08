@@ -190,6 +190,32 @@ def test_cpp_core_vectors_expose_metadata_constants(
     )
 
 
+def test_cpp_core_base_dispatch_admits_explicit_scalar_types(
+    specialization_artifacts: dict[str, str]
+) -> None:
+    core = specialization_artifacts["cpp/include/tsl_core.hpp"]
+
+    assert "template <class T, class Enable = void>\nstruct base_type_dispatch_key;" in core
+    assert (
+        "template <> struct base_type_dispatch_key<std::int32_t> "
+        "{ using type = base_si32_tag; };"
+        in core
+    )
+    assert (
+        "template <> struct base_type_dispatch_key<std::uint64_t> "
+        "{ using type = base_ui64_tag; };"
+        in core
+    )
+    assert (
+        "template <> struct base_type_dispatch_key<float> "
+        "{ using type = base_f32_tag; };"
+        in core
+    )
+    assert "signed_base_dispatch_key_t" not in core
+    assert "unsigned_base_dispatch_key_t" not in core
+    assert "floating_base_dispatch_key_t" not in core
+
+
 def test_cpp_implementation_state_api(
     specialization_artifacts: dict[str, str]
 ) -> None:
@@ -770,11 +796,13 @@ def test_rust_algorithm_helper_is_shipped_with_profile_mappings(
     assert "super::mask_population_count::<Simd<T, super::Avx2>>(mask)" in avx2
     assert "impl<const SCALE: u32> SelectedLoad<Simd<i32, super::Avx2>, SCALE> for Profile" in avx2
     assert (
-        "super::detail::primitives::Gather_narrowImpl<Simd<usize, Generic<8>>, 4, 1>"
+        "super::detail::primitives::Gather_narrowImpl<Simd<usize, Generic<8>>, "
+        "<usize as BaseTypeDispatch>::Key, 4, 1>"
         in avx2
     )
     assert (
-        "super::detail::primitives::Gather_narrowImpl<Simd<usize, Generic<8>>, SCALE, 1>"
+        "super::detail::primitives::Gather_narrowImpl<Simd<usize, Generic<8>>, "
+        "<usize as BaseTypeDispatch>::Key, SCALE, 1>"
         in avx2
     )
     assert (

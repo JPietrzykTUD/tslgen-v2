@@ -226,7 +226,7 @@ def test_simd_type_base_constraints_are_accepted_and_promoted() -> None:
     source = _base_source().replace(
         "  impls:\n",
         "  generic_params:\n"
-        "    IndexVec {kind simd_type, base_types [ints, si32]}\n"
+        "    IndexVec {kind simd_type, base_types [ints, si32], specialize_base true}\n"
         "  impls:\n",
     )
     document = SourceDocument(Path("catalog_validation_fixture.tsl"), source, "d", "tsl")
@@ -243,6 +243,7 @@ def test_simd_type_base_constraints_are_accepted_and_promoted() -> None:
     primitive = result.catalog.primitive("id")
     assert primitive is not None
     assert primitive.generic_params[0].base_type_constraints == ("ints", "si32")
+    assert primitive.generic_params[0].specialize_base is True
 
 
 def test_test_index_type_is_accepted_and_promoted() -> None:
@@ -297,6 +298,38 @@ def test_simd_type_base_constraints_are_allowed_only_on_simd_type_params() -> No
         d for d in diagnostics if d.code == "TSL-CATALOG-SIMD-TYPE-CONSTRAINT"
     )
     assert "allowed only for kind 'simd_type'" in diagnostic.message
+
+
+def test_simd_type_base_specialization_is_allowed_only_on_simd_type_params() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "  impls:\n",
+            "  generic_params:\n"
+            "    PreserveSign {kind bool, specialize_base true}\n"
+            "  impls:\n",
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-SIMD-TYPE-CONSTRAINT"
+    )
+    assert "specialize_base is allowed only for kind 'simd_type'" in diagnostic.message
+
+
+def test_simd_type_base_specialization_requires_base_constraints() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "  impls:\n",
+            "  generic_params:\n"
+            "    IndexVec {kind simd_type, specialize_base true}\n"
+            "  impls:\n",
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-SIMD-TYPE-CONSTRAINT"
+    )
+    assert "must declare base_types" in diagnostic.message
 
 
 def test_simd_type_base_constraints_must_resolve_to_scalar_types() -> None:

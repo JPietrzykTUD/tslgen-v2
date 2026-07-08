@@ -223,6 +223,9 @@ class GenericParam:
     # associated base type. Entries are scalar type tags or catalog type-group
     # names, e.g. ("?i32", "?i64").
     base_type_constraints: tuple[str, ...] = ()
+    # For `kind simd_type`, emit one internal implementation per constrained
+    # associated base case while keeping the public type parameter generic.
+    specialize_base: bool = False
     source: SourceSpan | None = None
 
 

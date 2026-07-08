@@ -19,6 +19,7 @@ via `requires`.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import product
 
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
@@ -34,6 +35,14 @@ from tslc.support_policy_views import (
     concrete_target_candidates,
     selectable_variants,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class SimdTypeBaseBinding:
+    """A selected associated-base case for a free ``kind simd_type`` parameter."""
+
+    param_name: str
+    base_tag: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +63,11 @@ class SelectedImplementation:
     # None = the ordinary single ``LANES``-parametric slot. Lets a size-changing body emit a
     # concrete ``Generic<N>`` per size instead of a const-generic-expression template.
     concrete_lanes: int | None = None
+    # Opt-in associated-base monomorphization for ``generic_params`` entries with
+    # ``kind simd_type``. The public API remains generic over the SIMD type; this
+    # binding gives lowering one concrete associated base case for generation-time
+    # queries such as ``base::generic(IndicesType)``.
+    simd_type_base_bindings: tuple[SimdTypeBaseBinding, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,17 +210,21 @@ class Selector:
                             for lanes in self._monomorphized_lanes(
                                 extension, best.implementation, type_tag
                             ):
-                                selected.append(
-                                    SelectedImplementation(
-                                        primitive=primitive,
-                                        implementation=best.implementation,
-                                        extension=extension,
-                                        type_tag=type_tag,
-                                        required_features=best.required_features,
-                                        to_target=to_target,
-                                        concrete_lanes=lanes,
+                                for bindings in _simd_type_base_binding_sets(
+                                    catalog, primitive
+                                ):
+                                    selected.append(
+                                        SelectedImplementation(
+                                            primitive=primitive,
+                                            implementation=best.implementation,
+                                            extension=extension,
+                                            type_tag=type_tag,
+                                            required_features=best.required_features,
+                                            to_target=to_target,
+                                            concrete_lanes=lanes,
+                                            simd_type_base_bindings=bindings,
+                                        )
                                     )
-                                )
                             if free_function:
                                 # One ISA-independent slot is enough; the body is identical
                                 # across extensions and the render ignores the extension.
@@ -453,3 +471,42 @@ def _applicable_flags(
             flags |= clause.flags
             matched = True
     return frozenset(flags) if matched else None
+
+
+def _simd_type_base_binding_sets(
+    catalog: Catalog, primitive: Primitive
+) -> tuple[tuple[SimdTypeBaseBinding, ...], ...]:
+    params = tuple(
+        generic_param
+        for generic_param in primitive.generic_params
+        if generic_param.kind == "simd_type" and generic_param.specialize_base
+    )
+    if not params:
+        return ((),)
+
+    choices: list[tuple[SimdTypeBaseBinding, ...]] = []
+    for param in params:
+        base_tags = _concrete_base_tags(catalog, param.base_type_constraints)
+        if not base_tags:
+            return ((),)
+        choices.append(
+            tuple(
+                SimdTypeBaseBinding(param.name, base_tag)
+                for base_tag in base_tags
+            )
+        )
+    return tuple(tuple(item for item in combination) for combination in product(*choices))
+
+
+def _concrete_base_tags(
+    catalog: Catalog, constraints: tuple[str, ...]
+) -> tuple[str, ...]:
+    seen: set[str] = set()
+    members: list[str] = []
+    for constraint in constraints:
+        for member in catalog.type_group_members(constraint):
+            if member in seen:
+                continue
+            seen.add(member)
+            members.append(member)
+    return tuple(members)

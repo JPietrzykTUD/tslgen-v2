@@ -330,13 +330,13 @@ class RustBackend:
             ret = "ToVec::RegisterType"
             vt_type = "ToVec::RegisterType"
         # Free SIMD type params (gather's `IndicesType`) — a `vidx` param projects through one.
-        decls = _type_param_decls(shape) + decls
+        decls = _type_param_decls(shape) + _type_param_base_key_decls(shape) + decls
         vidx_type = f"{shape.type_params[0].name}::RegisterType" if shape.type_params else None
         params = _params(shape, "Self", vt_type=vt_type, vidx_type=vidx_type)
         generics = f"<{', '.join(decls)}>" if decls else ""
         trait_header = (
             f"pub trait {rust_primitive_trait_name(primitive_name)}{generics}: "
-            f"StaticSimdVector{_index_where(shape)}"
+            f"StaticSimdVector{_index_where(shape, base_dispatch='hidden')}"
         )
         doc = _rust_doc(shape, context="Rust dispatch trait", concrete=False)
         return (
@@ -372,7 +372,11 @@ class RustBackend:
             targs = [spec.target.vector_spelling, *targs]
             ret = spec.target.register_spelling
             vt_type = spec.target.register_spelling
-        targs = [*_type_param_names(spec), *targs]
+        targs = [
+            *_type_param_names(spec),
+            *_type_param_base_key_args(spec, mode="concrete"),
+            *targs,
+        ]
         vidx_type = f"{spec.type_params[0].name}::RegisterType" if spec.type_params else None
         params = _params(spec, "Self", vt_type=vt_type, vidx_type=vidx_type)
         trait_args = f"<{', '.join(targs)}>" if targs else ""
@@ -407,7 +411,11 @@ class RustBackend:
             ),
             generic_decls=impl_parts,
             generic_names=impl_generic_names,
-            where_clause=_index_where(spec, impl_register=impl_register),
+            where_clause=_index_where(
+                spec,
+                impl_register=impl_register,
+                base_dispatch="concrete",
+            ),
             receiver_type=key,
         )
         doc_context = (
@@ -421,7 +429,7 @@ class RustBackend:
             (f"{doc}\n" if doc else "")
             + f"impl{impl_generics} {rust_primitive_trait_name(trait_primitive)}"
             + f"{trait_args} for {key}"
-            f"{_index_where(spec, impl_register=impl_register)} {{\n"
+            f"{_index_where(spec, impl_register=impl_register, base_dispatch='concrete')} {{\n"
             f"    const IMPLEMENTATION_STATE: ImplementationState = "
             f"{_rust_implementation_state(_spec_implementation_state(spec, variant_name))};\n"
             f"    {_unsafe_prefix(caller_unsafe)}fn apply({params}) -> {ret} {{\n"
@@ -463,7 +471,11 @@ class RustBackend:
         # qualified — `IndicesType::RegisterType` is non-injective, so it can't be inferred from
         # the `vidx` argument; pinning `IndicesType` in the trait path resolves `apply`.
         if shape.type_params:
-            targs = [*_type_param_names(shape), *targs]
+            targs = [
+                *_type_param_names(shape),
+                *_type_param_base_key_args(shape, mode="projection"),
+                *targs,
+            ]
             decl_list = _type_param_decls(
                 shape, trait_prefix=_PRIMITIVE_TRAIT_PREFIX
             ) + decl_list
@@ -488,7 +500,7 @@ class RustBackend:
             + f"pub {_unsafe_prefix(caller_unsafe)}fn {rust_raw_identifier(primitive_name)}"
             f"<S: {_PRIMITIVE_TRAIT_PREFIX}{rust_primitive_trait_name(primitive_name)}"
             f"{trait_args}{decls}>"
-            f"({params}) -> {ret}{_index_where(shape)} {{\n"
+            f"({params}) -> {ret}{_index_where(shape, base_dispatch='projection')} {{\n"
             f"    {call}\n"
             f"}}"
         )
@@ -688,6 +700,7 @@ def _query_trait_args(shape: LoweredSpecialization) -> list[str]:
     if shape.target is not None:
         args.append("ToVec")
     args.extend(param.name for param in shape.type_params)
+    args.extend(_type_param_base_key_args(shape, mode="projection"))
     args.extend(_query_trait_const_args(shape))
     return args
 
@@ -740,8 +753,7 @@ def _const_arg_type(typ: str, name: str) -> str:
 
 
 def _query_where_clauses(shape: LoweredSpecialization) -> list[str]:
-    constraint = _index_base_constraint(shape)
-    return [constraint] if constraint is not None else []
+    return _type_param_where_clauses(shape, base_dispatch="projection")
 
 
 def _generic_args(args: list[str]) -> str:
@@ -1009,7 +1021,12 @@ def _type_param_decls(
     return decls
 
 
-def _index_where(shape: LoweredSpecialization, *, impl_register: str | None = None) -> str:
+def _index_where(
+    shape: LoweredSpecialization,
+    *,
+    impl_register: str | None = None,
+    base_dispatch: str = "none",
+) -> str:
     """The where-clause(s) for a primitive with a `vidx` param. Always `IndicesType::BaseType:
     IndexBase` — the index lanes must convert to byte offsets (`idx_offset`). On a *real-ISA impl*
     (``impl_register`` set) it ALSO pins `IndicesType: SimdVector<RegisterType = …>` to that ISA's
@@ -1019,20 +1036,13 @@ def _index_where(shape: LoweredSpecialization, *, impl_register: str | None = No
     knowledge. Emitted on the trait/impl/wrapper so each constraint holds where the body needs it;
     empty for non-`vidx` primitives."""
 
-    index_base_constraint = _index_base_constraint(shape)
-    if index_base_constraint is None:
+    clauses = _type_param_where_clauses(shape, base_dispatch=base_dispatch)
+    if not clauses:
         return ""
-    index = shape.type_params[0].name
-    clauses = [index_base_constraint]
-    if impl_register is not None:
+    if impl_register is not None and _needs_index_base_constraint(shape):
+        index = shape.type_params[0].name
         clauses.insert(0, f"{index}: SimdVector<RegisterType = {impl_register}>")
     return " where " + ", ".join(clause for clause in clauses if clause is not None)
-
-
-def _index_base_constraint(shape: LoweredSpecialization) -> str | None:
-    if not _needs_index_base_constraint(shape):
-        return None
-    return f"{shape.type_params[0].name}::BaseType: IndexBase"
 
 
 def _needs_index_base_constraint(shape: LoweredSpecialization) -> bool:
@@ -1048,8 +1058,77 @@ def _needs_index_base_constraint(shape: LoweredSpecialization) -> bool:
     )
 
 
+def _type_param_where_clauses(
+    shape: LoweredSpecialization, *, base_dispatch: str
+) -> list[str]:
+    clauses: list[str] = []
+    if _needs_index_base_constraint(shape):
+        clauses.append(f"{shape.type_params[0].name}::BaseType: IndexBase")
+    clauses.extend(_type_param_base_dispatch_clauses(shape, mode=base_dispatch))
+    return clauses
+
+
+def _type_param_base_dispatch_clauses(
+    shape: LoweredSpecialization, *, mode: str
+) -> list[str]:
+    clauses: list[str] = []
+    for param in _specialized_base_type_params(shape):
+        if mode == "hidden":
+            clauses.append(
+                f"{param.name}::BaseType: BaseTypeDispatch<Key = {_base_key_param_name(param)}>"
+            )
+        elif mode == "projection":
+            clauses.append(f"{param.name}::BaseType: BaseTypeDispatch")
+        elif mode == "concrete":
+            clauses.append(
+                f"{param.name}::BaseType: BaseTypeDispatch<Key = "
+                f"{_rust_base_dispatch_key_tag(param.base_type_binding)}>"
+            )
+    return clauses
+
+
 def _type_param_names(shape: LoweredSpecialization) -> list[str]:
     return [param.name for param in shape.type_params]
+
+
+def _specialized_base_type_params(shape: LoweredSpecialization) -> tuple:
+    return tuple(param for param in shape.type_params if param.specialize_base)
+
+
+def _type_param_base_key_decls(shape: LoweredSpecialization) -> list[str]:
+    return [_base_key_param_name(param) for param in _specialized_base_type_params(shape)]
+
+
+def _type_param_base_key_args(
+    shape: LoweredSpecialization, *, mode: str
+) -> list[str]:
+    args: list[str] = []
+    for param in _specialized_base_type_params(shape):
+        if mode == "projection":
+            args.append(f"<{param.name}::BaseType as BaseTypeDispatch>::Key")
+        elif mode == "concrete":
+            args.append(_rust_base_dispatch_key_tag(param.base_type_binding))
+    return args
+
+
+def _base_key_param_name(param) -> str:  # noqa: ANN001 - small backend formatting helper
+    return f"{param.name}BaseKey"
+
+
+def _rust_base_dispatch_key_tag(base_tag: str | None) -> str:
+    mapping = {
+        "si8": "BaseSi8",
+        "si16": "BaseSi16",
+        "si32": "BaseSi32",
+        "si64": "BaseSi64",
+        "ui8": "BaseUi8",
+        "ui16": "BaseUi16",
+        "ui32": "BaseUi32",
+        "ui64": "BaseUi64",
+        "f32": "BaseF32",
+        "f64": "BaseF64",
+    }
+    return mapping.get(base_tag or "", "()")
 
 
 def _impl_generic_parts(shape: LoweredSpecialization) -> tuple[list[str], list[str]]:

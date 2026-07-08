@@ -43,6 +43,38 @@ template <class Primitive, class... Args>
 inline constexpr implementation_state implementation_state_v =
     implementation_state_of<Primitive, Args...>::value;
 
+namespace detail {
+
+struct base_si8_tag {};
+struct base_si16_tag {};
+struct base_si32_tag {};
+struct base_si64_tag {};
+struct base_ui8_tag {};
+struct base_ui16_tag {};
+struct base_ui32_tag {};
+struct base_ui64_tag {};
+struct base_f32_tag {};
+struct base_f64_tag {};
+
+template <class T, class Enable = void>
+struct base_type_dispatch_key;
+
+template <> struct base_type_dispatch_key<std::int8_t> { using type = base_si8_tag; };
+template <> struct base_type_dispatch_key<std::int16_t> { using type = base_si16_tag; };
+template <> struct base_type_dispatch_key<std::int32_t> { using type = base_si32_tag; };
+template <> struct base_type_dispatch_key<std::int64_t> { using type = base_si64_tag; };
+template <> struct base_type_dispatch_key<std::uint8_t> { using type = base_ui8_tag; };
+template <> struct base_type_dispatch_key<std::uint16_t> { using type = base_ui16_tag; };
+template <> struct base_type_dispatch_key<std::uint32_t> { using type = base_ui32_tag; };
+template <> struct base_type_dispatch_key<std::uint64_t> { using type = base_ui64_tag; };
+template <> struct base_type_dispatch_key<float> { using type = base_f32_tag; };
+template <> struct base_type_dispatch_key<double> { using type = base_f64_tag; };
+
+template <class T>
+using base_type_dispatch_key_t = typename base_type_dispatch_key<T>::type;
+
+}  // namespace detail
+
 // Type-punning bit reinterpret (`cast<bitcast>`): copy the object representation into a
 // same-sized destination type. `std::bit_cast` needs C++20; this `memcpy` form is C++17 and
 // the optimizer lowers it to a register move (used e.g. to read a SIMD register as another).

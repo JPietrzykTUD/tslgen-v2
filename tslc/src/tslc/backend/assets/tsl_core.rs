@@ -367,6 +367,46 @@ macro_rules! impl_index_base {
 }
 impl_index_base!(i8, i16, i32, i64, u8, u16, u32, u64, isize, usize);
 
+pub enum BaseSi8 {}
+pub enum BaseSi16 {}
+pub enum BaseSi32 {}
+pub enum BaseSi64 {}
+pub enum BaseUi8 {}
+pub enum BaseUi16 {}
+pub enum BaseUi32 {}
+pub enum BaseUi64 {}
+pub enum BaseF32 {}
+pub enum BaseF64 {}
+
+pub trait BaseTypeDispatch {
+    type Key;
+}
+
+macro_rules! impl_base_type_dispatch {
+    ($($type:ty => $key:ty),* $(,)?) => {
+        $(impl BaseTypeDispatch for $type { type Key = $key; })*
+    };
+}
+
+impl_base_type_dispatch!(
+    i8 => BaseSi8,
+    i16 => BaseSi16,
+    i32 => BaseSi32,
+    i64 => BaseSi64,
+    u8 => BaseUi8,
+    u16 => BaseUi16,
+    u32 => BaseUi32,
+    u64 => BaseUi64,
+    f32 => BaseF32,
+    f64 => BaseF64,
+);
+
+#[cfg(target_pointer_width = "32")]
+impl_base_type_dispatch!(isize => BaseSi32, usize => BaseUi32);
+
+#[cfg(target_pointer_width = "64")]
+impl_base_type_dispatch!(isize => BaseSi64, usize => BaseUi64);
+
 /// The byte offset of a gather/scatter index: `index * scale` (scale in {1,2,4,8}). Used by the
 /// fallback loops over a byte-reinterpreted base pointer.
 pub fn idx_offset<I: IndexBase, S: IndexBase>(index: I, scale: S) -> usize {
