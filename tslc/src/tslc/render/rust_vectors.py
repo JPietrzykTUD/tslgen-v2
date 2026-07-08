@@ -9,6 +9,7 @@ from tslc.backend.target_capability import rust_extension_tag
 from tslc.catalog.model import Extension
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.render._common import type_bits
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +28,7 @@ def rust_registrations(
     """Rust extension tag structs + vector trait impls for the used pairs."""
 
     lines: list[str] = []
+    lines.extend(_rust_sized_registrations(by_primitive, extensions))
     registrations = rust_vector_registrations(by_primitive, extensions)
     for ext in sorted({registration.extension_name for registration in registrations}):
         extension = extensions.get(ext)
@@ -60,6 +62,71 @@ def rust_registrations(
             f"const ELEMENT_COUNT: usize = {lane_count}; }}"
         )
     return ("\n".join(lines) + "\n\n") if lines else ""
+
+
+def _rust_sized_registrations(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    extensions: Mapping[str, Extension],
+) -> list[str]:
+    lines: list[str] = []
+    for ext in _used_sized_extensions(by_primitive, extensions):
+        extension = extensions[ext]
+        tag = rust_extension_tag(extension)
+        sized_tag = f"{tag}<LANES>"
+        lines.append(f"pub struct {tag}<const LANES: usize>;")
+        lines.append(
+            f"impl<T, const LANES: usize> SimdVector for Simd<T, {sized_tag}> {{ "
+            "type BaseType = T; "
+            f"type Extension = {sized_tag}; "
+            "type RegisterType = array_type<T, LANES>; "
+            "type MaskType = u64; type ImaskType = u64; "
+            "type Array = array_type<T, LANES>; "
+            f"type WithBaseType<ToBase> = Simd<ToBase, {sized_tag}>; "
+            "type WithExtension<ToExtension> = Simd<T, ToExtension>; "
+            "const ALIGN: usize = core::mem::align_of::<array_type<T, LANES>>(); "
+            "fn lane_count() -> usize { LANES } }"
+        )
+        lines.append(
+            f"impl<T, const LANES: usize> StaticSimdVector for Simd<T, {sized_tag}> {{ "
+            "const ELEMENT_COUNT: usize = LANES; }"
+        )
+    return lines
+
+
+def _used_sized_extensions(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    extensions: Mapping[str, Extension],
+) -> tuple[str, ...]:
+    used: set[str] = set()
+    for specs in by_primitive.values():
+        for spec in specs:
+            _record_sized_extension(used, extensions, spec.extension_name, spec.uses_sized_vector)
+            if spec.target is not None:
+                _record_sized_extension(
+                    used,
+                    extensions,
+                    spec.target.extension_isa,
+                    spec.target.uses_sized_vector,
+                )
+    return tuple(sorted(used))
+
+
+def _record_sized_extension(
+    used: set[str],
+    extensions: Mapping[str, Extension],
+    extension_name: str,
+    uses_sized_vector: bool,
+) -> None:
+    extension = extensions.get(extension_name)
+    if (
+        extension is None
+        or extension_name == "generic"
+        or not uses_sized_vector
+        or not DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
+        or not extension.supports_backend("rust")
+    ):
+        return
+    used.add(extension_name)
 
 
 def rust_vector_registrations(

@@ -56,10 +56,14 @@ class _RustTypes:
         extension = common.extension_for_isa(self.catalog, extension_name)
         return f"Simd<{base_spelling}, {rust_extension_tag(extension)}>"
 
-    def sized_vector_spelling(self, base_spelling: str, lanes: int | str) -> str:
+    def sized_vector_spelling(
+        self, base_spelling: str, extension_name: str, lanes: int | str
+    ) -> str:
         # `lanes` is normally concrete; a sized-vector target of a representation-change uses
         # the impl's lane const generic.
-        return f"Simd<{base_spelling}, Generic<{lanes}>>"
+        extension = common.extension_for_isa(self.catalog, extension_name)
+        tag = rust_extension_tag(extension if extension is not None else extension_name)
+        return f"Simd<{base_spelling}, {tag}<{lanes}>>"
 
     def target_register_spelling(
         self,

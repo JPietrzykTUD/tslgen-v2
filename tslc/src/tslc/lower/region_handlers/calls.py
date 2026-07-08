@@ -170,9 +170,7 @@ class CallLowerer:
         if entry == "Vec":
             base = context.env.backend.types.scalar_spelling(context.env.type_tag)
             return (
-                context.env.backend.types.vector_type_spelling(
-                    base, context.env.extension.isa_name
-                )
+                _vector_type_for_extension(base, context.env.extension, context)
                 if base is not None
                 else None
             )
@@ -189,7 +187,7 @@ class CallLowerer:
         if extension is not None:
             base = context.env.backend.types.scalar_spelling(context.env.type_tag)
             return (
-                context.env.backend.types.vector_type_spelling(base, extension.isa_name)
+                _vector_type_for_extension(base, extension, context)
                 if base is not None
                 else None
             )
@@ -201,9 +199,7 @@ class CallLowerer:
         if isinstance(value, TypeValue):
             base = context.env.backend.types.scalar_spelling(value.type_tag)
             return (
-                context.env.backend.types.vector_type_spelling(
-                    base, context.env.extension.isa_name
-                )
+                _vector_type_for_extension(base, context.env.extension, context)
                 if base is not None
                 else None
             )
@@ -233,9 +229,7 @@ class CallLowerer:
                 )
             if base is None:
                 return None
-            return context.env.backend.types.vector_type_spelling(
-                base, context.env.extension.isa_name
-            )
+            return _vector_type_for_extension(base, context.env.extension, context)
         if entry in context.env.simd_type_param_names:
             return entry
         value = self._evaluator.evaluate(entry, context)
@@ -244,3 +238,22 @@ class CallLowerer:
         if isinstance(value, VectorValue):  # a `let<type>` vector alias (`InVec`) -> its spelling
             return _vector_spelling(value, context)
         return None
+
+
+def _vector_type_for_extension(
+    base_spelling: str,
+    extension,
+    context: LoweringSession,
+) -> str:
+    if DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
+        lanes = (
+            context.env.lane_symbol()
+            if extension.isa_name == context.env.extension.isa_name
+            else DEFAULT_SUPPORT_POLICY.size_parameter_name(extension)
+        )
+        return context.env.backend.types.sized_vector_spelling(
+            base_spelling, extension.isa_name, lanes
+        )
+    return context.env.backend.types.vector_type_spelling(
+        base_spelling, extension.isa_name
+    )

@@ -9,6 +9,7 @@ import pytest
 from tslc.api import generate_project
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.target_families import ProfileFamilyCapability
+from tslc.diagnostics import has_errors
 from tslc.render.cpp_project import cpp_flags, cpp_target
 from tslc.render._common import slug
 from tslc.render.rust_project import rust_linker, rust_target, rust_target_features
@@ -84,6 +85,31 @@ def test_profile_name_sanitized_to_valid_identifiers(
     assert "cpp/include/tsl_icelake_rockerlake_oneapi.hpp" in by
     assert "pub mod tsl_icelake_rockerlake_oneapi;" in by["rust/src/lib.rs"]
     assert "icelake_rockerlake_oneapi = []" in by["rust/Cargo.toml"]
+
+
+def test_oneapi_sized_vector_is_distinct_from_generic(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["add"],
+        profiles=["cascadelake-oneapi"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    by = {a.logical_path: a.content for a in result.artifacts.artifacts}
+
+    cpp = by["cpp/include/tsl_cascadelake_oneapi.hpp"]
+    assert "template <std::size_t LANES>\nstruct oneapi_fpga" in cpp
+    assert "struct add_impl<tsl::simd<int32_t, tsl::generic<LANES>>>" in cpp
+    assert "struct add_impl<tsl::simd<int32_t, tsl::oneapi_fpga<LANES>>>" in cpp
+    assert cpp.count("struct add_impl<tsl::simd<int32_t, tsl::generic<LANES>>>") == 1
+    assert cpp.count("struct add_impl<tsl::simd<int32_t, tsl::oneapi_fpga<LANES>>>") == 1
+
+    rust = by["rust/src/tsl_cascadelake_oneapi.rs"]
+    assert "pub struct OneapiFpga<const LANES: usize>;" in rust
+    assert "impl<const LANES: usize> AddImpl for Simd<i32, Generic<LANES>>" in rust
+    assert "impl<const LANES: usize> AddImpl for Simd<i32, OneapiFpga<LANES>>" in rust
 
 
 def test_feature_flag_spelling(data_root: Path, machine_profiles_path: Path) -> None:

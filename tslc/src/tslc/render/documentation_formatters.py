@@ -331,7 +331,7 @@ def _cpp_vector_type(spec: LoweredSpecialization) -> str:
 
 def _cpp_extension_type(spec: LoweredSpecialization) -> str:
     if spec.uses_sized_vector:
-        return f"tsl::generic<{spec.lane_parameter or 'LANES'}>"
+        return f"tsl::{spec.extension_name}<{spec.lane_parameter or 'LANES'}>"
     return f"tsl::{spec.extension_name}"
 
 
@@ -339,7 +339,10 @@ def _rust_vector_type(spec: LoweredSpecialization) -> str:
     if spec.vector_spelling is not None:
         return spec.vector_spelling
     if spec.uses_sized_vector:
-        return f"Simd<{spec.base_type_spelling}, Generic<{spec.lane_parameter or 'LANES'}>>"
+        return (
+            f"Simd<{spec.base_type_spelling}, "
+            f"{rust_extension_tag(spec.extension_name)}<{spec.lane_parameter or 'LANES'}>>"
+        )
     return f"Simd<{spec.base_type_spelling}, {rust_extension_tag(spec.extension_name)}>"
 
 

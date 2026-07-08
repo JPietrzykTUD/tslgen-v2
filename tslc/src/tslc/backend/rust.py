@@ -1117,7 +1117,10 @@ def _vector_type(spec: LoweredSpecialization) -> str:
         return spec.vector_spelling
     if spec.uses_sized_vector:
         lane_parameter = spec.lane_parameter
-        return f"Simd<{spec.base_type_spelling}, Generic<{lane_parameter}>>"
+        return (
+            f"Simd<{spec.base_type_spelling}, "
+            f"{_ext_tag(spec.extension_name)}<{lane_parameter}>>"
+        )
     return f"Simd<{spec.base_type_spelling}, {_ext_tag(spec.extension_name)}>"
 
 
