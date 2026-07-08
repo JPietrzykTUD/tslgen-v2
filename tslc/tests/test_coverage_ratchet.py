@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tslc.catalog.machine_profiles import load_machine_profiles
 from tslc.maintenance.coverage_ratchet import (
+    _BASELINE,
     Snapshot,
     SlotKey,
     SlotRecord,
@@ -13,7 +15,10 @@ from tslc.maintenance.coverage_ratchet import (
     diff_snapshots,
     serialize,
 )
-from tslc.maintenance.coverage_inventory import _OUT as COVERAGE_INVENTORY_OUTPUT
+from tslc.maintenance.coverage_inventory import (
+    PROFILES,
+    _OUT as COVERAGE_INVENTORY_OUTPUT,
+)
 
 
 def _snapshot(slots: dict[SlotKey, SlotRecord]) -> Snapshot:
@@ -129,6 +134,18 @@ def test_compute_snapshot_self_diff_is_clean(
     assert diff_snapshots(snapshot, snapshot).changes == ()
     # add on avx2/cpp/si32 should be emitted
     assert snapshot.slots[SlotKey("avx2", "cpp", "add", "avx2", "si32")].emitted >= 1
+
+
+def test_canonical_coverage_profiles_exist_in_machine_profiles(
+    machine_profiles_path: Path,
+) -> None:
+    machine_profiles = load_machine_profiles(machine_profiles_path)
+    assert set(PROFILES) <= set(machine_profiles)
+
+
+def test_committed_baseline_uses_canonical_profiles() -> None:
+    baseline = deserialize(_BASELINE.read_text(encoding="utf-8"))
+    assert baseline.profiles == PROFILES
 
 
 def test_coverage_inventory_output_is_not_under_top_level_docs() -> None:

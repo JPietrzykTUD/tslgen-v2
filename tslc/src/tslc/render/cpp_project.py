@@ -70,6 +70,9 @@ def cpp_artifacts(
             _cpp_registration(ext, profile_render.extensions.get(ext))
             for ext in x86_exts
         )
+        registrations += _cpp_sized_registration(
+            emitted_exts, profile_render.extensions
+        )
         registrations += _cpp_native_registration(
             by_primitive, profile_render.extensions
         )
@@ -343,6 +346,69 @@ def _cpp_native_registration(
     return "".join(lines)
 
 
+def _cpp_sized_registration(
+    emitted_exts: Sequence[str],
+    extensions: Mapping[str, Extension],
+) -> str:
+    """Register profile-local sized vector tags that are not the static generic tag."""
+
+    lines: list[str] = []
+    for ext in emitted_exts:
+        extension = extensions.get(ext)
+        if (
+            extension is None
+            or ext == "generic"
+            or not DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension)
+        ):
+            continue
+        mask = _cpp_sized_mask_type(extension)
+        imask = _cpp_sized_imask_type(extension, mask)
+        lines.append(
+            f"template <std::size_t LANES>\n"
+            f"struct {ext} {{}};\n\n"
+            f"template <class T, std::size_t LANES>\n"
+            f"struct simd<T, {ext}<LANES>> {{\n"
+            "    static_assert((LANES * sizeof(T)) % 16 == 0,\n"
+            f"                  \"tsl::{ext}<LANES>: LANES * sizeof(T) must be a "
+            "multiple of 16 bytes (128 bits)\");\n"
+            "    using base_type = T;\n"
+            f"    using extension_type = {ext}<LANES>;\n"
+            "    using register_type = array_type<T, LANES>;\n"
+            f"    using mask_type = {mask};\n"
+            f"    using imask_type = {imask};\n"
+            "    template <class ToBase>\n"
+            f"    using with_base_type = simd<ToBase, {ext}<LANES>>;\n"
+            "    template <class ToExtension>\n"
+            "    using with_extension = simd<T, ToExtension>;\n"
+            "    static constexpr bool has_static_lane_count_v = true;\n"
+            "    static constexpr std::size_t lane_count_v = LANES;\n"
+            "    static constexpr std::size_t vector_element_count = lane_count_v;\n"
+            "    static constexpr std::size_t lane_count() noexcept {\n"
+            "        return lane_count_v;\n"
+            "    }\n"
+            "    static constexpr std::size_t vector_alignment = alignof(register_type);\n"
+            "    static constexpr std::size_t simd_register_alignment_v = vector_alignment;\n"
+            "};\n\n"
+            f"template <class T, std::size_t LANES>\n"
+            f"struct reg_param<simd<T, {ext}<LANES>>> {{\n"
+            f"    using type = const typename simd<T, {ext}<LANES>>::register_type &;\n"
+            "};\n\n"
+        )
+    return "".join(lines)
+
+
+def _cpp_sized_mask_type(extension: Extension) -> str:
+    if extension.mask_policy.kind == "lane_bitmask":
+        return "std::uint64_t"
+    return "register_type"
+
+
+def _cpp_sized_imask_type(extension: Extension, mask: str) -> str:
+    if extension.imask_policy.kind == "same_as_mask_type":
+        return mask
+    return "std::uint64_t"
+
+
 def _cpp_static_element_count_metadata(count_expr: str) -> str:
     return (
         "    static constexpr bool has_static_lane_count_v = true;\n"
@@ -578,7 +644,11 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
                     if spec.lane_parameter and spec.lane_parameter.isdigit()
                     else 16
                 )
-                vec = f"tsl::simd<{spec.base_type_spelling}, tsl::generic<{smoke_lanes}>>"
+                vec = _cpp_sized_vector_type(
+                    spec.base_type_spelling,
+                    spec.extension_name,
+                    smoke_lanes,
+                )
             else:
                 smoke_lanes = 8
                 vec = f"tsl::simd<{spec.base_type_spelling}, tsl::{spec.extension_name}>"
@@ -597,8 +667,10 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
                     if spec.target.windowed
                     else smoke_lanes
                 )
-                target_spelling = (
-                    f"tsl::simd<{spec.target.base_spelling}, tsl::generic<{target_lanes}>>"
+                target_spelling = _cpp_sized_vector_type(
+                    spec.target.base_spelling,
+                    spec.target.extension_isa,
+                    target_lanes,
                 )
             else:
                 target_spelling = spec.target.vector_spelling
@@ -637,6 +709,10 @@ def _concrete_arg_type(vec: str, kind: str) -> str:
     if kind in {"s[]", DEFAULT_SUPPORT_POLICY.lane_list_kind}:
         return f"::tsl::array_param<{vec}>::type"
     return f"{vec}::base_type"
+
+
+def _cpp_sized_vector_type(base_spelling: str, extension_name: str, lanes: int) -> str:
+    return f"tsl::simd<{base_spelling}, tsl::{extension_name}<{lanes}>>"
 
 
 def _cpp_cmakelists(profiles: tuple[ProfileRender, ...], assets: RenderAssets) -> str:

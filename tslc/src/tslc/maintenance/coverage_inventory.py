@@ -28,7 +28,7 @@ from tslc.diagnostics import has_errors
 from tslc.sources import SourceLoader
 from tslc.syntax.parser import TslParser
 
-PROFILES = ("scalar", "sse2", "avx", "avx2", "skylake", "icelake-rockerlake")
+PROFILES = ("scalar", "sse2", "avx", "avx2", "skylake", "icelake_rockerlake")
 
 
 def _find_repo_root(start: Path) -> Path:

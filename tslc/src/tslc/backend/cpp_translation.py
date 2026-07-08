@@ -20,10 +20,12 @@ class _CppTypes:
     def vector_type_spelling(self, base_spelling: str, extension_name: str) -> str:
         return f"tsl::simd<{base_spelling}, tsl::{extension_name}>"
 
-    def sized_vector_spelling(self, base_spelling: str, lanes: int | str) -> str:
+    def sized_vector_spelling(
+        self, base_spelling: str, extension_name: str, lanes: int | str
+    ) -> str:
         # `lanes` is normally a concrete count, but a sized-vector target of a
         # representation-change uses the impl's lane template parameter.
-        return f"tsl::simd<{base_spelling}, tsl::generic<{lanes}>>"
+        return f"tsl::simd<{base_spelling}, tsl::{extension_name}<{lanes}>>"
 
     def target_register_spelling(
         self,
@@ -38,7 +40,11 @@ class _CppTypes:
             return None
         if uses_sized_vector:
             # A sized-vector target is projected through the generated sized-vector substrate.
-            return f"typename {self.sized_vector_spelling(base, lane_parameter)}::register_type"
+            return (
+                f"typename "
+                f"{self.sized_vector_spelling(base, extension_isa, lane_parameter)}"
+                f"::register_type"
+            )
         if common.requires_declared_vector_register(self.catalog, extension_isa):
             declared = common.vector_register_type(
                 self.catalog, self.backend_id, extension_isa, base_tag

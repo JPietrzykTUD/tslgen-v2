@@ -308,7 +308,11 @@ class Lowerer:
             None
             if is_free_function
             else (
-                backend.types.sized_vector_spelling(base_type_spelling, lane_parameter)
+                backend.types.sized_vector_spelling(
+                    base_type_spelling,
+                    selected.extension.isa_name,
+                    lane_parameter,
+                )
                 if uses_sized_vector and lane_parameter is not None
                 else backend.types.vector_type_spelling(
                     base_type_spelling, selected.extension.isa_name

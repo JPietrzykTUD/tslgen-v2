@@ -102,7 +102,7 @@ def _resolve_sized_target(
         return _no_target_register(selected, backend, selected.extension.isa_name)
     return TargetVector(
         vector_spelling=backend.types.sized_vector_spelling(
-            to_base_spelling, lane_parameter
+            to_base_spelling, selected.extension.isa_name, lane_parameter
         ),
         register_spelling=register_spelling,
         extension_isa=selected.extension.isa_name,
@@ -141,7 +141,9 @@ def _resolve_base_target(
         return _no_target_register(selected, backend, selected.extension.isa_name)
     return TargetVector(
         vector_spelling=(
-            backend.types.sized_vector_spelling(to_base_spelling, lane_parameter)
+            backend.types.sized_vector_spelling(
+                to_base_spelling, selected.extension.isa_name, lane_parameter
+            )
             if uses_sized_vector and lane_parameter is not None
             else backend.types.vector_type_spelling(
                 to_base_spelling, selected.extension.isa_name
@@ -193,7 +195,9 @@ def _resolve_extension_target(
         return _no_target_register(selected, backend, target_isa, selected.type_tag)
     return TargetVector(
         vector_spelling=(
-            backend.types.sized_vector_spelling(base_type_spelling, target_lane_parameter)
+            backend.types.sized_vector_spelling(
+                base_type_spelling, target_isa, target_lane_parameter
+            )
             if target_uses_sized_vector
             else backend.types.vector_type_spelling(base_type_spelling, target_isa)
         ),
