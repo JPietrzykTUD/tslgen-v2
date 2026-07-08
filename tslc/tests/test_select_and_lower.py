@@ -12,6 +12,7 @@ from tslc.catalog.model import (
     Catalog,
     Extension,
     GenericParam,
+    GenericParamBaseWidthConstraint,
     Implementation,
     Primitive,
 )
@@ -830,6 +831,104 @@ def test_simd_type_base_specialization_expands_gather_narrow_slots(
         (("IndicesType", "si64"),),
         (("IndicesType", "ui64"),),
     }
+
+
+def test_simd_type_base_width_constraint_filters_specialized_slots(
+    catalog: Catalog, machine_profiles
+) -> None:
+    impl = Implementation(
+        ("avx2", "arith"),
+        "avx2",
+        "arith",
+        "complete(index);",
+        source_order=0,
+    )
+    primitive = Primitive(
+        name="wide_index_probe",
+        signature="usize:=vidx",
+        parameters=("index",),
+        attribute_keys=(),
+        generic_params=(
+            GenericParam(
+                "IndexVec",
+                "simd_type",
+                "",
+                base_type_constraints=("?i32", "?i64"),
+                specialize_base=True,
+                base_width_constraints=(GenericParamBaseWidthConstraint(">="),),
+            ),
+        ),
+        implementations=(impl,),
+    )
+    probe_catalog = Catalog(
+        primitives=(*catalog.primitives, primitive),
+        type_groups=catalog.type_groups,
+        extensions=catalog.extensions,
+        type_spellings=catalog.type_spellings,
+        translations=catalog.translations,
+        target_families=catalog.target_families,
+    )
+
+    slots = Selector().select_profile(
+        probe_catalog,
+        machine_profiles["avx2"],
+        "wide_index_probe",
+        ("ui64",),
+    ).selected
+
+    assert {
+        tuple((binding.param_name, binding.base_tag) for binding in slot.simd_type_base_bindings)
+        for slot in slots
+    } == {
+        (("IndexVec", "si64"),),
+        (("IndexVec", "ui64"),),
+    }
+
+
+def test_simd_type_base_width_constraint_rejects_unsatisfied_slots(
+    catalog: Catalog, machine_profiles
+) -> None:
+    impl = Implementation(
+        ("avx2", "arith"),
+        "avx2",
+        "arith",
+        "complete(index);",
+        source_order=0,
+    )
+    primitive = Primitive(
+        name="too_narrow_index_probe",
+        signature="usize:=vidx",
+        parameters=("index",),
+        attribute_keys=(),
+        generic_params=(
+            GenericParam(
+                "IndexVec",
+                "simd_type",
+                "",
+                base_type_constraints=("?i32",),
+                specialize_base=True,
+                base_width_constraints=(GenericParamBaseWidthConstraint(">="),),
+            ),
+        ),
+        implementations=(impl,),
+    )
+    probe_catalog = Catalog(
+        primitives=(*catalog.primitives, primitive),
+        type_groups=catalog.type_groups,
+        extensions=catalog.extensions,
+        type_spellings=catalog.type_spellings,
+        translations=catalog.translations,
+        target_families=catalog.target_families,
+    )
+
+    slots = Selector().select_profile(
+        probe_catalog,
+        machine_profiles["avx2"],
+        "too_narrow_index_probe",
+        ("ui64",),
+    ).selected
+
+    assert slots == ()
 
 
 def test_param_types_default_overrides_rendered_pointer_type(

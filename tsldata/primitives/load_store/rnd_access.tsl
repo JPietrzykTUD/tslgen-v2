@@ -677,7 +677,12 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
     """
   cross_lane true
   generic_params:
-    IndicesType {kind simd_type, base_types [?i32, ?i64], specialize_base true}
+    IndicesType:
+      kind simd_type
+      specialize_base true
+      constraints:
+        base_types [?i32, ?i64]
+        width(self::base) >= width(base::in)
     N {kind int, default 1}
   param_types:
     index_ptr:

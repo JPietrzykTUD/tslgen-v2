@@ -28,6 +28,7 @@ from tslc.catalog.model import (
     Implementation,
     Primitive,
 )
+from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
@@ -211,7 +212,7 @@ class Selector:
                                 extension, best.implementation, type_tag
                             ):
                                 for bindings in _simd_type_base_binding_sets(
-                                    catalog, primitive
+                                    catalog, primitive, type_tag
                                 ):
                                     selected.append(
                                         SelectedImplementation(
@@ -474,7 +475,7 @@ def _applicable_flags(
 
 
 def _simd_type_base_binding_sets(
-    catalog: Catalog, primitive: Primitive
+    catalog: Catalog, primitive: Primitive, type_tag: str
 ) -> tuple[tuple[SimdTypeBaseBinding, ...], ...]:
     params = tuple(
         generic_param
@@ -486,9 +487,13 @@ def _simd_type_base_binding_sets(
 
     choices: list[tuple[SimdTypeBaseBinding, ...]] = []
     for param in params:
-        base_tags = _concrete_base_tags(catalog, param.base_type_constraints)
+        base_tags = tuple(
+            base_tag
+            for base_tag in _concrete_base_tags(catalog, param.base_type_constraints)
+            if _base_width_constraints_match(param, base_tag, type_tag)
+        )
         if not base_tags:
-            return ((),)
+            return ()
         choices.append(
             tuple(
                 SimdTypeBaseBinding(param.name, base_tag)
@@ -510,3 +515,26 @@ def _concrete_base_tags(
             seen.add(member)
             members.append(member)
     return tuple(members)
+
+
+def _base_width_constraints_match(param, base_tag: str, type_tag: str) -> bool:  # noqa: ANN001
+    if not param.base_width_constraints:
+        return True
+    base_width = scalar_bit_width(base_tag)
+    input_width = scalar_bit_width(type_tag)
+    if base_width is None or input_width is None:
+        return False
+    return all(
+        _compare_widths(base_width, constraint.relation, input_width)
+        for constraint in param.base_width_constraints
+    )
+
+
+def _compare_widths(left: int, relation: str, right: int) -> bool:
+    if relation == ">=":
+        return left >= right
+    if relation == ">":
+        return left > right
+    if relation == "==":
+        return left == right
+    return False

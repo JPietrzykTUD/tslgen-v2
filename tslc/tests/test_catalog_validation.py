@@ -244,6 +244,40 @@ def test_simd_type_base_constraints_are_accepted_and_promoted() -> None:
     assert primitive is not None
     assert primitive.generic_params[0].base_type_constraints == ("ints", "si32")
     assert primitive.generic_params[0].specialize_base is True
+    assert primitive.generic_params[0].base_width_constraints == ()
+
+
+def test_simd_type_nested_constraints_are_accepted_and_promoted() -> None:
+    source = _base_source().replace(
+        "  impls:\n",
+        "  generic_params:\n"
+        "    IndexVec:\n"
+        "      kind simd_type\n"
+        "      specialize_base true\n"
+        "      constraints:\n"
+        "        base_types [ints, si32]\n"
+        "        width(self::base) >= width(base::in)\n"
+        "  impls:\n",
+    )
+    document = SourceDocument(Path("catalog_validation_fixture.tsl"), source, "d", "tsl")
+    parsed = TslParser(load_default_tsl_grammar()).parse((document,))
+    assert parsed.diagnostics == (), parsed.diagnostics
+    result = CatalogBuilder().build(parsed)
+    assert result.catalog is not None
+    diagnostics = (
+        *result.diagnostics,
+        *validate_catalog(result.catalog, parsed, required_backends=("cpp", "rust")),
+    )
+    assert diagnostics == ()
+
+    primitive = result.catalog.primitive("id")
+    assert primitive is not None
+    param = primitive.generic_params[0]
+    assert param.base_type_constraints == ("ints", "si32")
+    assert param.specialize_base is True
+    assert tuple(constraint.relation for constraint in param.base_width_constraints) == (
+        ">=",
+    )
 
 
 def test_test_index_type_is_accepted_and_promoted() -> None:
@@ -330,6 +364,64 @@ def test_simd_type_base_specialization_requires_base_constraints() -> None:
         d for d in diagnostics if d.code == "TSL-CATALOG-SIMD-TYPE-CONSTRAINT"
     )
     assert "must declare base_types" in diagnostic.message
+
+
+def test_simd_type_base_specialization_accepts_nested_base_constraints() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "  impls:\n",
+            "  generic_params:\n"
+            "    IndexVec:\n"
+            "      kind simd_type\n"
+            "      specialize_base true\n"
+            "      constraints:\n"
+            "        base_types [si32]\n"
+            "  impls:\n",
+        )
+    )
+
+    assert diagnostics == ()
+
+
+def test_simd_type_base_width_constraint_requires_specialization() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "  impls:\n",
+            "  generic_params:\n"
+            "    IndexVec:\n"
+            "      kind simd_type\n"
+            "      constraints:\n"
+            "        base_types [si32]\n"
+            "        width(self::base) >= width(base::in)\n"
+            "  impls:\n",
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-SIMD-TYPE-CONSTRAINT"
+    )
+    assert "base-width constraints require specialize_base true" in diagnostic.message
+
+
+def test_simd_type_base_constraints_cannot_duplicate_base_types_location() -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace(
+            "  impls:\n",
+            "  generic_params:\n"
+            "    IndexVec:\n"
+            "      kind simd_type\n"
+            "      base_types [si32]\n"
+            "      specialize_base true\n"
+            "      constraints:\n"
+            "        base_types [si64]\n"
+            "  impls:\n",
+        )
+    )
+
+    diagnostic = next(
+        d for d in diagnostics if d.code == "TSL-CATALOG-SIMD-TYPE-CONSTRAINT"
+    )
+    assert "declares base_types both directly and inside constraints" in diagnostic.message
 
 
 def test_simd_type_base_constraints_must_resolve_to_scalar_types() -> None:

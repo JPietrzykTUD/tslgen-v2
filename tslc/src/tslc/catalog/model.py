@@ -226,6 +226,17 @@ class GenericParam:
     # For `kind simd_type`, emit one internal implementation per constrained
     # associated base case while keeping the public type parameter generic.
     specialize_base: bool = False
+    # For specialized `kind simd_type`, source-level relations between the
+    # candidate associated base and the primitive's selected input base.
+    base_width_constraints: tuple["GenericParamBaseWidthConstraint", ...] = ()
+    source: SourceSpan | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class GenericParamBaseWidthConstraint:
+    """`width(self::base) <op> width(base::in)` for a SIMD type generic param."""
+
+    relation: str
     source: SourceSpan | None = None
 
 
