@@ -17,7 +17,7 @@ auto rake_quicksort(
   DataType * data, std::size_t count, std::mt19937_64 & rng
 ) {
   using IndexSimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, IndexType>;
-  using SimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::fixed<IndexSimdStyle::lane_count_v>, DataType>;
+  using DataSimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::fixed<IndexSimdStyle::lane_count_v>, DataType>;
 
   
   // get pivots (median of three)
@@ -51,13 +51,13 @@ auto rake_quicksort(
     std::swap(data[median.idx], data[(i+1) * rake_size - 1]);
   }
   
-  
   auto rake_indices_vec        = tsl::custom_sequence<IndexSimdStyle> indices(0, rake_size);
   auto const rake_increase_vec = tsl::set1<IndexSimdStyle>(IndexSimdStyle::lane_count_v);
+  auto const pivots_vec        = tsl::load<DataSimdStyle, false>(pivots_val.data());
 
-  auto const pivots_vec        = tsl::load<SimdStyle, false>(pivots_val.data());
-
-  
+  for (std::size_t i = 0; i < rake_size; ++i) {
+    auto const data_vec = tsl::gather<DataSimdStyle, false, >(data, rake_indices_vec);
+  }
 
 
 }

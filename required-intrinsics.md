@@ -15,6 +15,82 @@ Reviewed against the current `tsldata/primitives/` corpus and the Intel
 Intrinsics Guide. Any intrinsic in the source list below that is not named in
 `Partial coverage` or `Missing coverage` is currently treated as `covered`.
 
+## Covered mapping
+
+These required intrinsics already map to existing TSL primitive semantics.
+
+- `add`: `_mm512_add_epi32`, `_mm512_add_epi64`, `_mm512_add_pd`,
+  `_mm512_add_ps`.
+- `sub`: `_mm512_sub_epi32`, `_mm512_sub_epi64`, `_mm512_sub_pd`,
+  `_mm512_sub_ps`.
+- `mul`: `_mm512_mul_pd`, `_mm512_mul_ps`, `_mm512_mullo_epi32`.
+- `div`: `_mm512_div_pd`, `_mm512_div_ps`.
+- `min`: `_mm512_min_epi64`, `_mm512_min_pd`, `_mm512_min_ps`.
+- `max`: `_mm512_max_epi64`, `_mm512_max_pd`, `_mm512_max_ps`.
+- `binary_and`: `_mm512_and_epi32`, `_mm512_and_epi64`,
+  `_mm512_and_si512`.
+- `binary_andnot`: `_mm512_andnot_si512`.
+- `binary_or`: `_mm512_or_epi32`, `_mm512_or_si512`.
+- `binary_xor`: `_mm512_xor_epi32`, `_mm512_xor_epi64`.
+- `equal`: `_mm256_cmpeq_epi32`, `_mm512_cmpeq_epi32_mask`,
+  `_mm512_cmpeq_epi64_mask`.
+- `nequal`: `_mm512_cmpneq_epi32_mask`, `_mm512_cmpneq_epi64_mask`.
+- `less_than`: `_mm512_cmplt_epi32_mask`, `_mm512_cmplt_epi64_mask`.
+- `greater_than`: `_mm512_cmpgt_epi32_mask`, `_mm512_cmpgt_epi64_mask`.
+- `less_than_or_equal`: `_mm512_cmple_epi32_mask`,
+  `_mm512_cmple_epi64_mask`.
+- `greater_than_or_equal`: `_mm512_cmpge_epi32_mask`,
+  `_mm512_cmpge_epi64_mask`.
+- `equal[mask=zero]`: `_mm512_mask_cmpeq_epi32_mask`,
+  `_mm512_mask_cmpeq_epi64_mask`.
+- `nequal[mask=zero]`: `_mm512_mask_cmpneq_epi32_mask`.
+- `less_than[mask=zero]`: `_mm512_mask_cmplt_epi32_mask`.
+- `greater_than[mask=zero]`: `_mm512_mask_cmpgt_epi32_mask`.
+- `greater_than_or_equal[mask=zero]`: `_mm512_mask_cmpge_epi64_mask`.
+- `conflict`: `_mm512_conflict_epi32`.
+- `extract`: `_mm256_castsi256_si128`, `_mm512_castsi512_si128`,
+  `_mm512_castsi512_si256`.
+- `reinterpret`: `_mm512_castpd_si512`, `_mm512_castps_si512`,
+  `_mm512_castsi512_pd`, `_mm512_castsi512_ps`.
+- `cast` / `convert_up`: `_mm256_cvtepu8_epi16`,
+  `_mm512_cvtepi16_epi32`, `_mm512_cvtepi16_epi64`,
+  `_mm512_cvtepi32_epi64`, `_mm512_cvtepi8_epi32`,
+  `_mm512_cvtepi8_epi64`, `_mm512_cvtepu16_epi32`,
+  `_mm512_cvtepu8_epi32`.
+- `extract_value`: `_mm512_cvtsd_f64`, `_mm512_cvtss_f32`,
+  `_mm_cvtsi128_si32`, `_mm_cvtsi128_si64`.
+- `load`: `_mm256_load_si256`, `_mm256_loadu_si256`,
+  `_mm512_load_epi32`, `_mm512_load_epi64`, `_mm512_load_pd`,
+  `_mm512_load_ps`, `_mm512_load_si512`, `_mm512_loadu_si512`,
+  `_mm_load_si128`, `_mm_loadu_si128`.
+- `load[mask=pass_through]`: `_mm512_mask_loadu_epi32`.
+- `store`: `_mm512_store_epi32`, `_mm512_store_epi64`,
+  `_mm512_store_pd`, `_mm512_store_ps`, `_mm512_store_si512`,
+  `_mm512_storeu_si512`, `_mm_store_si128`.
+- `store[mask=pass_through]`: `_mm512_mask_storeu_epi32`.
+- `set_zero`: `_mm512_setzero_pd`, `_mm512_setzero_ps`,
+  `_mm512_setzero_si512`.
+- `set_undef`: `_mm256_undefined_si256`, `_mm512_undefined_epi32`.
+- `shift_left`: `_mm512_sll_epi32`, `_mm512_slli_epi32`,
+  `_mm512_slli_epi64`, `_mm512_sllv_epi32`, `_mm512_sllv_epi64`.
+- `shift_right`: `_mm512_srai_epi64`, `_mm512_srl_epi32`,
+  `_mm512_srli_epi32`, `_mm512_srli_epi64`, `_mm512_srlv_epi32`,
+  `_mm512_srlv_epi64`.
+- `lzc`: `_mm512_lzcnt_epi32`, `_mm512_lzcnt_epi64`.
+- `lzc_scalar`: `_lzcnt_u64`.
+- `popcnt`: `_mm_popcnt_u32`, `_mm_popcnt_u64`.
+- `to_integral`: `_mm512_mask2int`.
+- `mov[mask=pass_through]`: `_mm512_mask_mov_epi32`.
+- `blend`: `_mm512_mask_blend_epi32`.
+- `compress_store`: `_mm512_mask_compressstoreu_epi32`.
+- `gather`: `_mm512_i32gather_epi32`, `_mm512_i32gather_ps`,
+  `_mm512_i64gather_epi64`.
+- `gather[mask=pass_through]`: `_mm512_mask_i32gather_epi32`,
+  `_mm512_mask_i64gather_epi64`.
+- `scatter`: `_mm512_i32scatter_epi32`, `_mm512_i32scatter_ps`,
+  `_mm512_i64scatter_epi64`.
+- `scatter[mask=zero]`: `_mm512_mask_i32scatter_ps`.
+
 ## Partial coverage
 
 These are close enough to have existing TSL vocabulary, but should not be
