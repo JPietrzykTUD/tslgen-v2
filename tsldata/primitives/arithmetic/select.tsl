@@ -29,7 +29,7 @@ prim<v:=(v,v)> max(vec_a, vec_b):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl]
           avx2 [avx2]
@@ -81,7 +81,7 @@ prim<v:=(v,v)> min(vec_a, vec_b):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl]
           avx2 [avx2]

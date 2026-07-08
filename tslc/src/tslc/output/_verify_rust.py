@@ -10,8 +10,8 @@ from tslc.diagnostics import Diagnostic
 from tslc.output._verify_common import (
     command_failure_diagnostic,
     effective_rust_compiler,
-    emulator_prefix,
     missing_executable,
+    runner_prefix,
     rust_environment,
     rust_target,
     rust_target_args,
@@ -60,7 +60,33 @@ def _prepare_rust_backend(
     if result.returncode != 0:
         skipped.append(_rust_preflight_skip(result))
         return None
-    return backend
+    target_profiles: list[VerifyProfile] = []
+    for profile in backend.profiles:
+        target = rust_target(profile, config)
+        if target is None:
+            target_profiles.append(profile)
+            continue
+        target_preflight = _rust_target_preflight_command(
+            root,
+            backend,
+            profile,
+            config,
+            compiler,
+        )
+        if isinstance(target_preflight, Diagnostic):
+            diagnostics.append(target_preflight)
+            continue
+        result = runner(target_preflight)
+        results.append(result)
+        if result.returncode != 0:
+            skipped.append(_rust_target_preflight_skip(result))
+            continue
+        target_profiles.append(profile)
+    return VerifyBackend(
+        backend_id=backend.backend_id,
+        root_path=backend.root_path,
+        profiles=tuple(target_profiles),
+    )
 
 
 def _after_rust_command(
@@ -99,8 +125,8 @@ def _rust_command_groups(
     for profile in backend.profiles:
         target_dir = project_root / "target" / profile.file_stem
         # Build verification still uses `cargo test` so generated test targets
-        # compile. Cross-target builds cannot execute those binaries natively, so
-        # they use --no-run unless value-test mode has an emulator follow-up.
+            # compile. Cross-target builds cannot execute those binaries natively, so
+            # they use --no-run unless value-test mode has a runner follow-up.
         features = profile.profile_name
         severity = "error"
         step = "test"
@@ -115,7 +141,7 @@ def _rust_command_groups(
             # (report-then-promote), like the C++ ctest step.
             features = f"{profile.profile_name},value_tests"
             severity = "warning"
-            if emulator_prefix(profile, config):
+            if runner_prefix(profile, config):
                 step = "build-tests"
                 extra_args = ("--no-run", "--message-format=json")
         groups.append(
@@ -151,7 +177,7 @@ def _rust_emulated_test_commands(
     profile: VerifyProfile,
     config: BuildVerifierConfig,
 ) -> tuple[tuple[BuildCommand, ...], tuple[Diagnostic, ...]]:
-    prefix = emulator_prefix(profile, config)
+    prefix = runner_prefix(profile, config)
     if not prefix:
         return (), ()
 
@@ -240,6 +266,52 @@ def _rust_preflight_command(
     )
 
 
+def _rust_target_preflight_command(
+    root: Path,
+    backend: VerifyBackend,
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+    compiler: str,
+) -> BuildCommand | Diagnostic:
+    target = rust_target(profile, config)
+    if target is None:
+        raise ValueError("rust target preflight requires a concrete target")
+
+    project_root = root / backend.root_path
+    preflight_dir = project_root / "target" / "_compiler_preflight" / profile.file_stem
+    source_path = preflight_dir / "tslc_target_check.rs"
+    binary_path = preflight_dir / "tslc_target_check"
+    try:
+        preflight_dir.mkdir(parents=True, exist_ok=True)
+        source_path.write_text("fn main() {}\n", encoding="utf-8")
+    except OSError as exc:
+        return Diagnostic(
+            severity="error",
+            code="TSL-BUILD-VERIFY-PREFLIGHT-ERROR",
+            message=(
+                "could not write Rust target preflight source for profile "
+                f"{profile.profile_name} under {preflight_dir}: {exc}"
+            ),
+        )
+
+    return BuildCommand(
+        backend_id="rust",
+        profile_name=profile.profile_name,
+        step="target-preflight",
+        argv=(
+            compiler,
+            "--edition=2021",
+            "--target",
+            target,
+            str(source_path),
+            "-o",
+            str(binary_path),
+        ),
+        cwd=root,
+        env=rust_environment(profile, config),
+    )
+
+
 def _rust_preflight_skip(result: BuildCommandResult) -> str:
     command_text = " ".join(result.command.argv)
     detail = result.stderr.strip() or result.stdout.strip()
@@ -247,4 +319,14 @@ def _rust_preflight_skip(result: BuildCommandResult) -> str:
     return (
         "rust: Rust compiler preflight failed with exit code "
         f"{result.returncode}: {command_text}{suffix}"
+    )
+
+
+def _rust_target_preflight_skip(result: BuildCommandResult) -> str:
+    command_text = " ".join(result.command.argv)
+    detail = result.stderr.strip() or result.stdout.strip()
+    suffix = f": {detail}" if detail else ""
+    return (
+        f"rust: profile {result.command.profile_name} target preflight failed "
+        f"with exit code {result.returncode}: {command_text}{suffix}"
     )

@@ -64,7 +64,7 @@ prim<m:=()>[value=zero] mask_false():
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -177,7 +177,7 @@ prim<m:=()>[value=all] mask_true():
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false

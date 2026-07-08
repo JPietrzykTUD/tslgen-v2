@@ -21,8 +21,8 @@ _KNOWN_PROFILE_FAMILY_FIELDS = frozenset(
         "cpp_detection",
         "cpp_feature_flags",
         "cpp_target",
-        "emulator_kinds",
         "extension_families",
+        "runner_kinds",
         "rust_linker",
         "rust_target",
         "rust_target_features",
@@ -76,7 +76,7 @@ def validate_target_families(
             diagnostics,
             label=f"profile family {profile.key.text!r} field",
         )
-        for list_name in ("extension_families", "emulator_kinds"):
+        for list_name in ("extension_families", "runner_kinds"):
             list_field = child(profile, list_name)
             if list_field is not None and not is_scalar_list(list_field):
                 diagnostics.append(

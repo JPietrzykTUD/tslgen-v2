@@ -234,14 +234,13 @@ concrete vector type from `T` and `ParallelN`, then calls the user operation wit
 that internal `Vec`:
 
 ```cpp
-using vec = tsl::inferred_simd_t<T, ParallelN>;
+using vec =
+    tsl::dataparallel::simd_for_t<tsl::dataparallel::fixed<ParallelN>, T>;
 ```
 
 In the current generated C++ support code, the public alias is
-`tsl::inferred_simd_t<T, ParallelN>`, backed by profile-specialized
-`tsl::detail::inferred_simd<T, ParallelN>`. If we want the public spelling
-`tsl::inferred_simd<T, ParallelN>` instead, that should be a small naming/API
-cleanup in the generated support header rather than an algorithm-helper concern.
+`tsl::dataparallel::simd_for_t<Policy, T>`, backed by profile-specialized
+`tsl::dataparallel::simd_for<Policy, T>`.
 
 ## Vector Inference Contract
 
@@ -249,7 +248,8 @@ cleanup in the generated support header rather than an algorithm-helper concern.
 already turns that shape into the selected vector type:
 
 ```cpp
-using vec = tsl::inferred_simd_t<T, ParallelN>;
+using vec =
+    tsl::dataparallel::simd_for_t<tsl::dataparallel::fixed<ParallelN>, T>;
 ```
 
 Inference constraints:
@@ -268,7 +268,7 @@ Inference constraints:
 
 This removes the largest mapping burden from the algorithm helper. The helper
 should not duplicate profile-selection rules already expressed by
-`inferred_simd_t`.
+`tsl::dataparallel::simd_for_t`.
 
 ## Operation Invocation Contract
 
@@ -458,7 +458,8 @@ template <
     class Op,
     class T>
 void transform_unary(Op&& op, T const* input, T* output, std::size_t count) {
-  using vec = tsl::inferred_simd_t<T, ParallelN>;
+  using vec =
+      tsl::dataparallel::simd_for_t<tsl::dataparallel::fixed<ParallelN>, T>;
 
   static_assert(ParallelN > 0, "ParallelN must be greater than zero");
   static_assert(
@@ -467,10 +468,10 @@ void transform_unary(Op&& op, T const* input, T* output, std::size_t count) {
       "assume_aligned, or peel_to_aligned");
   static_assert(
       std::is_same<T, typename vec::base_type>::value,
-      "tsl::inferred_simd_t<T, ParallelN> must preserve T as Vec::base_type");
+      "dataparallel fixed mapping must preserve T as Vec::base_type");
   static_assert(
       vec::vector_element_count == ParallelN,
-      "tsl::inferred_simd_t<T, ParallelN> must produce exactly ParallelN lanes");
+      "dataparallel fixed mapping must produce exactly ParallelN lanes");
 
   if constexpr (std::is_same<Alignment, alignment::detect>::value) {
     bool const input_aligned = detail::is_aligned_for<vec>(input);
@@ -831,7 +832,7 @@ Likely include strategy:
 
 Important integration risks:
 
-1. `tsl.hpp` include order must declare core `simd`, `tsl::inferred_simd_t`, the
+1. `tsl.hpp` include order must declare core `simd`, `tsl::dataparallel`, the
    selected profile types, and required primitive wrappers before
    `tsl_algorithm.hpp`.
 2. Unsupported `(T, ParallelN)` combinations should fail with a clear
@@ -877,7 +878,7 @@ Decision:
   the generated gather primitive. Narrower unsigned integral row-id types remain
   a portable generic fallback case.
 
-Vector selection stays delegated to `tsl::inferred_simd_t`.
+Vector selection stays delegated to `tsl::dataparallel::simd_for_t`.
 
 ## First Implementation Slice
 
@@ -922,8 +923,10 @@ Out of scope:
 
 Expected dependencies:
 
-- `tsl::algo::parallelism::native` maps to `tsl::native_simd_t<T>`.
-- `tsl::algo::parallelism::fixed<N>` maps to `tsl::inferred_simd_t<T, N>`,
+- `tsl::algo::parallelism::native` maps to
+  `tsl::dataparallel::simd_for_t<tsl::dataparallel::native, T>`.
+- `tsl::algo::parallelism::fixed<N>` maps to
+  `tsl::dataparallel::simd_for_t<tsl::dataparallel::fixed<N>, T>`,
   falling back to `tsl::generic<N>` when no native profile specialization
   exists.
 - `Vec::vector_element_count` or `Vec::lane_count()` is available for chunk

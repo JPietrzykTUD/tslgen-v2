@@ -15,7 +15,7 @@ class ProfileFamilyCapability:
 
     name: str
     extension_families: frozenset[str] = frozenset()
-    emulator_kinds: frozenset[str] = frozenset()
+    runner_kinds: frozenset[str] = frozenset()
     sort_order: int = 100
     cpp_feature_flags: bool = True
     cpp_target: str | None = None
@@ -91,9 +91,9 @@ class TargetFamilyCatalog:
         capability = self.profile_families.get(profile_family)
         return capability is not None and extension_family in capability.extension_families
 
-    def emulator_kinds_for_profile_family(self, profile_family: str) -> frozenset[str]:
+    def runner_kinds_for_profile_family(self, profile_family: str) -> frozenset[str]:
         capability = self.profile_families.get(profile_family)
-        return frozenset() if capability is None else capability.emulator_kinds
+        return frozenset() if capability is None else capability.runner_kinds
 
 
 __all__ = ("ProfileFamilyCapability", "TargetFamilyCatalog")

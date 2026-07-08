@@ -61,7 +61,7 @@ prim<v:=(v,v)> binary_and(left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -184,6 +184,19 @@ prim<v:=(v,v)> binary_and(left, right):
               )
             );
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<v128_and, build[suffix=""]>(left, right)
+            );
+          """
     sve:
       ?i?:
         requires [sve]
@@ -260,7 +273,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -377,6 +390,19 @@ prim<v:=(v,v)> binary_andnot(left, right):
               )
             );
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<v128_andnot, build[suffix=""]>(right, left)
+            );
+          """
     sve:
       ?i?:
         requires [sve]
@@ -467,7 +493,7 @@ prim<v:=(v,v)> binary_or(left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -590,6 +616,19 @@ prim<v:=(v,v)> binary_or(left, right):
               )
             );
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<v128_or, build[suffix=""]>(left, right)
+            );
+          """
     sve:
       ?i?:
         requires [sve]
@@ -680,7 +719,7 @@ prim<v:=(v,v)> binary_xor(left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -803,6 +842,19 @@ prim<v:=(v,v)> binary_xor(left, right):
               )
             );
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<v128_xor, build[suffix=""]>(left, right)
+            );
+          """
     sve:
       ?i?:
         requires [sve]
@@ -875,7 +927,7 @@ prim<v:=v> inv(data):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2:
             ?i? [avx2]
@@ -889,6 +941,19 @@ prim<v:=v> inv(data):
           reasons []
         implementation:
           tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(mask<lane_true>())));"
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<v128_not, build[suffix=""]>(data)
+            );
+          """
 
 prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
   brief_description "Computes bitwise AND on active mask lanes and writes zero to inactive lanes."
@@ -927,7 +992,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1088,7 +1153,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1252,7 +1317,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1414,7 +1479,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1547,7 +1612,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1708,7 +1773,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1871,7 +1936,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2032,7 +2097,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2200,7 +2265,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2381,7 +2446,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false

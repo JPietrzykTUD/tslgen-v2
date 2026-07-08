@@ -8,11 +8,11 @@ from pathlib import Path
 from tslc.diagnostics import Diagnostic
 from tslc.output._verify_common import (
     cmake_cross_emulator,
-    configured_emulator_kinds,
+    configured_runner_kinds,
     cpp_environment,
     cpp_target,
     effective_cpp_compiler,
-    emulator_prefix,
+    runner_prefix,
     missing_executable,
 )
 from tslc.output.verify_drivers import VerifyBackendDriver
@@ -45,26 +45,30 @@ def _prepare_cpp_backend(
     diagnostics: list[Diagnostic],
     skipped: list[str],
 ) -> VerifyBackend | None:
-    compiler = effective_cpp_compiler(config, backend)
-    missing_compiler = missing_executable(compiler[0])
-    if missing_compiler is not None:
-        skipped.append(f"cpp: C++ compiler {missing_compiler} not found")
-        return None
-    native_preflight_ok = True
-    if any(cpp_target(profile, config) is None for profile in backend.profiles):
-        preflight = _cpp_preflight_command(root, backend, compiler)
-        if isinstance(preflight, Diagnostic):
-            diagnostics.append(preflight)
-            native_preflight_ok = False
-        else:
-            result = runner(preflight)
-            results.append(result)
-            if result.returncode != 0:
-                skipped.append(_cpp_preflight_skip(result))
-                native_preflight_ok = False
+    native_preflight_by_compiler: dict[tuple[str, ...], bool] = {}
     target_profiles: list[VerifyProfile] = []
     for profile in backend.profiles:
+        compiler = effective_cpp_compiler(config, backend, profile)
+        missing_compiler = missing_executable(compiler[0])
+        if missing_compiler is not None:
+            skipped.append(
+                f"cpp: profile {profile.profile_name} C++ compiler {missing_compiler} not found"
+            )
+            continue
         if cpp_target(profile, config) is None:
+            native_preflight_ok = native_preflight_by_compiler.get(compiler)
+            if native_preflight_ok is None:
+                preflight = _cpp_preflight_command(root, backend, compiler)
+                if isinstance(preflight, Diagnostic):
+                    diagnostics.append(preflight)
+                    native_preflight_ok = False
+                else:
+                    result = runner(preflight)
+                    results.append(result)
+                    native_preflight_ok = result.returncode == 0
+                    if not native_preflight_ok:
+                        skipped.append(_cpp_preflight_skip(result))
+                native_preflight_by_compiler[compiler] = native_preflight_ok
             if native_preflight_ok:
                 target_profiles.append(profile)
             continue
@@ -108,13 +112,13 @@ def _cpp_command_groups(
     config: BuildVerifierConfig,
 ) -> tuple[tuple[BuildCommand, ...], ...]:
     project_root = root / backend.root_path
-    env = cpp_environment(config, backend)
     groups: list[tuple[BuildCommand, ...]] = []
     for profile in backend.profiles:
+        env = cpp_environment(config, backend, profile)
         build_dir = project_root / "build" / profile.file_stem
         configure_args = _cpp_configure_args(project_root, build_dir, profile, config)
         commands: list[BuildCommand] = []
-        if config.run_value_tests and configured_emulator_kinds(config):
+        if config.run_value_tests and configured_runner_kinds(config):
             commands.append(
                 BuildCommand(
                     backend_id="cpp",
@@ -196,14 +200,7 @@ def _cpp_configure_args(
     ]
     target = cpp_target(profile, config)
     if target is not None:
-        args.extend(
-            (
-                "-DCMAKE_SYSTEM_NAME=Linux",
-                "-DCMAKE_SYSTEM_PROCESSOR=aarch64",
-                "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
-                f"-DCMAKE_CXX_COMPILER_TARGET={target}",
-            )
-        )
+        args.extend(_cpp_cross_target_cmake_args(target))
     cross_emulator = cmake_cross_emulator(profile, config)
     if cross_emulator:
         args.append(f"-DCMAKE_CROSSCOMPILING_EMULATOR={';'.join(cross_emulator)}")
@@ -213,13 +210,29 @@ def _cpp_configure_args(
     return tuple(args)
 
 
+def _cpp_cross_target_cmake_args(target: str) -> tuple[str, ...]:
+    if target.startswith("wasm32-"):
+        return (
+            "-DCMAKE_SYSTEM_NAME=WASI",
+            "-DCMAKE_SYSTEM_PROCESSOR=wasm32",
+            "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
+            f"-DCMAKE_CXX_COMPILER_TARGET={target}",
+        )
+    return (
+        "-DCMAKE_SYSTEM_NAME=Linux",
+        "-DCMAKE_SYSTEM_PROCESSOR=aarch64",
+        "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
+        f"-DCMAKE_CXX_COMPILER_TARGET={target}",
+    )
+
+
 def _cmake_test_launcher(
     profile: VerifyProfile,
     config: BuildVerifierConfig,
 ) -> tuple[str, ...]:
-    if profile.emulator is None or profile.emulator.kind != "sde":
+    if profile.runner is None or profile.runner.kind not in {"sde", "wasmtime"}:
         return ()
-    return emulator_prefix(profile, config)
+    return runner_prefix(profile, config)
 
 
 def _cpp_preflight_command(

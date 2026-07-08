@@ -88,6 +88,8 @@ def compose_intrinsic_name(
     if actual_prefix is None:
         return None
     if suffix:
+        if extension.intrinsic_style == "wasm":
+            return f"{actual_prefix}{suffix}_{base}"
         return f"{actual_prefix}{base}_{suffix}"
     return f"{actual_prefix}{base}"
 

@@ -152,7 +152,7 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -331,7 +331,7 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -876,7 +876,7 @@ prim<v:=cptr+> load_convert_up(ptr):
           neon [neon]
           sve [sve]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           scalar []
         safety:
           internal_unsafe true

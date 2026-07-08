@@ -167,6 +167,18 @@ class IntrinLowerer:
         suffix = self._suffix(selector, region, context)
         if context.effects.unsupported or context.effects.has_errors:
             return region.full_text
+        if (
+            context.env.extension.intrinsic_style == "wasm"
+            and suffix is None
+            and selector.get("suffix") is None
+        ):
+            context.effects.skip(
+                "TSL-LOWER-WASM-INTRIN-MISSING-LANE-SUFFIX",
+                "wasm intrin<..., build> requires a lane-shape suffix; "
+                'use an explicit suffix="" for untyped v128 intrinsics',
+                source=region.source,
+            )
+            return region.full_text
 
         name = context.env.backend.intrinsics.compose_intrinsic_name(
             context.env.extension, base, suffix, prefix=prefix

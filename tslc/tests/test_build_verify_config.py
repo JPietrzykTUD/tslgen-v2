@@ -12,15 +12,17 @@ from tslc.backend.cpp_capability import create_cpp_verify_driver
 from tslc.backend.rust_capability import create_rust_verify_driver
 from tslc.output.verify import (
     BuildCommand,
+    BuildCommandEnvironment,
     BuildCommandResult,
     BuildVerifierConfig,
     VerifyBackend,
-    VerifyEmulator,
     VerifyProfile,
     VerifyProject,
+    VerifyRunner,
     run_subprocess_build_command,
     verify_generated_project,
 )
+from tslc.output._verify_common import effective_cpp_compiler
 from tslc.output.verify_drivers import VerifyBackendDriver
 
 
@@ -36,6 +38,34 @@ def test_backend_capabilities_use_public_verify_driver_surface() -> None:
     assert rust_driver.command_groups.__module__ != verify_module.__name__
     assert not hasattr(verify_module, "cpp_verify_driver")
     assert not hasattr(verify_module, "rust_verify_driver")
+
+
+def test_subprocess_verifier_uses_local_runtime_cache_dirs(tmp_path: Path) -> None:
+    command = BuildCommand(
+        backend_id="cpp",
+        profile_name="wasm32_simd128",
+        step="test",
+        argv=("ctest", "--test-dir", "build"),
+        cwd=tmp_path,
+    )
+
+    env = verify_module._subprocess_env(command)
+
+    assert env is not None
+    assert env["WASMTIME_HOME"] == str(tmp_path / ".tslctmp" / "runtime" / "wasmtime-home")
+    assert env["XDG_CACHE_HOME"] == str(tmp_path / ".tslctmp" / "runtime" / "xdg-cache")
+
+    overridden = BuildCommand(
+        backend_id="cpp",
+        profile_name="wasm32_simd128",
+        step="test",
+        argv=("ctest", "--test-dir", "build"),
+        cwd=tmp_path,
+        env=(BuildCommandEnvironment("XDG_CACHE_HOME", "/custom/cache"),),
+    )
+    overridden_env = verify_module._subprocess_env(overridden)
+    assert overridden_env is not None
+    assert overridden_env["XDG_CACHE_HOME"] == "/custom/cache"
 
 
 def test_cpp_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
@@ -157,7 +187,9 @@ def test_cpp_verifier_skips_missing_explicit_compiler(tmp_path: Path) -> None:
 
     assert report.diagnostics == ()
     assert seen == []
-    assert report.skipped == ("cpp: C++ compiler /definitely/missing/c++ not found",)
+    assert report.skipped == (
+        "cpp: profile scalar C++ compiler /definitely/missing/c++ not found",
+    )
 
 
 def test_rust_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
@@ -208,7 +240,7 @@ def test_rust_build_verifier_cross_target_does_not_run_test_binary(
                         rust_target_features=("+neon",),
                         rust_target="aarch64-unknown-linux-musl",
                         rust_linker="rust-lld",
-                        emulator=VerifyEmulator(kind="qemu-aarch64", profile="cortex-a76"),
+                        runner=VerifyRunner(kind="qemu-aarch64", profile="cortex-a76"),
                     ),
                 ),
             ),
@@ -228,13 +260,72 @@ def test_rust_build_verifier_cross_target_does_not_run_test_binary(
     )
 
     assert report.diagnostics == ()
-    assert [command.step for command in seen] == ["preflight", "build-tests"]
+    assert [command.step for command in seen] == [
+        "preflight",
+        "target-preflight",
+        "build-tests",
+    ]
     assert "--target" in seen[1].argv
     assert "aarch64-unknown-linux-musl" in seen[1].argv
-    assert "--no-run" in seen[1].argv
-    assert "--message-format=json" not in seen[1].argv
-    env = _env(seen[1])
+    assert "--target" in seen[2].argv
+    assert "aarch64-unknown-linux-musl" in seen[2].argv
+    assert "--no-run" in seen[2].argv
+    assert "--message-format=json" not in seen[2].argv
+    env = _env(seen[2])
     assert env["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER"] == "rust-lld"
+
+
+def test_rust_target_preflight_failure_skips_only_that_profile(tmp_path: Path) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(
+                    VerifyProfile(profile_name="scalar", file_stem="scalar"),
+                    VerifyProfile(
+                        profile_name="wasm32_simd128",
+                        file_stem="wasm32_simd128",
+                        family="wasm32",
+                        rust_target_features=("+simd128",),
+                        rust_target="wasm32-wasip1",
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        if command.step == "target-preflight":
+            return BuildCommandResult(
+                command=command,
+                returncode=1,
+                stderr="can't find crate for `std`",
+            )
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=BuildVerifierConfig.create(rust_compiler=sys.executable),
+    )
+
+    assert report.diagnostics == ()
+    assert len(report.skipped) == 1
+    assert report.skipped[0].startswith(
+        "rust: profile wasm32_simd128 target preflight failed with exit code 1"
+    )
+    assert [command.step for command in seen] == [
+        "preflight",
+        "target-preflight",
+        "test",
+    ]
+    assert [command.profile_name for command in seen if command.step == "test"] == [
+        "scalar"
+    ]
 
 
 def test_rust_verifier_skips_after_failed_preflight(
@@ -414,7 +505,7 @@ def test_cpp_value_test_run_configures_sde_as_test_launcher(tmp_path: Path) -> N
                     VerifyProfile(
                         profile_name="avx2",
                         file_stem="avx2",
-                        emulator=VerifyEmulator(kind="sde", profile="hsw"),
+                        runner=VerifyRunner(kind="sde", profile="hsw"),
                     ),
                 ),
             ),
@@ -466,7 +557,7 @@ def test_sde_cpp_value_tests_pin_default_compiler_over_ambient_cxx(
                     VerifyProfile(
                         profile_name="sse2",
                         file_stem="sse2",
-                        emulator=VerifyEmulator(kind="sde", profile="mrm"),
+                        runner=VerifyRunner(kind="sde", profile="mrm"),
                     ),
                 ),
             ),
@@ -495,7 +586,7 @@ def test_sde_cpp_value_tests_pin_default_compiler_over_ambient_cxx(
     assert _env(seen[2])["CXX"] == "c++"
 
 
-def test_emulator_value_tests_skip_non_generic_profiles_without_matching_runner(
+def test_runner_value_tests_skip_non_generic_profiles_without_matching_runner(
     tmp_path: Path,
 ) -> None:
     project = VerifyProject(
@@ -508,7 +599,7 @@ def test_emulator_value_tests_skip_non_generic_profiles_without_matching_runner(
                         profile_name="neon",
                         file_stem="neon",
                         family="aarch64",
-                        emulator=VerifyEmulator(kind="qemu-aarch64", profile="cortex-a76"),
+                        runner=VerifyRunner(kind="qemu-aarch64", profile="cortex-a76"),
                     ),
                 ),
             ),
@@ -532,7 +623,7 @@ def test_emulator_value_tests_skip_non_generic_profiles_without_matching_runner(
 
     assert report.diagnostics == ()
     assert report.skipped == (
-        "cpp: profile neon requires qemu-aarch64, but that emulator is not "
+        "cpp: profile neon requires qemu-aarch64, but that runner is not "
         "configured; value-test verification skipped",
     )
     assert seen == []
@@ -551,7 +642,7 @@ def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(tmp_path: Path) -> 
                         family="aarch64",
                         cpp_flags=("-march=armv8-a+simd",),
                         cpp_target="aarch64-linux-gnu",
-                        emulator=VerifyEmulator(kind="qemu-aarch64", profile="cortex-a76"),
+                        runner=VerifyRunner(kind="qemu-aarch64", profile="cortex-a76"),
                     ),
                 ),
             ),
@@ -591,6 +682,104 @@ def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(tmp_path: Path) -> 
         in configure
     )
     assert seen[-1].argv[0] == "ctest"
+
+
+def test_cpp_wasm_value_tests_configure_wasi_and_wasmtime(tmp_path: Path) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="cpp",
+                root_path="cpp",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="wasm32_simd128",
+                        file_stem="wasm32_simd128",
+                        family="wasm32",
+                        cpp_flags=("-msimd128",),
+                        cpp_target="wasm32-wasip1",
+                        runner=VerifyRunner(kind="wasmtime", profile="default"),
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=BuildVerifierConfig.create(
+            cpp_compiler=sys.executable,
+            run_value_tests=True,
+            wasmtime_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen] == [
+        "target-preflight",
+        "clean",
+        "configure",
+        "build",
+        "build-values",
+        "test",
+    ]
+    assert seen[0].argv[0] == sys.executable
+    assert "--target=wasm32-wasip1" in seen[0].argv
+    assert "-msimd128" in seen[0].argv
+    configure = seen[2].argv
+    assert "-DCMAKE_SYSTEM_NAME=WASI" in configure
+    assert "-DCMAKE_SYSTEM_PROCESSOR=wasm32" in configure
+    assert "-DCMAKE_CXX_COMPILER_TARGET=wasm32-wasip1" in configure
+    assert f"-DTSL_TEST_LAUNCHER={sys.executable}" in configure
+    assert seen[-1].argv[0] == "ctest"
+
+
+def test_cpp_wasm_default_compiler_uses_wasi_sdk() -> None:
+    project = VerifyBackend(
+        backend_id="cpp",
+        root_path="cpp",
+        profiles=(
+            VerifyProfile(
+                profile_name="wasm32_simd128",
+                file_stem="wasm32_simd128",
+                cpp_target="wasm32-wasip1",
+            ),
+        ),
+    )
+
+    assert effective_cpp_compiler(BuildVerifierConfig.create(), project) == (
+        "/opt/wasi-sdk/bin/clang++",
+    )
+
+
+def test_cpp_default_compiler_is_profile_scoped_for_mixed_native_and_wasm(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("CXX", raising=False)
+    config = BuildVerifierConfig.create()
+    backend = VerifyBackend(
+        backend_id="cpp",
+        root_path="cpp",
+        profiles=(
+            VerifyProfile(profile_name="scalar", file_stem="scalar"),
+            VerifyProfile(
+                profile_name="wasm32_simd128",
+                file_stem="wasm32_simd128",
+                family="wasm32",
+                cpp_target="wasm32-wasip1",
+            ),
+        ),
+    )
+    scalar, wasm = backend.profiles
+
+    assert effective_cpp_compiler(config, backend, scalar) == ("c++",)
+    assert effective_cpp_compiler(config, backend, wasm) == ("/opt/wasi-sdk/bin/clang++",)
 
 
 def test_cpp_target_preflight_failure_skips_only_that_profile(tmp_path: Path) -> None:
@@ -653,7 +842,7 @@ def test_rust_qemu_value_tests_use_target_and_run_binaries(tmp_path: Path) -> No
                         rust_target_features=("+neon",),
                         rust_target="aarch64-unknown-linux-musl",
                         rust_linker="rust-lld",
-                        emulator=VerifyEmulator(kind="qemu-aarch64", profile="cortex-a76"),
+                        runner=VerifyRunner(kind="qemu-aarch64", profile="cortex-a76"),
                     ),
                 ),
             ),
@@ -685,12 +874,80 @@ def test_rust_qemu_value_tests_use_target_and_run_binaries(tmp_path: Path) -> No
     )
 
     assert report.diagnostics == ()
-    assert [command.step for command in seen] == ["preflight", "build-tests", "test"]
+    assert [command.step for command in seen] == [
+        "preflight",
+        "target-preflight",
+        "build-tests",
+        "test",
+    ]
     assert "--target" in seen[1].argv
     assert "aarch64-unknown-linux-musl" in seen[1].argv
-    env = _env(seen[1])
+    assert "--target" in seen[2].argv
+    assert "aarch64-unknown-linux-musl" in seen[2].argv
+    env = _env(seen[2])
     assert env["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER"] == "rust-lld"
-    assert seen[2].argv == (sys.executable, "-cpu", "cortex-a76", executable)
+    assert seen[3].argv == (sys.executable, "-cpu", "cortex-a76", executable)
+
+
+def test_rust_wasm_value_tests_use_wasmtime_runner(tmp_path: Path) -> None:
+    executable = str(tmp_path / "rust" / "target" / "wasm32" / "deps" / "values.wasm")
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="wasm32_simd128",
+                        file_stem="wasm32_simd128",
+                        family="wasm32",
+                        rust_target_features=("+simd128",),
+                        rust_target="wasm32-wasip1",
+                        runner=VerifyRunner(kind="wasmtime", profile="default"),
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        if command.step == "build-tests":
+            return BuildCommandResult(
+                command=command,
+                returncode=0,
+                stdout=json.dumps(
+                    {"reason": "compiler-artifact", "executable": executable}
+                ),
+            )
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=BuildVerifierConfig.create(
+            rust_compiler=sys.executable,
+            run_value_tests=True,
+            wasmtime_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen] == [
+        "preflight",
+        "target-preflight",
+        "build-tests",
+        "test",
+    ]
+    assert "--target" in seen[1].argv
+    assert "wasm32-wasip1" in seen[1].argv
+    assert "--target" in seen[2].argv
+    assert "wasm32-wasip1" in seen[2].argv
+    assert "--message-format=json" in seen[2].argv
+    assert _env(seen[2])["RUSTFLAGS"] == "-C target-feature=+simd128"
+    assert seen[3].argv == (sys.executable, executable)
 
 
 def test_rust_value_tests_run_built_binaries_through_sde(tmp_path: Path) -> None:
@@ -705,7 +962,7 @@ def test_rust_value_tests_run_built_binaries_through_sde(tmp_path: Path) -> None
                         profile_name="avx2",
                         file_stem="avx2",
                         rust_target_features=("+avx2",),
-                        emulator=VerifyEmulator(kind="sde", profile="hsw"),
+                        runner=VerifyRunner(kind="sde", profile="hsw"),
                     ),
                 ),
             ),
@@ -761,7 +1018,7 @@ def test_rust_sde_value_tests_diagnose_missing_test_binaries(tmp_path: Path) -> 
                     VerifyProfile(
                         profile_name="avx2",
                         file_stem="avx2",
-                        emulator=VerifyEmulator(kind="sde", profile="hsw"),
+                        runner=VerifyRunner(kind="sde", profile="hsw"),
                     ),
                 ),
             ),
@@ -797,7 +1054,7 @@ def test_explicit_sde_path_must_exist(tmp_path: Path) -> None:
                     VerifyProfile(
                         profile_name="avx2",
                         file_stem="avx2",
-                        emulator=VerifyEmulator(kind="sde", profile="hsw"),
+                        runner=VerifyRunner(kind="sde", profile="hsw"),
                     ),
                 ),
             ),
@@ -815,8 +1072,41 @@ def test_explicit_sde_path_must_exist(tmp_path: Path) -> None:
     )
 
     assert [diagnostic.code for diagnostic in report.diagnostics] == [
-        "TSL-BUILD-VERIFY-EMULATOR-MISSING"
+        "TSL-BUILD-VERIFY-RUNNER-MISSING"
     ]
+
+
+def test_explicit_wasmtime_path_must_exist(tmp_path: Path) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="rust",
+                root_path="rust",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="wasm32_simd128",
+                        file_stem="wasm32_simd128",
+                        runner=VerifyRunner(kind="wasmtime", profile="default"),
+                    ),
+                ),
+            ),
+        )
+    )
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        config=BuildVerifierConfig.create(
+            rust_compiler=sys.executable,
+            run_value_tests=True,
+            wasmtime_path="/definitely/missing/wasmtime",
+        ),
+    )
+
+    assert [diagnostic.code for diagnostic in report.diagnostics] == [
+        "TSL-BUILD-VERIFY-RUNNER-MISSING"
+    ]
+    assert "wasmtime" in report.diagnostics[0].message
 
 
 def _env(command: BuildCommand) -> dict[str, str]:

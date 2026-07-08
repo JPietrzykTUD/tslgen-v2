@@ -9,62 +9,91 @@
     {
       "name": "sse",
       "target_features": "sse",
-      "emulator": {"kind": "sde", "profile": "mrm"}
+      "runner": {"kind": "sde", "profile": "mrm"}
     },
     {
       "name": "sse2",
       "target_features": "sse sse2",
-      "emulator": {"kind": "sde", "profile": "mrm"}
+      "runner": {"kind": "sde", "profile": "mrm"}
     },
     {
       "name": "sse3",
       "target_features": "sse sse2 ssse3",
-      "emulator": {"kind": "sde", "profile": "mrm"}
+      "runner": {"kind": "sde", "profile": "mrm"}
     },
     {
       "name": "avx",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx",
-      "emulator": {"kind": "sde", "profile": "snb"}
+      "runner": {"kind": "sde", "profile": "snb"}
     },
     {
       "name": "avx2",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2",
-      "emulator": {"kind": "sde", "profile": "hsw"}
+      "runner": {"kind": "sde", "profile": "hsw"}
     },
     {
       "name": "knl",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd",
-      "emulator": {"kind": "sde", "profile": "future"}
+      "runner": {"kind": "sde", "profile": "future"}
     },
     {
       "name": "kml",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512_vpopcntdq",
-      "emulator": {"kind": "sde", "profile": "future"}
+      "runner": {"kind": "sde", "profile": "future"}
     },
     {
       "name": "skylake",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw",
-      "emulator": {"kind": "sde", "profile": "skx"}
+      "runner": {"kind": "sde", "profile": "skx"}
+    },
+    {
+      "name": "skylake-oneapi",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw",
+      "compile_modes": "oneapi_fpga",
+      "runner": {"kind": "sde", "profile": "skx"}
     },
     {
       "name": "cannonlake",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512ifma avx512vbmi",
-      "emulator": {"kind": "sde", "profile": "cnl"}
+      "runner": {"kind": "sde", "profile": "cnl"}
     },
     {
       "name": "cascadelake",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni",
-      "emulator": {"kind": "sde", "profile": "clx"}
+      "runner": {"kind": "sde", "profile": "clx"}
+    },
+    {
+      "name": "cascadelake-oneapi",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni",
+      "compile_modes": "oneapi_fpga",
+      "runner": {"kind": "sde", "profile": "clx"}
     },
     {
       "name": "cooperlake",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni avx512_bf16",
-      "emulator": {"kind": "sde", "profile": "cpx"}
+      "runner": {"kind": "sde", "profile": "cpx"}
     },
     {
-      "name": "icelake-rockerlake",
+      "name": "cooperlake-oneapi",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vnni avx512_bf16",
+      "compile_modes": "oneapi_fpga",
+      "runner": {"kind": "sde", "profile": "cpx"}
+    },
+    {
+      "name": "icelake_rockerlake",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
-      "emulator": {"kind": "sde", "profile": "icl"},
+      "runner": {"kind": "sde", "profile": "icl"},
+      "alternatives": {
+        "avx512_vpclmulqdq": "vpclmulqdq",
+        "avx512_gfni": "gfni",
+        "avx512_vaes": "vaes"
+      }
+    },
+    {
+      "name": "icelake_rockerlake-oneapi",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
+      "runner": {"kind": "sde", "profile": "icl"},
+      "compile_modes": "oneapi_fpga",
       "alternatives": {
         "avx512_vpclmulqdq": "vpclmulqdq",
         "avx512_gfni": "gfni",
@@ -74,7 +103,7 @@
     {
       "name": "tigerlake",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_vp2intersect",
-      "emulator": {"kind": "sde", "profile": "tgl"},
+      "runner": {"kind": "sde", "profile": "tgl"},
       "alternatives": {
         "avx512_vpclmulqdq": "vpclmulqdq",
         "avx512_gfni": "gfni",
@@ -84,7 +113,7 @@
     {
       "name": "zen4",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes",
-      "emulator": {"kind": "sde", "profile": "future"},
+      "runner": {"kind": "sde", "profile": "future"},
       "alternatives": {
         "avx512_vpclmulqdq": "vpclmulqdq",
         "avx512_gfni": "gfni",
@@ -92,9 +121,20 @@
       }
     },
     {
-      "name": "sapphirerapids",
+      "name": "sapphire_emerald_granite_rapids",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_fp16",
-      "emulator": {"kind": "sde", "profile": "spr"},
+      "runner": {"kind": "sde", "profile": "spr"},
+      "alternatives": {
+        "avx512_vpclmulqdq": "vpclmulqdq",
+        "avx512_gfni": "gfni",
+        "avx512_vaes": "vaes"
+      }
+    },
+    {
+      "name": "sapphire_emerald_granite_rapids-oneapi",
+      "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_fp16",
+      "runner": {"kind": "sde", "profile": "spr"},
+      "compile_modes": "oneapi_fpga",
       "alternatives": {
         "avx512_vpclmulqdq": "vpclmulqdq",
         "avx512_gfni": "gfni",
@@ -104,7 +144,7 @@
     {
       "name": "zen5",
       "target_features": "sse sse2 ssse3 sse4_1 sse4_2 avx avx2 avx512f avx512cd avx512vl avx512dq avx512bw avx512_vpopcntdq avx512ifma avx512vbmi avx512_vnni avx512_bf16 avx512_vbmi2 avx512_bitalg avx512_vpclmulqdq avx512_gfni avx512_vaes avx512_vp2intersect",
-      "emulator": {"kind": "sde", "profile": "future"},
+      "runner": {"kind": "sde", "profile": "future"},
       "alternatives": {
         "avx512_vpclmulqdq": "vpclmulqdq",
         "avx512_gfni": "gfni",
@@ -117,34 +157,42 @@
       "name": "neon",
       "target_features": "neon",
       "cpp_flags": [],
-      "emulator": {"kind": "qemu-aarch64", "profile": "cortex-a76"}
+      "runner": {"kind": "qemu-aarch64", "profile": "cortex-a76"}
     },
     {
       "name": "sve",
       "target_features": "sve",
       "cpp_flags": ["-mcpu=a64fx"],
-      "emulator": {"kind": "qemu-aarch64", "profile": "a64fx"}
+      "runner": {"kind": "qemu-aarch64", "profile": "a64fx"}
     },
     {
       "name": "sve128",
       "target_features": "sve",
       "compile_modes": "sve_vector_bits_128",
       "cpp_flags": ["-mcpu=a64fx", "-msve-vector-bits=128"],
-      "emulator": {"kind": "qemu-aarch64", "profile": "a64fx"}
+      "runner": {"kind": "qemu-aarch64", "profile": "a64fx"}
     },
     {
       "name": "sve256",
       "target_features": "sve",
       "compile_modes": "sve_vector_bits_256",
       "cpp_flags": ["-mcpu=a64fx", "-msve-vector-bits=256"],
-      "emulator": {"kind": "qemu-aarch64", "profile": "a64fx"}
+      "runner": {"kind": "qemu-aarch64", "profile": "a64fx"}
     },
     {
       "name": "sve512",
       "target_features": "sve",
       "compile_modes": "sve_vector_bits_512",
       "cpp_flags": ["-mcpu=a64fx", "-msve-vector-bits=512"],
-      "emulator": {"kind": "qemu-aarch64", "profile": "a64fx"}
+      "runner": {"kind": "qemu-aarch64", "profile": "a64fx"}
+    }
+  ],
+  "wasm32": [
+    {
+      "name": "wasm32-simd128",
+      "target_features": "simd128",
+      "cpp_flags": [],
+      "runner": {"kind": "wasmtime", "profile": "default"}
     }
   ]
 }

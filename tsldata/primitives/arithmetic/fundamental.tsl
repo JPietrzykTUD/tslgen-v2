@@ -48,8 +48,8 @@ prim<v:=(v,v)> add(left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
-          oneapi_fpga_rtl [oneapi_fpga_device]
+          oneapi_fpga []
+          oneapi_fpga_rtl []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -144,6 +144,15 @@ prim<v:=(v,v)> add(left, right):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<vaddq, build>(left, right));"
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<add, build>(left, right));"
     sve:
       arith:
         requires [sve]
@@ -196,8 +205,8 @@ prim<v:=(m,v,v)>[mask=zero] add(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
-          oneapi_fpga_rtl [oneapi_fpga_device]
+          oneapi_fpga []
+          oneapi_fpga_rtl []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -325,8 +334,8 @@ prim<v:=(m,v,v)>[mask=pass_through] add(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
-          oneapi_fpga_rtl [oneapi_fpga_device]
+          oneapi_fpga []
+          oneapi_fpga_rtl []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -461,8 +470,8 @@ prim<v:=(v,v)> sub(left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
-          oneapi_fpga_rtl [oneapi_fpga_device]
+          oneapi_fpga []
+          oneapi_fpga_rtl []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -557,6 +566,15 @@ prim<v:=(v,v)> sub(left, right):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<vsubq, build>(left, right));"
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<sub, build>(left, right));"
     sve:
       arith:
         requires [sve]
@@ -609,8 +627,8 @@ prim<v:=(m,v,v)>[mask=zero] sub(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
-          oneapi_fpga_rtl [oneapi_fpga_device]
+          oneapi_fpga []
+          oneapi_fpga_rtl []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -734,8 +752,8 @@ prim<v:=(m,v,v)>[mask=pass_through] sub(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
-          oneapi_fpga_rtl [oneapi_fpga_device]
+          oneapi_fpga []
+          oneapi_fpga_rtl []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -861,8 +879,8 @@ prim<v:=(m,v,v,v)>[mask=pass_through] blend_add(mask, left, right, adder):
         requires:
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
-          oneapi_fpga_rtl [oneapi_fpga_device]
+          oneapi_fpga []
+          oneapi_fpga_rtl []
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]

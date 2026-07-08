@@ -92,7 +92,7 @@ prim<v:=v> popcnt(data):
           sse [sse2]
           neon [neon]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -159,7 +159,7 @@ prim<usize:=s> lzc_scalar(data):
             """
     oneapi_fpga:
       ?i?:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -168,7 +168,7 @@ prim<usize:=s> lzc_scalar(data):
           tsil "complete(cast<static>(type(scalar::size), helper<clz_recursive, type(base::in), type(vector::offset_base)::apply>(data)));"
     oneapi_fpga_rtl:
       ?i?:
-        requires [oneapi_fpga_device]
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -275,8 +275,8 @@ prim<v:=v> lzc(data):
     [oneapi_fpga, oneapi_fpga_rtl]:
       ?i?:
         requires:
-          oneapi_fpga [oneapi_fpga_device]
-          oneapi_fpga_rtl [oneapi_fpga_device]
+          oneapi_fpga []
+          oneapi_fpga_rtl []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -323,8 +323,8 @@ prim<usize:=m> lzc_imask(value):
     [oneapi_fpga, oneapi_fpga_rtl]:
       ?i?:
         requires:
-          oneapi_fpga [oneapi_fpga_device]
-          oneapi_fpga_rtl [oneapi_fpga_device]
+          oneapi_fpga []
+          oneapi_fpga_rtl []
         safety:
           internal_unsafe false
           caller_unsafe false

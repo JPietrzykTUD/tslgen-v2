@@ -12,8 +12,8 @@ from tslc.diagnostics import Diagnostic
 
 
 @dataclass(frozen=True, slots=True)
-class VerifyEmulator:
-    kind: str  # "sde" | "qemu-aarch64"
+class VerifyRunner:
+    kind: str  # "sde" | "qemu-aarch64" | "wasmtime"
     profile: str
     args: tuple[str, ...] = ()
 
@@ -29,8 +29,8 @@ class VerifyProfile:
     rust_target_features: tuple[str, ...] = ()
     rust_target: str | None = None
     rust_linker: str | None = None
-    # Optional emulator profile used to run value tests for this profile.
-    emulator: VerifyEmulator | None = None
+    # Optional runner profile used to run value tests for this profile.
+    runner: VerifyRunner | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +54,7 @@ class BuildVerifierConfig:
     run_value_tests: bool = False
     sde_path: str | None = None
     qemu_aarch64_path: str | None = None
+    wasmtime_path: str | None = None
     cpp_target: str | None = None
     rust_target: str | None = None
     rust_linker: str | None = None
@@ -67,12 +68,14 @@ class BuildVerifierConfig:
         run_value_tests: bool = False,
         sde_path: str | None = None,
         qemu_aarch64_path: str | None = None,
+        wasmtime_path: str | None = None,
         cpp_target: str | None = None,
         rust_target: str | None = None,
         rust_linker: str | None = None,
     ) -> "BuildVerifierConfig":
         normalized_sde_path = _normalize_compiler_executable(sde_path)
         normalized_qemu_aarch64_path = _normalize_compiler_executable(qemu_aarch64_path)
+        normalized_wasmtime_path = _normalize_compiler_executable(wasmtime_path)
         normalized_cpp_compiler = _normalize_compiler_command(cpp_compiler)
         if normalized_cpp_compiler is None and normalized_sde_path is not None and run_value_tests:
             normalized_cpp_compiler = ("c++",)
@@ -82,6 +85,7 @@ class BuildVerifierConfig:
             run_value_tests=run_value_tests,
             sde_path=normalized_sde_path,
             qemu_aarch64_path=normalized_qemu_aarch64_path,
+            wasmtime_path=normalized_wasmtime_path,
             cpp_target=_normalize_compiler_executable(cpp_target),
             rust_target=_normalize_compiler_executable(rust_target),
             rust_linker=_normalize_compiler_executable(rust_linker),
@@ -150,7 +154,7 @@ __all__ = [
     "BuildVerificationReport",
     "BuildVerifierConfig",
     "VerifyBackend",
-    "VerifyEmulator",
     "VerifyProfile",
     "VerifyProject",
+    "VerifyRunner",
 ]

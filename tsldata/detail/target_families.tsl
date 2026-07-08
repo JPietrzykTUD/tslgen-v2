@@ -1,23 +1,23 @@
 target_families:
-  known_extension_families [scalar, generic_like, x86, arm, cuda]
+  known_extension_families [scalar, generic_like, x86, arm, cuda, wasm]
   universal_extension_families [scalar, generic_like]
   profile_families:
     generic:
       extension_families []
-      emulator_kinds []
+      runner_kinds []
       sort_order 0
       cpp_feature_flags false
       rust_target_features false
     x86:
       extension_families [x86]
-      emulator_kinds [sde]
+      runner_kinds [sde]
       sort_order 10
       cpp_feature_flags true
       cpp_detection "x86_builtin"
       rust_target_features true
     aarch64:
       extension_families [arm]
-      emulator_kinds ["qemu-aarch64"]
+      runner_kinds ["qemu-aarch64"]
       sort_order 20
       cpp_feature_flags false
       cpp_target "aarch64-linux-gnu"
@@ -25,3 +25,11 @@ target_families:
       rust_target_features true
       rust_target "aarch64-unknown-linux-musl"
       rust_linker "rust-lld"
+    wasm32:
+      extension_families [wasm]
+      runner_kinds [wasmtime]
+      sort_order 30
+      cpp_feature_flags true
+      cpp_target "wasm32-wasip1"
+      rust_target_features true
+      rust_target "wasm32-wasip1"

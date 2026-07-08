@@ -13,7 +13,7 @@ from tslc.catalog.model import Extension
 from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact
-from tslc.output.verify_model import VerifyEmulator, VerifyProfile
+from tslc.output.verify_model import VerifyProfile, VerifyRunner
 from tslc.render._common import (
     feature_spelling,
     slug,
@@ -100,7 +100,7 @@ def rust_verify_profiles(profiles: tuple[ProfileRender, ...]) -> tuple[VerifyPro
             ),
             rust_target=rust_target(profile_render.profile, profile_render.profile_family),
             rust_linker=rust_linker(profile_render.profile, profile_render.profile_family),
-            emulator=_verify_emulator(profile_render.profile),
+            runner=_verify_runner(profile_render.profile),
         )
         for profile_render in profiles
     )
@@ -151,13 +151,13 @@ def _rust_arch_use(emitted_exts: list[str], extensions: Mapping[str, Extension])
     return "\n".join(lines) + "\n"
 
 
-def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
-    if profile.emulator is None:
+def _verify_runner(profile: MachineProfile) -> VerifyRunner | None:
+    if profile.runner is None:
         return None
-    return VerifyEmulator(
-        kind=profile.emulator.kind,
-        profile=profile.emulator.profile,
-        args=profile.emulator.args,
+    return VerifyRunner(
+        kind=profile.runner.kind,
+        profile=profile.runner.profile,
+        args=profile.runner.args,
     )
 
 

@@ -86,7 +86,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -189,7 +189,7 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -292,7 +292,7 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -398,7 +398,7 @@ prim<m:=m> mask_binary_not(mask):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -519,7 +519,7 @@ prim<usize:=m> mask_population_count(mask):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -568,7 +568,7 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
           neon [neon]
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -591,7 +591,7 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
           neon [neon]
           scalar []
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false

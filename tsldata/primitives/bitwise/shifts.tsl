@@ -59,7 +59,7 @@ prim<v:=(v,sImm)> shift_left(data, shift):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -290,7 +290,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -422,7 +422,7 @@ prim<v:=(v,s)> shift_left(data, shift):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -624,7 +624,7 @@ prim<v:=(v,v)> shift_left(data, shift):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -885,7 +885,7 @@ prim<v:=(v,sImm)> shift_right(data, shift):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1308,7 +1308,7 @@ prim<v:=(v,s)> shift_right(data, shift):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1826,7 +1826,7 @@ prim<v:=(v,v)> shift_right(data, shift):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false

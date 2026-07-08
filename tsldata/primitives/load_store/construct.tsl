@@ -120,6 +120,33 @@ prim<v:=s> set1(value):
               intrin<svdup_n, build>(value)
             );
           """
+    wasm128:
+      ?i?:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<splat, build>(
+                cast<static>(type(base::signed_of(type(base::in))), value)
+              )
+            );
+          """
+      f?:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              intrin<splat, build>(value)
+            );
+          """
     scalar:
       arith:
         requires []
@@ -133,7 +160,7 @@ prim<v:=s> set1(value):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -226,7 +253,7 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -301,7 +328,7 @@ prim<v:=()>[value=zero] set_zero():
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -372,6 +399,19 @@ prim<v:=()>[value=zero] set_zero():
               call<primitive=binary_xor>(undef, undef)
             );
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            complete(
+              call<primitive=set1>(cast<static>(type(base::in), 0))
+            );
+          """
 
 prim<v:=()>[value=undef] set_undef():
   brief_description "Creates a vector register with intentionally undefined lane values."
@@ -403,7 +443,7 @@ prim<v:=()>[value=undef] set_undef():
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -627,7 +667,7 @@ prim<v:=(lanes<s>)> set(values):
           neon [neon]
           sve [sve]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false

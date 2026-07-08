@@ -16,7 +16,7 @@ from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 from tslc.output.artifacts import Artifact
-from tslc.output.verify_model import VerifyEmulator, VerifyProfile
+from tslc.output.verify_model import VerifyProfile, VerifyRunner
 from tslc.render._common import (
     feature_spelling,
     slug,
@@ -35,7 +35,6 @@ if TYPE_CHECKING:
 _CPP_STATIC_HEADERS = (
     "tsl_core.hpp",
     "tsl_dataparallel.hpp",
-    "tsl_inferred_simd.hpp",
     "tsl_algorithm_tags.hpp",
     "tsl_algorithm_detail_core.hpp",
     "tsl_algorithm_detail_mask.hpp",
@@ -127,7 +126,7 @@ def cpp_verify_profiles(profiles: tuple[ProfileRender, ...]) -> tuple[VerifyProf
             family=profile_render.profile.family,
             cpp_flags=cpp_flags(profile_render.profile, profile_render.profile_family),
             cpp_target=cpp_target(profile_render.profile, profile_render.profile_family),
-            emulator=_verify_emulator(profile_render.profile),
+            runner=_verify_runner(profile_render.profile),
         )
         for profile_render in profiles
     )
@@ -157,13 +156,13 @@ def cpp_target(
     return capability.cpp_target
 
 
-def _verify_emulator(profile: MachineProfile) -> VerifyEmulator | None:
-    if profile.emulator is None:
+def _verify_runner(profile: MachineProfile) -> VerifyRunner | None:
+    if profile.runner is None:
         return None
-    return VerifyEmulator(
-        kind=profile.emulator.kind,
-        profile=profile.emulator.profile,
-        args=profile.emulator.args,
+    return VerifyRunner(
+        kind=profile.runner.kind,
+        profile=profile.runner.profile,
+        args=profile.runner.args,
     )
 
 
@@ -172,7 +171,6 @@ def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) 
         '#include "tsl_core.hpp"',
         '#include "tsl_primitives.hpp"',
         '#include "tsl_dataparallel.hpp"',
-        '#include "tsl_inferred_simd.hpp"',
     ]
     if any(is_x86_register_extension(extensions.get(ext)) for ext in emitted_exts):
         lines.append('#include "tsl_x86_traits.hpp"')

@@ -402,7 +402,7 @@ prim<v:=()> sequence():
         requires:
           neon [neon]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -507,7 +507,7 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
           sse_vl [sse, sse2]
           neon [neon]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false

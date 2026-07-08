@@ -2,6 +2,8 @@ FROM ubuntu:26.04
 
 ARG ZIG_VERSION=0.16.0
 ARG ZIG_ARCH=x86_64-linux
+ARG WASI_SDK_VERSION=33
+ARG WASMTIME_VERSION=45.0.2
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV ONEAPI_ROOT=/opt/intel/oneapi
@@ -28,9 +30,20 @@ RUN set -eux; \
     rm /tmp/zig.tar.xz; \
     /opt/zig/zig version
 
+# Install WASI SDK: clang/clang++ for C/C++ -> wasm32-wasip1.
+RUN set -eux; \
+    curl -L "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION}/wasi-sdk-${WASI_SDK_VERSION}.0-x86_64-linux.tar.gz" \
+      -o /tmp/wasi-sdk.tar.gz; \
+    mkdir -p /opt; \
+    tar -xzf /tmp/wasi-sdk.tar.gz -C /opt; \
+    mv "/opt/wasi-sdk-${WASI_SDK_VERSION}.0-x86_64-linux" /opt/wasi-sdk; \
+    rm /tmp/wasi-sdk.tar.gz; \
+    /opt/wasi-sdk/bin/clang++ --version
+
 ENV RUSTUP_HOME=/usr/local/rustup
 ENV CARGO_HOME=/usr/local/cargo
-ENV PATH="/opt/venv/bin:/opt/zig:${CARGO_HOME}/bin:${PATH}"
+ENV WASI_SDK_PATH=/opt/wasi-sdk
+ENV PATH="/opt/venv/bin:/opt/zig:/opt/wasi-sdk/bin:${CARGO_HOME}/bin:${PATH}"
 
 ENV CC="zig cc"
 ENV CXX="zig c++"
@@ -44,8 +57,18 @@ RUN set -eux; \
       x86_64-unknown-linux-gnu \
       aarch64-unknown-linux-gnu \
       x86_64-unknown-linux-musl \
-      aarch64-unknown-linux-musl; \
+      aarch64-unknown-linux-musl \
+      wasm32-wasip1; \
     cargo install --locked cargo-zigbuild
+
+# Install Wasmtime runtime for executing generated .wasm value-test binaries.
+RUN set -eux; \
+    curl -L "https://github.com/bytecodealliance/wasmtime/releases/download/v${WASMTIME_VERSION}/wasmtime-v${WASMTIME_VERSION}-x86_64-linux.tar.xz" \
+      -o /tmp/wasmtime.tar.xz; \
+    tar -xJf /tmp/wasmtime.tar.xz -C /tmp; \
+    install -m 0755 "/tmp/wasmtime-v${WASMTIME_VERSION}-x86_64-linux/wasmtime" /usr/local/bin/wasmtime; \
+    rm -rf "/tmp/wasmtime-v${WASMTIME_VERSION}-x86_64-linux" /tmp/wasmtime.tar.xz; \
+    wasmtime --version
 
 COPY requirements.txt /tmp/requirements.txt
 

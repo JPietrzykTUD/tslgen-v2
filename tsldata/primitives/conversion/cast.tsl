@@ -151,7 +151,7 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           scalar []
         ToBase:
           arith:

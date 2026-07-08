@@ -74,14 +74,17 @@ def test_rust_target_presentation_capabilities_derive_from_metadata(
 ) -> None:
     avx2 = catalog.extensions["avx2"]
     neon = catalog.extensions["neon"]
+    wasm128 = catalog.extensions["wasm128"]
     generic = catalog.extensions["generic"]
     custom = _custom_rust_extension(catalog, "x86_demo", "X86Demo")
 
     assert rust_arch_module(avx2) == "x86_64"
     assert rust_arch_module(neon) == "aarch64"
+    assert rust_arch_module(wasm128) == "wasm32"
     assert rust_arch_module(generic) is None
     assert rust_extension_tag(None) == "Generic<1>"
     assert rust_extension_tag(avx2) == "Avx2"
+    assert rust_extension_tag(wasm128) == "Wasm128"
     assert rust_extension_tag(custom) == "X86Demo"
     assert rust_extension_tag("oneapi_fpga") == "OneapiFpga"
 
@@ -98,6 +101,10 @@ def test_rust_register_spelling_uses_source_register_metadata(catalog: Catalog) 
     assert rust.types.target_register_spelling("f64", "avx2") == (
         "core::arch::x86_64::__m256d"
     )
+    assert (
+        rust.types.target_register_spelling("si32", "wasm128")
+        == "core::arch::wasm32::v128"
+    )
     assert rust.types.target_register_spelling("si32", "scalar") == "i32"
     assert (
         rust.types.target_register_spelling(
@@ -107,6 +114,23 @@ def test_rust_register_spelling_uses_source_register_metadata(catalog: Catalog) 
             lane_parameter="LANES",
         )
         == "array_type<i32, LANES>"
+    )
+
+
+def test_wasm_intrinsic_composition_is_lane_shape_first(catalog: Catalog) -> None:
+    wasm128 = catalog.extensions["wasm128"]
+    cpp = create_backend_dialect(catalog, "cpp")
+    rust = create_backend_dialect(catalog, "rust")
+
+    assert cpp.intrinsics.default_suffix(wasm128, "si32") == "i32x4"
+    assert cpp.intrinsics.compose_intrinsic_name(wasm128, "add", "i32x4") == (
+        "wasm_i32x4_add"
+    )
+    assert rust.intrinsics.compose_intrinsic_name(wasm128, "add", "f32x4") == (
+        "core::arch::wasm32::f32x4_add"
+    )
+    assert cpp.intrinsics.compose_intrinsic_name(wasm128, "v128_load", None) == (
+        "wasm_v128_load"
     )
 
 

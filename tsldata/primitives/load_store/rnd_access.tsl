@@ -459,7 +459,7 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
           sse_vl [sse2]
           neon [neon]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -598,7 +598,7 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
           sse_vl [sse, sse2]
           neon [neon]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -703,7 +703,7 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
           sse_vl [sse, sse2]
           neon [neon]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -1034,7 +1034,7 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
           neon [neon]
           sve [sve]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -1372,7 +1372,7 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
           sse_vl [sse2]
           neon [neon]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -1708,7 +1708,7 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
           neon [neon]
           sve [sve]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe true
           caller_unsafe true

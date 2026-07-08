@@ -1,0 +1,27 @@
+{
+    "configurations": [
+        {
+            "name": "test-sort",
+            "compileCommands": "${workspaceFolder}/test-sort/build/compile_commands.json",
+            "includePath": [
+                "${workspaceFolder}/test-sort",
+                "${workspaceFolder}/test-sort/build/_deps/tsl-src/cpp/include"
+            ],
+            "defines": [
+                "TSL_PROFILE_SAPPHIRERAPIDS"
+            ],
+            "compilerPath": "/usr/bin/c++",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/test-sort",
+                    "${workspaceFolder}/test-sort/build/_deps/tsl-src/cpp/include"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        }
+    ],
+    "version": 4
+}

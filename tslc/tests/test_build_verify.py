@@ -49,9 +49,9 @@ def test_generated_profiles_build(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["add", "hadd"],
-        # Include a hyphenated, exotic-flag profile so identifier-sanitization and
-        # feature-flag-spelling regressions are caught by the build, not just inspection.
-        profiles=["scalar", "sse2", "avx", "avx2", "skylake", "icelake-rockerlake"],
+        # Include an exotic-flag profile so feature-flag-spelling regressions
+        # are caught by the build, not just inspection.
+        profiles=["scalar", "sse2", "avx", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -588,7 +588,7 @@ def test_to_integral_builds(data_root: Path, machine_profiles_path: Path, tmp_pa
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["to_integral"],
-        profiles=["scalar", "sse2", "avx", "avx2", "skylake", "icelake-rockerlake"],
+        profiles=["scalar", "sse2", "avx", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -630,7 +630,7 @@ def test_to_vector_builds(data_root: Path, machine_profiles_path: Path, tmp_path
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["to_vector"],
-        profiles=["scalar", "avx2", "skylake", "icelake-rockerlake"],
+        profiles=["scalar", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -675,12 +675,12 @@ def test_masked_comparisons_build(
     # (takes a mask, returns a mask), split to `<name>_maskz`. avx512(_vl) uses the native
     # masked compare (`intrin<…, build[post=mask]>` -> `_mm512_cmpeq_*_mask`); avx2/sse/scalar
     # fall back to `mask_binary_and(mask, <unmasked compare>)`; the generic `<LANES>` masked loop
-    # is gated off. Both backends, scalar + sse2 + avx2 + skylake + icelake-rockerlake.
+    # is gated off. Both backends, scalar + sse2 + avx2 + skylake + icelake_rockerlake.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["equal", "less_than", "greater_than_or_equal", "between_inclusive"],
-        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -726,7 +726,7 @@ def test_mul_imm_builds(data_root: Path, machine_profiles_path: Path, tmp_path: 
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["mul_imm"],
-        profiles=["scalar", "avx2", "skylake", "icelake-rockerlake"],
+        profiles=["scalar", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -800,7 +800,7 @@ def test_shift_right_imask_builds(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["shift_right_imask"],
-        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -849,13 +849,13 @@ def test_shift_right_avx512_immediate_builds(
     # immediate forwards through a literal match (`match shift { 0 => _mm512_srli_epi32::<0>(data),
     # … }`) whose literal arms re-type to whichever const each intrinsic wants (folds to one arm).
     # `value_range 0..base_bit_width(data)` sets the per-type arm count (16/32/64). This is the
-    # case the wall blocked; skylake + icelake-rockerlake, both backends. (The si8/u8 avx512
+    # case the wall blocked; skylake + icelake_rockerlake, both backends. (The si8/u8 avx512
     # `intrin::suffix(si?)` gap and the generic-vector reinterpret fallback skip cleanly.)
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["shift_right"],
-        profiles=["skylake", "icelake-rockerlake"],
+        profiles=["skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -996,7 +996,7 @@ def test_mask_binary_and_builds(data_root: Path, machine_profiles_path: Path, tm
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["mask_binary_and"],
-        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -1021,7 +1021,7 @@ def test_range_comparisons_build(data_root: Path, machine_profiles_path: Path, t
             "between_right_inclusive",
             "between_exclusive",
         ],
-        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -1044,7 +1044,7 @@ def test_mask_boolean_algebra_builds(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["mask_binary_or", "mask_binary_xor", "mask_binary_not"],
-        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -1065,7 +1065,7 @@ def test_mask_true_builds(data_root: Path, machine_profiles_path: Path, tmp_path
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["mask_true"],
-        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -1087,7 +1087,7 @@ def test_imask_ops_build(data_root: Path, machine_profiles_path: Path, tmp_path:
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["test_imask", "insert_imask", "extract_imask"],
-        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -1110,7 +1110,7 @@ def test_mask_population_count_builds(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["mask_population_count"],
-        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -1237,7 +1237,7 @@ def test_bit_reductions_build(
 ) -> None:
     # `hand`/`hor` (`s:=v` horizontal AND/OR: native reduce + the extract/shuffle x86 path,
     # plus the `to_array` + `var<typed>` accumulator loop) and `popcnt` (`v:=v`, per-lane
-    # population count on the AVX512 VPOPCNTDQ/BITALG native path — hence icelake-rockerlake —
+    # population count on the AVX512 VPOPCNTDQ/BITALG native path — hence icelake_rockerlake —
     # plus the sse/avx2 intrinsic slots), and `tzc` (`usize:=m`, `helper<ctz>` of the integral
     # mask, cast to a size value). Both backends; the generic fallbacks use width-aware
     # helper functions and no longer depend on a `vector::offset_base` query.
@@ -1245,7 +1245,7 @@ def test_bit_reductions_build(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["popcnt", "hand", "hor", "tzc"],
-        profiles=["sse2", "avx2", "skylake", "icelake-rockerlake"],
+        profiles=["sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None
@@ -1271,7 +1271,7 @@ def test_leading_zeros_build(
         [data_root],
         machine_profiles_path=machine_profiles_path,
         primitives=["lzc", "lzc_imask", "lzc_scalar"],
-        profiles=["scalar", "sse2", "avx2", "skylake", "icelake-rockerlake"],
+        profiles=["scalar", "sse2", "avx2", "skylake", "icelake_rockerlake"],
     )
     assert not has_errors(result.diagnostics), result.diagnostics
     assert result.rendered is not None

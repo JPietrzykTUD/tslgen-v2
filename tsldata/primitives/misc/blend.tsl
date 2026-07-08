@@ -55,7 +55,7 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -329,7 +329,7 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
           neon [neon]
           sve [sve]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -451,7 +451,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
           neon [neon]
           sve [sve]
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false

@@ -45,7 +45,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -305,7 +305,7 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -464,7 +464,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -617,7 +617,7 @@ prim<v:=(v,v)> div(divident, divisor):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -740,7 +740,7 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -855,7 +855,7 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -964,7 +964,7 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1306,7 +1306,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse]
@@ -1365,7 +1365,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
       arith:
         requires:
           generic []
-          oneapi_fpga [oneapi_fpga_device]
+          oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse]
