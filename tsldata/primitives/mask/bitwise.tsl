@@ -73,6 +73,15 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           reasons []
         implementation:
           tsil "complete(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=binary_and[Vec]>(mask_a, mask_b));"
     scalar:
       arith:
         requires []
@@ -176,6 +185,15 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
           reasons []
         implementation:
           tsil "complete(call<primitive=binary_or[Vec]>(mask_a, mask_b));"
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=binary_or[Vec]>(mask_a, mask_b));"
     scalar:
       arith:
         requires []
@@ -273,6 +291,15 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
     neon:
       arith:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=binary_xor[Vec]>(mask_a, mask_b));"
+    wasm128:
+      arith:
+        requires [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -385,6 +412,15 @@ prim<m:=m> mask_binary_not(mask):
           reasons []
         implementation:
           tsil "complete(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=binary_xor[Vec]>(mask, call<primitive=mask_true[Vec]>()));"
     scalar:
       arith:
         requires []
@@ -442,7 +478,7 @@ prim<usize:=m> mask_population_count(mask):
     - {tags [mask, popcnt, edge], extension "avx512", type "ui64", expected_rule "popcnt", lane_count 8, case {inputs [255], expected 8}}
     - {tags [mask, popcnt, zero], extension "avx512", type "ui64", expected_rule "popcnt", lane_count 8, case {inputs [0], expected 0}}
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar]:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128, scalar]:
       arith:
         requires:
           avx512 [avx512f]
@@ -451,6 +487,7 @@ prim<usize:=m> mask_population_count(mask):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
           scalar []
         safety:
           internal_unsafe false
@@ -557,7 +594,7 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
       kind bool
       default true
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, scalar, generic, oneapi_fpga]:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128, scalar, generic, oneapi_fpga]:
       ?i?:
         requires:
           avx512 [avx512f]
@@ -566,6 +603,7 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
           avx2 [avx]
           sse [sse]
           neon [neon]
+          wasm128 [simd128]
           scalar []
           generic []
           oneapi_fpga []
@@ -589,6 +627,7 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
           avx2 [avx]
           sse [sse]
           neon [neon]
+          wasm128 [simd128]
           scalar []
           generic []
           oneapi_fpga []

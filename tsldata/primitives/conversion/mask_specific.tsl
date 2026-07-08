@@ -69,6 +69,31 @@ prim<im:=m> to_integral(mask):
           reasons []
         implementation:
           tsil "complete(mask);"
+    wasm128:
+      ?i?:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(cast<static>(type(vector::imask), intrin<bitmask, build>(mask)));"
+      f32:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(cast<static>(type(vector::imask), intrin<bitmask, build[suffix=\"i32x4\"]>(mask)));"
+      f64:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(cast<static>(type(vector::imask), intrin<bitmask, build[suffix=\"i64x2\"]>(mask)));"
     avx2:
       ?i8:
         requires [avx, avx2]
@@ -384,6 +409,15 @@ prim<v:=m> to_vector(mask):
           reasons []
         implementation:
           tsil "complete(mask);"
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(mask);"
     scalar:
       arith:
         requires []
@@ -467,6 +501,25 @@ prim<m:=im> to_mask(mask):
           reasons []
         implementation:
           tsil "complete(mask);"
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_mask, call<primitive=to_mask[GenericVec]>(cast<static>(type(scalar::ui64), mask)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=to_array[GenericVec]>(
+                    call<primitive=to_vector[GenericVec]>(generic_mask)
+                  )
+                )
+              );
+            """
     avx2:
       ?i8:
         requires [avx, avx2]

@@ -62,6 +62,15 @@ prim<v:=v> popcnt(data):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<vcntq, build>(data));"
+    wasm128:
+      ?i8:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<popcnt, build>(data));"
     sve:
       ui?:
         requires [sve]
@@ -85,7 +94,7 @@ prim<v:=v> popcnt(data):
               )
             );
           """
-    [avx2, sse, neon, generic, oneapi_fpga]:
+    [avx2, sse, neon, generic, oneapi_fpga, wasm128]:
       ?i?:
         requires:
           avx2 [avx]
@@ -93,6 +102,7 @@ prim<v:=v> popcnt(data):
           neon [neon]
           generic []
           oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -131,11 +141,12 @@ prim<usize:=s> lzc_scalar(data):
     - {tags [basic], type "ui32", lane_count 8, case {inputs [16], expected 27}}
     - {tags [edge], type "ui32", lane_count 8, case {inputs [0], expected 32}}
   impls:
-    [scalar, generic]:
+    [scalar, generic, wasm128]:
       ?i?:
         requires:
           scalar []
           generic []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -146,6 +157,7 @@ prim<usize:=s> lzc_scalar(data):
         requires:
           scalar []
           generic []
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -251,7 +263,7 @@ prim<v:=v> lzc(data):
               )
             );
           """
-    [avx512, avx2, sse, neon, scalar, generic]:
+    [avx512, avx2, sse, neon, scalar, generic, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -260,6 +272,7 @@ prim<v:=v> lzc(data):
           neon [neon]
           scalar []
           generic []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -305,7 +318,7 @@ prim<usize:=m> lzc_imask(value):
     - {tags [basic], type "ui32", expected_rule "lzc", lane_count 8, case {inputs [8], expected 60}}
     - {tags [edge], type "ui32", expected_rule "lzc", lane_count 8, case {inputs [0], expected 64}}
   impls:
-    [avx512, avx2, sse, neon, scalar, generic]:
+    [avx512, avx2, sse, neon, scalar, generic, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -314,6 +327,7 @@ prim<usize:=m> lzc_imask(value):
           neon [neon]
           scalar []
           generic []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -347,7 +361,7 @@ prim<usize:=m> tzc(value):
     - {tags [basic], type "ui32", expected_rule "tzc", lane_count 8, case {inputs [8], expected 3}}
     - {tags [edge], type "ui32", expected_rule "tzc", lane_count 8, case {inputs [0], expected 64}}
   impls:
-    [avx512, avx2, sse, neon, scalar, generic]:
+    [avx512, avx2, sse, neon, scalar, generic, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -356,6 +370,7 @@ prim<usize:=m> tzc(value):
           neon [neon]
           scalar []
           generic []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false

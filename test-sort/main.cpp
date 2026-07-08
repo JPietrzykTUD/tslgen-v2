@@ -57,14 +57,15 @@ auto tsl_quicksort(
   size_t right_illplaced_count = 0;
   enum class advance_state {
     LEFT,
-    RIGHT
+    RIGHT,
+    BOTH
   };
 
   advance_state advance = advance_state::LEFT;
 
   while (left_read_ptr < right_read_ptr) {
 
-    if (advance == advance_state::LEFT) {
+    if (advance == advance_state::LEFT || advance == advance_state::BOTH) {
       // load data from the left of the partition
       data_left_vec = tsl::load<DataSimdStyle, false>(left_read_ptr);
       left_illplaced_mask = tsl::greater_than_or_equal<DataSimdStyle>(data_left_vec, pivot_vec);
@@ -72,21 +73,67 @@ auto tsl_quicksort(
       if (left_illplaced_count == 0) {
         // left all good --> we can't overwrite something --> increase the left read pointer and continue
         left_read_ptr += DataSimdStyle::lane_count_v;
-        // advance further left
+        advance = advance_state::LEFT;
         continue;
       }
     }  
-    
-    // some of the left data is ill-placed
-    
-    auto const data_right_vec = tsl::load<DataSimdStyle, false>(right_read_ptr);
-    auto const right_illplaced_mask = tsl::less_than<DataSimdStyle>(data_right_vec, pivot_vec);
-    auto const right_illplaced_count = tsl::mask_population_count<DataSimdStyle>(right_illplaced_mask);
-    if (right_illplaced_count == 0) {
-      // right all good --> we can't overwrite something --> decrease the right read pointer and continue
-      right_read_ptr -= DataSimdStyle::lane_count_v;
-      continue;
+    // at this point, we have some ill-placed elements on the left side of the partition (we may can swap from right)
+
+    if (advance == advance_state::RIGHT || advance == advance_state::BOTH) {
+      data_right_vec = tsl::load<DataSimdStyle, false>(right_read_ptr);
+      right_illplaced_mask = tsl::less_than<DataSimdStyle>(data_right_vec, pivot_vec);
+      right_illplaced_count = tsl::mask_population_count<DataSimdStyle>(right_illplaced_mask);
+      if (right_illplaced_count == 0) {
+        // right all good --> we can't overwrite something --> decrease the right read pointer and continue
+        right_read_ptr -= DataSimdStyle::lane_count_v;
+        advance = advance_state::RIGHT;
+        continue;
+      }
     }
+    // at this point, we have some ill-placed elements on the right side of the partition AND on the left side of the partition => WE SWAP
+    
+    // 1. get the minimum number of ill-placed elements on both sides
+    auto const min_illplaced_count = std::min(left_illplaced_count, right_illplaced_count);
+    // 2. compress right ill-placed elements to the front of the register (as they will overwrite the left part)
+    auto const right_illplaced_compact_vec = tsl::compress<DataSimdStyle>(right_illplaced_mask, data_right_vec);
+
+    auto const left_illplaced_compact_vec = tsl::compress<DataSimdStyle>(left_illplaced_mask, data_left_vec);
+    
+    // 3. create a mask for the low min_illplaced_count bits set to 1 (N > 0, thus not UB)
+    // for 3 elements that would be 0b00000111
+    auto const compact_imask = 
+      tsl::shift_right_imask<DataSimdStyle>(
+        tsl::to_integral<DataSimdStyle>(tsl::mask_true<DataSimdStyle>()),
+        DataSimdStyle::lane_count_v - min_illplaced_count
+      );
+    // for 3 elements that would be 0b11111000
+    auto const expand_imask = ~compact_imask;
+    
+    // 4. create a mask for the high min_illplaced_count bits set to 1
+    // for 3 elements that would be 0b11100000
+    auto const left_expand_imask = 
+      tsl::shift_left_imask<DataSimdStyle>(
+        compact_imask, 
+        DataSimdStyle::lane_count_v - min_illplaced_count
+      );
+    
+    // for 3 elements that would be 0b00011111
+    auto const left_compact_imask = ~left_expand_imask;
+
+    // LEFT
+    // prepare the left vector for storing
+    // compact the ill-placed elements to the front
+    auto const tmp_illplaced_left_vec = tsl::compress<DataSimdStyle>(left_illplaced_mask, data_left_vec);
+    auto const tmp_goodplaced_left_vec = tsl::compress<DataSimdStyle>(tsl::mask_binary_not<DataSimdStyle>(left_illplaced_mask), data_left_vec);
+    // move the tmp_illplaced_left_vec valid lanes to the back of the vector
+    auto const updated_illplaced_left_vec = tsl::expand<DataSimdStyle>(left_expand_imask, tmp_illplaced_left_vec);
+    // blend the vectors
+    auto const updated_left_vec = tsl::binary_or<DataSimdStyle>(updated_illplaced_left_vec, tmp_goodplaced_left_vec);
+
+    // RIGHT
+    // prepare the right vector for storing
+    // compact the ill-placed elements to the front
+    auto const tmp_illplaced_right_vec = tsl::compress<DataSimdStyle>(right_illplaced_mask, data_right_vec);
     
     
   }

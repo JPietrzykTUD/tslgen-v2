@@ -51,6 +51,15 @@ prim<m:=()>[value=zero] mask_false():
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svpfalse_b>());"
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=set_zero[Vec]>());"
     scalar:
       arith:
         requires []
@@ -164,6 +173,15 @@ prim<m:=()>[value=all] mask_true():
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<svptrue_b64>());"
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=set1[Vec]>(mask<lane_true>()));"
     scalar:
       arith:
         requires []

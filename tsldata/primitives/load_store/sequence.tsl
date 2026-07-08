@@ -397,12 +397,13 @@ prim<v:=()> sequence():
               indexes
             ));
           """
-    [neon, generic, oneapi_fpga]:
+    [neon, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
           neon [neon]
           generic []
           oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -497,7 +498,7 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
               )
             );
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga]:
+    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -508,6 +509,7 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
           neon [neon]
           generic []
           oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false

@@ -195,6 +195,23 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
                 )
               );
             """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              complete(
+                intrin<v128_bitselect, build[suffix=""]>(
+                  right,
+                  left,
+                  call<primitive=to_vector>(mask)
+                )
+              );
+            """
     neon:
       arith:
         requires [neon]
@@ -316,7 +333,7 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
                 )
               );
             """
-    [avx2, sse, neon, sve, generic, oneapi_fpga]:
+    [avx2, sse, neon, sve, wasm128, generic, oneapi_fpga]:
       arith:
         requires:
           avx2:
@@ -328,6 +345,7 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
             f64 [sse, sse2]
           neon [neon]
           sve [sve]
+          wasm128 [simd128]
           generic []
           oneapi_fpga []
         safety:
@@ -438,7 +456,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
                 )
               );
             """
-    [avx2, sse, neon, sve, generic, oneapi_fpga]:
+    [avx2, sse, neon, sve, wasm128, generic, oneapi_fpga]:
       arith:
         requires:
           avx2:
@@ -450,6 +468,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
             f64 [sse, sse2]
           neon [neon]
           sve [sve]
+          wasm128 [simd128]
           generic []
           oneapi_fpga []
         safety:

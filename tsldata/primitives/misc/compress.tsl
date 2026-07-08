@@ -292,7 +292,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
               std::free(result_values);
               complete(result);
             """
-    [avx2, sse, neon, generic, oneapi_fpga]:
+    [avx2, sse, neon, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
           avx2 [avx2]
@@ -300,6 +300,7 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
           neon [neon]
           generic []
           oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false

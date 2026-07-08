@@ -289,12 +289,13 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
               );
             }
           """
-    [avx2, sse, neon]:
+    [avx2, sse, neon, wasm128]:
       arith:
         requires:
           avx2 [avx]
           sse [sse, sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -456,12 +457,13 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
               );
             }
           """
-    [avx2, sse, neon]:
+    [avx2, sse, neon, wasm128]:
       arith:
         requires:
           avx2 [avx]
           sse [sse, sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -595,7 +597,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               );
             }
           """
-    [avx2, sse, neon]:
+    [avx2, sse, neon, wasm128]:
       arith:
         requires:
           avx2 [avx, avx2]
@@ -603,6 +605,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
             [si8, ui8, si16, ui16, si32, ui32, f32, f64] [sse, sse2]
             [si64, ui64] [sse, sse2, sse4_1]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -705,7 +708,7 @@ prim<s:=cptr>[aligned=false] load_scalar(ptr):
     - {tags [scalar, basic], type "f64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
     - {tags [scalar, edge], type "f64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
   impls:
-    [scalar, generic, avx512, avx2, sse, neon, sve, oneapi_fpga]:
+    [scalar, generic, avx512, avx2, sse, neon, sve, oneapi_fpga, wasm128]:
       arith:
         requires:
           generic []
@@ -715,6 +718,7 @@ prim<s:=cptr>[aligned=false] load_scalar(ptr):
           neon [neon]
           sve [sve]
           oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe true

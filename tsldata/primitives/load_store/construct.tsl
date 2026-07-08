@@ -211,13 +211,14 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
     - {tags [masked, set1, basic], type "f64", case {inputs [2, [1.0, -2.0], -2.25], expected [1.0, -2.25]}}
     - {tags [masked, set1, edge], type "f64", case {inputs [3, [1.0, -2.0], -2.25], expected [-2.25, -2.25]}}
   impls:
-    [avx512, avx2, sse, neon]:
+    [avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -453,6 +454,15 @@ prim<v:=()>[value=undef] set_undef():
               var<typed>(array_type<type(base::in), value(vector::length), value(vector::alignment)>, result, value(uninit::array));
               complete(result);
             """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(call<primitive=set_zero[Vec]>());"
     avx512:
       ?i?:
         requires [avx512f]
@@ -661,13 +671,14 @@ prim<v:=(lanes<s>)> set(values):
               )
             );
           """
-    [neon, sve, generic, oneapi_fpga]:
+    [neon, sve, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
           neon [neon]
           sve [sve]
           generic []
           oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false

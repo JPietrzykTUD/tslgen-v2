@@ -366,6 +366,22 @@ def _wasm_slot(catalog: Catalog, machine_profiles, primitive: str, type_tag: str
     )
 
 
+def _wasm_unmasked_slots(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    type_tag: str,
+):
+    return tuple(
+        slot
+        for slot in Selector()
+        .select_profile(catalog, machine_profiles["wasm32-simd128"], primitive, (type_tag,))
+        .selected
+        if slot.extension.name == "wasm128"
+        and slot.primitive.attributes.get("mask") is None
+    )
+
+
 @pytest.mark.parametrize(
     ("primitive", "type_tag", "expected_cpp", "expected_rust"),
     (
@@ -439,6 +455,154 @@ def test_lower_wasm128_array_roundtrip_primitives(catalog: Catalog, machine_prof
     assert "array_type<int32_t, 4> tmp{};" in cpp_to.body_text
     assert "::tsl::store<Vec, false>(tmp.data(), a)" in cpp_to.body_text
     assert "return tmp;" in cpp_to.body_text
+
+
+@pytest.mark.parametrize(
+    ("primitive", "type_tag", "expected_cpp", "expected_rust"),
+    (
+        (
+            "mul",
+            "si32",
+            "return wasm_i32x4_mul(factor1, factor2);",
+            "unsafe { return core::arch::wasm32::i32x4_mul(factor1, factor2); }",
+        ),
+        (
+            "div",
+            "f32",
+            "return wasm_f32x4_div(divident, divisor);",
+            "unsafe { return core::arch::wasm32::f32x4_div(divident, divisor); }",
+        ),
+        (
+            "popcnt",
+            "ui8",
+            "return wasm_i8x16_popcnt(data);",
+            "unsafe { return core::arch::wasm32::i8x16_popcnt(data); }",
+        ),
+    ),
+)
+def test_lower_wasm128_expanded_direct_primitives(
+    catalog: Catalog,
+    machine_profiles,
+    primitive,
+    type_tag,
+    expected_cpp,
+    expected_rust,
+) -> None:
+    slot = _wasm_slot(catalog, machine_profiles, primitive, type_tag)
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert cpp is not None
+    assert cpp.body_text == expected_cpp
+
+    rust = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+    assert rust is not None
+    assert rust.body_text == expected_rust
+
+
+@pytest.mark.parametrize(
+    ("primitive", "type_tag", "needle"),
+    (
+        ("mul", "si8", "::tsl::mul<tsl::simd<int8_t, tsl::generic<16>>>"),
+        ("div", "si32", "::tsl::div<tsl::simd<int32_t, tsl::generic<4>>>"),
+        ("mod", "si32", "::tsl::mod<tsl::simd<int32_t, tsl::generic<4>>>"),
+        ("max", "si32", "::tsl::max<tsl::simd<int32_t, tsl::generic<4>>>"),
+        ("lzc", "ui32", "::tsl::lzc_scalar<tsl::simd<uint32_t, tsl::scalar>>"),
+    ),
+)
+def test_lower_wasm128_expanded_bridge_primitives(
+    catalog: Catalog,
+    machine_profiles,
+    primitive,
+    type_tag,
+    needle,
+) -> None:
+    slot = _wasm_slot(catalog, machine_profiles, primitive, type_tag)
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert cpp is not None
+    if primitive != "lzc":
+        assert "tsl::generic" in cpp.body_text
+    assert needle in cpp.body_text
+
+    rust = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+    assert rust is not None
+    if primitive != "lzc":
+        assert "Generic" in rust.body_text
+
+
+def test_lower_wasm128_shift_overloads_keep_scalar_and_vector_counts_distinct(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    left_slots = {
+        slot.primitive.signature: slot
+        for slot in _wasm_unmasked_slots(catalog, machine_profiles, "shift_left", "si32")
+    }
+    slots = {
+        slot.primitive.signature: slot
+        for slot in _wasm_unmasked_slots(catalog, machine_profiles, "shift_right", "si32")
+    }
+    assert {"v:=(v,sImm)", "v:=(v,s)", "v:=(v,v)"} <= set(left_slots)
+    assert {"v:=(v,sImm)", "v:=(v,s)", "v:=(v,v)"} <= set(slots)
+
+    cpp = create_backend_dialect(catalog, "cpp")
+    rust = create_backend_dialect(catalog, "rust")
+
+    left_imm = Lowerer().lower(left_slots["v:=(v,sImm)"], catalog, cpp).specialization
+    left_scalar = Lowerer().lower(left_slots["v:=(v,s)"], catalog, cpp).specialization
+    left_vector = Lowerer().lower(left_slots["v:=(v,v)"], catalog, cpp).specialization
+    left_imm_rust = Lowerer().lower(
+        left_slots["v:=(v,sImm)"], catalog, rust
+    ).specialization
+    left_scalar_rust = Lowerer().lower(
+        left_slots["v:=(v,s)"], catalog, rust
+    ).specialization
+
+    imm = Lowerer().lower(slots["v:=(v,sImm)"], catalog, cpp).specialization
+    scalar = Lowerer().lower(slots["v:=(v,s)"], catalog, cpp).specialization
+    vector = Lowerer().lower(slots["v:=(v,v)"], catalog, cpp).specialization
+
+    assert left_imm is not None
+    assert "::tsl::shift_left<Vec>" in left_imm.body_text
+    assert "wasm_i32x4_shl(data, shift)" not in left_imm.body_text
+
+    assert left_imm_rust is not None
+    assert "shift_left::<Self, _>" in left_imm_rust.body_text
+    assert "i32x4_shl::<" not in left_imm_rust.body_text
+
+    assert left_scalar is not None
+    assert left_scalar.body_text == (
+        "return wasm_i32x4_shl(data, static_cast<uint32_t>(shift));"
+    )
+
+    assert left_scalar_rust is not None
+    assert left_scalar_rust.body_text == (
+        "unsafe { return core::arch::wasm32::i32x4_shl(data, (shift) as u32); }"
+    )
+
+    assert left_vector is not None
+    assert "generic_shift" in left_vector.body_text
+    assert "::tsl::to_array<Vec>(shift)" in left_vector.body_text
+
+    assert imm is not None
+    assert "::tsl::shift_right_imm<" in imm.body_text
+    assert "::tsl::to_array<Vec>(shift)" not in imm.body_text
+
+    assert scalar is not None
+    assert "::tsl::shift_right<" in scalar.body_text
+    assert "generic_shift" not in scalar.body_text
+
+    assert vector is not None
+    assert "generic_shift" in vector.body_text
+    assert "::tsl::to_array<Vec>(shift)" in vector.body_text
 
 
 def test_lower_scalar_add_has_no_unsafe(catalog: Catalog, machine_profiles) -> None:

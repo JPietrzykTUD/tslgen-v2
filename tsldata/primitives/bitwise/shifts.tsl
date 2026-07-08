@@ -192,6 +192,22 @@ prim<v:=(v,sImm)> shift_left(data, shift):
                 )
               );
             """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              complete(
+                call<primitive=shift_left>(
+                  data,
+                  cast<static>(type(base::in), shift)
+                )
+              );
+            """
     sve:
       ?i?:
         requires [sve]
@@ -358,6 +374,18 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
+              complete(call<primitive=blend>(mask, data, shifted));
+            """
+    wasm128:
+      arith:
+        requires [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -537,6 +565,34 @@ prim<v:=(v,s)> shift_left(data, shift):
           """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=@self[GenericVec]>(
+                    generic_data,
+                    shift
+                  )
+                )
+              );
+            """
+    wasm128:
+      ?i?:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<shl, build>(data, cast<static>(ui32, shift)));"
+      f?:
+        requires [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -747,6 +803,26 @@ prim<v:=(v,v)> shift_left(data, shift):
             """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=@self[GenericVec]>(
+                    generic_data, generic_shift
+                  )
+                )
+              );
+            """
+    wasm128:
+      arith:
+        requires [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1161,6 +1237,25 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=@self[GenericVec, shift, PreserveSign]>(
+                    generic_data
+                  )
+                )
+              );
+            """
+    wasm128:
+      arith:
+        requires [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1719,6 +1814,26 @@ prim<v:=(v,s)> shift_right(data, shift):
                 )
               );
             """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=@self[GenericVec, PreserveSign]>(
+                    generic_data,
+                    shift
+                  )
+                )
+              );
+            """
     sve:
       ?i?:
         requires [sve]
@@ -2009,6 +2124,27 @@ prim<v:=(v,v)> shift_right(data, shift):
             """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=@self[GenericVec, PreserveSign]>(
+                    generic_data,
+                    generic_shift
+                  )
+                )
+              );
+            """
+    wasm128:
+      arith:
+        requires [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
