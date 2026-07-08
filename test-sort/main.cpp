@@ -14,16 +14,17 @@ using _Test_IndexType = std::size_t;
 
 template <class DataType = _Test_DataType, class IndexType = _Test_IndexType>
 auto rake_quicksort(
-  DataType * data, std::size_t count, std::mt19937_64 & rng
+  DataType * data, IndexType * indices, std::size_t count, std::mt19937_64 & rng
 ) {
   using IndexSimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, IndexType>;
-  using DataSimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::fixed<IndexSimdStyle::lane_count_v>, DataType>;
+  // using DataSimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::fixed<IndexSimdStyle::lane_count_v>, DataType>;
+  using DataSimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, DataType>;
 
   
   // get pivots (median of three)
-  std::size_t const rake_size = count / IndexSimdStyle::lane_count_v;
+  std::size_t const rake_size = count / DataSimdStyle::lane_count_v;
   std::uniform_int_distribution<IndexType> pivot_dist(0, rake_size - 1);
-  std::array<DataType, IndexSimdStyle::lane_count_v> pivots_val;
+  std::array<DataType, DataSimdStyle::lane_count_v> pivots_val;
   struct pivot_t {
     IndexType idx;
     DataType val;
@@ -35,7 +36,7 @@ auto rake_quicksort(
       return lhs.val > rhs.val;
     }
   };
-  for (auto i = 0; i < IndexSimdStyle::lane_count_v; ++i) {
+  for (auto i = 0; i < DataSimdStyle::lane_count_v; ++i) {
     pivot_t pivot1(pivot_dist(rng), data);
     pivot_t pivot2(pivot_dist(rng), data);
     pivot_t pivot3(pivot_dist(rng), data);

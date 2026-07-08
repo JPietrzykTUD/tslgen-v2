@@ -168,6 +168,13 @@ def _effective_cpp_compiler_for_profile(
         return ("/opt/wasi-sdk/bin/clang++",)
     if cpp_target(profile, config) is not None:
         return ("clang++",)
+    if (
+        config.run_value_tests
+        and config.sde_path is not None
+        and profile.runner is not None
+        and profile.runner.kind == "sde"
+    ):
+        return ("c++",)
     return _native_cpp_compiler()
 
 

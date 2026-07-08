@@ -758,6 +758,57 @@ def test_cpp_wasm_default_compiler_uses_wasi_sdk() -> None:
     )
 
 
+def test_sde_runner_does_not_override_wasm_cpp_default_compiler(
+    tmp_path: Path,
+) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="cpp",
+                root_path="cpp",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="wasm32_simd128",
+                        file_stem="wasm32_simd128",
+                        family="wasm32",
+                        cpp_flags=("-msimd128",),
+                        cpp_target="wasm32-wasip1",
+                        runner=VerifyRunner(kind="wasmtime", profile="default"),
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=BuildVerifierConfig.create(
+            run_value_tests=True,
+            sde_path=sys.executable,
+            wasmtime_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen[:3]] == [
+        "target-preflight",
+        "clean",
+        "configure",
+    ]
+    assert seen[0].argv[0] == "/opt/wasi-sdk/bin/clang++"
+    assert "--target=wasm32-wasip1" in seen[0].argv
+    assert "-msimd128" in seen[0].argv
+    assert _env(seen[0])["CXX"] == "/opt/wasi-sdk/bin/clang++"
+    assert _env(seen[1])["CXX"] == "/opt/wasi-sdk/bin/clang++"
+
+
 def test_cpp_default_compiler_is_profile_scoped_for_mixed_native_and_wasm(
     monkeypatch,
 ) -> None:
