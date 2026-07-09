@@ -790,7 +790,7 @@ def test_shift_right_scalar_builds(
 def test_shift_right_imask_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
-    # `shift_right_imask` (`im:=(im,s)`) closes the mask subsystem: a logical right shift of
+    # `shift_right_imask` (`im:=(im,usize)`) closes the mask subsystem: a logical right shift of
     # the integral mask. Its `if<compile>(is_signed(vector::imask) && !PreserveSign)` predicate
     # short-circuits — the imask is unsigned by construction, so `is_signed` folds `false`, the
     # `&&` collapses to `false`, and the generation splice takes the plain logical-shift `else`

@@ -134,6 +134,13 @@ def default_value_test_patterns(
             support=support,
             allow_generic_params=True,
         ),
+        _simple(
+            scalar_result_case,
+            "im",
+            ("im", "usize"),
+            support=support,
+            allow_generic_params=True,
+        ),
         _simple(scalar_result_case, "im", ("im", "im"), support=support),
         _simple(scalar_result_case, "im", ("im", "im", "im"), support=support),
         _simple(load_case, "v", ("cptr",), support=support, allow_axis=True),

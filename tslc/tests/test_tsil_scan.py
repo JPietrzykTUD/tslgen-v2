@@ -61,6 +61,28 @@ def test_intrin_build_selector_is_raw_and_args_recurse() -> None:
     assert not intrinsic.has_statement_terminator
 
 
+def test_select_expr_arguments_recurse() -> None:
+    segments = scan(
+        "complete(select_expr("
+        "a == b, cast<static>(si32, 1), call<primitive=zero[Vec]>()"
+        "));"
+    )
+    emit = segments[0]
+    assert isinstance(emit, Region)
+    select = emit.body[0]
+    assert isinstance(select, Region)
+    assert select.keyword == "select_expr"
+    assert select.selector_text == ""
+    assert any(
+        isinstance(segment, Region) and segment.keyword == "cast"
+        for segment in select.body
+    )
+    assert any(
+        isinstance(segment, Region) and segment.keyword == "call"
+        for segment in select.body
+    )
+
+
 def test_removed_pack_keyword_stays_raw_text() -> None:
     segments = scan("complete(pack<first>(value));")
 

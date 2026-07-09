@@ -14,6 +14,7 @@ from tslc.ir.segments import RawText, Region, Segment
 from tslc.lower._text import split_selector_terms, split_top_level
 from tslc.lower.calls import parse_call_selector
 from tslc.lower.cast_selectors import parse_cast_selector
+from tslc.lower.region_handlers.common import _split_arg_groups
 from tslc.lower.region_handlers.declarations import parse_var_selector
 from tslc.lower.region_handlers.intrinsics import IntrinsicSelector
 from tslc.lower.region_handlers.masks import parse_mask_selector
@@ -350,6 +351,26 @@ def _validate_no_selector_region(
     )
 
 
+def _validate_select_expr_region(
+    primitive_name: str,
+    region: Region,
+    diagnostics: list[Diagnostic],
+) -> None:
+    if not region.selector_text.strip() and len(_split_arg_groups(region.body)) == 3:
+        return
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-BODY-BAD-SELECT-EXPR",
+            message=(
+                f"primitive {primitive_name!r}: select_expr must be "
+                "`select_expr(condition, if_true, if_false)`"
+            ),
+            source=region.source,
+        )
+    )
+
+
 def _segments_text(segments: tuple[Segment, ...]) -> str:
     return "".join(
         segment.text if isinstance(segment, RawText) else segment.full_text
@@ -367,6 +388,7 @@ _SHELL_VALIDATORS: dict[str, ShellValidator] = {
     "intrin_selector": _validate_intrin_region,
     "mask_selector": _validate_mask_region,
     "no_selector": _validate_no_selector_region,
+    "select_expr": _validate_select_expr_region,
     "var_selector": _validate_var_region,
 }
 

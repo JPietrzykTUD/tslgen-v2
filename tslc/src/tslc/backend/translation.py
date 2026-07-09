@@ -102,6 +102,9 @@ class BackendSyntaxDialect(Protocol):
     def render_compile_switch(
         self, selector: RenderField, arms: tuple[tuple[str, RenderField], ...]
     ) -> RenderText: ...
+    def render_select_expr(
+        self, condition: RenderField, if_true: RenderField, if_false: RenderField
+    ) -> RenderText: ...
 
 
 class BackendDialect(Protocol):

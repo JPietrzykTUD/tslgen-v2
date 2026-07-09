@@ -1,0 +1,332 @@
+prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
+  cross_lane true
+  brief_description "Packs active mask lanes into the low lanes of the result and fills remaining lanes with zero."
+  detailed_description """
+    Packs mask-selected lanes from the source vector toward the beginning of the
+    result and fills all remaining result lanes with zero.
+    """
+  semantics """
+    input: mask mask, register data
+    out_idx = 0
+    for each lane i:
+      if mask[i] is active:
+        result[out_idx] = data[i]
+        out_idx = out_idx + 1
+    while out_idx < number_of_vector_lanes:
+      result[out_idx] = 0
+      out_idx = out_idx + 1
+    return result
+    """
+  tests:
+    - {tags [basic], type "ui8", case {inputs [43690, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [2, 4, 6, 8, 10, 12, 14, 16, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "ui8", case {inputs [65535, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [basic], type "si8", case {inputs [43690, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]], expected [-2, -4, -6, -8, -10, -12, -14, -16, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {tags [edge], type "si8", case {inputs [65535, [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]], expected [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]}}
+    - {tags [basic], type "ui16", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8]], expected [2, 4, 6, 8, 0, 0, 0, 0]}}
+    - {tags [edge], type "ui16", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [basic], type "si16", case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-2, -4, -6, -8, 0, 0, 0, 0]}}
+    - {tags [edge], type "si16", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
+    - {tags [basic], type "ui32", case {inputs [170, [1, 2, 3, 4, 5, 6, 7, 8]], expected [2, 4, 6, 8, 0, 0, 0, 0]}}
+    - {tags [edge], type "ui32", case {inputs [255, [1, 2, 3, 4, 5, 6, 7, 8]], expected [1, 2, 3, 4, 5, 6, 7, 8]}}
+    - {tags [basic], type "si32", case {inputs [170, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-2, -4, -6, -8, 0, 0, 0, 0]}}
+    - {tags [edge], type "si32", case {inputs [255, [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-1, -2, -3, -4, -5, -6, -7, -8]}}
+    - {tags [basic], type "ui64", case {inputs [10, [1, 2, 3, 4]], expected [2, 4, 0, 0]}}
+    - {tags [edge], type "ui64", case {inputs [15, [1, 2, 3, 4]], expected [1, 2, 3, 4]}}
+    - {tags [basic], type "si64", case {inputs [10, [-1, -2, -3, -4]], expected [-2, -4, 0, 0]}}
+    - {tags [edge], type "si64", case {inputs [15, [-1, -2, -3, -4]], expected [-1, -2, -3, -4]}}
+    - {tags [basic], type "f32", case {inputs [10, [1.0, 2.0, 3.0, 4.0]], expected [2.0, 4.0, 0.0, 0.0]}}
+    - {tags [edge], type "f32", case {inputs [15, [1.0, 2.0, 3.0, 4.0]], expected [1.0, 2.0, 3.0, 4.0]}}
+    - {tags [basic], type "f64", case {inputs [2, [1.0, 2.0]], expected [2.0, 0.0]}}
+    - {tags [edge], type "f64", case {inputs [3, [1.0, 2.0]], expected [1.0, 2.0]}}
+  impls:
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword [avx512_vbmi2, avx512f]
+          avx2_vl:
+            idqword [avx512f, avx512vl, avx]
+            bword [avx512_vbmi2, avx512f, avx512vl, avx]
+          sse_vl:
+            idqword [avx512f, avx512vl, sse2]
+            bword [avx512_vbmi2, avx512f, avx512vl, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              complete(
+                intrin<maskz_compress, build[suffix=base::signed_of(base::in)]>(
+                  mask,
+                  data
+                )
+              );
+            """
+      f?:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              complete(
+                intrin<maskz_compress, build>(
+                  mask,
+                  data
+                )
+              );
+            """
+    sve:
+      [?i32, ?i64, f32, f64]:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              complete(intrin<svcompact, build>(mask, data));
+            """
+      [?i8, ?i16]:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+              let<type>(Base, type(base::in));
+              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+              var<const_infer>(values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+              var<const_infer>(result_values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+              intrin<svst1, build>(call<primitive=mask_true[Vec]>(), values, data);
+              loop<backend>(i, 0, lanes, 1) {
+                result_values[i] = cast<static>(Base, 0);
+              }
+              var<const_infer>(all, call<primitive=mask_true[Vec]>());
+              var<const_infer>(indexes, intrin<svindex, build>(cast<static>(Base, 0), cast<static>(Base, 1)));
+              var<infer>(out_idx, 0);
+              loop<backend>(i, 0, lanes, 1) {
+                var<const_infer>(lane, intrin<svcmpeq_n, build[suffix=base::in]>(all, indexes, cast<static>(Base, i)));
+                if (intrin<svptest_any>(lane, mask)) {
+                  result_values[out_idx] = values[i];
+                  out_idx = out_idx + 1;
+                }
+              }
+              var<const_infer>(result, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result_values));
+              std::free(values);
+              std::free(result_values);
+              complete(result);
+            """
+    [avx2, sse, neon, generic, oneapi_fpga, wasm128]:
+      arith:
+        requires:
+          avx2 [avx2]
+          sse [sse2]
+          neon [neon]
+          generic []
+          oneapi_fpga []
+          wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              var<const_infer>(values, call<primitive=to_array[Vec]>(data));
+              var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
+              var<infer>(out_idx, 0);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                if (mask<test>(mask, i)) {
+                  result[out_idx] = values[i];
+                  out_idx = out_idx + 1;
+                }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    scalar:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              var<infer>(result, cast<static>(type(base::in), 0));
+              if (mask) {
+                result = data;
+              }
+              complete(result);
+            """
+prim<v:=(m,v,v)>[mask=pass_through, op=expand] expand(mask, to_keep, to_expand):
+  cross_lane true
+  brief_description "Expands packed source lanes into active mask lanes and keeps inactive lanes."
+  detailed_description """
+    Expands values from the low lanes of a packed source vector into the active
+    mask lanes of the result. Inactive result lanes preserve the corresponding
+    lanes from `to_keep`.
+    """
+  semantics """
+    input: mask mask, register to_keep, register to_expand
+    in_idx = 0
+    for each lane i:
+      if mask[i] is active:
+        result[i] = to_expand[in_idx]
+        in_idx = in_idx + 1
+      else:
+        result[i] = to_keep[i]
+    return result
+    """
+  tests:
+    - {tags [basic], type "ui8", case {inputs [43690, [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116], [2, 4, 6, 8, 10, 12, 14, 16, 201, 202, 203, 204, 205, 206, 207, 208]], expected [101, 2, 103, 4, 105, 6, 107, 8, 109, 10, 111, 12, 113, 14, 115, 16]}}
+    - {tags [all], type "ui8", case {inputs [65535, [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]], expected [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]}}
+    - {tags [basic], type "si8", case {inputs [43690, [-101, -102, -103, -104, -105, -106, -107, -108, -109, -110, -111, -112, -113, -114, -115, -116], [-2, -4, -6, -8, -10, -12, -14, -16, -21, -22, -23, -24, -25, -26, -27, -28]], expected [-101, -2, -103, -4, -105, -6, -107, -8, -109, -10, -111, -12, -113, -14, -115, -16]}}
+    - {tags [all], type "si8", case {inputs [65535, [-101, -102, -103, -104, -105, -106, -107, -108, -109, -110, -111, -112, -113, -114, -115, -116], [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]], expected [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16]}}
+    - {tags [basic], type "ui16", case {inputs [170, [101, 102, 103, 104, 105, 106, 107, 108], [2, 4, 6, 8, 201, 202, 203, 204]], expected [101, 2, 103, 4, 105, 6, 107, 8]}}
+    - {tags [zero], type "ui16", case {inputs [0, [101, 102, 103, 104, 105, 106, 107, 108], [1, 2, 3, 4, 5, 6, 7, 8]], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
+    - {tags [basic], type "si16", case {inputs [170, [-101, -102, -103, -104, -105, -106, -107, -108], [-2, -4, -6, -8, -201, -202, -203, -204]], expected [-101, -2, -103, -4, -105, -6, -107, -8]}}
+    - {tags [zero], type "si16", case {inputs [0, [-101, -102, -103, -104, -105, -106, -107, -108], [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-101, -102, -103, -104, -105, -106, -107, -108]}}
+    - {tags [basic], type "ui32", case {inputs [170, [101, 102, 103, 104, 105, 106, 107, 108], [2, 4, 6, 8, 201, 202, 203, 204]], expected [101, 2, 103, 4, 105, 6, 107, 8]}}
+    - {tags [zero], type "ui32", case {inputs [0, [101, 102, 103, 104, 105, 106, 107, 108], [1, 2, 3, 4, 5, 6, 7, 8]], expected [101, 102, 103, 104, 105, 106, 107, 108]}}
+    - {tags [basic], type "si32", case {inputs [170, [-101, -102, -103, -104, -105, -106, -107, -108], [-2, -4, -6, -8, -201, -202, -203, -204]], expected [-101, -2, -103, -4, -105, -6, -107, -8]}}
+    - {tags [zero], type "si32", case {inputs [0, [-101, -102, -103, -104, -105, -106, -107, -108], [-1, -2, -3, -4, -5, -6, -7, -8]], expected [-101, -102, -103, -104, -105, -106, -107, -108]}}
+    - {tags [basic], type "ui64", case {inputs [10, [101, 102, 103, 104], [2, 4, 201, 202]], expected [101, 2, 103, 4]}}
+    - {tags [zero], type "ui64", case {inputs [0, [101, 102, 103, 104], [1, 2, 3, 4]], expected [101, 102, 103, 104]}}
+    - {tags [basic], type "si64", case {inputs [10, [-101, -102, -103, -104], [-2, -4, -201, -202]], expected [-101, -2, -103, -4]}}
+    - {tags [zero], type "si64", case {inputs [0, [-101, -102, -103, -104], [-1, -2, -3, -4]], expected [-101, -102, -103, -104]}}
+    - {tags [basic], type "f32", case {inputs [10, [101.0, 102.0, 103.0, 104.0], [2.0, 4.0, 201.0, 202.0]], expected [101.0, 2.0, 103.0, 4.0]}}
+    - {tags [all], type "f32", case {inputs [15, [101.0, 102.0, 103.0, 104.0], [1.5, -2.5, 3.25, -4.75]], expected [1.5, -2.5, 3.25, -4.75]}}
+    - {tags [basic], type "f64", case {inputs [2, [101.0, 102.0], [2.0, 201.0]], expected [101.0, 2.0]}}
+    - {tags [all], type "f64", case {inputs [3, [101.0, 102.0], [1.5, -2.5]], expected [1.5, -2.5]}}
+  impls:
+    [avx512, avx2_vl, sse_vl]:
+      ?i?:
+        requires:
+          avx512:
+            idqword [avx512f]
+            bword [avx512_vbmi2, avx512f]
+          avx2_vl:
+            idqword [avx512f, avx512vl, avx]
+            bword [avx512_vbmi2, avx512f, avx512vl, avx]
+          sse_vl:
+            idqword [avx512f, avx512vl, sse, sse2]
+            bword [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              complete(
+                intrin<mask_expand, build[suffix=base::signed_of(base::in)]>(
+                  to_keep,
+                  mask,
+                  to_expand
+                )
+              );
+            """
+      f?:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx512f, avx512vl, avx]
+          sse_vl [avx512f, avx512vl, sse, sse2]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              complete(
+                intrin<mask_expand, build>(
+                  to_keep,
+                  mask,
+                  to_expand
+                )
+              );
+            """
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+              let<type>(Base, type(base::in));
+              let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
+              let<type>(IndexVec, type(vector::as_base(IndexBase)));
+              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+              var<const_infer>(keep_values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+              var<const_infer>(expand_values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+              var<const_infer>(result_values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+              intrin<svst1, build>(call<primitive=mask_true[Vec]>(), keep_values, to_keep);
+              intrin<svst1, build>(call<primitive=mask_true[Vec]>(), expand_values, to_expand);
+              loop<backend>(i, 0, lanes, 1) {
+                result_values[i] = keep_values[i];
+              }
+              var<const_infer>(all, call<primitive=mask_true[IndexVec]>());
+              var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(cast<static>(IndexBase, 0), cast<static>(IndexBase, 1)));
+              var<infer>(in_idx, 0);
+              loop<backend>(i, 0, lanes, 1) {
+                var<const_infer>(lane, intrin<svcmpeq_n, build[suffix=IndexBase]>(all, indexes, cast<static>(IndexBase, i)));
+                if (intrin<svptest_any>(lane, mask)) {
+                  result_values[i] = expand_values[in_idx];
+                  in_idx = in_idx + 1;
+                }
+              }
+              var<const_infer>(result, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result_values));
+              std::free(keep_values);
+              std::free(expand_values);
+              std::free(result_values);
+              complete(result);
+            """
+    [avx2, sse, neon, generic, oneapi_fpga, wasm128]:
+      arith:
+        requires:
+          avx2 [avx2]
+          sse [sse2]
+          neon [neon]
+          generic []
+          oneapi_fpga []
+          wasm128 [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              var<const_infer>(keep_values, call<primitive=to_array[Vec]>(to_keep));
+              var<const_infer>(expand_values, call<primitive=to_array[Vec]>(to_expand));
+              var<infer>(result, keep_values);
+              var<infer>(in_idx, 0);
+              loop<backend, unroll>(i, 0, value(vector::length), 1) {
+                if (mask<test>(mask, i)) {
+                  result[i] = expand_values[in_idx];
+                  in_idx = in_idx + 1;
+                }
+              }
+              complete(call<primitive=from_array[Vec]>(result));
+            """
+    scalar:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              if (mask) {
+                complete(to_expand);
+              } else {
+                complete(to_keep);
+              }
+            """

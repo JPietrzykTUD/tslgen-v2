@@ -308,6 +308,21 @@ class _RustSyntax:
         parts.append(literal_text("}"))
         return render_sequence(tuple(parts))
 
+    def render_select_expr(
+        self, condition: RenderField, if_true: RenderField, if_false: RenderField
+    ) -> RenderText:
+        return render_sequence(
+            (
+                literal_text("(if "),
+                condition,
+                literal_text(" { "),
+                if_true,
+                literal_text(" } else { "),
+                if_false,
+                literal_text(" })"),
+            )
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class _RustReturnValue:

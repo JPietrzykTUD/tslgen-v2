@@ -268,6 +268,7 @@ def test_rust_build_verifier_cross_target_does_not_run_test_binary(
     ]
     assert "--target" in seen[1].argv
     assert "aarch64-unknown-linux-musl" in seen[1].argv
+    assert "linker=rust-lld" in seen[1].argv
     assert "--target" in seen[2].argv
     assert "aarch64-unknown-linux-musl" in seen[2].argv
     assert "--no-run" in seen[2].argv
@@ -684,7 +685,10 @@ def test_runner_value_tests_skip_non_generic_profiles_without_matching_runner(
     assert seen == []
 
 
-def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(tmp_path: Path) -> None:
+def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     project = VerifyProject(
         backends=(
             VerifyBackend(
@@ -704,6 +708,14 @@ def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(tmp_path: Path) -> 
         )
     )
     seen: list[BuildCommand] = []
+    real_which = shutil.which
+
+    def fake_which(executable: str) -> str | None:
+        if executable == "aarch64-linux-gnu-g++":
+            return executable
+        return real_which(executable)
+
+    monkeypatch.setattr(shutil, "which", fake_which)
 
     def runner(command: BuildCommand) -> BuildCommandResult:
         seen.append(command)
@@ -728,15 +740,72 @@ def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(tmp_path: Path) -> 
         "build-values",
         "test",
     ]
+    assert seen[0].argv[0] == "aarch64-linux-gnu-g++"
+    assert "--target=aarch64-linux-gnu" not in seen[0].argv
+    configure = seen[2].argv
+    assert "-DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-gnu" not in configure
+    emulator = _configure_arg(configure, "-DCMAKE_CROSSCOMPILING_EMULATOR=")
+    assert emulator is not None
+    assert emulator.startswith(f"-DCMAKE_CROSSCOMPILING_EMULATOR={sys.executable};")
+    assert emulator.endswith(";-cpu;cortex-a76")
+    assert seen[-1].argv[0] == "ctest"
+
+
+def test_cpp_qemu_value_tests_fall_back_to_clang_target_when_cross_gpp_missing(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="cpp",
+                root_path="cpp",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="neon",
+                        file_stem="neon",
+                        family="aarch64",
+                        cpp_flags=("-march=armv8-a+simd",),
+                        cpp_target="aarch64-linux-gnu",
+                        runner=VerifyRunner(kind="qemu-aarch64", profile="cortex-a76"),
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+    real_which = shutil.which
+
+    def fake_which(executable: str) -> str | None:
+        if executable == "aarch64-linux-gnu-g++":
+            return None
+        return real_which(executable)
+
+    monkeypatch.setattr(shutil, "which", fake_which)
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=BuildVerifierConfig.create(
+            run_value_tests=True,
+            qemu_aarch64_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert [command.step for command in seen[:3]] == [
+        "target-preflight",
+        "clean",
+        "configure",
+    ]
     assert seen[0].argv[0] == "clang++"
     assert "--target=aarch64-linux-gnu" in seen[0].argv
-    configure = seen[2].argv
-    assert "-DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-gnu" in configure
-    assert (
-        f"-DCMAKE_CROSSCOMPILING_EMULATOR={sys.executable};-cpu;cortex-a76"
-        in configure
-    )
-    assert seen[-1].argv[0] == "ctest"
+    assert "-DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-gnu" in seen[2].argv
 
 
 def test_cpp_wasm_value_tests_configure_wasi_and_wasmtime(tmp_path: Path) -> None:
@@ -1021,11 +1090,13 @@ def test_rust_qemu_value_tests_use_target_and_run_binaries(tmp_path: Path) -> No
     ]
     assert "--target" in seen[1].argv
     assert "aarch64-unknown-linux-musl" in seen[1].argv
+    assert "linker=rust-lld" in seen[1].argv
     assert "--target" in seen[2].argv
     assert "aarch64-unknown-linux-musl" in seen[2].argv
     env = _env(seen[2])
     assert env["CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER"] == "rust-lld"
-    assert seen[3].argv == (sys.executable, "-cpu", "cortex-a76", executable)
+    assert seen[3].argv[0] == sys.executable
+    assert seen[3].argv[-3:] == ("-cpu", "cortex-a76", executable)
 
 
 def test_rust_wasm_value_tests_use_wasmtime_runner(tmp_path: Path) -> None:
@@ -1250,3 +1321,7 @@ def test_explicit_wasmtime_path_must_exist(tmp_path: Path) -> None:
 
 def _env(command: BuildCommand) -> dict[str, str]:
     return {item.key: item.value for item in command.env}
+
+
+def _configure_arg(argv: tuple[str, ...], prefix: str) -> str | None:
+    return next((arg for arg in argv if arg.startswith(prefix)), None)

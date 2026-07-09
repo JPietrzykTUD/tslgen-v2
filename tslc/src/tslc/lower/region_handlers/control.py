@@ -249,6 +249,29 @@ class IfLowerer:
         return None
 
 
+class SelectExprLowerer:
+    """``select_expr(cond, if_true, if_false)`` -> backend conditional expression."""
+
+    keyword = "select_expr"
+
+    def lower(
+        self, region: Region, context: LoweringSession, render: RenderBody
+    ) -> RenderField:
+        groups = _split_arg_groups(region.body)
+        if region.selector_text.strip() or len(groups) != 3:
+            context.effects.skip(
+                "TSL-LOWER-BAD-SELECT-EXPR",
+                f"select_expr needs exactly three arguments and no selector: "
+                f"{region.full_text!r}",
+                source=region.source,
+            )
+            return region.full_text
+        condition, if_true, if_false = (render(group) for group in groups)
+        return context.env.backend.syntax.render_select_expr(
+            condition, if_true, if_false
+        )
+
+
 class AssumeAlignedLowerer:
     """``assume_aligned<N>(ptr)`` -> an aligned-pointer hint. C++ forwards to the static
     core's ``::tsl::assume_aligned<N>(ptr)`` (``std::assume_aligned``); Rust has no stable

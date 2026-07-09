@@ -294,6 +294,51 @@ def test_cli_test_flag_fails_on_value_test_diagnostic(monkeypatch, tmp_path, cap
     assert "build/test-verified" not in captured.out
 
 
+def test_cli_test_flag_fails_on_value_test_skip(monkeypatch, tmp_path, capsys) -> None:
+    def fake_generate_project(source_paths, **kwargs):
+        return SimpleNamespace(
+            diagnostics=(),
+            coverage=(object(),),
+            artifacts=SimpleNamespace(artifacts=(object(),)),
+            rendered=SimpleNamespace(verify=object()),
+        )
+
+    def fake_write_artifacts(artifacts, output_root):
+        return SimpleNamespace(
+            diagnostics=(),
+            written=(Path(output_root) / "generated.txt",),
+            output_root=Path(output_root),
+        )
+
+    def fake_verify_project(output_root, verify, **kwargs):
+        return SimpleNamespace(
+            skipped=("cpp: profile neon requires qemu-aarch64",),
+            diagnostics=(),
+            commands=(),
+        )
+
+    monkeypatch.setattr(cli, "generate_project", fake_generate_project)
+    monkeypatch.setattr(cli, "write_artifacts", fake_write_artifacts)
+    monkeypatch.setattr(cli, "verify_project", fake_verify_project)
+
+    rc = cli.main(
+        [
+            "--sources",
+            "tsldata",
+            "--machine-profiles",
+            "supplementary/buildsystem/machine_profiles.json",
+            "--output-root",
+            str(tmp_path),
+            "--test",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert "[verify-skip] cpp: profile neon requires qemu-aarch64" in captured.err
+    assert "build/test-verified" not in captured.out
+
+
 def test_cli_test_flag_requires_output_root(monkeypatch, capsys) -> None:
     def fail_generate_project(*_args, **_kwargs):
         raise AssertionError("generation should not run without an output root")

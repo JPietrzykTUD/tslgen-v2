@@ -194,7 +194,10 @@ def _differential(case: ValueTestCasePlan) -> str:
     if case.result_kind == "m":
         lines.append(f"  auto hw = tsl::{case.to_integral_name}<Hw>({hw_call});")
         lines.append(f"  typename Ref::mask_type ref = {ref_call};")
-        lines.append(f'  return tsl::test::check_mask_match("{case.function_name}", hw, ref, {case.lanes});')
+        lines.append(
+            f'  return tsl::test::check_mask_match_for<Hw>("{case.function_name}", '
+            f"hw, ref, {case.lanes});"
+        )
     else:
         lines.append(f"  typename tsl::array_for<Hw>::type hout = tsl::{case.to_array_name}<Hw>({hw_call});")
         lines.append(f"  typename Ref::register_type ref = {ref_call};")
@@ -237,7 +240,7 @@ def _differential_fuzz(case: ValueTestCasePlan) -> str:
     if case.result_kind == "m":
         lines.append(f"    auto hw = tsl::{case.to_integral_name}<Hw>({hw_call});")
         lines.append(f"    typename Ref::mask_type ref = {ref_call};")
-        check = f'tsl::test::check_mask_match("{case.function_name}", hw, ref, {lanes})'
+        check = f'tsl::test::check_mask_match_for<Hw>("{case.function_name}", hw, ref, {lanes})'
     else:
         lines.append(f"    typename tsl::array_for<Hw>::type hw = tsl::{case.to_array_name}<Hw>({hw_call});")
         lines.append(f"    typename Ref::register_type ref = {ref_call};")

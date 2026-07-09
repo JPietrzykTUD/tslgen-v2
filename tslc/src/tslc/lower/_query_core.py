@@ -5,6 +5,7 @@ from __future__ import annotations
 from tslc.catalog.scalar_types import (
     is_signed,
     same_scalar_width,
+    scalar_bit_width_or_default,
     scalar_byte_width_or_default,
     signed_of,
     unsigned_of,
@@ -126,6 +127,17 @@ class SizeBytesQuery:
         if len(args) != 1 or not isinstance(args[0], TypeValue):
             return None
         return TextValue(str(scalar_byte_width_or_default(args[0].type_tag)))
+
+
+class SizeBitsQuery:
+    """``type::size_bits(x)`` -> bit width of a type tag."""
+
+    head = "type::size_bits"
+
+    def apply(self, args, context):  # noqa: ANN001
+        if len(args) != 1 or not isinstance(args[0], TypeValue):
+            return None
+        return TextValue(str(scalar_bit_width_or_default(args[0].type_tag)))
 
 
 class SameSizeQuery:

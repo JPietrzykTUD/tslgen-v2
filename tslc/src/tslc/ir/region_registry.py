@@ -34,6 +34,7 @@ DEFAULT_TSIL_REGION_DESCRIPTORS: tuple[TsilRegionDescriptor, ...] = (
     TsilRegionDescriptor("cast", shell_validator="cast_selector"),
     TsilRegionDescriptor("call", shell_validator="call_selector"),
     TsilRegionDescriptor("if", body_shape="if_block"),
+    TsilRegionDescriptor("select_expr", shell_validator="select_expr"),
     TsilRegionDescriptor("assume_aligned"),
     TsilRegionDescriptor("loop", body_shape="loop_block"),
     TsilRegionDescriptor("switch", body_shape="switch_block"),

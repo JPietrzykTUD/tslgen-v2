@@ -140,6 +140,18 @@ inline int check_mask_match(const char *name, A hw, B reference, std::size_t n) 
     return failures;
 }
 
+// Differential mask check with a hardware vector in hand. Native predicate
+// masks, such as SVE `svbool_t`, use the profile adapter; ordinary integral
+// masks stay on the compact bitset path above.
+template <class Vec, class A, class B>
+inline int check_mask_match_for(const char *name, A hw, B reference, std::size_t n) {
+    if constexpr (std::is_convertible_v<A, std::uint64_t>) {
+        return check_mask_match(name, hw, reference, n);
+    } else {
+        return check_mask_bits<Vec>(name, hw, static_cast<std::uint64_t>(reference), n, n);
+    }
+}
+
 // Compare a mask result against a per-lane set/clear expectation. The generic reference's mask
 // is an integer bitset (bit `i` = lane `i`); `expected_set[i]` is 1 if lane `i` should be set.
 // Representation-neutral: only which lanes are set is asserted, never the bit width/pattern.

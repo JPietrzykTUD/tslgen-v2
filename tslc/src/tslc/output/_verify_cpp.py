@@ -11,6 +11,7 @@ from tslc.output._verify_common import (
     configured_runner_kinds,
     cpp_environment,
     cpp_target,
+    cpp_compiler_accepts_explicit_target,
     effective_cpp_compiler,
     runner_prefix,
     missing_executable,
@@ -114,9 +115,16 @@ def _cpp_command_groups(
     project_root = root / backend.root_path
     groups: list[tuple[BuildCommand, ...]] = []
     for profile in backend.profiles:
+        compiler = effective_cpp_compiler(config, backend, profile)
         env = cpp_environment(config, backend, profile)
         build_dir = project_root / "build" / profile.file_stem
-        configure_args = _cpp_configure_args(project_root, build_dir, profile, config)
+        configure_args = _cpp_configure_args(
+            project_root,
+            build_dir,
+            profile,
+            config,
+            compiler,
+        )
         commands: list[BuildCommand] = []
         if config.run_value_tests and configured_runner_kinds(config):
             commands.append(
@@ -189,6 +197,7 @@ def _cpp_configure_args(
     build_dir: Path,
     profile: VerifyProfile,
     config: BuildVerifierConfig,
+    compiler: tuple[str, ...],
 ) -> tuple[str, ...]:
     args = [
         "cmake",
@@ -200,7 +209,7 @@ def _cpp_configure_args(
     ]
     target = cpp_target(profile, config)
     if target is not None:
-        args.extend(_cpp_cross_target_cmake_args(target))
+        args.extend(_cpp_cross_target_cmake_args(target, compiler))
     cross_emulator = cmake_cross_emulator(profile, config)
     if cross_emulator:
         args.append(f"-DCMAKE_CROSSCOMPILING_EMULATOR={';'.join(cross_emulator)}")
@@ -210,20 +219,28 @@ def _cpp_configure_args(
     return tuple(args)
 
 
-def _cpp_cross_target_cmake_args(target: str) -> tuple[str, ...]:
+def _cpp_cross_target_cmake_args(
+    target: str,
+    compiler: tuple[str, ...],
+) -> tuple[str, ...]:
+    accepts_target = cpp_compiler_accepts_explicit_target(compiler)
     if target.startswith("wasm32-"):
-        return (
+        args = [
             "-DCMAKE_SYSTEM_NAME=WASI",
             "-DCMAKE_SYSTEM_PROCESSOR=wasm32",
             "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
-            f"-DCMAKE_CXX_COMPILER_TARGET={target}",
-        )
-    return (
+        ]
+        if accepts_target:
+            args.append(f"-DCMAKE_CXX_COMPILER_TARGET={target}")
+        return tuple(args)
+    args = [
         "-DCMAKE_SYSTEM_NAME=Linux",
         "-DCMAKE_SYSTEM_PROCESSOR=aarch64",
         "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
-        f"-DCMAKE_CXX_COMPILER_TARGET={target}",
-    )
+    ]
+    if accepts_target:
+        args.append(f"-DCMAKE_CXX_COMPILER_TARGET={target}")
+    return tuple(args)
 
 
 def _cmake_test_launcher(
@@ -312,13 +329,13 @@ def _cpp_target_preflight_command(
             ),
         )
 
-    return BuildCommand(
-        backend_id="cpp",
-        profile_name=profile.profile_name,
-        step="target-preflight",
-        argv=(
-            *compiler,
-            f"--target={target}",
+    argv = [
+        *compiler,
+    ]
+    if cpp_compiler_accepts_explicit_target(compiler):
+        argv.append(f"--target={target}")
+    argv.extend(
+        [
             "-x",
             "c++",
             "-std=c++17",
@@ -327,7 +344,14 @@ def _cpp_target_preflight_command(
             str(source_path),
             "-o",
             str(object_path),
-        ),
+        ]
+    )
+
+    return BuildCommand(
+        backend_id="cpp",
+        profile_name=profile.profile_name,
+        step="target-preflight",
+        argv=tuple(argv),
         cwd=root,
         env=cpp_environment(config, backend, profile),
     )

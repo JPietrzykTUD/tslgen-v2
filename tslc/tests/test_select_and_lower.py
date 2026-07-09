@@ -708,6 +708,22 @@ def test_oneapi_exact_lane_mask_policy_lowers_lane_bitmask_operations(
     assert "typename Vec::register_type result" not in cpp.body_text
 
 
+def test_rust_sse_float_nequal_uses_sse_cmpneq_intrinsic(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slots = _by_key(catalog, machine_profiles["sse"], "nequal")
+    slot = slots[("f32", "sse")]
+
+    rust = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+
+    assert rust is not None
+    assert "core::arch::x86_64::_mm_cmpneq_ps(left, right)" in rust.body_text
+    assert "core::arch::x86_64::_mm_cmp_ps" not in rust.body_text
+
+
 @pytest.mark.parametrize("backend_id", ("cpp", "rust"))
 def test_fixed_non_x86_extension_requires_register_metadata(backend_id: str) -> None:
     ext = Extension(
@@ -893,6 +909,58 @@ def test_bound_simd_type_generic_base_folds_generation_condition(
         )
         for param in lowered.specialization.type_params
     ) == (("IndexVec", True, "ui32", expected_spelling),)
+
+
+@pytest.mark.parametrize(
+    ("backend_id", "expected"),
+    (
+        (
+            "cpp",
+            "return ((left == right) ? (static_cast<int32_t>(0)) : (left));",
+        ),
+        (
+            "rust",
+            "return if left == right { (0) as i32 } else { left };",
+        ),
+    ),
+)
+def test_select_expr_lowers_to_backend_conditional_expression(
+    catalog: Catalog,
+    backend_id: str,
+    expected: str,
+) -> None:
+    impl = Implementation(
+        ("avx2", "all"),
+        "avx2",
+        "all",
+        (
+            "complete(select_expr("
+            "left == right, "
+            "cast<static>(base::in, 0), "
+            "left"
+            "));"
+        ),
+        source_order=0,
+    )
+    primitive = Primitive(
+        name="select_expr_probe",
+        signature="v:=(v,v)",
+        parameters=("left", "right"),
+        attribute_keys=(),
+        implementations=(impl,),
+    )
+    slot = SelectedImplementation(
+        primitive=primitive,
+        implementation=impl,
+        extension=catalog.extensions["avx2"],
+        type_tag="si32",
+    )
+
+    lowered = Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend_id))
+
+    assert lowered.diagnostics == ()
+    assert lowered.specialization is not None
+    assert lowered.specialization.body_text == expected
 
 
 @pytest.mark.parametrize(

@@ -43,6 +43,7 @@ _COMPOSITION_KEYWORDS = frozenset(
         "mask",
         "mem",
         "op",
+        "select_expr",
         "switch",
         "var",
     }

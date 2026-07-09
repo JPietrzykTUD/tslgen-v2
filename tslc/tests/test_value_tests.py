@@ -24,6 +24,21 @@ from tslc.value_tests.coverage import parity_gaps
 pytestmark = pytest.mark.generated_build
 
 
+def _assert_value_tests_ran(report, *, backends: tuple[str, ...]) -> None:
+    assert report.skipped == (), report.skipped
+    assert report.diagnostics == (), report.diagnostics
+    steps = {
+        (command.command.backend_id, command.command.profile_name, command.command.step)
+        for command in report.commands
+    }
+    missing = [
+        backend
+        for backend in backends
+        if not any(step_backend == backend and step == "test" for step_backend, _, step in steps)
+    ]
+    assert not missing, (missing, steps)
+
+
 def test_golden_value_tests_build_and_pass(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
@@ -37,7 +52,16 @@ def test_golden_value_tests_build_and_pass(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["add", "sub", "conflict", "equal", "store", "hadd", "shift_left"],
+        primitives=[
+            "add",
+            "sub",
+            "conflict",
+            "equal",
+            "store",
+            "hadd",
+            "shift_left",
+            "shift_left_imask",
+        ],
         profiles=["avx2"],
         backends=("cpp",),
         test_harness=True,
@@ -48,14 +72,7 @@ def test_golden_value_tests_build_and_pass(
     assert not has_errors(write_report.diagnostics), write_report.diagnostics
 
     report = verify_project(tmp_path, result.rendered.verify, run_value_tests=True)
-    # No compile/configure errors, and (since the golden tests pass) no value-test warnings.
-    assert report.diagnostics == (), report.diagnostics
-    # The value tests actually ran (the ctest step is present), so a green result is meaningful
-    # rather than vacuous.
-    cpp_steps = {c.command.step for c in report.commands if c.command.backend_id == "cpp"}
-    if cpp_steps:  # cpp toolchain available (else the backend was skipped)
-        assert "test" in cpp_steps, cpp_steps
-        assert "build-values" in cpp_steps, cpp_steps
+    _assert_value_tests_ran(report, backends=("cpp",))
 
 
 def test_neon_native_arithmetic_bitwise_extract_and_cast_value_tests_build_and_pass(
@@ -67,13 +84,13 @@ def test_neon_native_arithmetic_bitwise_extract_and_cast_value_tests_build_and_p
 
     zig = Path("/opt/zig/zig")
     qemu = shutil.which("qemu-aarch64")
-    if not zig.exists() or qemu is None:
-        pytest.skip("C++/Rust NEON QEMU value-test gate needs /opt/zig/zig and qemu-aarch64")
+    assert zig.exists(), "C++/Rust NEON QEMU value-test gate needs /opt/zig/zig"
+    assert qemu is not None, "C++/Rust NEON QEMU value-test gate needs qemu-aarch64"
 
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["sub", "mul", "binary_and", "extract_value", "cast"],
+        primitives=["sub", "mul", "binary_and", "extract_value", "cast", "shift_left_imask"],
         profiles=["neon"],
         backends=("cpp", "rust"),
         test_harness=True,
@@ -93,29 +110,108 @@ def test_neon_native_arithmetic_bitwise_extract_and_cast_value_tests_build_and_p
         qemu_aarch64_path=qemu,
         run_value_tests=True,
     )
-    assert report.diagnostics == (), report.diagnostics
-    steps = {
-        (command.command.backend_id, command.command.step)
-        for command in report.commands
-    }
-    command_steps = [
-        (
-            command.command.backend_id,
-            command.command.profile_name,
-            command.command.step,
-            command.returncode,
-        )
-        for command in report.commands
+    _assert_value_tests_ran(report, backends=("cpp", "rust"))
+
+
+def test_shift_left_imask_value_tests_cover_x86_arm_and_oneapi(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    """`shift_left_imask` authored cases run on SDE/QEMU and build under icpx OneAPI."""
+
+    zig = Path("/opt/zig/zig")
+    qemu = shutil.which("qemu-aarch64")
+    sde = Path("/opt/intel-sde/sde64")
+    icpx = Path("/opt/intel/oneapi/compiler/2025.0/bin/icpx")
+    assert sde.exists(), "x86 value-test gate needs /opt/intel-sde/sde64"
+    assert zig.exists(), "ARM value-test gate needs /opt/zig/zig"
+    assert qemu is not None, "ARM value-test gate needs qemu-aarch64"
+    assert icpx.exists(), "OneAPI FPGA compile-mode gate needs icpx"
+
+    x86_result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["shift_left_imask"],
+        profiles=["avx2", "skylake-oneapi"],
+        backends=("cpp",),
+        test_harness=True,
+        value_test_warnings=True,
+    )
+    assert x86_result.diagnostics == (), x86_result.diagnostics
+    assert x86_result.rendered is not None
+    coverage = x86_result.rendered.value_tests.coverage
+    blocking = [
+        entry
+        for entry in coverage
+        if entry.status
+        in {"missing_authored_tests", "authored_unplanned", "backend_unsupported"}
     ]
-    assert ("cpp", "test") in steps, (report.skipped, command_steps)
-    if any(
-        skip.startswith("rust: profile neon target preflight failed")
-        for skip in report.skipped
-    ):
-        pytest.skip(
-            "Rust NEON value-test gate needs a working aarch64-unknown-linux-musl target"
-        )
-    assert ("rust", "test") in steps, (report.skipped, command_steps)
+    assert not blocking
+    assert {
+        (entry.backend_id, entry.profile_name, entry.case_name)
+        for entry in coverage
+        if entry.status == "emitted"
+    } >= {
+        ("cpp", "avx2", "shift_left_imask_ui32_basic"),
+        ("cpp", "skylake-oneapi", "shift_left_imask_ui32_basic"),
+        ("cpp", "avx2", "shift_left_imask_ui32_width"),
+        ("cpp", "skylake-oneapi", "shift_left_imask_ui32_width"),
+    }
+
+    x86_root = tmp_path / "x86"
+    write_report = write_artifacts(x86_result.artifacts, x86_root)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    x86_report = verify_project(
+        x86_root,
+        x86_result.rendered.verify,
+        sde_path=str(sde),
+        run_value_tests=True,
+    )
+    _assert_value_tests_ran(x86_report, backends=("cpp",))
+
+    neon_result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["shift_left_imask"],
+        profiles=["neon"],
+        backends=("cpp",),
+        test_harness=True,
+        value_test_warnings=True,
+    )
+    assert neon_result.diagnostics == (), neon_result.diagnostics
+    assert neon_result.rendered is not None
+    neon_coverage = neon_result.rendered.value_tests.coverage
+    blocking = [
+        entry
+        for entry in neon_coverage
+        if entry.status
+        in {"missing_authored_tests", "authored_unplanned", "backend_unsupported"}
+    ]
+    assert not blocking
+    assert {
+        (entry.backend_id, entry.profile_name, entry.case_name)
+        for entry in neon_coverage
+        if entry.status == "emitted"
+    } >= {
+        ("cpp", "neon", "shift_left_imask_ui32_basic"),
+        ("cpp", "neon", "shift_left_imask_ui32_width"),
+    }
+
+    neon_root = tmp_path / "neon"
+    write_report = write_artifacts(neon_result.artifacts, neon_root)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    neon_report = verify_project(
+        neon_root,
+        neon_result.rendered.verify,
+        cpp_compiler=(str(zig), "c++"),
+        cpp_target="aarch64-linux-musl",
+        qemu_aarch64_path=qemu,
+        run_value_tests=True,
+    )
+    _assert_value_tests_ran(neon_report, backends=("cpp",))
 
 
 def test_value_full_corpus_avx2_coverage_is_complete(

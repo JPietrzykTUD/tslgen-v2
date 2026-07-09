@@ -65,6 +65,7 @@ def test_query_facade_separates_evaluator_from_namespace_functions() -> None:
     assert QueryEvaluator.__module__ == "tslc.lower.queries"
     assert modules_by_head["type::is_same"] == "tslc.lower._query_core"
     assert modules_by_head["type::same_size"] == "tslc.lower._query_core"
+    assert modules_by_head["type::size_bits"] == "tslc.lower._query_core"
     assert modules_by_head["vector::length"] == "tslc.lower._query_vector"
     assert modules_by_head["vector::runtime_length"] == "tslc.lower._query_vector"
 
@@ -76,6 +77,16 @@ def test_type_is_same_query(catalog: Catalog) -> None:
     assert ev.evaluate("type::is_same(type(base::in), ui8)", ctx) == BoolValue(False)
     assert ev.evaluate("type::same_size(type(base::in), si16)", ctx) == BoolValue(True)
     assert ev.evaluate("type::same_size(type(base::in), si32)", ctx) == BoolValue(False)
+
+
+def test_type_size_queries_accept_type_values_without_wrapper(catalog: Catalog) -> None:
+    ev = QueryEvaluator()
+    ctx = _ctx(catalog, "avx2", "ui32")
+
+    assert ev.evaluate("type::size_bytes(base::in)", ctx) == TextValue("4")
+    assert ev.evaluate("type::size_bytes(type(base::in))", ctx) == TextValue("4")
+    assert ev.evaluate("type::size_bits(base::in)", ctx) == TextValue("32")
+    assert ev.evaluate("value(type::size_bits(base::in))", ctx) == TextValue("32")
 
 
 def test_select_query_chooses_same_kind_generation_value(catalog: Catalog) -> None:
