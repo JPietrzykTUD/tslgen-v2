@@ -5,21 +5,24 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(TSL_AVAILABLE_PROFILES @{available_profiles})
 set(TSL_PROFILE "auto" CACHE STRING "TSL profile to consume: auto or one generated profile")
-set_property(CACHE TSL_PROFILE PROPERTY STRINGS auto @{profile_choices})
-@{profile_auto_options}
+set_property(CACHE TSL_PROFILE PROPERTY STRINGS auto @{profile_auto_choices} @{profile_choices})
 
 set(_TSL_REQUESTED_PROFILE "${TSL_PROFILE}")
 @{profile_aliases}
+@{profile_auto_helpers}
 
 if(_TSL_REQUESTED_PROFILE STREQUAL "auto")
   set(TSL_SELECTED_PROFILE "@{fallback_profile}")
-  if(CMAKE_CROSSCOMPILING)
+  if(TSL_SELECTED_PROFILE STREQUAL "")
+    message(FATAL_ERROR "TSL_PROFILE=auto has no ungated generated profiles to select; choose an explicit TSL_PROFILE@{profile_auto_hint}")
+  elseif(CMAKE_CROSSCOMPILING)
     message(STATUS "TSL_PROFILE=auto cannot run CPU probes while cross-compiling; using ${TSL_SELECTED_PROFILE}")
   else()
     include(CheckCXXSourceRuns)
 @{profile_detection}
     message(STATUS "TSL auto-detected profile = ${TSL_SELECTED_PROFILE}")
   endif()
+@{profile_auto_modes}
 else()
   list(FIND TSL_AVAILABLE_PROFILES "${_TSL_REQUESTED_PROFILE}" _tsl_profile_index)
   if(_tsl_profile_index EQUAL -1)

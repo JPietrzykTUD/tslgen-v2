@@ -733,7 +733,19 @@ def _cpp_sized_vector_type(base_spelling: str, extension_name: str, lanes: int) 
 
 def _cpp_cmakelists(profiles: tuple[ProfileRender, ...], assets: RenderAssets) -> str:
     slugs = tuple(slug(profile.profile.name) for profile in profiles)
-    fallback = "scalar" if "scalar" in slugs else slugs[0]
+    ungated_slugs = tuple(
+        slug(profile.profile.name)
+        for profile in profiles
+        if profile.profile.auto_detect_gate is None
+    )
+    fallback = (
+        "scalar"
+        if "scalar" in ungated_slugs
+        else ungated_slugs[0]
+        if ungated_slugs
+        else ""
+    )
+    auto_choices = _cpp_profile_auto_choices(profiles)
     rendered = assets.fill(
         "cpp_cmakelists.txt.tmpl",
         available_profiles=_cmake_list(slugs),
@@ -741,10 +753,15 @@ def _cpp_cmakelists(profiles: tuple[ProfileRender, ...], assets: RenderAssets) -
             _cmake_quote(value)
             for value in (*slugs, *_profile_alias_choices(profiles))
         ),
-        profile_auto_options=_cpp_profile_auto_options(profiles),
+        profile_auto_choices=" ".join(
+            _cmake_quote(value) for value in auto_choices
+        ),
         profile_aliases=_cpp_profile_aliases(profiles),
+        profile_auto_helpers=_cpp_profile_auto_helpers(profiles, assets),
+        profile_auto_hint=_cpp_profile_auto_hint(auto_choices),
         fallback_profile=fallback,
-        profile_detection=_cpp_profile_detection(profiles, fallback),
+        profile_detection=_cpp_profile_detection(profiles, fallback, auto_gate=None),
+        profile_auto_modes=_cpp_profile_auto_modes(profiles),
         profile_targets=_cpp_profile_targets(profiles),
     )
     return rendered.rstrip("\n") + "\n"
@@ -758,21 +775,26 @@ def _profile_alias_choices(profiles: tuple[ProfileRender, ...]) -> tuple[str, ..
     )
 
 
-def _cpp_profile_auto_options(profiles: tuple[ProfileRender, ...]) -> str:
-    gates = sorted(
-        {
-            profile.profile.auto_detect_gate
-            for profile in profiles
-            if profile.profile.auto_detect_gate is not None
-        }
+def _cpp_profile_auto_choices(profiles: tuple[ProfileRender, ...]) -> tuple[str, ...]:
+    return tuple(
+        _cpp_profile_auto_mode_name(gate)
+        for gate in _cpp_profile_auto_gates(profiles)
     )
-    return "\n".join(
-        (
-            f'option({_cpp_profile_auto_gate_variable(gate)} "Allow '
-            f'TSL_PROFILE=auto to select profiles gated by {gate}" OFF)'
-        )
-        for gate in gates
-    )
+
+
+def _cpp_profile_auto_hint(auto_choices: tuple[str, ...]) -> str:
+    if not auto_choices:
+        return ""
+    return " or one of: " + ", ".join(auto_choices)
+
+
+def _cpp_profile_auto_helpers(
+    profiles: tuple[ProfileRender, ...],
+    assets: RenderAssets,
+) -> str:
+    if not _cpp_profile_auto_gates(profiles):
+        return ""
+    return assets.text("cpp_profile_auto_helpers.cmake").strip()
 
 
 def _cpp_profile_aliases(profiles: tuple[ProfileRender, ...]) -> str:
@@ -820,11 +842,15 @@ def _cpp_profile_targets(profiles: tuple[ProfileRender, ...]) -> str:
 def _cpp_profile_detection(
     profiles: tuple[ProfileRender, ...],
     fallback_profile: str,
+    *,
+    auto_gate: str | None,
 ) -> str:
     blocks: list[str] = []
     for profile_render in _auto_detection_order(profiles):
         profile = profile_render.profile
         profile_slug = slug(profile.name)
+        if profile.auto_detect_gate != auto_gate:
+            continue
         if profile_slug == fallback_profile and not profile.features:
             continue
         source = _cpp_profile_detection_source(profile_render)
@@ -839,27 +865,72 @@ def _cpp_profile_detection(
                 "    endif()",
             )
         )
-        gate = _cpp_profile_auto_gate(profile)
-        if gate is not None:
-            block = "\n".join(
-                (
-                    f"    if({gate})",
-                    _indent_lines(block, "  "),
-                    "    endif()",
-                )
-            )
         blocks.append(block)
     return "\n".join(blocks)
 
 
-def _cpp_profile_auto_gate(profile: MachineProfile) -> str | None:
-    if profile.auto_detect_gate is None:
-        return None
-    return _cpp_profile_auto_gate_variable(profile.auto_detect_gate)
+def _cpp_profile_auto_modes(profiles: tuple[ProfileRender, ...]) -> str:
+    blocks: list[str] = []
+    for gate in _cpp_profile_auto_gates(profiles):
+        gated_profiles = tuple(
+            profile for profile in profiles if profile.profile.auto_detect_gate == gate
+        )
+        gated_slugs = tuple(slug(profile.profile.name) for profile in gated_profiles)
+        if not gated_slugs:
+            continue
+        mode = _cpp_profile_auto_mode_name(gate)
+        detection = _cpp_profile_detection(gated_profiles, "", auto_gate=gate)
+        lines = [
+            f'elseif(_TSL_REQUESTED_PROFILE STREQUAL "{mode}")',
+            '  set(TSL_SELECTED_PROFILE "")',
+            f'  _tsl_detect_profile_gate("{gate}" _TSL_GATE_READY _TSL_GATE_REASON)',
+            "  if(NOT _TSL_GATE_READY)",
+            (
+                f'    message(FATAL_ERROR "TSL_PROFILE={mode} requested, but '
+                f'{gate} auto-detection failed: ${{_TSL_GATE_REASON}}")'
+            ),
+            "  endif()",
+            "  if(CMAKE_CROSSCOMPILING)",
+            (
+                f'    message(FATAL_ERROR "TSL_PROFILE={mode} cannot run CPU '
+                'profile probes while cross-compiling")'
+            ),
+            "  else()",
+            "    include(CheckCXXSourceRuns)",
+        ]
+        if detection:
+            lines.append(detection)
+        lines.extend(
+            [
+                '    if(TSL_SELECTED_PROFILE STREQUAL "")',
+                (
+                    f'      message(FATAL_ERROR "TSL_PROFILE={mode} verified '
+                    f'{gate}, but no generated gated profile matched this CPU. '
+                    f'Available gated profiles: {", ".join(gated_slugs)}")'
+                ),
+                "    endif()",
+                f'    message(STATUS "TSL_PROFILE={mode} selected profile = ${{TSL_SELECTED_PROFILE}}")',
+                "  endif()",
+            ]
+        )
+        blocks.append("\n".join(lines))
+    return "\n".join(blocks)
 
 
-def _cpp_profile_auto_gate_variable(gate: str) -> str:
-    return f"TSL_AUTO_{slug(gate).upper()}"
+def _cpp_profile_auto_gates(profiles: tuple[ProfileRender, ...]) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            {
+                profile.profile.auto_detect_gate
+                for profile in profiles
+                if profile.profile.auto_detect_gate is not None
+            }
+        )
+    )
+
+
+def _cpp_profile_auto_mode_name(gate: str) -> str:
+    return "auto-" + slug(gate).replace("_", "-")
 
 
 def _indent_lines(text: str, prefix: str) -> str:
