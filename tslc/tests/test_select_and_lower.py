@@ -708,6 +708,22 @@ def test_oneapi_exact_lane_mask_policy_lowers_lane_bitmask_operations(
     assert "typename Vec::register_type result" not in cpp.body_text
 
 
+def test_rust_sse_float_nequal_uses_sse_cmpneq_intrinsic(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slots = _by_key(catalog, machine_profiles["sse"], "nequal")
+    slot = slots[("f32", "sse")]
+
+    rust = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+
+    assert rust is not None
+    assert "core::arch::x86_64::_mm_cmpneq_ps(left, right)" in rust.body_text
+    assert "core::arch::x86_64::_mm_cmp_ps" not in rust.body_text
+
+
 @pytest.mark.parametrize("backend_id", ("cpp", "rust"))
 def test_fixed_non_x86_extension_requires_register_metadata(backend_id: str) -> None:
     ext = Extension(

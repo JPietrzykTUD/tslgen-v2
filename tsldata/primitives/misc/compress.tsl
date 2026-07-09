@@ -39,11 +39,18 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
     - {tags [basic], type "f64", case {inputs [2, [1.0, 2.0]], expected [2.0, 0.0]}}
     - {tags [edge], type "f64", case {inputs [3, [1.0, 2.0]], expected [1.0, 2.0]}}
   impls:
-    avx512:
+    [avx512, avx2_vl, sse_vl]:
       ?i?:
         requires:
-          idqword [avx512f]
-          bword [avx512_vbmi2, avx512f]
+          avx512:
+            idqword [avx512f]
+            bword [avx512_vbmi2, avx512f]
+          avx2_vl:
+            idqword [avx512f, avx512vl, avx]
+            bword [avx512_vbmi2, avx512f, avx512vl, avx]
+          sse_vl:
+            idqword [avx512f, avx512vl, sse2]
+            bword [avx512_vbmi2, avx512f, avx512vl, sse2]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -58,7 +65,9 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
               );
             """
       f?:
-        requires [avx512f]
+        avx512 [avx512f]
+        avx2_vl [avx512f, avx512vl, avx]
+        sse_vl [avx512f, avx512vl, sse]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -71,177 +80,6 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
                   data
                 )
               );
-            """
-    [avx2, avx2_vl]:
-      ?i8:
-        requires:
-          avx2 [avx512_vbmi2, avx512f, avx512vl, avx2]
-          avx2_vl [avx512_vbmi2, avx512f, avx512vl, avx]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
-              complete(
-                intrin<maskz_compress, build[suffix=base::signed_of(base::in)]>(
-                  cast<static>(ui32, imask),
-                  data
-                )
-              );
-            """
-      ?i16:
-        requires:
-          avx2 [avx512_vbmi2, avx512f, avx512vl, avx2]
-          avx2_vl [avx512_vbmi2, avx512f, avx512vl, avx]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
-              complete(
-                intrin<maskz_compress, build[suffix=base::signed_of(base::in)]>(
-                  cast<static>(ui16, imask),
-                  data
-                )
-              );
-            """
-      [?i32, ?i64]:
-        requires:
-          avx2 [avx512f, avx512vl, avx2]
-          avx2_vl [avx512f, avx512vl, avx]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
-              complete(
-                intrin<maskz_compress, build[suffix=base::signed_of(base::in)]>(
-                  cast<static>(ui8, imask),
-                  data
-                )
-              );
-            """
-      f?:
-        requires:
-          avx2 [avx512f, avx512vl, avx]
-          avx2_vl [avx512f, avx512vl, avx]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
-              complete(
-                intrin<maskz_compress, build>(
-                  cast<static>(ui8, imask),
-                  data
-                )
-              );
-            """
-    [sse, sse_vl]:
-      ?i8:
-        requires:
-          sse [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
-          sse_vl [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
-              complete(
-                intrin<maskz_compress, build[suffix=base::signed_of(base::in)]>(
-                  cast<static>(ui16, imask),
-                  data
-                )
-              );
-            """
-      ?i16:
-        requires:
-          sse [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
-          sse_vl [avx512_vbmi2, avx512f, avx512vl, sse, sse2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
-              complete(
-                intrin<maskz_compress, build[suffix=base::signed_of(base::in)]>(
-                  cast<static>(ui8, imask),
-                  data
-                )
-              );
-            """
-      [?i32, ?i64]:
-        requires:
-          sse [avx512f, avx512vl, sse, sse2]
-          sse_vl [avx512f, avx512vl, sse, sse2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
-              complete(
-                intrin<maskz_compress, build[suffix=base::signed_of(base::in)]>(
-                  cast<static>(ui8, imask),
-                  data
-                )
-              );
-            """
-      f?:
-        requires:
-          sse:
-            f32 [avx512f, avx512vl, sse]
-            f64 [avx512f, avx512vl, sse, sse2]
-          sse_vl [avx512f, avx512vl, sse, sse2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
-              complete(
-                intrin<maskz_compress, build>(
-                  cast<static>(ui8, imask),
-                  data
-                )
-              );
-            """
-    [avx2_vl, sse_vl]:
-      [?i8, ?i16]:
-        requires:
-          avx2_vl [avx512f, avx512vl, avx]
-          sse_vl [avx512f, avx512vl, sse, sse2]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-              var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
-              var<const_infer>(values, call<primitive=to_array[Vec]>(data));
-              var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-              var<infer>(out_idx, 0);
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                if (mask<test, imask>(imask, i)) {
-                  result[out_idx] = values[i];
-                  out_idx = out_idx + 1;
-                }
-              }
-              complete(call<primitive=from_array[Vec]>(result));
             """
     sve:
       [?i32, ?i64, f32, f64]:
