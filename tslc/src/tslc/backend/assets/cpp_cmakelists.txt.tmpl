@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(TSL_AVAILABLE_PROFILES @{available_profiles})
 set(TSL_PROFILE "auto" CACHE STRING "TSL profile to consume: auto or one generated profile")
 set_property(CACHE TSL_PROFILE PROPERTY STRINGS auto @{profile_choices})
+@{profile_auto_options}
 
 set(_TSL_REQUESTED_PROFILE "${TSL_PROFILE}")
 @{profile_aliases}

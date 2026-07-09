@@ -1164,6 +1164,24 @@ def test_machine_profile_cpp_flags_are_validated(tmp_path: Path) -> None:
     assert "TSL-PROFILE-MALFORMED-FIELD" in {d.code for d in result.diagnostics}
 
 
+def test_machine_profile_auto_detect_gate_is_validated(tmp_path: Path) -> None:
+    path = tmp_path / "machine_profiles.json"
+    path.write_text(
+        '{\n'
+        '  "x86": [\n'
+        '    {"name": "good", "target_features": "sse", "auto_detect_gate": "fpga"},\n'
+        '    {"name": "bad", "target_features": "sse", "auto_detect_gate": "two tokens"}\n'
+        '  ]\n'
+        '}\n',
+        encoding="utf-8",
+    )
+
+    result = load_machine_profiles_checked(path)
+
+    assert result.profiles["good"].auto_detect_gate == "fpga"
+    assert "TSL-PROFILE-MALFORMED-FIELD" in {d.code for d in result.diagnostics}
+
+
 def test_machine_profile_runner_metadata_is_validated(tmp_path: Path) -> None:
     path = tmp_path / "machine_profiles.json"
     path.write_text(

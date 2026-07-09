@@ -312,10 +312,15 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     assert machine_profiles["sve512"].compile_modes == frozenset(
         {"sve_vector_bits_512"}
     )
+    assert machine_profiles["sve512"].auto_detect_gate is None
     assert machine_profiles["sve512"].cpp_flags == (
         "-mcpu=a64fx",
         "-msve-vector-bits=512",
     )
+    assert machine_profiles["skylake-oneapi"].compile_modes == frozenset(
+        {"oneapi_fpga"}
+    )
+    assert machine_profiles["skylake-oneapi"].auto_detect_gate == "oneapi_fpga"
     assert machine_profiles["wasm32-simd128"].family == "wasm32"
     assert machine_profiles["wasm32-simd128"].features == frozenset({"simd128"})
     assert machine_profiles["wasm32-simd128"].cpp_flags == ()

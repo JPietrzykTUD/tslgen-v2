@@ -741,6 +741,7 @@ def _cpp_cmakelists(profiles: tuple[ProfileRender, ...], assets: RenderAssets) -
             _cmake_quote(value)
             for value in (*slugs, *_profile_alias_choices(profiles))
         ),
+        profile_auto_options=_cpp_profile_auto_options(profiles),
         profile_aliases=_cpp_profile_aliases(profiles),
         fallback_profile=fallback,
         profile_detection=_cpp_profile_detection(profiles, fallback),
@@ -754,6 +755,23 @@ def _profile_alias_choices(profiles: tuple[ProfileRender, ...]) -> tuple[str, ..
         profile.profile.name
         for profile in profiles
         if profile.profile.name != slug(profile.profile.name)
+    )
+
+
+def _cpp_profile_auto_options(profiles: tuple[ProfileRender, ...]) -> str:
+    gates = sorted(
+        {
+            profile.profile.auto_detect_gate
+            for profile in profiles
+            if profile.profile.auto_detect_gate is not None
+        }
+    )
+    return "\n".join(
+        (
+            f'option({_cpp_profile_auto_gate_variable(gate)} "Allow '
+            f'TSL_PROFILE=auto to select profiles gated by {gate}" OFF)'
+        )
+        for gate in gates
     )
 
 
@@ -813,17 +831,39 @@ def _cpp_profile_detection(
         if source is None:
             continue
         variable = "TSL_CPU_HAS_" + profile_slug.upper()
-        blocks.append(
-            "\n".join(
+        block = "\n".join(
+            (
+                f"    check_cxx_source_runs([=[\n{source}\n]=] {variable})",
+                f"    if({variable})",
+                f'      set(TSL_SELECTED_PROFILE "{profile_slug}")',
+                "    endif()",
+            )
+        )
+        gate = _cpp_profile_auto_gate(profile)
+        if gate is not None:
+            block = "\n".join(
                 (
-                    f"    check_cxx_source_runs([=[\n{source}\n]=] {variable})",
-                    f"    if({variable})",
-                    f'      set(TSL_SELECTED_PROFILE "{profile_slug}")',
+                    f"    if({gate})",
+                    _indent_lines(block, "  "),
                     "    endif()",
                 )
             )
-        )
+        blocks.append(block)
     return "\n".join(blocks)
+
+
+def _cpp_profile_auto_gate(profile: MachineProfile) -> str | None:
+    if profile.auto_detect_gate is None:
+        return None
+    return _cpp_profile_auto_gate_variable(profile.auto_detect_gate)
+
+
+def _cpp_profile_auto_gate_variable(gate: str) -> str:
+    return f"TSL_AUTO_{slug(gate).upper()}"
+
+
+def _indent_lines(text: str, prefix: str) -> str:
+    return "\n".join(prefix + line if line else line for line in text.splitlines())
 
 
 def _auto_detection_order(

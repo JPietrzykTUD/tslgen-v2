@@ -48,11 +48,12 @@ class TslPairWiseSwapQuickSorter {
  public:
   TslPairWiseSwapQuickSorter() : rng(std::random_device{}()) {}
  private:
-  pivot_t<DataType, IndexType> get_pivot(DataType * data, std::size_t count) {
-    pivot_t<DataType, IndexType> pivot1(pivot_dist(rng), data);
-    pivot_t<DataType, IndexType> pivot2(pivot_dist(rng), data);
-    pivot_t<DataType, IndexType> pivot3(pivot_dist(rng), data);
-    pivot_t<DataType, IndexType> median = std::max(
+  pivot_t get_pivot(DataType * data, std::size_t count) {
+    std::uniform_int_distribution<IndexType> pivot_dist(0, count - 1);
+    pivot_t pivot1(pivot_dist(rng), data);
+    pivot_t pivot2(pivot_dist(rng), data);
+    pivot_t pivot3(pivot_dist(rng), data);
+    pivot_t median = std::max(
       std::min(pivot1, pivot2),
       std::min(
         std::max(pivot1, pivot2),
@@ -67,7 +68,7 @@ class TslPairWiseSwapQuickSorter {
   auto quicksort_partition(
     DataType * left_ptr,
     DataType * right_ptr,
-    typename tsl::reg_param<Vec>::type pivot_vec
+    typename tsl::reg_param<DataSimdStyle>::type pivot_vec
   ) -> std::pair<DataType *, DataType *> {
     typename DataSimdStyle::register_type data_left_vec, data_right_vec;
     typename DataSimdStyle::mask_type bad_lanes_l_mask = tsl::mask_false<DataSimdStyle>();
@@ -75,6 +76,8 @@ class TslPairWiseSwapQuickSorter {
     size_t bad_lanes_l_count = 0;
     size_t bad_lanes_r_count = 0;
     advance_state advance = advance_state::LEFT;
+    
+    right_ptr -= DataSimdStyle::lane_count_v + 1; // we don't want to include the pivot in the partitioning process, the pivoting process swaps the pivot to the end of the partition
     
     while ((left_ptr + DataSimdStyle::lane_count_v) <= right_ptr) {
 
