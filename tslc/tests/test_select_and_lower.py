@@ -506,10 +506,8 @@ def test_lower_wasm128_expanded_direct_primitives(
 @pytest.mark.parametrize(
     ("primitive", "type_tag", "needle"),
     (
-        ("mul", "si8", "::tsl::mul<tsl::simd<int8_t, tsl::generic<16>>>"),
         ("div", "si32", "::tsl::div<tsl::simd<int32_t, tsl::generic<4>>>"),
         ("mod", "si32", "::tsl::mod<tsl::simd<int32_t, tsl::generic<4>>>"),
-        ("max", "si32", "::tsl::max<tsl::simd<int32_t, tsl::generic<4>>>"),
         ("lzc", "ui32", "::tsl::lzc_scalar<tsl::simd<uint32_t, tsl::scalar>>"),
     ),
 )
@@ -536,6 +534,50 @@ def test_lower_wasm128_expanded_bridge_primitives(
     assert rust is not None
     if primitive != "lzc":
         assert "Generic" in rust.body_text
+
+
+@pytest.mark.parametrize(
+    ("primitive", "type_tag", "cpp_needles", "rust_needles"),
+    (
+        (
+            "mul",
+            "si8",
+            ("wasm_u16x8_extmul_low_u8x16", "wasm_u8x16_narrow_i16x8"),
+            ("u16x8_extmul_low_u8x16", "u8x16_narrow_i16x8"),
+        ),
+        (
+            "max",
+            "si32",
+            ("::tsl::blend<Vec>", "::tsl::less_than<Vec>"),
+            ("blend::<Self>", "less_than::<Self>"),
+        ),
+    ),
+)
+def test_lower_wasm128_composed_primitives_avoid_generic_bridge(
+    catalog: Catalog,
+    machine_profiles,
+    primitive,
+    type_tag,
+    cpp_needles,
+    rust_needles,
+) -> None:
+    slot = _wasm_slot(catalog, machine_profiles, primitive, type_tag)
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert cpp is not None
+    assert "tsl::generic" not in cpp.body_text
+    for needle in cpp_needles:
+        assert needle in cpp.body_text
+
+    rust = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+    assert rust is not None
+    assert "Generic" not in rust.body_text
+    for needle in rust_needles:
+        assert needle in rust.body_text
 
 
 def test_lower_wasm128_shift_overloads_keep_scalar_and_vector_counts_distinct(
@@ -593,11 +635,13 @@ def test_lower_wasm128_shift_overloads_keep_scalar_and_vector_counts_distinct(
     assert "::tsl::to_array<Vec>(shift)" in left_vector.body_text
 
     assert imm is not None
-    assert "::tsl::shift_right_imm<" in imm.body_text
+    assert "::tsl::shift_right<Vec, PreserveSign>" in imm.body_text
+    assert "static_cast<int32_t>(shift)" in imm.body_text
     assert "::tsl::to_array<Vec>(shift)" not in imm.body_text
 
     assert scalar is not None
-    assert "::tsl::shift_right<" in scalar.body_text
+    assert "wasm_i32x4_shr(data, static_cast<uint32_t>(shift))" in scalar.body_text
+    assert "wasm_u32x4_shr(udata, static_cast<uint32_t>(shift))" in scalar.body_text
     assert "generic_shift" not in scalar.body_text
 
     assert vector is not None

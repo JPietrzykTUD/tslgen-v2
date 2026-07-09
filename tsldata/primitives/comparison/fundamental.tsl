@@ -547,23 +547,34 @@ prim<m:=(v,v)> less_than(left, right):
       ui64:
         requires [simd128]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(GenericVec, type(vector::as_extension(generic)));
-            var<const_infer>(generic_left, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(left)));
-            var<const_infer>(generic_right, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(right)));
-            var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_left, generic_right));
+            var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000000000000000)));
             complete(
-              call<primitive=from_array[Vec]>(
-                call<primitive=to_array[GenericVec]>(
-                  call<primitive=to_vector[GenericVec]>(generic_result)
-                )
+              intrin<lt, build[suffix="i64x2"]>(
+                call<primitive=binary_xor>(left, sign_bit),
+                call<primitive=binary_xor>(right, sign_bit)
               )
             );
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_left, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(left)));
+              var<const_infer>(generic_right, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(right)));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_left, generic_right));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=to_array[GenericVec]>(
+                    call<primitive=to_vector[GenericVec]>(generic_result)
+                  )
+                )
+              );
+            """
     oneapi_fpga:
       arith:
         requires []
@@ -912,23 +923,34 @@ prim<m:=(v,v)> greater_than(left, right):
       ui64:
         requires [simd128]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(GenericVec, type(vector::as_extension(generic)));
-            var<const_infer>(generic_left, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(left)));
-            var<const_infer>(generic_right, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(right)));
-            var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_left, generic_right));
+            var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000000000000000)));
             complete(
-              call<primitive=from_array[Vec]>(
-                call<primitive=to_array[GenericVec]>(
-                  call<primitive=to_vector[GenericVec]>(generic_result)
-                )
+              intrin<gt, build[suffix="i64x2"]>(
+                call<primitive=binary_xor>(left, sign_bit),
+                call<primitive=binary_xor>(right, sign_bit)
               )
             );
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_left, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(left)));
+              var<const_infer>(generic_right, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(right)));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_left, generic_right));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=to_array[GenericVec]>(
+                    call<primitive=to_vector[GenericVec]>(generic_result)
+                  )
+                )
+              );
+            """
     oneapi_fpga:
       arith:
         requires []
@@ -1259,23 +1281,34 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
       ui64:
         requires [simd128]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(GenericVec, type(vector::as_extension(generic)));
-            var<const_infer>(generic_left, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(left)));
-            var<const_infer>(generic_right, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(right)));
-            var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_left, generic_right));
+            var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000000000000000)));
             complete(
-              call<primitive=from_array[Vec]>(
-                call<primitive=to_array[GenericVec]>(
-                  call<primitive=to_vector[GenericVec]>(generic_result)
-                )
+              intrin<le, build[suffix="i64x2"]>(
+                call<primitive=binary_xor>(left, sign_bit),
+                call<primitive=binary_xor>(right, sign_bit)
               )
             );
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_left, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(left)));
+              var<const_infer>(generic_right, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(right)));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_left, generic_right));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=to_array[GenericVec]>(
+                    call<primitive=to_vector[GenericVec]>(generic_result)
+                  )
+                )
+              );
+            """
     oneapi_fpga:
       arith:
         requires []
@@ -1535,23 +1568,34 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
       ui64:
         requires [simd128]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-            let<type>(GenericVec, type(vector::as_extension(generic)));
-            var<const_infer>(generic_left, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(left)));
-            var<const_infer>(generic_right, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(right)));
-            var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_left, generic_right));
+            var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000000000000000)));
             complete(
-              call<primitive=from_array[Vec]>(
-                call<primitive=to_array[GenericVec]>(
-                  call<primitive=to_vector[GenericVec]>(generic_result)
-                )
+              intrin<ge, build[suffix="i64x2"]>(
+                call<primitive=binary_xor>(left, sign_bit),
+                call<primitive=binary_xor>(right, sign_bit)
               )
             );
           """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_left, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(left)));
+              var<const_infer>(generic_right, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(right)));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_left, generic_right));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=to_array[GenericVec]>(
+                    call<primitive=to_vector[GenericVec]>(generic_result)
+                  )
+                )
+              );
+            """
     oneapi_fpga:
       arith:
         requires []

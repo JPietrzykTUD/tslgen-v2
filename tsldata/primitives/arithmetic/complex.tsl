@@ -269,11 +269,21 @@ prim<v:=(v,v)> mul(factor1, factor2):
       arith:
         requires [simd128]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
+            var<const_infer>(low_products, intrin<extmul_low_u8x16, build[suffix="u16x8"]>(factor1, factor2));
+            var<const_infer>(high_products, intrin<extmul_high_u8x16, build[suffix="u16x8"]>(factor1, factor2));
+            var<const_infer>(low_byte_mask, intrin<splat, build[suffix="i16x8"]>(cast<static>(type(scalar::si16), 0x00ff)));
+            var<const_infer>(low_bytes, intrin<v128_and, build[suffix=""]>(low_products, low_byte_mask));
+            var<const_infer>(high_bytes, intrin<v128_and, build[suffix=""]>(high_products, low_byte_mask));
+            complete(intrin<narrow_i16x8, build[suffix="u8x16"]>(low_bytes, high_bytes));
+          """
+        variants:
+          generic_fallback:
+            tsil """
             let<type>(GenericVec, type(vector::as_extension(generic)));
             var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
             var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
