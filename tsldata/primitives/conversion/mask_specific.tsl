@@ -69,6 +69,31 @@ prim<im:=m> to_integral(mask):
           reasons []
         implementation:
           tsil "complete(mask);"
+    wasm128:
+      ?i?:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(cast<static>(type(vector::imask), intrin<bitmask, build>(mask)));"
+      f32:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(cast<static>(type(vector::imask), intrin<bitmask, build[suffix=\"i32x4\"]>(mask)));"
+      f64:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(cast<static>(type(vector::imask), intrin<bitmask, build[suffix=\"i64x2\"]>(mask)));"
     avx2:
       ?i8:
         requires [avx, avx2]
@@ -384,6 +409,15 @@ prim<v:=m> to_vector(mask):
           reasons []
         implementation:
           tsil "complete(mask);"
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(mask);"
     scalar:
       arith:
         requires []
@@ -467,6 +501,149 @@ prim<m:=im> to_mask(mask):
           reasons []
         implementation:
           tsil "complete(mask);"
+    wasm128:
+      ?i8:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+              var<typed>(array_type<type(scalar::si16), 8>, and_values, value(uninit::array));
+              loop<backend>(i, 0, 8, 1) {
+                var<const_infer>(bit, (cast<static>(type(scalar::ui64), 1)) << i);
+                and_values[i] = cast<static>(type(scalar::si16), bit);
+              }
+              var<const_infer>(and_vec, intrin<v128_load, build[suffix=""]>(
+                cast<reinterpret, type=const_ptr>(type(vector::register), and_values.as_ptr())
+              ));
+              var<const_infer>(low_data, intrin<splat, build[suffix="i16x8"]>(
+                cast<static>(type(scalar::si16), mask)
+              ));
+              var<const_infer>(high_data, intrin<splat, build[suffix="i16x8"]>(
+                cast<static>(type(scalar::si16), (cast<static>(type(scalar::ui64), mask) >> 8))
+              ));
+              var<const_infer>(low_mask, intrin<eq, build[suffix="i16x8"]>(
+                intrin<v128_and, build[suffix=""]>(low_data, and_vec),
+                and_vec
+              ));
+              var<const_infer>(high_mask, intrin<eq, build[suffix="i16x8"]>(
+                intrin<v128_and, build[suffix=""]>(high_data, and_vec),
+                and_vec
+              ));
+              complete(intrin<narrow_i16x8, build[suffix="i8x16"]>(low_mask, high_mask));
+            """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_mask, call<primitive=to_mask[GenericVec]>(cast<static>(type(scalar::ui64), mask)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=to_array[GenericVec]>(
+                    call<primitive=to_vector[GenericVec]>(generic_mask)
+                  )
+                )
+              );
+            """
+      [ ?i16, ?i32, ?i64 ]:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              var<typed>(array_type<type(base::in), value(vector::length)>, and_values, value(uninit::array));
+              loop<backend>(i, 0, value(vector::length), 1) {
+                var<const_infer>(bit, (cast<static>(type(scalar::ui64), 1)) << i);
+                and_values[i] = cast<static>(type(base::in), bit);
+              }
+              var<const_infer>(and_vec, call<primitive=from_array[Vec]>(and_values));
+              var<const_infer>(data_vec, call<primitive=set1[Vec]>(cast<static>(type(base::in), mask)));
+              var<const_infer>(anded_vec, call<primitive=binary_and[Vec]>(data_vec, and_vec));
+              complete(call<primitive=equal[Vec]>(anded_vec, and_vec));
+            """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_mask, call<primitive=to_mask[GenericVec]>(cast<static>(type(scalar::ui64), mask)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=to_array[GenericVec]>(
+                    call<primitive=to_vector[GenericVec]>(generic_mask)
+                  )
+                )
+              );
+            """
+      f32:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+              var<typed>(array_type<type(scalar::si32), value(vector::length)>, and_values, value(uninit::array));
+              loop<backend>(i, 0, value(vector::length), 1) {
+                var<const_infer>(bit, (cast<static>(type(scalar::ui64), 1)) << i);
+                and_values[i] = cast<static>(type(scalar::si32), bit);
+              }
+              var<const_infer>(and_vec, intrin<v128_load, build[suffix=""]>(
+                cast<reinterpret, type=const_ptr>(type(vector::register), and_values.as_ptr())
+              ));
+              var<const_infer>(data_vec, intrin<splat, build[suffix="i32x4"]>(cast<static>(type(scalar::si32), mask)));
+              var<const_infer>(anded_vec, intrin<v128_and, build[suffix=""]>(data_vec, and_vec));
+              complete(intrin<eq, build[suffix="i32x4"]>(anded_vec, and_vec));
+            """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_mask, call<primitive=to_mask[GenericVec]>(cast<static>(type(scalar::ui64), mask)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=to_array[GenericVec]>(
+                    call<primitive=to_vector[GenericVec]>(generic_mask)
+                  )
+                )
+              );
+            """
+      f64:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic, raw_pointer]
+        implementation:
+          tsil """
+              var<typed>(array_type<type(scalar::si64), value(vector::length)>, and_values, value(uninit::array));
+              loop<backend>(i, 0, value(vector::length), 1) {
+                var<const_infer>(bit, (cast<static>(type(scalar::ui64), 1)) << i);
+                and_values[i] = cast<static>(type(scalar::si64), bit);
+              }
+              var<const_infer>(and_vec, intrin<v128_load, build[suffix=""]>(
+                cast<reinterpret, type=const_ptr>(type(vector::register), and_values.as_ptr())
+              ));
+              var<const_infer>(data_vec, intrin<splat, build[suffix="i64x2"]>(cast<static>(type(scalar::si64), mask)));
+              var<const_infer>(anded_vec, intrin<v128_and, build[suffix=""]>(data_vec, and_vec));
+              complete(intrin<eq, build[suffix="i64x2"]>(anded_vec, and_vec));
+            """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_mask, call<primitive=to_mask[GenericVec]>(cast<static>(type(scalar::ui64), mask)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=to_array[GenericVec]>(
+                    call<primitive=to_vector[GenericVec]>(generic_mask)
+                  )
+                )
+              );
+            """
     avx2:
       ?i8:
         requires [avx, avx2]

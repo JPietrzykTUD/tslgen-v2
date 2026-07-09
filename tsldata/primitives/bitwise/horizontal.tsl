@@ -286,13 +286,14 @@ prim<s:=v> hand(vec):
             mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(type(base::in))));
             complete(out);
           """
-    [scalar, generic, oneapi_fpga, neon]:
+    [scalar, generic, oneapi_fpga, neon, wasm128]:
       ?i?:
         requires:
           scalar []
           generic []
           oneapi_fpga []
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -306,7 +307,7 @@ prim<s:=v> hand(vec):
             }
             complete(result);
           """
-    [scalar, generic, oneapi_fpga, avx2, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx2, sse, neon, wasm128]:
       f?:
         requires:
           scalar []
@@ -315,6 +316,7 @@ prim<s:=v> hand(vec):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -578,13 +580,14 @@ prim<s:=v> hor(vec):
             mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(type(base::in))));
             complete(out);
           """
-    [scalar, generic, oneapi_fpga, neon]:
+    [scalar, generic, oneapi_fpga, neon, wasm128]:
       ?i?:
         requires:
           scalar []
           generic []
           oneapi_fpga []
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -598,12 +601,13 @@ prim<s:=v> hor(vec):
             }
             complete(result);
           """
-    [scalar, generic, oneapi_fpga]:
+    [scalar, generic, oneapi_fpga, wasm128]:
       f?:
         requires:
           scalar []
           generic []
           oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -700,7 +704,7 @@ prim<s:=(m,v)> hand(mask, vec):
             }
             complete(cast<static>(type(base::in), intrin<mask_reduce_and, build[suffix=base::signed_of(base::in)]>(mask, vec)));
           """
-    [scalar, generic, oneapi_fpga, avx512, avx2_vl, avx2, sse_vl, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128]:
       ?i?:
         requires:
           scalar []
@@ -712,6 +716,7 @@ prim<s:=(m,v)> hand(mask, vec):
           sse_vl [avx512bw, avx512vl]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -745,6 +750,7 @@ prim<s:=(m,v)> hand(mask, vec):
           sse_vl [avx512bw, avx512vl]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -826,7 +832,7 @@ prim<s:=(m,v)> hor(mask, vec):
           reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type(base::in), intrin<mask_reduce_or, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
-    [scalar, generic, oneapi_fpga, avx512, avx2_vl, avx2, sse_vl, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128]:
       ?i?:
         requires:
           scalar []
@@ -838,6 +844,7 @@ prim<s:=(m,v)> hor(mask, vec):
           sse_vl [avx512bw, avx512vl]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -865,6 +872,7 @@ prim<s:=(m,v)> hor(mask, vec):
           sse_vl [avx512bw, avx512vl]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -922,13 +930,14 @@ prim<s:=(m,v)> hor(mask, vec):
             mem<copy>(cast<reinterpret, type=ptr>(void, &out), cast<reinterpret, type=const_ptr>(void, &result), value(type::size_bytes(type(base::in))));
             complete(out);
           """
-    [scalar, generic, oneapi_fpga, neon]:
+    [scalar, generic, oneapi_fpga, neon, wasm128]:
       ?i?:
         requires:
           scalar []
           generic []
           oneapi_fpga []
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -942,7 +951,7 @@ prim<s:=(m,v)> hor(mask, vec):
             }
             complete(result);
           """
-    [scalar, generic, oneapi_fpga, avx2, sse, neon, sve]:
+    [scalar, generic, oneapi_fpga, avx2, sse, neon, sve, wasm128]:
       f?:
         requires:
           scalar []
@@ -952,6 +961,7 @@ prim<s:=(m,v)> hor(mask, vec):
           sse [sse2]
           neon [neon]
           sve [sve]
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe false

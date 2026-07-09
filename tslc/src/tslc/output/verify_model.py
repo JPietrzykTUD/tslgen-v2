@@ -23,6 +23,7 @@ class VerifyProfile:
     profile_name: str
     file_stem: str
     family: str = "generic"
+    compile_modes: frozenset[str] = frozenset()
     # C++ extra compile flags (e.g. ("-mavx2",)); Rust target features (e.g. ("+avx2",)).
     cpp_flags: tuple[str, ...] = ()
     cpp_target: str | None = None
@@ -77,8 +78,6 @@ class BuildVerifierConfig:
         normalized_qemu_aarch64_path = _normalize_compiler_executable(qemu_aarch64_path)
         normalized_wasmtime_path = _normalize_compiler_executable(wasmtime_path)
         normalized_cpp_compiler = _normalize_compiler_command(cpp_compiler)
-        if normalized_cpp_compiler is None and normalized_sde_path is not None and run_value_tests:
-            normalized_cpp_compiler = ("c++",)
         return cls(
             cpp_compiler=normalized_cpp_compiler,
             rust_compiler=_normalize_compiler_executable(rust_compiler),

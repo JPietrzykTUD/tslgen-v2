@@ -48,6 +48,7 @@ ENV PATH="/opt/venv/bin:/opt/zig:/opt/wasi-sdk/bin:${CARGO_HOME}/bin:${PATH}"
 ENV CC="zig cc"
 ENV CXX="zig c++"
 
+# Install Rust and Cargo
 RUN set -eux; \
     mkdir -p "${RUSTUP_HOME}" "${CARGO_HOME}"; \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
@@ -93,11 +94,13 @@ RUN curl -fsSL https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-P
     && echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" \
         > /etc/apt/sources.list.d/oneAPI.list
 
+# Install Intel oneAPI compilers and FPGA addon
 RUN apt-get update && apt-get install -y --no-install-recommends \
         intel-oneapi-compiler-dpcpp-cpp-2025.0 \
         intel-compiler-fpga-addon-2025.0 \
     && rm -rf /var/lib/apt/lists/*
 
+# Set up environment variables for Intel oneAPI
 RUN echo 'source /opt/intel/oneapi/setvars.sh --force >/dev/null 2>&1' \
         > /etc/profile.d/oneapi.sh
 

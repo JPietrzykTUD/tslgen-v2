@@ -64,6 +64,15 @@ prim<m:=(v,v)> equal(left, right):
             }
             complete(result);
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<eq, build>(left, right));"
     oneapi_fpga:
       arith:
         requires []
@@ -73,12 +82,12 @@ prim<m:=(v,v)> equal(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type(vector::register));
-            RegisterT result{};
-            var<const_infer>(true_value, mask<lane_true>());
-            var<const_infer>(false_value, mask<lane_false>());
+            let<type>(MaskT, type(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = (left[i] == right[i]) ? true_value : false_value;
+              if (left[i] == right[i]) {
+                mask<set>(result, i);
+              }
             }
             complete(result);
           """
@@ -288,6 +297,15 @@ prim<m:=(v,v)> nequal(left, right):
             }
             complete(result);
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<ne, build>(left, right));"
     oneapi_fpga:
       arith:
         requires []
@@ -297,12 +315,12 @@ prim<m:=(v,v)> nequal(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type(vector::register));
-            RegisterT result{};
-            var<const_infer>(true_value, mask<lane_true>());
-            var<const_infer>(false_value, mask<lane_false>());
+            let<type>(MaskT, type(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = (left[i] != right[i]) ? true_value : false_value;
+              if (left[i] != right[i]) {
+                mask<set>(result, i);
+              }
             }
             complete(result);
           """
@@ -493,6 +511,70 @@ prim<m:=(v,v)> less_than(left, right):
             }
             complete(result);
           """
+    wasm128:
+      [si8, si16, si32, si64, f?]:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<lt, build>(left, right));"
+      ui8:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<lt, build[suffix=\"u8x16\"]>(left, right));"
+      ui16:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<lt, build[suffix=\"u16x8\"]>(left, right));"
+      ui32:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<lt, build[suffix=\"u32x4\"]>(left, right));"
+      ui64:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000000000000000)));
+            complete(
+              intrin<lt, build[suffix="i64x2"]>(
+                call<primitive=binary_xor>(left, sign_bit),
+                call<primitive=binary_xor>(right, sign_bit)
+              )
+            );
+          """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_left, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(left)));
+              var<const_infer>(generic_right, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(right)));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_left, generic_right));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=to_array[GenericVec]>(
+                    call<primitive=to_vector[GenericVec]>(generic_result)
+                  )
+                )
+              );
+            """
     oneapi_fpga:
       arith:
         requires []
@@ -502,12 +584,12 @@ prim<m:=(v,v)> less_than(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type(vector::register));
-            RegisterT result{};
-            var<const_infer>(true_value, mask<lane_true>());
-            var<const_infer>(false_value, mask<lane_false>());
+            let<type>(MaskT, type(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = (left[i] < right[i]) ? true_value : false_value;
+              if (left[i] < right[i]) {
+                mask<set>(result, i);
+              }
             }
             complete(result);
           """
@@ -805,6 +887,70 @@ prim<m:=(v,v)> greater_than(left, right):
             }
             complete(result);
           """
+    wasm128:
+      [si8, si16, si32, si64, f?]:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<gt, build>(left, right));"
+      ui8:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<gt, build[suffix=\"u8x16\"]>(left, right));"
+      ui16:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<gt, build[suffix=\"u16x8\"]>(left, right));"
+      ui32:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<gt, build[suffix=\"u32x4\"]>(left, right));"
+      ui64:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000000000000000)));
+            complete(
+              intrin<gt, build[suffix="i64x2"]>(
+                call<primitive=binary_xor>(left, sign_bit),
+                call<primitive=binary_xor>(right, sign_bit)
+              )
+            );
+          """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_left, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(left)));
+              var<const_infer>(generic_right, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(right)));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_left, generic_right));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=to_array[GenericVec]>(
+                    call<primitive=to_vector[GenericVec]>(generic_result)
+                  )
+                )
+              );
+            """
     oneapi_fpga:
       arith:
         requires []
@@ -814,12 +960,12 @@ prim<m:=(v,v)> greater_than(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type(vector::register));
-            RegisterT result{};
-            var<const_infer>(true_value, mask<lane_true>());
-            var<const_infer>(false_value, mask<lane_false>());
+            let<type>(MaskT, type(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = (left[i] > right[i]) ? true_value : false_value;
+              if (left[i] > right[i]) {
+                mask<set>(result, i);
+              }
             }
             complete(result);
           """
@@ -1099,6 +1245,70 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
             }
             complete(result);
           """
+    wasm128:
+      [si8, si16, si32, si64, f?]:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<le, build>(left, right));"
+      ui8:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<le, build[suffix=\"u8x16\"]>(left, right));"
+      ui16:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<le, build[suffix=\"u16x8\"]>(left, right));"
+      ui32:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<le, build[suffix=\"u32x4\"]>(left, right));"
+      ui64:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000000000000000)));
+            complete(
+              intrin<le, build[suffix="i64x2"]>(
+                call<primitive=binary_xor>(left, sign_bit),
+                call<primitive=binary_xor>(right, sign_bit)
+              )
+            );
+          """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_left, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(left)));
+              var<const_infer>(generic_right, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(right)));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_left, generic_right));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=to_array[GenericVec]>(
+                    call<primitive=to_vector[GenericVec]>(generic_result)
+                  )
+                )
+              );
+            """
     oneapi_fpga:
       arith:
         requires []
@@ -1108,12 +1318,12 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type(vector::register));
-            RegisterT result{};
-            var<const_infer>(true_value, mask<lane_true>());
-            var<const_infer>(false_value, mask<lane_false>());
+            let<type>(MaskT, type(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = (left[i] <= right[i]) ? true_value : false_value;
+              if (left[i] <= right[i]) {
+                mask<set>(result, i);
+              }
             }
             complete(result);
           """
@@ -1322,6 +1532,70 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
             }
             complete(result);
           """
+    wasm128:
+      [si8, si16, si32, si64, f?]:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<ge, build>(left, right));"
+      ui8:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<ge, build[suffix=\"u8x16\"]>(left, right));"
+      ui16:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<ge, build[suffix=\"u16x8\"]>(left, right));"
+      ui32:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<ge, build[suffix=\"u32x4\"]>(left, right));"
+      ui64:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000000000000000)));
+            complete(
+              intrin<ge, build[suffix="i64x2"]>(
+                call<primitive=binary_xor>(left, sign_bit),
+                call<primitive=binary_xor>(right, sign_bit)
+              )
+            );
+          """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_left, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(left)));
+              var<const_infer>(generic_right, call<primitive=from_array[GenericVec]>(call<primitive=to_array[Vec]>(right)));
+              var<const_infer>(generic_result, call<primitive=@self[GenericVec]>(generic_left, generic_right));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=to_array[GenericVec]>(
+                    call<primitive=to_vector[GenericVec]>(generic_result)
+                  )
+                )
+              );
+            """
     oneapi_fpga:
       arith:
         requires []
@@ -1331,12 +1605,12 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type(vector::register));
-            RegisterT result{};
-            var<const_infer>(true_value, mask<lane_true>());
-            var<const_infer>(false_value, mask<lane_false>());
+            let<type>(MaskT, type(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = (left[i] >= right[i]) ? true_value : false_value;
+              if (left[i] >= right[i]) {
+                mask<set>(result, i);
+              }
             }
             complete(result);
           """
@@ -1545,6 +1819,22 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
             }
             complete(result);
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=equal[Vec]>(left, right)
+              )
+            );
+          """
     oneapi_fpga:
       arith:
         requires []
@@ -1554,15 +1844,15 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type(vector::register));
-            RegisterT result{};
-            var<const_infer>(true_value, mask<lane_true>());
-            var<const_infer>(false_value, mask<lane_false>());
+            let<type>(MaskT, type(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = (
+              if (
                 (left[i] == right[i]) &&
-                (mask<test>(mask,i))
-              ) ? true_value : false_value;
+                (mask<test>(mask, i))
+              ) {
+                mask<set>(result, i);
+              }
             }
             complete(result);
           """
@@ -1768,6 +2058,22 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
             }
             complete(result);
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=nequal[Vec]>(left, right)
+              )
+            );
+          """
     oneapi_fpga:
       arith:
         requires []
@@ -1777,15 +2083,15 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type(vector::register));
-            RegisterT result{};
-            var<const_infer>(true_value, mask<lane_true>());
-            var<const_infer>(false_value, mask<lane_false>());
+            let<type>(MaskT, type(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = (
+              if (
                 (left[i] != right[i]) &&
                 (mask<test>(mask, i))
-              ) ? true_value : false_value;
+              ) {
+                mask<set>(result, i);
+              }
             }
             complete(result);
           """
@@ -1990,6 +2296,22 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
             }
             complete(result);
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=less_than[Vec]>(left, right)
+              )
+            );
+          """
     oneapi_fpga:
       arith:
         requires []
@@ -1999,15 +2321,15 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type(vector::register));
-            RegisterT result{};
-            var<const_infer>(true_value, mask<lane_true>());
-            var<const_infer>(false_value, mask<lane_false>());
+            let<type>(MaskT, type(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = (
+              if (
                 (left[i] < right[i]) &&
                 (mask<test>(mask, i))
-              ) ? true_value : false_value;
+              ) {
+                mask<set>(result, i);
+              }
             }
             complete(result);
           """
@@ -2212,6 +2534,22 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
             }
             complete(result);
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=greater_than[Vec]>(left, right)
+              )
+            );
+          """
     oneapi_fpga:
       arith:
         requires []
@@ -2221,15 +2559,15 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type(vector::register));
-            RegisterT result{};
-            var<const_infer>(true_value, mask<lane_true>());
-            var<const_infer>(false_value, mask<lane_false>());
+            let<type>(MaskT, type(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = (
+              if (
                 (left[i] > right[i]) &&
                 (mask<test>(mask, i))
-              ) ? true_value : false_value;
+              ) {
+                mask<set>(result, i);
+              }
             }
             complete(result);
           """
@@ -2434,6 +2772,22 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
             }
             complete(result);
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=less_than_or_equal[Vec]>(left, right)
+              )
+            );
+          """
     oneapi_fpga:
       arith:
         requires []
@@ -2443,15 +2797,15 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type(vector::register));
-            RegisterT result{};
-            var<const_infer>(true_value, mask<lane_true>());
-            var<const_infer>(false_value, mask<lane_false>());
+            let<type>(MaskT, type(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = (
+              if (
                 (left[i] <= right[i]) &&
                 (mask<test>(mask, i))
-              ) ? true_value : false_value;
+              ) {
+                mask<set>(result, i);
+              }
             }
             complete(result);
           """
@@ -2656,6 +3010,22 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
             }
             complete(result);
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=greater_than_or_equal[Vec]>(left, right)
+              )
+            );
+          """
     oneapi_fpga:
       arith:
         requires []
@@ -2665,15 +3035,15 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(RegisterT, type(vector::register));
-            RegisterT result{};
-            var<const_infer>(true_value, mask<lane_true>());
-            var<const_infer>(false_value, mask<lane_false>());
+            let<type>(MaskT, type(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = (
+              if (
                 (left[i] >= right[i]) &&
                 (mask<test>(mask, i))
-              ) ? true_value : false_value;
+              ) {
+                mask<set>(result, i);
+              }
             }
             complete(result);
           """

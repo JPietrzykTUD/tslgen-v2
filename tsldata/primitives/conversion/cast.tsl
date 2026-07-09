@@ -147,12 +147,13 @@ prim<v:=v>[cast=reinterpret] reinterpret(data):
                     complete(intrin<svreinterpret_, build[infix=to_type_suffix, suffix=base::in]>(data));
                   }
                 """
-    [generic, oneapi_fpga, scalar]:
+    [generic, oneapi_fpga, scalar, wasm128]:
       arith:
         requires:
           generic []
           oneapi_fpga []
           scalar []
+          wasm128 [simd128]
         ToBase:
           arith:
             safety:
@@ -1431,9 +1432,11 @@ prim<v:=v>[cast=convert] cast(data):
                   result[0] = cast<static>(type(base::generic(OutVec)), in_arr[0]);
                   complete(call<primitive=from_array[OutVec]>(result)) ;
                 """
-    generic:
+    [generic, wasm128]:
       arith:
-        requires []
+        requires:
+          generic []
+          wasm128 [simd128]
         ToBase:
           arith:
             safety:

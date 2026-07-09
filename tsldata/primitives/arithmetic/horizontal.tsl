@@ -204,7 +204,7 @@ prim<s:=v> hadd(vec):
             }
             complete(result);
           """
-    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
           scalar []
@@ -214,6 +214,7 @@ prim<s:=v> hadd(vec):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -379,7 +380,7 @@ prim<s:=v> hmax(vec):
             var<const_infer>(temp, intrin<_mm_max_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
             complete(intrin<_mm_cvtsd_f64>(temp));
           """
-    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
           scalar []
@@ -389,6 +390,7 @@ prim<s:=v> hmax(vec):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -556,7 +558,7 @@ prim<s:=v> hmin(vec):
             var<const_infer>(temp, intrin<_mm_min_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
             complete(intrin<_mm_cvtsd_f64>(temp));
           """
-    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
           scalar []
@@ -566,6 +568,7 @@ prim<s:=v> hmin(vec):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -658,7 +661,7 @@ prim<s:=(m,v)> hadd(mask, vec):
           reasons []
         implementation:
           tsil "complete(call<primitive=hadd>(call<primitive=blend>(mask, call<primitive=set_zero[Vec]>(), vec)));"
-    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
           scalar []
@@ -668,6 +671,7 @@ prim<s:=(m,v)> hadd(mask, vec):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -785,7 +789,7 @@ prim<s:=(m,v)> hmax(mask, vec):
             }
             complete(cast<static>(type(base::in), intrin<mask_reduce_max, build>(mask, vec)));
           """
-    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
           scalar []
@@ -795,6 +799,7 @@ prim<s:=(m,v)> hmax(mask, vec):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -918,7 +923,7 @@ prim<s:=(m,v)> hmin(mask, vec):
             }
             complete(cast<static>(type(base::in), intrin<mask_reduce_min, build>(mask, vec)));
           """
-    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon]:
+    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
           scalar []
@@ -928,6 +933,7 @@ prim<s:=(m,v)> hmin(mask, vec):
           avx2 [avx2]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false

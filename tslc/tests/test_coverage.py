@@ -92,7 +92,7 @@ def test_scalable_fixed_lane_signatures_are_policy_deferred(
     assert {entry.status for entry in result.skipped} == {"policy_deferred"}
 
     report = format_coverage_report(result)
-    assert "1079 emitted / 1079 attempted" in report
+    assert "1142 emitted / 1142 attempted" in report
     assert "30 policy-deferred slots" in report
     assert "skipped because" not in report
     assert "policy-deferred because" in report

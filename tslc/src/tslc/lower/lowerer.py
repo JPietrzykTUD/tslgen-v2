@@ -16,7 +16,7 @@ this file.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 
 from tslc.backend import translation_common
@@ -72,6 +72,9 @@ class LoweredTypeParam:
     name: str
     bounds: tuple[str, ...] = ()
     base_type_constraints: tuple[str, ...] = ()
+    specialize_base: bool = False
+    base_type_binding: str | None = None
+    base_type_binding_spelling: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -381,6 +384,10 @@ class Lowerer:
                 for gp in selected.primitive.generic_params
                 if gp.kind == "simd_type"
             ),
+            simd_type_param_base_bindings={
+                binding.param_name: binding.base_tag
+                for binding in selected.simd_type_base_bindings
+            },
             lane_list_params=_lane_list_param_map(
                 parameters,
                 shape,
@@ -391,10 +398,20 @@ class Lowerer:
         )
         context = body_context(env, scope, shape, self._support)
 
+        param_context = (
+            body_context(
+                replace(env, simd_type_param_base_bindings={}),
+                scope,
+                shape,
+                self._support,
+            )
+            if selected.simd_type_base_bindings
+            else context
+        )
         param_type_overrides = _param_type_overrides(
             selected.primitive,
             parameters,
-            context,
+            param_context,
             self._region_lowerers,
         )
 
@@ -519,6 +536,20 @@ class Lowerer:
                         )
                     ),
                     base_type_constraints=gp.base_type_constraints,
+                    specialize_base=gp.specialize_base,
+                    base_type_binding=context.env.simd_type_param_base_bindings.get(
+                        gp.name
+                    ),
+                    base_type_binding_spelling=(
+                        backend.types.scalar_spelling(binding)
+                        if (
+                            binding := context.env.simd_type_param_base_bindings.get(
+                                gp.name
+                            )
+                        )
+                        is not None
+                        else None
+                    ),
                 )
                 for gp in selected.primitive.generic_params
                 if gp.kind == "simd_type"

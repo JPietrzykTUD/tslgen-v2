@@ -1,0 +1,1 @@
+cmake -S . -B build -DCMAKE_CXX_COMPILER=/usr/bin/c++ -DTSL_PROFILE=auto

@@ -43,6 +43,38 @@ template <class Primitive, class... Args>
 inline constexpr implementation_state implementation_state_v =
     implementation_state_of<Primitive, Args...>::value;
 
+namespace detail {
+
+struct base_si8_tag {};
+struct base_si16_tag {};
+struct base_si32_tag {};
+struct base_si64_tag {};
+struct base_ui8_tag {};
+struct base_ui16_tag {};
+struct base_ui32_tag {};
+struct base_ui64_tag {};
+struct base_f32_tag {};
+struct base_f64_tag {};
+
+template <class T, class Enable = void>
+struct base_type_dispatch_key;
+
+template <> struct base_type_dispatch_key<std::int8_t> { using type = base_si8_tag; };
+template <> struct base_type_dispatch_key<std::int16_t> { using type = base_si16_tag; };
+template <> struct base_type_dispatch_key<std::int32_t> { using type = base_si32_tag; };
+template <> struct base_type_dispatch_key<std::int64_t> { using type = base_si64_tag; };
+template <> struct base_type_dispatch_key<std::uint8_t> { using type = base_ui8_tag; };
+template <> struct base_type_dispatch_key<std::uint16_t> { using type = base_ui16_tag; };
+template <> struct base_type_dispatch_key<std::uint32_t> { using type = base_ui32_tag; };
+template <> struct base_type_dispatch_key<std::uint64_t> { using type = base_ui64_tag; };
+template <> struct base_type_dispatch_key<float> { using type = base_f32_tag; };
+template <> struct base_type_dispatch_key<double> { using type = base_f64_tag; };
+
+template <class T>
+using base_type_dispatch_key_t = typename base_type_dispatch_key<T>::type;
+
+}  // namespace detail
+
 // Type-punning bit reinterpret (`cast<bitcast>`): copy the object representation into a
 // same-sized destination type. `std::bit_cast` needs C++20; this `memcpy` form is C++17 and
 // the optimizer lowers it to a register move (used e.g. to read a SIMD register as another).
@@ -317,6 +349,16 @@ inline std::uint32_t popcount(T v) {
     return static_cast<std::uint32_t>(
         __builtin_popcountll(static_cast<unsigned long long>(static_cast<U>(v))));
 }
+#if defined(AC_VERSION)
+template <int W, bool S>
+inline std::uint32_t popcount(ac_int<W, S> v) {
+    std::uint32_t count = 0;
+    for (int i = 0; i < W; ++i) {
+        count += v[i] ? 1u : 0u;
+    }
+    return count;
+}
+#endif
 // Trailing-zero count of an integer mask (used by `tzc`): the index of the lowest set bit,
 // or the full bit-width when the mask is zero. `__builtin_ctzll(0)` is undefined, hence the
 // guard. Matches the frozen runtime-support `ctz` / Rust's `trailing_zeros`.
@@ -330,6 +372,17 @@ inline std::uint32_t ctz(T v) {
         __builtin_ctzll(static_cast<unsigned long long>(static_cast<U>(v)))
     );
 }
+#if defined(AC_VERSION)
+template <int W, bool S>
+inline std::uint32_t ctz(ac_int<W, S> v) {
+    for (int i = 0; i < W; ++i) {
+        if (v[i]) {
+            return static_cast<std::uint32_t>(i);
+        }
+    }
+    return static_cast<std::uint32_t>(W);
+}
+#endif
 // Leading-zero count of an integer (used by `lzc`/`lzc_imask`): the number of high-order
 // zero bits, width-aware via `sizeof(T)` (so a `u8` counts within 8 bits), and the full
 // bit-width when the value is zero (`__builtin_clzll(0)` is undefined). Matches the frozen
@@ -345,6 +398,17 @@ inline std::uint32_t clz(T v) {
     const int leading = __builtin_clzll(static_cast<unsigned long long>(static_cast<U>(v)));
     return static_cast<std::uint32_t>(leading - (ull_width - width));
 }
+#if defined(AC_VERSION)
+template <int W, bool S>
+inline std::uint32_t clz(ac_int<W, S> v) {
+    for (int i = W; i-- > 0;) {
+        if (v[i]) {
+            return static_cast<std::uint32_t>(W - 1 - i);
+        }
+    }
+    return static_cast<std::uint32_t>(W);
+}
+#endif
 // Test lane `index` of an emulated mask, agnostic to how the vector stores it. Two reprs:
 // an integer bitset (the generic vector's `std::uint64_t`, or a native `__mmaskN`) tests bit
 // `index`; a register lane-mask (sse/avx2, where the mask IS a data register whose lanes are

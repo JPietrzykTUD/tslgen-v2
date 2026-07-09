@@ -64,6 +64,7 @@ def test_query_facade_separates_evaluator_from_namespace_functions() -> None:
 
     assert QueryEvaluator.__module__ == "tslc.lower.queries"
     assert modules_by_head["type::is_same"] == "tslc.lower._query_core"
+    assert modules_by_head["type::same_size"] == "tslc.lower._query_core"
     assert modules_by_head["vector::length"] == "tslc.lower._query_vector"
     assert modules_by_head["vector::runtime_length"] == "tslc.lower._query_vector"
 
@@ -73,6 +74,8 @@ def test_type_is_same_query(catalog: Catalog) -> None:
     ctx = _ctx(catalog, "avx2", "ui16")
     assert ev.evaluate("type::is_same(type(base::in), ui16)", ctx) == BoolValue(True)
     assert ev.evaluate("type::is_same(type(base::in), ui8)", ctx) == BoolValue(False)
+    assert ev.evaluate("type::same_size(type(base::in), si16)", ctx) == BoolValue(True)
+    assert ev.evaluate("type::same_size(type(base::in), si32)", ctx) == BoolValue(False)
 
 
 def test_select_query_chooses_same_kind_generation_value(catalog: Catalog) -> None:
@@ -216,19 +219,45 @@ def test_simd_type_generic_params_are_queryable_by_authored_name(
     )
 
 
+def test_bound_simd_type_base_param_is_generation_queryable(catalog: Catalog) -> None:
+    ev = QueryEvaluator()
+    ctx = LoweringSession(
+        env=LoweringEnv(
+            catalog=catalog,
+            backend=create_backend_dialect(catalog, "cpp"),
+            extension=catalog.extensions["avx2"],
+            type_tag="si32",
+            simd_type_param_names=frozenset({"IndexVec"}),
+            simd_type_param_base_bindings={"IndexVec": "ui32"},
+        )
+    )
+
+    assert ev.evaluate("type(base::generic(IndexVec))", ctx) == TypeValue("ui32")
+    assert ev.evaluate(
+        "type::is_same(type(base::generic(IndexVec)), ui32)", ctx
+    ) == BoolValue(True)
+    assert ev.evaluate(
+        "type::same_size(type(base::in), type(base::generic(IndexVec)))", ctx
+    ) == BoolValue(True)
+
+
 def test_lowering_env_freezes_simd_type_param_names(catalog: Catalog) -> None:
     names = {"IndexVec"}
+    bindings = {"IndexVec": "ui32"}
     env = LoweringEnv(
         catalog=catalog,
         backend=create_backend_dialect(catalog, "cpp"),
         extension=catalog.extensions["avx2"],
         type_tag="si32",
         simd_type_param_names=names,
+        simd_type_param_base_bindings=bindings,
     )
 
     names.add("OtherVec")
+    bindings["IndexVec"] = "si64"
 
     assert env.simd_type_param_names == frozenset({"IndexVec"})
+    assert dict(env.simd_type_param_base_bindings) == {"IndexVec": "ui32"}
 
 
 # --- if<generation> lowering (taken branch only) -----------------------------

@@ -1060,7 +1060,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
               intrin<maskz_and, build>(mask, left, right)
             );
           """
-    [avx2, sse, neon]:
+    [avx2, sse, neon, wasm128]:
       arith:
         requires:
           avx2:
@@ -1071,6 +1071,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1222,7 +1223,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
               intrin<mask_and, build>(left, mask, left, right)
             );
           """
-    [avx2, sse, neon]:
+    [avx2, sse, neon, wasm128]:
       arith:
         requires:
           avx2:
@@ -1233,6 +1234,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1385,7 +1387,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
               intrin<maskz_andnot, build>(mask, left, right)
             );
           """
-    [avx2, sse, neon]:
+    [avx2, sse, neon, wasm128]:
       arith:
         requires:
           avx2:
@@ -1396,6 +1398,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1548,7 +1551,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
               intrin<mask_andnot, build>(left, mask, left, right)
             );
           """
-    [avx2, sse, neon, sve]:
+    [avx2, sse, neon, sve, wasm128]:
       arith:
         requires:
           avx2:
@@ -1560,6 +1563,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
             f64 [sse, sse2]
           neon [neon]
           sve [sve]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1680,7 +1684,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
               intrin<maskz_or, build>(mask, left, right)
             );
           """
-    [avx2, sse, neon]:
+    [avx2, sse, neon, wasm128]:
       arith:
         requires:
           avx2:
@@ -1691,6 +1695,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1842,7 +1847,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
               intrin<mask_or, build>(left, mask, left, right)
             );
           """
-    [avx2, sse, neon]:
+    [avx2, sse, neon, wasm128]:
       arith:
         requires:
           avx2:
@@ -1853,6 +1858,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2004,7 +2010,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
               intrin<maskz_xor, build>(mask, left, right)
             );
           """
-    [avx2, sse, neon]:
+    [avx2, sse, neon, wasm128]:
       arith:
         requires:
           avx2:
@@ -2015,6 +2021,7 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2166,7 +2173,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
               intrin<mask_xor, build>(left, mask, left, right)
             );
           """
-    [avx2, sse, neon]:
+    [avx2, sse, neon, wasm128]:
       arith:
         requires:
           avx2:
@@ -2177,6 +2184,7 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2342,7 +2350,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
               )
             );
           """
-    [avx2, sse, neon]:
+    [avx2, sse, neon, wasm128]:
       arith:
         requires:
           avx2:
@@ -2353,6 +2361,7 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2526,7 +2535,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
               )
             );
           """
-    [avx2, sse, neon]:
+    [avx2, sse, neon, wasm128]:
       arith:
         requires:
           avx2:
@@ -2537,6 +2546,7 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
             f32 [sse]
             f64 [sse, sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false

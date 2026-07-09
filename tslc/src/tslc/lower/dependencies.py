@@ -35,6 +35,7 @@ from tslc.lower.queries import (
     QueryFunction,
     QueryValue,
     SelectQuery,
+    SameSizeQuery,
     SignedOfQuery,
     SizeBytesQuery,
     TypeQuery,
@@ -59,6 +60,7 @@ _DEPENDENCY_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
     SelectQuery(),
     IsSameQuery(),
     SizeBytesQuery(),
+    SameSizeQuery(),
     IsSignedQuery(),
     AttributeQuery(),
     VectorAlignmentQuery(),
@@ -101,6 +103,7 @@ class _DependencyQueryEnv:
     extension: Extension
     type_tag: str
     attributes: Mapping[str, str] = field(default_factory=dict)
+    simd_type_param_base_bindings: Mapping[str, str] = field(default_factory=dict)
     concrete_lanes: int | None = None
     backend: _DependencyBackendCapabilities = field(
         default_factory=_DependencyBackendCapabilities
@@ -111,6 +114,11 @@ class _DependencyQueryEnv:
             self,
             "attributes",
             MappingProxyType(dict(sorted(self.attributes.items()))),
+        )
+        object.__setattr__(
+            self,
+            "simd_type_param_base_bindings",
+            MappingProxyType(dict(sorted(self.simd_type_param_base_bindings.items()))),
         )
 
     def lane_symbol(self) -> str:

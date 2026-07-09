@@ -33,6 +33,9 @@ from tslc.syntax.ast import (
 
 _KNOWN_GENERIC_PARAM_KINDS = frozenset({"bool", "int", "simd_type"})
 _KNOWN_IMMEDIATE_DISPATCH = frozenset({"literal_match"})
+_BASE_WIDTH_CONSTRAINT_RE = re.compile(
+    r"^width\(self::base\)\s*(>=|>|==)\s*width\(base::in\)$"
+)
 _KNOWN_PRIMITIVE_FIELDS = frozenset(
     {
         "brief_description",
@@ -142,7 +145,9 @@ def _validate_generic_params(
         for entry in children(field.field):
             validate_known_fields(
                 children(entry),
-                frozenset({"kind", "default", "base_types"}),
+                frozenset(
+                    {"kind", "default", "base_types", "specialize_base", "constraints"}
+                ),
                 diagnostics,
                 owner=f"generic parameter {entry.key.text!r}",
             )
@@ -155,7 +160,69 @@ def _validate_generic_params(
                     f"generic parameter kind {kind!r}",
                     sorted(_KNOWN_GENERIC_PARAM_KINDS),
                 )
-            base_types = child(entry, "base_types")
+            specialize_base = child(entry, "specialize_base")
+            if specialize_base is not None:
+                specialize_value = field_text(specialize_base)
+                if specialize_value not in KNOWN_BOOLEAN_VALUES:
+                    invalid_enum(
+                        diagnostics,
+                        specialize_base,
+                        f"generic parameter {entry.key.text!r} specialize_base value "
+                        f"{specialize_value!r}",
+                        sorted(KNOWN_BOOLEAN_VALUES),
+                    )
+                if kind != "simd_type":
+                    diagnostics.append(
+                        diagnostic_at(
+                            severity="error",
+                            code="TSL-CATALOG-SIMD-TYPE-CONSTRAINT",
+                            message=(
+                                f"generic parameter {entry.key.text!r} uses specialize_base, "
+                                "but specialize_base is allowed only for kind 'simd_type'"
+                            ),
+                            source=source_span(specialize_base.source),
+                        )
+                    )
+            constraints = child(entry, "constraints")
+            if constraints is not None:
+                _validate_generic_param_constraints(
+                    entry.key.text,
+                    constraints,
+                    kind,
+                    field_text(specialize_base) == "true",
+                    diagnostics,
+                )
+            direct_base_types = child(entry, "base_types")
+            nested_base_types = child(constraints, "base_types")
+            if direct_base_types is not None and nested_base_types is not None:
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-SIMD-TYPE-CONSTRAINT",
+                        message=(
+                            f"generic parameter {entry.key.text!r} declares base_types "
+                            "both directly and inside constraints"
+                        ),
+                        source=source_span(nested_base_types.source),
+                    )
+                )
+            base_types = nested_base_types or direct_base_types
+            if (
+                specialize_base is not None
+                and field_text(specialize_base) == "true"
+                and base_types is None
+            ):
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-SIMD-TYPE-CONSTRAINT",
+                        message=(
+                            f"generic parameter {entry.key.text!r} uses specialize_base, "
+                            "but specialized simd_type parameters must declare base_types"
+                        ),
+                        source=source_span(specialize_base.source),
+                    )
+                )
             if base_types is None:
                 continue
             if kind != "simd_type":
@@ -182,6 +249,73 @@ def _validate_generic_params(
                         source=source_span(base_types.source),
                     )
                 )
+
+
+def _validate_generic_param_constraints(
+    name: str,
+    constraints,
+    kind: str | None,
+    specialize_base: bool,
+    diagnostics: list[Diagnostic],
+) -> None:
+    constraint_fields = children(constraints)
+    diagnose_duplicate_fields(
+        constraint_fields,
+        diagnostics,
+        label=f"generic parameter {name!r} constraint",
+    )
+    width_constraint_count = 0
+    for field in constraint_fields:
+        key = field.key.text
+        if key == "base_types":
+            continue
+        if _BASE_WIDTH_CONSTRAINT_RE.fullmatch(key):
+            width_constraint_count += 1
+            if kind != "simd_type":
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-SIMD-TYPE-CONSTRAINT",
+                        message=(
+                            f"generic parameter {name!r} uses a base-width constraint, "
+                            "but base-width constraints are allowed only for kind 'simd_type'"
+                        ),
+                        source=source_span(field.source),
+                    )
+                )
+            if not specialize_base:
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-CATALOG-SIMD-TYPE-CONSTRAINT",
+                        message=(
+                            f"generic parameter {name!r} uses a base-width constraint, "
+                            "but base-width constraints require specialize_base true"
+                        ),
+                        source=source_span(field.source),
+                    )
+                )
+            continue
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-UNKNOWN-FIELD",
+                message=f"unknown field {key!r} in generic parameter {name!r} constraints",
+                source=source_span(field.source),
+            )
+        )
+    if width_constraint_count > 1:
+        diagnostics.append(
+            diagnostic_at(
+                severity="error",
+                code="TSL-CATALOG-SIMD-TYPE-CONSTRAINT",
+                message=(
+                    f"generic parameter {name!r} constraints may contain at most one "
+                    "base-width constraint"
+                ),
+                source=source_span(constraints.source),
+            )
+        )
 
 
 def _validate_immediate_params(

@@ -192,6 +192,22 @@ prim<v:=(v,sImm)> shift_left(data, shift):
                 )
               );
             """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              complete(
+                call<primitive=shift_left>(
+                  data,
+                  cast<static>(type(base::in), shift)
+                )
+              );
+            """
     sve:
       ?i?:
         requires [sve]
@@ -358,6 +374,18 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
     sve:
       arith:
         requires [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              var<const_infer>(shifted, call<primitive=shift_left[Vec, shift]>(data));
+              complete(call<primitive=blend>(mask, data, shifted));
+            """
+    wasm128:
+      arith:
+        requires [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -543,6 +571,43 @@ prim<v:=(v,s)> shift_left(data, shift):
           reasons []
         implementation:
           tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=@self[GenericVec]>(
+                    generic_data,
+                    shift
+                  )
+                )
+              );
+            """
+    wasm128:
+      ?i?:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<shl, build>(data, cast<static>(ui32, shift)));"
+      f?:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
+              let<type>(UnsignedVec, type(vector::as_base(UnsignedT)));
+              var<const_infer>(udata, call<primitive=reinterpret[Vec, UnsignedVec]>(data));
+              var<const_infer>(ures, intrin<shl, build[suffix=UnsignedT]>(udata, cast<static>(ui32, shift)));
+              complete(call<primitive=reinterpret[UnsignedVec, Vec]>(ures));
+            """
+        variants:
+          generic_fallback:
+            tsil """
               let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
@@ -747,6 +812,26 @@ prim<v:=(v,v)> shift_left(data, shift):
             """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=@self[GenericVec]>(
+                    generic_data, generic_shift
+                  )
+                )
+              );
+            """
+    wasm128:
+      arith:
+        requires [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1167,6 +1252,35 @@ prim<v:=(v,sImm)> shift_right(data, shift):
           reasons []
         implementation:
           tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=@self[GenericVec, shift, PreserveSign]>(
+                    generic_data
+                  )
+                )
+              );
+            """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              complete(
+                call<primitive=shift_right[Vec, PreserveSign]>(
+                  data,
+                  cast<static>(type(base::in), shift)
+                )
+              );
+            """
+        variants:
+          generic_fallback:
+            tsil """
               let<type>(GenericVec, type(vector::as_extension(generic)));
               var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
               complete(
@@ -1719,6 +1833,123 @@ prim<v:=(v,s)> shift_right(data, shift):
                 )
               );
             """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              if<generation>(type::is_same(type(base::in), ui8)) {
+                complete(intrin<shr, build[suffix="u8x16"]>(data, cast<static>(ui32, shift)));
+              } else<generation> {
+                if<generation>(type::is_same(type(base::in), ui16)) {
+                  complete(intrin<shr, build[suffix="u16x8"]>(data, cast<static>(ui32, shift)));
+                } else<generation> {
+                  if<generation>(type::is_same(type(base::in), ui32)) {
+                    complete(intrin<shr, build[suffix="u32x4"]>(data, cast<static>(ui32, shift)));
+                  } else<generation> {
+                    if<generation>(type::is_same(type(base::in), ui64)) {
+                      complete(intrin<shr, build[suffix="u64x2"]>(data, cast<static>(ui32, shift)));
+                    } else<generation> {
+                      if<generation>(type::is_same(type(base::in), si8)) {
+                        if<compile>(!PreserveSign) {
+                          let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
+                          let<type>(UnsignedVec, type(vector::as_base(UnsignedT)));
+                          var<const_infer>(udata, call<primitive=reinterpret[Vec, UnsignedVec]>(data));
+                          var<const_infer>(ures, intrin<shr, build[suffix="u8x16"]>(udata, cast<static>(ui32, shift)));
+                          complete(call<primitive=reinterpret[UnsignedVec, Vec]>(ures));
+                        } else<compile> {
+                          complete(intrin<shr, build>(data, cast<static>(ui32, shift)));
+                        }
+                      } else<generation> {
+                        if<generation>(type::is_same(type(base::in), si16)) {
+                          if<compile>(!PreserveSign) {
+                            let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
+                            let<type>(UnsignedVec, type(vector::as_base(UnsignedT)));
+                            var<const_infer>(udata, call<primitive=reinterpret[Vec, UnsignedVec]>(data));
+                            var<const_infer>(ures, intrin<shr, build[suffix="u16x8"]>(udata, cast<static>(ui32, shift)));
+                            complete(call<primitive=reinterpret[UnsignedVec, Vec]>(ures));
+                          } else<compile> {
+                            complete(intrin<shr, build>(data, cast<static>(ui32, shift)));
+                          }
+                        } else<generation> {
+                          if<generation>(type::is_same(type(base::in), si32)) {
+                            if<compile>(!PreserveSign) {
+                              let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
+                              let<type>(UnsignedVec, type(vector::as_base(UnsignedT)));
+                              var<const_infer>(udata, call<primitive=reinterpret[Vec, UnsignedVec]>(data));
+                              var<const_infer>(ures, intrin<shr, build[suffix="u32x4"]>(udata, cast<static>(ui32, shift)));
+                              complete(call<primitive=reinterpret[UnsignedVec, Vec]>(ures));
+                            } else<compile> {
+                              complete(intrin<shr, build>(data, cast<static>(ui32, shift)));
+                            }
+                          } else<generation> {
+                            if<generation>(type::is_same(type(base::in), si64)) {
+                              if<compile>(!PreserveSign) {
+                                let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
+                                let<type>(UnsignedVec, type(vector::as_base(UnsignedT)));
+                                var<const_infer>(udata, call<primitive=reinterpret[Vec, UnsignedVec]>(data));
+                                var<const_infer>(ures, intrin<shr, build[suffix="u64x2"]>(udata, cast<static>(ui32, shift)));
+                                complete(call<primitive=reinterpret[UnsignedVec, Vec]>(ures));
+                              } else<compile> {
+                                complete(intrin<shr, build>(data, cast<static>(ui32, shift)));
+                              }
+                            } else<generation> {
+                              if<generation>(type::is_same(type(base::in), f32)) {
+                                if<compile>(!PreserveSign) {
+                                  let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
+                                  let<type>(UnsignedVec, type(vector::as_base(UnsignedT)));
+                                  var<const_infer>(udata, call<primitive=reinterpret[Vec, UnsignedVec]>(data));
+                                  var<const_infer>(ures, intrin<shr, build[suffix="u32x4"]>(udata, cast<static>(ui32, shift)));
+                                  complete(call<primitive=reinterpret[UnsignedVec, Vec]>(ures));
+                                } else<compile> {
+                                  let<type>(SignedT, type(base::signed_of(type(base::in))));
+                                  let<type>(SignedVec, type(vector::as_base(SignedT)));
+                                  var<const_infer>(sdata, call<primitive=reinterpret[Vec, SignedVec]>(data));
+                                  var<const_infer>(sres, intrin<shr, build[suffix="i32x4"]>(sdata, cast<static>(ui32, shift)));
+                                  complete(call<primitive=reinterpret[SignedVec, Vec]>(sres));
+                                }
+                              } else<generation> {
+                                if<compile>(!PreserveSign) {
+                                  let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
+                                  let<type>(UnsignedVec, type(vector::as_base(UnsignedT)));
+                                  var<const_infer>(udata, call<primitive=reinterpret[Vec, UnsignedVec]>(data));
+                                  var<const_infer>(ures, intrin<shr, build[suffix="u64x2"]>(udata, cast<static>(ui32, shift)));
+                                  complete(call<primitive=reinterpret[UnsignedVec, Vec]>(ures));
+                                } else<compile> {
+                                  let<type>(SignedT, type(base::signed_of(type(base::in))));
+                                  let<type>(SignedVec, type(vector::as_base(SignedT)));
+                                  var<const_infer>(sdata, call<primitive=reinterpret[Vec, SignedVec]>(data));
+                                  var<const_infer>(sres, intrin<shr, build[suffix="i64x2"]>(sdata, cast<static>(ui32, shift)));
+                                  complete(call<primitive=reinterpret[SignedVec, Vec]>(sres));
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=@self[GenericVec, PreserveSign]>(
+                    generic_data,
+                    shift
+                  )
+                )
+              );
+            """
     sve:
       ?i?:
         requires [sve]
@@ -2009,6 +2240,27 @@ prim<v:=(v,v)> shift_right(data, shift):
             """
       f?:
         requires [neon]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_data, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(data)));
+              var<const_infer>(generic_shift, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(shift)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=@self[GenericVec, PreserveSign]>(
+                    generic_data,
+                    generic_shift
+                  )
+                )
+              );
+            """
+    wasm128:
+      arith:
+        requires [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false

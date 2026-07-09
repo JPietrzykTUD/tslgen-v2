@@ -16,7 +16,7 @@ prim<void:=(ptr,cptr,s,s)> memory_cp(dst, src, count_bytes, copy_kind):
     - {tags [misaligned], type "ui8", src_offset 1, dst_offset 3, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32], 16], expected [0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
     - {tags [misaligned, full], type "ui8", src_offset 7, dst_offset 5, case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32], 32], expected [0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]}}
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, scalar, generic, oneapi_fpga]:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, sve, scalar, generic, oneapi_fpga, wasm128]:
       ptr:
         requires:
           avx512 [avx512f]
@@ -29,6 +29,7 @@ prim<void:=(ptr,cptr,s,s)> memory_cp(dst, src, count_bytes, copy_kind):
           scalar []
           generic []
           oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -50,6 +51,7 @@ prim<void:=(ptr,cptr,s,s)> memory_cp(dst, src, count_bytes, copy_kind):
           scalar []
           generic []
           oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe true

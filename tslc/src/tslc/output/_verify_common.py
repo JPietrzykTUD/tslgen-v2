@@ -17,6 +17,8 @@ from tslc.output.verify_model import (
     _normalize_compiler_executable,
 )
 
+_ONEAPI_CPP_COMPILER = "/opt/intel/oneapi/compiler/2025.0/bin/icpx"
+
 
 def missing_executable(executable: str) -> str | None:
     return executable if shutil.which(executable) is None else None
@@ -155,6 +157,10 @@ def effective_cpp_compiler(
         _is_wasm_cpp_target(candidate, config) for candidate in backend.profiles
     ):
         return ("/opt/wasi-sdk/bin/clang++",)
+    if backend is not None and backend.profiles and all(
+        _needs_oneapi_cpp_compiler(candidate) for candidate in backend.profiles
+    ):
+        return (_ONEAPI_CPP_COMPILER,)
     if backend is not None and any(cpp_target(profile, config) for profile in backend.profiles):
         return ("clang++",)
     return _native_cpp_compiler()
@@ -168,6 +174,15 @@ def _effective_cpp_compiler_for_profile(
         return ("/opt/wasi-sdk/bin/clang++",)
     if cpp_target(profile, config) is not None:
         return ("clang++",)
+    if _needs_oneapi_cpp_compiler(profile):
+        return (_ONEAPI_CPP_COMPILER,)
+    if (
+        config.run_value_tests
+        and config.sde_path is not None
+        and profile.runner is not None
+        and profile.runner.kind == "sde"
+    ):
+        return ("c++",)
     return _native_cpp_compiler()
 
 
@@ -185,6 +200,10 @@ def _native_cpp_compiler() -> tuple[str, ...]:
 def _is_wasm_cpp_target(profile: VerifyProfile, config: BuildVerifierConfig) -> bool:
     target = cpp_target(profile, config)
     return target is not None and target.startswith("wasm32-")
+
+
+def _needs_oneapi_cpp_compiler(profile: VerifyProfile) -> bool:
+    return "oneapi_fpga" in profile.compile_modes
 
 
 def _ambient_cpp_compiler() -> tuple[str, ...]:

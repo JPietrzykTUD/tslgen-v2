@@ -223,6 +223,20 @@ class GenericParam:
     # associated base type. Entries are scalar type tags or catalog type-group
     # names, e.g. ("?i32", "?i64").
     base_type_constraints: tuple[str, ...] = ()
+    # For `kind simd_type`, emit one internal implementation per constrained
+    # associated base case while keeping the public type parameter generic.
+    specialize_base: bool = False
+    # For specialized `kind simd_type`, source-level relations between the
+    # candidate associated base and the primitive's selected input base.
+    base_width_constraints: tuple["GenericParamBaseWidthConstraint", ...] = ()
+    source: SourceSpan | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class GenericParamBaseWidthConstraint:
+    """`width(self::base) <op> width(base::in)` for a SIMD type generic param."""
+
+    relation: str
     source: SourceSpan | None = None
 
 
@@ -306,6 +320,9 @@ class MaskPolicy:
     - ``"bool"`` (scalar): the mask is a ``bool``.
     - ``"lane_bitmask"`` (sse/avx2): the mask *is* the vector register (all-ones /
       all-zeros per lane), so ``mask_type = register_type``.
+    - ``"exact_lane_bitmask"`` (sized generic-like vectors): the mask is an
+      integer-like bitset with exactly one bit per lane; backend spellings may
+      name a lane-parameterized type such as ``ac_int<LANES, false>``.
     - ``"native_predicate"`` (scalable SVE): the mask is one backend-native predicate
       spelling declared directly by backend id.
     - ``"native_predicate_by_lanes"`` (avx512 and the ``_vl`` variants): the mask is a
@@ -334,6 +351,9 @@ class MaskPolicy:
 
     def spelling_for_lanes(self, backend_id: str, lanes: int) -> str | None:
         return self.backend_spelling_by_lanes.get(backend_id, {}).get(lanes)
+
+    def lowers_as_lane_bitmask(self) -> bool:
+        return self.kind in {"exact_lane_bitmask", "lane_bitmask"}
 
 
 @dataclass(frozen=True, slots=True)

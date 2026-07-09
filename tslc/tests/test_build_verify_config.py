@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -586,6 +587,60 @@ def test_sde_cpp_value_tests_pin_default_compiler_over_ambient_cxx(
     assert _env(seen[2])["CXX"] == "c++"
 
 
+def test_sde_runner_does_not_override_oneapi_cpp_default_compiler(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="cpp",
+                root_path="cpp",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="cascadelake_oneapi",
+                        file_stem="cascadelake_oneapi",
+                        family="x86",
+                        compile_modes=frozenset({"oneapi_fpga"}),
+                        runner=VerifyRunner(kind="sde", profile="clx"),
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+    oneapi_compiler = "/opt/intel/oneapi/compiler/2025.0/bin/icpx"
+    real_which = shutil.which
+
+    def fake_which(executable: str) -> str | None:
+        if executable == oneapi_compiler:
+            return executable
+        return real_which(executable)
+
+    monkeypatch.setattr(shutil, "which", fake_which)
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=BuildVerifierConfig.create(
+            run_value_tests=True,
+            sde_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert report.skipped == ()
+    assert [command.step for command in seen[:3]] == ["preflight", "clean", "configure"]
+    assert seen[0].argv[0] == oneapi_compiler
+    assert _env(seen[1])["CXX"] == oneapi_compiler
+    assert _env(seen[2])["CXX"] == oneapi_compiler
+
+
 def test_runner_value_tests_skip_non_generic_profiles_without_matching_runner(
     tmp_path: Path,
 ) -> None:
@@ -756,6 +811,90 @@ def test_cpp_wasm_default_compiler_uses_wasi_sdk() -> None:
     assert effective_cpp_compiler(BuildVerifierConfig.create(), project) == (
         "/opt/wasi-sdk/bin/clang++",
     )
+
+
+def test_cpp_oneapi_default_compiler_uses_intel_llvm() -> None:
+    project = VerifyBackend(
+        backend_id="cpp",
+        root_path="cpp",
+        profiles=(
+            VerifyProfile(
+                profile_name="cascadelake_oneapi",
+                file_stem="cascadelake_oneapi",
+                compile_modes=frozenset({"oneapi_fpga"}),
+            ),
+        ),
+    )
+
+    assert effective_cpp_compiler(BuildVerifierConfig.create(), project) == (
+        "/opt/intel/oneapi/compiler/2025.0/bin/icpx",
+    )
+    assert effective_cpp_compiler(
+        BuildVerifierConfig.create(),
+        project,
+        project.profiles[0],
+    ) == ("/opt/intel/oneapi/compiler/2025.0/bin/icpx",)
+
+
+def test_sde_runner_does_not_override_wasm_cpp_default_compiler(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project = VerifyProject(
+        backends=(
+            VerifyBackend(
+                backend_id="cpp",
+                root_path="cpp",
+                profiles=(
+                    VerifyProfile(
+                        profile_name="wasm32_simd128",
+                        file_stem="wasm32_simd128",
+                        family="wasm32",
+                        cpp_flags=("-msimd128",),
+                        cpp_target="wasm32-wasip1",
+                        runner=VerifyRunner(kind="wasmtime", profile="default"),
+                    ),
+                ),
+            ),
+        )
+    )
+    seen: list[BuildCommand] = []
+    real_which = shutil.which
+
+    def fake_which(executable: str) -> str | None:
+        if executable == "/opt/wasi-sdk/bin/clang++":
+            return executable
+        return real_which(executable)
+
+    monkeypatch.setattr(shutil, "which", fake_which)
+
+    def runner(command: BuildCommand) -> BuildCommandResult:
+        seen.append(command)
+        return BuildCommandResult(command=command, returncode=0)
+
+    report = verify_generated_project(
+        tmp_path,
+        project,
+        runner,
+        config=BuildVerifierConfig.create(
+            run_value_tests=True,
+            sde_path=sys.executable,
+            wasmtime_path=sys.executable,
+        ),
+    )
+
+    assert report.diagnostics == ()
+    assert report.skipped == ()
+    assert [command.step for command in seen[:3]] == [
+        "target-preflight",
+        "clean",
+        "configure",
+    ]
+    assert seen[0].argv[0] == "/opt/wasi-sdk/bin/clang++"
+    assert "--target=wasm32-wasip1" in seen[0].argv
+    assert "-msimd128" in seen[0].argv
+    assert _env(seen[0])["CXX"] == "/opt/wasi-sdk/bin/clang++"
+    assert _env(seen[1])["CXX"] == "/opt/wasi-sdk/bin/clang++"
 
 
 def test_cpp_default_compiler_is_profile_scoped_for_mixed_native_and_wasm(

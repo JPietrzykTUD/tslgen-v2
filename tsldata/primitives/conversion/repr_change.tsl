@@ -165,9 +165,11 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
               tsil """
                   complete(intrin<_mm512_extractf64x2_pd>(data, index));
                 """
-    generic:
+    [generic, wasm128]:
       arith:
-        requires []
+        requires:
+          generic []
+          wasm128 [simd128]
         ToExtension:
           where:
             family same_as
@@ -230,7 +232,7 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
                   }
                   complete(call<primitive=from_array[OutVec]>(result));
                 """
-    [sse, sse_vl, avx2_vl, neon, sve]:
+    [sse, sse_vl, avx2_vl, neon, sve, wasm128]:
       arith:
         requires:
           sse [sse, sse2]
@@ -238,6 +240,7 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
           avx2_vl [avx512f, avx512vl, avx]
           neon [neon]
           sve [sve]
+          wasm128 [simd128]
         ToExtension:
           where:
             family same_as
@@ -388,9 +391,11 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
               tsil """
                   complete(intrin<_mm512_insertf64x4>(orig, data, index));
                 """
-    generic:
+    [generic, wasm128]:
       arith:
-        requires []
+        requires:
+          generic []
+          wasm128 [simd128]
         ToExtension:
           where:
             family same_as
@@ -1642,7 +1647,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                     }
                   }
                 """
-    [avx512, avx2, sse, neon, generic, oneapi_fpga, scalar]:
+    [avx512, avx2, sse, neon, generic, oneapi_fpga, scalar, wasm128]:
       arith:
         # Monomorphize the sized (generic) software body over the extension's `size_bits`: one
         # concrete `generic<N>` specialization per size, so the width-changed output is a concrete
@@ -1657,6 +1662,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
           generic []
           oneapi_fpga []
           scalar []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2205,7 +2211,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               std::free(out_values);
               complete(result);
             """
-    [avx512, avx2, sse, neon, generic, oneapi_fpga, scalar]:
+    [avx512, avx2, sse, neon, generic, oneapi_fpga, scalar, wasm128]:
       arith:
         # Monomorphize the sized (generic) software body over `size_bits` (see convert_up) so the
         # width-changed output is a concrete `generic<N>`; fixed-width extensions ignore it.
@@ -2218,6 +2224,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
           generic []
           oneapi_fpga []
           scalar []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false

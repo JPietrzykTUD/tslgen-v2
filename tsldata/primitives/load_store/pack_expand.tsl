@@ -126,12 +126,13 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
             }
             std::free(values);
           """
-    [avx2, sse, neon]:
+    [avx2, sse, neon, wasm128]:
       arith:
         requires:
           avx2 [avx2]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -304,12 +305,13 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
                std::free(result_values);
                complete(result);
             """
-    [avx2, sse, neon]:
+    [avx2, sse, neon, wasm128]:
       arith:
         requires:
           avx2 [avx2]
           sse [sse2]
           neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe true
@@ -868,7 +870,7 @@ prim<v:=cptr+> load_convert_up(ptr):
                    var<const_infer>(loaded, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), ptr));
                    complete(intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[OutVec]>(), loaded));
                 """
-    [sse, sse_vl, neon, sve, generic, oneapi_fpga, scalar]:
+    [sse, sse_vl, neon, sve, generic, oneapi_fpga, scalar, wasm128]:
       arith:
         requires:
           sse [sse2]
@@ -878,6 +880,7 @@ prim<v:=cptr+> load_convert_up(ptr):
           generic []
           oneapi_fpga []
           scalar []
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe true

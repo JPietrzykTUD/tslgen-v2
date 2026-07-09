@@ -62,6 +62,15 @@ prim<v:=v> popcnt(data):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<vcntq, build>(data));"
+    wasm128:
+      ?i8:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<popcnt, build>(data));"
     sve:
       ui?:
         requires [sve]
@@ -85,7 +94,7 @@ prim<v:=v> popcnt(data):
               )
             );
           """
-    [avx2, sse, neon, generic, oneapi_fpga]:
+    [avx2, sse, neon, generic, oneapi_fpga, wasm128]:
       ?i?:
         requires:
           avx2 [avx]
@@ -93,6 +102,7 @@ prim<v:=v> popcnt(data):
           neon [neon]
           generic []
           oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -131,11 +141,12 @@ prim<usize:=s> lzc_scalar(data):
     - {tags [basic], type "ui32", lane_count 8, case {inputs [16], expected 27}}
     - {tags [edge], type "ui32", lane_count 8, case {inputs [0], expected 32}}
   impls:
-    [scalar, generic]:
+    [scalar, generic, wasm128]:
       ?i?:
         requires:
           scalar []
           generic []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -146,6 +157,7 @@ prim<usize:=s> lzc_scalar(data):
         requires:
           scalar []
           generic []
+          wasm128 [simd128]
         safety:
           internal_unsafe true
           caller_unsafe false
@@ -165,7 +177,7 @@ prim<usize:=s> lzc_scalar(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), helper<clz_recursive, type(base::in), type(vector::offset_base)::apply>(data)));"
+          tsil "complete(cast<static>(type(scalar::size), helper<clz>(data)));"
     oneapi_fpga_rtl:
       ?i?:
         requires []
@@ -174,7 +186,7 @@ prim<usize:=s> lzc_scalar(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), helper<clz_recursive, type(base::in), type(vector::offset_base)::apply>(data)));"
+          tsil "complete(cast<static>(type(scalar::size), helper<clz>(data)));"
 prim<v:=v> lzc(data):
   brief_description "Counts leading zero bits independently in each vector lane."
   detailed_description """
@@ -251,7 +263,7 @@ prim<v:=v> lzc(data):
               )
             );
           """
-    [avx512, avx2, sse, neon, scalar, generic]:
+    [avx512, avx2, sse, neon, scalar, generic, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -260,6 +272,7 @@ prim<v:=v> lzc(data):
           neon [neon]
           scalar []
           generic []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -285,7 +298,7 @@ prim<v:=v> lzc(data):
           tsil """
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
                loop<backend, unroll>(i, 0, value(vector::length), 1)  {
-                data_arr[i] = cast<static>(type(base::in), helper<clz_recursive, type(base::in), type(vector::offset_base)::apply>(data_arr[i]));
+                data_arr[i] = cast<static>(type(base::in), call<primitive=lzc_scalar[type(vector::as_extension(scalar))]>(data_arr[i]));
               }
                complete(call<primitive=from_array[Vec]>(data_arr)) ;
             """
@@ -305,7 +318,7 @@ prim<usize:=m> lzc_imask(value):
     - {tags [basic], type "ui32", expected_rule "lzc", lane_count 8, case {inputs [8], expected 60}}
     - {tags [edge], type "ui32", expected_rule "lzc", lane_count 8, case {inputs [0], expected 64}}
   impls:
-    [avx512, avx2, sse, neon, scalar, generic]:
+    [avx512, avx2, sse, neon, scalar, generic, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -314,6 +327,7 @@ prim<usize:=m> lzc_imask(value):
           neon [neon]
           scalar []
           generic []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -321,7 +335,7 @@ prim<usize:=m> lzc_imask(value):
         implementation:
           tsil "complete(cast<static>(type(scalar::size), helper<clz>(call<primitive=to_integral[Vec]>(value))));"
     [oneapi_fpga, oneapi_fpga_rtl]:
-      ?i?:
+      arith:
         requires:
           oneapi_fpga []
           oneapi_fpga_rtl []
@@ -330,7 +344,7 @@ prim<usize:=m> lzc_imask(value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), helper<clz_recursive, type(vector::imask), type(intrin::vector::imask)::apply>(call<primitive=to_integral[Vec]>(value))));"
+          tsil "complete(cast<static>(type(scalar::size), helper<clz>(call<primitive=to_integral[Vec]>(value))));"
 prim<usize:=m> tzc(value):
   brief_description "Counts trailing zero bits in an integral mask value."
   detailed_description """
@@ -347,7 +361,7 @@ prim<usize:=m> tzc(value):
     - {tags [basic], type "ui32", expected_rule "tzc", lane_count 8, case {inputs [8], expected 3}}
     - {tags [edge], type "ui32", expected_rule "tzc", lane_count 8, case {inputs [0], expected 64}}
   impls:
-    [avx512, avx2, sse, neon, scalar, generic]:
+    [avx512, avx2, sse, neon, scalar, generic, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -356,6 +370,7 @@ prim<usize:=m> tzc(value):
           neon [neon]
           scalar []
           generic []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false

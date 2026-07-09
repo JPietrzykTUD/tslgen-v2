@@ -51,6 +51,35 @@ prim<v:=(v,v)> max(vec_a, vec_b):
               )
             );
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=blend>(
+                call<primitive=less_than>(vec_a, vec_b),
+                vec_a,
+                vec_b
+              )
+            );
+          """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_vec_a, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(vec_a)));
+              var<const_infer>(generic_vec_b, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(vec_b)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=@self[GenericVec]>(generic_vec_a, generic_vec_b)
+                )
+              );
+            """
 
 prim<v:=(v,v)> min(vec_a, vec_b):
   brief_description "Selects the lane-wise minimum of two vector registers."
@@ -103,3 +132,32 @@ prim<v:=(v,v)> min(vec_a, vec_b):
               )
             );
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=blend>(
+                call<primitive=less_than>(vec_a, vec_b),
+                vec_b,
+                vec_a
+              )
+            );
+          """
+        variants:
+          generic_fallback:
+            tsil """
+              let<type>(GenericVec, type(vector::as_extension(generic)));
+              var<const_infer>(generic_vec_a, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(vec_a)));
+              var<const_infer>(generic_vec_b, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(vec_b)));
+              complete(
+                call<primitive=from_array[Vec]>(
+                  call<primitive=@self[GenericVec]>(generic_vec_a, generic_vec_b)
+                )
+              );
+            """

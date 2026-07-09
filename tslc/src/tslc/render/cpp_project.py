@@ -42,6 +42,7 @@ _CPP_STATIC_HEADERS = (
     "tsl_algorithm.hpp",
     "tsl_x86_traits.hpp",
 )
+_CMAKE_CXX_FEATURE_FLAG_COMPILERS = "GNU,Clang,AppleClang,IntelLLVM"
 
 
 def cpp_artifacts(
@@ -127,6 +128,7 @@ def cpp_verify_profiles(profiles: tuple[ProfileRender, ...]) -> tuple[VerifyProf
             profile_name=slug(profile_render.profile.name),
             file_stem=slug(profile_render.profile.name),
             family=profile_render.profile.family,
+            compile_modes=profile_render.profile.compile_modes,
             cpp_flags=cpp_flags(profile_render.profile, profile_render.profile_family),
             cpp_target=cpp_target(profile_render.profile, profile_render.profile_family),
             runner=_verify_runner(profile_render.profile),
@@ -398,6 +400,8 @@ def _cpp_sized_registration(
 
 
 def _cpp_sized_mask_type(extension: Extension) -> str:
+    if extension.mask_policy.kind == "exact_lane_bitmask":
+        return extension.mask_policy.spelling("cpp") or "std::uint64_t"
     if extension.mask_policy.kind == "lane_bitmask":
         return "std::uint64_t"
     return "register_type"
@@ -677,7 +681,10 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
             targs = (
                 [vec]
                 + ([target_spelling] if target_spelling else [])
-                + [vec for _ in spec.type_params]
+                + [
+                    _cpp_type_param_smoke_vector(spec, param, smoke_lanes)
+                    for param in spec.type_params
+                ]
                 + [value for _, value in spec.axis]
                 + (["0"] if spec.immediate is not None else [])
                 + [default for _, _, default in spec.generic_params]
@@ -693,6 +700,15 @@ def _cpp_smoke(profile_render: ProfileRender) -> str:
     lines.append("  return 0;")
     lines.append("}")
     return "\n".join(lines) + "\n"
+
+
+def _cpp_type_param_smoke_vector(
+    spec: LoweredSpecialization, param, smoke_lanes: int  # noqa: ANN001
+) -> str:
+    base = param.base_type_binding_spelling or spec.base_type_spelling
+    if spec.uses_sized_vector:
+        return _cpp_sized_vector_type(base, spec.extension_name, smoke_lanes)
+    return f"tsl::simd<{base}, tsl::{spec.extension_name}>"
 
 
 def _concrete_arg_type(vec: str, kind: str) -> str:
@@ -931,4 +947,4 @@ def _cmake_quote(value: str) -> str:
 
 
 def _cmake_cxx_flag(flag: str) -> str:
-    return f"$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:{flag}>"
+    return f"$<$<CXX_COMPILER_ID:{_CMAKE_CXX_FEATURE_FLAG_COMPILERS}>:{flag}>"

@@ -329,7 +329,7 @@ def _cpp_target_preflight_command(
             str(object_path),
         ),
         cwd=root,
-        env=cpp_environment(config, backend),
+        env=cpp_environment(config, backend, profile),
     )
 
 

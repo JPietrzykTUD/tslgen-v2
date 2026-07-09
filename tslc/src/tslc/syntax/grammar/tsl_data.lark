@@ -25,6 +25,7 @@ TRANSLATION: "translation"
 GENERIC_PARAMS: "generic_params"
 LANE_SET: "lane_set"
 EXTENSION: "extension"
+BASE_WIDTH_CONSTRAINT.3: /width\(self::base\)[ \t]*(>=|>|==)[ \t]*width\(base::in\)/
 
 NAME.1: /(?!prim\b)(?!template\b)(?!types\b)(?!flags\b)(?!language\b)(?!operation\b)(?!translation\b)(?!generic_params\b)(?!lane_set\b)(?!extension\b)(?!body\b)(?!native\b)[a-zA-Z_?][a-zA-Z0-9_?.]*(::[a-zA-Z_?][a-zA-Z0-9_?.]*)*/
 SIGNATURE.2: /[a-zA-Z_?][^:=]*:=(?:[^<>]|<[^<>]*(?:<[^<>]*>[^<>]*)*>)+/
@@ -65,6 +66,7 @@ pair.2: key value
       | key ":" value
       | key ":" NEWLINE _INDENT stmt_list _DEDENT
       | key ":" NEWLINE _INDENT list_block _DEDENT
+      | base_width_constraint
 
 key: NAME
    | SIGNED_NUMBER
@@ -101,9 +103,11 @@ map_multiline: NEWLINE map_pair_line (NEWLINE map_pair_line)* NEWLINE?
 map_pair_line: pair_inline
              | key ":" value                -> pair_inline_colon
              | key ":" NEWLINE map_kv_block -> pair_inline_block
+             | base_width_constraint        -> pair_inline
 map_kv_block: map_pair_line (NEWLINE map_pair_line)* NEWLINE?
 
 pair_inline: key value
+base_width_constraint: BASE_WIDTH_CONSTRAINT -> key
 
 ?scalar: ESCAPED_STRING        -> string
        | MULTILINE_STRING      -> multiline_string

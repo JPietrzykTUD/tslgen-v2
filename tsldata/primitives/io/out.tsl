@@ -33,7 +33,7 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
     - {tags [basic], type "f64", case {inputs [[1.0, 2.0], 0], expected "0000000000000000000000000000000000000000000000000000000000000010|0000000000000000000000000000000000000000000000000000000000000001|\n"}}
     - {tags [edge], type "f64", case {inputs [[0.0, 255.0], 0], expected "0000000000000000000000000000000000000000000000000000000011111111|0000000000000000000000000000000000000000000000000000000000000000|\n"}}
   impls:
-    [avx512, avx2, sse, generic, oneapi_fpga]:
+    [avx512, avx2, sse, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -41,6 +41,7 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
           sse [sse2]
           generic []
           oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false

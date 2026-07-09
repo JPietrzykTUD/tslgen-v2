@@ -11,7 +11,7 @@ ${self}: steerable task runner for the tslc generator and its maintenance toolin
 Modes:
   ./${self} generate   generate + format the C++/Rust project               (no compiler needed)
   ./${self} build      generate + build-verify both backends                [default]
-  ./${self} test       generate + build + run the value tests (SDE / qemu-aarch64 when present)
+  ./${self} test       generate + build + run the value tests (SDE / qemu-aarch64 / Wasmtime when present)
   ./${self} document   generate + format + build C++/Rust API docs
   ./${self} document-site
                        rebuild only the docs website from existing generated docs/data
@@ -34,7 +34,7 @@ the website from an existing output tree; explain/ratchet/dump
 drive the \`tslc.maintenance\` tools directly and need no toolchain.
 
 Env knobs (build/test only): TSLC_OUTPUT_ROOT TSLC_SOURCES TSLC_MACHINE_PROFILES
-  TSLC_BACKENDS TSLC_SDE TSLC_QEMU_AARCH64 TSLC_VERIFY_JOBS
+  TSLC_BACKENDS TSLC_SDE TSLC_QEMU_AARCH64 TSLC_WASMTIME TSLC_VERIFY_JOBS
 Env knobs (document or TSLC_DOCUMENT=1): TSLC_DOXYGEN TSLC_SPHINX_BUILD TSLC_CARGO
   TSLC_NPM
   TSLC_DOCUMENT_PROJECT
@@ -65,7 +65,7 @@ has_cli_flag() {
 if [[ "$mode" == "generate" ]] && { has_cli_flag --test || has_cli_flag --fuzz; }; then
   echo "ERROR: dev.sh generate does not accept --test or --fuzz." >&2
   echo "Use './dev.sh test ...' so SDE/qemu-aarch64 paths are wired consistently." >&2
-  echo "For manual control, call 'python -m tslc.cli' directly with explicit --sde/--qemu-aarch64." >&2
+  echo "For manual control, call 'python -m tslc.cli' directly with explicit --sde/--qemu-aarch64/--wasmtime." >&2
   exit 2
 fi
 
@@ -97,6 +97,7 @@ effective_output_root="$(effective_cli_value --output-root "$output_root")"
 document_backends="$(effective_cli_value --backends "$backends")"
 sde="${TSLC_SDE:-/opt/intel-sde/sde64}"
 qemu="${TSLC_QEMU_AARCH64:-/usr/bin/qemu-aarch64}"
+wasmtime="${TSLC_WASMTIME:-/usr/local/bin/wasmtime}"
 doxygen="${TSLC_DOXYGEN:-doxygen}"
 sphinx_build="${TSLC_SPHINX_BUILD:-sphinx-build}"
 cargo_doc="${TSLC_CARGO:-cargo}"
@@ -220,10 +221,11 @@ case "$mode" in
   build) cli+=( --verify ) ;;
   test)
     cli+=( --test --value-test-warnings )
-    # Pass the emulators only when present, so SDE/qemu-annotated profiles run rather than fail
-    # on a missing binary; absent ones are skipped by the verify step.
+    # Pass the runners only when present, so annotated profiles run rather than fail on a
+    # missing binary; absent ones are skipped by the verify step.
     [[ -e "$sde" ]] && cli+=( --sde "$sde" )
     [[ -e "$qemu" ]] && cli+=( --qemu-aarch64 "$qemu" )
+    [[ -e "$wasmtime" ]] && cli+=( --wasmtime "$wasmtime" )
     ;;
 esac
 (( ${#extra_args[@]} )) && cli+=( "${extra_args[@]}" )

@@ -340,6 +340,18 @@ prim<s:=v[idx]> extract_value(a):
                var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
                complete(arr[cast<static>(type(scalar::size), Index)]) ;
             """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+               var<const_infer>(arr, call<primitive=to_array[Vec]>(a));
+               complete(arr[cast<static>(type(scalar::size), Index)]) ;
+            """
     neon:
       arith:
         requires [neon]

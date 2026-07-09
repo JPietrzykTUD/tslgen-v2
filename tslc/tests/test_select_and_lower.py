@@ -12,6 +12,7 @@ from tslc.catalog.model import (
     Catalog,
     Extension,
     GenericParam,
+    GenericParamBaseWidthConstraint,
     Implementation,
     Primitive,
 )
@@ -20,7 +21,7 @@ from tslc.lower import lowerer as lowerer_module
 from tslc.lower.implementation_state import ImplementationState
 from tslc.lower.lowerer import Lowerer
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
-from tslc.select.selector import SelectedImplementation, Selector
+from tslc.select.selector import SelectedImplementation, Selector, SimdTypeBaseBinding
 
 _TYPES = ("si32", "ui32", "f32", "f64")
 
@@ -365,6 +366,22 @@ def _wasm_slot(catalog: Catalog, machine_profiles, primitive: str, type_tag: str
     )
 
 
+def _wasm_unmasked_slots(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    type_tag: str,
+):
+    return tuple(
+        slot
+        for slot in Selector()
+        .select_profile(catalog, machine_profiles["wasm32-simd128"], primitive, (type_tag,))
+        .selected
+        if slot.extension.name == "wasm128"
+        and slot.primitive.attributes.get("mask") is None
+    )
+
+
 @pytest.mark.parametrize(
     ("primitive", "type_tag", "expected_cpp", "expected_rust"),
     (
@@ -440,6 +457,198 @@ def test_lower_wasm128_array_roundtrip_primitives(catalog: Catalog, machine_prof
     assert "return tmp;" in cpp_to.body_text
 
 
+@pytest.mark.parametrize(
+    ("primitive", "type_tag", "expected_cpp", "expected_rust"),
+    (
+        (
+            "mul",
+            "si32",
+            "return wasm_i32x4_mul(factor1, factor2);",
+            "unsafe { return core::arch::wasm32::i32x4_mul(factor1, factor2); }",
+        ),
+        (
+            "div",
+            "f32",
+            "return wasm_f32x4_div(divident, divisor);",
+            "unsafe { return core::arch::wasm32::f32x4_div(divident, divisor); }",
+        ),
+        (
+            "popcnt",
+            "ui8",
+            "return wasm_i8x16_popcnt(data);",
+            "unsafe { return core::arch::wasm32::i8x16_popcnt(data); }",
+        ),
+    ),
+)
+def test_lower_wasm128_expanded_direct_primitives(
+    catalog: Catalog,
+    machine_profiles,
+    primitive,
+    type_tag,
+    expected_cpp,
+    expected_rust,
+) -> None:
+    slot = _wasm_slot(catalog, machine_profiles, primitive, type_tag)
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert cpp is not None
+    assert cpp.body_text == expected_cpp
+
+    rust = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+    assert rust is not None
+    assert rust.body_text == expected_rust
+
+
+@pytest.mark.parametrize(
+    ("primitive", "type_tag", "needle"),
+    (
+        ("div", "si32", "::tsl::div<tsl::simd<int32_t, tsl::generic<4>>>"),
+        ("mod", "si32", "::tsl::mod<tsl::simd<int32_t, tsl::generic<4>>>"),
+        ("lzc", "ui32", "::tsl::lzc_scalar<tsl::simd<uint32_t, tsl::scalar>>"),
+    ),
+)
+def test_lower_wasm128_expanded_bridge_primitives(
+    catalog: Catalog,
+    machine_profiles,
+    primitive,
+    type_tag,
+    needle,
+) -> None:
+    slot = _wasm_slot(catalog, machine_profiles, primitive, type_tag)
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert cpp is not None
+    if primitive != "lzc":
+        assert "tsl::generic" in cpp.body_text
+    assert needle in cpp.body_text
+
+    rust = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+    assert rust is not None
+    if primitive != "lzc":
+        assert "Generic" in rust.body_text
+
+
+@pytest.mark.parametrize(
+    ("primitive", "type_tag", "cpp_needles", "rust_needles"),
+    (
+        (
+            "mul",
+            "si8",
+            ("wasm_u16x8_extmul_low_u8x16", "wasm_u8x16_narrow_i16x8"),
+            ("u16x8_extmul_low_u8x16", "u8x16_narrow_i16x8"),
+        ),
+        (
+            "max",
+            "si32",
+            ("::tsl::blend<Vec>", "::tsl::less_than<Vec>"),
+            ("blend::<Self>", "less_than::<Self>"),
+        ),
+    ),
+)
+def test_lower_wasm128_composed_primitives_avoid_generic_bridge(
+    catalog: Catalog,
+    machine_profiles,
+    primitive,
+    type_tag,
+    cpp_needles,
+    rust_needles,
+) -> None:
+    slot = _wasm_slot(catalog, machine_profiles, primitive, type_tag)
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert cpp is not None
+    assert "tsl::generic" not in cpp.body_text
+    for needle in cpp_needles:
+        assert needle in cpp.body_text
+
+    rust = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "rust")
+    ).specialization
+    assert rust is not None
+    assert "Generic" not in rust.body_text
+    for needle in rust_needles:
+        assert needle in rust.body_text
+
+
+def test_lower_wasm128_shift_overloads_keep_scalar_and_vector_counts_distinct(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    left_slots = {
+        slot.primitive.signature: slot
+        for slot in _wasm_unmasked_slots(catalog, machine_profiles, "shift_left", "si32")
+    }
+    slots = {
+        slot.primitive.signature: slot
+        for slot in _wasm_unmasked_slots(catalog, machine_profiles, "shift_right", "si32")
+    }
+    assert {"v:=(v,sImm)", "v:=(v,s)", "v:=(v,v)"} <= set(left_slots)
+    assert {"v:=(v,sImm)", "v:=(v,s)", "v:=(v,v)"} <= set(slots)
+
+    cpp = create_backend_dialect(catalog, "cpp")
+    rust = create_backend_dialect(catalog, "rust")
+
+    left_imm = Lowerer().lower(left_slots["v:=(v,sImm)"], catalog, cpp).specialization
+    left_scalar = Lowerer().lower(left_slots["v:=(v,s)"], catalog, cpp).specialization
+    left_vector = Lowerer().lower(left_slots["v:=(v,v)"], catalog, cpp).specialization
+    left_imm_rust = Lowerer().lower(
+        left_slots["v:=(v,sImm)"], catalog, rust
+    ).specialization
+    left_scalar_rust = Lowerer().lower(
+        left_slots["v:=(v,s)"], catalog, rust
+    ).specialization
+
+    imm = Lowerer().lower(slots["v:=(v,sImm)"], catalog, cpp).specialization
+    scalar = Lowerer().lower(slots["v:=(v,s)"], catalog, cpp).specialization
+    vector = Lowerer().lower(slots["v:=(v,v)"], catalog, cpp).specialization
+
+    assert left_imm is not None
+    assert "::tsl::shift_left<Vec>" in left_imm.body_text
+    assert "wasm_i32x4_shl(data, shift)" not in left_imm.body_text
+
+    assert left_imm_rust is not None
+    assert "shift_left::<Self, _>" in left_imm_rust.body_text
+    assert "i32x4_shl::<" not in left_imm_rust.body_text
+
+    assert left_scalar is not None
+    assert left_scalar.body_text == (
+        "return wasm_i32x4_shl(data, static_cast<uint32_t>(shift));"
+    )
+
+    assert left_scalar_rust is not None
+    assert left_scalar_rust.body_text == (
+        "unsafe { return core::arch::wasm32::i32x4_shl(data, (shift) as u32); }"
+    )
+
+    assert left_vector is not None
+    assert "generic_shift" in left_vector.body_text
+    assert "::tsl::to_array<Vec>(shift)" in left_vector.body_text
+
+    assert imm is not None
+    assert "::tsl::shift_right<Vec, PreserveSign>" in imm.body_text
+    assert "static_cast<int32_t>(shift)" in imm.body_text
+    assert "::tsl::to_array<Vec>(shift)" not in imm.body_text
+
+    assert scalar is not None
+    assert "wasm_i32x4_shr(data, static_cast<uint32_t>(shift))" in scalar.body_text
+    assert "wasm_u32x4_shr(udata, static_cast<uint32_t>(shift))" in scalar.body_text
+    assert "generic_shift" not in scalar.body_text
+
+    assert vector is not None
+    assert "generic_shift" in vector.body_text
+    assert "::tsl::to_array<Vec>(shift)" in vector.body_text
+
+
 def test_lower_scalar_add_has_no_unsafe(catalog: Catalog, machine_profiles) -> None:
     slot = _by_key(catalog, machine_profiles["scalar"], "add")[("si32", "scalar")]
     cpp = Lowerer().lower(
@@ -474,6 +683,29 @@ def test_lower_to_vector_lane_bitmask_identity_is_native(
     assert cpp is not None
     assert cpp.body_text == "return mask;"
     assert cpp.implementation_state is ImplementationState.NATIVE
+
+
+def test_oneapi_exact_lane_mask_policy_lowers_lane_bitmask_operations(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slots = {
+        (s.type_tag, s.extension.name): s
+        for s in Selector()
+        .select_profile(catalog, machine_profiles["skylake-oneapi"], "less_than", ("si32",))
+        .selected
+        if s.primitive.attributes.get("mask") is None
+    }
+    slot = slots[("si32", "oneapi_fpga")]
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert "typename Vec::mask_type result = 0;" in cpp.body_text
+    assert "result |= (1ull << i);" in cpp.body_text
+    assert "typename Vec::register_type result" not in cpp.body_text
 
 
 @pytest.mark.parametrize("backend_id", ("cpp", "rust"))
@@ -604,6 +836,63 @@ def test_simd_type_generic_param_queries_lower_from_authored_name(
         for param in lowered.specialization.type_params
     ) == (("IndexVec", (), ("?i32",)),)
     assert lowered.specialization.body_text == expected
+
+
+@pytest.mark.parametrize("backend_id", ("cpp", "rust"))
+def test_bound_simd_type_generic_base_folds_generation_condition(
+    catalog: Catalog,
+    backend_id: str,
+) -> None:
+    impl = Implementation(
+        ("avx2", "all"),
+        "avx2",
+        "all",
+        (
+            "complete(value(select("
+            "value(type::same_size(type(base::in), type(base::generic(IndexVec)))), "
+            "\"1\", \"0\")));"
+        ),
+        source_order=0,
+    )
+    primitive = Primitive(
+        name="index_base_width_probe",
+        signature="usize:=vidx",
+        parameters=("index",),
+        attribute_keys=(),
+        generic_params=(
+            GenericParam(
+                "IndexVec",
+                "simd_type",
+                "",
+                base_type_constraints=("?i32",),
+                specialize_base=True,
+            ),
+        ),
+        implementations=(impl,),
+    )
+    slot = SelectedImplementation(
+        primitive=primitive,
+        implementation=impl,
+        extension=catalog.extensions["avx2"],
+        type_tag="si32",
+        simd_type_base_bindings=(SimdTypeBaseBinding("IndexVec", "ui32"),),
+    )
+
+    lowered = Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend_id))
+
+    assert lowered.diagnostics == ()
+    assert lowered.specialization is not None
+    assert lowered.specialization.body_text == "return 1;"
+    expected_spelling = "uint32_t" if backend_id == "cpp" else "u32"
+    assert tuple(
+        (
+            param.name,
+            param.specialize_base,
+            param.base_type_binding,
+            param.base_type_binding_spelling,
+        )
+        for param in lowered.specialization.type_params
+    ) == (("IndexVec", True, "ui32", expected_spelling),)
 
 
 @pytest.mark.parametrize(
@@ -753,6 +1042,126 @@ def test_runtime_array_var_lowers_sve_scratch_storage(
     assert "std::free" not in cpp.body_text
 
 
+def test_simd_type_base_specialization_expands_gather_narrow_slots(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slots = [
+        s
+        for s in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "gather_narrow", ("ui16",))
+        .selected
+        if s.extension.name == "avx2"
+    ]
+
+    assert {
+        tuple((binding.param_name, binding.base_tag) for binding in slot.simd_type_base_bindings)
+        for slot in slots
+    } == {
+        (("IndicesType", "si32"),),
+        (("IndicesType", "ui32"),),
+        (("IndicesType", "si64"),),
+        (("IndicesType", "ui64"),),
+    }
+
+
+def test_simd_type_base_width_constraint_filters_specialized_slots(
+    catalog: Catalog, machine_profiles
+) -> None:
+    impl = Implementation(
+        ("avx2", "arith"),
+        "avx2",
+        "arith",
+        "complete(index);",
+        source_order=0,
+    )
+    primitive = Primitive(
+        name="wide_index_probe",
+        signature="usize:=vidx",
+        parameters=("index",),
+        attribute_keys=(),
+        generic_params=(
+            GenericParam(
+                "IndexVec",
+                "simd_type",
+                "",
+                base_type_constraints=("?i32", "?i64"),
+                specialize_base=True,
+                base_width_constraints=(GenericParamBaseWidthConstraint(">="),),
+            ),
+        ),
+        implementations=(impl,),
+    )
+    probe_catalog = Catalog(
+        primitives=(*catalog.primitives, primitive),
+        type_groups=catalog.type_groups,
+        extensions=catalog.extensions,
+        type_spellings=catalog.type_spellings,
+        translations=catalog.translations,
+        target_families=catalog.target_families,
+    )
+
+    slots = Selector().select_profile(
+        probe_catalog,
+        machine_profiles["avx2"],
+        "wide_index_probe",
+        ("ui64",),
+    ).selected
+
+    assert {
+        tuple((binding.param_name, binding.base_tag) for binding in slot.simd_type_base_bindings)
+        for slot in slots
+    } == {
+        (("IndexVec", "si64"),),
+        (("IndexVec", "ui64"),),
+    }
+
+
+def test_simd_type_base_width_constraint_rejects_unsatisfied_slots(
+    catalog: Catalog, machine_profiles
+) -> None:
+    impl = Implementation(
+        ("avx2", "arith"),
+        "avx2",
+        "arith",
+        "complete(index);",
+        source_order=0,
+    )
+    primitive = Primitive(
+        name="too_narrow_index_probe",
+        signature="usize:=vidx",
+        parameters=("index",),
+        attribute_keys=(),
+        generic_params=(
+            GenericParam(
+                "IndexVec",
+                "simd_type",
+                "",
+                base_type_constraints=("?i32",),
+                specialize_base=True,
+                base_width_constraints=(GenericParamBaseWidthConstraint(">="),),
+            ),
+        ),
+        implementations=(impl,),
+    )
+    probe_catalog = Catalog(
+        primitives=(*catalog.primitives, primitive),
+        type_groups=catalog.type_groups,
+        extensions=catalog.extensions,
+        type_spellings=catalog.type_spellings,
+        translations=catalog.translations,
+        target_families=catalog.target_families,
+    )
+
+    slots = Selector().select_profile(
+        probe_catalog,
+        machine_profiles["avx2"],
+        "too_narrow_index_probe",
+        ("ui64",),
+    ).selected
+
+    assert slots == ()
+
+
 def test_param_types_default_overrides_rendered_pointer_type(
     catalog: Catalog, machine_profiles
 ) -> None:
@@ -776,13 +1185,19 @@ def test_param_types_default_overrides_rendered_pointer_type(
 
     assert cpp is not None
     assert rust is not None
+    assert cpp.type_params[0].base_type_binding in {"si32", "ui32", "si64", "ui64"}
+    assert rust.type_params[0].base_type_binding == cpp.type_params[0].base_type_binding
     assert cpp.param_type_overrides[1] == "typename IndicesType::base_type const *"
     assert rust.param_type_overrides[1] == "*const IndicesType::BaseType"
     assert recording_syntax.param_type_calls == [(True, True)]
     cpp_source = CppBackend().render_primitive("gather_narrow", (cpp,))
     rust_source = RustBackend().render_primitive("gather_narrow", (rust,))
     assert "typename IndicesType::base_type const * index_ptr" in cpp_source
+    assert "class IndicesTypeBaseKey = ::tsl::detail::base_type_dispatch_key_t" in cpp_source
+    assert "::tsl::detail::base_" in cpp_source
     assert "index_ptr: *const IndicesType::BaseType" in rust_source
+    assert "IndicesTypeBaseKey" in rust_source
+    assert "<IndicesType::BaseType as BaseTypeDispatch>::Key" in rust_source
 
 
 class _RecordingSyntax:

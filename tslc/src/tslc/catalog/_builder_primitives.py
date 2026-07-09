@@ -16,6 +16,7 @@ from tslc.catalog._builder_implementations import _implementations_from_entries
 from tslc.catalog.model import (
     BOOLEAN_WILDCARD_ATTRIBUTES,
     GenericParam,
+    GenericParamBaseWidthConstraint,
     ImmediateParam,
     ParamTypeRule,
     Primitive,
@@ -31,6 +32,9 @@ from tslc.syntax.ast import (
 
 _BOOLEAN_WILDCARD_VALUES = ("true", "false")
 _PARAM_TYPE_CONDITION_RE = re.compile(r"^if\s+([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_]+)$")
+_BASE_WIDTH_CONSTRAINT_RE = re.compile(
+    r"^width\(self::base\)\s*(>=|>|==)\s*width\(base::in\)$"
+)
 
 
 def _build_primitives(
@@ -179,11 +183,39 @@ def _generic_params(declaration: ParsedPrimitiveDeclaration) -> tuple[GenericPar
             name=entry.key.text,
             kind=_field_text(_child(entry, "kind")) or "bool",
             default=_field_text(_child(entry, "default")) or "false",
-            base_type_constraints=_list_text(_child(entry, "base_types")),
+            base_type_constraints=_generic_param_base_types(entry),
+            specialize_base=_bool_field(_child(entry, "specialize_base")),
+            base_width_constraints=_generic_param_base_width_constraints(entry),
             source=_source_span(entry.source),
         )
         for entry in _children(fields[0].field)
     )
+
+
+def _generic_param_base_types(entry) -> tuple[str, ...]:  # noqa: ANN001
+    direct = _list_text(_child(entry, "base_types"))
+    nested = _list_text(_child(_child(entry, "constraints"), "base_types"))
+    return nested or direct
+
+
+def _generic_param_base_width_constraints(
+    entry,  # noqa: ANN001
+) -> tuple[GenericParamBaseWidthConstraint, ...]:
+    constraints = _child(entry, "constraints")
+    if constraints is None:
+        return ()
+    result: list[GenericParamBaseWidthConstraint] = []
+    for field in _children(constraints):
+        match = _BASE_WIDTH_CONSTRAINT_RE.fullmatch(field.key.text)
+        if match is None:
+            continue
+        result.append(
+            GenericParamBaseWidthConstraint(
+                relation=match.group(1),
+                source=_source_span(field.key.source),
+            )
+        )
+    return tuple(result)
 
 
 

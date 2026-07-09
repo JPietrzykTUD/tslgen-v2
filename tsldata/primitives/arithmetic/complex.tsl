@@ -257,6 +257,42 @@ prim<v:=(v,v)> mul(factor1, factor2):
               )
             );
           """
+    wasm128:
+      [?i16, ?i32, ?i64, f?]:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<mul, build>(factor1, factor2));"
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<const_infer>(low_products, intrin<extmul_low_u8x16, build[suffix="u16x8"]>(factor1, factor2));
+            var<const_infer>(high_products, intrin<extmul_high_u8x16, build[suffix="u16x8"]>(factor1, factor2));
+            var<const_infer>(low_byte_mask, intrin<splat, build[suffix="i16x8"]>(cast<static>(type(scalar::si16), 0x00ff)));
+            var<const_infer>(low_bytes, intrin<v128_and, build[suffix=""]>(low_products, low_byte_mask));
+            var<const_infer>(high_bytes, intrin<v128_and, build[suffix=""]>(high_products, low_byte_mask));
+            complete(intrin<narrow_i16x8, build[suffix="u8x16"]>(low_bytes, high_bytes));
+          """
+        variants:
+          generic_fallback:
+            tsil """
+            let<type>(GenericVec, type(vector::as_extension(generic)));
+            var<const_infer>(generic_factor1, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor1)));
+            var<const_infer>(generic_factor2, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(factor2)));
+            complete(
+              call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec]>(generic_factor1, generic_factor2)
+              )
+            );
+          """
     sve:
       arith:
         requires [sve]
@@ -301,11 +337,12 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneapi_fpga]:
+    [generic, oneapi_fpga, wasm128]:
       arith:
         requires:
           generic []
           oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -460,11 +497,12 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
             }
             complete(factor1);
           """
-    [generic, oneapi_fpga]:
+    [generic, oneapi_fpga, wasm128]:
       arith:
         requires:
           generic []
           oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -691,6 +729,32 @@ prim<v:=(v,v)> div(divident, divisor):
               )
             );
           """
+    wasm128:
+      f?:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<div, build>(divident, divisor));"
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(GenericVec, type(vector::as_extension(generic)));
+            var<const_infer>(generic_divident, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divident)));
+            var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divisor)));
+            complete(
+              call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec]>(generic_divident, generic_divisor)
+              )
+            );
+          """
     sve:
       idqword:
         requires [sve]
@@ -736,11 +800,12 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneapi_fpga]:
+    [generic, oneapi_fpga, wasm128]:
       arith:
         requires:
           generic []
           oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -851,11 +916,12 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
             }
             complete(divident);
           """
-    [generic, oneapi_fpga]:
+    [generic, oneapi_fpga, wasm128]:
       arith:
         requires:
           generic []
           oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1251,6 +1317,22 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
               )
             );
           """
+    wasm128:
+      arith:
+        requires [simd128]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=mul>(
+                data,
+                call<primitive=set1>(cast<static>(type(base::in), factor))
+              )
+            );
+          """
     sve:
       arith:
         requires [sve]
@@ -1302,7 +1384,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneapi_fpga, avx512, avx2, sse, neon, sve]:
+    [generic, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
       arith:
         requires:
           generic []
@@ -1312,6 +1394,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
           sse [sse]
           neon [neon]
           sve [sve]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1361,7 +1444,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
             }
             complete(data);
           """
-    [generic, oneapi_fpga, avx512, avx2, sse, neon, sve]:
+    [generic, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
       arith:
         requires:
           generic []
@@ -1371,6 +1454,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
           sse [sse]
           neon [neon]
           sve [sve]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1452,6 +1536,24 @@ prim<v:=(v,v)> mod(dividend, divisor):
     sse:
       arith:
         requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(GenericVec, type(vector::as_extension(generic)));
+            var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(dividend)));
+            var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divisor)));
+            complete(
+              call<primitive=from_array[Vec]>(
+                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
+              )
+            );
+          """
+    wasm128:
+      arith:
+        requires [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1603,7 +1705,7 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [avx512, avx2, sse, sve, generic]:
+    [avx512, avx2, sse, sve, generic, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1611,6 +1713,7 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1659,7 +1762,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
             }
             complete(dividend);
           """
-    [avx512, avx2, sse, sve, generic]:
+    [avx512, avx2, sse, sve, generic, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1667,6 +1770,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1708,6 +1812,22 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
           avx2 [avx]
           sse [sse]
           sve [sve]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              call<primitive=mod>(
+                dividend,
+                call<primitive=set1>(cast<static>(type(base::in), divisor))
+              )
+            );
+          """
+    wasm128:
+      arith:
+        requires [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1793,7 +1913,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [avx512, avx2, sse, sve, generic]:
+    [avx512, avx2, sse, sve, generic, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1801,6 +1921,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1850,7 +1971,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
             }
             complete(dividend);
           """
-    [avx512, avx2, sse, sve, generic]:
+    [avx512, avx2, sse, sve, generic, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1858,6 +1979,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
