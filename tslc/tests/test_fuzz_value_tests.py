@@ -62,7 +62,7 @@ def test_fuzz_renderer_wires_oracle_and_detector() -> None:
 def test_fuzz_renderer_mask_result_uses_to_integral() -> None:
     code = _differential_fuzz(_plan(result_kind="m", call_name="equal", param_kinds=("v", "v")))
     assert "tsl::to_integral<Hw>(" in code
-    assert "tsl::test::check_mask_match(" in code
+    assert "tsl::test::check_mask_match_for<Hw>(" in code
     assert "typename Ref::mask_type ref =" in code
 
 

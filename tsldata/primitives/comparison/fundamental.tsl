@@ -418,7 +418,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             complete(
-              intrin<cmp, build>(left, right, _CMP_NEQ_UQ)
+              intrin<cmpneq, build>(left, right)
             );
           """
     neon:

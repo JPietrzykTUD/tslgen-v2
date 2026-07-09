@@ -108,6 +108,7 @@ jobs:
 
       - name: Run generated value-test shard
         run: |
+          summary_file="tslctmp/ci-logs/generated-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}/summary.md"
           # Intel SDE/Pin needs ptrace when running generated x86 value-test binaries.
           bash .github/scripts/run_with_log.sh \
             "tslctmp/ci-logs/generated-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}/value-tests.log" \
@@ -117,6 +118,7 @@ jobs:
               -e TSLC_BACKENDS="${{ matrix.backend }}" \
               -e TSLC_PROFILES="${{ matrix.profile_shard.profiles }}" \
               -e TSLC_CI_OUTPUT="./tslctmp/ci-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}" \
+              -e TSLC_SUMMARY_FILE="./${summary_file}" \
               -e TSLC_SDE="/opt/intel-sde/sde64" \
               -e TSLC_QEMU_AARCH64="/usr/bin/qemu-aarch64" \
               -- \
@@ -128,6 +130,20 @@ jobs:
                   --profiles "${TSLC_PROFILES}" \
                   --output-root "${TSLC_CI_OUTPUT}"
               '
+
+      - name: Append generated value-test summary
+        if: always()
+        run: |
+          summary_file="tslctmp/ci-logs/generated-values-${{ matrix.backend }}-${{ matrix.profile_shard.name }}/summary.md"
+          if [[ -s "$summary_file" ]]; then
+            cat "$summary_file" >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### Generated value-test summary"
+              echo
+              echo "No summary was produced for ${{ matrix.backend }} / ${{ matrix.profile_shard.name }}. Check the uploaded logs for setup failures."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload generated value-test logs
         if: always()

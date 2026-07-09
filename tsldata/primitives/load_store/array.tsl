@@ -161,12 +161,8 @@ prim<s[]:=v> to_array(a):
           reasons [intrinsic]
         implementation:
           tsil """
-               var<typed>(array_type<type(base::in), value(vector::length), value(vector::alignment)>, tmp, value(uninit::array));
-              svbool_t pg = intrin<svptrue_b8>();
-              if<generation>(value(type::size_bytes(type(base::in))) == 2) { pg = intrin<svptrue_b16>(); }
-              else if<generation>(value(type::size_bytes(type(base::in))) == 4) { pg = intrin<svptrue_b32>(); }
-              else if<generation>(value(type::size_bytes(type(base::in))) == 8) { pg = intrin<svptrue_b64>(); }
-              intrin<svst1>(pg, tmp.data(), a);
+               var<typed>(array_type<type(base::in), value(vector::length)>, tmp, value(uninit::array));
+              intrin<svst1>(call<primitive=mask_true[Vec]>(), tmp.data(), a);
                complete(tmp) ;
             """
     [generic, oneapi_fpga]:

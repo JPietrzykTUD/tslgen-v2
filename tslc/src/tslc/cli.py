@@ -10,6 +10,7 @@ from pathlib import Path
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.diagnostics import has_errors
 from tslc.output.verify import BuildVerificationReport
+from tslc.pipeline import GenerationResult
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -133,6 +134,11 @@ def main(argv: list[str] | None = None) -> int:
         help="run clang-format/rustfmt over the written artifacts (best-effort; "
         "skipped if the formatter is unavailable). Use --no-format to disable.",
     )
+    parser.add_argument(
+        "--summary-file",
+        default=None,
+        help="append a Markdown generation/verification summary to this path",
+    )
     args = parser.parse_args(argv)
 
     # Fuzzing only matters once the value tests are built and run, and it needs the test harness
@@ -166,6 +172,15 @@ def main(argv: list[str] | None = None) -> int:
         [Path(path) for path in args.sources],
         **generate_kwargs,
     )
+    verify_report: BuildVerificationReport | None = None
+    summary_written = False
+
+    def write_summary_once() -> None:
+        nonlocal summary_written
+        if summary_written:
+            return
+        summary_written = True
+        _write_summary_file(args.summary_file, result, verify_report, args.test)
 
     for diagnostic in result.diagnostics:
         location = f" {diagnostic.location.path}:{diagnostic.location.line}" if diagnostic.location else ""
@@ -182,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
         print(format_coverage_report(result))
 
     if has_errors(result.diagnostics):
+        write_summary_once()
         return 1
 
     if args.output_root is not None:
@@ -189,6 +205,7 @@ def main(argv: list[str] | None = None) -> int:
         for diagnostic in write_report.diagnostics:
             print(f"[write] {diagnostic.code}: {diagnostic.message}", file=sys.stderr)
         if has_errors(write_report.diagnostics):
+            write_summary_once()
             return 1
         print(f"wrote {len(write_report.written)} files under {write_report.output_root}")
 
@@ -232,6 +249,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"[verify] {diagnostic.code}: {diagnostic.message}", file=sys.stderr)
             if args.test:
                 _print_test_output(verify_report)
+            write_summary_once()
             if has_errors(verify_report.diagnostics) or (
                 args.test and verify_report.diagnostics
             ):
@@ -239,6 +257,7 @@ def main(argv: list[str] | None = None) -> int:
             verified = "build/test-verified" if args.test else "build-verified"
             print(f"{verified} {len(verify_report.commands)} commands")
 
+    write_summary_once()
     return 0
 
 
@@ -279,6 +298,31 @@ def _print_captured_stream(label: str, text: str) -> None:
     if stripped:
         print(f"[{label}]")
         print(stripped)
+
+
+def _write_summary_file(
+    summary_file: str | None,
+    result: GenerationResult,
+    verify_report: BuildVerificationReport | None,
+    run_value_tests: bool,
+) -> None:
+    if summary_file is None:
+        return
+    from tslc.output.summary import (
+        append_markdown_summary,
+        render_value_test_markdown_summary,
+    )
+
+    test_plan = result.rendered.value_tests if result.rendered is not None else None
+    append_markdown_summary(
+        summary_file,
+        render_value_test_markdown_summary(
+            test_plan,
+            verify_report,
+            run_value_tests=run_value_tests,
+        ),
+    )
+    print(f"wrote Markdown summary to {summary_file}")
 
 
 if __name__ == "__main__":

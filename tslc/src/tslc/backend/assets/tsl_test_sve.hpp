@@ -4,7 +4,6 @@
 
 #if defined(__ARM_FEATURE_SVE)
 
-#include "tsl_sve.hpp"
 #include "tsl_test_core.hpp"
 
 #include <arm_sve.h>
@@ -52,10 +51,8 @@ inline svbool_t lane_predicate(std::size_t lane) {
 
 }  // namespace sve_detail
 
-template <class Base>
-struct mask_bits_adapter<::tsl::simd<Base, ::tsl::sve>> {
-    using Vec = ::tsl::simd<Base, ::tsl::sve>;
-
+template <class Vec>
+struct sve_mask_bits_adapter {
     static typename Vec::mask_type from_bits(std::uint64_t bits,
                                              std::size_t authored_lanes,
                                              std::size_t lanes) {
@@ -88,6 +85,30 @@ struct mask_bits_adapter<::tsl::simd<Base, ::tsl::sve>> {
         return failures;
     }
 };
+
+#if defined(TSL_PROFILE_SVE)
+template <class Base>
+struct mask_bits_adapter<::tsl::simd<Base, ::tsl::sve>>
+    : sve_mask_bits_adapter<::tsl::simd<Base, ::tsl::sve>> {};
+#endif
+
+#if defined(TSL_PROFILE_SVE128)
+template <class Base>
+struct mask_bits_adapter<::tsl::simd<Base, ::tsl::sve128>>
+    : sve_mask_bits_adapter<::tsl::simd<Base, ::tsl::sve128>> {};
+#endif
+
+#if defined(TSL_PROFILE_SVE256)
+template <class Base>
+struct mask_bits_adapter<::tsl::simd<Base, ::tsl::sve256>>
+    : sve_mask_bits_adapter<::tsl::simd<Base, ::tsl::sve256>> {};
+#endif
+
+#if defined(TSL_PROFILE_SVE512)
+template <class Base>
+struct mask_bits_adapter<::tsl::simd<Base, ::tsl::sve512>>
+    : sve_mask_bits_adapter<::tsl::simd<Base, ::tsl::sve512>> {};
+#endif
 
 }  // namespace detail
 

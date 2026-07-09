@@ -298,6 +298,16 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     assert machine_profiles["neon"].cpp_flags == ()
     assert machine_profiles["sve"].features == frozenset({"sve"})
     assert machine_profiles["sve"].cpp_flags == ("-mcpu=a64fx",)
+    assert machine_profiles["sve128"].runner is not None
+    assert (
+        machine_profiles["sve128"].runner.profile
+        == "max,sve=on,sve128=on,sve256=off,sve512=off"
+    )
+    assert machine_profiles["sve256"].runner is not None
+    assert (
+        machine_profiles["sve256"].runner.profile
+        == "max,sve=on,sve128=on,sve256=on,sve512=off"
+    )
     assert machine_profiles["sve512"].features == frozenset({"sve"})
     assert machine_profiles["sve512"].compile_modes == frozenset(
         {"sve_vector_bits_512"}

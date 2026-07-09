@@ -17,17 +17,24 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
     - {tags [mask, and, basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 204], expected 136}}
     - {tags [mask, and, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 34952}}
   impls:
-    [avx512, sve]:
+    avx512:
       arith:
-        requires:
-          avx512 [avx512f]
-          sve [sve]
+        requires [avx512f]
         safety:
           internal_unsafe false
           caller_unsafe false
           reasons []
         implementation:
           tsil "complete(mask_a & mask_b);"
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svand_b_z>(call<primitive=mask_true[Vec]>(), mask_a, mask_b));"
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
@@ -128,18 +135,26 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
     - {tags [mask, or, basic], extension "avx512", type "ui16", lane_count 32, case {inputs [43690, 52428], expected 61166}}
     - {tags [mask, or, basic], extension "avx512", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 61166}}
     - {tags [mask, or, basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 204], expected 238}}
+    - {tags [mask, or, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 61166}}
   impls:
-    [avx512, sve]:
+    avx512:
       arith:
-        requires:
-          avx512 [avx512f]
-          sve [sve]
+        requires [avx512f]
         safety:
           internal_unsafe false
           caller_unsafe false
           reasons []
         implementation:
           tsil "complete(mask_a | mask_b);"
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svorr_b_z>(call<primitive=mask_true[Vec]>(), mask_a, mask_b));"
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
@@ -240,18 +255,26 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
     - {tags [mask, xor, basic], extension "avx512", type "ui16", lane_count 32, case {inputs [43690, 52428], expected 26214}}
     - {tags [mask, xor, basic], extension "avx512", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 26214}}
     - {tags [mask, xor, basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 204], expected 102}}
+    - {tags [mask, xor, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 26214}}
   impls:
-    [avx512, sve]:
+    avx512:
       arith:
-        requires:
-          avx512 [avx512f]
-          sve [sve]
+        requires [avx512f]
         safety:
           internal_unsafe false
           caller_unsafe false
           reasons []
         implementation:
           tsil "complete(mask_a ^ mask_b);"
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<sveor_b_z>(call<primitive=mask_true[Vec]>(), mask_a, mask_b));"
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]
@@ -355,18 +378,26 @@ prim<m:=m> mask_binary_not(mask):
     - {tags [mask, not, edge], extension "avx512", type "ui16", lane_count 32, case {inputs [0], expected 4294967295}}
     - {tags [mask, not, edge], extension "avx512", type "ui32", lane_count 16, case {inputs [0], expected 65535}}
     - {tags [mask, not, edge], extension "avx512", type "ui64", lane_count 8, case {inputs [0], expected 255}}
+    - {tags [mask, not, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690], expected 21845}}
   impls:
-    [avx512, sve]:
+    avx512:
       arith:
-        requires:
-          avx512 [avx512f]
-          sve [sve]
+        requires [avx512f]
         safety:
           internal_unsafe false
           caller_unsafe false
           reasons []
         implementation:
           tsil "complete(op<bit_negate>(mask));"
+    sve:
+      arith:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil "complete(intrin<svnot_b_z>(call<primitive=mask_true[Vec]>(), mask));"
     avx2_vl:
       arith:
         requires [avx2, avx512f, avx512vl]

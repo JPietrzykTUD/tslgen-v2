@@ -18,6 +18,9 @@ from tslc.output.verify_model import (
 )
 
 _ONEAPI_CPP_COMPILER = "/opt/intel/oneapi/compiler/2025.0/bin/icpx"
+_AARCH64_GNU_CPP_COMPILER = "aarch64-linux-gnu-g++"
+_AARCH64_GNU_CPP_DRIVER_PREFIXES = ("aarch64-linux-gnu-",)
+_AARCH64_QEMU_SYSROOT = Path("/usr/aarch64-linux-gnu")
 
 
 def missing_executable(executable: str) -> str | None:
@@ -136,7 +139,13 @@ def runner_prefix(
     if runner.kind == "qemu-aarch64":
         if config.qemu_aarch64_path is None:
             return ()
-        return (config.qemu_aarch64_path, "-cpu", runner.profile, *runner.args)
+        return (
+            config.qemu_aarch64_path,
+            *_qemu_aarch64_sysroot_args(runner.args),
+            "-cpu",
+            runner.profile,
+            *runner.args,
+        )
     if runner.kind == "wasmtime":
         if config.wasmtime_path is None:
             return ()
@@ -161,6 +170,13 @@ def effective_cpp_compiler(
         _needs_oneapi_cpp_compiler(candidate) for candidate in backend.profiles
     ):
         return (_ONEAPI_CPP_COMPILER,)
+    if backend is not None and backend.profiles and all(
+        _is_default_aarch64_gnu_cpp_target(candidate, config)
+        for candidate in backend.profiles
+    ):
+        compiler = _aarch64_gnu_cpp_compiler()
+        if compiler is not None:
+            return compiler
     if backend is not None and any(cpp_target(profile, config) for profile in backend.profiles):
         return ("clang++",)
     return _native_cpp_compiler()
@@ -172,6 +188,10 @@ def _effective_cpp_compiler_for_profile(
 ) -> tuple[str, ...]:
     if _is_wasm_cpp_target(profile, config):
         return ("/opt/wasi-sdk/bin/clang++",)
+    if _is_default_aarch64_gnu_cpp_target(profile, config):
+        compiler = _aarch64_gnu_cpp_compiler()
+        if compiler is not None:
+            return compiler
     if cpp_target(profile, config) is not None:
         return ("clang++",)
     if _needs_oneapi_cpp_compiler(profile):
@@ -200,6 +220,41 @@ def _native_cpp_compiler() -> tuple[str, ...]:
 def _is_wasm_cpp_target(profile: VerifyProfile, config: BuildVerifierConfig) -> bool:
     target = cpp_target(profile, config)
     return target is not None and target.startswith("wasm32-")
+
+
+def _is_default_aarch64_gnu_cpp_target(
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+) -> bool:
+    target = cpp_target(profile, config)
+    return (
+        target is not None
+        and target.startswith("aarch64-linux-gnu")
+        and profile.runner is not None
+        and profile.runner.kind == "qemu-aarch64"
+    )
+
+
+def _aarch64_gnu_cpp_compiler() -> tuple[str, ...] | None:
+    if shutil.which(_AARCH64_GNU_CPP_COMPILER) is None:
+        return None
+    return (_AARCH64_GNU_CPP_COMPILER,)
+
+
+def cpp_compiler_accepts_explicit_target(compiler: tuple[str, ...]) -> bool:
+    if not compiler:
+        return True
+    executable = Path(compiler[0]).name
+    return not executable.startswith(_AARCH64_GNU_CPP_DRIVER_PREFIXES)
+
+
+def _qemu_aarch64_sysroot_args(runner_args: tuple[str, ...]) -> tuple[str, ...]:
+    if any(arg == "-L" or arg.startswith("-L") for arg in runner_args):
+        return ()
+    loader = _AARCH64_QEMU_SYSROOT / "lib" / "ld-linux-aarch64.so.1"
+    if not loader.is_file():
+        return ()
+    return ("-L", str(_AARCH64_QEMU_SYSROOT))
 
 
 def _needs_oneapi_cpp_compiler(profile: VerifyProfile) -> bool:

@@ -35,6 +35,7 @@ drive the \`tslc.maintenance\` tools directly and need no toolchain.
 
 Env knobs (build/test only): TSLC_OUTPUT_ROOT TSLC_SOURCES TSLC_MACHINE_PROFILES
   TSLC_BACKENDS TSLC_SDE TSLC_QEMU_AARCH64 TSLC_WASMTIME TSLC_VERIFY_JOBS
+  TSLC_SUMMARY_FILE
 Env knobs (document or TSLC_DOCUMENT=1): TSLC_DOXYGEN TSLC_SPHINX_BUILD TSLC_CARGO
   TSLC_NPM
   TSLC_DOCUMENT_PROJECT
@@ -103,6 +104,7 @@ sphinx_build="${TSLC_SPHINX_BUILD:-sphinx-build}"
 cargo_doc="${TSLC_CARGO:-cargo}"
 npm_doc="${TSLC_NPM:-npm}"
 document_project="${TSLC_DOCUMENT_PROJECT:-TSL Generated API}"
+summary_file="${TSLC_SUMMARY_FILE:-}"
 
 export PYTHONPATH="tslc/src${PYTHONPATH:+:$PYTHONPATH}"
 
@@ -217,6 +219,9 @@ cli=(
   --backends "$backends"
   --output-root "$output_root"
 )
+if [[ -n "$summary_file" ]] && ! has_cli_flag --summary-file; then
+  cli+=( --summary-file "$summary_file" )
+fi
 case "$mode" in
   build) cli+=( --verify ) ;;
   test)
