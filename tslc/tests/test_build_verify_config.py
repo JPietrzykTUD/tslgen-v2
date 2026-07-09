@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -760,6 +761,7 @@ def test_cpp_wasm_default_compiler_uses_wasi_sdk() -> None:
 
 def test_sde_runner_does_not_override_wasm_cpp_default_compiler(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     project = VerifyProject(
         backends=(
@@ -780,6 +782,14 @@ def test_sde_runner_does_not_override_wasm_cpp_default_compiler(
         )
     )
     seen: list[BuildCommand] = []
+    real_which = shutil.which
+
+    def fake_which(executable: str) -> str | None:
+        if executable == "/opt/wasi-sdk/bin/clang++":
+            return executable
+        return real_which(executable)
+
+    monkeypatch.setattr(shutil, "which", fake_which)
 
     def runner(command: BuildCommand) -> BuildCommandResult:
         seen.append(command)
@@ -797,6 +807,7 @@ def test_sde_runner_does_not_override_wasm_cpp_default_compiler(
     )
 
     assert report.diagnostics == ()
+    assert report.skipped == ()
     assert [command.step for command in seen[:3]] == [
         "target-preflight",
         "clean",
