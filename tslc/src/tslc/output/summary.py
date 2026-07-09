@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tslc.output.verify_model import BuildCommandResult, BuildVerificationReport
+from tslc.render._common import slug
 from tslc.value_tests.model import ValueTestProfilePlan, ValueTestProjectPlan
 
 
@@ -17,7 +18,7 @@ _TOOLCHAIN_PROFILE = "_toolchain"
 class ProfileValueTestSummary:
     backend_id: str
     profile_name: str
-    primitive_count: int
+    planned_primitive_names: int
     planned_cases: int
     passed_cases: int
     failed_or_blocked_cases: int
@@ -50,7 +51,9 @@ def render_value_test_markdown_summary(
 ) -> str:
     """Render a GitHub-flavored Markdown value-test verification summary."""
 
-    rows = _profile_summaries(test_plan, verify_report, run_value_tests=run_value_tests)
+    rows = value_test_profile_summaries(
+        test_plan, verify_report, run_value_tests=run_value_tests
+    )
     lines = [
         f"### {_escape_markdown_cell(title)}",
         "",
@@ -59,7 +62,7 @@ def render_value_test_markdown_summary(
             "the generated runner currently reports one command result per profile."
         ),
         "",
-        "| Backend | Profile | Primitives | Planned cases | Passed cases | "
+        "| Backend | Profile | Planned primitive names | Planned cases | Passed cases | "
         "Failed/blocked cases | Test cmds | Verify cmds | Status |",
         "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
@@ -89,14 +92,21 @@ def render_value_test_markdown_summary(
     return "\n".join(lines) + "\n"
 
 
-def _profile_summaries(
+def value_test_profile_summaries(
     test_plan: ValueTestProjectPlan | None,
     verify_report: BuildVerificationReport | None,
     *,
     run_value_tests: bool,
 ) -> tuple[ProfileValueTestSummary, ...]:
+    """Summarize planned value tests joined to rendered verifier commands.
+
+    Value-test plans use source profile names, while generated verifier commands
+    use render-safe profile identifiers. Joining through the render slug keeps
+    the summary aligned with the commands that actually ran.
+    """
+
     profiles = {
-        (profile.backend_id, profile.profile_name): profile
+        (profile.backend_id, slug(profile.profile_name)): profile
         for profile in (test_plan.profiles if test_plan is not None else ())
     }
     commands = _commands_by_profile(verify_report)
@@ -104,13 +114,22 @@ def _profile_summaries(
     return tuple(
         _profile_summary(
             key[0],
-            key[1],
+            _display_profile_name(key[1], profiles.get(key)),
             profiles.get(key),
             tuple(commands.get(key, ())),
             run_value_tests=run_value_tests,
         )
         for key in keys
     )
+
+
+def _display_profile_name(
+    normalized_profile_name: str,
+    profile: ValueTestProfilePlan | None,
+) -> str:
+    if profile is None:
+        return normalized_profile_name
+    return profile.profile_name
 
 
 def _commands_by_profile(
@@ -137,7 +156,7 @@ def _profile_summary(
 ) -> ProfileValueTestSummary:
     cases = profile.cases if profile is not None else ()
     planned_cases = len(cases)
-    primitive_count = len({case.call_name for case in cases})
+    planned_primitive_names = len({case.call_name for case in cases})
     test_commands = tuple(result for result in commands if result.command.step == "test")
     passed_test_commands = _passed_commands(test_commands)
     passed_verify_commands = _passed_commands(commands)
@@ -167,7 +186,7 @@ def _profile_summary(
     return ProfileValueTestSummary(
         backend_id=backend_id,
         profile_name=profile_name,
-        primitive_count=primitive_count,
+        planned_primitive_names=planned_primitive_names,
         planned_cases=planned_cases,
         passed_cases=passed_cases,
         failed_or_blocked_cases=failed_or_blocked_cases,
@@ -210,7 +229,7 @@ def _summary_row(row: ProfileValueTestSummary) -> str:
     return (
         f"| {_escape_markdown_cell(row.backend_id)} "
         f"| {_escape_markdown_cell(row.profile_name)} "
-        f"| {row.primitive_count} "
+        f"| {row.planned_primitive_names} "
         f"| {row.planned_cases} "
         f"| {row.passed_cases} "
         f"| {row.failed_or_blocked_cases} "
@@ -232,4 +251,5 @@ __all__ = [
     "ProfileValueTestSummary",
     "append_markdown_summary",
     "render_value_test_markdown_summary",
+    "value_test_profile_summaries",
 ]

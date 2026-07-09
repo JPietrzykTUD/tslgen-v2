@@ -9,19 +9,20 @@ endif()
 include(CTest)
 include(FetchContent)
 
-set(TSL_RELEASE_VERSION "v0.1.1" CACHE STRING "Generated TSL release tag")
+set(TSL_RELEASE_VERSION "v0.1.3" CACHE STRING "Generated TSL release tag")
 set(
   TSL_RELEASE_ARCHIVE_URL
-  "https://github.com/JPietrzykTUD/tslgen-v2/releases/download/${TSL_RELEASE_VERSION}/tsl-generated-1daeecdd39aa2b02a1bb60697d67fe6ae70b23cc.tar.gz"
+  # "https://github.com/JPietrzykTUD/tslgen-v2/releases/download/${TSL_RELEASE_VERSION}/tsl-generated-1daeecdd39aa2b02a1bb60697d67fe6ae70b23cc.tar.gz"
+  "https://github.com/JPietrzykTUD/tslgen-v2/releases/download/${TSL_RELEASE_VERSION}/tsl-generated-${TSL_RELEASE_VERSION}.tar.gz"
   CACHE STRING
   "URL of the generated TSL release archive"
 )
-set(
-  TSL_RELEASE_ARCHIVE_SHA256
-  "428af929846e06ecd891eb0e322a6713f10829cfb7412f420c0a548e38a28e95"
-  CACHE STRING
-  "Optional SHA256 digest for the generated TSL release archive"
-)
+# set(
+#   TSL_RELEASE_ARCHIVE_SHA256
+#   "428af929846e06ecd891eb0e322a6713f10829cfb7412f420c0a548e38a28e95"
+#   CACHE STRING
+#   "Optional SHA256 digest for the generated TSL release archive"
+# )
 set(TSL_PROFILE "auto" CACHE STRING "Generated TSL profile consumed by this test")
 
 set(_tsl_release_hash_args)

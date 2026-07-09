@@ -7,6 +7,11 @@ from types import SimpleNamespace
 
 from tslc import cli
 from tslc.diagnostics import Diagnostic
+from tslc.value_tests.model import (
+    ValueTestCasePlan,
+    ValueTestProfilePlan,
+    ValueTestProjectPlan,
+)
 
 
 def test_cli_test_flag_enables_existing_value_test_paths(
@@ -339,6 +344,81 @@ def test_cli_test_flag_fails_on_value_test_skip(monkeypatch, tmp_path, capsys) -
     assert "build/test-verified" not in captured.out
 
 
+def test_cli_test_flag_fails_when_planned_value_tests_do_not_run(
+    monkeypatch,
+    tmp_path,
+    capsys,
+) -> None:
+    def fake_generate_project(source_paths, **kwargs):
+        return SimpleNamespace(
+            diagnostics=(),
+            coverage=(object(),),
+            artifacts=SimpleNamespace(artifacts=(object(),)),
+            rendered=SimpleNamespace(
+                verify=object(),
+                value_tests=ValueTestProjectPlan(
+                    profiles=(
+                        ValueTestProfilePlan(
+                            "cpp",
+                            "wasm32-simd128",
+                            (_value_case("add", "test_add_compiles"),),
+                        ),
+                    )
+                ),
+            ),
+        )
+
+    def fake_write_artifacts(artifacts, output_root):
+        return SimpleNamespace(
+            diagnostics=(),
+            written=(Path(output_root) / "generated.txt",),
+            output_root=Path(output_root),
+        )
+
+    def fake_verify_project(output_root, verify, **kwargs):
+        return SimpleNamespace(
+            skipped=(),
+            diagnostics=(),
+            commands=(
+                SimpleNamespace(
+                    command=SimpleNamespace(
+                        backend_id="cpp",
+                        profile_name="wasm32_simd128",
+                        step="build-values",
+                        argv=("cmake", "--build", "build"),
+                    ),
+                    returncode=0,
+                    stdout="",
+                    stderr="",
+                ),
+            ),
+        )
+
+    monkeypatch.setattr(cli, "generate_project", fake_generate_project)
+    monkeypatch.setattr(cli, "write_artifacts", fake_write_artifacts)
+    monkeypatch.setattr(cli, "verify_project", fake_verify_project)
+
+    rc = cli.main(
+        [
+            "--sources",
+            "tsldata",
+            "--machine-profiles",
+            "supplementary/buildsystem/machine_profiles.json",
+            "--output-root",
+            str(tmp_path),
+            "--test",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert (
+        "[verify-incomplete] cpp profile wasm32-simd128 1/1 planned value-test "
+        "cases not run"
+    ) in captured.err
+    assert "build/test-verified" not in captured.out
+
+
 def test_cli_test_flag_requires_output_root(monkeypatch, capsys) -> None:
     def fail_generate_project(*_args, **_kwargs):
         raise AssertionError("generation should not run without an output root")
@@ -358,3 +438,16 @@ def test_cli_test_flag_requires_output_root(monkeypatch, capsys) -> None:
     captured = capsys.readouterr()
     assert rc == 1
     assert "--test requires --output-root" in captured.err
+
+
+def _value_case(call_name: str, function_name: str) -> ValueTestCasePlan:
+    return ValueTestCasePlan(
+        kind="compile_only",
+        function_name=function_name,
+        case_name="compile",
+        call_name=call_name,
+        type_tag="si32",
+        base_spelling="std::int32_t",
+        lanes=4,
+        result_kind="v",
+    )

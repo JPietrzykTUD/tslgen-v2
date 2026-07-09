@@ -171,6 +171,7 @@ class TslPairWiseSwapQuickSorter {
     using DataScalarStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::fixed<1>, DataType>;
     auto const pivot_vec = tsl::set1<DataSimdStyle>(pivot.val);
     auto [left_ptr, right_ptr] = quicksort_partition<DataSimdStyle>(data, data + count - 2, pivot_vec);
+    
     if (left_ptr < right_ptr) {
       [left_ptr, right_ptr] = quicksort_partition<DataScalarStyle>(left_ptr, right_ptr, pivot.val);
     }

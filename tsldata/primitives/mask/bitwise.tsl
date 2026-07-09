@@ -613,6 +613,8 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
     """
   semantics """
     input: integral mask data, scalar shift, generic PreserveSign
+    if shift is greater than or equal to the base type bit width:
+      return 0
     if integral mask type is signed and PreserveSign is false:
       return unsigned(data) >> shift
     return data >> shift
@@ -620,6 +622,7 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
   tests:
     - {tags [basic], type "ui32", lane_count 16, case {inputs [240, 4], expected 15}}
     - {tags [zero], type "ui32", lane_count 16, case {inputs [0, 4], expected 0}}
+    - {tags [width], type "ui32", lane_count 16, case {inputs [1, 32], expected 0}}
   generic_params:
     PreserveSign:
       kind bool
@@ -645,9 +648,24 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
         implementation:
           tsil """
           if<compile>(( value(type::is_signed(type(vector::imask))) ) && (!PreserveSign)) {
-             complete(cast<static>(type(vector::imask), cast<static>(type(base::unsigned_of(type(vector::imask))), data) >> shift));
+             complete(
+               select_expr(
+                 shift >= value(type::size_bits(base::in)),
+                 cast<static>(type(vector::imask), 0),
+                 cast<static>(
+                   type(vector::imask),
+                   cast<static>(type(base::unsigned_of(type(vector::imask))), data) >> shift
+                 )
+               )
+             );
           } else {
-             complete(data >> shift) ;
+             complete(
+               select_expr(
+                 shift >= value(type::size_bits(base::in)),
+                 cast<static>(type(vector::imask), 0),
+                 cast<static>(type(vector::imask), data >> shift)
+               )
+             );
           }
             """
       f?:
@@ -668,7 +686,13 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
           reasons []
         implementation:
           tsil """
-           complete(data >> cast<static>(type(vector::imask), shift)) ;
+           complete(
+             select_expr(
+               shift >= value(type::size_bits(base::in)),
+               cast<static>(type(vector::imask), 0),
+               cast<static>(type(vector::imask), data >> shift)
+             )
+           );
             """
 prim<im:=(im,usize)> shift_left_imask(data, shift):
   brief_description "Shifts an integral mask value left by a scalar shift count."
