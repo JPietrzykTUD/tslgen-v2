@@ -224,6 +224,7 @@ def _record_rendered_region_state(
         "mask",
         "mem",
         "op",
+        "select_expr",
         "var",
     }:
         context.effects.mark_implementation_composition()

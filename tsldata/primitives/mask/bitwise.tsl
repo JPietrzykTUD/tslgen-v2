@@ -603,7 +603,7 @@ prim<usize:=m> mask_population_count(mask):
               }
               complete(count);
             """
-prim<im:=(im,s)> shift_right_imask(data, shift):
+prim<im:=(im,usize)> shift_right_imask(data, shift):
   brief_description "Shifts an integral mask value right by a scalar shift count."
   detailed_description """
     Shifts an integral mask value right by a runtime scalar amount. The
@@ -670,3 +670,46 @@ prim<im:=(im,s)> shift_right_imask(data, shift):
           tsil """
            complete(data >> cast<static>(type(vector::imask), shift)) ;
             """
+prim<im:=(im,usize)> shift_left_imask(data, shift):
+  brief_description "Shifts an integral mask value left by a scalar shift count."
+  detailed_description """
+    Shifts an integral mask value left by a runtime scalar amount.
+    """
+  semantics """
+    input: integral mask data, scalar shift
+    if shift is greater than or equal to the base type bit width:
+      return 0
+    return data << shift
+    """
+  tests:
+    - {tags [basic], type "ui32", lane_count 16, case {inputs [15, 4], expected 240}}
+    - {tags [zero], type "ui32", lane_count 16, case {inputs [0, 4], expected 0}}
+    - {tags [width], type "ui32", lane_count 16, case {inputs [1, 32], expected 0}}
+  impls:
+    [avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128, scalar, generic, oneapi_fpga]:
+      arith:
+        requires:
+          avx512 [avx512f]
+          avx2_vl [avx2, avx512f, avx512vl]
+          sse_vl [sse2, avx512f, avx512vl]
+          avx2 [avx]
+          sse [sse]
+          neon [neon]
+          wasm128 [simd128]
+          scalar []
+          generic []
+          oneapi_fpga []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            complete(
+              select_expr(
+                shift >= value(type::size_bits(base::in)),
+                cast<static>(type(vector::imask), 0),
+                cast<static>(type(vector::imask), data << shift)
+              )
+            );
+          """

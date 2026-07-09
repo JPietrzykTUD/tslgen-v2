@@ -921,6 +921,23 @@ def test_query_region_selectors_are_diagnosed() -> None:
 @pytest.mark.parametrize(
     "body",
     [
+        "complete(select_expr<generation>(a, b, c));",
+        "complete(select_expr(a, b));",
+        "complete(select_expr(a, b, c, d));",
+    ],
+)
+def test_malformed_select_expr_body_region_is_diagnosed(body: str) -> None:
+    diagnostics = _diagnostics(
+        _base_source().replace('tsil "complete(data);"', f'tsil "{body}"')
+    )
+
+    diagnostic = next(d for d in diagnostics if d.code == "TSL-BODY-BAD-SELECT-EXPR")
+    assert "select_expr(condition, if_true, if_false)" in diagnostic.message
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
         "complete(mask<set:1>(data, 0));",
         "complete(mask<set>(data, 0, true));",
         "complete(mask<lane_true>(data));",

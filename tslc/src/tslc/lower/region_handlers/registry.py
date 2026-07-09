@@ -11,6 +11,7 @@ from tslc.lower.region_handlers.control import (
     AssumeAlignedLowerer,
     IfLowerer,
     LoopLowerer,
+    SelectExprLowerer,
     SwitchLowerer,
 )
 from tslc.lower.region_handlers.declarations import LetLowerer, VarLowerer
@@ -40,6 +41,7 @@ _REGION_LOWERER_FACTORIES: dict[str, RegionLowererFactory] = {
     "cast": CastLowerer,
     "call": CallLowerer,
     "if": IfLowerer,
+    "select_expr": SelectExprLowerer,
     "assume_aligned": AssumeAlignedLowerer,
     "loop": LoopLowerer,
     "switch": SwitchLowerer,

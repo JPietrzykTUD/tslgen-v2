@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tslc.ir.segments import RawText, Region, Segment
+from tslc.lower._text import skip_string
 from tslc.lower.context import LoweringSession, VectorValue
 
 
@@ -41,10 +42,15 @@ def _split_arg_groups(segments: tuple[Segment, ...]) -> list[tuple[Segment, ...]
             continue
         text = segment.text
         start = 0
-        for index, char in enumerate(text):
+        index = 0
+        while index < len(text):
+            char = text[index]
+            if char == '"':
+                index = skip_string(text, index)
+                continue
             if char in "(<[":
                 depth += 1
-            elif char in ")>]":
+            elif char in ")>]" and depth > 0:
                 depth -= 1
             elif char == "," and depth == 0:
                 piece = text[start:index]
@@ -52,6 +58,7 @@ def _split_arg_groups(segments: tuple[Segment, ...]) -> list[tuple[Segment, ...]
                     groups[-1].append(RawText(piece))
                 groups.append([])
                 start = index + 1
+            index += 1
         tail = text[start:]
         if tail.strip():
             groups[-1].append(RawText(tail))

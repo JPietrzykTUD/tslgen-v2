@@ -278,6 +278,24 @@ evaluator chooses a branch and only the taken body is emitted. If
 backend compile-time branch instead: C++ uses `if constexpr`, while Rust emits a
 normal const-parameter-dependent `if`.
 
+### `select_expr`
+
+Syntax:
+
+```tsil
+select_expr(condition, if_true, if_false)
+```
+
+Use `select_expr` for expression-level runtime choice when a body needs a
+portable conditional value. All three arguments are recursively lowered TSIL
+expression fragments; the two arms should be expressions, not statement bodies.
+For statement-level branching, use `if`.
+
+Catalog validation requires exactly three arguments and no selector. Lowering
+renders the condition and both arms recursively, then asks the backend syntax
+dialect to emit an expression conditional. C++ emits a conditional operator.
+Rust emits an `if { ... } else { ... }` expression.
+
 ### `assume_aligned`
 
 Syntax:
@@ -349,6 +367,10 @@ queries include `base::in`, `base::signed_of(...)`, `base::unsigned_of(...)`,
 `vector::register`, `vector::mask`, `vector::imask`, `vector::as_base(...)`,
 and `vector::as_extension(...)`.
 
+Inside other query arguments, type-valued leaves can be passed directly. For
+example, prefer `value(type::size_bytes(base::in))` over the redundant
+`value(type::size_bytes(type(base::in)))`.
+
 Lowering evaluates the whole region with the query evaluator. Type values
 become backend scalar spellings, text values pass through as text, and vector
 values become backend vector spellings. If the query cannot be resolved,
@@ -366,7 +388,8 @@ Use `value` to splice generated constants or backend-specific value fragments
 into an expression. Common queries include `vector::length` for static lane
 counts, `vector::runtime_length` for runtime lane counts, `vector::alignment`,
 `generic::length(...)`, `generic::runtime_length(...)`,
-`type::size_bytes(...)`, `primitive::attribute(...)`, and `select(...)`.
+`type::size_bytes(...)`, `type::size_bits(...)`, `primitive::attribute(...)`,
+and `select(...)`.
 
 Lowering uses the same query evaluator as `type`. Text values become literal
 rendered text, type values become backend scalar spellings, and vector values

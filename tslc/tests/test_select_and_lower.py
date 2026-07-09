@@ -912,6 +912,58 @@ def test_bound_simd_type_generic_base_folds_generation_condition(
 
 
 @pytest.mark.parametrize(
+    ("backend_id", "expected"),
+    (
+        (
+            "cpp",
+            "return ((left == right) ? (static_cast<int32_t>(0)) : (left));",
+        ),
+        (
+            "rust",
+            "return if left == right { (0) as i32 } else { left };",
+        ),
+    ),
+)
+def test_select_expr_lowers_to_backend_conditional_expression(
+    catalog: Catalog,
+    backend_id: str,
+    expected: str,
+) -> None:
+    impl = Implementation(
+        ("avx2", "all"),
+        "avx2",
+        "all",
+        (
+            "complete(select_expr("
+            "left == right, "
+            "cast<static>(base::in, 0), "
+            "left"
+            "));"
+        ),
+        source_order=0,
+    )
+    primitive = Primitive(
+        name="select_expr_probe",
+        signature="v:=(v,v)",
+        parameters=("left", "right"),
+        attribute_keys=(),
+        implementations=(impl,),
+    )
+    slot = SelectedImplementation(
+        primitive=primitive,
+        implementation=impl,
+        extension=catalog.extensions["avx2"],
+        type_tag="si32",
+    )
+
+    lowered = Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend_id))
+
+    assert lowered.diagnostics == ()
+    assert lowered.specialization is not None
+    assert lowered.specialization.body_text == expected
+
+
+@pytest.mark.parametrize(
     ("backend_id", "expected_call"),
     (
         ("cpp", "to_array<IndexVec>(index)"),

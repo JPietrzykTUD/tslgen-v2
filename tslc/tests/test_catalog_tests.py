@@ -49,6 +49,16 @@ def test_scalar_and_compile_test_fields_are_promoted(catalog: Catalog) -> None:
     assert case.inputs[0].mask_bits == "240"
     assert case.inputs[1].scalar == "4"
 
+    shift_left = _first(catalog, "shift_left_imask", masked=False)
+    basic = next(t for t in shift_left.tests if t.name == "shift_left_imask_ui32_basic")
+    assert [arg.kind for arg in basic.inputs] == ["mask", "scalar"]
+    assert basic.inputs[0].mask_bits == "15"
+    assert basic.inputs[1].scalar == "4"
+    assert basic.expected == ("240",)
+    width = next(t for t in shift_left.tests if t.name == "shift_left_imask_ui32_width")
+    assert width.inputs[1].scalar == "32"
+    assert width.expected == ("0",)
+
     undef = _first(catalog, "set_undef", masked=False)
     compile_case = next(t for t in undef.tests if t.role == "compile")
     assert compile_case.name == "set_undef_si32_compile"

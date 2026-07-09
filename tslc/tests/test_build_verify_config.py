@@ -268,6 +268,7 @@ def test_rust_build_verifier_cross_target_does_not_run_test_binary(
     ]
     assert "--target" in seen[1].argv
     assert "aarch64-unknown-linux-musl" in seen[1].argv
+    assert "linker=rust-lld" in seen[1].argv
     assert "--target" in seen[2].argv
     assert "aarch64-unknown-linux-musl" in seen[2].argv
     assert "--no-run" in seen[2].argv
@@ -1089,6 +1090,7 @@ def test_rust_qemu_value_tests_use_target_and_run_binaries(tmp_path: Path) -> No
     ]
     assert "--target" in seen[1].argv
     assert "aarch64-unknown-linux-musl" in seen[1].argv
+    assert "linker=rust-lld" in seen[1].argv
     assert "--target" in seen[2].argv
     assert "aarch64-unknown-linux-musl" in seen[2].argv
     env = _env(seen[2])

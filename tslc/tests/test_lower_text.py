@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from tslc.ir.scan import scan
 from tslc.lower._text import split_selector_terms
+from tslc.lower.region_handlers.common import _split_arg_groups
 
 
 def test_split_selector_terms_keeps_build_modifiers_together() -> None:
@@ -26,3 +28,23 @@ def test_split_selector_terms_respects_strings_and_nested_selectors() -> None:
         "foo",
         'build[suffix=intrin::suffix("x,y"), infix=vector::as_base(base::in)]',
     ]
+
+
+def test_split_arg_groups_respects_strings_and_nested_regions() -> None:
+    region = scan(
+        'select_expr(flag, helper<format>("x,y"), call<primitive=foo>(a, b))'
+    )[0]
+
+    assert len(_split_arg_groups(region.body)) == 3
+
+
+def test_split_arg_groups_does_not_treat_comparison_as_closing_angle() -> None:
+    region = scan(
+        "select_expr("
+        "cast<static>(ShiftT, shift) >= cast<static>(ShiftT, value(type::size_bits(base::in))), "
+        "cast<static>(ShiftT, 0), "
+        "data << cast<static>(ShiftT, shift)"
+        ")"
+    )[0]
+
+    assert len(_split_arg_groups(region.body)) == 3

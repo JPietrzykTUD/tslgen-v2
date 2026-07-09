@@ -13,6 +13,7 @@ from tslc.output._verify_common import (
     missing_executable,
     runner_prefix,
     rust_environment,
+    rust_linker,
     rust_target,
     rust_target_args,
 )
@@ -303,6 +304,7 @@ def _rust_target_preflight_command(
             "--edition=2021",
             "--target",
             target,
+            *_rust_linker_args(profile, config),
             str(source_path),
             "-o",
             str(binary_path),
@@ -310,6 +312,14 @@ def _rust_target_preflight_command(
         cwd=root,
         env=rust_environment(profile, config),
     )
+
+
+def _rust_linker_args(
+    profile: VerifyProfile,
+    config: BuildVerifierConfig,
+) -> tuple[str, ...]:
+    linker = rust_linker(profile, config)
+    return ("-C", f"linker={linker}") if linker is not None else ()
 
 
 def _rust_preflight_skip(result: BuildCommandResult) -> str:
