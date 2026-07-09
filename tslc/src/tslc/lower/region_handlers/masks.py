@@ -66,11 +66,11 @@ class MaskLowerer:
     ) -> RenderField:
         extension = context.env.extension
         repr_kind = extension.mask_policy.kind
-        # `lane_bitmask` covers two physical reprs: the generic vector's integer bitset (one bit
-        # per lane) and the sse/avx2 register lane-mask (the mask IS a data register, one
-        # all-ones/all-zeros lane per element). They test differently, so a register-backed
-        # lane mask (a real vector width) gets its own `*_lane_register` key.
-        if repr_kind == "lane_bitmask" and extension.vector_bits > 0:
+        # Lane-bitmask policies lower through the same per-lane bit operations. Fixed-width
+        # x86 masks are register-backed, so a real vector width gets its own template key.
+        if extension.mask_policy.lowers_as_lane_bitmask():
+            repr_kind = "lane_bitmask"
+        if extension.mask_policy.kind == "lane_bitmask" and extension.vector_bits > 0:
             repr_kind = "lane_register"
         args: list[RenderText] = []
         for group in _split_arg_groups(region.body):

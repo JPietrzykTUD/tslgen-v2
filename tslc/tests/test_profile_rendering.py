@@ -101,6 +101,9 @@ def test_oneapi_sized_vector_is_distinct_from_generic(
 
     cpp = by["cpp/include/tsl_cascadelake_oneapi.hpp"]
     assert "template <std::size_t LANES>\nstruct oneapi_fpga" in cpp
+    assert "#include <sycl/ext/intel/ac_types/ac_int.hpp>" in cpp
+    assert "using mask_type = ac_int<LANES, false>;" in cpp
+    assert "using imask_type = ac_int<LANES, false>;" in cpp
     assert "struct add_impl<tsl::simd<int32_t, tsl::generic<LANES>>>" in cpp
     assert "struct add_impl<tsl::simd<int32_t, tsl::oneapi_fpga<LANES>>>" in cpp
     assert cpp.count("struct add_impl<tsl::simd<int32_t, tsl::generic<LANES>>>") == 1
@@ -294,8 +297,8 @@ def test_fixed_sve_profile_registers_guarded_static_cpp_simd_types(
     assert f"#if defined(TSL_PROFILE_SVE{width})" in dispatch
     assert (
         f"target_compile_options(tsl_profile_sve{width} INTERFACE "
-        "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-mcpu=a64fx> "
-        f"$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-msve-vector-bits={width}>)"
+        "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-mcpu=a64fx> "
+        f"$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-msve-vector-bits={width}>)"
     ) in cmake
     assert f"__ARM_FEATURE_SVE_BITS == {width}" in cmake
 
@@ -339,7 +342,7 @@ def test_sve_profile_registers_scalable_cpp_simd_types(
     assert "return svadd_s32_x(::tsl::mask_true<Vec>(), left, right);" in cpp
     assert 'add_library(tsl::sve ALIAS tsl_profile_sve)' in cmake
     assert "target_compile_definitions(tsl_profile_sve INTERFACE TSL_PROFILE_SVE)" in cmake
-    assert "target_compile_options(tsl_profile_sve INTERFACE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-mcpu=a64fx>)" in cmake
+    assert "target_compile_options(tsl_profile_sve INTERFACE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-mcpu=a64fx>)" in cmake
     assert any(
         case.kind == "scalable_golden" and case.source_extension == "sve"
         for profile in result.rendered.value_tests.profiles_for("cpp")

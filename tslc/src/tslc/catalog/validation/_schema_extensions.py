@@ -68,7 +68,13 @@ KNOWN_EXTENSION_BACKEND_FIELDS = frozenset(
     }
 )
 _KNOWN_MASK_POLICY_KINDS = frozenset(
-    {"bool", "lane_bitmask", "native_predicate", "native_predicate_by_lanes"}
+    {
+        "bool",
+        "exact_lane_bitmask",
+        "lane_bitmask",
+        "native_predicate",
+        "native_predicate_by_lanes",
+    }
 )
 _KNOWN_IMASK_POLICY_KINDS = frozenset(
     {"lane_bitmask", "same_as_mask_type", "unsigned_scalar"}
@@ -109,6 +115,7 @@ def validate_extension_block(
         diagnostics,
     )
     _validate_mask_policy_backend_maps(mask, diagnostics)
+    _validate_exact_lane_bitmask_cpp_spelling(mask, fields, diagnostics)
     imask = fields.get("integral_mask_type_policy")
     _validate_policy_block(
         imask,
@@ -299,3 +306,32 @@ def _validate_mask_policy_backend_maps(
             diagnostics,
             label=f"mask_type_policy {backend.key.text!r} lane field",
         )
+
+
+def _validate_exact_lane_bitmask_cpp_spelling(
+    field: ParsedTslField | None,
+    extension_fields: dict[str, ParsedTslField],
+    diagnostics: list[Diagnostic],
+) -> None:
+    if field is None or field_text(child(field, "kind")) != "exact_lane_bitmask":
+        return
+    cpp = extension_fields.get("cpp")
+    if (
+        cpp is None
+        or (field_text(child(cpp, "supported")) or "").lower() != "true"
+    ):
+        return
+    spelling = child(child(field, "backend_spelling"), "cpp")
+    if spelling is not None:
+        return
+    diagnostics.append(
+        diagnostic_at(
+            severity="error",
+            code="TSL-CATALOG-MISSING-MASK-BACKEND-SPELLING",
+            message=(
+                "mask_type_policy kind 'exact_lane_bitmask' requires "
+                "backend_spelling.cpp when C++ is supported"
+            ),
+            source=source_span(field.source),
+        )
+    )

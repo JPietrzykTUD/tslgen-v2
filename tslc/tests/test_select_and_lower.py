@@ -685,6 +685,29 @@ def test_lower_to_vector_lane_bitmask_identity_is_native(
     assert cpp.implementation_state is ImplementationState.NATIVE
 
 
+def test_oneapi_exact_lane_mask_policy_lowers_lane_bitmask_operations(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slots = {
+        (s.type_tag, s.extension.name): s
+        for s in Selector()
+        .select_profile(catalog, machine_profiles["skylake-oneapi"], "less_than", ("si32",))
+        .selected
+        if s.primitive.attributes.get("mask") is None
+    }
+    slot = slots[("si32", "oneapi_fpga")]
+
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert "typename Vec::mask_type result = 0;" in cpp.body_text
+    assert "result |= (1ull << i);" in cpp.body_text
+    assert "typename Vec::register_type result" not in cpp.body_text
+
+
 @pytest.mark.parametrize("backend_id", ("cpp", "rust"))
 def test_fixed_non_x86_extension_requires_register_metadata(backend_id: str) -> None:
     ext = Extension(

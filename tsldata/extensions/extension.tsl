@@ -366,8 +366,15 @@ extension oneapi_fpga:
   mask_vector_loadable false
   runtime_lanes false
   default_test_target false
+  mask_type_policy:
+    kind "exact_lane_bitmask"
+    backend_spelling:
+      cpp "ac_int<LANES, false>"
+  integral_mask_type_policy:
+    kind "same_as_mask_type"
   cpp:
     supported true
+    headers ["sycl/ext/intel/ac_types/ac_int.hpp"]
     test_suite_name "TslOneapiFpga"
     test_support_header "tests/scalar_support.hpp"
   rust:

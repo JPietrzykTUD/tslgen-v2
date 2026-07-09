@@ -42,6 +42,7 @@ _CPP_STATIC_HEADERS = (
     "tsl_algorithm.hpp",
     "tsl_x86_traits.hpp",
 )
+_CMAKE_CXX_FEATURE_FLAG_COMPILERS = "GNU,Clang,AppleClang,IntelLLVM"
 
 
 def cpp_artifacts(
@@ -398,6 +399,8 @@ def _cpp_sized_registration(
 
 
 def _cpp_sized_mask_type(extension: Extension) -> str:
+    if extension.mask_policy.kind == "exact_lane_bitmask":
+        return extension.mask_policy.spelling("cpp") or "std::uint64_t"
     if extension.mask_policy.kind == "lane_bitmask":
         return "std::uint64_t"
     return "register_type"
@@ -943,4 +946,4 @@ def _cmake_quote(value: str) -> str:
 
 
 def _cmake_cxx_flag(flag: str) -> str:
-    return f"$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:{flag}>"
+    return f"$<$<CXX_COMPILER_ID:{_CMAKE_CXX_FEATURE_FLAG_COMPILERS}>:{flag}>"

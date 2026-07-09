@@ -177,7 +177,7 @@ prim<usize:=s> lzc_scalar(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), helper<clz_recursive, type(base::in), type(vector::offset_base)::apply>(data)));"
+          tsil "complete(cast<static>(type(scalar::size), helper<clz>(data)));"
     oneapi_fpga_rtl:
       ?i?:
         requires []
@@ -186,7 +186,7 @@ prim<usize:=s> lzc_scalar(data):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), helper<clz_recursive, type(base::in), type(vector::offset_base)::apply>(data)));"
+          tsil "complete(cast<static>(type(scalar::size), helper<clz>(data)));"
 prim<v:=v> lzc(data):
   brief_description "Counts leading zero bits independently in each vector lane."
   detailed_description """
@@ -298,7 +298,7 @@ prim<v:=v> lzc(data):
           tsil """
                var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
                loop<backend, unroll>(i, 0, value(vector::length), 1)  {
-                data_arr[i] = cast<static>(type(base::in), helper<clz_recursive, type(base::in), type(vector::offset_base)::apply>(data_arr[i]));
+                data_arr[i] = cast<static>(type(base::in), call<primitive=lzc_scalar[type(vector::as_extension(scalar))]>(data_arr[i]));
               }
                complete(call<primitive=from_array[Vec]>(data_arr)) ;
             """
@@ -335,7 +335,7 @@ prim<usize:=m> lzc_imask(value):
         implementation:
           tsil "complete(cast<static>(type(scalar::size), helper<clz>(call<primitive=to_integral[Vec]>(value))));"
     [oneapi_fpga, oneapi_fpga_rtl]:
-      ?i?:
+      arith:
         requires:
           oneapi_fpga []
           oneapi_fpga_rtl []
@@ -344,7 +344,7 @@ prim<usize:=m> lzc_imask(value):
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(cast<static>(type(scalar::size), helper<clz_recursive, type(vector::imask), type(intrin::vector::imask)::apply>(call<primitive=to_integral[Vec]>(value))));"
+          tsil "complete(cast<static>(type(scalar::size), helper<clz>(call<primitive=to_integral[Vec]>(value))));"
 prim<usize:=m> tzc(value):
   brief_description "Counts trailing zero bits in an integral mask value."
   detailed_description """

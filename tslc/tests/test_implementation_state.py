@@ -52,6 +52,13 @@ def test_direct_state_classifies_mask_vector_identity_from_extension_policy() ->
         parameters=("mask",),
         mask_policy=MaskPolicy(kind="lane_bitmask"),
     )
+    exact_lane_bitmask = _selected(
+        "native",
+        "complete(mask);",
+        signature="v := m",
+        parameters=("mask",),
+        mask_policy=MaskPolicy(kind="exact_lane_bitmask"),
+    )
     native_predicate = _selected(
         "native",
         "complete(mask);",
@@ -64,6 +71,10 @@ def test_direct_state_classifies_mask_vector_identity_from_extension_policy() ->
         lane_bitmask,
         scan(lane_bitmask.implementation.body_text),
     ) is ImplementationState.NATIVE
+    assert infer_direct_implementation_state(
+        exact_lane_bitmask,
+        scan(exact_lane_bitmask.implementation.body_text),
+    ) is ImplementationState.UNKNOWN
     assert infer_direct_implementation_state(
         native_predicate,
         scan(native_predicate.implementation.body_text),

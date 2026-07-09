@@ -676,6 +676,34 @@ def test_missing_backend_spellings_are_diagnosed() -> None:
     assert "si32" in diagnostics[0].message
 
 
+def test_exact_lane_bitmask_requires_cpp_backend_spelling() -> None:
+    diagnostics = _diagnostics(
+        "types:\n"
+        "  ints {types [si32]}\n"
+        "extension scalar:\n"
+        '  extension_name "scalar"\n'
+        '  family "scalar"\n'
+        "  mask_type_policy:\n"
+        '    kind "exact_lane_bitmask"\n'
+        "  cpp:\n"
+        "    supported true\n"
+        "language cpp:\n"
+        '  s32 {type "int32_t"}\n'
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n',
+        backends=("cpp",),
+    )
+
+    assert {
+        d.code for d in diagnostics
+    } == {"TSL-CATALOG-MISSING-MASK-BACKEND-SPELLING"}
+    assert "backend_spelling.cpp" in diagnostics[0].message
+
+
 def test_bad_extension_inheritance_is_diagnosed() -> None:
     diagnostics = _diagnostics(
         _base_source(

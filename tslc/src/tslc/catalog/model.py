@@ -320,6 +320,9 @@ class MaskPolicy:
     - ``"bool"`` (scalar): the mask is a ``bool``.
     - ``"lane_bitmask"`` (sse/avx2): the mask *is* the vector register (all-ones /
       all-zeros per lane), so ``mask_type = register_type``.
+    - ``"exact_lane_bitmask"`` (sized generic-like vectors): the mask is an
+      integer-like bitset with exactly one bit per lane; backend spellings may
+      name a lane-parameterized type such as ``ac_int<LANES, false>``.
     - ``"native_predicate"`` (scalable SVE): the mask is one backend-native predicate
       spelling declared directly by backend id.
     - ``"native_predicate_by_lanes"`` (avx512 and the ``_vl`` variants): the mask is a
@@ -348,6 +351,9 @@ class MaskPolicy:
 
     def spelling_for_lanes(self, backend_id: str, lanes: int) -> str | None:
         return self.backend_spelling_by_lanes.get(backend_id, {}).get(lanes)
+
+    def lowers_as_lane_bitmask(self) -> bool:
+        return self.kind in {"exact_lane_bitmask", "lane_bitmask"}
 
 
 @dataclass(frozen=True, slots=True)

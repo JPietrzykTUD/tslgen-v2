@@ -184,6 +184,13 @@ def test_extension_inheritance_activation_and_supersession(catalog: Catalog) -> 
     oneapi = catalog.extensions["oneapi_fpga"]
     assert oneapi.active_when.target_features == frozenset()
     assert oneapi.active_when.compile_modes == frozenset({"oneapi_fpga"})
+    assert oneapi.mask_policy.kind == "exact_lane_bitmask"
+    assert oneapi.mask_policy.spelling("cpp") == "ac_int<LANES, false>"
+    assert oneapi.imask_policy.kind == "same_as_mask_type"
+    assert (
+        oneapi.metadata.backend["cpp"].headers
+        == ("sycl/ext/intel/ac_types/ac_int.hpp",)
+    )
     assert compile_guards[0].hint_flag == "-msve-vector-bits=512"
     assert (
         sve512.direct_vector_register_type("cpp", "si32")
