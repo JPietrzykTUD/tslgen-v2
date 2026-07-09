@@ -53,6 +53,7 @@ def test_value_test_summary_counts_profile_case_and_command_results(tmp_path: Pa
         run_value_tests=True,
     )
 
+    assert "| Backend | Profile | Planned primitive names |" in markdown
     assert (
         "| cpp | avx2 | 2 | 2 | 2 | 0 | 1/1 | 3/3 | passed |"
         in markdown
@@ -61,6 +62,40 @@ def test_value_test_summary_counts_profile_case_and_command_results(tmp_path: Pa
         "| rust | wasm32_simd128 | 1 | 1 | 0 | 1 | 0/1 | 1/2 | failed |"
         in markdown
     )
+
+
+def test_value_test_summary_matches_source_profile_to_rendered_command_slug(
+    tmp_path: Path,
+) -> None:
+    plan = ValueTestProjectPlan(
+        profiles=(
+            ValueTestProfilePlan(
+                "cpp",
+                "wasm32-simd128",
+                (_case("add", "test_add_compiles"),),
+            ),
+        )
+    )
+    report = BuildVerificationReport(
+        commands=(
+            _result(tmp_path, "cpp", "wasm32_simd128", "configure", 0),
+            _result(tmp_path, "cpp", "wasm32_simd128", "build-values", 0),
+            _result(tmp_path, "cpp", "wasm32_simd128", "test", 0),
+        ),
+        diagnostics=(),
+    )
+
+    markdown = render_value_test_markdown_summary(
+        plan,
+        report,
+        run_value_tests=True,
+    )
+
+    assert (
+        "| cpp | wasm32-simd128 | 1 | 1 | 1 | 0 | 1/1 | 3/3 | passed |"
+        in markdown
+    )
+    assert "| cpp | wasm32_simd128 |" not in markdown
 
 
 def test_value_test_summary_marks_planned_cases_blocked_when_profile_is_skipped(

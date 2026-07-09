@@ -17,7 +17,9 @@
         "GitHub.copilot",
         "DBTUD.tslgen-edit",
         "mohsen1.prettify-json",
-        "openai.chatgpt"
+        "openai.chatgpt",
+        "github.vscode-github-actions",
+        "Anthropic.claude-code"
       ]
     }
   }

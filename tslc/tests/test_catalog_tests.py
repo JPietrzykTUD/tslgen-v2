@@ -48,6 +48,9 @@ def test_scalar_and_compile_test_fields_are_promoted(catalog: Catalog) -> None:
     assert [arg.kind for arg in case.inputs] == ["mask", "scalar"]
     assert case.inputs[0].mask_bits == "240"
     assert case.inputs[1].scalar == "4"
+    width = next(t for t in shift.tests if t.name == "shift_right_imask_ui32_width")
+    assert width.inputs[1].scalar == "32"
+    assert width.expected == ("0",)
 
     shift_left = _first(catalog, "shift_left_imask", masked=False)
     basic = next(t for t in shift_left.tests if t.name == "shift_left_imask_ui32_basic")

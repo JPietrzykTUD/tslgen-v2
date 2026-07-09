@@ -59,6 +59,7 @@ def test_golden_value_tests_build_and_pass(
             "equal",
             "store",
             "hadd",
+            "shift_right_imask",
             "shift_left",
             "shift_left_imask",
         ],
@@ -90,7 +91,15 @@ def test_neon_native_arithmetic_bitwise_extract_and_cast_value_tests_build_and_p
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["sub", "mul", "binary_and", "extract_value", "cast", "shift_left_imask"],
+        primitives=[
+            "sub",
+            "mul",
+            "binary_and",
+            "extract_value",
+            "cast",
+            "shift_right_imask",
+            "shift_left_imask",
+        ],
         profiles=["neon"],
         backends=("cpp", "rust"),
         test_harness=True,
@@ -113,12 +122,12 @@ def test_neon_native_arithmetic_bitwise_extract_and_cast_value_tests_build_and_p
     _assert_value_tests_ran(report, backends=("cpp", "rust"))
 
 
-def test_shift_left_imask_value_tests_cover_x86_arm_and_oneapi(
+def test_shift_imask_value_tests_cover_x86_arm_and_oneapi(
     data_root: Path,
     machine_profiles_path: Path,
     tmp_path: Path,
 ) -> None:
-    """`shift_left_imask` authored cases run on SDE/QEMU and build under icpx OneAPI."""
+    """Integral-mask shift cases run on SDE/QEMU and build under icpx OneAPI."""
 
     zig = Path("/opt/zig/zig")
     qemu = shutil.which("qemu-aarch64")
@@ -132,7 +141,7 @@ def test_shift_left_imask_value_tests_cover_x86_arm_and_oneapi(
     x86_result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["shift_left_imask"],
+        primitives=["shift_right_imask", "shift_left_imask"],
         profiles=["avx2", "skylake-oneapi"],
         backends=("cpp",),
         test_harness=True,
@@ -153,6 +162,10 @@ def test_shift_left_imask_value_tests_cover_x86_arm_and_oneapi(
         for entry in coverage
         if entry.status == "emitted"
     } >= {
+        ("cpp", "avx2", "shift_right_imask_ui32_basic"),
+        ("cpp", "skylake-oneapi", "shift_right_imask_ui32_basic"),
+        ("cpp", "avx2", "shift_right_imask_ui32_width"),
+        ("cpp", "skylake-oneapi", "shift_right_imask_ui32_width"),
         ("cpp", "avx2", "shift_left_imask_ui32_basic"),
         ("cpp", "skylake-oneapi", "shift_left_imask_ui32_basic"),
         ("cpp", "avx2", "shift_left_imask_ui32_width"),
@@ -174,7 +187,7 @@ def test_shift_left_imask_value_tests_cover_x86_arm_and_oneapi(
     neon_result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["shift_left_imask"],
+        primitives=["shift_right_imask", "shift_left_imask"],
         profiles=["neon"],
         backends=("cpp",),
         test_harness=True,
@@ -195,6 +208,8 @@ def test_shift_left_imask_value_tests_cover_x86_arm_and_oneapi(
         for entry in neon_coverage
         if entry.status == "emitted"
     } >= {
+        ("cpp", "neon", "shift_right_imask_ui32_basic"),
+        ("cpp", "neon", "shift_right_imask_ui32_width"),
         ("cpp", "neon", "shift_left_imask_ui32_basic"),
         ("cpp", "neon", "shift_left_imask_ui32_width"),
     }

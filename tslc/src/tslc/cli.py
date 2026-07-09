@@ -6,11 +6,15 @@ import argparse
 import shlex
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.diagnostics import has_errors
 from tslc.output.verify import BuildVerificationReport
 from tslc.pipeline import GenerationResult
+
+if TYPE_CHECKING:
+    from tslc.output.summary import ProfileValueTestSummary
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -249,9 +253,27 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"[verify] {diagnostic.code}: {diagnostic.message}", file=sys.stderr)
             if args.test:
                 _print_test_output(verify_report)
+            incomplete_value_tests = (
+                _incomplete_value_test_profiles(result, verify_report)
+                if args.test
+                else ()
+            )
+            for profile in incomplete_value_tests:
+                print(
+                    "[verify-incomplete] "
+                    f"{profile.backend_id} profile {profile.profile_name} "
+                    f"{profile.failed_or_blocked_cases}/{profile.planned_cases} "
+                    f"planned value-test cases {profile.status}",
+                    file=sys.stderr,
+                )
             write_summary_once()
             if has_errors(verify_report.diagnostics) or (
-                args.test and (verify_report.diagnostics or verify_report.skipped)
+                args.test
+                and (
+                    verify_report.diagnostics
+                    or verify_report.skipped
+                    or incomplete_value_tests
+                )
             ):
                 return 1
             verified = "build/test-verified" if args.test else "build-verified"
@@ -298,6 +320,28 @@ def _print_captured_stream(label: str, text: str) -> None:
     if stripped:
         print(f"[{label}]")
         print(stripped)
+
+
+def _incomplete_value_test_profiles(
+    result: GenerationResult,
+    verify_report: BuildVerificationReport,
+) -> tuple["ProfileValueTestSummary", ...]:
+    if result.rendered is None:
+        return ()
+    test_plan = getattr(result.rendered, "value_tests", None)
+    if test_plan is None:
+        return ()
+    from tslc.output.summary import value_test_profile_summaries
+
+    return tuple(
+        profile
+        for profile in value_test_profile_summaries(
+            test_plan,
+            verify_report,
+            run_value_tests=True,
+        )
+        if profile.planned_cases > 0 and profile.status != "passed"
+    )
 
 
 def _write_summary_file(

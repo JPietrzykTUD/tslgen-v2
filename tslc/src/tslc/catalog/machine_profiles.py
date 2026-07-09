@@ -54,6 +54,10 @@ class MachineProfile:
     # Optional runner profile used by the after-write verifier to execute value
     # tests on hosts that cannot run the profile directly.
     runner: MachineProfileRunner | None = None
+    # Optional opt-in gate for generated profile auto-detection. Ungated profiles
+    # may participate in auto-detection by default; gated profiles require an
+    # explicit generated build-system option.
+    auto_detect_gate: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "features", frozenset(self.features))
@@ -177,6 +181,7 @@ def load_machine_profiles_checked(
                     "alternatives",
                     "cpp_flags",
                     "runner",
+                    "auto_detect_gate",
                 },
                 path,
                 diagnostics,
@@ -239,6 +244,13 @@ def load_machine_profiles_checked(
                 path,
                 diagnostics,
             )
+            auto_detect_gate = _optional_token_field(
+                name,
+                fields.get("auto_detect_gate"),
+                "auto_detect_gate",
+                path,
+                diagnostics,
+            )
             profiles[name] = MachineProfile(
                 name=name,
                 family=family,
@@ -247,6 +259,7 @@ def load_machine_profiles_checked(
                 compile_modes=compile_modes,
                 cpp_flags=cpp_flags,
                 runner=runner,
+                auto_detect_gate=auto_detect_gate,
             )
     return MachineProfileLoadResult(
         profiles=MappingProxyType(profiles),
@@ -375,6 +388,37 @@ def _string_list_field(
         )
     )
     return ()
+
+
+def _optional_token_field(
+    profile_name: str,
+    value: Any,
+    field_name: str,
+    path: Path,
+    diagnostics: list[Diagnostic],
+) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-MALFORMED-FIELD",
+                f"machine profile {profile_name!r} {field_name} must be a string",
+            )
+        )
+        return None
+    tokens = value.split()
+    if len(tokens) != 1:
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-MALFORMED-FIELD",
+                f"machine profile {profile_name!r} {field_name} must be one token",
+            )
+        )
+        return None
+    return tokens[0]
 
 
 def _runner(

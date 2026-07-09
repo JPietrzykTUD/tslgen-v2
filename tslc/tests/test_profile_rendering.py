@@ -135,6 +135,64 @@ def test_feature_flag_spelling(data_root: Path, machine_profiles_path: Path) -> 
     assert "target_link_libraries(tsl_generated INTERFACE tsl_profile_${TSL_SELECTED_PROFILE})" in cmake
     assert "check_cxx_source_runs" in cmake
     assert '__builtin_cpu_supports("avx2")' in cmake
+    assert "TSL_AUTO_ONEAPI_FPGA" not in cmake
+    assert "auto-oneapi-fpga" not in cmake
+
+
+def test_oneapi_fpga_profiles_are_opt_in_for_cmake_auto_detection(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    cmake = {
+        a.logical_path: a.content
+        for a in _gen(
+            data_root,
+            machine_profiles_path,
+            primitives=["add"],
+            profiles=["cascadelake", "cascadelake-oneapi"],
+            backends=["cpp"],
+        ).artifacts.artifacts
+    }["cpp/CMakeLists.txt"]
+
+    assert '"auto-oneapi-fpga"' in cmake
+    assert "TSL_AUTO_ONEAPI_FPGA" not in cmake
+    assert 'elseif(_TSL_REQUESTED_PROFILE STREQUAL "auto-oneapi-fpga")' in cmake
+    assert '_tsl_detect_profile_gate("oneapi_fpga" _TSL_GATE_READY _TSL_GATE_REASON)' in cmake
+    assert "sycl-ls" in cmake
+    assert "clinfo" in cmake
+    assert "aocl list-devices" in cmake
+    assert "aocl diagnose" in cmake
+
+    base_selection = 'set(TSL_SELECTED_PROFILE "cascadelake")'
+    oneapi_selection = 'set(TSL_SELECTED_PROFILE "cascadelake_oneapi")'
+    cpu_auto = 'if(_TSL_REQUESTED_PROFILE STREQUAL "auto")'
+    fpga_auto = 'elseif(_TSL_REQUESTED_PROFILE STREQUAL "auto-oneapi-fpga")'
+
+    assert base_selection in cmake
+    assert oneapi_selection in cmake
+    assert cmake.index(cpu_auto) < cmake.index(base_selection) < cmake.index(fpga_auto)
+    assert cmake.index(fpga_auto) < cmake.index(oneapi_selection)
+    assert cmake.index("    check_cxx_source_runs", cmake.index(fpga_auto)) < cmake.index(
+        oneapi_selection
+    )
+
+
+def test_cpu_auto_detection_has_no_gated_profile_fallback(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    cmake = {
+        a.logical_path: a.content
+        for a in _gen(
+            data_root,
+            machine_profiles_path,
+            primitives=["add"],
+            profiles=["cascadelake-oneapi"],
+            backends=["cpp"],
+        ).artifacts.artifacts
+    }["cpp/CMakeLists.txt"]
+
+    assert 'set(TSL_SELECTED_PROFILE "")' in cmake
+    assert "TSL_PROFILE=auto has no ungated generated profiles" in cmake
+    assert "auto-oneapi-fpga" in cmake
 
 
 def test_cpp_profile_flags_are_profile_family_owned() -> None:
