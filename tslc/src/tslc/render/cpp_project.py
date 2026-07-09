@@ -128,6 +128,7 @@ def cpp_verify_profiles(profiles: tuple[ProfileRender, ...]) -> tuple[VerifyProf
             profile_name=slug(profile_render.profile.name),
             file_stem=slug(profile_render.profile.name),
             family=profile_render.profile.family,
+            compile_modes=profile_render.profile.compile_modes,
             cpp_flags=cpp_flags(profile_render.profile, profile_render.profile_family),
             cpp_target=cpp_target(profile_render.profile, profile_render.profile_family),
             runner=_verify_runner(profile_render.profile),

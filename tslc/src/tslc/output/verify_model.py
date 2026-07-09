@@ -23,6 +23,7 @@ class VerifyProfile:
     profile_name: str
     file_stem: str
     family: str = "generic"
+    compile_modes: frozenset[str] = frozenset()
     # C++ extra compile flags (e.g. ("-mavx2",)); Rust target features (e.g. ("+avx2",)).
     cpp_flags: tuple[str, ...] = ()
     cpp_target: str | None = None
