@@ -69,9 +69,22 @@ def render_value_test_markdown_summary(
         lines.append("| - | - | 0 | 0 | 0 | 0 | 0/0 | 0/0 | no profiles |")
 
     if verify_report is not None and verify_report.skipped:
-        lines.extend(["", "<details><summary>Skipped verification notes</summary>", ""])
+        count = len(verify_report.skipped)
+        suffix = "" if count == 1 else "s"
+        lines.extend(
+            [
+                "",
+                "> [!WARNING]",
+                (
+                    f"> {count} verification skip{suffix} reported. "
+                    "A generated value-test run with skips is incomplete."
+                ),
+                "",
+                f"#### Skipped Verification Notes ({count})",
+                "",
+            ]
+        )
         lines.extend(f"- {_escape_markdown_text(note)}" for note in verify_report.skipped)
-        lines.extend(["", "</details>"])
 
     return "\n".join(lines) + "\n"
 

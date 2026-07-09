@@ -251,7 +251,7 @@ def main(argv: list[str] | None = None) -> int:
                 _print_test_output(verify_report)
             write_summary_once()
             if has_errors(verify_report.diagnostics) or (
-                args.test and verify_report.diagnostics
+                args.test and (verify_report.diagnostics or verify_report.skipped)
             ):
                 return 1
             verified = "build/test-verified" if args.test else "build-verified"

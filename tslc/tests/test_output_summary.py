@@ -82,6 +82,9 @@ def test_value_test_summary_marks_planned_cases_blocked_when_profile_is_skipped(
     )
 
     assert "| cpp | sve | 1 | 1 | 0 | 1 | 0/0 | 0/0 | skipped |" in markdown
+    assert "> [!WARNING]" in markdown
+    assert "1 verification skip reported" in markdown
+    assert "#### Skipped Verification Notes (1)" in markdown
     assert "- cpp: profile sve skipped \\| no runner" in markdown
 
 

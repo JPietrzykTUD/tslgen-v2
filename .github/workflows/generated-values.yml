@@ -1,9 +1,9 @@
 name: Generated Value Tests
 
 on:
+  pull_request:
+  merge_group:
   push:
-    branches:
-      - main
     tags:
       - "v*"
   workflow_dispatch:
@@ -121,6 +121,7 @@ jobs:
               -e TSLC_SUMMARY_FILE="./${summary_file}" \
               -e TSLC_SDE="/opt/intel-sde/sde64" \
               -e TSLC_QEMU_AARCH64="/usr/bin/qemu-aarch64" \
+              -e TSLC_WASMTIME="/usr/local/bin/wasmtime" \
               -- \
               bash -lc '
                 set -e
