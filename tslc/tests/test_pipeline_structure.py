@@ -20,6 +20,7 @@ from tslc.catalog.machine_profiles import MachineProfile
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
+from tslc.render import cpp_build, cpp_profile_header, cpp_project
 from tslc.render.project import render_project
 from tslc.target_text import LoweredBody
 
@@ -36,6 +37,14 @@ def test_pipeline_facade_keeps_input_and_closure_boundaries() -> None:
         == "tslc._pipeline_closure"
     )
     assert pipeline._profile_with_required_features.__module__ == "tslc._pipeline_closure"
+
+
+def test_cpp_project_renderer_has_focused_owned_modules() -> None:
+    assert cpp_project.cpp_artifacts.__module__ == "tslc.render.cpp_project"
+    assert cpp_profile_header._cpp_registration.__module__ == (
+        "tslc.render.cpp_profile_header"
+    )
+    assert cpp_build.cpp_flags.__module__ == "tslc.render.cpp_build"
 
 
 def test_backend_closure_seed_primitives_are_capability_owned() -> None:

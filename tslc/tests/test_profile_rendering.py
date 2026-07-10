@@ -10,7 +10,7 @@ from tslc.api import generate_project
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.diagnostics import has_errors
-from tslc.render.cpp_project import cpp_flags, cpp_target
+from tslc.render.cpp_build import cpp_flags, cpp_target
 from tslc.render._common import slug
 from tslc.render.rust_project import rust_linker, rust_target, rust_target_features
 

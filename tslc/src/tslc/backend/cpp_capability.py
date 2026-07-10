@@ -17,7 +17,8 @@ from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
 from tslc.backend.cpp_validation import validate_cpp_profiles
 from tslc.catalog.model import Catalog
 from tslc.output.verify_drivers import cpp_verify_driver
-from tslc.render.cpp_project import cpp_artifacts, cpp_verify_profiles
+from tslc.render.cpp_build import cpp_verify_profiles
+from tslc.render.cpp_project import cpp_artifacts
 from tslc.render.documentation_formatters import CPP_DOCUMENTATION_FORMATTER
 from tslc.render.tests_project import cpp_test_artifacts
 from tslc.value_tests.render_cpp import CPP_VALUE_TEST_SUPPORT

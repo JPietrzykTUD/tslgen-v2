@@ -12,7 +12,10 @@ from tslc.backend.target_capability import (
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.lower.lowerer import LoweredSpecialization
-from tslc.render.cpp_project import _cpp_native_registration, _cpp_registration
+from tslc.render.cpp_profile_header import (
+    _cpp_native_registration,
+    _cpp_registration,
+)
 from tslc.target_text import LoweredBody
 from tslc.render.rust_vectors import rust_registrations
 
