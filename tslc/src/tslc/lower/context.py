@@ -28,6 +28,7 @@ from tslc.lower.implementation_facts import (
 from tslc.target_text import RenderText, as_render_text
 
 if TYPE_CHECKING:
+    from tslc.lower.dependencies import CallDependencyOrigin
     from tslc.select.selector import SelectedImplementation
 
 _MAPPING_PROXY_TYPE = type(MappingProxyType({}))
@@ -87,6 +88,9 @@ class LoweringEnv:
     # the name of the primitive currently being lowered, so a `@self[...]` call can recurse
     # into it for a different vector (e.g. generic delegating per-lane to scalar).
     current_primitive: str = ""
+    # Human-readable provenance for call edges recorded while this body is
+    # lowered. Variants replace this with their authored variant name.
+    dependency_origin: str = "implementation"
     # the selected primitive's attribute values (concrete after wildcard expansion),
     # e.g. {"aligned": "false"} — read by the `primitive::attribute` query.
     attributes: Mapping[str, str] = field(default_factory=dict)
@@ -263,6 +267,9 @@ class LoweringEffects:
     implementation_state_facts: ImplementationStateFacts = field(
         default_factory=ImplementationStateFacts
     )
+    call_dependency_origins: list["CallDependencyOrigin"] = field(
+        default_factory=list
+    )
     _implementation_state_suppression_depth: int = 0
 
     def error(
@@ -310,6 +317,9 @@ class LoweringEffects:
     def mark_call(self) -> None:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_call()
+
+    def record_call_dependency(self, origin: "CallDependencyOrigin") -> None:
+        self.call_dependency_origins.append(origin)
 
     def mark_composition(self) -> None:
         if self._implementation_state_suppression_depth == 0:

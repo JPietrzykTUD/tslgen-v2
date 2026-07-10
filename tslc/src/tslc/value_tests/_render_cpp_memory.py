@@ -164,7 +164,7 @@ def _pointer_lifetime(case: ValueTestCasePlan) -> str:
 
 def _pointer_free(case: ValueTestCasePlan) -> str:
     count = case.scalar_inputs[0] if case.scalar_inputs else "1"
-    alignment = case.target_base_spelling
+    alignment = case.alignment
     alloc = (
         f"std::aligned_alloc(static_cast<std::size_t>({alignment}), static_cast<std::size_t>({count}))"
         if alignment is not None

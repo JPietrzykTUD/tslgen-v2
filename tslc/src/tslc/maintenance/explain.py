@@ -36,15 +36,11 @@ from tslc.api import _expand_sources
 from tslc.backend.registry import create_backend_dialect, registered_backend_ids
 from tslc.ir.scan import scan
 from tslc.maintenance._segments_view import format_segment_tree
-from tslc.lower.dependencies import (
-    CallDependency,
-    extract_call_dependencies_from_segments,
-)
+from tslc.lower.dependencies import CallDependency
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc.pipeline import (
     GenerationRequest,
     _load_inputs,
-    _target_dependency_context,
     generate,
 )
 from tslc.select.selector import (
@@ -250,13 +246,13 @@ def _explain_selected_slot(
 
     # 4. DEPENDENCIES & PRUNING ---------------------------------------------------
     out.line("[4] DEPENDENCIES & VERDICT")
-    callees = extract_call_dependencies_from_segments(
-        segments,
-        slot.primitive.name,
-        extension_tag,
-        slot.type_tag,
-        *_target_dependency_context(slot),
-        catalog,
+    callees = frozenset(
+        origin.dependency
+        for origin in (
+            lowered.specialization.call_dependency_origins
+            if lowered.specialization is not None
+            else ()
+        )
     )
     _print_dependencies(out, callees, verdicts)
     out.blank()

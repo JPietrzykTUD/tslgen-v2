@@ -14,12 +14,10 @@ from pathlib import Path
 from typing import Literal
 
 from tslc._pipeline_closure import (
-    CallDependencyOrigin,
     _LoweredSlot,
     _profile_with_required_features,
     _propagate_transitive_call_facts,
     _prune_unresolved,
-    _target_dependency_context,
 )
 from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
 from tslc.backend.emitted_profile import EmittedProfile
@@ -29,10 +27,7 @@ from tslc.catalog.model import RESULT_DIM_EXTENSION, Catalog, Extension
 from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
 from tslc.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
-from tslc.lower.dependencies import (
-    CallDependency,
-    extract_call_dependencies_from_segments,
-)
+from tslc.lower.dependencies import CallDependency, CallDependencyOrigin
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer, LoweringResult
 from tslc.output.artifacts import ArtifactSet
 from tslc.render.project import RenderedProject, render_project
@@ -317,39 +312,8 @@ class _GenerationSession:
                 slot.implementation.body_text,
                 source=slot.implementation.body_source,
             )
-            dependency_context = _target_dependency_context(slot)
-            callees = set(
-                extract_call_dependencies_from_segments(
-                    body_segments,
-                    primitive,
-                    slot.extension.isa_name,
-                    slot.type_tag,
-                    *dependency_context,
-                    catalog,
-                )
-            )
-            callee_origins = [
-                CallDependencyOrigin(dependency, "implementation")
-                for dependency in sorted(callees, key=_dependency_sort_key)
-            ]
-            for variant in slot.implementation.variants:
-                variant_callees = extract_call_dependencies_from_segments(
-                    scan(variant.body_text, source=variant.body_source),
-                    primitive,
-                    slot.extension.isa_name,
-                    slot.type_tag,
-                    *dependency_context,
-                    catalog,
-                )
-                callees.update(variant_callees)
-                callee_origins.extend(
-                    CallDependencyOrigin(
-                        dependency,
-                        f"implementation variant {variant.name!r}",
-                    )
-                    for dependency in sorted(variant_callees, key=_dependency_sort_key)
-                )
             slot_lowered = False
+            slot_dependencies: set[CallDependency] = set()
             for capability in self.backends:
                 backend = capability.backend_id
                 if backend not in backend_ids:
@@ -366,21 +330,26 @@ class _GenerationSession:
                 )
                 if lowered.specialization is None:
                     continue
+                callee_origins = lowered.specialization.call_dependency_origins
+                callees = frozenset(
+                    origin.dependency for origin in callee_origins
+                )
                 lowered_slots.append(
                     _LoweredSlot(
                         backend=backend,
                         spec=lowered.specialization,
-                        callees=frozenset(callees),
-                        callee_origins=tuple(callee_origins),
+                        callees=callees,
+                        callee_origins=callee_origins,
                     )
                 )
+                slot_dependencies.update(callees)
                 slot_lowered = True
 
             if slot_lowered:
                 discovered_primitives.extend(
                     dependency_primitive
                     for dependency_primitive in sorted(
-                        {dependency.primitive for dependency in callees}
+                        {dependency.primitive for dependency in slot_dependencies}
                     )
                     if catalog.primitives_named(dependency_primitive, unmasked=False)
                 )
@@ -454,19 +423,6 @@ def _record_render_extensions(
     target_extension = catalog.extensions.get(slot.to_target)
     if target_extension is not None:
         selected_extensions[target_extension.isa_name] = target_extension
-
-
-def _dependency_sort_key(
-    dependency: CallDependency,
-) -> tuple[str, str, str, str, str, str]:
-    return (
-        dependency.primitive,
-        dependency.mask_policy or "",
-        dependency.source.extension_isa,
-        dependency.source.base_tag,
-        dependency.target.extension_isa if dependency.target is not None else "",
-        dependency.target.base_tag if dependency.target is not None else "",
-    )
 
 
 def _pruned_reason(slot: "_LoweredSlot") -> str:

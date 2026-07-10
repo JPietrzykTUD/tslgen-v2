@@ -7,6 +7,10 @@ import re
 from tslc.ir.region_syntax import parse_call_selector, split_arg_groups
 from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession, VectorValue
+from tslc.lower.dependencies import (
+    CallDependencyOrigin,
+    resolve_lowered_call_dependency,
+)
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.common import _vector_spelling
 from tslc.lower.region_handlers.protocol import RenderBody
@@ -85,6 +89,17 @@ class CallLowerer:
         attrs = {
             key: self._resolve_attr_value(value, context) for key, value in parsed.attrs
         }
+        context.effects.record_call_dependency(
+            CallDependencyOrigin(
+                resolve_lowered_call_dependency(
+                    parsed,
+                    context,
+                    self._evaluator,
+                    mask_policy=attrs.get("mask"),
+                ),
+                context.env.dependency_origin,
+            )
+        )
 
         # A `attrs[mask=…]` call to a policy-split name targets its `_mask`/`_maskz` split (the
         # render rename); single-form callees (`blend`) aren't in the set and stay bare.

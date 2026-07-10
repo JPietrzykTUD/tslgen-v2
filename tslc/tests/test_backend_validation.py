@@ -13,8 +13,8 @@ from tslc.backend.cpp_validation import (
     validate_cpp_profiles,
 )
 from tslc.backend.emitted_profile import EmittedProfile
-from tslc.backend.rust import _const_arg_type
 from tslc.backend.rust_const_args import RUST_CONST_ARG_WRAPPERS
+from tslc.backend.rust_implementation_state import const_arg_type
 from tslc.backend.rust_validation import validate_rust_profiles
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
@@ -101,7 +101,7 @@ def test_rust_unsupported_const_query_type_is_diagnostic() -> None:
 def test_rust_const_argument_mapping_drives_emission(
     type_name: str, wrapper: str
 ) -> None:
-    assert _const_arg_type(type_name, "N") == f"{wrapper}<N>"
+    assert const_arg_type(type_name, "N") == f"{wrapper}<N>"
 
 
 def _profile(

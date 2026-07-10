@@ -17,6 +17,10 @@ from tslc.value_tests.model import (
     HarnessPrimitiveNames,
     ValueTestBackendSupport,
     ValueTestCasePlan,
+    ValueTestExpectation,
+    ValueTestInputs,
+    ValueTestInvocation,
+    ValueTestScalable,
 )
 
 
@@ -69,14 +73,18 @@ def scalable_golden_cases(
                 type_tag=case.type_tag,
                 base_spelling=spec.base_type_spelling,
                 lanes=case.lanes,
-                vector_inputs=vector_inputs,
-                expected=case.expected,
-                result_kind=spec.result_kind,
-                param_kinds=spec.param_kinds,
-                source_extension=spec.extension_name,
-                load_name=harness.load,
-                store_name=harness.store,
-                runtime_lanes_expr=runtime_lanes,
+                inputs=ValueTestInputs(vectors=vector_inputs),
+                expectation=ValueTestExpectation(values=case.expected),
+                invocation=ValueTestInvocation(
+                    result_kind=spec.result_kind,
+                    param_kinds=spec.param_kinds,
+                ),
+                scalable=ValueTestScalable(
+                    source_extension=spec.extension_name,
+                    load_name=harness.load,
+                    store_name=harness.store,
+                    runtime_lanes_expr=runtime_lanes,
+                ),
             )
         )
     return tuple(plans)
@@ -146,16 +154,19 @@ def scalable_masked_cases(
                 type_tag=case.type_tag,
                 base_spelling=spec.base_type_spelling,
                 lanes=case.lanes,
-                vector_inputs=vector_inputs,
-                expected=case.expected,
-                result_kind=spec.result_kind,
-                param_kinds=spec.param_kinds,
-                mask_inputs=mask_inputs,
-                source_extension=spec.extension_name,
-                load_name=harness.load,
-                store_name=harness.store,
-                runtime_lanes_expr=runtime_lanes,
-                mask_from_bits_exprs=(mask_expr,),
+                inputs=ValueTestInputs(vectors=vector_inputs, masks=mask_inputs),
+                expectation=ValueTestExpectation(values=case.expected),
+                invocation=ValueTestInvocation(
+                    result_kind=spec.result_kind,
+                    param_kinds=spec.param_kinds,
+                ),
+                scalable=ValueTestScalable(
+                    source_extension=spec.extension_name,
+                    load_name=harness.load,
+                    store_name=harness.store,
+                    runtime_lanes_expr=runtime_lanes,
+                    mask_from_bits_exprs=(mask_expr,),
+                ),
             )
         )
     return tuple(plans)

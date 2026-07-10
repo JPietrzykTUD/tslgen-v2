@@ -17,6 +17,12 @@ from tslc.value_tests.model import (
     HarnessPrimitiveNames,
     ValueTestBackendSupport,
     ValueTestCasePlan,
+    ValueTestExpectation,
+    ValueTestInputs,
+    ValueTestInvocation,
+    ValueTestMemory,
+    ValueTestScalable,
+    ValueTestTarget,
 )
 from tslc.value_tests.param_layouts import resolve_param_layout
 
@@ -94,18 +100,26 @@ def scalable_mask_store_cases(
                 type_tag=case.type_tag,
                 base_spelling=spec.base_type_spelling,
                 lanes=case.lanes,
-                expected=case.expected,
-                expected_type_tag=layout.type_tag,
-                result_kind=spec.result_kind,
-                param_kinds=spec.param_kinds,
-                mask_inputs=mask_inputs,
-                axis_args=_axis_args(spec, case),
-                source_extension=spec.extension_name,
-                runtime_lanes_expr=runtime_lanes,
-                mask_from_bits_exprs=(mask_expr,),
-                buffer_offset=offset,
-                buffer_length=len(case.expected),
-                target_base_spelling=layout.base_spelling,
+                inputs=ValueTestInputs(masks=mask_inputs),
+                expectation=ValueTestExpectation(values=case.expected),
+                invocation=ValueTestInvocation(
+                    result_kind=spec.result_kind,
+                    param_kinds=spec.param_kinds,
+                    axis_args=_axis_args(spec, case),
+                ),
+                target=ValueTestTarget(
+                    type_tag=layout.type_tag,
+                    base_spelling=layout.base_spelling,
+                ),
+                memory=ValueTestMemory(
+                    buffer_offset=offset,
+                    buffer_length=len(case.expected),
+                ),
+                scalable=ValueTestScalable(
+                    source_extension=spec.extension_name,
+                    runtime_lanes_expr=runtime_lanes,
+                    mask_from_bits_exprs=(mask_expr,),
+                ),
             )
         )
     return tuple(plans)

@@ -96,7 +96,8 @@ islands**. Per the charter: *we do not parse C++/Rust expressions; we translate
 only keyword islands.* [ir/scan.py](src/tslc/ir/scan.py) scans a body into a
 recursive `tuple[Segment, ...]`:
 
-- **`RawText`** — target source, passed through verbatim;
+- **`RawText`** — target source, passed through verbatim; line and block comments
+  are opaque to the keyword scanner (including nested Rust block comments);
 - **`Region`** — a recognized keyword island whose `<...>` shell is parsed by
   syntax-only helpers in [ir/region_syntax.py](src/tslc/ir/region_syntax.py) and
   whose `(...)` payload is recursively scanned.
@@ -110,9 +111,10 @@ joins each keyword's handler factory with its implementation-state effect, so
 lowering and state classification cannot drift into parallel keyword lists.
 Together they cover `complete`, `intrin`, `helper`, `op`, `call`, `value`,
 `type`, `cast`, `var`, `let`, `mask`, `mem`, `lanes`, `io`, `if`,
-`select_expr`, `loop`, `switch`, and `assume_aligned`. **Growth happens by
-adding a lexical descriptor, its owned validator when needed, and one lowering
-registration row.**
+`select_expr`, `loop`, `switch`, and `assume_aligned`. **A call-shaped keyword
+grows by adding a lexical descriptor, its owned validator when needed, and one
+lowering registration row. A genuinely new structural body shape also adds one
+paired scanner/malformed-scanner parser registration in `ir/scan.py`.**
 
 So `intrin<add, build[suffix=base::signed_of(base::in)]>(left, right)` becomes
 `_mm256_add_epi32(...)` for AVX2/si32, and
@@ -132,8 +134,10 @@ required target features). Region handlers
 keyword; a query evaluator ([lower/queries.py](src/tslc/lower/queries.py))
 resolves the `<...>` selectors.
 
+Successful `call<...>` lowering records typed dependency origins using the same
+query evaluator and live generation-time control flow that produced the body.
 The pipeline then runs a **profile-scoped dependency closure**: from the
-requested primitives it follows `call<...>` edges
+requested primitives it resolves those lowered call facts
 ([lower/dependencies.py](src/tslc/lower/dependencies.py)), lowers callees, and
 **prunes to a fixpoint** any specialization whose callees aren't themselves
 emitted for the same `simd<type,ext>` (else the generated call wouldn't link).
@@ -161,7 +165,10 @@ formatting/documentation specs. Signature type
 projection machinery and the concrete C++/Rust projection tables are co-located
 in [backend/signature_types.py](src/tslc/backend/signature_types.py), then shared
 by function emitters and documentation formatting. They are backend-owned facts,
-not registry capabilities.
+not registry capabilities. Backend-neutral variant/body facts live in
+[backend/primitive_rendering.py](src/tslc/backend/primitive_rendering.py);
+language documentation assembly and Rust type-parameter/state-query spelling
+live in focused sibling modules rather than the function emitters.
 
 - **C++** — `*_impl<Vec>` struct partial-specializations + wrapper function
   templates ([backend/cpp.py](src/tslc/backend/cpp.py)).
@@ -181,8 +188,16 @@ project with a top-level dispatch header/module.
 Authored `tests:` blocks (input lanes → expected lanes) drive the
 [value_tests/](src/tslc/value_tests/) subsystem, which generates **executable**
 C++/Rust tests: build a SIMD register from a lane array, run the generated
-primitive, read the result back, compare to `expected`. The array↔register
-round-trip uses auto-discovered "harness primitives" (`from_array`, `to_array`,
+primitive, read the result back, compare to `expected`. Each case plan groups
+inputs, expectations, invocation facts, memory layouts, representation changes,
+scalable harness facts, and differential harness facts into frozen typed
+components
+([value_tests/case_components.py](src/tslc/value_tests/case_components.py));
+[case-kind capabilities](src/tslc/value_tests/case_capabilities.py) validate
+those facts through the focused
+[case plan](src/tslc/value_tests/case_plan.py) before rendering. The
+array↔register round-trip uses auto-discovered "harness primitives"
+(`from_array`, `to_array`,
 `to_integral`, found by signature shape in
 [value_tests/harness.py](src/tslc/value_tests/harness.py)). A **differential**
 mode cross-checks each hardware implementation against the portable `generic`

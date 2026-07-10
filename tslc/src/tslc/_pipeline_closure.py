@@ -5,15 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import (
-    ImplementationSafety,
-    RESULT_DIM_BASE,
-    RESULT_DIM_EXTENSION,
+from tslc.catalog.model import ImplementationSafety
+from tslc.lower.dependencies import (
+    CallDependency,
+    CallDependencyOrigin,
+    VectorIdentity,
 )
-from tslc.lower.dependencies import CallDependency, VectorIdentity
 from tslc.lower.implementation_state import combine_implementation_states
 from tslc.lower.lowerer import LoweredSpecialization
-from tslc.select.selector import SelectedImplementation
 
 
 @dataclass(slots=True, eq=False)
@@ -23,33 +22,6 @@ class _LoweredSlot:
     callees: frozenset[CallDependency]
     callee_origins: tuple["CallDependencyOrigin", ...] = ()
     unresolved_callee: "CallDependencyOrigin | None" = None
-
-
-@dataclass(frozen=True, slots=True)
-class CallDependencyOrigin:
-    dependency: CallDependency
-    origin: str
-
-
-def _target_dependency_context(
-    slot: SelectedImplementation,
-) -> tuple[str | None, str | None, str | None]:
-    target_alias = (
-        slot.primitive.result_target[1] if slot.primitive.result_target is not None else None
-    )
-    target_base = (
-        slot.to_target
-        if slot.primitive.result_target is not None
-        and slot.primitive.result_target[0] == RESULT_DIM_BASE
-        else None
-    )
-    target_extension = (
-        slot.to_target
-        if slot.primitive.result_target is not None
-        and slot.primitive.result_target[0] == RESULT_DIM_EXTENSION
-        else None
-    )
-    return target_alias, target_base, target_extension
 
 
 def _prune_unresolved(

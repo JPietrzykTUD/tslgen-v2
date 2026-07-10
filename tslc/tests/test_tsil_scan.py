@@ -11,7 +11,12 @@ from tslc.ir.region_registry import (
     TSIL_REGION_KEYWORDS,
     region_shell_validator,
 )
-from tslc.ir.scan import KEYWORDS, scan
+from tslc.ir.scan import (
+    KEYWORDS,
+    STRUCTURAL_REGION_BODY_SHAPES,
+    find_malformed_regions,
+    scan,
+)
 from tslc.ir.segments import RawText, Region
 from tslc.lower.region_handlers.registry import (
     DEFAULT_REGION_LOWERERS,
@@ -33,6 +38,11 @@ def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:
     assert KEYWORDS == TSIL_REGION_KEYWORDS
     assert registration_keywords == TSIL_REGION_KEYWORDS
     assert lowerer_keywords == TSIL_REGION_KEYWORDS
+    assert STRUCTURAL_REGION_BODY_SHAPES == frozenset(
+        descriptor.body_shape
+        for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS
+        if descriptor.body_shape != "call"
+    )
     assert region_shell_validator("call") == "call_selector"
     assert region_shell_validator("mask") == "mask_selector"
     assert region_shell_validator("var") == "var_selector"
@@ -132,6 +142,43 @@ def test_keyword_inside_identifier_is_not_matched() -> None:
 def test_keyword_inside_string_is_not_matched() -> None:
     segments = scan('a = "call<primitive=x>(y)";')
     assert segments == (RawText('a = "call<primitive=x>(y)";'),)
+
+
+def test_keywords_inside_line_and_block_comments_are_not_matched() -> None:
+    body = (
+        "// call<primitive=dead[Vec]>(value)\n"
+        "/* complete(value); /* call<primitive=nested[Vec]>() */ */\n"
+        "complete(value);"
+    )
+
+    segments = scan(body)
+
+    assert len(segments) == 2
+    assert isinstance(segments[0], RawText)
+    assert "call<primitive=dead" in segments[0].text
+    assert "call<primitive=nested" in segments[0].text
+    assert isinstance(segments[1], Region)
+    assert segments[1].keyword == "complete"
+
+
+def test_comment_delimiters_do_not_close_region_payloads() -> None:
+    segments = scan(
+        "complete(value /* ) call<primitive=dead[Vec]>() */ + other);"
+    )
+
+    complete = segments[0]
+    assert isinstance(complete, Region)
+    assert complete.keyword == "complete"
+    assert complete.body == (
+        RawText("value /* ) call<primitive=dead[Vec]>() */ + other"),
+    )
+
+
+def test_malformed_region_scan_ignores_commented_regions() -> None:
+    assert find_malformed_regions(
+        "// call<primitive=broken trailing>(value)\n"
+        "/* intrin<broken(value) */"
+    ) == ()
 
 
 def test_scan_carries_nested_source_spans() -> None:

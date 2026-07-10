@@ -16,7 +16,13 @@ from tslc.value_tests.case_helpers import (
     valid_generic_lanes as _valid_generic_lanes,
     vector_inputs as _vector_inputs,
 )
-from tslc.value_tests.model import ValueTestCasePlan
+from tslc.value_tests.model import (
+    ValueTestCasePlan,
+    ValueTestExpectation,
+    ValueTestInputs,
+    ValueTestInvocation,
+    ValueTestMemory,
+)
 from tslc.value_tests.param_layouts import resolve_param_layout
 
 def store_case(
@@ -280,10 +286,12 @@ def pointer_lifetime_case(
         type_tag=case.type_tag,
         base_spelling=specs[0].base_type_spelling,
         lanes=case.lanes or 1,
-        result_kind=specs[0].result_kind,
-        param_kinds=specs[0].param_kinds,
-        scalar_inputs=scalar_inputs,
-        expected=case.expected,
+        inputs=ValueTestInputs(scalars=scalar_inputs),
+        expectation=ValueTestExpectation(values=case.expected),
+        invocation=ValueTestInvocation(
+            result_kind=specs[0].result_kind,
+            param_kinds=specs[0].param_kinds,
+        ),
     )
 
 def pointer_free_case(
@@ -305,11 +313,17 @@ def pointer_free_case(
         type_tag=case.type_tag,
         base_spelling=specs[0].base_type_spelling,
         lanes=case.lanes or 1,
-        result_kind=specs[0].result_kind,
-        param_kinds=specs[0].param_kinds,
-        scalar_inputs=scalar_inputs,
-        expected=case.expected,
-        target_base_spelling=str(case.alignment) if case.alignment is not None else None,
+        inputs=ValueTestInputs(scalars=scalar_inputs),
+        expectation=ValueTestExpectation(values=case.expected),
+        invocation=ValueTestInvocation(
+            result_kind=specs[0].result_kind,
+            param_kinds=specs[0].param_kinds,
+        ),
+        memory=(
+            ValueTestMemory(alignment=case.alignment)
+            if case.alignment is not None
+            else None
+        ),
     )
 
 def indexed_load_case(

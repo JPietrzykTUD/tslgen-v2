@@ -1,79 +1,19 @@
-"""Semantic dependencies discovered from TSIL primitive calls.
+"""Semantic dependencies discovered from lowered TSIL primitive calls.
 
-The pipeline needs to know which primitive specializations a selected body calls so it can keep
-reachable callees and prune dangling callers. This module owns that source-level analysis. It
-walks the shared TSIL segment stream, uses the shared call selector parser for ``call<...>``
-syntax, and delegates query vocabulary to :mod:`tslc.lower.queries`. The local interpretation is
-only dependency identity: source/target vector axes and mask policy. It does not render backend
-spellings or interpret intrinsics.
+The pipeline needs to know which primitive specializations a lowered body calls
+so it can keep reachable callees and prune dangling callers. The call-region
+lowerer records these source identities while rendering the branch that will
+actually be emitted; this module owns only the typed identity and its focused
+resolution helpers.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass, field
-from types import MappingProxyType
+from dataclasses import dataclass
 
-from tslc.catalog.model import Catalog, Extension
-from tslc.diagnostics import SourceSpan
-from tslc.ir.region_syntax import parse_call_selector
-from tslc.ir.scan import scan
-from tslc.ir.segments import RawText, Region, Segment
-from tslc.ir.text import split_top_level
-from tslc.lower.context import LoweringScope, VectorValue
-from tslc.lower.queries import (
-    AsBaseQuery,
-    AsExtensionQuery,
-    AttributeQuery,
-    BaseGenericQuery,
-    BaseInQuery,
-    GenericLengthQuery,
-    GenericRuntimeLengthQuery,
-    IsSameQuery,
-    IsSignedQuery,
-    QueryEvaluator,
-    QueryFunction,
-    QueryValue,
-    SelectQuery,
-    SameSizeQuery,
-    SignedOfQuery,
-    SizeBytesQuery,
-    TypeQuery,
-    TypeValue,
-    UnsignedOfQuery,
-    ValueQuery,
-    VectorAlignmentQuery,
-    VectorAsQuery,
-    VectorLengthQuery,
-    VectorRuntimeLengthQuery,
-    WindowBaseQuery,
-)
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
-
-
-_DEPENDENCY_QUERY_FUNCTIONS: tuple[QueryFunction, ...] = (
-    BaseInQuery(),
-    SignedOfQuery(),
-    UnsignedOfQuery(),
-    TypeQuery(),
-    ValueQuery(),
-    SelectQuery(),
-    IsSameQuery(),
-    SizeBytesQuery(),
-    SameSizeQuery(),
-    IsSignedQuery(),
-    AttributeQuery(),
-    VectorAlignmentQuery(),
-    VectorLengthQuery(),
-    VectorRuntimeLengthQuery(),
-    AsExtensionQuery(),
-    AsBaseQuery(),
-    WindowBaseQuery(),
-    VectorAsQuery(),
-    BaseGenericQuery(),
-    GenericLengthQuery(),
-    GenericRuntimeLengthQuery(),
-)
+from tslc.ir.region_syntax import ParsedCallSelector
+from tslc.lower.context import LoweringSession, VectorValue
+from tslc.lower.queries import QueryEvaluator, TypeValue
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,262 +31,151 @@ class CallDependency:
 
 
 @dataclass(frozen=True, slots=True)
-class _DependencyBackendCapabilities:
-    """Backend-neutral capabilities needed by shared query functions."""
+class CallDependencyOrigin:
+    """One lowered call edge plus its authored implementation origin."""
 
-    supports_sized_vector_lane_expressions: bool = True
+    dependency: CallDependency
+    origin: str
 
 
-@dataclass(frozen=True, slots=True)
-class _DependencyQueryEnv:
-    catalog: Catalog
-    extension: Extension
-    type_tag: str
-    attributes: Mapping[str, str] = field(default_factory=dict)
-    simd_type_param_base_bindings: Mapping[str, str] = field(default_factory=dict)
-    concrete_lanes: int | None = None
-    backend: _DependencyBackendCapabilities = field(
-        default_factory=_DependencyBackendCapabilities
+def resolve_lowered_call_dependency(
+    selector: ParsedCallSelector,
+    context: LoweringSession,
+    evaluator: QueryEvaluator,
+    *,
+    mask_policy: str | None,
+) -> CallDependency:
+    """Resolve one successfully lowered ``call`` to source vector identities."""
+
+    current = VectorIdentity(context.env.type_tag, context.env.extension.isa_name)
+    callee = (
+        context.env.current_primitive
+        if selector.primitive_ref == "@self"
+        else selector.primitive_ref.lstrip("@")
     )
-
-    def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "attributes",
-            MappingProxyType(dict(sorted(self.attributes.items()))),
-        )
-        object.__setattr__(
-            self,
-            "simd_type_param_base_bindings",
-            MappingProxyType(dict(sorted(self.simd_type_param_base_bindings.items()))),
-        )
-
-    def lane_symbol(self) -> str:
-        if self.concrete_lanes is not None:
-            return str(self.concrete_lanes)
-        return DEFAULT_SUPPORT_POLICY.size_parameter_name(self.extension)
-
-
-@dataclass(frozen=True, slots=True)
-class _DependencyEffects:
-    def skip(self, *_args: object, **_kwargs: object) -> None:
-        return None
-
-
-@dataclass(frozen=True, slots=True)
-class _DependencyQueryContext:
-    env: _DependencyQueryEnv
-    scope: LoweringScope
-    effects: _DependencyEffects = field(default_factory=_DependencyEffects)
-
-
-def extract_call_dependencies(
-    body_text: str,
-    current_primitive: str,
-    current_extension: str,
-    current_type_tag: str,
-    target_alias: str | None,
-    target_base: str | None,
-    target_extension: str | None,
-    catalog: Catalog,
-    source: SourceSpan | None = None,
-) -> frozenset[CallDependency]:
-    """Return the typed primitive-call dependencies in one implementation body.
-
-    The first call bracket entry is the callee source vector. Representation-changing callees may
-    carry a second vector entry for their target axis. Both positions can name source-local
-    ``let<type>`` aliases, so extraction walks the shared TSIL segment stream in source order.
-    """
-
-    return extract_call_dependencies_from_segments(
-        scan(body_text, source=source),
-        current_primitive,
-        current_extension,
-        current_type_tag,
-        target_alias,
-        target_base,
-        target_extension,
-        catalog,
-    )
-
-
-def extract_call_dependencies_from_segments(
-    segments: tuple[Segment, ...],
-    current_primitive: str,
-    current_extension: str,
-    current_type_tag: str,
-    target_alias: str | None,
-    target_base: str | None,
-    target_extension: str | None,
-    catalog: Catalog,
-) -> frozenset[CallDependency]:
-    """Return call dependencies from an already-scanned TSIL segment sequence."""
-
-    resolver = _DependencyResolver(
-        catalog=catalog,
-        current_primitive=current_primitive,
-        current=VectorIdentity(current_type_tag, current_extension),
-        extension=_extension_for_isa(catalog, current_extension),
-        target_alias=target_alias,
-        target_base=target_base,
-        target_extension=target_extension,
-    )
-    resolver.visit(segments)
-    return frozenset(resolver.calls)
-
-
-@dataclass(slots=True)
-class _DependencyResolver:
-    catalog: Catalog
-    current_primitive: str
-    current: VectorIdentity
-    extension: Extension | None
-    target_alias: str | None
-    target_base: str | None
-    target_extension: str | None
-    evaluator: QueryEvaluator = field(
-        default_factory=lambda: QueryEvaluator(functions=_DEPENDENCY_QUERY_FUNCTIONS)
-    )
-    scope: LoweringScope = field(default_factory=LoweringScope)
-    calls: set[CallDependency] = field(default_factory=set)
-
-    def __post_init__(self) -> None:
-        if self.target_alias is not None and self.target_base is not None:
-            self.scope.bind_target_type_symbol(self.target_alias, self.target_base)
-            self.scope.bind_target_type_symbol("ToType", self.target_base)
-        if self.target_alias is not None and self.target_extension is not None:
-            self.scope.bind_extension_symbol(self.target_alias, self.target_extension)
-
-    def visit(self, segments: tuple[Segment, ...] | None) -> None:
-        if segments is None:
-            return
-        for segment in segments:
-            if isinstance(segment, RawText):
-                continue
-            if segment.keyword == "let":
-                self._record_let_alias(segment)
-            elif segment.keyword == "call":
-                dependency = self._call_dependency(segment)
-                if dependency is not None:
-                    self.calls.add(dependency)
-            self.visit(segment.body)
-            self.visit(segment.block)
-            if segment.else_block is not None:
-                self.visit(segment.else_block)
-            if segment.arms is not None:
-                for _label, body in segment.arms:
-                    self.visit(body)
-
-    def _record_let_alias(self, region: Region) -> None:
-        if region.selector_text.strip() != "type":
-            return
-        terms = split_top_level(_segments_text(region.body))
-        if len(terms) != 2:
-            return
-        name, expr = terms[0].strip(), terms[1].strip()
-        value = self._evaluate(expr)
-        if isinstance(value, VectorValue):
-            self.scope.vector_aliases[name] = value
-        elif isinstance(value, TypeValue):
-            self.scope.bind_type_symbol(name, value.type_tag)
-
-    def _call_dependency(self, region: Region) -> CallDependency | None:
-        parsed = parse_call_selector(region.selector_text)
-        if parsed is None:
-            return None
-        callee = (
-            self.current_primitive
-            if parsed.primitive_ref == "@self"
-            else parsed.primitive_ref.lstrip("@")
-        )
-        entries = list(parsed.type_args)
-        source = self.current
-        if entries:
-            source = self._resolve_vector(entries[0]) or self.current
-        target = None
-        if _callee_has_target_axis(self.catalog, callee):
-            for entry in entries[1:]:
-                target = self._resolve_vector(entry)
-                if target is not None:
-                    break
-        mask_policy = next(
-            (value for key, value in parsed.attrs if key == "mask"),
+    entries = selector.type_args
+    source = (
+        _resolve_lowered_vector(entries[0], context, evaluator)
+        if entries
+        else None
+    ) or current
+    target = None
+    if _lowered_callee_has_target_axis(context, callee):
+        target = next(
+            (
+                resolved
+                for entry in entries[1:]
+                if (
+                    resolved := _resolve_lowered_vector(entry, context, evaluator)
+                )
+                is not None
+            ),
             None,
         )
-        return CallDependency(callee, mask_policy, source, target)
+    return CallDependency(callee, mask_policy, source, target)
 
-    def _resolve_vector(self, expr: str) -> VectorIdentity | None:
-        expr = expr.strip()
-        if expr == "Vec":
-            return self.current
-        if expr.startswith("Vec<") and expr.endswith(">"):
-            base = self._resolve_type(expr[len("Vec<") : -1])
-            return (
-                VectorIdentity(base, self.current.extension_isa)
-                if base is not None
-                else None
-            )
-        extension = self._resolve_extension_isa(expr)
-        if extension is not None:
-            return VectorIdentity(self.current.base_tag, extension)
-        value = self._evaluate(expr)
-        if isinstance(value, VectorValue):
-            return VectorIdentity(value.base_tag, value.extension_isa)
-        if isinstance(value, TypeValue):
-            return VectorIdentity(value.type_tag, self.current.extension_isa)
-        return None
 
-    def _resolve_type(self, expr: str) -> str | None:
-        value = self._evaluate(expr.strip())
-        return value.type_tag if isinstance(value, TypeValue) else None
+def dependency_sort_key(
+    dependency: CallDependency,
+) -> tuple[str, str, str, str, str, str]:
+    return (
+        dependency.primitive,
+        dependency.mask_policy or "",
+        dependency.source.extension_isa,
+        dependency.source.base_tag,
+        dependency.target.extension_isa if dependency.target is not None else "",
+        dependency.target.base_tag if dependency.target is not None else "",
+    )
 
-    def _resolve_extension_isa(self, expr: str) -> str | None:
-        name = expr.strip()
-        if self.target_alias is not None and name == self.target_alias:
-            name = self.target_extension or ""
-        extension = self.catalog.extensions.get(name)
-        if extension is not None:
-            return extension.isa_name
-        for extension in self.catalog.extensions.values():
-            if extension.isa_name == name:
-                return name
-        return None
 
-    def _evaluate(self, expr: str) -> QueryValue | None:
-        if self.extension is None:
-            return None
-        return self.evaluator.evaluate(
-            expr,
-            _DependencyQueryContext(
-                env=_DependencyQueryEnv(
-                    catalog=self.catalog,
-                    extension=self.extension,
-                    type_tag=self.current.base_tag,
-                ),
-                scope=self.scope,
-            ),
+def origin_sort_key(
+    origin: CallDependencyOrigin,
+) -> tuple[str, str, str, str, str, str, str]:
+    return (*dependency_sort_key(origin.dependency), origin.origin)
+
+
+def _resolve_lowered_vector(
+    expression: str,
+    context: LoweringSession,
+    evaluator: QueryEvaluator,
+) -> VectorIdentity | None:
+    expression = expression.strip()
+    if expression == "Vec":
+        return VectorIdentity(context.env.type_tag, context.env.extension.isa_name)
+    if expression.startswith("Vec<") and expression.endswith(">"):
+        base = _resolve_lowered_type(
+            expression[len("Vec<") : -1], context, evaluator
+        )
+        return (
+            VectorIdentity(base, context.env.extension.isa_name)
+            if base is not None
+            else None
         )
 
+    vector = context.scope.resolve_vector_alias(expression)
+    if vector is not None:
+        return VectorIdentity(vector.base_tag, vector.extension_isa)
+    extension = _resolve_lowered_extension_isa(expression, context)
+    if extension is not None:
+        return VectorIdentity(context.env.type_tag, extension)
 
-def _extension_for_isa(catalog: Catalog, extension_isa: str) -> Extension | None:
-    direct = catalog.extensions.get(extension_isa)
-    if direct is not None:
-        return direct
-    for extension in catalog.extensions.values():
-        if extension.isa_name == extension_isa:
-            return extension
+    value = evaluator.evaluate(expression, context)
+    if isinstance(value, VectorValue):
+        return VectorIdentity(value.base_tag, value.extension_isa)
+    if isinstance(value, TypeValue):
+        return VectorIdentity(value.type_tag, context.env.extension.isa_name)
     return None
 
 
-def _callee_has_target_axis(catalog: Catalog, callee: str) -> bool:
+def _resolve_lowered_type(
+    expression: str,
+    context: LoweringSession,
+    evaluator: QueryEvaluator,
+) -> str | None:
+    expression = expression.strip()
+    bound = context.scope.resolve_type_symbol(expression)
+    if bound is not None:
+        return bound
+    value = evaluator.evaluate(expression, context)
+    return value.type_tag if isinstance(value, TypeValue) else None
+
+
+def _resolve_lowered_extension_isa(
+    expression: str,
+    context: LoweringSession,
+) -> str | None:
+    name = expression.strip()
+    bound = context.scope.resolve_extension_symbol(name)
+    if bound is not None:
+        name = bound
+    extension = context.env.catalog.extensions.get(name)
+    if extension is not None:
+        return extension.isa_name
+    return next(
+        (
+            extension.isa_name
+            for extension in context.env.catalog.extensions.values()
+            if extension.isa_name == name
+        ),
+        None,
+    )
+
+
+def _lowered_callee_has_target_axis(
+    context: LoweringSession,
+    callee: str,
+) -> bool:
     return any(
         primitive.result_target is not None
-        for primitive in catalog.primitives_named(callee, unmasked=False)
+        for primitive in context.env.catalog.primitives_named(callee, unmasked=False)
     )
 
 
-def _segments_text(segments: tuple[Segment, ...]) -> str:
-    return "".join(
-        segment.text if isinstance(segment, RawText) else segment.full_text
-        for segment in segments
-    )
+__all__ = (
+    "CallDependency",
+    "CallDependencyOrigin",
+    "VectorIdentity",
+    "dependency_sort_key",
+    "origin_sort_key",
+    "resolve_lowered_call_dependency",
+)

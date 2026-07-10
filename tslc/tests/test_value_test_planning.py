@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -28,9 +29,19 @@ from tslc.value_tests import (
 from tslc.value_tests.model import (
     DEFAULT_VALUE_TEST_CASE_CAPABILITIES,
     DEFAULT_VALUE_TEST_CASE_KINDS,
-    ValueTestCasePlan,
+    ValueTestCasePlan as _ValueTestCasePlan,
     ValueTestCoverageEntry,
+    ValueTestDifferential,
+    ValueTestExpectation,
+    ValueTestFact,
+    ValueTestIndex,
+    ValueTestInputs,
+    ValueTestInvocation,
+    ValueTestMemory,
     ValueTestProfilePlan,
+    ValueTestRepresentation,
+    ValueTestScalable,
+    ValueTestTarget,
 )
 from tslc.value_tests.param_layouts import scalar_type_tag_from_expr
 from tslc.value_tests.renderer_capability import ValueTestRendererCapability
@@ -43,6 +54,107 @@ from tslc.value_tests.render_rust import (
 )
 
 _VALUE_TEST_SUPPORTS = (CPP_VALUE_TEST_SUPPORT, RUST_VALUE_TEST_SUPPORT)
+
+
+def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
+    """Concise fixture adapter; production builders use the typed components directly."""
+
+    names = (
+        "kind",
+        "function_name",
+        "case_name",
+        "call_name",
+        "type_tag",
+        "base_spelling",
+        "lanes",
+    )
+    values = dict(zip(names, identity, strict=False))
+    values.update(fields)
+    core = {name: values.pop(name) for name in names}
+
+    source_extension = values.pop("source_extension", None)
+    runtime_lanes = values.pop("runtime_lanes_expr", None)
+    target_values = {
+        "type_tag": values.pop("expected_type_tag", None),
+        "base_spelling": values.pop("target_base_spelling", None),
+        "lanes": values.pop("target_lanes", None),
+    }
+    index_values = {
+        "value": values.pop("index_value", None),
+        "type_tag": values.pop("index_type_tag", None),
+        "base_spelling": values.pop("index_base_spelling", None),
+        "lanes": values.pop("index_lanes", None),
+    }
+    memory_values = {
+        "buffer_offset": values.pop("buffer_offset", 0),
+        "buffer_length": values.pop("buffer_length", None),
+        "source_offset": values.pop("source_offset", 0),
+        "alignment": values.pop("alignment", None),
+    }
+    hardware_extension = values.pop("hardware_extension", None)
+    from_array = values.pop("from_array_name", None)
+    to_array = values.pop("to_array_name", None)
+    to_integral = values.pop("to_integral_name", None)
+
+    plan = _ValueTestCasePlan(
+        **core,
+        inputs=ValueTestInputs(
+            vectors=values.pop("vector_inputs", ()),
+            masks=values.pop("mask_inputs", ()),
+            scalar=values.pop("scalar_input", None),
+            scalars=values.pop("scalar_inputs", ()),
+        ),
+        expectation=ValueTestExpectation(
+            values=values.pop("expected", ()),
+            text=values.pop("text_expected", None),
+        ),
+        invocation=ValueTestInvocation(
+            result_kind=values.pop("result_kind", None),
+            param_kinds=values.pop("param_kinds", ()),
+            axis_args=values.pop("axis_args", ()),
+            immediate=values.pop("immediate_value", None),
+            generic_defaults=values.pop("generic_defaults", ()),
+        ),
+        target=ValueTestTarget(**target_values) if any(value is not None for value in target_values.values()) else None,
+        index=ValueTestIndex(**index_values) if any(value is not None for value in index_values.values()) else None,
+        memory=ValueTestMemory(**memory_values) if any(memory_values.values()) else None,
+        representation=(
+            ValueTestRepresentation(
+                source_extension=source_extension,
+                target_extension=values.pop("target_extension", None),
+                from_array_name=from_array,
+                to_array_name=to_array,
+            )
+            if source_extension is not None and runtime_lanes is None
+            else None
+        ),
+        scalable=(
+            ValueTestScalable(
+                source_extension=source_extension,
+                runtime_lanes_expr=runtime_lanes,
+                mask_from_bits_exprs=values.pop("mask_from_bits_exprs", ()),
+                mask_check_expr=values.pop("mask_check_expr", None),
+                load_name=values.pop("load_name", None),
+                store_name=values.pop("store_name", None),
+            )
+            if source_extension is not None and runtime_lanes is not None
+            else None
+        ),
+        differential=(
+            ValueTestDifferential(
+                hardware_extension=hardware_extension,
+                from_array_name=from_array or "",
+                to_array_name=to_array,
+                to_integral_name=to_integral,
+                fuzz_seed=values.pop("fuzz_seed", None),
+                fuzz_iterations=values.pop("fuzz_iterations", 0),
+            )
+            if hardware_extension is not None
+            else None
+        ),
+    )
+    assert not values, f"unhandled fixture fields: {sorted(values)}"
+    return plan
 
 
 def test_emitted_profile_requires_name_finalization_context() -> None:
@@ -893,6 +1005,11 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
 
 
 def test_value_test_case_plan_validates_kind_requirements() -> None:
+    assert all(
+        isinstance(fact, ValueTestFact)
+        for capability in DEFAULT_VALUE_TEST_CASE_CAPABILITIES
+        for fact in capability.requirements.required_facts
+    )
     zero_arg = ValueTestCasePlan(
         kind="generic_golden",
         function_name="test_zero",
@@ -906,6 +1023,20 @@ def test_value_test_case_plan_validates_kind_requirements() -> None:
         param_kinds=(),
     )
     assert zero_arg.vector_inputs == ()
+
+    aligned_free = ValueTestCasePlan(
+        kind="pointer_free",
+        function_name="test_aligned_free",
+        case_name="aligned_free",
+        call_name="deallocate",
+        type_tag="ptr",
+        base_spelling="void*",
+        lanes=1,
+        scalar_inputs=("64",),
+        alignment=32,
+    )
+    assert aligned_free.alignment == 32
+    assert aligned_free.target_base_spelling is None
 
     with pytest.raises(ValueError, match="unsupported value-test case kind"):
         ValueTestCasePlan(
@@ -931,7 +1062,7 @@ def test_value_test_case_plan_validates_kind_requirements() -> None:
             expected=("1", "2"),
         )
 
-    with pytest.raises(ValueError, match="requires runtime_lanes_expr"):
+    with pytest.raises(ValueError, match="requires scalable_"):
         ValueTestCasePlan(
             kind="scalable_mask_result",
             function_name="test_scalable_bad",
@@ -1387,6 +1518,10 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
     )
     assert len(planner.splitlines()) < 250
     for path in (
+        "model.py",
+        "case_components.py",
+        "case_capabilities.py",
+        "case_plan.py",
         "case_plans.py",
         "_case_common.py",
         "_case_core.py",
@@ -1456,7 +1591,7 @@ def test_rust_value_test_support_matches_renderer_dispatch() -> None:
 
 
 def test_value_test_case_requirements_cover_renderer_dispatch() -> None:
-    assert frozenset(ValueTestCasePlan.CASE_REQUIREMENTS) == DEFAULT_VALUE_TEST_CASE_KINDS
+    assert frozenset(_ValueTestCasePlan.CASE_REQUIREMENTS) == DEFAULT_VALUE_TEST_CASE_KINDS
     assert {
         capability.kind for capability in DEFAULT_VALUE_TEST_CASE_CAPABILITIES
     } == DEFAULT_VALUE_TEST_CASE_KINDS

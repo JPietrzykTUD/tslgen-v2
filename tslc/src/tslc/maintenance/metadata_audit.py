@@ -25,12 +25,10 @@ from tslc.catalog.signatures import parse_signature
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import Diagnostic, has_errors
 from tslc.ir.scan import scan
-from tslc.lower.dependencies import extract_call_dependencies_from_segments
 from tslc.lower.lowerer import Lowerer
 from tslc.pipeline import (
     _LoweredSlot,
     _prune_unresolved,
-    _target_dependency_context,
 )
 from tslc.select.selector import SelectedImplementation, Selector
 from tslc.sources import SourceDocument, SourceLoader
@@ -418,15 +416,8 @@ def _requires_suggestions(
                     selected_slot.implementation.body_text,
                     source=selected_slot.implementation.body_source,
                 )
-                callees = extract_call_dependencies_from_segments(
-                    body_segments,
-                    primitive_name,
-                    selected_slot.extension.isa_name,
-                    selected_slot.type_tag,
-                    *_target_dependency_context(selected_slot),
-                    inputs.catalog,
-                )
                 lowered_any = False
+                slot_dependencies = set()
                 for backend in backends:
                     lowered = lowerer.lower(
                         selected_slot,
@@ -436,6 +427,8 @@ def _requires_suggestions(
                     )
                     if lowered.specialization is None:
                         continue
+                    origins = lowered.specialization.call_dependency_origins
+                    callees = frozenset(origin.dependency for origin in origins)
                     audit_slots.append(
                         _AuditSlot(
                             profile_name=profile_name,
@@ -444,12 +437,16 @@ def _requires_suggestions(
                                 backend=backend,
                                 spec=lowered.specialization,
                                 callees=callees,
+                                callee_origins=origins,
                             ),
                         )
                     )
+                    slot_dependencies.update(callees)
                     lowered_any = True
                 if lowered_any:
-                    dependency_names = sorted({dependency.primitive for dependency in callees})
+                    dependency_names = sorted(
+                        {dependency.primitive for dependency in slot_dependencies}
+                    )
                     for dependency_name in dependency_names:
                         if (
                             dependency_name not in processed

@@ -10,7 +10,6 @@ from tslc.value_tests.case_helpers import (
     args_match as _args_match,
     base_spelling as _base_spelling,
     effective_lanes as _effective_lanes,
-    function_name as _function_name,
     immediate_value as _immediate_value,
     mask_inputs as _mask_inputs,
     plan_case as _plan,
@@ -34,18 +33,15 @@ def generic_golden_case(
         return None
     if len(case.expected) != case.lanes:
         return None
-    return ValueTestCasePlan(
-        kind="generic_golden",
-        function_name=_function_name(name, index, case),
-        case_name=case.name,
-        call_name=name,
-        type_tag=case.type_tag,
-        base_spelling=base_spelling,
-        lanes=case.lanes,
+    return _plan(
+        "generic_golden",
+        name,
+        index,
+        case,
+        specs,
+        base_spelling,
         vector_inputs=vector_inputs,
         expected=case.expected,
-        result_kind=specs[0].result_kind,
-        param_kinds=specs[0].param_kinds,
     )
 
 
@@ -64,17 +60,15 @@ def masked_case(
         return None
     if len(mask_inputs) != 1 or len(vector_inputs) != specs[0].param_kinds.count("v"):
         return None
-    return ValueTestCasePlan(
-        kind="masked",
-        function_name=_function_name(name, index, case),
-        case_name=case.name,
-        call_name=name,
-        type_tag=case.type_tag,
-        base_spelling=base_spelling,
-        lanes=case.lanes,
+    return _plan(
+        "masked",
+        name,
+        index,
+        case,
+        specs,
+        base_spelling,
         vector_inputs=vector_inputs,
         expected=case.expected,
-        param_kinds=specs[0].param_kinds,
         mask_inputs=mask_inputs,
     )
 
@@ -372,14 +366,13 @@ def immediate_case(
         return None
     if len(vector_inputs) != specs[0].param_kinds.count("v"):
         return None
-    return ValueTestCasePlan(
-        kind="immediate",
-        function_name=_function_name(name, index, case),
-        case_name=case.name,
-        call_name=name,
-        type_tag=case.type_tag,
-        base_spelling=base_spelling,
-        lanes=case.lanes,
+    return _plan(
+        "immediate",
+        name,
+        index,
+        case,
+        specs,
+        base_spelling,
         vector_inputs=vector_inputs,
         expected=case.expected,
         immediate_value=_immediate_value(imm_inputs[0], specs[0].immediate),

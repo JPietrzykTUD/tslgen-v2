@@ -222,10 +222,10 @@ def _pointer_lifetime(case: ValueTestCasePlan) -> str:
 
 def _pointer_free(case: ValueTestCasePlan) -> str:
     count = case.scalar_inputs[0] if case.scalar_inputs else "1"
-    if case.target_base_spelling is None:
+    if case.alignment is None:
         alloc = f"mem_alloc({count}usize)"
     else:
-        alloc = f"mem_alloc_aligned({case.target_base_spelling}usize, {count}usize)"
+        alloc = f"mem_alloc_aligned({case.alignment}usize, {count}usize)"
     return "\n".join(
         [
             "    #[test]",

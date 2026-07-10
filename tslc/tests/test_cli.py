@@ -9,6 +9,7 @@ from tslc import cli
 from tslc.diagnostics import Diagnostic
 from tslc.value_tests.model import (
     ValueTestCasePlan,
+    ValueTestInvocation,
     ValueTestProfilePlan,
     ValueTestProjectPlan,
 )
@@ -449,5 +450,5 @@ def _value_case(call_name: str, function_name: str) -> ValueTestCasePlan:
         type_tag="si32",
         base_spelling="std::int32_t",
         lanes=4,
-        result_kind="v",
+        invocation=ValueTestInvocation(result_kind="v"),
     )

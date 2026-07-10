@@ -48,6 +48,7 @@ from tslc.lower._diagnostics import (
     lowering_skip_diagnostic,
     primitive_signature_source as _primitive_signature_source,
 )
+from tslc.lower.dependencies import CallDependencyOrigin, origin_sort_key
 from tslc.lower.region_handlers import (
     DEFAULT_REGION_LOWERERS,
     RegionLowerer,
@@ -154,6 +155,7 @@ class LoweredSpecialization:
     # Feature flags required by this body, including call-graph propagation after
     # dependency pruning.
     required_features: frozenset[str] = frozenset()
+    call_dependency_origins: tuple[CallDependencyOrigin, ...] = ()
     implementation_state: ImplementationState = ImplementationState.UNKNOWN
     safety: ImplementationSafety = field(default_factory=ImplementationSafety)
     variant_bodies: tuple[LoweredImplementationVariant, ...] = ()
@@ -452,8 +454,17 @@ class Lowerer:
         variant_bodies: list[LoweredImplementationVariant] = []
         effective_safety = safety
         diagnostics = [*default_body.diagnostics]
+        call_dependency_origins = set(context.effects.call_dependency_origins)
         for variant, variant_segments in variant_sources:
-            variant_context = body_context(env, scope, shape, self._support)
+            variant_context = body_context(
+                replace(
+                    env,
+                    dependency_origin=f"implementation variant {variant.name!r}",
+                ),
+                scope,
+                shape,
+                self._support,
+            )
             rendered_variant = render_body(
                 selected=selected,
                 shape=shape,
@@ -475,6 +486,9 @@ class Lowerer:
             )
             effective_safety = effective_safety.merge(variant_safety)
             diagnostics.extend(rendered_variant.diagnostics)
+            call_dependency_origins.update(
+                variant_context.effects.call_dependency_origins
+            )
             variant_bodies.append(
                 LoweredImplementationVariant(
                     name=variant.name,
@@ -561,6 +575,9 @@ class Lowerer:
             mask_policy=selected.primitive.attributes.get("mask"),
             lane_list_params=tuple(context.env.lane_list_params.values()),
             required_features=selected.required_features,
+            call_dependency_origins=tuple(
+                sorted(call_dependency_origins, key=origin_sort_key)
+            ),
             implementation_state=default_body.implementation_state,
             safety=effective_safety,
             variant_bodies=tuple(variant_bodies),

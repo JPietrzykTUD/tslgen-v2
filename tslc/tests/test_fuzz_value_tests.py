@@ -7,29 +7,40 @@ from pathlib import Path
 from tslc.api import generate_project
 from tslc.value_tests._case_conversion import FUZZ_ITERATIONS, _fuzz_seed
 from tslc.value_tests._render_cpp_conversion import _differential_fuzz
-from tslc.value_tests.model import ValueTestCasePlan
+from tslc.value_tests.model import (
+    ValueTestCasePlan,
+    ValueTestDifferential,
+    ValueTestInvocation,
+)
 
 
-def _plan(**kwargs) -> ValueTestCasePlan:
-    base = dict(
+def _plan(
+    *,
+    result_kind: str = "v",
+    call_name: str = "add",
+    param_kinds: tuple[str, ...] = ("v", "v"),
+) -> ValueTestCasePlan:
+    return ValueTestCasePlan(
         kind="differential_fuzz",
         function_name="fuzz_diff_avx2_add_si32",
         case_name="add:fuzz",
-        call_name="add",
+        call_name=call_name,
         type_tag="si32",
         base_spelling="int32_t",
         lanes=8,
-        result_kind="v",
-        param_kinds=("v", "v"),
-        hardware_extension="avx2",
-        from_array_name="from_array",
-        to_array_name="to_array",
-        to_integral_name="to_integral",
-        fuzz_seed=12345,
-        fuzz_iterations=256,
+        invocation=ValueTestInvocation(
+            result_kind=result_kind,
+            param_kinds=param_kinds,
+        ),
+        differential=ValueTestDifferential(
+            hardware_extension="avx2",
+            from_array_name="from_array",
+            to_array_name="to_array",
+            to_integral_name="to_integral",
+            fuzz_seed=12345,
+            fuzz_iterations=256,
+        ),
     )
-    base.update(kwargs)
-    return ValueTestCasePlan(**base)
 
 
 # --------------------------------------------------------------------------- seed
