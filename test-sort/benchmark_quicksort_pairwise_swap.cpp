@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <cstdint>
@@ -9,6 +10,7 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -32,6 +34,7 @@ auto constexpr gibibyte = kibibyte * mebibyte;
 
 struct benchmark_config {
   std::string output_path = "quicksort_pairwise_swap_benchmark.tsv";
+  std::string trace_output_path;
   std::size_t trials = 7;
   std::uint64_t max_bytes = 64 * mebibyte;
   std::uint64_t seed = 0x123456789abcdef0ULL;
@@ -130,6 +133,8 @@ void print_usage(char const * program_name) {
     << "\n"
     << "Options:\n"
     << "  -o, --output PATH   TSV output path (default: quicksort_pairwise_swap_benchmark.tsv)\n"
+    << "      --trace-output PATH\n"
+    << "                      Optional pairwise-swap trace TSV path; disabled by default\n"
     << "      --trials N      Trials per algorithm/distribution/size (default: 7)\n"
     << "      --max-size N    Largest benchmark size in elements\n"
     << "      --max-bytes N   Largest benchmark footprint, accepts KiB/MiB/GiB suffixes (default: 64MiB)\n"
@@ -159,6 +164,8 @@ auto parse_args(int argc, char ** argv) -> benchmark_config {
       std::exit(0);
     } else if (arg == "-o" || arg == "--output") {
       config.output_path = require_value(arg.c_str());
+    } else if (arg == "--trace-output") {
+      config.trace_output_path = require_value(arg.c_str());
     } else if (arg == "--trials") {
       config.trials = static_cast<std::size_t>(parse_unsigned(require_value(arg.c_str()), arg.c_str()));
       if (config.trials == 0) {
@@ -340,6 +347,23 @@ auto measure_pairwise_swap_sort(std::vector<BenchmarkDataType> & data, std::uint
   return {static_cast<std::uint64_t>(elapsed), checksum(data)};
 }
 
+auto measure_pairwise_swap_sort_with_trace(
+  std::vector<BenchmarkDataType> & data,
+  std::uint64_t sort_seed,
+  TslPairWiseSwapQuickSortTrace & trace
+) -> measurement {
+  TslPairWiseSwapQuickSorter<BenchmarkDataType, BenchmarkIndexType> sorter(sort_seed);
+  auto const start = std::chrono::steady_clock::now();
+  sorter.sort_with_trace(data.data(), data.size(), trace);
+  auto const stop = std::chrono::steady_clock::now();
+  if (!std::is_sorted(data.begin(), data.end())) {
+    throw std::runtime_error("TslPairWiseSwapQuickSorter produced unsorted output");
+  }
+
+  auto const elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start).count();
+  return {static_cast<std::uint64_t>(elapsed), checksum(data)};
+}
+
 #if defined(HAVE_HIGHWAY_VQSORT)
 auto measure_vqsort(std::vector<BenchmarkDataType> & data) -> measurement {
   auto const start = std::chrono::steady_clock::now();
@@ -422,6 +446,132 @@ void write_result(
          << result.checksum << '\n';
 }
 
+void write_histogram_value(std::ofstream & output, std::array<std::uint64_t, 65> const & histogram) {
+  bool wrote_value = false;
+  for (std::size_t lane_count = 0; lane_count < histogram.size(); ++lane_count) {
+    if (histogram[lane_count] == 0) {
+      continue;
+    }
+    if (wrote_value) {
+      output << ';';
+    }
+    output << lane_count << ':' << histogram[lane_count];
+    wrote_value = true;
+  }
+  if (!wrote_value) {
+    output << "empty";
+  }
+}
+
+void write_partition_trace_header(std::ofstream & output, char const * prefix) {
+  output << '\t' << prefix << "_calls"
+         << '\t' << prefix << "_input_elements"
+         << '\t' << prefix << "_elapsed_ns"
+         << '\t' << prefix << "_vectorized_calls"
+         << '\t' << prefix << "_vector_iterations"
+         << '\t' << prefix << "_left_loads"
+         << '\t' << prefix << "_right_loads"
+         << '\t' << prefix << "_left_all_good"
+         << '\t' << prefix << "_right_all_good"
+         << '\t' << prefix << "_swap_iterations"
+         << '\t' << prefix << "_swappable_lanes"
+         << '\t' << prefix << "_good_left_lanes"
+         << '\t' << prefix << "_good_right_lanes"
+         << '\t' << prefix << "_carry_left_lanes"
+         << '\t' << prefix << "_carry_right_lanes"
+         << '\t' << prefix << "_left_progress_elements"
+         << '\t' << prefix << "_right_progress_elements"
+         << '\t' << prefix << "_scalar_span_elements"
+         << '\t' << prefix << "_scalar_left_steps"
+         << '\t' << prefix << "_scalar_right_steps"
+         << '\t' << prefix << "_scalar_swaps"
+         << '\t' << prefix << "_left_bad_lane_histogram"
+         << '\t' << prefix << "_right_bad_lane_histogram";
+}
+
+void write_trace_header(std::ofstream & output) {
+  output << "algorithm\tdistribution\tsize\tbytes\tsize_label\ttrial\tinput_seed\tsort_seed\telapsed_ns\tchecksum"
+         << "\tsimd_lanes"
+         << "\tsort_calls"
+         << "\ttrivial_calls"
+         << "\tmax_depth"
+         << "\tmax_sort_elements"
+         << "\tleaf_sort_calls"
+         << "\tleaf_sort_elements"
+         << "\tleaf_sort_ns"
+         << "\tpivot_calls"
+         << "\tpivot_elements"
+         << "\tpivot_ns";
+  write_partition_trace_header(output, "less");
+  write_partition_trace_header(output, "equal");
+  output << '\n';
+}
+
+void write_partition_trace(std::ofstream & output, TslPairWiseSwapQuickSortPartitionTrace const & trace) {
+  output << '\t' << trace.calls
+         << '\t' << trace.input_elements
+         << '\t' << trace.elapsed_ns
+         << '\t' << trace.vectorized_calls
+         << '\t' << trace.vector_iterations
+         << '\t' << trace.left_loads
+         << '\t' << trace.right_loads
+         << '\t' << trace.left_all_good
+         << '\t' << trace.right_all_good
+         << '\t' << trace.swap_iterations
+         << '\t' << trace.swappable_lanes
+         << '\t' << trace.good_left_lanes
+         << '\t' << trace.good_right_lanes
+         << '\t' << trace.carry_left_lanes
+         << '\t' << trace.carry_right_lanes
+         << '\t' << trace.left_progress_elements
+         << '\t' << trace.right_progress_elements
+         << '\t' << trace.scalar_span_elements
+         << '\t' << trace.scalar_left_steps
+         << '\t' << trace.scalar_right_steps
+         << '\t' << trace.scalar_swaps
+         << '\t';
+  write_histogram_value(output, trace.left_bad_lane_histogram);
+  output << '\t';
+  write_histogram_value(output, trace.right_bad_lane_histogram);
+}
+
+void write_trace_result(
+  std::ofstream & output,
+  char const * distribution,
+  size_case const & size,
+  std::size_t trial,
+  std::uint64_t input_seed,
+  std::uint64_t sort_seed,
+  measurement const & result,
+  TslPairWiseSwapQuickSortTrace const & trace
+) {
+  using DataSimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, BenchmarkDataType>;
+  output << "tsl_pairwise_swap" << '\t'
+         << distribution << '\t'
+         << size.elements << '\t'
+         << size.bytes << '\t'
+         << size.label << '\t'
+         << trial << '\t'
+         << input_seed << '\t'
+         << sort_seed << '\t'
+         << result.elapsed_ns << '\t'
+         << result.checksum << '\t'
+         << DataSimdStyle::lane_count_v << '\t'
+         << trace.sort_calls << '\t'
+         << trace.trivial_calls << '\t'
+         << trace.max_depth << '\t'
+         << trace.max_sort_elements << '\t'
+         << trace.leaf_sort_calls << '\t'
+         << trace.leaf_sort_elements << '\t'
+         << trace.leaf_sort_ns << '\t'
+         << trace.pivot_calls << '\t'
+         << trace.pivot_elements << '\t'
+         << trace.pivot_ns;
+  write_partition_trace(output, trace.less_than_pivot);
+  write_partition_trace(output, trace.equal_to_pivot);
+  output << '\n';
+}
+
 } // namespace
 
 int main(int argc, char ** argv) {
@@ -439,6 +589,16 @@ int main(int argc, char ** argv) {
     }
     output << std::setprecision(12);
     output << "algorithm\tdistribution\tsize\tbytes\tsize_label\ttrial\tinput_seed\tsort_seed\telapsed_ns\tns_per_element\tmib_per_second\tchecksum\n";
+
+    std::ofstream trace_output;
+    if (!config.trace_output_path.empty()) {
+      trace_output.open(config.trace_output_path);
+      if (!trace_output) {
+        throw std::runtime_error("could not open trace TSV output: " + config.trace_output_path);
+      }
+      trace_output << std::setprecision(12);
+      write_trace_header(trace_output);
+    }
 
     std::vector<distribution_case> const distributions{
       {"uniform_random", make_uniform_random_case},
@@ -476,7 +636,14 @@ int main(int argc, char ** argv) {
 #if defined(HAVE_HIGHWAY_VQSORT)
           auto const vqsort_result = measure_vqsort(vqsort_data);
 #endif
-          auto const pairwise_result = measure_pairwise_swap_sort(pairwise_data, sort_seed);
+          std::unique_ptr<TslPairWiseSwapQuickSortTrace> pairwise_trace;
+          measurement pairwise_result{};
+          if (trace_output.is_open()) {
+            pairwise_trace = std::make_unique<TslPairWiseSwapQuickSortTrace>();
+            pairwise_result = measure_pairwise_swap_sort_with_trace(pairwise_data, sort_seed, *pairwise_trace);
+          } else {
+            pairwise_result = measure_pairwise_swap_sort(pairwise_data, sort_seed);
+          }
 #if defined(HAVE_HIGHWAY_VQSORT)
           verify_equal_results(std_data, vqsort_data, distribution.name, size, trial);
 #endif
@@ -488,6 +655,19 @@ int main(int argc, char ** argv) {
 #endif
           write_result(output, "tsl_pairwise_swap", distribution.name, size, trial, input_seed, sort_seed, pairwise_result);
           output.flush();
+          if (pairwise_trace) {
+            write_trace_result(
+              trace_output,
+              distribution.name,
+              size,
+              trial,
+              input_seed,
+              sort_seed,
+              pairwise_result,
+              *pairwise_trace
+            );
+            trace_output.flush();
+          }
 #if defined(HAVE_HIGHWAY_VQSORT)
           rows_written += 3;
 #else
@@ -515,6 +695,9 @@ int main(int argc, char ** argv) {
     }
 
     std::cout << "Wrote " << rows_written << " benchmark rows to " << config.output_path << std::endl;
+    if (trace_output.is_open()) {
+      std::cout << "Wrote pairwise trace rows to " << config.trace_output_path << std::endl;
+    }
     return 0;
   } catch (std::exception const & error) {
     std::cerr << "benchmark failed: " << error.what() << std::endl;
