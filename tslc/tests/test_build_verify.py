@@ -65,6 +65,45 @@ def test_generated_profiles_build(
     assert report.commands, f"nothing verified; skipped={report.skipped}"
 
 
+def test_rust_target_feature_body_builds_with_typed_vector_owner(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    source = tmp_path / "typed_owner_probe.tsl"
+    source.write_text(
+        "prim<s:=(m,s)> typed_owner_probe(mask, position):\n"
+        "  impls:\n"
+        "    avx2:\n"
+        "      ?i?:\n"
+        "        requires [avx, avx2]\n"
+        "        implementation:\n"
+        '          tsil "complete(cast<static>(type(base::in), '
+        'mask<test>(mask, cast<static>(type(scalar::size), position))));"\n',
+        encoding="utf-8",
+    )
+    result = generate_project(
+        [data_root, source],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["typed_owner_probe"],
+        profiles=["avx2"],
+        backends=["rust"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    assert result.rendered is not None
+    profile = next(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path == "rust/src/tsl_avx2.rs"
+    )
+    assert "<Simd<i32, Avx2> as SimdVector>::mask_lane_test" in profile
+
+    output_root = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, output_root)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+    report = verify_project(output_root, result.rendered.verify)
+    assert report.diagnostics == (), report.diagnostics
+    assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
 def test_cpp_fetch_content_consumer_builds(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:

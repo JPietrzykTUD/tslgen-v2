@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 
 from tslc.backend.primitive_rendering import body_for as _body_for
 from tslc.backend.primitive_rendering import variant_names as _variant_names
@@ -28,7 +29,7 @@ from tslc.lower.lowerer import (
     varying_positions,
 )
 from tslc.lower.implementation_state import ImplementationState
-from tslc.target_text import RenderContext
+from tslc.target_text import LoweredBody, RenderContext
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 _PRIMITIVE_TRAIT_PREFIX = "detail::primitives::"
@@ -219,14 +220,13 @@ class RustBackend:
                 f", {n}: {_rust_concrete_param(spec, k)}" for n, k in fixed
             )
             ret_impl = _rust_concrete_result(spec)
-            body = body_ref.render(
-                RenderContext(
-                    current_vector=vec,
-                    current_register=spec.register_spelling,
-                    current_base=spec.base_type_spelling,
-                    current_mask=f"<{vec} as SimdVector>::MaskType",
-                    current_imask=f"<{vec} as SimdVector>::ImaskType",
-                )
+            body_context = RenderContext(
+                current_owner=f"<{vec} as SimdVector>",
+                current_vector=vec,
+                current_register=spec.register_spelling,
+                current_base=spec.base_type_spelling,
+                current_mask=f"<{vec} as SimdVector>::MaskType",
+                current_imask=f"<{vec} as SimdVector>::ImaskType",
             )
             helper_params = ", ".join(
                 (
@@ -240,7 +240,8 @@ class RustBackend:
                     f"let {spec.param_names[vi]} = self;",
                     self._target_feature_body(
                         spec,
-                        body,
+                        body_ref,
+                        render_context=body_context,
                         params=helper_params,
                         args=helper_args,
                         return_type=ret_impl,
@@ -385,19 +386,18 @@ class RustBackend:
         # Native index intrinsics take the concrete integer-register type for the selected ISA.
         # Lowering resolves it from source extension metadata; scalar/generic stay opaque.
         impl_register = spec.index_register_spelling
-        body = body_ref.render(
-            RenderContext(
-                current_vector=key,
-                current_register=spec.register_spelling,
-                current_base=spec.base_type_spelling,
-                current_mask=f"<{key} as SimdVector>::MaskType",
-                current_imask=f"<{key} as SimdVector>::ImaskType",
-            )
+        body_context = RenderContext(
+            current_vector=key,
+            current_register=spec.register_spelling,
+            current_base=spec.base_type_spelling,
+            current_mask=f"<{key} as SimdVector>::MaskType",
+            current_imask=f"<{key} as SimdVector>::ImaskType",
         )
         concrete_owner = f"<{key} as SimdVector>"
         body = self._target_feature_body(
             spec,
-            body,
+            body_ref,
+            render_context=body_context,
             params=_params(
                 spec,
                 concrete_owner,
@@ -509,8 +509,9 @@ class RustBackend:
     def _target_feature_body(
         self,
         spec: LoweredSpecialization,
-        body: str,
+        body: LoweredBody,
         *,
+        render_context: RenderContext | None = None,
         params: str,
         args: str,
         return_type: str,
@@ -520,10 +521,15 @@ class RustBackend:
         receiver_type: str | None = None,
     ) -> str:
         attrs = self._target_feature_attrs(spec)
+        active_context = render_context or RenderContext()
+        if attrs and receiver_type is not None:
+            active_context = replace(
+                active_context,
+                current_owner=f"<{receiver_type} as SimdVector>",
+            )
+        rendered_body = body.render(active_context)
         if not attrs:
-            return body
-        if receiver_type is not None:
-            body = _qualify_nested_self_receiver(body, receiver_type)
+            return rendered_body
         decls = f"<{', '.join(generic_decls)}>" if generic_decls else ""
         call_generics = f"::<{', '.join(generic_names)}>" if generic_names else ""
         attr_lines = "\n".join(attrs)
@@ -531,7 +537,7 @@ class RustBackend:
             f"{attr_lines}\n"
             f"unsafe fn __tsl_target_feature_body{decls}({params}) -> {return_type}"
             f"{where_clause} {{\n"
-            f"{_indent(body, 4)}\n"
+            f"{_indent(rendered_body, 4)}\n"
             f"}}\n"
             f"unsafe {{ __tsl_target_feature_body{call_generics}({args}) }}"
         )
@@ -568,7 +574,7 @@ def _free_function(spec: LoweredSpecialization, *, backend: RustBackend) -> str:
     function_name = rust_raw_identifier(spec.primitive_name)
     body = backend._target_feature_body(
         spec,
-        spec.body_text,
+        spec.body,
         params=params,
         args=_runtime_names(spec),
         return_type=ret_type,
@@ -644,7 +650,7 @@ def _free_function_variant(
     )
     body_text = backend._target_feature_body(
         spec,
-        body.render(),
+        body,
         params=params,
         args=_runtime_names(spec),
         return_type=ret_type,
@@ -664,12 +670,6 @@ def _variant_primitive_name(
     if variant_name is None:
         return primitive_name
     return f"{primitive_name}_{variant_name}"
-
-
-def _qualify_nested_self_receiver(body: str, receiver_type: str) -> str:
-    """Nested Rust helper functions cannot capture the outer impl's ``Self``."""
-
-    return f"<{receiver_type} as SimdVector>::".join(body.split("Self::"))
 
 
 def _primitive_module(internal: str) -> str:

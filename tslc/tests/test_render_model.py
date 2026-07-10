@@ -62,6 +62,23 @@ def test_lowered_body_context_renders_explicit_current_placeholders() -> None:
     )
 
 
+def test_lowered_body_context_renders_explicit_owner_placeholder() -> None:
+    body = LoweredBody.from_render_text(
+        render_sequence(
+            (
+                "return ",
+                RenderPlaceholder("current_owner", "Self"),
+                "::lane_count();",
+            )
+        )
+    )
+
+    assert body.render() == "return Self::lane_count();"
+    assert body.render(RenderContext(current_owner="<Vec as SimdVector>")) == (
+        "return <Vec as SimdVector>::lane_count();"
+    )
+
+
 def test_lowered_body_literal_text_is_not_rewritten_by_context() -> None:
     body = LoweredBody.from_text('return "~::<Self> Self::RegisterType";')
 

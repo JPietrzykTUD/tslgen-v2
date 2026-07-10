@@ -186,6 +186,7 @@ class _RustTemplates:
     def render_template(
         self, key: str, fallback: str | None = None, /, **fields: RenderField
     ) -> RenderText:
+        fields.setdefault("owner", RenderPlaceholder("current_owner", "Self"))
         return common.template_application(
             self.catalog, self.backend_id, key, fallback, **fields
         )

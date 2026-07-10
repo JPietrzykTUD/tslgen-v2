@@ -15,6 +15,7 @@ from types import MappingProxyType
 from typing import Literal, Protocol
 
 RenderPlaceholderKind = Literal[
+    "current_owner",
     "current_vector",
     "current_register",
     "current_base",
@@ -37,6 +38,7 @@ class TemplateRenderError(RenderError):
 @dataclass(frozen=True, slots=True)
 class RenderContext:
     unsafe_block_renderer: UnsafeBlockRenderer | None = None
+    current_owner: str | None = None
     current_vector: str | None = None
     current_register: str | None = None
     current_base: str | None = None
@@ -69,6 +71,7 @@ class RenderPlaceholder:
         if context is None:
             return self.default
         value = {
+            "current_owner": context.current_owner,
             "current_vector": context.current_vector,
             "current_register": context.current_register,
             "current_base": context.current_base,
