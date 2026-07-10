@@ -9,6 +9,7 @@
 
 
 #include <tsl.hpp>
+#include "bitonic_sort.hpp"
 
 
 template <typename DataType, typename IndexType>
@@ -236,6 +237,12 @@ class TslPairWiseSwapQuickSorter {
       data[j] = value;
     }
   }
+  void bitonic_merge_sort(DataType * data, std::size_t count) {
+    avx512_sort::sort_u32_up_to_256(
+        data,
+        count
+    );
+  }
 
  public:
   void operator()(DataType * data, std::size_t count) {
@@ -243,8 +250,12 @@ class TslPairWiseSwapQuickSorter {
       return;
     }
     using DataSimdStyle = tsl::dataparallel::simd_for_t<tsl::dataparallel::native, DataType>;
-    if (count <= (2 * DataSimdStyle::lane_count_v)) {
-      insertion_sort(data, count);
+    auto constexpr insertion_sort_threshold = std::max<std::size_t>(
+      256,
+      2 * DataSimdStyle::lane_count_v
+    );
+    if (count <= insertion_sort_threshold) {
+      bitonic_merge_sort(data, count);
       return;
     }
 

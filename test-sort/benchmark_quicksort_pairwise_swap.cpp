@@ -15,6 +15,10 @@
 #include <utility>
 #include <vector>
 
+#if defined(HAVE_HIGHWAY_VQSORT)
+#include "hwy/contrib/sort/vqsort.h"
+#endif
+
 #include "quicksort_pairwise_swap.hpp"
 
 using BenchmarkDataType = std::uint32_t;
@@ -336,6 +340,20 @@ auto measure_pairwise_swap_sort(std::vector<BenchmarkDataType> & data, std::uint
   return {static_cast<std::uint64_t>(elapsed), checksum(data)};
 }
 
+#if defined(HAVE_HIGHWAY_VQSORT)
+auto measure_vqsort(std::vector<BenchmarkDataType> & data) -> measurement {
+  auto const start = std::chrono::steady_clock::now();
+  hwy::VQSort(data.data(), data.size(), hwy::SortAscending{});
+  auto const stop = std::chrono::steady_clock::now();
+  if (!std::is_sorted(data.begin(), data.end())) {
+    throw std::runtime_error("hwy::VQSort produced unsorted output");
+  }
+
+  auto const elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start).count();
+  return {static_cast<std::uint64_t>(elapsed), checksum(data)};
+}
+#endif
+
 void verify_equal_results(
   std::vector<BenchmarkDataType> const & expected,
   std::vector<BenchmarkDataType> const & actual,
@@ -449,16 +467,32 @@ int main(int argc, char ** argv) {
           auto const sort_seed = input_seed ^ 0x94d049bb133111ebULL;
           auto input = distribution.make(size.elements, input_seed);
           auto std_data = input;
+#if defined(HAVE_HIGHWAY_VQSORT)
+          auto vqsort_data = input;
+#endif
           auto pairwise_data = std::move(input);
 
           auto const std_result = measure_std_sort(std_data);
+#if defined(HAVE_HIGHWAY_VQSORT)
+          auto const vqsort_result = measure_vqsort(vqsort_data);
+#endif
           auto const pairwise_result = measure_pairwise_swap_sort(pairwise_data, sort_seed);
+#if defined(HAVE_HIGHWAY_VQSORT)
+          verify_equal_results(std_data, vqsort_data, distribution.name, size, trial);
+#endif
           verify_equal_results(std_data, pairwise_data, distribution.name, size, trial);
 
           write_result(output, "std_sort", distribution.name, size, trial, input_seed, 0, std_result);
+#if defined(HAVE_HIGHWAY_VQSORT)
+          write_result(output, "vqsort", distribution.name, size, trial, input_seed, 0, vqsort_result);
+#endif
           write_result(output, "tsl_pairwise_swap", distribution.name, size, trial, input_seed, sort_seed, pairwise_result);
           output.flush();
+#if defined(HAVE_HIGHWAY_VQSORT)
+          rows_written += 3;
+#else
           rows_written += 2;
+#endif
 
           std::cerr << "done\t"
                     << distribution.name << '\t'
@@ -466,7 +500,13 @@ int main(int argc, char ** argv) {
                     << "trial " << (trial + 1) << '/' << config.trials
                     << "\tstd_sort="
                     << (static_cast<double>(std_result.elapsed_ns) / 1'000'000'000.0)
-                    << "s\ttsl_pairwise_swap="
+                    << 's'
+#if defined(HAVE_HIGHWAY_VQSORT)
+                    << "\tvqsort="
+                    << (static_cast<double>(vqsort_result.elapsed_ns) / 1'000'000'000.0)
+                    << 's'
+#endif
+                    << "\ttsl_pairwise_swap="
                     << (static_cast<double>(pairwise_result.elapsed_ns) / 1'000'000'000.0)
                     << 's'
                     << std::endl;
