@@ -25,6 +25,7 @@ from tslc.catalog.signatures import parse_signature
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import Diagnostic, has_errors
 from tslc.ir.scan import scan
+from tslc.lower.dependencies import CallDependency
 from tslc.lower.lowerer import Lowerer
 from tslc.pipeline import (
     _LoweredSlot,
@@ -417,7 +418,7 @@ def _requires_suggestions(
                     source=selected_slot.implementation.body_source,
                 )
                 lowered_any = False
-                slot_dependencies = set()
+                slot_dependencies: set[CallDependency] = set()
                 for backend in backends:
                     lowered = lowerer.lower(
                         selected_slot,
@@ -486,12 +487,14 @@ def _requires_suggestions(
             )
 
     suggestions: list[MetadataSuggestion] = []
-    for key, missing in sorted(missing_by_entry.items(), key=lambda item: item[0]):
+    for key, missing_features in sorted(
+        missing_by_entry.items(), key=lambda item: item[0]
+    ):
         primitive, _path, _line, _column = key
         ref = entry_index[key]
         entry = ref.entry
         local_flags, field = _local_requires_flags(entry)
-        after_flags = frozenset(local_flags | frozenset(missing))
+        after_flags = frozenset(local_flags | frozenset(missing_features))
         edit = _requires_edit(inputs, entry, after_flags, field)
         suggestions.append(
             MetadataSuggestion(
@@ -502,7 +505,7 @@ def _requires_suggestions(
                 subject=f"{primitive} {'/'.join(ref.selector_path)}",
                 reason=(
                     "transitive primitive calls require "
-                    f"{_format_list(sorted(missing))} "
+                    f"{_format_list(sorted(missing_features))} "
                     f"({', '.join(sorted(reasons_by_entry[key]))})"
                 ),
                 before=(

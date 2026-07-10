@@ -16,7 +16,11 @@ from tslc.backend.cpp_profile import (
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
 from tslc.backend.target_capability import is_x86_register_extension
 from tslc.compiler_assets import RenderAssets
-from tslc.lower.lowerer import LoweredSpecialization, varying_positions
+from tslc.lower.lowerer import (
+    LoweredSpecialization,
+    LoweredTypeParam,
+    varying_positions,
+)
 from tslc.output.artifacts import Artifact
 from tslc.render._common import slug, text
 from tslc.render.cpp_build import _cpp_cmakelists
@@ -275,7 +279,9 @@ def _cpp_smoke(emitted_profile: EmittedProfile) -> str:
 
 
 def _cpp_type_param_smoke_vector(
-    spec: LoweredSpecialization, param, smoke_lanes: int  # noqa: ANN001
+    spec: LoweredSpecialization,
+    param: LoweredTypeParam,
+    smoke_lanes: int,
 ) -> str:
     base = param.base_type_binding_spelling or spec.base_type_spelling
     if spec.uses_sized_vector:

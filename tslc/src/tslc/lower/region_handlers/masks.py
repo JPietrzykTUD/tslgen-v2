@@ -36,6 +36,8 @@ class MaskLowerer:
             if render_text(rendered).strip():
                 args.append(trimmed_text(rendered))
         selector = parse_mask_selector(region.selector_text, len(args))
+        key: str
+        fields: dict[str, RenderField]
         if selector is not None and selector.kind in ("lane_true", "lane_false"):
             key = "mask_lane_all_true" if selector.op == "lane_true" else "mask_lane_all_false"
             base = context.env.backend.types.scalar_spelling(context.env.type_tag)

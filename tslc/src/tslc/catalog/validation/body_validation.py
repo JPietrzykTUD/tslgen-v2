@@ -20,7 +20,11 @@ from tslc.ir.region_syntax import (
 from tslc.ir.scan import find_malformed_regions, scan
 from tslc.ir.segments import RawText, Region, Segment
 from tslc.ir.text import split_selector_terms, split_top_level
-from tslc.syntax.ast import OuterTslParseResult, ParsedImplementationBodyEnvelope
+from tslc.syntax.ast import (
+    OuterTslParseResult,
+    ParsedImplementationBodyEnvelope,
+    ParsedImplementationSelectorEntry,
+)
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -37,12 +41,16 @@ def validate_body_regions(
                 _validate_envelope(primitive.name, envelope, diagnostics)
 
 
-def _implementation_body_envelopes(entries):
+def _implementation_body_envelopes(
+    entries: tuple[ParsedImplementationSelectorEntry, ...],
+) -> tuple[ParsedImplementationBodyEnvelope, ...]:
+    envelopes: list[ParsedImplementationBodyEnvelope] = []
     for entry in entries:
-        yield from entry.body_envelopes
+        envelopes.extend(entry.body_envelopes)
         for variant in entry.variants:
-            yield from variant.body_envelopes
-        yield from _implementation_body_envelopes(entry.children)
+            envelopes.extend(variant.body_envelopes)
+        envelopes.extend(_implementation_body_envelopes(entry.children))
+    return tuple(envelopes)
 
 
 def _validate_envelope(

@@ -25,6 +25,7 @@ from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import (
     Catalog,
     Extension,
+    GenericParam,
     Implementation,
     Primitive,
 )
@@ -517,7 +518,11 @@ def _concrete_base_tags(
     return tuple(members)
 
 
-def _base_width_constraints_match(param, base_tag: str, type_tag: str) -> bool:  # noqa: ANN001
+def _base_width_constraints_match(
+    param: GenericParam,
+    base_tag: str,
+    type_tag: str,
+) -> bool:
     if not param.base_width_constraints:
         return True
     base_width = scalar_bit_width(base_tag)

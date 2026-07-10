@@ -19,6 +19,8 @@ def _vector_spelling(value: VectorValue, context: LoweringSession) -> str | None
             if value.lanes is not None
             else value.lane_parameter
         )
+        if lanes is None:
+            return None
         return context.env.backend.types.sized_vector_spelling(
             base, value.extension_isa, lanes
         )

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from tslc.backend.rust_names import rust_primitive_trait_name
-from tslc.lower.lowerer import LoweredSpecialization
+from tslc.lower.lowerer import LoweredSpecialization, LoweredTypeParam
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
@@ -126,10 +126,11 @@ def _base_dispatch_clauses(
     return clauses
 
 
-def _specialized_params(shape: LoweredSpecialization) -> tuple:
+def _specialized_params(
+    shape: LoweredSpecialization,
+) -> tuple[LoweredTypeParam, ...]:
     return tuple(param for param in shape.type_params if param.specialize_base)
 
 
-def _base_key_param_name(param) -> str:  # noqa: ANN001 - formatting-only domain value
+def _base_key_param_name(param: LoweredTypeParam) -> str:
     return f"{param.name}BaseKey"
-

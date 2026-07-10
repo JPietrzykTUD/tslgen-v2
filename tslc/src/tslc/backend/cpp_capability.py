@@ -26,6 +26,7 @@ from tslc.render.tests_project import cpp_test_artifacts
 from tslc.value_tests.render_cpp import CPP_VALUE_TEST_SUPPORT
 
 if TYPE_CHECKING:
+    from tslc.backend.translation import BackendDialect
     from tslc.backend.emitted_profile import EmittedProfile
     from tslc.compiler_assets import RenderAssets
     from tslc.output.artifacts import Artifact
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
     from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
 
 
-def create_cpp_dialect(catalog: Catalog) -> CppBackendDialect:
+def create_cpp_dialect(catalog: Catalog) -> BackendDialect:
     return CppBackendDialect(catalog)
 
 

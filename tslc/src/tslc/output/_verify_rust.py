@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from collections.abc import Mapping
 
-from tslc.diagnostics import Diagnostic
+from tslc.diagnostics import Diagnostic, Severity
 from tslc.output._verify_common import (
     command_failure_diagnostic,
     effective_rust_compiler,
@@ -226,7 +226,7 @@ def _rust_command_groups(
             # compile. Cross-target builds cannot execute those binaries natively, so
             # they use --no-run unless value-test mode has a runner follow-up.
         features = profile.profile_name
-        severity = "error"
+        severity: Severity = "error"
         step = "test"
         extra_args: tuple[str, ...] = ()
         if not config.run_value_tests and rust_target(profile, config) is not None:

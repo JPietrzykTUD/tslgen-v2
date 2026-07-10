@@ -9,7 +9,7 @@ import shlex
 from types import MappingProxyType
 from typing import Protocol
 
-from tslc.diagnostics import Diagnostic
+from tslc.diagnostics import Diagnostic, Severity
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,7 +127,7 @@ class BuildCommand:
     argv: tuple[str, ...]
     cwd: Path
     env: tuple[BuildCommandEnvironment, ...] = ()
-    severity_on_failure: str = "error"
+    severity_on_failure: Severity = "error"
 
 
 @dataclass(frozen=True, slots=True)

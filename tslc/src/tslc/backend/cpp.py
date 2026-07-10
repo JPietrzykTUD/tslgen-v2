@@ -19,6 +19,7 @@ from tslc.backend.primitive_rendering import variant_names as _variant_names
 from tslc.backend.signature_types import CPP_SIGNATURE_TYPES
 from tslc.lower.lowerer import (
     LoweredSpecialization,
+    LoweredTypeParam,
     effective_param_types,
     varying_positions,
 )
@@ -174,8 +175,13 @@ class CppBackend:
         # A monomorphized slot (numeric `lane_parameter`) is a full specialization over a concrete
         # `generic<16>`, so it adds no lane template parameter; a `LANES`-parametric sized vector
         # adds the unbound lane param to the (partial-specialization) head.
-        if first.uses_sized_vector and not first.lane_parameter.isdigit():
-            free.append(f"std::size_t {first.lane_parameter}")
+        lane_parameter = first.lane_parameter
+        if (
+            first.uses_sized_vector
+            and lane_parameter is not None
+            and not lane_parameter.isdigit()
+        ):
+            free.append(f"std::size_t {lane_parameter}")
         if first.immediate is not None:
             free.append(f"{first.immediate[1]} {first.immediate[0]}")
         # Free SIMD type params are unbound in the (partial) specialization — head AND key.
@@ -552,7 +558,7 @@ def _impl_name(primitive_name: str, variant_name: str | None = None) -> str:
 
 def _specialized_base_type_params(
     spec: LoweredSpecialization,
-) -> tuple:
+) -> tuple[LoweredTypeParam, ...]:
     return tuple(param for param in spec.type_params if param.specialize_base)
 
 
@@ -563,7 +569,7 @@ def _type_param_base_bindings(spec: LoweredSpecialization) -> tuple[tuple[str, s
     )
 
 
-def _base_key_param_name(param) -> str:  # noqa: ANN001 - small backend formatting helper
+def _base_key_param_name(param: LoweredTypeParam) -> str:
     return f"{param.name}BaseKey"
 
 

@@ -75,7 +75,8 @@ class BackendTemplateDialect(Protocol):
 
 
 class BackendSyntaxDialect(Protocol):
-    borrowed_call_arg_prefix: str | None
+    @property
+    def borrowed_call_arg_prefix(self) -> str | None: ...
 
     def frame_return(self, value: RenderField) -> RenderText: ...
     def render_call(
@@ -108,12 +109,23 @@ class BackendSyntaxDialect(Protocol):
 
 
 class BackendDialect(Protocol):
-    backend_id: str
-    supports_sized_vector_lane_expressions: bool
-    types: BackendTypeDialect
-    intrinsics: BackendIntrinsicDialect
-    templates: BackendTemplateDialect
-    syntax: BackendSyntaxDialect
+    @property
+    def backend_id(self) -> str: ...
+
+    @property
+    def supports_sized_vector_lane_expressions(self) -> bool: ...
+
+    @property
+    def types(self) -> BackendTypeDialect: ...
+
+    @property
+    def intrinsics(self) -> BackendIntrinsicDialect: ...
+
+    @property
+    def templates(self) -> BackendTemplateDialect: ...
+
+    @property
+    def syntax(self) -> BackendSyntaxDialect: ...
 
 
 __all__ = [

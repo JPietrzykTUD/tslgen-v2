@@ -12,7 +12,14 @@ from tslc.lower.context import LoweringSession
 from tslc.lower.generation import evaluate_generation_int_segments
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.target_text import RenderField, literal_text, render_sequence, render_text
+from tslc.target_text import (
+    RenderContext,
+    RenderField,
+    RenderText,
+    literal_text,
+    render_sequence,
+    render_text,
+)
 
 
 def _split_top_level_op(text: str, op: str) -> list[str]:
@@ -76,7 +83,7 @@ class _RuntimeCondition:
 
     content: RenderField
 
-    def render(self, context=None) -> str:
+    def render(self, context: RenderContext | None = None) -> str:
         text = (
             self.content
             if isinstance(self.content, str)
@@ -120,7 +127,7 @@ class IfLowerer:
         if taken is not None:
             # Fully generation-resolvable: splice only the taken branch (no surviving `if`).
             if taken:
-                return render(region.block)
+                return render(region.block) if region.block is not None else ""
             return render(region.else_block) if region.else_block is not None else ""
 
         # `if<compile>` second half: the predicate has a *symbolic* term (a `generic_params`
@@ -232,11 +239,15 @@ class IfLowerer:
         ors = _split_top_level_op(text, "||")
         if len(ors) > 1:
             parts = [self._render_condition(part, context) for part in ors]
-            return None if None in parts else " || ".join(parts)
+            if any(part is None for part in parts):
+                return None
+            return " || ".join(part for part in parts if part is not None)
         ands = _split_top_level_op(text, "&&")
         if len(ands) > 1:
             parts = [self._render_condition(part, context) for part in ands]
-            return None if None in parts else " && ".join(parts)
+            if any(part is None for part in parts):
+                return None
+            return " && ".join(part for part in parts if part is not None)
         leaf = text.strip()
         value = self._evaluator.evaluate(leaf, context)
         if isinstance(value, BoolValue):
@@ -511,6 +522,6 @@ def _selected_switch_label(
 
 def _render_without_state(
     context: LoweringSession, render: RenderBody, body: tuple[Segment, ...]
-):
+) -> RenderText:
     with context.effects.suppress_implementation_state():
         return render(body)

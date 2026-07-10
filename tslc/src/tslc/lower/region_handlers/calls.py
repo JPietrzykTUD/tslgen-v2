@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from tslc.catalog.model import Extension
 from tslc.ir.region_syntax import parse_call_selector, split_arg_groups
 from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession, VectorValue
@@ -257,7 +258,7 @@ class CallLowerer:
 
 def _vector_type_for_extension(
     base_spelling: str,
-    extension,
+    extension: Extension,
     context: LoweringSession,
 ) -> str:
     if DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):

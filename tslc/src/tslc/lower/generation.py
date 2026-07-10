@@ -36,7 +36,7 @@ def evaluate_generation_int_text(text: str, context: LoweringSession) -> int | N
         tree = ast.parse(text, mode="eval")
     except SyntaxError:
         return None
-    return _IntEvaluator(context).visit(tree.body)
+    return _IntEvaluator(context).evaluate(tree.body)
 
 
 class _IntEvaluator(ast.NodeVisitor):
@@ -55,6 +55,10 @@ class _IntEvaluator(ast.NodeVisitor):
     def __init__(self, context: LoweringSession) -> None:
         self._context = context
 
+    def evaluate(self, node: ast.AST) -> int | None:
+        value = self.visit(node)
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
+
     def visit_Constant(self, node: ast.Constant) -> int | None:  # noqa: N802
         if isinstance(node.value, int) and not isinstance(node.value, bool):
             return node.value
@@ -64,7 +68,7 @@ class _IntEvaluator(ast.NodeVisitor):
         return self._context.scope.resolve_generation_int(node.id)
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> int | None:  # noqa: N802
-        value = self.visit(node.operand)
+        value = self.evaluate(node.operand)
         if value is None:
             return None
         if isinstance(node.op, ast.UAdd):
@@ -74,8 +78,8 @@ class _IntEvaluator(ast.NodeVisitor):
         return None
 
     def visit_BinOp(self, node: ast.BinOp) -> int | None:  # noqa: N802
-        left = self.visit(node.left)
-        right = self.visit(node.right)
+        left = self.evaluate(node.left)
+        right = self.evaluate(node.right)
         if left is None or right is None:
             return None
         operation = self._BINOPS.get(type(node.op))

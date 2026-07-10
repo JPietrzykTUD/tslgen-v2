@@ -26,6 +26,8 @@ from tslc.catalog.test_promotion import build_test_cases
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
 from tslc.syntax.ast import (
     ParsedPrimitiveDeclaration,
+    ParsedTslAttribute,
+    ParsedTslField,
     ParsedTslScalarValue,
 )
 
@@ -121,7 +123,7 @@ def _expand_wildcards(attributes: dict[str, str]) -> list[dict[str, str]]:
 
 
 
-def _attribute_value(attribute) -> str:  # noqa: ANN001 - ParsedTslAttribute
+def _attribute_value(attribute: ParsedTslAttribute) -> str:
     value = attribute.value
     return value.text if isinstance(value, ParsedTslScalarValue) else ""
 
@@ -134,7 +136,7 @@ def _param_type_rules(declaration: ParsedPrimitiveDeclaration) -> tuple[ParamTyp
             for entry in _children(parameter):
                 condition = _parse_param_type_condition(entry.key.text)
                 type_expr = _field_text(entry)
-                if condition is _INVALID_PARAM_TYPE_CONDITION or not type_expr:
+                if condition is None or not type_expr:
                     continue
                 attribute_name, attribute_value = condition
                 rules.append(
@@ -150,16 +152,15 @@ def _param_type_rules(declaration: ParsedPrimitiveDeclaration) -> tuple[ParamTyp
 
 
 
-_INVALID_PARAM_TYPE_CONDITION = object()
-
-
-def _parse_param_type_condition(text: str) -> tuple[str | None, str | None] | object:
+def _parse_param_type_condition(
+    text: str,
+) -> tuple[str | None, str | None] | None:
     condition = _unquote_key(text)
     if condition == "default":
         return (None, None)
     match = _PARAM_TYPE_CONDITION_RE.fullmatch(condition)
     if match is None:
-        return _INVALID_PARAM_TYPE_CONDITION
+        return None
     return match.group(1), match.group(2)
 
 
@@ -192,14 +193,14 @@ def _generic_params(declaration: ParsedPrimitiveDeclaration) -> tuple[GenericPar
     )
 
 
-def _generic_param_base_types(entry) -> tuple[str, ...]:  # noqa: ANN001
+def _generic_param_base_types(entry: ParsedTslField) -> tuple[str, ...]:
     direct = _list_text(_child(entry, "base_types"))
     nested = _list_text(_child(_child(entry, "constraints"), "base_types"))
     return nested or direct
 
 
 def _generic_param_base_width_constraints(
-    entry,  # noqa: ANN001
+    entry: ParsedTslField,
 ) -> tuple[GenericParamBaseWidthConstraint, ...]:
     constraints = _child(entry, "constraints")
     if constraints is None:

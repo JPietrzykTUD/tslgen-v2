@@ -10,20 +10,25 @@ from tslc.catalog.scalar_types import (
     signed_of,
     unsigned_of,
 )
-from tslc.lower._query_model import BoolValue, TextValue, TypeValue
+from tslc.lower._query_model import BoolValue, QueryValue, TextValue, TypeValue
+from tslc.lower.context import LoweringSession
 
 
 class BaseInQuery:
     head = "base::in"
 
-    def apply(self, args, context):  # noqa: ANN001 - protocol-typed
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         return TypeValue(context.env.type_tag)
 
 
 class SignedOfQuery:
     head = "base::signed_of"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if len(args) != 1 or not isinstance(args[0], TypeValue):
             return None
         return TypeValue(signed_of(args[0].type_tag))
@@ -34,7 +39,9 @@ class UnsignedOfQuery:
 
     head = "base::unsigned_of"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if len(args) != 1 or not isinstance(args[0], TypeValue):
             return None
         return TypeValue(unsigned_of(args[0].type_tag))
@@ -45,7 +52,9 @@ class TypeQuery:
 
     head = "type"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         return args[0] if len(args) == 1 else None
 
 
@@ -54,7 +63,9 @@ class ValueQuery:
 
     head = "value"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         return args[0] if len(args) == 1 else None
 
 
@@ -63,7 +74,9 @@ class SelectQuery:
 
     head = "select"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if len(args) != 3 or not isinstance(args[0], BoolValue):
             return None
         true_value = args[1]
@@ -78,7 +91,9 @@ class IntrinPrefixQuery:
 
     head = "intrin::prefix"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if args:
             return None
         fragment = context.env.extension.compose_prefix.get(context.env.backend.backend_id)
@@ -90,7 +105,9 @@ class IntrinSuffixQuery:
 
     head = "intrin::suffix"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if not args:
             fragment = context.env.extension.compose_suffix_by_type.get(context.env.type_tag)
             return TextValue(fragment) if fragment is not None else None
@@ -112,10 +129,15 @@ class IsSameQuery:
 
     head = "type::is_same"
 
-    def apply(self, args, context):  # noqa: ANN001
-        if len(args) != 2 or not all(isinstance(arg, TypeValue) for arg in args):
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
+        if len(args) != 2:
             return None
-        return BoolValue(args[0].type_tag == args[1].type_tag)
+        left, right = args
+        if not isinstance(left, TypeValue) or not isinstance(right, TypeValue):
+            return None
+        return BoolValue(left.type_tag == right.type_tag)
 
 
 class SizeBytesQuery:
@@ -123,7 +145,9 @@ class SizeBytesQuery:
 
     head = "type::size_bytes"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if len(args) != 1 or not isinstance(args[0], TypeValue):
             return None
         return TextValue(str(scalar_byte_width_or_default(args[0].type_tag)))
@@ -134,7 +158,9 @@ class SizeBitsQuery:
 
     head = "type::size_bits"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if len(args) != 1 or not isinstance(args[0], TypeValue):
             return None
         return TextValue(str(scalar_bit_width_or_default(args[0].type_tag)))
@@ -145,10 +171,15 @@ class SameSizeQuery:
 
     head = "type::same_size"
 
-    def apply(self, args, context):  # noqa: ANN001
-        if len(args) != 2 or not all(isinstance(arg, TypeValue) for arg in args):
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
+        if len(args) != 2:
             return None
-        return BoolValue(same_scalar_width(args[0].type_tag, args[1].type_tag))
+        left, right = args
+        if not isinstance(left, TypeValue) or not isinstance(right, TypeValue):
+            return None
+        return BoolValue(same_scalar_width(left.type_tag, right.type_tag))
 
 
 class IsSignedQuery:
@@ -156,7 +187,9 @@ class IsSignedQuery:
 
     head = "type::is_signed"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if len(args) != 1:
             return None
         arg = args[0]
@@ -172,7 +205,9 @@ class AttributeQuery:
 
     head = "primitive::attribute"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if len(args) != 1 or not isinstance(args[0], TextValue):
             return None
         return BoolValue(context.env.attributes.get(args[0].as_text()) == "true")

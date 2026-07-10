@@ -29,6 +29,7 @@ from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.syntax.ast import (
     ParsedPrimitiveDeclaration,
     ParsedTslAttribute,
+    ParsedTslField,
 )
 
 _KNOWN_GENERIC_PARAM_KINDS = frozenset({"bool", "int", "simd_type"})
@@ -254,7 +255,7 @@ def _validate_generic_params(
 
 def _validate_generic_param_constraints(
     name: str,
-    constraints,
+    constraints: ParsedTslField,
     kind: str | None,
     specialize_base: bool,
     diagnostics: list[Diagnostic],
@@ -379,7 +380,7 @@ def _validate_param_types(
                 )
             for entry in children(parameter):
                 parsed = _parse_param_type_condition(entry.key.text)
-                if parsed is _INVALID_PARAM_TYPE_CONDITION:
+                if parsed is None:
                     diagnostics.append(
                         diagnostic_at(
                             severity="error",
@@ -436,6 +437,7 @@ def _validate_param_types(
                         )
                     )
                     continue
+                assert attribute_value is not None
                 allowed = _KNOWN_PRIMITIVE_ATTRIBUTES.get(attribute_name, frozenset())
                 if attribute_value not in allowed or attribute_value == "*":
                     invalid_enum(
@@ -475,16 +477,15 @@ def _validate_param_types(
                     )
 
 
-_INVALID_PARAM_TYPE_CONDITION = object()
-
-
-def _parse_param_type_condition(text: str) -> tuple[str | None, str | None] | object:
+def _parse_param_type_condition(
+    text: str,
+) -> tuple[str | None, str | None] | None:
     condition = unquote_key(text)
     if condition == "default":
         return (None, None)
     match = _PARAM_TYPE_CONDITION_RE.fullmatch(condition)
     if match is None:
-        return _INVALID_PARAM_TYPE_CONDITION
+        return None
     return match.group(1), match.group(2)
 
 

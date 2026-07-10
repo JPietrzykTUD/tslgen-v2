@@ -81,7 +81,7 @@ class BackendSignatureTypes:
                 f"backend {self.backend_id!r} signature kind {kind!r} {form} "
                 "projection requires " + ", ".join(missing)
             )
-        return template.format(**values)
+        return str(template.format(**values))
 
 
 CPP_SIGNATURE_TYPES = BackendSignatureTypes(

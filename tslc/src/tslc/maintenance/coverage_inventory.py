@@ -73,7 +73,10 @@ def _build_verified_primitives() -> set[str]:
                 and isinstance(node.value, ast.List)
             ):
                 verified |= {
-                    el.value for el in node.value.elts if isinstance(el, ast.Constant)
+                    el.value
+                    for el in node.value.elts
+                    if isinstance(el, ast.Constant)
+                    and isinstance(el.value, str)
                 }
     return verified
 
@@ -157,6 +160,9 @@ def main() -> int:
     catalog = CatalogBuilder().build(
         TslParser(load_default_tsl_grammar()).parse(SourceLoader().load_dir(_DATA_ROOT).documents)
     ).catalog
+    if catalog is None:
+        print("ERROR: catalog promotion failed", file=sys.stderr)
+        return 1
     names = sorted({p.name for p in catalog.primitives})
     backend_ids = registered_backend_ids()
     sigs: dict[str, set[str]] = defaultdict(set)
@@ -182,11 +188,13 @@ def main() -> int:
     }
     skips: Counter[str] = Counter()
     reasons: dict[str, Counter[str]] = defaultdict(Counter)
-    for entry in result.coverage:
-        coverage_by_backend[entry.backend][entry.primitive].add(entry.extension)
-    for entry in result.skipped:
-        skips[entry.primitive] += 1
-        reasons[entry.primitive][entry.reason] += 1
+    for coverage_entry in result.coverage:
+        coverage_by_backend[coverage_entry.backend][coverage_entry.primitive].add(
+            coverage_entry.extension
+        )
+    for skipped_entry in result.skipped:
+        skips[skipped_entry.primitive] += 1
+        reasons[skipped_entry.primitive][skipped_entry.reason] += 1
 
     def status(name: str) -> str:
         emitted = any(coverage[name] for coverage in coverage_by_backend.values())
@@ -202,8 +210,8 @@ def main() -> int:
     total_emitted = len(result.coverage)
     total_skipped = len(result.skipped)
     histogram: Counter[str] = Counter()
-    for entry in result.skipped:
-        histogram[_category(entry.reason)] += 1
+    for skipped_entry in result.skipped:
+        histogram[_category(skipped_entry.reason)] += 1
     backend_label = "/".join(backend_ids)
     parity = all(
         len({frozenset(coverage[name]) for coverage in coverage_by_backend.values()}) <= 1

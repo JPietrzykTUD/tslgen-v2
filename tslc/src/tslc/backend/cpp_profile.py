@@ -18,7 +18,10 @@ from tslc.target_text import TemplateApplication
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
-def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) -> str:
+def _cpp_includes(
+    emitted_exts: Sequence[str],
+    extensions: Mapping[str, Extension],
+) -> str:
     lines = [
         '#include "tsl_core.hpp"',
         '#include "tsl_primitives.hpp"',

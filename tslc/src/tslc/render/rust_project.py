@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from tslc.backend.rust import RustBackend
 from tslc.backend.emitted_profile import (
     EmittedProfile,
@@ -153,7 +153,10 @@ def rust_linker(
     return capability.backend("rust").linker
 
 
-def _rust_arch_use(emitted_exts: list[str], extensions: Mapping[str, Extension]) -> str:
+def _rust_arch_use(
+    emitted_exts: Sequence[str],
+    extensions: Mapping[str, Extension],
+) -> str:
     modules = {
         module
         for ext in emitted_exts

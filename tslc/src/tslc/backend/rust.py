@@ -194,16 +194,21 @@ class RustBackend:
             # the slot is monomorphized at a concrete lane count (a numeric `lane_parameter` like
             # "16"), in which case the impl is over a concrete `Generic<16>` with no lane generic.
             lane_parameter = spec.lane_parameter
+            has_lane_generic = (
+                spec.uses_sized_vector
+                and lane_parameter is not None
+                and not lane_parameter.isdigit()
+            )
             impl_generics = (
                 [f"const {lane_parameter}: usize"]
-                if spec.uses_sized_vector and not lane_parameter.isdigit()
+                if has_lane_generic
                 else []
             ) + [
                 f"const {name}: {typ}" for name, typ, _ in spec.generic_params
             ]
             impl_generic_names = (
                 [lane_parameter]
-                if spec.uses_sized_vector and not lane_parameter.isdigit()
+                if has_lane_generic and lane_parameter is not None
                 else []
             ) + [name for name, _, _ in spec.generic_params]
             vec = _vector_type(spec)
@@ -712,8 +717,12 @@ def _impl_generic_parts(shape: LoweredSpecialization) -> tuple[list[str], list[s
 
     const_decls: list[str] = []
     const_names: list[str] = []
-    if shape.uses_sized_vector and not shape.lane_parameter.isdigit():
-        lane_parameter = shape.lane_parameter
+    lane_parameter = shape.lane_parameter
+    if (
+        shape.uses_sized_vector
+        and lane_parameter is not None
+        and not lane_parameter.isdigit()
+    ):
         const_decls.append(f"const {lane_parameter}: usize")
         const_names.append(lane_parameter)
     if shape.immediate is not None:
@@ -808,8 +817,10 @@ def _params(
         if override is not None:
             typ = override
         elif kind == "vt":
+            assert vt_type is not None
             typ = vt_type
         elif kind == DEFAULT_SUPPORT_POLICY.index_vector_kind:
+            assert vidx_type is not None
             typ = vidx_type
         else:
             typ = _param_kind_type(kind, owner)

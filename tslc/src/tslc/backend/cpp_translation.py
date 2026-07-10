@@ -39,6 +39,8 @@ class _CppTypes:
         if base is None:
             return None
         if uses_sized_vector:
+            if lane_parameter is None:
+                return None
             # A sized-vector target is projected through the generated sized-vector substrate.
             return (
                 f"typename "

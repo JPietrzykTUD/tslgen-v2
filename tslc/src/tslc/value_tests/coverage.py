@@ -10,6 +10,7 @@ from tslc.value_tests.model import (
     ValueTestCasePlan,
     ValueTestCoverageEntry,
     ValueTestParityEntry,
+    ValueTestCoverageStatus,
 )
 
 CoverageIdentity = tuple[str, str, str, str | None]
@@ -40,7 +41,7 @@ def case_coverage(
     unplanned_reason: str | None = None,
 ) -> ValueTestCoverageEntry:
     if supported:
-        status = (
+        status: ValueTestCoverageStatus = (
             "compile_only_emitted"
             if all(case.kind == "compile_only" for case in supported)
             else "emitted"

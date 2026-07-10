@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import TypeGuard
 
 from tslc.backend.emitted_profile import used_type_specs
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
@@ -678,7 +679,9 @@ def _rust_algorithm_vector_mappings(
     return "\n\n".join(lines)
 
 
-def _rust_algorithm_vector_is_mappable(extension: Extension | None) -> bool:
+def _rust_algorithm_vector_is_mappable(
+    extension: Extension | None,
+) -> TypeGuard[Extension]:
     if extension is None:
         return False
     if DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):

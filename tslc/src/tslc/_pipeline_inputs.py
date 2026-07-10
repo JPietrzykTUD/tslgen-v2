@@ -24,10 +24,17 @@ from tslc.value_tests import HarnessPrimitiveNames, discover_harness_primitives
 
 
 class _InputRequest(Protocol):
-    source_paths: tuple[Path, ...]
-    machine_profiles_path: Path
-    backends: tuple[str, ...]
-    test_harness: bool
+    @property
+    def source_paths(self) -> tuple[Path, ...]: ...
+
+    @property
+    def machine_profiles_path(self) -> Path: ...
+
+    @property
+    def backends(self) -> tuple[str, ...]: ...
+
+    @property
+    def test_harness(self) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)

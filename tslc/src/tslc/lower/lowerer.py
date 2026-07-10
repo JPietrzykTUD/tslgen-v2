@@ -41,6 +41,7 @@ from tslc.lower.context import (
     LaneListParameter,
     LoweringEnv,
     LoweringScope,
+    LoweringSession,
 )
 from tslc.lower._diagnostics import (
     implementation_source as _implementation_source,
@@ -410,7 +411,7 @@ class Lowerer:
             else context
         )
         param_type_overrides = _param_type_overrides(
-            selected.primitive,
+            selected,
             parameters,
             param_context,
             self._region_lowerers,
@@ -847,13 +848,14 @@ def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
 
 
 def _param_type_overrides(
-    primitive: Primitive,
+    selected: SelectedImplementation,
     parameters: tuple[str, ...],
     context: LoweringSession,
     region_lowerers: tuple[RegionLowerer, ...],
 ) -> tuple[str | None, ...]:
+    primitive = selected.primitive
     overrides: list[str | None] = []
-    renderer = ExpressionRenderer(context, region_lowerers)
+    renderer = ExpressionRenderer(context, selected, region_lowerers)
     for parameter_name in parameters:
         rule = next(
             (

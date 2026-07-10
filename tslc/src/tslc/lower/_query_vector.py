@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from tslc.catalog.model import Extension
-from tslc.lower._query_model import TextValue, TypeValue
+from tslc.lower._query_model import QueryValue, TextValue, TypeValue
 from tslc.lower.context import LoweringSession, SimdTypeParameterValue, VectorValue
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
@@ -74,7 +74,9 @@ class RegisterQuery:
 
     head = "vector::register"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         return TextValue(context.env.backend.types.register_type_spelling())
 
 
@@ -83,10 +85,13 @@ class RegisterGenericQuery:
 
     head = "register::generic"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if len(args) != 1:
             return None
         arg = args[0]
+        lane_parameter: str | None
         if isinstance(arg, TypeValue):
             base_tag, isa = arg.type_tag, context.env.extension.isa_name
             uses_sized_vector = DEFAULT_SUPPORT_POLICY.uses_sized_vector(
@@ -116,7 +121,9 @@ class MaskQuery:
 
     head = "vector::mask"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         return TextValue(context.env.backend.types.mask_type_spelling())
 
 
@@ -125,7 +132,9 @@ class ImaskQuery:
 
     head = "vector::imask"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if context.env.extension.vector_bits == 0:
             if (
                 DEFAULT_SUPPORT_POLICY.register_is_base(context.env.extension)
@@ -140,7 +149,9 @@ class VectorAlignmentQuery:
 
     head = "vector::alignment"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         return TextValue(
             str(
                 DEFAULT_SUPPORT_POLICY.vector_alignment_bytes(
@@ -155,7 +166,9 @@ class VectorLengthQuery:
 
     head = "vector::length"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if context.env.concrete_lanes is not None:
             return TextValue(str(context.env.concrete_lanes))
         if DEFAULT_SUPPORT_POLICY.uses_scalable_vector(context.env.extension):
@@ -172,7 +185,9 @@ class VectorRuntimeLengthQuery:
 
     head = "vector::runtime_length"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if args:
             return None
         if context.env.concrete_lanes is not None:
@@ -196,7 +211,9 @@ class AsExtensionQuery:
 
     head = "vector::as_extension"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if len(args) != 1 or not isinstance(args[0], TextValue):
             return None
         ext = args[0].as_text()
@@ -211,7 +228,9 @@ class AsBaseQuery:
 
     head = "vector::as_base"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if len(args) != 1 or not isinstance(args[0], TypeValue):
             return None
         return _vector_value(args[0].type_tag, context)
@@ -222,7 +241,9 @@ class WindowBaseQuery:
 
     head = "vector::window_base"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if len(args) != 1 or not isinstance(args[0], TypeValue):
             return None
         to_base = args[0].type_tag
@@ -267,7 +288,9 @@ class VectorAsQuery:
 
     head = "vector::as"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if len(args) != 2:
             return None
         ext_arg, base_arg = args
@@ -281,7 +304,9 @@ class BaseGenericQuery:
 
     head = "base::generic"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if len(args) != 1:
             return None
         arg = args[0]
@@ -301,7 +326,9 @@ class GenericLengthQuery:
 
     head = "generic::length"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if len(args) != 1:
             return None
         value = args[0]
@@ -325,7 +352,9 @@ class GenericRuntimeLengthQuery:
 
     head = "generic::runtime_length"
 
-    def apply(self, args, context):  # noqa: ANN001
+    def apply(
+        self, args: tuple[QueryValue, ...], context: LoweringSession
+    ) -> QueryValue | None:
         if len(args) != 1:
             return None
         value = args[0]
@@ -368,20 +397,14 @@ def _simd_type_param_base_spelling(
     value: SimdTypeParameterValue,
     context: LoweringSession,
 ) -> str | None:
-    types = getattr(getattr(context.env, "backend", None), "types", None)
-    if types is None:
-        return None
-    return types.simd_type_param_base_spelling(value.name)
+    return context.env.backend.types.simd_type_param_base_spelling(value.name)
 
 
 def _simd_type_param_register_spelling(
     value: SimdTypeParameterValue,
     context: LoweringSession,
 ) -> str | None:
-    types = getattr(getattr(context.env, "backend", None), "types", None)
-    if types is None:
-        return None
-    return types.simd_type_param_register_spelling(value.name)
+    return context.env.backend.types.simd_type_param_register_spelling(value.name)
 
 
 def _simd_type_param_lane_count_spelling(
@@ -390,7 +413,7 @@ def _simd_type_param_lane_count_spelling(
     *,
     runtime: bool,
 ) -> str | None:
-    types = getattr(getattr(context.env, "backend", None), "types", None)
-    if types is None:
-        return None
-    return types.simd_type_param_lane_count_spelling(value.name, runtime=runtime)
+    return context.env.backend.types.simd_type_param_lane_count_spelling(
+        value.name,
+        runtime=runtime,
+    )

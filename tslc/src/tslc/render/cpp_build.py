@@ -393,7 +393,11 @@ def _cmake_list(values: Sequence[str]) -> str:
 
 
 def _cmake_quote(value: str) -> str:
-    escaped = value.translate(str.maketrans({'"': r"\"", "\\": r"\\"}))
+    translations: dict[int, str | int | None] = {
+        ord('"'): r"\"",
+        ord("\\"): r"\\",
+    }
+    escaped = value.translate(str.maketrans(translations))
     return '"' + escaped + '"'
 
 

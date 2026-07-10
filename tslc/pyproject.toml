@@ -29,11 +29,7 @@ addopts = "--basetemp=tslctmp/pytest"
 [tool.mypy]
 python_version = "3.14"
 files = [
-  "src/tslc/api.py",
-  "src/tslc/output/writer.py",
-  "src/tslc/value_tests/case_components.py",
-  "src/tslc/value_tests/case_capabilities.py",
-  "src/tslc/value_tests/case_plan.py",
+  "src/tslc",
 ]
 follow_imports = "silent"
 check_untyped_defs = true

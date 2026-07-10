@@ -295,10 +295,9 @@ def _cpp_target_preflight_command(
     profile: VerifyProfile,
     config: BuildVerifierConfig,
     compiler: tuple[str, ...],
-) -> BuildCommand | Diagnostic | None:
+) -> BuildCommand | Diagnostic:
     target = cpp_target(profile, config)
-    if target is None:
-        return None
+    assert target is not None
 
     project_root = root / backend.root_path
     preflight_dir = project_root / "build" / "_compiler_preflight" / profile.file_stem

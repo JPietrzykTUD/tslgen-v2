@@ -332,8 +332,8 @@ def _catalog_type_tags(catalog: Catalog) -> tuple[str, ...]:
 
 def _type_member_sources(
     parsed: OuterTslParseResult,
-) -> dict[str, SourceSpan]:
-    sources: dict[str, SourceSpan] = {}
+) -> dict[str, SourceSpan | None]:
+    sources: dict[str, SourceSpan | None] = {}
     for document in parsed.documents:
         for declaration in document.declarations:
             if not isinstance(declaration, ParsedBlockDeclaration) or declaration.kind != "types":
@@ -351,17 +351,19 @@ def _type_member_sources(
     return sources
 
 
-def _inherit_sources(parsed: OuterTslParseResult | None) -> dict[str, SourceSpan]:
+def _inherit_sources(
+    parsed: OuterTslParseResult | None,
+) -> dict[str, SourceSpan | None]:
     return _extension_field_sources(parsed, "inherits")
 
 
 def _extension_field_sources(
     parsed: OuterTslParseResult | None,
     field_name: str,
-) -> dict[str, SourceSpan]:
+) -> dict[str, SourceSpan | None]:
     if parsed is None:
         return {}
-    sources: dict[str, SourceSpan] = {}
+    sources: dict[str, SourceSpan | None] = {}
     for document in parsed.documents:
         for declaration in document.declarations:
             if not isinstance(declaration, ParsedBlockDeclaration) or declaration.kind != "extension":
@@ -372,10 +374,12 @@ def _extension_field_sources(
     return sources
 
 
-def _extension_sources(parsed: OuterTslParseResult | None) -> dict[str, SourceSpan]:
+def _extension_sources(
+    parsed: OuterTslParseResult | None,
+) -> dict[str, SourceSpan | None]:
     if parsed is None:
         return {}
-    sources: dict[str, SourceSpan] = {}
+    sources: dict[str, SourceSpan | None] = {}
     for document in parsed.documents:
         for declaration in document.declarations:
             if not isinstance(declaration, ParsedBlockDeclaration) or declaration.kind != "extension":

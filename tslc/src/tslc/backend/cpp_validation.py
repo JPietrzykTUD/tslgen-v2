@@ -50,7 +50,10 @@ def resolve_cpp_compile_guards(
                             f"conflicting C++ compile guard {guard.name!r}"
                             f"{profile_label}"
                         ),
-                        source=guard.source or extension.source,
+                        source=(
+                            guard.source
+                            or (extension.source if extension is not None else None)
+                        ),
                     )
                 )
                 continue
@@ -64,7 +67,10 @@ def resolve_cpp_compile_guards(
                             f"conflicting C++ compile guard values for {guard.macro}"
                             f"{profile_label}: {required[0]} and {guard.equals}"
                         ),
-                        source=guard.source or extension.source,
+                        source=(
+                            guard.source
+                            or (extension.source if extension is not None else None)
+                        ),
                     )
                 )
                 continue

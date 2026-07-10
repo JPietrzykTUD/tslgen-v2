@@ -16,7 +16,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from types import TracebackType
+from typing import TYPE_CHECKING, TypeVar
 
 from tslc.backend.translation import BackendDialect
 from tslc.catalog.model import Catalog, Extension, ImplementationSafety
@@ -31,7 +32,8 @@ if TYPE_CHECKING:
     from tslc.lower.dependencies import CallDependencyOrigin
     from tslc.select.selector import SelectedImplementation
 
-_MAPPING_PROXY_TYPE = type(MappingProxyType({}))
+_K = TypeVar("_K")
+_V = TypeVar("_V")
 
 
 @dataclass(frozen=True, slots=True)
@@ -357,7 +359,12 @@ class _ImplementationStateSuppression:
     def __enter__(self) -> None:
         self._effects._implementation_state_suppression_depth += 1
 
-    def __exit__(self, exc_type, exc, traceback) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self._effects._implementation_state_suppression_depth -= 1
 
 
@@ -368,7 +375,7 @@ class LoweringSession:
     effects: LoweringEffects = field(default_factory=LoweringEffects)
 
 
-def _frozen_mapping(value: Mapping) -> Mapping:
-    if isinstance(value, _MAPPING_PROXY_TYPE):
+def _frozen_mapping(value: Mapping[_K, _V]) -> Mapping[_K, _V]:
+    if isinstance(value, MappingProxyType):
         return value
     return MappingProxyType(dict(value))
