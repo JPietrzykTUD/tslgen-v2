@@ -63,7 +63,15 @@ class CastLowerer:
             )
 
         if type_text.rstrip().endswith("*"):
-            return self._legacy_pointer_cast(type_text, region, context, render(args[1]))
+            context.effects.skip(
+                "TSL-LOWER-UNSUPPORTED-CAST",
+                (
+                    "legacy pointer cast syntax is unsupported; use "
+                    "cast<reinterpret, type=ptr|const_ptr>"
+                ),
+                source=region.source,
+            )
+            return region.full_text
 
         key = f"cast_{selector.variant}"
         if context.env.backend.templates.template(key) is None:
@@ -107,24 +115,6 @@ class CastLowerer:
             return region.full_text
         return context.env.backend.syntax.render_pointer_cast(
             inner, is_const=is_const, expr=expr
-        )
-
-    def _legacy_pointer_cast(
-        self,
-        type_text: str,
-        region: Region,
-        context: LoweringSession,
-        expr: RenderField,
-    ) -> RenderField:
-        stripped = type_text.rstrip()[:-1].rstrip()  # drop the trailing `*`
-        is_const = stripped.endswith("const")
-        inner_text = stripped[: -len("const")].rstrip() if is_const else stripped
-        return self._pointer_cast(
-            inner_text,
-            is_const=is_const,
-            region=region,
-            context=context,
-            expr=expr,
         )
 
     def _type_spelling(
