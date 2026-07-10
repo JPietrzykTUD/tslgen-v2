@@ -175,4 +175,8 @@ if(ENABLE_VQSORT_BENCHMARK)
   target_link_libraries(benchmark_quicksort_pairwise_swap PRIVATE hwy_contrib)
 endif()
 
+add_executable(benchmark_compact_merge benchmark_compact_merge.cpp)
+target_compile_features(benchmark_compact_merge PRIVATE cxx_std_17)
+target_link_libraries(benchmark_compact_merge PRIVATE tsl::tsl)
+
 add_test(NAME test_sort COMMAND test_sort)

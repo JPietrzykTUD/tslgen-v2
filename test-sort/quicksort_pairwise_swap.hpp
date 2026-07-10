@@ -70,6 +70,47 @@ class TslPairWiseSwapQuickSorter {
     return median;
   }
 
+  template <class DataSimdStyle>
+  static auto low_lane_mask(std::size_t count) {
+    auto constexpr lane_count = DataSimdStyle::lane_count_v;
+    auto const full_mask = tsl::to_integral<DataSimdStyle>(tsl::mask_true<DataSimdStyle>());
+    return tsl::shift_right_imask<DataSimdStyle>(
+      full_mask,
+      lane_count - count
+    );
+  }
+
+  template <class DataSimdStyle>
+  static auto lane_mask(std::size_t offset, std::size_t count) {
+    return tsl::shift_left_imask<DataSimdStyle>(
+      low_lane_mask<DataSimdStyle>(count),
+      offset
+    );
+  }
+
+  template <class DataSimdStyle>
+  static auto expand_three_compacted_groups(
+    typename tsl::reg_param<DataSimdStyle>::type first_vec,
+    std::size_t first_count,
+    typename tsl::reg_param<DataSimdStyle>::type second_vec,
+    std::size_t second_count,
+    typename tsl::reg_param<DataSimdStyle>::type third_vec,
+    std::size_t third_count
+  ) -> typename DataSimdStyle::register_type {
+    auto result = first_vec;
+    result = tsl::expand<DataSimdStyle>(
+      lane_mask<DataSimdStyle>(first_count, second_count),
+      result,
+      second_vec
+    );
+    result = tsl::expand<DataSimdStyle>(
+      lane_mask<DataSimdStyle>(first_count + second_count, third_count),
+      result,
+      third_vec
+    );
+    return result;
+  }
+
   template <class DataSimdStyle, partition_mode PartitionMode>
   auto quicksort_partition(
     DataType * left_ptr,
@@ -134,56 +175,32 @@ class TslPairWiseSwapQuickSorter {
         auto const compact_good_r_vec     = tsl::compress<DataSimdStyle>(tsl::mask_binary_not<DataSimdStyle>(bad_lanes_r_mask), data_right_vec);
 
         auto const swappable_lanes_count  = std::min(bad_lanes_l_count, bad_lanes_r_count);
-        auto const full_mask              = tsl::to_integral<DataSimdStyle>(tsl::mask_true<DataSimdStyle>());
-        auto const low_lane_mask          = [full_mask](std::size_t count) {
-                                              return tsl::shift_right_imask<DataSimdStyle>(
-                                                full_mask,
-                                                lane_count - count
-                                              );
-                                            };
-        auto const lane_mask              = [&low_lane_mask](std::size_t offset, std::size_t count) {
-                                              return tsl::shift_left_imask<DataSimdStyle>(
-                                                low_lane_mask(count),
-                                                offset
-                                              );
-                                            };
-        auto const swap_mask              = low_lane_mask(swappable_lanes_count);
+        auto const swap_mask              = low_lane_mask<DataSimdStyle>(swappable_lanes_count);
         auto const carry_l_count          = bad_lanes_l_count - swappable_lanes_count;
         auto const carry_r_count          = bad_lanes_r_count - swappable_lanes_count;
         auto const good_l_count           = lane_count - bad_lanes_l_count;
         auto const good_r_count           = lane_count - bad_lanes_r_count;
-        auto const carry_l_select_mask    = tsl::mask_binary_xor<DataSimdStyle>(swap_mask, low_lane_mask(bad_lanes_l_count));
-        auto const carry_r_select_mask    = tsl::mask_binary_xor<DataSimdStyle>(swap_mask, low_lane_mask(bad_lanes_r_count));
+        auto const carry_l_select_mask    = tsl::mask_binary_xor<DataSimdStyle>(swap_mask, low_lane_mask<DataSimdStyle>(bad_lanes_l_count));
+        auto const carry_r_select_mask    = tsl::mask_binary_xor<DataSimdStyle>(swap_mask, low_lane_mask<DataSimdStyle>(bad_lanes_r_count));
 
         auto const compact_carry_l_vec    = tsl::compress<DataSimdStyle>(carry_l_select_mask, compact_bad_l_vec);
         auto const compact_carry_r_vec    = tsl::compress<DataSimdStyle>(carry_r_select_mask, compact_bad_r_vec);
 
-        auto const left_good_mask         = lane_mask(swappable_lanes_count, good_l_count);
-        auto const carry_l_write_mask     = lane_mask(swappable_lanes_count + good_l_count, carry_l_count);
-        auto const carry_r_write_mask     = low_lane_mask(carry_r_count);
-        auto const right_swap_mask        = lane_mask(carry_r_count, swappable_lanes_count);
-        auto const right_good_mask        = lane_mask(carry_r_count + swappable_lanes_count, good_r_count);
-        auto left_write_vec               = compact_bad_r_vec;
-        left_write_vec                    = tsl::expand<DataSimdStyle>(
-                                              left_good_mask,
-                                              left_write_vec,
-                                              compact_good_l_vec
+        auto const left_write_vec         = expand_three_compacted_groups<DataSimdStyle>(
+                                              compact_bad_r_vec,
+                                              swappable_lanes_count,
+                                              compact_good_l_vec,
+                                              good_l_count,
+                                              compact_carry_l_vec,
+                                              carry_l_count
                                             );
-        left_write_vec                    = tsl::expand<DataSimdStyle>(
-                                              carry_l_write_mask,
-                                              left_write_vec,
-                                              compact_carry_l_vec
-                                            );
-        auto right_write_vec              = compact_carry_r_vec;
-        right_write_vec                   = tsl::expand<DataSimdStyle>(
-                                              right_swap_mask,
-                                              right_write_vec,
-                                              compact_bad_l_vec
-                                            );
-        right_write_vec                   = tsl::expand<DataSimdStyle>(
-                                              right_good_mask,
-                                              right_write_vec,
-                                              compact_good_r_vec
+        auto const right_write_vec        = expand_three_compacted_groups<DataSimdStyle>(
+                                              compact_carry_r_vec,
+                                              carry_r_count,
+                                              compact_bad_l_vec,
+                                              swappable_lanes_count,
+                                              compact_good_r_vec,
+                                              good_r_count
                                             );
         tsl::store<DataSimdStyle, false>(left_ptr, left_write_vec);
         tsl::store<DataSimdStyle, false>(right_ptr, right_write_vec);
