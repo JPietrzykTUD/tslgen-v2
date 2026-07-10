@@ -17,8 +17,8 @@ from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyProfile, VerifyRunner
 from tslc.render._common import slug, text
-from tslc.render.rust_algorithm import rust_algorithm_module
-from tslc.render.rust_vectors import rust_registrations
+from tslc.backend.rust_algorithm import rust_algorithm_module
+from tslc.backend.rust_vectors import rust_registrations
 
 
 def rust_artifacts(

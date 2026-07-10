@@ -78,6 +78,10 @@ def test_type_spellings_normalized(catalog: Catalog) -> None:
     assert catalog.type_spellings["rust"]["u64"] == "u64"
 
 
+def test_rust_runtime_has_one_asset_owned_source(catalog: Catalog) -> None:
+    assert "preamble" not in catalog.translations["rust"]
+
+
 def test_to_integral_tests_default_to_unqualified_baseline(catalog: Catalog) -> None:
     primitive = catalog.primitive("to_integral")
     assert primitive is not None

@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 from tslc.backend.cpp_validation import resolve_cpp_compile_guards
-from tslc.backend.emitted_profile import used_type_specs
+from tslc.backend.emitted_profile import EmittedProfile, used_type_specs
+from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
 from tslc.backend.target_capability import (
     cpp_x86_register_helper,
     is_x86_register_extension,
@@ -53,6 +54,17 @@ def _cpp_primitive_tags(profiles: tuple[EmittedProfile, ...]) -> str:
         "",
     ]
     return "\n".join(lines)
+
+
+def cpp_profiles_support_algorithm(profiles: tuple[EmittedProfile, ...]) -> bool:
+    """Whether every emitted C++ profile can expose the static algorithm facade."""
+
+    return bool(profiles) and all(
+        CPP_HELPER_MANIFEST.supports(
+            "algorithm", emitted_profile.specializations("cpp")
+        )
+        for emitted_profile in profiles
+    )
 
 
 def _guard_cpp_profile(
@@ -374,4 +386,3 @@ def _cpp_imask_type(
     if kind == "same_as_mask_type":
         return mask
     return f"typename detail::lane_bitmask_int<{vector_bits}, {base_type}>::type"
-

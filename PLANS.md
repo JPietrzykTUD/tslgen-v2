@@ -133,6 +133,7 @@ Always consider:
 
 ```bash
 python -m compileall -q tslc/src/tslc
+(cd tslc && python -m mypy)
 git diff --check
 ```
 

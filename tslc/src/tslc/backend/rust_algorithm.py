@@ -10,11 +10,11 @@ from tslc.backend.target_capability import rust_extension_tag
 from tslc.catalog.model import Extension
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
-from tslc.render.rust_facades import (
+from tslc.backend.rust_facades import (
     rust_algorithm_primitive_facades,
     rust_public_function_names,
 )
-from tslc.render.rust_vectors import RustVectorRegistration, rust_vector_registrations
+from tslc.backend.rust_vectors import RustVectorRegistration, rust_vector_registrations
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 

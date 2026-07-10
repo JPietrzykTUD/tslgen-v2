@@ -13,7 +13,7 @@ from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.compiler_assets import RenderAssets
 from tslc.output.verify_model import VerifyProfile, VerifyRunner
 from tslc.render._common import slug
-from tslc.render.cpp_profile_header import _cpp_compile_guard_condition
+from tslc.backend.cpp_profile import _cpp_compile_guard_condition
 
 _CMAKE_CXX_FEATURE_FLAG_COMPILERS = "GNU,Clang,AppleClang,IntelLLVM"
 
@@ -394,4 +394,3 @@ def _cmake_quote(value: str) -> str:
 
 def _cmake_cxx_flag(flag: str) -> str:
     return f"$<$<CXX_COMPILER_ID:{_CMAKE_CXX_FEATURE_FLAG_COMPILERS}>:{flag}>"
-

@@ -122,6 +122,7 @@ Run from the repository root unless noted.
 ```bash
 python -m compileall -q tslc/src/tslc
 PYTHONPATH=tslc/src python -m pytest -q tslc/tests
+(cd tslc && python -m mypy)
 git diff --check
 ```
 

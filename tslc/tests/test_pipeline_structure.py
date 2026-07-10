@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from tslc import pipeline
+from tslc.backend import cpp_profile
 from tslc.backend.capability import BackendCapability
 from tslc.backend.cpp_capability import CPP_BACKEND
 from tslc.backend.emitted_profile import EmittedProfile
@@ -20,7 +21,7 @@ from tslc.catalog.machine_profiles import MachineProfile
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
-from tslc.render import cpp_build, cpp_profile_header, cpp_project
+from tslc.render import cpp_build, cpp_project
 from tslc.render.project import render_project
 from tslc.target_text import LoweredBody
 
@@ -41,9 +42,7 @@ def test_pipeline_facade_keeps_input_and_closure_boundaries() -> None:
 
 def test_cpp_project_renderer_has_focused_owned_modules() -> None:
     assert cpp_project.cpp_artifacts.__module__ == "tslc.render.cpp_project"
-    assert cpp_profile_header._cpp_registration.__module__ == (
-        "tslc.render.cpp_profile_header"
-    )
+    assert cpp_profile._cpp_registration.__module__ == "tslc.backend.cpp_profile"
     assert cpp_build.cpp_flags.__module__ == "tslc.render.cpp_build"
 
 
@@ -179,6 +178,20 @@ def test_backend_semantics_do_not_import_project_rendering() -> None:
     )
 
     assert _forbidden_imports(paths, "tslc.render") == []
+
+
+def test_renderers_do_not_own_backend_helper_admission() -> None:
+    package_root = _REPO_ROOT / "tslc" / "src" / "tslc"
+    render_paths = sorted((package_root / "render").rglob("*.py"))
+
+    assert _forbidden_imports(render_paths, "tslc.backend.helper_requirements") == []
+    for old_module in (
+        "cpp_profile_header.py",
+        "rust_algorithm.py",
+        "rust_facades.py",
+        "rust_vectors.py",
+    ):
+        assert not (package_root / "render" / old_module).exists()
 
 
 def test_backend_fact_modules_have_no_function_local_imports() -> None:

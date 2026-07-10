@@ -54,7 +54,7 @@ class ValueTestCasePlan:
         self._validate_expected(requirements)
         self._validate_inputs(requirements)
         self._validate_fuzz(requirements)
-        self._validate_differential_helpers()
+        self._validate_differential_helpers(requirements)
 
     def _validate_common_fields(self) -> None:
         for field_name in (
@@ -87,7 +87,7 @@ class ValueTestCasePlan:
                 )
 
     def _validate_expected(self, requirements: ValueTestCaseRequirements) -> None:
-        expected_len = len(self.expected)
+        expected_len = len(self.expectation.values)
         if requirements.expected == "optional":
             return
         if requirements.expected == "non_empty" and expected_len == 0:
@@ -97,14 +97,15 @@ class ValueTestCasePlan:
         if requirements.expected == "lanes" and expected_len != self.lanes:
             raise ValueError(self._expected_error(f"{self.lanes} lane values"))
         if requirements.expected == "target_lanes":
-            if self.target_lanes is None:
+            target_lanes = self.target.lanes if self.target is not None else None
+            if target_lanes is None:
                 raise ValueError(
                     f"value-test case {self.function_name!r} kind {self.kind!r} "
                     "requires target_lanes"
                 )
-            if expected_len != self.target_lanes:
+            if expected_len != target_lanes:
                 raise ValueError(
-                    self._expected_error(f"{self.target_lanes} target lane values")
+                    self._expected_error(f"{target_lanes} target lane values")
                 )
 
     def _validate_inputs(self, requirements: ValueTestCaseRequirements) -> None:
@@ -112,14 +113,18 @@ class ValueTestCasePlan:
         self._validate_tuple_arity("mask_inputs", requirements.mask_inputs)
         self._validate_tuple_arity("scalar_inputs", requirements.scalar_inputs)
         if requirements.vector_inputs_match_lanes:
-            for index, values in enumerate(self.vector_inputs):
+            for index, values in enumerate(self.inputs.vectors):
                 if len(values) != self.lanes:
                     raise ValueError(
                         f"value-test case {self.function_name!r} kind {self.kind!r} "
                         f"requires vector_inputs[{index}] to have {self.lanes} values"
                     )
         mask_exprs = self.scalable.mask_from_bits_exprs if self.scalable else ()
-        if mask_exprs and self.mask_inputs and len(mask_exprs) != len(self.mask_inputs):
+        if (
+            mask_exprs
+            and self.inputs.masks
+            and len(mask_exprs) != len(self.inputs.masks)
+        ):
             raise ValueError(
                 f"value-test case {self.function_name!r} kind {self.kind!r} "
                 "requires one mask_from_bits expression per mask input"
@@ -127,9 +132,9 @@ class ValueTestCasePlan:
 
     def _validate_tuple_arity(self, field_name: str, arity: InputArity) -> None:
         values = {
-            "vector_inputs": self.vector_inputs,
-            "mask_inputs": self.mask_inputs,
-            "scalar_inputs": self.scalar_inputs,
+            "vector_inputs": self.inputs.vectors,
+            "mask_inputs": self.inputs.masks,
+            "scalar_inputs": self.inputs.scalars,
         }[field_name]
         if arity == "optional":
             return
@@ -158,17 +163,23 @@ class ValueTestCasePlan:
                 "requires positive fuzz_iterations"
             )
 
-    def _validate_differential_helpers(self) -> None:
-        if self.kind not in {"differential", "differential_fuzz"}:
+    def _validate_differential_helpers(
+        self,
+        requirements: ValueTestCaseRequirements,
+    ) -> None:
+        if ValueTestFact.DIFFERENTIAL not in requirements.required_facts:
             return
-        if self.result_kind == "m":
-            if self.to_integral_name is None:
+        differential = self.differential
+        if differential is None:
+            return
+        if self.invocation.result_kind == "m":
+            if differential.to_integral_name is None:
                 raise ValueError(
                     f"value-test case {self.function_name!r} kind {self.kind!r} "
                     "requires to_integral_name for mask results"
                 )
             return
-        if self.to_array_name is None:
+        if differential.to_array_name is None:
             raise ValueError(
                 f"value-test case {self.function_name!r} kind {self.kind!r} "
                 "requires to_array_name for value results"
@@ -219,162 +230,3 @@ class ValueTestCasePlan:
             f"value-test case {self.function_name!r} kind {self.kind!r} "
             f"requires expected to contain {expectation}"
         )
-
-    # Renderers consume these projections; builders construct the typed
-    # components above, so related facts retain one owner.
-    @property
-    def vector_inputs(self) -> tuple[tuple[str, ...], ...]:
-        return self.inputs.vectors
-
-    @property
-    def mask_inputs(self) -> tuple[str, ...]:
-        return self.inputs.masks
-
-    @property
-    def scalar_input(self) -> str | None:
-        return self.inputs.scalar
-
-    @property
-    def scalar_inputs(self) -> tuple[str, ...]:
-        return self.inputs.scalars
-
-    @property
-    def expected(self) -> tuple[str, ...]:
-        return self.expectation.values
-
-    @property
-    def text_expected(self) -> str | None:
-        return self.expectation.text
-
-    @property
-    def result_kind(self) -> str | None:
-        return self.invocation.result_kind
-
-    @property
-    def param_kinds(self) -> tuple[str, ...]:
-        return self.invocation.param_kinds
-
-    @property
-    def axis_args(self) -> tuple[str, ...]:
-        return self.invocation.axis_args
-
-    @property
-    def immediate_value(self) -> str | None:
-        return self.invocation.immediate
-
-    @property
-    def generic_defaults(self) -> tuple[str, ...]:
-        return self.invocation.generic_defaults
-
-    @property
-    def expected_type_tag(self) -> str | None:
-        return self.target.type_tag if self.target is not None else None
-
-    @property
-    def target_base_spelling(self) -> str | None:
-        return self.target.base_spelling if self.target is not None else None
-
-    @property
-    def target_lanes(self) -> int | None:
-        return self.target.lanes if self.target is not None else None
-
-    @property
-    def index_value(self) -> str | None:
-        return self.index.value if self.index is not None else None
-
-    @property
-    def index_type_tag(self) -> str | None:
-        return self.index.type_tag if self.index is not None else None
-
-    @property
-    def index_base_spelling(self) -> str | None:
-        return self.index.base_spelling if self.index is not None else None
-
-    @property
-    def index_lanes(self) -> int | None:
-        return self.index.lanes if self.index is not None else None
-
-    @property
-    def buffer_offset(self) -> int:
-        return self.memory.buffer_offset if self.memory is not None else 0
-
-    @property
-    def buffer_length(self) -> int | None:
-        return self.memory.buffer_length if self.memory is not None else None
-
-    @property
-    def source_offset(self) -> int:
-        return self.memory.source_offset if self.memory is not None else 0
-
-    @property
-    def alignment(self) -> int | None:
-        return self.memory.alignment if self.memory is not None else None
-
-    @property
-    def source_extension(self) -> str | None:
-        if self.scalable is not None:
-            return self.scalable.source_extension
-        if self.representation is not None:
-            return self.representation.source_extension
-        return None
-
-    @property
-    def target_extension(self) -> str | None:
-        return (
-            self.representation.target_extension
-            if self.representation is not None
-            else None
-        )
-
-    @property
-    def from_array_name(self) -> str | None:
-        if self.differential is not None:
-            return self.differential.from_array_name
-        if self.representation is not None:
-            return self.representation.from_array_name
-        return None
-
-    @property
-    def to_array_name(self) -> str | None:
-        if self.differential is not None:
-            return self.differential.to_array_name
-        if self.representation is not None:
-            return self.representation.to_array_name
-        return None
-
-    @property
-    def to_integral_name(self) -> str | None:
-        return self.differential.to_integral_name if self.differential else None
-
-    @property
-    def hardware_extension(self) -> str | None:
-        return self.differential.hardware_extension if self.differential else None
-
-    @property
-    def runtime_lanes_expr(self) -> str | None:
-        return self.scalable.runtime_lanes_expr if self.scalable is not None else None
-
-    @property
-    def mask_from_bits_exprs(self) -> tuple[str, ...]:
-        return self.scalable.mask_from_bits_exprs if self.scalable is not None else ()
-
-    @property
-    def mask_check_expr(self) -> str | None:
-        return self.scalable.mask_check_expr if self.scalable is not None else None
-
-    @property
-    def load_name(self) -> str | None:
-        return self.scalable.load_name if self.scalable is not None else None
-
-    @property
-    def store_name(self) -> str | None:
-        return self.scalable.store_name if self.scalable is not None else None
-
-    @property
-    def fuzz_seed(self) -> int | None:
-        return self.differential.fuzz_seed if self.differential is not None else None
-
-    @property
-    def fuzz_iterations(self) -> int:
-        return self.differential.fuzz_iterations if self.differential is not None else 0
-

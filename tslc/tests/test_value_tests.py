@@ -265,7 +265,7 @@ def test_value_full_corpus_avx2_coverage_is_complete(
     }
     assert unpacked_cases[
         "store_mask_repr_f32_aligned_true_packed_false_mask_unpacked"
-    ].expected_type_tag == "ui32"
+    ].target.type_tag == "ui32"
     assert any(entry.status == "compile_only_emitted" for entry in plan.coverage)
     assert len(plan.coverage) >= 1000
 

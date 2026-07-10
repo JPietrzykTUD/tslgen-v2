@@ -16,11 +16,11 @@ from tslc.value_tests.render_cpp_helpers import (
 
 
 def _mask_to_vector(case: ValueTestCasePlan) -> str:
-    expected = cpp_literal_list(case.expected, case.type_tag)
+    expected = cpp_literal_list(case.expectation.values, case.type_tag)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
-        f"  typename Vec::mask_type mask = {case.mask_inputs[0]}ull;",
+        f"  typename Vec::mask_type mask = {case.inputs.masks[0]}ull;",
         f"  typename Vec::register_type result = tsl::{case.call_name}<Vec>(mask);",
         f"  static const {case.base_spelling} expected[{case.lanes}] = {{{expected}}};",
         f'  return tsl::test::check_lanes<{case.base_spelling}>('
@@ -32,7 +32,7 @@ def _mask_to_vector(case: ValueTestCasePlan) -> str:
 def _immediate(case: ValueTestCasePlan) -> str:
     lines = [f"int {case.function_name}() {{"]
     arg_names = []
-    for position, values in enumerate(case.vector_inputs):
+    for position, values in enumerate(case.inputs.vectors):
         literals = cpp_literal_list(values, case.type_tag)
         lines.append(f"  static const {case.base_spelling} in{position}[{case.lanes}] = {{{literals}}};")
         lines.append(
@@ -43,11 +43,11 @@ def _immediate(case: ValueTestCasePlan) -> str:
             f"  for (std::size_t i = 0; i < {case.lanes}; ++i) a{position}[i] = in{position}[i];"
         )
         arg_names.append(f"a{position}")
-    expected = cpp_literal_list(case.expected, case.type_tag)
+    expected = cpp_literal_list(case.expectation.values, case.type_tag)
     targs = [f"tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>"]
-    if case.immediate_value is not None:
-        targs.append(case.immediate_value)
-    targs.extend(case.generic_defaults)
+    if case.invocation.immediate is not None:
+        targs.append(case.invocation.immediate)
+    targs.extend(case.invocation.generic_defaults)
     lines.append(f"  static const {case.base_spelling} expected[{case.lanes}] = {{{expected}}};")
     lines.append(
         f"  auto result = tsl::{case.call_name}<{', '.join(targs)}>({', '.join(arg_names)});"
@@ -66,7 +66,7 @@ def _compile_only(case: ValueTestCasePlan) -> str:
     ]
     args = _append_call_args(lines, case)
     call = f"tsl::{case.call_name}<Vec>({', '.join(args)})"
-    if case.result_kind == "void":
+    if case.invocation.result_kind == "void":
         lines.append(f"  {call};")
     else:
         lines.append(f"  auto result = {call};")
@@ -76,8 +76,8 @@ def _compile_only(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 def _array_to_vector(case: ValueTestCasePlan) -> str:
-    literals = cpp_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = cpp_literal_list(case.expected, case.type_tag)
+    literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = cpp_literal_list(case.expectation.values, case.type_tag)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
@@ -93,8 +93,8 @@ def _array_to_vector(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 def _broadcast(case: ValueTestCasePlan) -> str:
-    value = cpp_literal(case.scalar_input or "0", case.type_tag)
-    expected = cpp_literal_list(case.expected, case.type_tag)
+    value = cpp_literal(case.inputs.scalar or "0", case.type_tag)
+    expected = cpp_literal_list(case.expectation.values, case.type_tag)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
@@ -108,7 +108,7 @@ def _broadcast(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 def _scalar_vector(case: ValueTestCasePlan) -> str:
-    expected = cpp_literal_list(case.expected, case.type_tag)
+    expected = cpp_literal_list(case.expectation.values, case.type_tag)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
@@ -124,8 +124,8 @@ def _scalar_vector(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 def _vector_to_array(case: ValueTestCasePlan) -> str:
-    literals = cpp_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = cpp_literal_list(case.expected, case.type_tag)
+    literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = cpp_literal_list(case.expectation.values, case.type_tag)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
@@ -147,8 +147,8 @@ def _scalar_result(case: ValueTestCasePlan) -> str:
     ]
     args = _append_call_args(lines, case)
     template_args = ["Vec"]
-    if case.index_value is not None:
-        template_args.append(case.index_value)
+    if case.index is not None and case.index.value is not None:
+        template_args.append(case.index.value)
     result_type = _scalar_result_type(case)
     expected = _scalar_expected(case, result_type)
     lines.append(
@@ -162,8 +162,8 @@ def _scalar_result(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 def _lane_list(case: ValueTestCasePlan) -> str:
-    literals = cpp_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = cpp_literal_list(case.expected, case.type_tag)
+    literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = cpp_literal_list(case.expectation.values, case.type_tag)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",
@@ -179,8 +179,8 @@ def _lane_list(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 def _reduction(case: ValueTestCasePlan) -> str:
-    literals = cpp_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = cpp_literal(case.expected[0], case.type_tag)
+    literals = cpp_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = cpp_literal(case.expectation.values[0], case.type_tag)
     lines = [
         f"int {case.function_name}() {{",
         f"  using Vec = tsl::simd<{case.base_spelling}, tsl::generic<{case.lanes}>>;",

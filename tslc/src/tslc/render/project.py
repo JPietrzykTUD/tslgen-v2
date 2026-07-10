@@ -10,7 +10,6 @@ from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact, ArtifactSet
 from tslc.output.verify_model import VerifyBackend, VerifyProject
 from tslc.render.documentation_project import documentation_artifacts
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.value_tests import ValueTestProjectPlan
 
 _EMPTY_VALUE_TEST_PLAN = ValueTestProjectPlan(profiles=())

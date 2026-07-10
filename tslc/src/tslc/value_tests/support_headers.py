@@ -14,9 +14,22 @@ def support_headers_for_cases(
     headers: set[str] = set()
     for case in cases:
         for extension_name in (
-            case.source_extension,
-            case.target_extension,
-            case.hardware_extension,
+            case.scalable.source_extension if case.scalable is not None else None,
+            (
+                case.representation.source_extension
+                if case.representation is not None
+                else None
+            ),
+            (
+                case.representation.target_extension
+                if case.representation is not None
+                else None
+            ),
+            (
+                case.differential.hardware_extension
+                if case.differential is not None
+                else None
+            ),
         ):
             if extension_name is None:
                 continue

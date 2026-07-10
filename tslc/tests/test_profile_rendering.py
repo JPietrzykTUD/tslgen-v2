@@ -402,12 +402,16 @@ def test_sve_profile_registers_scalable_cpp_simd_types(
     assert "target_compile_definitions(tsl_profile_sve INTERFACE TSL_PROFILE_SVE)" in cmake
     assert "target_compile_options(tsl_profile_sve INTERFACE $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang,IntelLLVM>:-mcpu=a64fx>)" in cmake
     assert any(
-        case.kind == "scalable_golden" and case.source_extension == "sve"
+        case.kind == "scalable_golden"
+        and case.scalable is not None
+        and case.scalable.source_extension == "sve"
         for profile in result.rendered.value_tests.profiles_for("cpp")
         for case in profile.cases
     )
     assert any(
-        case.kind == "scalable_masked" and case.source_extension == "sve"
+        case.kind == "scalable_masked"
+        and case.scalable is not None
+        and case.scalable.source_extension == "sve"
         for profile in result.rendered.value_tests.profiles_for("cpp")
         for case in profile.cases
     )
@@ -435,7 +439,9 @@ def test_sve_profile_plans_scalable_mask_result_values(
     values = sve_value_artifacts["cpp/tests/values_sve.cpp"]
 
     assert any(
-        case.kind == "scalable_mask_result" and case.source_extension == "sve"
+        case.kind == "scalable_mask_result"
+        and case.scalable is not None
+        and case.scalable.source_extension == "sve"
         for profile in result.rendered.value_tests.profiles_for("cpp")
         for case in profile.cases
     )
@@ -453,7 +459,9 @@ def test_sve_profile_plans_scalable_masked_mask_result_values(
     values = sve_value_artifacts["cpp/tests/values_sve.cpp"]
 
     assert any(
-        case.kind == "scalable_masked_mask_result" and case.source_extension == "sve"
+        case.kind == "scalable_masked_mask_result"
+        and case.scalable is not None
+        and case.scalable.source_extension == "sve"
         for profile in result.rendered.value_tests.profiles_for("cpp")
         for case in profile.cases
     )
@@ -472,7 +480,9 @@ def test_sve_profile_plans_scalable_mask_logic_values(
     values = sve_value_artifacts["cpp/tests/values_sve.cpp"]
 
     assert any(
-        case.kind == "scalable_mask_logic" and case.source_extension == "sve"
+        case.kind == "scalable_mask_logic"
+        and case.scalable is not None
+        and case.scalable.source_extension == "sve"
         for profile in result.rendered.value_tests.profiles_for("cpp")
         for case in profile.cases
     )
@@ -491,7 +501,9 @@ def test_sve_profile_plans_scalable_mask_constant_values(
     values = sve_value_artifacts["cpp/tests/values_sve.cpp"]
 
     assert any(
-        case.kind == "scalable_mask_constant" and case.source_extension == "sve"
+        case.kind == "scalable_mask_constant"
+        and case.scalable is not None
+        and case.scalable.source_extension == "sve"
         for profile in result.rendered.value_tests.profiles_for("cpp")
         for case in profile.cases
     )
@@ -511,7 +523,9 @@ def test_sve_profile_plans_scalable_mask_conversion_values(
     values = sve_value_artifacts["cpp/tests/values_sve.cpp"]
 
     assert any(
-        case.kind == "scalable_mask_conversion" and case.source_extension == "sve"
+        case.kind == "scalable_mask_conversion"
+        and case.scalable is not None
+        and case.scalable.source_extension == "sve"
         for profile in result.rendered.value_tests.profiles_for("cpp")
         for case in profile.cases
     )
@@ -534,7 +548,9 @@ def test_sve_profile_plans_scalable_mask_to_vector_values(
     values = sve_value_artifacts["cpp/tests/values_sve.cpp"]
 
     assert any(
-        case.kind == "scalable_masked" and case.source_extension == "sve"
+        case.kind == "scalable_masked"
+        and case.scalable is not None
+        and case.scalable.source_extension == "sve"
         for profile in result.rendered.value_tests.profiles_for("cpp")
         for case in profile.cases
     )
@@ -553,7 +569,9 @@ def test_sve_profile_plans_scalable_mask_store_values(
     values = sve_value_artifacts["cpp/tests/values_sve.cpp"]
 
     assert any(
-        case.kind == "scalable_mask_store" and case.source_extension == "sve"
+        case.kind == "scalable_mask_store"
+        and case.scalable is not None
+        and case.scalable.source_extension == "sve"
         for profile in result.rendered.value_tests.profiles_for("cpp")
         for case in profile.cases
     )

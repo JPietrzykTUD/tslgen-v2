@@ -14,7 +14,7 @@ from tslc.output.verify import (
     VerifyProject,
     verify_generated_project,
 )
-from tslc.output.writer import ArtifactWriteReport, ArtifactWriter
+from tslc.output.writer import ArtifactWriteMode, ArtifactWriteReport, ArtifactWriter
 from tslc.pipeline import GenerationMode, GenerationRequest, GenerationResult, generate
 
 _ARITH_TYPE_TAGS = DEFAULT_SCALAR_TYPE_TAGS
@@ -80,9 +80,9 @@ def _expand_sources(source_paths: Iterable[Path | str]) -> tuple[Path, ...]:
 def write_artifacts(
     artifacts: ArtifactSet,
     output_root: Path | str,
-    mode: str = "manifest-clean",
+    mode: ArtifactWriteMode = "manifest-clean",
 ) -> ArtifactWriteReport:
-    return ArtifactWriter().write(artifacts, output_root, mode)  # type: ignore[arg-type]
+    return ArtifactWriter().write(artifacts, output_root, mode)
 
 
 def verify_project(

@@ -58,6 +58,25 @@ def test_lowerer_keeps_target_vector_resolution_boundary() -> None:
     assert resolve_target_vector.__module__ == "tslc.lower.target_vectors"
 
 
+def test_lowerer_catalog_facts_cache_is_owned_by_catalog_identity(
+    catalog: Catalog,
+) -> None:
+    lowerer = Lowerer()
+    first = lowerer._facts_for(catalog)
+    equivalent_catalog = Catalog(
+        primitives=catalog.primitives,
+        type_groups=catalog.type_groups,
+        extensions=catalog.extensions,
+        type_spellings=catalog.type_spellings,
+        translations=catalog.translations,
+        target_families=catalog.target_families,
+    )
+
+    assert lowerer._facts_for(catalog) is first
+    assert lowerer._facts_for(equivalent_catalog) is not first
+    assert lowerer._catalog_facts_catalog is equivalent_catalog
+
+
 def test_unknown_primitive_is_error(catalog: Catalog, machine_profiles) -> None:
     result = Selector().select_profile(
         catalog, machine_profiles["avx2"], "does_not_exist", _TYPES

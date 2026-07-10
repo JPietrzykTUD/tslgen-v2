@@ -216,7 +216,7 @@ class Lowerer:
     ) -> None:
         self._region_lowerers = region_lowerers
         self._support = support
-        self._catalog_facts_id: int | None = None
+        self._catalog_facts_catalog: Catalog | None = None
         self._catalog_facts: _LowererCatalogFacts | None = None
 
     def lower(
@@ -594,10 +594,9 @@ class Lowerer:
         )
 
     def _facts_for(self, catalog: Catalog) -> _LowererCatalogFacts:
-        catalog_id = id(catalog)
-        if self._catalog_facts_id != catalog_id or self._catalog_facts is None:
+        if self._catalog_facts_catalog is not catalog or self._catalog_facts is None:
             self._catalog_facts = _LowererCatalogFacts.build(catalog, self._support)
-            self._catalog_facts_id = catalog_id
+            self._catalog_facts_catalog = catalog
         return self._catalog_facts
 
 

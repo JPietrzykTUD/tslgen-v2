@@ -12,12 +12,12 @@ from tslc.backend.target_capability import (
 from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.lower.lowerer import LoweredSpecialization
-from tslc.render.cpp_profile_header import (
+from tslc.backend.cpp_profile import (
     _cpp_native_registration,
     _cpp_registration,
 )
 from tslc.target_text import LoweredBody
-from tslc.render.rust_vectors import rust_registrations
+from tslc.backend.rust_vectors import rust_registrations
 
 
 def test_x86_register_capabilities_derive_from_extension_facts(

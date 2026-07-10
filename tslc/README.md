@@ -32,6 +32,7 @@ See [CHARTER.md](CHARTER.md) for the design rules this project holds itself to.
 
 ```bash
 cd tslc
+python -m mypy
 python -m pytest -q
 # Generated C++/Rust build/value gates are opt-in:
 python -m pytest -q --run-generated-builds tests/test_build_verify.py tests/test_value_tests.py

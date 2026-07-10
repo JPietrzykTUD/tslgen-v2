@@ -3,22 +3,23 @@
 from __future__ import annotations
 
 from tslc.backend.cpp import CppBackend
+from tslc.backend.cpp_profile import (
+    _cpp_includes,
+    _cpp_inferred_simd_registrations,
+    _cpp_native_registration,
+    _cpp_primitive_tags,
+    _cpp_registration,
+    _cpp_sized_registration,
+    _guard_cpp_profile,
+    cpp_profiles_support_algorithm,
+)
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
-from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
 from tslc.backend.target_capability import is_x86_register_extension
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 from tslc.output.artifacts import Artifact
 from tslc.render._common import slug, text
 from tslc.render.cpp_build import _cpp_cmakelists
-from tslc.render.cpp_profile_header import (
-    _cpp_includes,
-    _cpp_inferred_simd_registrations,
-    _cpp_native_registration,
-    _cpp_registration,
-    _cpp_sized_registration,
-    _guard_cpp_profile,
-)
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 _CPP_STATIC_HEADERS = (
@@ -118,7 +119,7 @@ def cpp_artifacts(
             "cpp/include/tsl.hpp",
             _cpp_dispatch(
                 profiles,
-                include_algorithm=_cpp_profiles_support_algorithm(profiles),
+                include_algorithm=cpp_profiles_support_algorithm(profiles),
             ),
             media_type=media_type,
         )
@@ -138,34 +139,6 @@ def cpp_artifacts(
         )
     )
     return artifacts
-
-def _cpp_primitive_tags(profiles: tuple[EmittedProfile, ...]) -> str:
-    names = sorted(
-        {
-            primitive
-            for emitted_profile in profiles
-            for primitive in emitted_profile.specializations("cpp")
-        }
-    )
-    lines = [
-        "#pragma once",
-        "namespace tsl::primitive {",
-        *(f"struct {name} {{}};" for name in names),
-        "}  // namespace tsl::primitive",
-        "",
-    ]
-    return "\n".join(lines)
-
-def _cpp_profiles_support_algorithm(profiles: tuple[EmittedProfile, ...]) -> bool:
-    if not profiles:
-        return False
-    return all(
-        CPP_HELPER_MANIFEST.supports(
-            "algorithm", emitted_profile.specializations("cpp")
-        )
-        for emitted_profile in profiles
-    )
-
 
 def _cpp_dispatch(
     profiles: tuple[EmittedProfile, ...],

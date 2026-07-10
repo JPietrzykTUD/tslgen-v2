@@ -80,8 +80,8 @@ class _FixedLaneModel(LaneModel):
     def append_result_check(
         self, lines: list[str], case: ValueTestCasePlan, call: str
     ) -> None:
-        if case.result_kind == "m":
-            bits = ", ".join("1" if token_truthy(v) else "0" for v in case.expected)
+        if case.invocation.result_kind == "m":
+            bits = ", ".join("1" if token_truthy(v) else "0" for v in case.expectation.values)
             lines.append(f"  typename Vec::mask_type result = {call};")
             lines.append(f"  static const int expected[{case.lanes}] = {{{bits}}};")
             lines.append(
@@ -89,7 +89,7 @@ class _FixedLaneModel(LaneModel):
                 f"{case.lanes});"
             )
         else:
-            expected = cpp_literal_list(case.expected, case.type_tag)
+            expected = cpp_literal_list(case.expectation.values, case.type_tag)
             lines.append(f"  typename Vec::register_type result = {call};")
             lines.append(
                 f"  static const {case.base_spelling} expected[{case.lanes}] = {{{expected}}};"
@@ -100,7 +100,7 @@ class _FixedLaneModel(LaneModel):
             )
 
     def verify_mask(self, lines: list[str], case: ValueTestCasePlan) -> None:
-        expected_int = int(case.expected[0])
+        expected_int = int(case.expectation.values[0])
         bits = ", ".join("1" if (expected_int >> i) & 1 else "0" for i in range(case.lanes))
         lines.append(f"  static const int expected[{case.lanes}] = {{{bits}}};")
         lines.append(
@@ -115,22 +115,24 @@ class _ScalableLaneModel(LaneModel):
         # Only the facts the header itself spells are required here; load/store/mask facts are
         # validated by the steps that consume them (bind_call_args, append_result_check, ...),
         # since mask-logic/constant/conversion cases legitimately have no vector I/O.
-        if case.source_extension is None or case.runtime_lanes_expr is None:
+        if case.scalable is None:
             raise ValueError("scalable C++ value test requires extension and lanes facts")
         return scalable_header(case)
 
     def bind_call_args(self, lines: list[str], case: ValueTestCasePlan) -> list[str]:
+        scalable = case.scalable
+        assert scalable is not None
         args: list[str] = []
         vector_index = 0
         mask_index = 0
-        for kind in case.param_kinds:
+        for kind in case.invocation.param_kinds:
             if kind == "v":
                 args.append(append_runtime_vector_input(lines, case, vector_index))
                 vector_index += 1
             elif kind == "m":
                 lines.append(
                     f"  typename Vec::mask_type m{mask_index} = "
-                    f"{case.mask_from_bits_exprs[mask_index]};"
+                    f"{scalable.mask_from_bits_exprs[mask_index]};"
                 )
                 args.append(f"m{mask_index}")
                 mask_index += 1
@@ -143,13 +145,14 @@ class _ScalableLaneModel(LaneModel):
     def append_result_check(
         self, lines: list[str], case: ValueTestCasePlan, call: str
     ) -> None:
-        if case.result_kind == "m":
+        if case.invocation.result_kind == "m":
             raise ValueError(
                 "scalable value result cannot be a mask; use render_mask_case"
             )
-        if case.store_name is None:
+        scalable = case.scalable
+        if scalable is None or scalable.store_name is None:
             raise ValueError("scalable value result requires a store fact")
-        expected = cpp_literal_list(case.expected, case.type_tag)
+        expected = cpp_literal_list(case.expectation.values, case.type_tag)
         lines.extend(
             [
                 f"  static const {case.base_spelling} authored_expected[{case.lanes}] = "
@@ -159,16 +162,17 @@ class _ScalableLaneModel(LaneModel):
                 f"  for (std::size_t i = 0; i < lanes; ++i) expected[i] = "
                 f"authored_expected[i % {case.lanes}];",
                 f"  typename Vec::register_type result = {call};",
-                f"  tsl::{case.store_name}<Vec, false>(actual.data(), result);",
+                f"  tsl::{scalable.store_name}<Vec, false>(actual.data(), result);",
                 f'  return tsl::test::check_lanes<{case.base_spelling}>('
                 f'"{case.case_name}", actual.data(), expected.data(), lanes);',
             ]
         )
 
     def verify_mask(self, lines: list[str], case: ValueTestCasePlan) -> None:
-        if case.mask_check_expr is None:
+        scalable = case.scalable
+        if scalable is None or scalable.mask_check_expr is None:
             raise ValueError("scalable mask result requires a mask-check fact")
-        lines.append(f"  return {case.mask_check_expr};")
+        lines.append(f"  return {scalable.mask_check_expr};")
 
 
 _FIXED = _FixedLaneModel()
@@ -178,7 +182,7 @@ _SCALABLE = _ScalableLaneModel()
 def lane_model_for(case: ValueTestCasePlan) -> LaneModel:
     """Pick the lane model from the case's data: scalable iff a runtime lane count is set."""
 
-    return _SCALABLE if case.runtime_lanes_expr is not None else _FIXED
+    return _SCALABLE if case.scalable is not None else _FIXED
 
 
 def render_value_case(case: ValueTestCasePlan) -> str:
@@ -214,14 +218,16 @@ def render_mask_conversion(case: ValueTestCasePlan) -> str:
     """Render a mask<->imask conversion: a typed input and a typed result, verified as a mask."""
 
     model = lane_model_for(case)
+    scalable = case.scalable
+    assert scalable is not None
     lines = model.open(case)
     input_type = (
-        "typename Vec::mask_type" if case.param_kinds == ("m",) else "typename Vec::imask_type"
+        "typename Vec::mask_type" if case.invocation.param_kinds == ("m",) else "typename Vec::imask_type"
     )
     result_type = (
-        "typename Vec::mask_type" if case.result_kind == "m" else "typename Vec::imask_type"
+        "typename Vec::mask_type" if case.invocation.result_kind == "m" else "typename Vec::imask_type"
     )
-    lines.append(f"  {input_type} input = {case.mask_from_bits_exprs[0]};")
+    lines.append(f"  {input_type} input = {scalable.mask_from_bits_exprs[0]};")
     lines.append(f"  {result_type} result = tsl::{case.call_name}<Vec>(input);")
     model.verify_mask(lines, case)
     lines.append("}")

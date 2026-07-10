@@ -11,9 +11,9 @@ def append_call_args(lines: list[str], case: ValueTestCasePlan) -> list[str]:
     vector_index = 0
     mask_index = 0
     scalar_index = 0
-    for position, kind in enumerate(case.param_kinds):
+    for position, kind in enumerate(case.invocation.param_kinds):
         if kind == "v":
-            values = case.vector_inputs[vector_index]
+            values = case.inputs.vectors[vector_index]
             literals = cpp_literal_list(values, case.type_tag)
             lines.append(
                 f"  static const {case.base_spelling} in{vector_index}[{case.lanes}] = "
@@ -29,7 +29,7 @@ def append_call_args(lines: list[str], case: ValueTestCasePlan) -> list[str]:
         elif kind == "m":
             lines.append(
                 f"  typename Vec::mask_type m{mask_index} = "
-                f"{uint_literal(case.mask_inputs[mask_index])};"
+                f"{uint_literal(case.inputs.masks[mask_index])};"
             )
             args.append(f"m{mask_index}")
             mask_index += 1
@@ -37,19 +37,19 @@ def append_call_args(lines: list[str], case: ValueTestCasePlan) -> list[str]:
             lines.append(
                 f"  typename Vec::imask_type im{mask_index} = "
                 f"static_cast<typename Vec::imask_type>("
-                f"{uint_literal(case.mask_inputs[mask_index])});"
+                f"{uint_literal(case.inputs.masks[mask_index])});"
             )
             args.append(f"im{mask_index}")
             mask_index += 1
         elif kind in {"s", "sImm"}:
-            value = cpp_literal(case.scalar_inputs[scalar_index], case.type_tag)
+            value = cpp_literal(case.inputs.scalars[scalar_index], case.type_tag)
             lines.append(f"  {case.base_spelling} s{scalar_index} = {value};")
             args.append(f"s{scalar_index}")
             scalar_index += 1
         elif kind == "usize":
             lines.append(
                 f"  std::size_t s{scalar_index} = "
-                f"static_cast<std::size_t>({case.scalar_inputs[scalar_index]});"
+                f"static_cast<std::size_t>({case.inputs.scalars[scalar_index]});"
             )
             args.append(f"s{scalar_index}")
             scalar_index += 1
@@ -62,15 +62,15 @@ def append_call_args(lines: list[str], case: ValueTestCasePlan) -> list[str]:
 
 
 def scalar_result_type(case: ValueTestCasePlan) -> str:
-    if case.result_kind == "usize":
+    if case.invocation.result_kind == "usize":
         return "std::size_t"
-    if case.result_kind == "im":
+    if case.invocation.result_kind == "im":
         return "typename Vec::imask_type"
     return case.base_spelling
 
 
 def scalar_expected(case: ValueTestCasePlan, result_type: str) -> str:
-    token = case.expected[0]
+    token = case.expectation.values[0]
     if result_type == "std::size_t":
         return f"static_cast<std::size_t>({token})"
     if result_type == "typename Vec::imask_type":
@@ -101,16 +101,18 @@ def cpp_string_literal(value: str) -> str:
 
 
 def axis_suffix(case: ValueTestCasePlan) -> str:
-    return "".join(f", {value}" for value in case.axis_args)
+    return "".join(f", {value}" for value in case.invocation.axis_args)
 
 
 def scalable_header(case: ValueTestCasePlan) -> list[str]:
     """Open a scalable (runtime-length) value-test function: SVE-style `Vec` + runtime `lanes`."""
 
+    scalable = case.scalable
+    assert scalable is not None
     return [
         f"int {case.function_name}() {{",
-        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::{case.source_extension}>;",
-        f"  const std::size_t lanes = static_cast<std::size_t>({case.runtime_lanes_expr});",
+        f"  using Vec = tsl::simd<{case.base_spelling}, tsl::{scalable.source_extension}>;",
+        f"  const std::size_t lanes = static_cast<std::size_t>({scalable.runtime_lanes_expr});",
     ]
 
 
@@ -123,7 +125,9 @@ def append_runtime_vector_input(
     ``i % case.lanes``; this is only sound for lane-local ops — see ``lane_model``.
     """
 
-    values = case.vector_inputs[position]
+    values = case.inputs.vectors[position]
+    scalable = case.scalable
+    assert scalable is not None and scalable.load_name is not None
     literals = cpp_literal_list(values, case.type_tag)
     lines.append(
         f"  static const {case.base_spelling} authored{position}[{case.lanes}] = "
@@ -136,7 +140,7 @@ def append_runtime_vector_input(
     )
     lines.append(
         f"  typename Vec::register_type v{position} = "
-        f"tsl::{case.load_name}<Vec, false>(in{position}.data());"
+        f"tsl::{scalable.load_name}<Vec, false>(in{position}.data());"
     )
     return f"v{position}"
 
