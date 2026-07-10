@@ -190,6 +190,7 @@ def test_backend_fact_modules_have_no_function_local_imports() -> None:
         backend_root / "capability.py",
         backend_root / "cpp_capability.py",
         backend_root / "rust_capability.py",
+        _REPO_ROOT / "tslc" / "src" / "tslc" / "output" / "verify_drivers.py",
     )
 
     assert _function_local_imports(paths, "tslc") == []

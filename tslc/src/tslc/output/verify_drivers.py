@@ -68,18 +68,6 @@ class VerifyBackendDriver:
     prepare_command_environment: PrepareCommandEnvironment = _keep_command_environment
 
 
-def cpp_verify_driver() -> VerifyBackendDriver:
-    from tslc.output._verify_cpp import create_cpp_verify_driver
-
-    return create_cpp_verify_driver()
-
-
-def rust_verify_driver() -> VerifyBackendDriver:
-    from tslc.output._verify_rust import create_rust_verify_driver
-
-    return create_rust_verify_driver()
-
-
 def missing_verify_tool(driver: VerifyBackendDriver) -> str | None:
     for tool in driver.required_tools:
         if missing_executable(tool) is not None:
@@ -94,9 +82,7 @@ __all__ = [
     "PrepareCommandEnvironment",
     "VerifyBackendDriver",
     "command_failure_diagnostic",
-    "cpp_verify_driver",
     "filter_runner_verifiable_profiles",
     "missing_verify_tool",
     "runner_missing_diagnostic",
-    "rust_verify_driver",
 ]

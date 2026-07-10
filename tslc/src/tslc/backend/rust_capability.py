@@ -16,7 +16,9 @@ from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
 from tslc.backend.rust_translation import RustBackendDialect
 from tslc.backend.rust_validation import validate_rust_profiles
 from tslc.catalog.model import Catalog
-from tslc.output.verify_drivers import rust_verify_driver
+from tslc.output._verify_rust import (
+    create_rust_verify_driver as _create_rust_verify_driver,
+)
 from tslc.render.documentation_formatters import RUST_DOCUMENTATION_FORMATTER
 from tslc.render.rust_project import rust_artifacts, rust_verify_profiles
 from tslc.render.tests_project import rust_test_artifacts
@@ -62,7 +64,7 @@ def rust_documentation_formatter() -> BackendDocumentationFormatter:
 
 
 def create_rust_verify_driver() -> VerifyBackendDriver:
-    return rust_verify_driver()
+    return _create_rust_verify_driver()
 
 
 RUST_BACKEND = BackendCapability(
