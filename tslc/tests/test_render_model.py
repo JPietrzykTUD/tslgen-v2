@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from tslc.render.model import (
 from tslc.select.selector import Selector
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+_BODY_TEXT_NAMES = frozenset({"body", "body_text"})
 
 
 def test_lowered_body_default_render_preserves_rust_vector_owner() -> None:
@@ -196,7 +198,32 @@ def test_backend_renderers_do_not_rewrite_body_text_semantics() -> None:
     for path in checked:
         text = path.read_text(encoding="utf-8")
         assert "_concretize_simd_assoc" not in text
-        assert ".replace(" not in text
+        assert _body_text_replace_calls(path, text) == []
+
+
+def _body_text_replace_calls(path: Path, text: str) -> list[str]:
+    tree = ast.parse(text, filename=str(path))
+    calls: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Attribute) or node.func.attr != "replace":
+            continue
+        receiver_names = _expr_names(node.func.value)
+        if receiver_names & _BODY_TEXT_NAMES:
+            rel = path.relative_to(_REPO_ROOT)
+            calls.append(f"{rel}:{node.lineno}: {ast.unparse(node).strip()}")
+    return calls
+
+
+def _expr_names(node: ast.AST) -> set[str]:
+    names: set[str] = set()
+    for child in ast.walk(node):
+        if isinstance(child, ast.Name):
+            names.add(child.id)
+        elif isinstance(child, ast.Attribute):
+            names.add(child.attr)
+    return names
 
 
 def test_lowered_body_model_does_not_scan_for_semantic_spellings() -> None:
