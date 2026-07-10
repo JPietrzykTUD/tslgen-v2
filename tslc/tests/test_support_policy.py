@@ -62,9 +62,9 @@ def test_backend_registry_owns_registered_backends(catalog: Catalog) -> None:
     assert create_backend_dialect(catalog, "cpp").backend_id == "cpp"
     assert create_backend_dialect(catalog, "rust").backend_id == "rust"
     with pytest.raises(ValueError, match="unsupported backend"):
-        create_backend_dialect(catalog, "c17")
+        create_backend_dialect(catalog, "unknown")
     with pytest.raises(ValueError, match="unsupported backend"):
-        backend_capabilities(("c17",))
+        backend_capabilities(("unknown",))
 
 
 def test_policy_owns_mask_forms() -> None:
