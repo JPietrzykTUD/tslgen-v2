@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "Export compile_commands.json")
 project(tsl_release_fetch_content_sort LANGUAGES CXX)
 
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
+endif()
+
 if(POLICY CMP0135)
   cmake_policy(SET CMP0135 NEW)
 endif()
@@ -67,8 +72,12 @@ else()
   FetchContent_MakeAvailable(tsl)
 endif()
 
-add_executable(test_sort main.cpp)
+add_executable(test_sort test_quicksort_pairwise_swap.cpp)
 target_compile_features(test_sort PRIVATE cxx_std_17)
 target_link_libraries(test_sort PRIVATE tsl::tsl)
+
+add_executable(benchmark_quicksort_pairwise_swap benchmark_quicksort_pairwise_swap.cpp)
+target_compile_features(benchmark_quicksort_pairwise_swap PRIVATE cxx_std_17)
+target_link_libraries(benchmark_quicksort_pairwise_swap PRIVATE tsl::tsl)
 
 add_test(NAME test_sort COMMAND test_sort)
