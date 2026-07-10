@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
 
 from tslc.catalog.validation._schema_common import (
     KNOWN_BOOLEAN_VALUES,
@@ -25,7 +26,6 @@ from tslc.catalog.validation.source_spans import (
     source_span,
 )
 from tslc.diagnostics import Diagnostic, diagnostic_at
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.syntax.ast import (
     ParsedPrimitiveDeclaration,
     ParsedTslAttribute,
@@ -67,6 +67,7 @@ _PARAM_TYPE_CONDITION_RE = re.compile(r"^if\s+([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0
 
 def validate_primitive(
     declaration: ParsedPrimitiveDeclaration,
+    backend_ids: Collection[str],
     diagnostics: list[Diagnostic],
 ) -> None:
     fields = tuple(field.field for field in declaration.fields)
@@ -88,7 +89,7 @@ def validate_primitive(
             )
     _validate_attributes(declaration.attributes, diagnostics)
     _validate_generic_params(declaration, diagnostics)
-    _validate_immediate_params(declaration, diagnostics)
+    _validate_immediate_params(declaration, backend_ids, diagnostics)
     _validate_param_types(declaration, diagnostics)
     validate_implementation_safety(declaration, diagnostics)
     _validate_return_type(declaration, diagnostics)
@@ -320,6 +321,7 @@ def _validate_generic_param_constraints(
 
 def _validate_immediate_params(
     declaration: ParsedPrimitiveDeclaration,
+    backend_ids: Collection[str],
     diagnostics: list[Diagnostic],
 ) -> None:
     for field in declaration.fields_by_name("params"):
@@ -332,7 +334,7 @@ def _validate_immediate_params(
             )
             dispatch = child(entry, "dispatch")
             for child_field in children(dispatch):
-                if not DEFAULT_SUPPORT_POLICY.supports_backend(child_field.key.text):
+                if child_field.key.text not in backend_ids:
                     diagnostics.append(
                         diagnostic_at(
                             severity="error",

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from tslc.backend.cpp import CppBackend
 from tslc.backend.rust import RustBackend
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, ImplementationSafety

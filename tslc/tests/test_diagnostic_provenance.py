@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.builder import CatalogBuildResult, CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.compiler_assets import load_default_tsl_grammar

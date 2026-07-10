@@ -23,7 +23,7 @@ from tslc._pipeline_closure import (
 )
 from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
 from tslc.backend.emitted_profile import EmittedProfile
-from tslc.backend.registry import backend_capabilities
+from tslc.backend.registry import backend_capabilities, registered_backend_ids
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import RESULT_DIM_EXTENSION, Catalog, Extension
 from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
@@ -47,7 +47,7 @@ from tslc.value_tests import (
     ValueTestProjectPlan,
 )
 
-_DEFAULT_BACKENDS = DEFAULT_SUPPORT_POLICY.default_backend_ids
+_DEFAULT_BACKENDS = registered_backend_ids()
 GenerationMode = Literal["partial", "strict"]
 SkipStatus = Literal["coverage_gap", "policy_deferred"]
 _TYPE_ORDER = SCALAR_TYPE_ORDER

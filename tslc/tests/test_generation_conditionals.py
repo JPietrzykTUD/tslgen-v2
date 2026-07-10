@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tslc.api import generate_project
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.lower.context import (
     LoweringEnv,

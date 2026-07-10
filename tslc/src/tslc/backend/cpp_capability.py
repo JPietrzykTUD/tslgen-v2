@@ -5,13 +5,18 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from tslc.backend.capability import BackendCapability, BackendDocumentationFormatter
+from tslc.backend.cpp_translation import CppBackendDialect
 from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
 from tslc.backend.cpp_validation import validate_cpp_profiles
 from tslc.catalog.model import Catalog
+from tslc.output.verify_drivers import cpp_verify_driver
+from tslc.render.cpp_project import cpp_artifacts, cpp_verify_profiles
+from tslc.render.documentation_formatters import CPP_DOCUMENTATION_FORMATTER
+from tslc.render.tests_project import cpp_test_artifacts
+from tslc.value_tests.render_cpp import CPP_VALUE_TEST_SUPPORT
 
 if TYPE_CHECKING:
     from tslc.backend.emitted_profile import EmittedProfile
-    from tslc.backend.cpp_translation import CppBackendDialect
     from tslc.compiler_assets import RenderAssets
     from tslc.output.artifacts import Artifact
     from tslc.output.verify_drivers import VerifyBackendDriver
@@ -20,50 +25,36 @@ if TYPE_CHECKING:
 
 
 def create_cpp_dialect(catalog: Catalog) -> CppBackendDialect:
-    from tslc.backend.cpp_translation import CppBackendDialect
-
     return CppBackendDialect(catalog)
 
 
 def cpp_project_artifacts(
     profiles: tuple[EmittedProfile, ...], assets: RenderAssets, media_type: str
 ) -> list[Artifact]:
-    from tslc.render.cpp_project import cpp_artifacts
-
     return cpp_artifacts(profiles, assets, media_type=media_type)
 
 
 def cpp_profile_verification(
     profiles: tuple[EmittedProfile, ...],
 ) -> tuple[VerifyProfile, ...]:
-    from tslc.render.cpp_project import cpp_verify_profiles
-
     return cpp_verify_profiles(profiles)
 
 
 def cpp_value_test_support() -> ValueTestBackendSupport:
-    from tslc.value_tests.render_cpp import CPP_VALUE_TEST_SUPPORT
-
     return CPP_VALUE_TEST_SUPPORT
 
 
 def cpp_value_test_artifacts(
     plan: ValueTestProjectPlan, assets: RenderAssets, media_type: str
 ) -> list[Artifact]:
-    from tslc.render.tests_project import cpp_test_artifacts
-
     return cpp_test_artifacts(plan, assets, media_type=media_type)
 
 
 def cpp_documentation_formatter() -> BackendDocumentationFormatter:
-    from tslc.render.documentation_formatters import CPP_DOCUMENTATION_FORMATTER
-
     return CPP_DOCUMENTATION_FORMATTER
 
 
 def create_cpp_verify_driver() -> VerifyBackendDriver:
-    from tslc.output.verify_drivers import cpp_verify_driver
-
     return cpp_verify_driver()
 
 

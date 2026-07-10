@@ -10,7 +10,7 @@ import pytest
 
 from tslc.api import generate_project
 from tslc.backend import translation_common
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.lower.lowerer import Lowerer
 from tslc.target_text import (

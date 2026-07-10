@@ -23,7 +23,6 @@ from tslc.catalog.model import (
     ImaskPolicy,
     MaskPolicy,
 )
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.syntax.ast import ParsedBlockDeclaration, ParsedTslField
 
 
@@ -116,8 +115,16 @@ def _declared_extension_fields(declaration: ParsedBlockDeclaration) -> frozenset
     return frozenset(field.key.text for field in declaration.fields)
 
 
-def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
+def _build_extension(
+    declaration: ParsedBlockDeclaration,
+    backend_ids: frozenset[str],
+) -> Extension:
     fields = {field.key.text: field for field in declaration.fields}
+    backend_ids = backend_ids | frozenset(
+        field.key.text
+        for field in declaration.fields
+        if _child(field, "supported") is not None
+    )
     # Identity is the block name: `avx2` and `avx2_vl` are distinct extensions
     # (avx2-only hardware vs. avx512vl-present hardware) even though they share the
     # `extension_name` ISA spelling "avx2".
@@ -146,8 +153,8 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
         compose_prefix=compose_prefix,
         compose_suffix_by_type=compose_suffix_by_type,
         vector_register_types=_vector_register_types(fields.get("vector_register_types")),
-        backend_headers=_backend_headers(fields),
-        backend_supported=_backend_supported(fields),
+        backend_headers=_backend_headers(fields, backend_ids),
+        backend_supported=_backend_supported(fields, backend_ids),
         inherits=_field_text(fields.get("inherits")),
         active_when=_extension_activation(fields.get("active_when")),
         supersedes=_list_text_set(fields.get("supersedes")),
@@ -159,7 +166,7 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
         ),
         mask_policy=_mask_policy(fields.get("mask_type_policy")),
         imask_policy=_imask_policy(fields.get("integral_mask_type_policy")),
-        metadata=_extension_metadata(fields),
+        metadata=_extension_metadata(fields, backend_ids),
         default_test_target=(_field_text(fields.get("default_test_target")) or "").lower()
         == "true",
         test_filter_exclude_templates=_list_text_set(
@@ -207,18 +214,24 @@ def _vector_register_types(
     return result
 
 
-def _backend_headers(fields: dict[str, ParsedTslField]) -> dict[str, tuple[str, ...]]:
+def _backend_headers(
+    fields: dict[str, ParsedTslField],
+    backend_ids: frozenset[str],
+) -> dict[str, tuple[str, ...]]:
     """Promote backend-owned extension include/import metadata."""
 
     result: dict[str, tuple[str, ...]] = {}
-    for backend_id in DEFAULT_SUPPORT_POLICY.default_backend_ids:
+    for backend_id in sorted(backend_ids):
         headers = _list_text(_child(fields.get(backend_id), "headers"))
         if headers:
             result[backend_id] = headers
     return result
 
 
-def _extension_metadata(fields: dict[str, ParsedTslField]) -> ExtensionMetadata:
+def _extension_metadata(
+    fields: dict[str, ParsedTslField],
+    backend_ids: frozenset[str],
+) -> ExtensionMetadata:
     return ExtensionMetadata(
         vendor=_field_text(fields.get("vendor")),
         native_sort_order=_opt_int(_field_text(fields.get("native_sort_order"))),
@@ -230,15 +243,16 @@ def _extension_metadata(fields: dict[str, ParsedTslField]) -> ExtensionMetadata:
         signature_support_exclude=_list_text(
             _child(fields.get("signature_support"), "exclude")
         ),
-        backend=_backend_extension_metadata(fields),
+        backend=_backend_extension_metadata(fields, backend_ids),
     )
 
 
 def _backend_extension_metadata(
     fields: dict[str, ParsedTslField],
+    backend_ids: frozenset[str],
 ) -> dict[str, BackendExtensionMetadata]:
     result: dict[str, BackendExtensionMetadata] = {}
-    for backend_id in DEFAULT_SUPPORT_POLICY.default_backend_ids:
+    for backend_id in sorted(backend_ids):
         backend = fields.get(backend_id)
         if backend is None:
             continue
@@ -279,11 +293,14 @@ def _backend_compile_guards(
     return tuple(guards)
 
 
-def _backend_supported(fields: dict[str, ParsedTslField]) -> dict[str, bool]:
+def _backend_supported(
+    fields: dict[str, ParsedTslField],
+    backend_ids: frozenset[str],
+) -> dict[str, bool]:
     """Promote explicit backend ``supported`` flags."""
 
     result: dict[str, bool] = {}
-    for backend_id in DEFAULT_SUPPORT_POLICY.default_backend_ids:
+    for backend_id in sorted(backend_ids):
         text = _field_text(_child(fields.get(backend_id), "supported"))
         if text is not None:
             result[backend_id] = text.lower() == "true"

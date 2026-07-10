@@ -11,6 +11,7 @@ from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog
 from tslc.catalog.validation import validate_catalog
+from tslc.backend.registry import registered_backend_ids
 from tslc.compiler_assets import (
     RenderAssets,
     load_default_render_assets,
@@ -64,6 +65,7 @@ def _load_inputs(request: _InputRequest) -> tuple[_PipelineInputs | None, list[D
             catalog,
             parse_result,
             required_backends=request.backends,
+            supported_backends=registered_backend_ids(),
         )
     )
     if has_errors(diagnostics):

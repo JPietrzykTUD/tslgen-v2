@@ -498,7 +498,7 @@ def test_unknown_extension_backend_metadata_fields_are_diagnosed() -> None:
 
 
 def test_extension_backend_field_names_follow_supported_backends() -> None:
-    assert {"cpp", "rust"} <= known_extension_fields()
+    assert {"cpp", "rust"} <= known_extension_fields(("cpp", "rust"))
     assert {"active_when", "supersedes"} <= known_extension_fields()
     assert "lscpu_flags" not in known_extension_fields()
     assert "zig" in known_extension_fields(("zig",))

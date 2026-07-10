@@ -18,12 +18,9 @@ from tslc.catalog.signatures import parse_signature
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
-def test_policy_owns_backend_and_signature_support(catalog: Catalog) -> None:
+def test_policy_owns_signature_support(catalog: Catalog) -> None:
     policy = DEFAULT_SUPPORT_POLICY
 
-    assert policy.default_backend_ids == ("cpp", "rust")
-    assert policy.supports_backend("cpp")
-    assert not policy.supports_backend("c17")
     assert policy.supports_signature(parse_signature("v:=(ptr,vidx,sImm)"))
     assert policy.supports_signature(parse_signature("v:=(cptr,vidx,sImm)"))
     lane_list_shape = parse_signature("v:=(lanes<s>)")
@@ -48,18 +45,19 @@ def test_policy_owns_backend_and_signature_support(catalog: Catalog) -> None:
     )
 
 
-def test_backend_registries_agree_with_support_policy(catalog: Catalog) -> None:
-    assert registered_backend_ids() == DEFAULT_SUPPORT_POLICY.default_backend_ids
-    capabilities = backend_capabilities(DEFAULT_SUPPORT_POLICY.default_backend_ids)
+def test_backend_registry_owns_registered_backends(catalog: Catalog) -> None:
+    backend_ids = registered_backend_ids()
+    assert backend_ids == ("cpp", "rust")
+    capabilities = backend_capabilities(backend_ids)
     assert tuple(capability.backend_id for capability in capabilities) == (
-        DEFAULT_SUPPORT_POLICY.default_backend_ids
+        backend_ids
     )
     assert tuple(capability.root_path for capability in capabilities) == ("cpp", "rust")
     assert tuple(
         capability.value_test_support().backend_id for capability in capabilities
-    ) == DEFAULT_SUPPORT_POLICY.default_backend_ids
+    ) == backend_ids
     assert tuple(capability.verify_driver().backend_id for capability in capabilities) == (
-        DEFAULT_SUPPORT_POLICY.default_backend_ids
+        backend_ids
     )
     assert create_backend_dialect(catalog, "cpp").backend_id == "cpp"
     assert create_backend_dialect(catalog, "rust").backend_id == "rust"

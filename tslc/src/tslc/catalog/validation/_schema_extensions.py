@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 
 from tslc.catalog.target_families import TargetFamilyCatalog
 from tslc.catalog.validation._schema_common import (
@@ -13,7 +13,6 @@ from tslc.catalog.validation._schema_common import (
 )
 from tslc.catalog.validation.source_spans import child, children, field_text, source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.syntax.ast import ParsedBlockDeclaration, ParsedTslField
 
 EXTENSION_METADATA_FIELDS = frozenset(
@@ -51,9 +50,6 @@ EXTENSION_METADATA_FIELDS = frozenset(
         "vendor",
     }
 )
-KNOWN_EXTENSION_FIELDS = EXTENSION_METADATA_FIELDS | frozenset(
-    DEFAULT_SUPPORT_POLICY.default_backend_ids
-)
 KNOWN_EXTENSION_BACKEND_FIELDS = frozenset(
     {
         "arch_module",
@@ -81,14 +77,13 @@ _KNOWN_IMASK_POLICY_KINDS = frozenset(
 )
 
 
-def known_extension_fields(
-    backend_ids: Iterable[str] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
-) -> frozenset[str]:
+def known_extension_fields(backend_ids: Iterable[str] = ()) -> frozenset[str]:
     return EXTENSION_METADATA_FIELDS | frozenset(backend_ids)
 
 
 def validate_extension_block(
     declaration: ParsedBlockDeclaration,
+    backend_ids: Collection[str],
     diagnostics: list[Diagnostic],
     target_families: TargetFamilyCatalog,
 ) -> None:
@@ -114,7 +109,7 @@ def validate_extension_block(
         "mask_type_policy",
         diagnostics,
     )
-    _validate_mask_policy_backend_maps(mask, diagnostics)
+    _validate_mask_policy_backend_maps(mask, backend_ids, diagnostics)
     _validate_exact_lane_bitmask_cpp_spelling(mask, fields, diagnostics)
     imask = fields.get("integral_mask_type_policy")
     _validate_policy_block(
@@ -136,7 +131,7 @@ def validate_extension_block(
         prefix = child(compose, "prefix")
         if prefix is not None:
             validate_backend_key_fields(
-                children(prefix), diagnostics, owner="intrinsic prefix"
+                children(prefix), backend_ids, diagnostics, owner="intrinsic prefix"
             )
         suffix = child(compose, "suffix")
         if suffix is not None:
@@ -172,7 +167,7 @@ def validate_extension_block(
             diagnostics,
             label="signature_support field",
         )
-    for backend_id in DEFAULT_SUPPORT_POLICY.default_backend_ids:
+    for backend_id in sorted(backend_ids):
         backend = fields.get(backend_id)
         if backend is None:
             continue
@@ -208,6 +203,7 @@ def validate_extension_block(
             )
             validate_backend_key_fields(
                 children(backend_map),
+                backend_ids,
                 diagnostics,
                 owner=backend_map_name,
             )
@@ -271,6 +267,7 @@ def _validate_policy_block(
 
 def _validate_mask_policy_backend_maps(
     field: ParsedTslField | None,
+    backend_ids: Collection[str],
     diagnostics: list[Diagnostic],
 ) -> None:
     if field is None:
@@ -284,6 +281,7 @@ def _validate_mask_policy_backend_maps(
         )
         validate_backend_key_fields(
             children(spelling),
+            backend_ids,
             diagnostics,
             owner="mask_type_policy backend_spelling",
         )
@@ -297,6 +295,7 @@ def _validate_mask_policy_backend_maps(
     )
     validate_backend_key_fields(
         children(by_lanes),
+        backend_ids,
         diagnostics,
         owner="mask_type_policy backend_spelling_by_lanes",
     )

@@ -9,7 +9,7 @@ from tslc.backend.target_capability import (
     rust_extension_tag,
     x86_register_bits,
 )
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.render.cpp_project import _cpp_native_registration, _cpp_registration

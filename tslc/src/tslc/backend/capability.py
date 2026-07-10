@@ -10,6 +10,7 @@ from tslc.backend.helper_requirements import (
     BackendHelperManifest,
     EMPTY_HELPER_MANIFEST,
 )
+from tslc.output.verify_model import VerifyBackend
 
 if TYPE_CHECKING:
     from tslc.backend.emitted_profile import EmittedProfile
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
     from tslc.lower.lowerer import LoweredSpecialization
     from tslc.output.artifacts import Artifact
     from tslc.output.verify_drivers import VerifyBackendDriver
-    from tslc.output.verify_model import VerifyBackend, VerifyProfile
+    from tslc.output.verify_model import VerifyProfile
     from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
 
 DialectFactory = Callable[["Catalog"], "BackendDialect"]
@@ -104,8 +105,6 @@ class BackendCapability:
         return profile.specializations(self.backend_id)
 
     def verify_backend(self, profiles: tuple[EmittedProfile, ...]) -> VerifyBackend:
-        from tslc.output.verify_model import VerifyBackend
-
         return VerifyBackend(
             backend_id=self.backend_id,
             root_path=self.root_path,

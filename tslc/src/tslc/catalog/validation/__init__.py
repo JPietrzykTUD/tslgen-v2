@@ -22,7 +22,6 @@ from tslc.catalog.validation.invariants import (
 )
 from tslc.catalog.validation.schema_validation import validate_parsed_documents
 from tslc.diagnostics import Diagnostic, sort_diagnostics
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.syntax.ast import OuterTslParseResult
 
 __all__ = ("validate_catalog",)
@@ -32,17 +31,33 @@ def validate_catalog(
     catalog: Catalog,
     parsed: OuterTslParseResult | None = None,
     *,
-    required_backends: Iterable[str] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
+    required_backends: Iterable[str] | None = None,
+    supported_backends: Iterable[str] | None = None,
 ) -> tuple[Diagnostic, ...]:
     """Validate parsed/catalog data and return structured diagnostics."""
 
     diagnostics: list[Diagnostic] = []
-    backends = tuple(dict.fromkeys(required_backends))
-    validate_required_backends(catalog, backends, diagnostics)
+    backends = tuple(
+        dict.fromkeys(
+            sorted(catalog.type_spellings)
+            if required_backends is None
+            else required_backends
+        )
+    )
+    supported = tuple(
+        dict.fromkeys(backends if supported_backends is None else supported_backends)
+    )
+    validate_required_backends(catalog, backends, supported, diagnostics)
     validate_primitive_signatures(catalog, diagnostics)
     validate_generic_param_base_constraints(catalog, diagnostics)
     validate_extension_inheritance(catalog, diagnostics, parsed)
-    validate_backend_type_spellings(catalog, backends, diagnostics, parsed)
+    validate_backend_type_spellings(
+        catalog,
+        backends,
+        supported,
+        diagnostics,
+        parsed,
+    )
     validate_scalable_runtime_lane_counts(catalog, backends, diagnostics, parsed)
     if parsed is not None:
         validate_parsed_documents(parsed, diagnostics, catalog.target_families)

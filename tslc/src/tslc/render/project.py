@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tslc.backend.emitted_profile import EmittedProfile
-from tslc.backend.registry import backend_capabilities
+from tslc.backend.registry import backend_capabilities, registered_backend_ids
 from tslc.compiler_assets import RenderAssets
 from tslc.output.artifacts import Artifact, ArtifactSet
 from tslc.output.verify_model import VerifyBackend, VerifyProject
@@ -25,7 +25,7 @@ class RenderedProject:
 
 def render_project(
     profiles: tuple[EmittedProfile, ...],
-    backends: tuple[str, ...] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
+    backends: tuple[str, ...] = registered_backend_ids(),
     value_tests: ValueTestProjectPlan = _EMPTY_VALUE_TEST_PLAN,
     *,
     assets: RenderAssets,

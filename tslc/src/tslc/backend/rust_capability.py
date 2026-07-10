@@ -6,12 +6,17 @@ from typing import TYPE_CHECKING
 
 from tslc.backend.capability import BackendCapability, BackendDocumentationFormatter
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
+from tslc.backend.rust_translation import RustBackendDialect
 from tslc.backend.rust_validation import validate_rust_profiles
 from tslc.catalog.model import Catalog
+from tslc.output.verify_drivers import rust_verify_driver
+from tslc.render.documentation_formatters import RUST_DOCUMENTATION_FORMATTER
+from tslc.render.rust_project import rust_artifacts, rust_verify_profiles
+from tslc.render.tests_project import rust_test_artifacts
+from tslc.value_tests.render_rust import RUST_VALUE_TEST_SUPPORT
 
 if TYPE_CHECKING:
     from tslc.backend.emitted_profile import EmittedProfile
-    from tslc.backend.rust_translation import RustBackendDialect
     from tslc.compiler_assets import RenderAssets
     from tslc.output.artifacts import Artifact
     from tslc.output.verify_drivers import VerifyBackendDriver
@@ -20,50 +25,36 @@ if TYPE_CHECKING:
 
 
 def create_rust_dialect(catalog: Catalog) -> RustBackendDialect:
-    from tslc.backend.rust_translation import RustBackendDialect
-
     return RustBackendDialect(catalog)
 
 
 def rust_project_artifacts(
     profiles: tuple[EmittedProfile, ...], assets: RenderAssets, media_type: str
 ) -> list[Artifact]:
-    from tslc.render.rust_project import rust_artifacts
-
     return rust_artifacts(profiles, assets, media_type=media_type)
 
 
 def rust_profile_verification(
     profiles: tuple[EmittedProfile, ...],
 ) -> tuple[VerifyProfile, ...]:
-    from tslc.render.rust_project import rust_verify_profiles
-
     return rust_verify_profiles(profiles)
 
 
 def rust_value_test_support() -> ValueTestBackendSupport:
-    from tslc.value_tests.render_rust import RUST_VALUE_TEST_SUPPORT
-
     return RUST_VALUE_TEST_SUPPORT
 
 
 def rust_value_test_artifacts(
     plan: ValueTestProjectPlan, assets: RenderAssets, media_type: str
 ) -> list[Artifact]:
-    from tslc.render.tests_project import rust_test_artifacts
-
     return rust_test_artifacts(plan, assets, media_type=media_type)
 
 
 def rust_documentation_formatter() -> BackendDocumentationFormatter:
-    from tslc.render.documentation_formatters import RUST_DOCUMENTATION_FORMATTER
-
     return RUST_DOCUMENTATION_FORMATTER
 
 
 def create_rust_verify_driver() -> VerifyBackendDriver:
-    from tslc.output.verify_drivers import rust_verify_driver
-
     return rust_verify_driver()
 
 

@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 
 from tslc.catalog.validation.source_spans import source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 from tslc.syntax.ast import (
     ParsedTslAttribute,
     ParsedTslField,
@@ -39,12 +38,13 @@ def validate_known_fields(
 
 def validate_backend_key_fields(
     fields: Sequence[ParsedTslField],
+    backend_ids: Collection[str],
     diagnostics: list[Diagnostic],
     *,
     owner: str,
 ) -> None:
     for field in fields:
-        if not DEFAULT_SUPPORT_POLICY.supports_backend(field.key.text):
+        if field.key.text not in backend_ids:
             diagnostics.append(
                 diagnostic_at(
                     severity="error",

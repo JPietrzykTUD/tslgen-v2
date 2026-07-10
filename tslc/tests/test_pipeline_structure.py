@@ -177,9 +177,18 @@ def test_backend_fact_modules_have_no_function_local_imports() -> None:
         backend_root / "emitted_profile.py",
         backend_root / "cpp_validation.py",
         backend_root / "rust_validation.py",
+        backend_root / "capability.py",
+        backend_root / "cpp_capability.py",
+        backend_root / "rust_capability.py",
     )
 
     assert _function_local_imports(paths, "tslc") == []
+
+
+def test_support_policy_does_not_import_backend_registration() -> None:
+    path = _REPO_ROOT / "tslc" / "src" / "tslc" / "support_policy.py"
+
+    assert _forbidden_imports((path,), "tslc.backend") == []
 
 
 def test_project_renderer_does_not_finalize_or_plan_semantics() -> None:

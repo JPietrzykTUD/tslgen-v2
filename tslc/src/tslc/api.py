@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
+from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.output.artifacts import ArtifactSet
 from tslc.output.verify import (
@@ -15,7 +16,6 @@ from tslc.output.verify import (
 )
 from tslc.output.writer import ArtifactWriteReport, ArtifactWriter
 from tslc.pipeline import GenerationMode, GenerationRequest, GenerationResult, generate
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 _ARITH_TYPE_TAGS = DEFAULT_SCALAR_TYPE_TAGS
 
@@ -27,7 +27,7 @@ def generate_project(
     primitives: Iterable[str] | None = None,
     profiles: Iterable[str] | None = None,
     type_tags: Iterable[str] = _ARITH_TYPE_TAGS,
-    backends: Iterable[str] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
+    backends: Iterable[str] = registered_backend_ids(),
     generation_mode: GenerationMode = "partial",
     test_harness: bool = False,
     value_test_warnings: bool = False,

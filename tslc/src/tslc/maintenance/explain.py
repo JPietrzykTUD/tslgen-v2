@@ -33,8 +33,7 @@ import argparse
 from pathlib import Path
 
 from tslc.api import _expand_sources
-from tslc.backend.registry import registered_backend_ids
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect, registered_backend_ids
 from tslc.ir.scan import scan
 from tslc.maintenance._segments_view import format_segment_tree
 from tslc.lower.dependencies import (

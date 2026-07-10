@@ -16,7 +16,7 @@ from pathlib import Path
 import sys
 from typing import Literal, TextIO, cast
 
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect, registered_backend_ids
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog, ImplementationSafety
@@ -114,7 +114,7 @@ def audit_metadata(
     profiles: Iterable[str] = _DEFAULT_PROFILES,
     primitives: Iterable[str] | None = None,
     type_tags: Iterable[str] = _DEFAULT_TYPES,
-    backends: Iterable[str] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
+    backends: Iterable[str] = registered_backend_ids(),
 ) -> MetadataAuditResult:
     """Return source metadata suggestions without writing files."""
 

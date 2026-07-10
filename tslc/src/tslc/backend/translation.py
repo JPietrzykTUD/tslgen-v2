@@ -13,7 +13,6 @@ from tslc.catalog.scalar_types import (
     unsigned_of,
 )
 from tslc.target_text import RenderField, RenderText
-from tslc.backend.registry import create_backend_dialect
 
 
 class BackendTypeDialect(Protocol):
@@ -123,7 +122,6 @@ __all__ = [
     "BackendSyntaxDialect",
     "BackendTemplateDialect",
     "BackendTypeDialect",
-    "create_backend_dialect",
     "is_signed",
     "is_type_tag",
     "normalize_scalar_tag",

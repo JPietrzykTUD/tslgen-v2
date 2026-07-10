@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from tslc.api import generate_project
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.diagnostics import has_errors
 from tslc.ir.region_syntax import ParsedCallSelector, parse_call_selector
