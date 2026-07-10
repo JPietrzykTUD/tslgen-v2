@@ -6,10 +6,10 @@ import re
 
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region
-from tslc.lower._text import split_selector_terms
+from tslc.ir.text import split_selector_terms
 from tslc.lower.context import LoweringSession
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.render.model import RenderField, render_text, trimmed_text
+from tslc.target_text import RenderField, render_text, trimmed_text
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 

@@ -4,24 +4,20 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from string import Formatter
 from types import MappingProxyType
 from typing import Literal
 
 from tslc.catalog.signatures import LANE_LIST_KIND
 
 PointerMutability = Literal["const", "mutable"]
-_FORMATTER = Formatter()
 
 
 @dataclass(frozen=True, slots=True)
 class SignatureKindCapability:
     """Compiler behavior for one signature kind token.
 
-    The token itself is source-visible, but these projections are compiler
-    semantics: overload identity, pointer/borrow categories, and backend type
-    projections. Keeping them together prevents a new kind from needing separate
-    edits in support policy, lowering, and every backend renderer.
+    The token itself is source-visible. This model owns only language-neutral
+    semantics; target-language type projections belong to each backend.
     """
 
     kind: str
@@ -36,13 +32,6 @@ class SignatureKindCapability:
     requires_vector_axis: bool = True
     overload_token: str = "base"
     overload_token_when_register_is_base: str | None = None
-    cpp_result_type: str | None = None
-    cpp_param_type: str | None = None
-    cpp_free_type: str | None = None
-    rust_owner_type: str | None = None
-    rust_param_type: str | None = None
-    rust_free_type: str | None = None
-    rust_concrete_type: str | None = None
 
     def overload_identity_token(self, *, register_is_base: bool) -> str:
         if register_is_base and self.overload_token_when_register_is_base is not None:
@@ -187,53 +176,6 @@ class SignatureKindCatalog:
             register_is_base=register_is_base
         )
 
-    def cpp_result_type(self, kind: str) -> str:
-        return self._projection(kind, "cpp_result_type")
-
-    def cpp_param_type(
-        self,
-        kind: str,
-        *,
-        index_type: str | None = None,
-        target_vector: str = "ToVec",
-    ) -> str:
-        return self._projection(
-            kind,
-            "cpp_param_type",
-            index_type=index_type,
-            target_vector=target_vector,
-        )
-
-    def cpp_free_type(self, kind: str, *, base_type: str) -> str:
-        return self._projection(kind, "cpp_free_type", base=base_type)
-
-    def rust_owner_type(self, kind: str, *, owner: str) -> str:
-        return self._projection(kind, "rust_owner_type", owner=owner)
-
-    def rust_param_type(self, kind: str, *, owner: str) -> str:
-        return self._projection(kind, "rust_param_type", owner=owner)
-
-    def rust_free_type(self, kind: str, *, base_type: str) -> str:
-        if self.is_const_pointer(kind) and base_type.startswith("*mut "):
-            return "*const " + base_type[len("*mut ") :]
-        return self._projection(kind, "rust_free_type", base=base_type)
-
-    def rust_concrete_type(
-        self,
-        kind: str,
-        *,
-        base_type: str,
-        register_type: str,
-        array_type: str,
-    ) -> str:
-        return self._projection(
-            kind,
-            "rust_concrete_type",
-            base=base_type,
-            register=register_type,
-            array=array_type,
-        )
-
     def _single_kind(self, flag: str) -> str:
         self._validate_single_kind(flag)
         return next(
@@ -251,27 +193,6 @@ class SignatureKindCatalog:
         if len(matches) != 1:
             raise ValueError(f"expected exactly one signature kind with {flag}")
 
-    def _projection(self, kind: str, projection_name: str, **values: str | None) -> str:
-        template = getattr(self._capability(kind), projection_name)
-        if template is None:
-            raise KeyError(
-                f"signature kind {kind!r} has no {projection_name} projection"
-            )
-        required = frozenset(
-            field_name
-            for _literal, field_name, _format_spec, _conversion in _FORMATTER.parse(
-                template
-            )
-            if field_name
-        )
-        missing = tuple(sorted(name for name in required if values.get(name) is None))
-        if missing:
-            raise ValueError(
-                f"signature kind {kind!r} {projection_name} projection requires "
-                + ", ".join(missing)
-            )
-        return template.format(**values)
-
     def _capability(self, kind: str) -> SignatureKindCapability:
         capability = self.by_kind.get(kind)
         if capability is None:
@@ -286,124 +207,53 @@ DEFAULT_SIGNATURE_KINDS = SignatureKindCatalog(
             maskable_result=True,
             overload_token="register",
             overload_token_when_register_is_base="base",
-            cpp_result_type="typename Vec::register_type",
-            cpp_param_type="typename tsl::reg_param<Vec>::type",
-            rust_owner_type="{owner}::RegisterType",
-            rust_param_type="{owner}::RegisterType",
-            rust_concrete_type="{register}",
         ),
-        SignatureKindCapability(
-            "s",
-            cpp_result_type="typename Vec::base_type",
-            cpp_param_type="typename Vec::base_type",
-            cpp_free_type="{base}",
-            rust_owner_type="{owner}::BaseType",
-            rust_param_type="{owner}::BaseType",
-            rust_free_type="{base}",
-            rust_concrete_type="{base}",
-        ),
+        SignatureKindCapability("s"),
         SignatureKindCapability(
             "m",
             maskable_result=True,
             overload_token="mask",
-            cpp_result_type="typename Vec::mask_type",
-            cpp_param_type="typename Vec::mask_type",
-            rust_owner_type="{owner}::MaskType",
-            rust_param_type="{owner}::MaskType",
-            rust_concrete_type="{register}",
         ),
-        SignatureKindCapability(
-            "im",
-            maskable_result=True,
-            cpp_result_type="typename Vec::imask_type",
-            cpp_param_type="typename Vec::imask_type",
-            rust_owner_type="{owner}::ImaskType",
-            rust_param_type="{owner}::ImaskType",
-            rust_concrete_type="{register}",
-        ),
+        SignatureKindCapability("im", maskable_result=True),
         SignatureKindCapability(
             "usize",
             requires_vector_axis=False,
-            cpp_result_type="std::size_t",
-            cpp_param_type="std::size_t",
-            cpp_free_type="std::size_t",
-            rust_owner_type="usize",
-            rust_param_type="usize",
-            rust_free_type="usize",
-            rust_concrete_type="usize",
         ),
-        SignatureKindCapability(
-            "sImm",
-            immediate_operand=True,
-        ),
+        SignatureKindCapability("sImm", immediate_operand=True),
         SignatureKindCapability(
             "ptr",
             pointer_mutability="mutable",
             requires_vector_axis=False,
             overload_token="ptr",
-            cpp_param_type="typename Vec::base_type *",
-            cpp_free_type="{base}",
-            rust_owner_type="*mut {owner}::BaseType",
-            rust_param_type="*mut {owner}::BaseType",
-            rust_free_type="{base}",
-            rust_concrete_type="*mut {base}",
         ),
         SignatureKindCapability(
             "ptr+",
             pointer_mutability="mutable",
             requires_vector_axis=False,
             overload_token="ptr",
-            cpp_param_type="typename Vec::base_type *",
-            cpp_free_type="{base}",
-            rust_owner_type="*mut {owner}::BaseType",
-            rust_param_type="*mut {owner}::BaseType",
-            rust_free_type="{base}",
-            rust_concrete_type="*mut {base}",
         ),
         SignatureKindCapability(
             "cptr",
             pointer_mutability="const",
             requires_vector_axis=False,
             overload_token="const_ptr",
-            cpp_param_type="typename Vec::base_type const *",
-            cpp_free_type="const {base}",
-            rust_owner_type="*const {owner}::BaseType",
-            rust_param_type="*const {owner}::BaseType",
-            rust_free_type="*const {base}",
-            rust_concrete_type="*const {base}",
         ),
         SignatureKindCapability(
             "cptr+",
             pointer_mutability="const",
             requires_vector_axis=False,
             overload_token="const_ptr",
-            cpp_param_type="typename Vec::base_type const *",
-            cpp_free_type="const {base}",
-            rust_owner_type="*const {owner}::BaseType",
-            rust_param_type="*const {owner}::BaseType",
-            rust_free_type="*const {base}",
-            rust_concrete_type="*const {base}",
         ),
         SignatureKindCapability(
             "void",
             maskable_result=True,
             requires_vector_axis=False,
-            cpp_result_type="void",
-            cpp_free_type="void",
-            rust_owner_type="()",
-            rust_free_type="()",
-            rust_concrete_type="()",
         ),
         SignatureKindCapability(
             "s[]",
             borrowed_parameter=True,
             scalable_deferred=True,
             overload_token="array",
-            cpp_result_type="typename ::tsl::array_for<Vec>::type",
-            cpp_param_type="typename ::tsl::array_param<Vec>::type",
-            rust_owner_type="{owner}::Array",
-            rust_param_type="&{owner}::Array",
-            rust_concrete_type="{array}",
         ),
         SignatureKindCapability(
             LANE_LIST_KIND,
@@ -411,37 +261,15 @@ DEFAULT_SIGNATURE_KINDS = SignatureKindCatalog(
             lane_list=True,
             scalable_deferred=True,
             overload_token="lane_list",
-            cpp_param_type="typename ::tsl::array_param<Vec>::type",
-            rust_owner_type="{owner}::Array",
-            rust_param_type="&{owner}::Array",
-            rust_concrete_type="{array}",
         ),
-        SignatureKindCapability(
-            "vt",
-            overload_token="target_register",
-            cpp_param_type="typename tsl::reg_param<{target_vector}>::type",
-            rust_owner_type="{owner}::RegisterType",
-            rust_param_type="{owner}::RegisterType",
-            rust_concrete_type="{register}",
-        ),
+        SignatureKindCapability("vt", overload_token="target_register"),
         SignatureKindCapability(
             "vidx",
             mask_deferred_param=True,
             index_vector=True,
             overload_token="index_register",
-            cpp_param_type="typename tsl::reg_param<{index_type}>::type",
-            rust_owner_type="{owner}::RegisterType",
-            rust_param_type="{owner}::RegisterType",
-            rust_concrete_type="{register}",
         ),
-        SignatureKindCapability(
-            "o",
-            cpp_result_type="std::string &",
-            cpp_param_type="std::string &",
-            rust_owner_type="&mut String",
-            rust_param_type="&mut String",
-            rust_concrete_type="{base}",
-        ),
+        SignatureKindCapability("o"),
     )
 )
 

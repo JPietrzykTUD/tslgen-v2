@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
+from tslc.ir.region_syntax import parse_cast_selector, segments_text, split_arg_groups
 from tslc.ir.segments import Region
-from tslc.lower.cast_selectors import parse_cast_selector
 from tslc.lower.context import LoweringSession
 from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
-from tslc.lower.region_handlers.common import _segment_text, _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.render.model import RenderField
+from tslc.target_text import RenderField
 
 
 class CastLowerer:
@@ -28,7 +27,7 @@ class CastLowerer:
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
-        args = _split_arg_groups(region.body)
+        args = split_arg_groups(region.body)
         if len(args) != 2:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-CAST",
@@ -46,7 +45,7 @@ class CastLowerer:
             )
             return region.full_text
 
-        type_text = _segment_text(args[0])
+        type_text = segments_text(args[0])
         if selector.type_kind in {"ptr", "const_ptr"}:
             if selector.variant != "reinterpret":
                 context.effects.skip(

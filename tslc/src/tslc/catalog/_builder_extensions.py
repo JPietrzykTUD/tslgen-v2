@@ -12,6 +12,7 @@ from tslc.catalog._builder_common import (
     _list_text,
     _list_text_set,
     _opt_int,
+    _source_span,
 )
 from tslc.catalog.model import (
     BackendCompileGuard,
@@ -178,6 +179,7 @@ def _build_extension(declaration: ParsedBlockDeclaration) -> Extension:
             if n is not None
         ),
         unroll_variants=(_field_text(fields.get("unroll_variants")) or "").lower() == "true",
+        source=_source_span(declaration.source),
     )
 
 
@@ -271,6 +273,7 @@ def _backend_compile_guards(
                 equals=equals,
                 hint_flag=_field_text(_child(guard, "hint_flag")),
                 diagnostic=_field_text(_child(guard, "diagnostic")),
+                source=_source_span(guard.source),
             )
         )
     return tuple(guards)

@@ -6,7 +6,7 @@ from tslc.catalog.model import Catalog, Extension
 from tslc.catalog.scalar_types import (
     normalize_scalar_tag,
 )
-from tslc.render.model import RenderField, RenderText, TemplateApplication
+from tslc.target_text import RenderField, RenderText, TemplateApplication
 
 
 def scalar_spelling(catalog: Catalog, backend_id: str, type_tag: str) -> str | None:

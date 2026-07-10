@@ -15,9 +15,10 @@ from tslc.catalog.model import (
 )
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
-from tslc.render.emitted_names import finalize_emitted_names
-from tslc.render.model import LoweredBody
-from tslc.render.project import ProfileRender, render_project
+from tslc.backend.emitted_names import finalize_emitted_names
+from tslc.target_text import LoweredBody
+from tslc.backend.emitted_profile import EmittedProfile
+from tslc.render.project import render_project
 from tslc.value_tests.coverage import parity_gaps, parity_inventory
 from tslc.value_tests import (
     ValueTestBackendProfileInput,
@@ -44,9 +45,9 @@ from tslc.value_tests.render_rust import (
 _VALUE_TEST_SUPPORTS = (CPP_VALUE_TEST_SUPPORT, RUST_VALUE_TEST_SUPPORT)
 
 
-def test_profile_render_freezes_backend_mappings() -> None:
+def test_emitted_profile_freezes_backend_mappings() -> None:
     source_cpp: dict[str, tuple[LoweredSpecialization, ...]] = {}
-    profile = ProfileRender(
+    profile = EmittedProfile(
         profile=MachineProfile("unit", "generic", frozenset(), {}),
         specializations_by_backend={"cpp": source_cpp, "rust": {}},
     )
@@ -426,7 +427,7 @@ def test_planner_warns_for_each_unsupported_authored_case() -> None:
     assert "bad_unselected_type" not in warnings[0].message
 
 
-def test_render_project_surfaces_value_test_warnings_when_requested(
+def test_render_project_consumes_prebuilt_value_test_plan(
     render_assets: RenderAssets,
 ) -> None:
     primitive = Primitive(
@@ -450,25 +451,19 @@ def test_render_project_surfaces_value_test_warnings_when_requested(
     spec = _spec("neg", "neg", param_kinds=("v",))
     profile = _profile(cpp={"neg": (spec,)})
 
-    rendered = render_project(
-        (profile,),
-        backends=("cpp",),
-        catalog=catalog,
-        value_test_warnings=True,
-        assets=render_assets,
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp", profile.profile.name, profile.specializations("cpp")
+            ),
+        )
     )
+    rendered = render_project((profile,), ("cpp",), plan, assets=render_assets)
 
-    assert [diagnostic.code for diagnostic in rendered.diagnostics] == [
+    assert [diagnostic.code for diagnostic in plan.diagnostics] == [
         "TSL-VALUE-TEST-UNSUPPORTED-CASE"
     ]
-    suppressed = render_project(
-        (profile,),
-        backends=("cpp",),
-        catalog=catalog,
-        value_test_warnings=False,
-        assets=render_assets,
-    )
-    assert suppressed.diagnostics == ()
+    assert rendered.value_tests is plan
 
 
 def test_renderers_consume_prebuilt_plans_without_catalog(
@@ -1381,8 +1376,6 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
             "_render_rust_memory.py",
         )
     )
-    pipeline = Path("tslc/src/tslc/pipeline.py").read_text(encoding="utf-8")
-
     assert len(planner.splitlines()) < 250
     for path in (
         "case_plans.py",
@@ -1435,10 +1428,6 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
     assert "tsl::tsl_core" in rust_profile_template
     assert "Catalog" not in render_rust
     assert "Primitive" not in render_rust
-    assert "value_test_warnings=self.request.value_test_warnings" in pipeline
-    assert "value_test_warnings=self.request.test_harness" not in pipeline
-
-
 def test_cpp_value_test_support_matches_renderer_dispatch() -> None:
     assert CPP_VALUE_TEST_SUPPORT.case_kinds == CPP_VALUE_TEST_RENDERER.case_kinds
     assert CPP_VALUE_TEST_RENDERER.backend_support() == CPP_VALUE_TEST_SUPPORT
@@ -1530,14 +1519,14 @@ def _profile(
     *,
     cpp: dict[str, tuple[LoweredSpecialization, ...]] | None = None,
     rust: dict[str, tuple[LoweredSpecialization, ...]] | None = None,
-) -> ProfileRender:
-    return ProfileRender(
+) -> EmittedProfile:
+    return EmittedProfile(
         profile=MachineProfile("unit", "generic", frozenset(), {}),
         specializations_by_backend={"cpp": cpp or {}, "rust": rust or {}},
     )
 
 
-def _inputs(profile: ProfileRender) -> tuple[ValueTestBackendProfileInput, ...]:
+def _inputs(profile: EmittedProfile) -> tuple[ValueTestBackendProfileInput, ...]:
     return (
         ValueTestBackendProfileInput(
             "cpp", profile.profile.name, profile.specializations("cpp")
@@ -1569,7 +1558,7 @@ def _spec(
         result_kind=result_kind,
         param_names=tuple(f"p{i}" for i in range(len(param_kinds))),
         param_kinds=param_kinds,
-        body=LoweredBody.from_text("", backend_id="cpp"),
+        body=LoweredBody.from_text(""),
         uses_sized_vector=True,
         lane_parameter="4",
         axis=axis,

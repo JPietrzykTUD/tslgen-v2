@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from tslc.backend.rust_const_args import RUST_CONST_ARG_WRAPPERS
 from tslc.backend.rust_names import (
     rust_primitive_tag_name,
     rust_primitive_trait_name,
 )
+from tslc.backend.signature_types import RUST_SIGNATURE_TYPES, rust_free_type
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.backend.target_capability import rust_extension_tag
 from tslc.documentation import (
@@ -24,8 +26,8 @@ from tslc.lower.lowerer import (
     varying_positions,
 )
 from tslc.lower.implementation_state import ImplementationState
-from tslc.render._common import feature_spelling
-from tslc.render.model import RenderContext
+from tslc.backend.target_capability import feature_spelling
+from tslc.target_text import RenderContext
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 _PRIMITIVE_TRAIT_PREFIX = "detail::primitives::"
@@ -218,7 +220,6 @@ class RustBackend:
             ret_impl = _rust_concrete_result(spec)
             body = body_ref.render(
                 RenderContext(
-                    backend_id=self.backend_id,
                     current_vector=vec,
                     current_register=spec.register_spelling,
                     current_base=spec.base_type_spelling,
@@ -385,7 +386,6 @@ class RustBackend:
         impl_register = spec.index_register_spelling
         body = body_ref.render(
             RenderContext(
-                backend_id=self.backend_id,
                 current_vector=key,
                 current_register=spec.register_spelling,
                 current_base=spec.base_type_spelling,
@@ -731,24 +731,11 @@ def _query_const_args(shape: LoweredSpecialization) -> list[str]:
 
 
 def _const_arg_type(typ: str, name: str) -> str:
-    wrappers = {
-        "bool": "BoolArg",
-        "i8": "I8Arg",
-        "i16": "I16Arg",
-        "i32": "I32Arg",
-        "i64": "I64Arg",
-        "isize": "ISizeArg",
-        "u8": "U8Arg",
-        "u16": "U16Arg",
-        "u32": "U32Arg",
-        "u64": "U64Arg",
-        "usize": "USizeArg",
-    }
-    wrapper = wrappers.get(typ)
-    if wrapper is None:
-        raise ValueError(
-            f"unsupported Rust const arg type for implementation-state query: {typ!r}"
-        )
+    wrapper = RUST_CONST_ARG_WRAPPERS.get(typ)
+    assert wrapper is not None, (
+        "Rust profile validation missed an unsupported const argument type: "
+        f"{typ!r}"
+    )
     return f"{wrapper}<{name}>"
 
 
@@ -995,7 +982,7 @@ def _free_kind_type(kind: str, base_spelling: str) -> str:
     """A free function's kind -> concrete Rust type (no `Self` projection). Pointer spellings
     carry their own mutability; `usize` is a size; `void` is unit."""
 
-    return DEFAULT_SUPPORT_POLICY.rust_free_type(kind, base_type=base_spelling)
+    return rust_free_type(kind, base_spelling)
 
 
 def _type_param_decls(
@@ -1168,11 +1155,11 @@ def _rust_concrete(spec: LoweredSpecialization, kind: str) -> str:
     """Concrete (non-associated) type for an overloaded impl's `for`/params: the impl is
     written for a concrete arg type, so associated-type projections won't do."""
 
-    return DEFAULT_SUPPORT_POLICY.rust_concrete_type(
+    return RUST_SIGNATURE_TYPES.concrete_type(
         kind,
-        base_type=spec.base_type_spelling,
-        register_type=spec.register_spelling,
-        array_type=_rust_concrete_array(spec),
+        base=spec.base_type_spelling,
+        register=spec.register_spelling,
+        array=_rust_concrete_array(spec),
     )
 
 
@@ -1204,11 +1191,11 @@ def _vector_type(spec: LoweredSpecialization) -> str:
 
 
 def _kind_type(kind: str, owner: str) -> str:
-    return DEFAULT_SUPPORT_POLICY.rust_owner_type(kind, owner=owner)
+    return RUST_SIGNATURE_TYPES.owner_type(kind, owner=owner)
 
 
 def _param_kind_type(kind: str, owner: str) -> str:
-    return DEFAULT_SUPPORT_POLICY.rust_param_type(kind, owner=owner)
+    return RUST_SIGNATURE_TYPES.parameter_type(kind, owner=owner)
 
 
 def _params(

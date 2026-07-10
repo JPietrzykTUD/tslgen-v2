@@ -70,16 +70,17 @@ tslc/
     api.py                    Public generation API
     cli.py                    CLI entry point
     compiler_assets.py        Static grammar/render asset loading
+    target_text.py            Backend-ready structured target-text values
     sources.py                Source-document loading
     syntax/                   TSL parser and parsed-source models
     catalog/                  Typed catalog model, builder, validation
     select/                   Target/profile implementation selection
     ir/                       Recursive TSIL body segments and region registry
     lower/                    Lowering from catalog + TSIL regions to typed output facts
-    backend/                  Backend dialects, translation, emitted functions
-    render/                   In-memory generated-project render models/artifacts
+    backend/                  Backend dialects, manifests, validation, emitted profiles/functions
+    render/                   Formatting of finalized profiles into project artifacts
     output/                   Artifact writing and build/test verification
-    value_tests/              Generated value-test planning and harness data
+    value_tests/              Pre-render generated value-test planning and harness data
     maintenance/              Developer tools: explain, stage dump, coverage ratchet
   tests/                      Python test suite
   CHARTER.md                  Short design contract

@@ -19,7 +19,7 @@ from tslc.lower.context import (
 )
 from tslc.lower.implementation_state import (
     ImplementationState,
-    direct_return_is_native,
+    record_rendered_region_state,
 )
 from tslc.lower.raw_text import render_raw_text
 from tslc.lower.region_handlers import (
@@ -27,7 +27,7 @@ from tslc.lower.region_handlers import (
     RegionLowerer,
     StatementFinalizer,
 )
-from tslc.render.model import (
+from tslc.target_text import (
     RenderContext,
     RenderSequence,
     RenderText,
@@ -156,7 +156,11 @@ class ExpressionRenderer:
 
     def render_text(self, segments: tuple[Segment, ...]) -> str:
         return self.render(segments).render(
-            RenderContext(backend_id=self._context.env.backend.backend_id)
+            RenderContext(
+                unsafe_block_renderer=(
+                    self._context.env.backend.syntax.render_unsafe_block
+                )
+            )
         )
 
     def _render_segment(self, segment: Segment) -> RenderText:
@@ -169,9 +173,13 @@ class ExpressionRenderer:
                 f"region {segment.keyword!r} is not supported yet: {segment.full_text!r}",
                 source=segment.source,
             )
-            self._context.effects.mark_implementation_unknown()
+            self._context.effects.mark_unknown()
             return literal_text(segment.full_text)
-        _record_rendered_region_state(segment, self._context, self._selected)
+        record_rendered_region_state(
+            self._context.effects,
+            segment,
+            self._selected,
+        )
         rendered = as_render_text(lowerer.lower(segment, self._context, self.render))
         return _finish_consumed_statement_terminator(segment, lowerer, rendered)
 
@@ -188,48 +196,6 @@ def _finish_consumed_statement_terminator(
     if isinstance(lowerer, StatementFinalizer):
         return as_render_text(lowerer.finish_statement(rendered, region))
     return render_sequence((rendered, literal_text(";")))
-
-
-def _record_rendered_region_state(
-    region: Region,
-    context: LoweringSession,
-    selected: SelectedImplementation,
-) -> None:
-    if region.keyword == "complete" and direct_return_is_native(region, selected):
-        context.effects.mark_implementation_direct()
-        return
-    if region.keyword == "intrin":
-        context.effects.mark_implementation_intrinsic()
-        return
-    if region.keyword == "call":
-        context.effects.mark_implementation_call()
-        return
-    if region.keyword == "loop":
-        selector = region.selector_text.split(",", 1)[0].strip()
-        if selector == "backend":
-            context.effects.mark_implementation_fallback()
-        elif selector != "generation":
-            context.effects.mark_implementation_composition()
-        return
-    if region.keyword in {"if", "switch"}:
-        return
-    if region.keyword in {"complete", "let", "type", "value"}:
-        return
-    if region.keyword in {
-        "assume_aligned",
-        "cast",
-        "helper",
-        "io",
-        "lanes",
-        "mask",
-        "mem",
-        "op",
-        "select_expr",
-        "var",
-    }:
-        context.effects.mark_implementation_composition()
-        return
-    context.effects.mark_implementation_unknown()
 
 
 def _clone_scope(scope: LoweringScope) -> LoweringScope:

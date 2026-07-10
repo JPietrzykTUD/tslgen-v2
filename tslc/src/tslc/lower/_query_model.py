@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from tslc.lower._text import split_head_arg, split_top_level
+from tslc.ir.text import split_head_arg, split_top_level
 from tslc.lower.context import LoweringSession, SimdTypeParameterValue, VectorValue
-from tslc.render.model import RenderField, render_text
+from tslc.target_text import RenderField, render_text
 
 
 @dataclass(frozen=True, slots=True)

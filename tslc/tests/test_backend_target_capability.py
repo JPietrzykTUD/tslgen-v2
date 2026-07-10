@@ -13,7 +13,7 @@ from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.render.cpp_project import _cpp_native_registration, _cpp_registration
-from tslc.render.model import LoweredBody
+from tslc.target_text import LoweredBody
 from tslc.render.rust_vectors import rust_registrations
 
 
@@ -54,7 +54,7 @@ def test_cpp_native_registration_exposes_vector_metadata(catalog: Catalog) -> No
         result_kind="v",
         param_names=("left", "right"),
         param_kinds=("v", "v"),
-        body=LoweredBody.from_text("return left;", backend_id="cpp"),
+        body=LoweredBody.from_text("return left;"),
         vector_spelling="tsl::simd<int32_t, tsl::neon>",
     )
 
@@ -149,7 +149,7 @@ def test_rust_registration_uses_source_tag_and_lowered_register(
         result_kind="v",
         param_names=("left", "right"),
         param_kinds=("v", "v"),
-        body=LoweredBody.from_text("return left;", backend_id="rust"),
+        body=LoweredBody.from_text("return left;"),
         vector_spelling="Simd<i32, X86Demo>",
     )
 

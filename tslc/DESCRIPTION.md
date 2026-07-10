@@ -31,7 +31,7 @@ The compiler is a pure function once source data and static compiler assets are
 loaded, orchestrated in [pipeline.py](src/tslc/pipeline.py):
 
 ```
-sources + compiler assets → parse → catalog → select → scan body → lower → emit → render → write → verify
+sources + compiler assets → parse → catalog → select → scan body → lower → finalize names → validate/plan → render → write → verify
 ```
 
 | Stage | Module | Role |
@@ -43,8 +43,9 @@ sources + compiler assets → parse → catalog → select → scan body → low
 | **select** | [select/](src/tslc/select/) | For each `(backend, extension, type)` slot, pick the best implementation body |
 | **ir / scan** | [ir/](src/tslc/ir/) | Turn a TSIL body into a recursive `tuple[Segment, ...]` — *not* an AST |
 | **lower** | [lower/](src/tslc/lower/) | Walk segments, resolve queries/intrinsics → `LoweredSpecialization` |
-| **backend** | [backend/](src/tslc/backend/) | Emit C++/Rust function text from lowered specs |
-| **render** | [render/](src/tslc/render/) | Assemble a per-profile project (headers/modules, dispatch, CMake/Cargo) |
+| **backend** | [backend/](src/tslc/backend/) | Own target type projection, helper manifests, emitted profiles, validation, and C++/Rust function text |
+| **value tests** | [value_tests/](src/tslc/value_tests/) | Plan executable cases from finalized emitted names |
+| **render** | [render/](src/tslc/render/) | Format validated profiles and prebuilt test plans into headers/modules, dispatch, CMake/Cargo, and docs |
 | **output** | [output/](src/tslc/output/) | Write the file tree; build-verify with real toolchains (incl. SDE/QEMU emulation) |
 
 Entry points: [cli.py](src/tslc/cli.py) (`python -m tslc.cli`) and
@@ -96,14 +97,22 @@ only keyword islands.* [ir/scan.py](src/tslc/ir/scan.py) scans a body into a
 recursive `tuple[Segment, ...]`:
 
 - **`RawText`** — target source, passed through verbatim;
-- **`Region`** — a recognized keyword island whose `<...>` selector is kept raw
-  and whose `(...)` payload is recursively scanned.
+- **`Region`** — a recognized keyword island whose `<...>` shell is parsed by
+  syntax-only helpers in [ir/region_syntax.py](src/tslc/ir/region_syntax.py) and
+  whose `(...)` payload is recursively scanned.
 
-The keyword set ([scan.py](src/tslc/ir/scan.py), `KEYWORDS`) is the *entire*
-extension surface — `complete`, `intrin`, `op`, `call`, `value`, `type`, `cast`,
-`var`, `let`, `mask`, `mem`, `lanes`, `io`, `if`, `loop`, `switch`,
-`assume_aligned`. **Growth happens by adding a keyword here (and a handler),
-never by adding wrapper families.**
+The descriptor registry
+([ir/region_registry.py](src/tslc/ir/region_registry.py)) is the lexical source
+of truth consumed by scanning and shell validation. The typed lower-owned
+registration
+([lower/region_handlers/registry.py](src/tslc/lower/region_handlers/registry.py))
+joins each keyword's handler factory with its implementation-state effect, so
+lowering and state classification cannot drift into parallel keyword lists.
+Together they cover `complete`, `intrin`, `helper`, `op`, `call`, `value`,
+`type`, `cast`, `var`, `let`, `mask`, `mem`, `lanes`, `io`, `if`,
+`select_expr`, `loop`, `switch`, and `assume_aligned`. **Growth happens by
+adding a lexical descriptor, its owned validator when needed, and one lowering
+registration row.**
 
 So `intrin<add, build[suffix=base::signed_of(base::in)]>(left, right)` becomes
 `_mm256_add_epi32(...)` for AVX2/si32, and
@@ -132,9 +141,24 @@ It also **propagates bottom-up** unsafe-ness and required target features
 through the live call graph
 ([pipeline.py](src/tslc/pipeline.py), `_propagate_transitive_call_facts`).
 
+After closure, constructing an
+[backend/emitted_profile.py](src/tslc/backend/emitted_profile.py) profile uses
+[backend/emitted_names.py](src/tslc/backend/emitted_names.py) to finalize masked
+and immediate wrapper names, then freezes deterministic per-backend groups.
+Backend validators reject contradictory declared
+capabilities before artifacts are constructed, while declared unsupported
+extensions remain explicit coverage skips. Helper dependency roots and helper
+admission both come from typed manifests in
+[backend/helper_requirements.py](src/tslc/backend/helper_requirements.py).
+
 Backends differ idiomatically (a `BackendDialect`,
 [backend/translation.py](src/tslc/backend/translation.py), abstracts type
-spellings, intrinsic composition, and call syntax):
+spellings, intrinsic composition, call syntax, and unsafe framing). The
+[backend registry](src/tslc/backend/registry.py) owns each backend's dialect
+factory, artifact media type and renderers, documentation formatter, validation,
+helper manifest, value-test support, and verification adapter. Signature type
+projection tables remain owned by the corresponding C++ or Rust function
+emitter; they are not registry capabilities.
 
 - **C++** — `*_impl<Vec>` struct partial-specializations + wrapper function
   templates ([backend/cpp.py](src/tslc/backend/cpp.py)).
@@ -144,8 +168,10 @@ spellings, intrinsic composition, and call syntax):
 A static substrate ships as assets
 ([backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp),
 [tsl_core.rs](src/tslc/backend/assets/tsl_core.rs)) defining `simd<T,Ext>` /
-`SimdVector` and helpers; [render/](src/tslc/render/) fills `.tmpl` templates
-into a per-profile project with a top-level dispatch header/module.
+`SimdVector` and helpers. Backend target-text values use
+[target_text.py](src/tslc/target_text.py); [render/](src/tslc/render/) only formats
+finalized, validated profiles and prebuilt value-test plans into a per-profile
+project with a top-level dispatch header/module.
 
 ## Differential value tests
 

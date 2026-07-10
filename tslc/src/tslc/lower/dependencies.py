@@ -16,10 +16,10 @@ from types import MappingProxyType
 
 from tslc.catalog.model import Catalog, Extension
 from tslc.diagnostics import SourceSpan
+from tslc.ir.region_syntax import parse_call_selector
 from tslc.ir.scan import scan
 from tslc.ir.segments import RawText, Region, Segment
-from tslc.lower._text import split_top_level
-from tslc.lower.calls import parse_call_selector
+from tslc.ir.text import split_top_level
 from tslc.lower.context import LoweringScope, VectorValue
 from tslc.lower.queries import (
     AsBaseQuery,

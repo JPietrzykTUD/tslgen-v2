@@ -25,7 +25,7 @@ from tslc.pipeline import (
     _prune_unresolved,
     _propagate_transitive_call_facts,
 )
-from tslc.render.model import LoweredBody
+from tslc.target_text import LoweredBody
 from tslc.select.selector import Selector
 from tslc.sources import SourceDocument, SourceLoader
 from tslc.syntax.ast import ParsedImplementationSelectorEntry
@@ -595,6 +595,10 @@ def _base_source(impls: str) -> str:
         "extension scalar:\n"
         '  extension_name "scalar"\n'
         '  family "scalar"\n'
+        "  cpp:\n"
+        "    supported true\n"
+        "  rust:\n"
+        "    supported true\n"
         "language cpp:\n"
         '  s32 {type "int32_t"}\n'
         "language rust:\n"
@@ -657,7 +661,7 @@ def _spec(
         param_kinds=param_kinds,
         body=LoweredBody.from_text(
             body,
-            backend_id="rust",
+            unsafe_block_renderer=lambda rendered: f"unsafe {{ {rendered} }}",
             requires_unsafe=safety.internal_unsafe,
         ),
         immediate=immediate,

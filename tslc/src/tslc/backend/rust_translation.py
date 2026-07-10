@@ -10,7 +10,7 @@ from tslc.backend.target_capability import (
     rust_extension_tag,
 )
 from tslc.catalog.model import Catalog, Extension
-from tslc.render.model import (
+from tslc.target_text import (
     RenderContext,
     RenderField,
     RenderPlaceholder,
@@ -322,6 +322,9 @@ class _RustSyntax:
                 literal_text(" })"),
             )
         )
+
+    def render_unsafe_block(self, body: str) -> str:
+        return f"unsafe {{ {body} }}"
 
 
 @dataclass(frozen=True, slots=True)

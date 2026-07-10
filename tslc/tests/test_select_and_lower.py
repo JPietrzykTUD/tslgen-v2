@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from tslc.backend.cpp import CppBackend
@@ -769,6 +771,21 @@ def test_fixed_non_x86_extension_requires_register_metadata(backend_id: str) -> 
         type_tag="si32",
     )
 
+    unsupported_slot = replace(
+        slot,
+        extension=replace(ext, backend_supported={}),
+    )
+    unsupported = Lowerer().lower(
+        unsupported_slot,
+        catalog,
+        create_backend_dialect(catalog, backend_id),
+    )
+
+    assert unsupported.specialization is None
+    assert [diagnostic.code for diagnostic in unsupported.diagnostics] == [
+        "TSL-LOWER-BACKEND-UNSUPPORTED"
+    ]
+
     lowered = Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend_id))
 
     assert lowered.specialization is None
@@ -1303,6 +1320,9 @@ class _RecordingSyntax:
     def render_compile_switch(self, selector, arms):  # noqa: ANN001, ANN201
         return self.inner.render_compile_switch(selector, arms)
 
+    def render_unsafe_block(self, body: str) -> str:
+        return self.inner.render_unsafe_block(body)
+
 
 class _RecordingDialect:
     def __init__(self, inner, syntax: _RecordingSyntax) -> None:  # noqa: ANN001
@@ -1323,6 +1343,7 @@ def test_consumed_tsil_statement_terminators_render_once() -> None:
         family="scalar",
         compose_prefix={},
         compose_suffix_by_type={},
+        backend_supported={"cpp": True},
     )
     impl = Implementation(
         ("scalar", "ints"),
@@ -1376,6 +1397,7 @@ def test_intrin_build_supports_explicit_prefix_and_suffix() -> None:
         family="x86",
         compose_prefix={},
         compose_suffix_by_type={},
+        backend_supported={"cpp": True},
     )
     impl = Implementation(
         ("custom", "ints"),
@@ -1421,6 +1443,7 @@ def test_wasm_intrin_build_requires_lane_suffix_for_typed_ops() -> None:
         intrinsic_style="wasm",
         compose_prefix={"cpp": "wasm_"},
         compose_suffix_by_type={},
+        backend_supported={"cpp": True},
     )
     impl = Implementation(
         ("wasm128", "ints"),
@@ -1464,6 +1487,7 @@ def test_wasm_intrin_build_accepts_explicit_empty_suffix_for_v128_ops() -> None:
         intrinsic_style="wasm",
         compose_prefix={"cpp": "wasm_"},
         compose_suffix_by_type={},
+        backend_supported={"cpp": True},
     )
     impl = Implementation(
         ("wasm128", "ints"),
@@ -1508,6 +1532,7 @@ def test_intrin_build_suffix_and_infix_accept_type_values() -> None:
         family="x86",
         compose_prefix={"cpp": "_custom_"},
         compose_suffix_by_type={"si32": "epi32"},
+        backend_supported={"cpp": True},
     )
     impl = Implementation(
         ("custom", "ints"),
@@ -1555,6 +1580,7 @@ def test_intrin_build_appends_literal_post_fragment() -> None:
         family="x86",
         compose_prefix={"cpp": ""},
         compose_suffix_by_type={"si32": "s32"},
+        backend_supported={"cpp": True},
     )
     impl = Implementation(
         ("custom", "ints"),
@@ -1599,6 +1625,7 @@ def test_intrin_build_prefix_remains_text_only() -> None:
         family="x86",
         compose_prefix={"cpp": "_custom_"},
         compose_suffix_by_type={"si32": "epi32"},
+        backend_supported={"cpp": True},
     )
     impl = Implementation(
         ("custom", "ints"),
@@ -1641,6 +1668,7 @@ def test_intrin_build_rejects_whitespace_separated_selector_terms() -> None:
         family="x86",
         compose_prefix={"cpp": "_custom_"},
         compose_suffix_by_type={"si32": "epi32"},
+        backend_supported={"cpp": True},
     )
     impl = Implementation(
         ("custom", "ints"),

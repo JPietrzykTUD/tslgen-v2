@@ -21,7 +21,7 @@ from tslc.lower.implementation_state import (
     infer_direct_implementation_state,
 )
 from tslc.lower.region_handlers.control import IfLowerer, SwitchLowerer
-from tslc.render.model import render_sequence
+from tslc.target_text import render_sequence
 from tslc.select.selector import SelectedImplementation
 
 

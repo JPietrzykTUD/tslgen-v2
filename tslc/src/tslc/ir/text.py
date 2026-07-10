@@ -1,4 +1,4 @@
-"""Small shared text utilities for TSIL selector/modifier parsing."""
+"""Small text utilities shared by TSIL scanning, validation, and lowering."""
 
 from __future__ import annotations
 
@@ -19,11 +19,7 @@ def skip_string(text: str, index: int) -> int:
 
 
 def split_top_level(text: str, separator: str = ",") -> list[str]:
-    """Split ``text`` on ``separator`` at bracket/string depth zero.
-
-    Respects ``()`` and ``<>`` nesting and skips double-quoted strings, so a
-    comma inside ``intrin::suffix("x,y")`` does not split it.
-    """
+    """Split ``text`` on ``separator`` at bracket/string depth zero."""
 
     terms: list[str] = []
     depth = 0
@@ -48,11 +44,7 @@ def split_top_level(text: str, separator: str = ",") -> list[str]:
 
 
 def split_selector_terms(text: str) -> list[str]:
-    """Split selector/modifier text on top-level commas.
-
-    Selector surfaces can contain nested queries and bracketed modifier lists,
-    so splitting respects ``()``, ``<>``, ``[]``, and quoted strings.
-    """
+    """Split selector text on commas outside nested syntax and strings."""
 
     terms: list[str] = []
     round_depth = 0
@@ -94,11 +86,7 @@ def split_selector_terms(text: str) -> list[str]:
 
 
 def split_head_arg(text: str) -> tuple[str, str] | None:
-    """Split a ``head(arg)`` form into ``(head, arg)`` with balanced parens.
-
-    Returns ``None`` when ``text`` is not a single ``head(...)`` call (e.g. a
-    bare leaf like ``base::in`` or a stray suffix after the closing paren).
-    """
+    """Split a balanced ``head(arg)`` form into its head and argument."""
 
     text = text.strip()
     open_index = text.find("(")
@@ -122,3 +110,6 @@ def split_head_arg(text: str) -> tuple[str, str] | None:
                 return text[:open_index].strip(), text[open_index + 1 : i].strip()
         i += 1
     return None
+
+
+__all__ = ("skip_string", "split_head_arg", "split_selector_terms", "split_top_level")

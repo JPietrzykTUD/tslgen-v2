@@ -3,26 +3,20 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from tslc.backend.cpp import CppBackend
+from tslc.backend.capability import DocumentationSpec as _DocSpec
+from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.registry import backend_capability
 from tslc.catalog.model import Extension
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
 from tslc.render.documentation_formatters import (
-    DocumentationSpec as _DocSpec,
-    documentation_formatter,
     is_free_function,
     static_lane_count,
 )
 
-if TYPE_CHECKING:
-    from tslc.render.project import ProfileRender
-
-_CPP_BACKEND = CppBackend()
-
-
-def documentation_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifact]:
+def documentation_artifacts(profiles: tuple[EmittedProfile, ...]) -> list[Artifact]:
     return [
         _artifact(
             "docs/specializations/specializations.json",
@@ -32,7 +26,7 @@ def documentation_artifacts(profiles: tuple[ProfileRender, ...]) -> list[Artifac
     ]
 
 
-def _specializations_json(profiles: tuple[ProfileRender, ...]) -> str:
+def _specializations_json(profiles: tuple[EmittedProfile, ...]) -> str:
     strings = _StringTable()
     features = _IndexedTuples()
     safeties = _IndexedTuples()
@@ -235,7 +229,7 @@ class _IndexedTuples:
 
 
 def _profile_row(
-    profile: "ProfileRender",
+    profile: "EmittedProfile",
     *,
     strings: _StringTable,
     features: _IndexedTuples,
@@ -415,12 +409,12 @@ def _target_class_sort_key(family: str, width: str) -> str:
     return f"{family_order}:{width_order}:{family}:{width}"
 
 
-def _extension_family(profile: ProfileRender, spec: LoweredSpecialization) -> str:
+def _extension_family(profile: EmittedProfile, spec: LoweredSpecialization) -> str:
     extension = profile.extensions.get(spec.extension_name)
     return extension.family if extension is not None else ""
 
 
-def _profile_group(profile: ProfileRender) -> tuple[str, str, str]:
+def _profile_group(profile: EmittedProfile) -> tuple[str, str, str]:
     family = profile.profile.family or "unclassified"
     return (
         family,
@@ -429,7 +423,7 @@ def _profile_group(profile: ProfileRender) -> tuple[str, str, str]:
     )
 
 
-def _profile_summary(profile: ProfileRender, feature_limit: int = 2) -> str:
+def _profile_summary(profile: EmittedProfile, feature_limit: int = 2) -> str:
     family = profile.profile.family or "unclassified"
     base = f"{_human_label(family)} class"
     features = tuple(sorted(profile.profile.features))
@@ -438,7 +432,7 @@ def _profile_summary(profile: ProfileRender, feature_limit: int = 2) -> str:
     return f"{base} + {_feature_summary(features, feature_limit)}"
 
 
-def _profile_tooltip(profile: ProfileRender, summary: str) -> str:
+def _profile_tooltip(profile: EmittedProfile, summary: str) -> str:
     features = tuple(sorted(profile.profile.features))
     feature_text = ", ".join(features) if features else "none"
     return "\n".join(
@@ -450,7 +444,7 @@ def _profile_tooltip(profile: ProfileRender, summary: str) -> str:
     )
 
 
-def _profile_sort_key(profile: ProfileRender) -> str:
+def _profile_sort_key(profile: EmittedProfile) -> str:
     features = tuple(sorted(profile.profile.features))
     return ":".join(
         (
@@ -463,9 +457,7 @@ def _profile_sort_key(profile: ProfileRender) -> str:
 
 
 def _register_type(spec: LoweredSpecialization, backend_id: str) -> str:
-    if backend_id == "cpp":
-        return _CPP_BACKEND.documentation_register_type(spec)
-    return spec.register_spelling
+    return backend_capability(backend_id).documentation_formatter().register_type(spec)
 
 
 def _width_label(spec: LoweredSpecialization, extension: Extension | None) -> str:
@@ -516,9 +508,9 @@ def _expression_row(
     strings: _StringTable,
 ) -> tuple[int, int, int, int] | None:
     doc = _representative_spec(specs, backend_id=backend_id)
-    formatter = documentation_formatter(backend_id)
-    if doc is None or formatter is None:
+    if doc is None:
         return None
+    formatter = backend_capability(backend_id).documentation_formatter()
     facade = formatter.facade(doc)
     expression = formatter.expression(doc)
     return (

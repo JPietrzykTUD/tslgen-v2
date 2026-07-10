@@ -15,7 +15,6 @@ from tslc.catalog.signature_kinds import (
     SignatureKindCatalog,
 )
 from tslc.catalog.signatures import parse_signature
-from tslc.render.backend_drivers import render_backend_drivers
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
@@ -55,10 +54,6 @@ def test_backend_registries_agree_with_support_policy(catalog: Catalog) -> None:
     assert tuple(capability.backend_id for capability in capabilities) == (
         DEFAULT_SUPPORT_POLICY.default_backend_ids
     )
-    assert tuple(
-        driver.backend_id
-        for driver in render_backend_drivers(DEFAULT_SUPPORT_POLICY.default_backend_ids)
-    ) == DEFAULT_SUPPORT_POLICY.default_backend_ids
     assert tuple(capability.root_path for capability in capabilities) == ("cpp", "rust")
     assert tuple(
         capability.value_test_support().backend_id for capability in capabilities
@@ -88,7 +83,7 @@ def test_policy_owns_mask_forms() -> None:
     assert not policy.is_maskable_signature(gather_shape)
 
 
-def test_signature_kind_capabilities_single_source_projection_rules() -> None:
+def test_signature_kind_capabilities_own_language_neutral_rules() -> None:
     policy = DEFAULT_SUPPORT_POLICY
 
     assert policy.supported_signature_kinds >= {
@@ -120,23 +115,6 @@ def test_signature_kind_capabilities_single_source_projection_rules() -> None:
     assert policy.overload_identity_token("vidx", register_is_base=False) == (
         "index_register"
     )
-    assert policy.cpp_result_type("m") == "typename Vec::mask_type"
-    assert policy.cpp_param_type("vidx", index_type="IndicesType") == (
-        "typename tsl::reg_param<IndicesType>::type"
-    )
-    assert policy.rust_owner_type("o", owner="S") == "&mut String"
-    assert policy.rust_param_type("s[]", owner="S") == "&S::Array"
-    assert (
-        policy.rust_concrete_type(
-            "ptr",
-            base_type="i32",
-            register_type="__m128i",
-            array_type="[i32; 4]",
-        )
-        == "*mut i32"
-    )
-    with pytest.raises(ValueError, match="requires index_type"):
-        policy.cpp_param_type("vidx")
 
 
 def test_signature_kind_catalog_rejects_ambiguous_capabilities() -> None:

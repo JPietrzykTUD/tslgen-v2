@@ -7,8 +7,8 @@ from dataclasses import dataclass
 
 from tslc.backend.target_capability import rust_extension_tag
 from tslc.catalog.model import Extension
+from tslc.catalog.scalar_types import scalar_bit_width_or_default
 from tslc.lower.lowerer import LoweredSpecialization
-from tslc.render._common import type_bits
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
@@ -19,6 +19,7 @@ class RustVectorRegistration:
     base_spelling: str
     register_spelling: str
     vector_bits: int
+    type_bits: int
 
 
 def rust_registrations(
@@ -41,10 +42,10 @@ def rust_registrations(
         base = registration.base_spelling
         register = registration.register_spelling
         bits = registration.vector_bits
-        mask = rust_mask_type(extension, base, register)
-        imask = rust_imask_type(extension, base, mask, bits)
+        mask = rust_mask_type(extension, registration.type_bits, register)
+        imask = rust_imask_type(extension, registration.type_bits, mask, bits)
         alignment = bits // 8
-        lane_count = bits // type_bits(base)
+        lane_count = bits // registration.type_bits
         array = f"array_type<{base}, {lane_count}, {alignment}>"
         tag = rust_extension_tag(extension)
         lines.append(
@@ -185,23 +186,24 @@ def _record_rust_vector(
         base_spelling=base_spelling,
         register_spelling=register_spelling,
         vector_bits=extension.vector_bits,
+        type_bits=scalar_bit_width_or_default(type_tag),
     )
 
 
-def rust_mask_type(extension: Extension | None, base_spelling: str, register: str) -> str:
+def rust_mask_type(extension: Extension | None, type_bits: int, register: str) -> str:
     if extension is None or extension.mask_policy.kind != "native_predicate_by_lanes":
         return register
-    lanes = extension.vector_bits // type_bits(base_spelling)
+    lanes = extension.vector_bits // type_bits
     return extension.mask_policy.spelling_for_lanes("rust", max(8, lanes)) or register
 
 
 def rust_imask_type(
-    extension: Extension | None, base_spelling: str, mask: str, vector_bits: int
+    extension: Extension | None, type_bits: int, mask: str, vector_bits: int
 ) -> str:
     kind = extension.imask_policy.kind if extension is not None else "lane_bitmask"
     if kind == "same_as_mask_type":
         return mask
-    lanes = vector_bits // type_bits(base_spelling)
+    lanes = vector_bits // type_bits
     width = 8 if lanes <= 8 else 16 if lanes <= 16 else 32 if lanes <= 32 else 64
     return f"u{width}"
 

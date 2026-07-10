@@ -33,10 +33,10 @@ from tslc.catalog.scalar_types import scalar_bit_width_or_default
 from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, sort_diagnostics
 from tslc.documentation import PrimitiveDocumentation, primitive_documentation
+from tslc.ir.region_syntax import parse_call_selector
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region, Segment
 from tslc.lower.body_rendering import ExpressionRenderer, body_context, render_body
-from tslc.lower.calls import parse_call_selector
 from tslc.lower.context import (
     LaneListParameter,
     LoweringEnv,
@@ -56,7 +56,7 @@ from tslc.lower.implementation_state import (
     ImplementationState,
 )
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
-from tslc.render.model import (
+from tslc.target_text import (
     LoweredBody,
     render_text,
 )
@@ -158,6 +158,7 @@ class LoweredSpecialization:
     safety: ImplementationSafety = field(default_factory=ImplementationSafety)
     variant_bodies: tuple[LoweredImplementationVariant, ...] = ()
     documentation: PrimitiveDocumentation = field(default_factory=PrimitiveDocumentation)
+    source: SourceSpan | None = None
 
     @property
     def body_text(self) -> str:
@@ -231,6 +232,13 @@ class Lowerer:
                 f"could not parse signature {selected.primitive.signature!r}",
                 source=_primitive_signature_source(selected),
             )
+        if not selected.extension.supports_backend(backend.backend_id):
+            return _skip(
+                "TSL-LOWER-BACKEND-UNSUPPORTED",
+                f"extension {selected.extension.isa_name!r} is not supported on "
+                f"{backend.backend_id}",
+                source=_implementation_source(selected),
+            )
         deferred_kinds = self._support.deferred_signature_kinds_for_extension(
             shape, selected.extension
         )
@@ -291,15 +299,6 @@ class Lowerer:
             )
         )
         if register_spelling is None:
-            if not selected.extension.supports_backend(backend.backend_id):
-                # The corpus declares this extension unemittable for this backend (e.g. SVE on
-                # Rust, which has no stable scalable intrinsics): a coverage gap, not a failure.
-                return _skip(
-                    "TSL-LOWER-BACKEND-UNSUPPORTED",
-                    f"extension {selected.extension.isa_name!r} is not supported on "
-                    f"{backend.backend_id}",
-                    source=_implementation_source(selected),
-                )
             return _error(
                 "TSL-LOWER-NO-REGISTER-TYPE",
                 f"no {backend.backend_id} register-type spelling for "
@@ -439,7 +438,7 @@ class Lowerer:
         safety = selected.implementation.safety.merge(default_body.safety)
         body = LoweredBody.from_render_text(
             default_body.rendered,
-            backend_id=backend.backend_id,
+            unsafe_block_renderer=backend.syntax.render_unsafe_block,
             requires_unsafe=safety.internal_unsafe,
         )
 
@@ -481,7 +480,7 @@ class Lowerer:
                     name=variant.name,
                     body=LoweredBody.from_render_text(
                         rendered_variant.rendered,
-                        backend_id=backend.backend_id,
+                        unsafe_block_renderer=backend.syntax.render_unsafe_block,
                         requires_unsafe=variant_safety.internal_unsafe,
                     ),
                     implementation_state=rendered_variant.implementation_state,
@@ -570,6 +569,7 @@ class Lowerer:
                 detailed=selected.primitive.detailed_description,
                 semantics=selected.primitive.semantics,
             ),
+            source=_implementation_source(selected),
         )
         return LoweringResult(
             specialization=specialization,

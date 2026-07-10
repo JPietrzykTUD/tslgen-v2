@@ -3,34 +3,30 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING
-
 from tslc.backend.cpp import CppBackend
+from tslc.backend.cpp_validation import resolve_cpp_compile_guards
+from tslc.backend.emitted_profile import (
+    EmittedProfile,
+    used_extensions,
+    used_type_specs,
+)
 from tslc.backend.target_capability import (
     cpp_x86_register_helper,
+    feature_spelling,
     is_x86_register_extension,
 )
+from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import BackendCompileGuard, Extension
+from tslc.catalog.scalar_types import scalar_bit_width_or_default
 from tslc.catalog.target_families import ProfileFamilyCapability
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization, varying_positions
 from tslc.output.artifacts import Artifact
 from tslc.output.verify_model import VerifyProfile, VerifyRunner
-from tslc.render._common import (
-    feature_spelling,
-    slug,
-    text,
-    type_bits,
-    used_exts,
-    used_type_specs,
-)
-from tslc.render.model import TemplateApplication
+from tslc.render._common import slug, text
+from tslc.target_text import TemplateApplication
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
-
-if TYPE_CHECKING:
-    from tslc.render.project import ProfileRender
-
 
 _CPP_STATIC_HEADERS = (
     "tsl_core.hpp",
@@ -46,39 +42,46 @@ _CMAKE_CXX_FEATURE_FLAG_COMPILERS = "GNU,Clang,AppleClang,IntelLLVM"
 
 
 def cpp_artifacts(
-    profiles: tuple[ProfileRender, ...], assets: RenderAssets
+    profiles: tuple[EmittedProfile, ...],
+    assets: RenderAssets,
+    *,
+    media_type: str,
 ) -> list[Artifact]:
     backend = CppBackend()
     artifacts = [
-        text(f"cpp/include/{header}", assets.text(header))
+        text(f"cpp/include/{header}", assets.text(header), media_type=media_type)
         for header in _CPP_STATIC_HEADERS
     ] + [
-        text("cpp/include/tsl_primitives.hpp", _cpp_primitive_tags(profiles)),
+        text(
+            "cpp/include/tsl_primitives.hpp",
+            _cpp_primitive_tags(profiles),
+            media_type=media_type,
+        ),
         # Ship the formatter config at the C++ project root so `clang-format` (ascending from
         # include/ and tests/) finds it and the generated project is self-contained.
-        text("cpp/.clang-format", assets.text(".clang-format")),
+        text("cpp/.clang-format", assets.text(".clang-format"), media_type=media_type),
     ]
-    for profile_render in profiles:
-        by_primitive = profile_render.specializations("cpp")
-        emitted_exts = used_exts(by_primitive)
+    for emitted_profile in profiles:
+        by_primitive = emitted_profile.specializations("cpp")
+        emitted_exts = used_extensions(by_primitive)
         x86_exts = [
             e
             for e in emitted_exts
-            if is_x86_register_extension(profile_render.extensions.get(e))
+            if is_x86_register_extension(emitted_profile.extensions.get(e))
         ]
-        includes = _cpp_includes(emitted_exts, profile_render.extensions)
+        includes = _cpp_includes(emitted_exts, emitted_profile.extensions)
         registrations = "".join(
-            _cpp_registration(ext, profile_render.extensions.get(ext))
+            _cpp_registration(ext, emitted_profile.extensions.get(ext))
             for ext in x86_exts
         )
         registrations += _cpp_sized_registration(
-            emitted_exts, profile_render.extensions
+            emitted_exts, emitted_profile.extensions
         )
         registrations += _cpp_native_registration(
-            by_primitive, profile_render.extensions
+            by_primitive, emitted_profile.extensions
         )
         registrations += _cpp_inferred_simd_registrations(
-            by_primitive, profile_render.extensions
+            by_primitive, emitted_profile.extensions
         )
         # All declarations (impl primary templates + wrappers) precede all
         # specialization bodies, so any body may call any primitive's wrapper.
@@ -99,12 +102,24 @@ def cpp_artifacts(
         )
         content = _guard_cpp_profile(
             content,
-            used_exts(by_primitive),
-            profile_render.extensions,
+            used_extensions(by_primitive),
+            emitted_profile.extensions,
         )
-        profile_slug = slug(profile_render.profile.name)
-        artifacts.append(text(f"cpp/include/tsl_{profile_slug}.hpp", content))
-        artifacts.append(text(f"cpp/tests/smoke_{profile_slug}.cpp", _cpp_smoke(profile_render)))
+        profile_slug = slug(emitted_profile.profile.name)
+        artifacts.append(
+            text(
+                f"cpp/include/tsl_{profile_slug}.hpp",
+                content,
+                media_type=media_type,
+            )
+        )
+        artifacts.append(
+            text(
+                f"cpp/tests/smoke_{profile_slug}.cpp",
+                _cpp_smoke(emitted_profile),
+                media_type=media_type,
+            )
+        )
 
     artifacts.append(
         text(
@@ -113,27 +128,38 @@ def cpp_artifacts(
                 profiles,
                 include_algorithm=_cpp_profiles_support_algorithm(profiles),
             ),
+            media_type=media_type,
         )
     )
     artifacts.append(
-        text("cpp/docs/input/tsl_api_docs.hpp", _cpp_documentation_facade(profiles))
+        text(
+            "cpp/docs/input/tsl_api_docs.hpp",
+            _cpp_documentation_facade(profiles),
+            media_type=media_type,
+        )
     )
-    artifacts.append(text("cpp/CMakeLists.txt", _cpp_cmakelists(profiles, assets)))
+    artifacts.append(
+        text(
+            "cpp/CMakeLists.txt",
+            _cpp_cmakelists(profiles, assets),
+            media_type=media_type,
+        )
+    )
     return artifacts
 
 
-def cpp_verify_profiles(profiles: tuple[ProfileRender, ...]) -> tuple[VerifyProfile, ...]:
+def cpp_verify_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[VerifyProfile, ...]:
     return tuple(
         VerifyProfile(
-            profile_name=slug(profile_render.profile.name),
-            file_stem=slug(profile_render.profile.name),
-            family=profile_render.profile.family,
-            compile_modes=profile_render.profile.compile_modes,
-            cpp_flags=cpp_flags(profile_render.profile, profile_render.profile_family),
-            cpp_target=cpp_target(profile_render.profile, profile_render.profile_family),
-            runner=_verify_runner(profile_render.profile),
+            profile_name=slug(emitted_profile.profile.name),
+            file_stem=slug(emitted_profile.profile.name),
+            family=emitted_profile.profile.family,
+            compile_modes=emitted_profile.profile.compile_modes,
+            cpp_flags=cpp_flags(emitted_profile.profile, emitted_profile.profile_family),
+            cpp_target=cpp_target(emitted_profile.profile, emitted_profile.profile_family),
+            runner=_verify_runner(emitted_profile.profile),
         )
-        for profile_render in profiles
+        for emitted_profile in profiles
     )
 
 
@@ -191,12 +217,12 @@ def _cpp_includes(emitted_exts: list[str], extensions: Mapping[str, Extension]) 
     return "\n".join(lines) + "\n"
 
 
-def _cpp_primitive_tags(profiles: tuple[ProfileRender, ...]) -> str:
+def _cpp_primitive_tags(profiles: tuple[EmittedProfile, ...]) -> str:
     names = sorted(
         {
             primitive
-            for profile_render in profiles
-            for primitive in profile_render.specializations("cpp")
+            for emitted_profile in profiles
+            for primitive in emitted_profile.specializations("cpp")
         }
     )
     lines = [
@@ -214,7 +240,7 @@ def _guard_cpp_profile(
     emitted_exts: Sequence[str],
     extensions: Mapping[str, Extension],
 ) -> str:
-    guards = _cpp_compile_guards(emitted_exts, extensions)
+    guards = resolve_cpp_compile_guards(emitted_exts, extensions).guards
     if not guards:
         return content
     condition = _cpp_compile_guard_condition(guards)
@@ -226,30 +252,6 @@ def _guard_cpp_profile(
         f'#  error "{diagnostic}"\n'
         "#endif\n"
     )
-
-
-def _cpp_compile_guards(
-    emitted_exts: Sequence[str],
-    extensions: Mapping[str, Extension],
-) -> tuple[BackendCompileGuard, ...]:
-    guards: dict[str, BackendCompileGuard] = {}
-    macro_values: dict[str, str] = {}
-    for ext in emitted_exts:
-        extension = extensions.get(ext)
-        metadata = None if extension is None else extension.metadata.backend.get("cpp")
-        for guard in () if metadata is None else metadata.compile_guards:
-            existing = guards.get(guard.name)
-            if existing is not None and existing != guard:
-                raise ValueError(f"conflicting C++ compile guard {guard.name!r}")
-            required = macro_values.get(guard.macro)
-            if required is not None and required != guard.equals:
-                raise ValueError(
-                    f"conflicting C++ compile guard values for {guard.macro}: "
-                    f"{required} and {guard.equals}"
-                )
-            guards[guard.name] = guard
-            macro_values[guard.macro] = guard.equals
-    return tuple(guards[name] for name in sorted(guards))
 
 
 def _cpp_compile_guard_condition(guards: Sequence[BackendCompileGuard]) -> str:
@@ -272,8 +274,9 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
 
     helper = cpp_x86_register_helper(extension)
     bits = extension.vector_bits if extension is not None else None
-    if helper is None or bits is None:
-        raise ValueError(f"unsupported C++ x86 register extension {ext!r}")
+    assert helper is not None and bits is not None, (
+        f"C++ profile validation missed unsupported x86 extension {ext!r}"
+    )
     if extension is not None and extension.mask_policy.kind == "native_predicate_by_lanes":
         mask = f"typename detail::native_mask<{extension.vector_bits}, T>::type"
     else:
@@ -324,7 +327,13 @@ def _cpp_native_registration(
         if register is None:
             continue
         bits = extension.vector_bits
-        mask = _cpp_mask_type(extension, bits, register, base_type=base)
+        mask = _cpp_mask_type(
+            extension,
+            bits,
+            register,
+            base_type=base,
+            type_tag=type_tag,
+        )
         imask = _cpp_imask_type(extension, bits, mask, base_type=base)
         alignment = DEFAULT_SUPPORT_POLICY.vector_alignment_bytes(extension, type_tag)
         element_count = _cpp_element_count_metadata(extension, type_tag, base)
@@ -433,11 +442,10 @@ def _cpp_element_count_metadata(
     if lane_count is not None:
         return _cpp_static_element_count_metadata(str(lane_count))
     runtime = extension.runtime_lane_count.get("cpp")
-    if runtime is None:
-        raise ValueError(
-            f"extension {extension.name!r} needs a runtime_lane_count entry "
-            "for backend 'cpp' for scalable C++ vector registration"
-        )
+    assert runtime is not None, (
+        "C++ profile validation missed a scalable runtime_lane_count entry for "
+        f"extension {extension.name!r}"
+    )
     runtime = TemplateApplication(
         f"{extension.name}.runtime_lane_count.cpp",
         runtime,
@@ -519,12 +527,13 @@ def _cpp_mask_type(
     register: str,
     *,
     base_type: str,
+    type_tag: str,
 ) -> str:
     kind = extension.mask_policy.kind
     if kind == "native_predicate":
         return extension.mask_policy.spelling("cpp") or register
     if kind == "native_predicate_by_lanes":
-        lanes = vector_bits // type_bits(base_type)
+        lanes = vector_bits // scalar_bit_width_or_default(type_tag)
         concrete = extension.mask_policy.spelling_for_lanes("cpp", max(8, lanes))
         if concrete is not None:
             return concrete
@@ -547,34 +556,25 @@ def _cpp_imask_type(
     return f"typename detail::lane_bitmask_int<{vector_bits}, {base_type}>::type"
 
 
-def _cpp_profiles_support_algorithm(profiles: tuple[ProfileRender, ...]) -> bool:
+def _cpp_profiles_support_algorithm(profiles: tuple[EmittedProfile, ...]) -> bool:
     if not profiles:
         return False
-    required = {
-        "load",
-        "store",
-        "store_mask",
-        "to_integral",
-        "to_mask",
-        "gather_narrow",
-        "compress_store",
-        "mask_population_count",
-        "mask_binary_and",
-    }
     return all(
-        required <= set(profile_render.specializations("cpp"))
-        for profile_render in profiles
+        CPP_HELPER_MANIFEST.supports(
+            "algorithm", emitted_profile.specializations("cpp")
+        )
+        for emitted_profile in profiles
     )
 
 
 def _cpp_dispatch(
-    profiles: tuple[ProfileRender, ...],
+    profiles: tuple[EmittedProfile, ...],
     *,
     include_algorithm: bool = False,
 ) -> str:
     lines = ["#pragma once", ""]
-    for index, profile_render in enumerate(profiles):
-        profile_slug = slug(profile_render.profile.name)
+    for index, emitted_profile in enumerate(profiles):
+        profile_slug = slug(emitted_profile.profile.name)
         keyword = "#if" if index == 0 else "#elif"
         lines.append(f"{keyword} defined(TSL_PROFILE_{profile_slug.upper()})")
         lines.append(f'#  include "tsl_{profile_slug}.hpp"')
@@ -586,12 +586,12 @@ def _cpp_dispatch(
     return "\n".join(lines) + "\n"
 
 
-def _cpp_documentation_facade(profiles: tuple[ProfileRender, ...]) -> str:
+def _cpp_documentation_facade(profiles: tuple[EmittedProfile, ...]) -> str:
     backend = CppBackend()
     api_declarations: list[str] = []
     seen_api: set[str] = set()
-    for profile_render in profiles:
-        by_primitive = profile_render.specializations("cpp")
+    for emitted_profile in profiles:
+        by_primitive = emitted_profile.specializations("cpp")
         for name in sorted(by_primitive):
             declaration = backend.render_documentation_api_declaration(
                 name, by_primitive[name]
@@ -616,12 +616,12 @@ def _cpp_documentation_facade(profiles: tuple[ProfileRender, ...]) -> str:
     return "\n\n".join(section.rstrip() for section in sections if section.strip()) + "\n"
 
 
-def _cpp_smoke(profile_render: ProfileRender) -> str:
+def _cpp_smoke(emitted_profile: EmittedProfile) -> str:
     # Address-take every emitted wrapper instantiation so the profile's bodies are
     # fully compiled (with the profile's ISA flags), not merely parsed.
     lines = ["#include <tsl.hpp>", "", "namespace {"]
     index = 0
-    by_primitive = profile_render.specializations("cpp")
+    by_primitive = emitted_profile.specializations("cpp")
     for name in sorted(by_primitive):
         specs = by_primitive[name]
         first = specs[0]
@@ -731,7 +731,7 @@ def _cpp_sized_vector_type(base_spelling: str, extension_name: str, lanes: int) 
     return f"tsl::simd<{base_spelling}, tsl::{extension_name}<{lanes}>>"
 
 
-def _cpp_cmakelists(profiles: tuple[ProfileRender, ...], assets: RenderAssets) -> str:
+def _cpp_cmakelists(profiles: tuple[EmittedProfile, ...], assets: RenderAssets) -> str:
     slugs = tuple(slug(profile.profile.name) for profile in profiles)
     ungated_slugs = tuple(
         slug(profile.profile.name)
@@ -767,7 +767,7 @@ def _cpp_cmakelists(profiles: tuple[ProfileRender, ...], assets: RenderAssets) -
     return rendered.rstrip("\n") + "\n"
 
 
-def _profile_alias_choices(profiles: tuple[ProfileRender, ...]) -> tuple[str, ...]:
+def _profile_alias_choices(profiles: tuple[EmittedProfile, ...]) -> tuple[str, ...]:
     return tuple(
         profile.profile.name
         for profile in profiles
@@ -775,7 +775,7 @@ def _profile_alias_choices(profiles: tuple[ProfileRender, ...]) -> tuple[str, ..
     )
 
 
-def _cpp_profile_auto_choices(profiles: tuple[ProfileRender, ...]) -> tuple[str, ...]:
+def _cpp_profile_auto_choices(profiles: tuple[EmittedProfile, ...]) -> tuple[str, ...]:
     return tuple(
         _cpp_profile_auto_mode_name(gate)
         for gate in _cpp_profile_auto_gates(profiles)
@@ -789,7 +789,7 @@ def _cpp_profile_auto_hint(auto_choices: tuple[str, ...]) -> str:
 
 
 def _cpp_profile_auto_helpers(
-    profiles: tuple[ProfileRender, ...],
+    profiles: tuple[EmittedProfile, ...],
     assets: RenderAssets,
 ) -> str:
     if not _cpp_profile_auto_gates(profiles):
@@ -797,10 +797,10 @@ def _cpp_profile_auto_helpers(
     return assets.text("cpp_profile_auto_helpers.cmake").strip()
 
 
-def _cpp_profile_aliases(profiles: tuple[ProfileRender, ...]) -> str:
+def _cpp_profile_aliases(profiles: tuple[EmittedProfile, ...]) -> str:
     lines: list[str] = []
-    for profile_render in profiles:
-        profile_name = profile_render.profile.name
+    for emitted_profile in profiles:
+        profile_name = emitted_profile.profile.name
         profile_slug = slug(profile_name)
         if profile_name == profile_slug:
             continue
@@ -810,10 +810,10 @@ def _cpp_profile_aliases(profiles: tuple[ProfileRender, ...]) -> str:
     return "\n".join(lines)
 
 
-def _cpp_profile_targets(profiles: tuple[ProfileRender, ...]) -> str:
+def _cpp_profile_targets(profiles: tuple[EmittedProfile, ...]) -> str:
     blocks: list[str] = []
-    for profile_render in profiles:
-        profile_slug = slug(profile_render.profile.name)
+    for emitted_profile in profiles:
+        profile_slug = slug(emitted_profile.profile.name)
         target = f"tsl_profile_{profile_slug}"
         lines = [
             f"add_library({target} INTERFACE)",
@@ -828,7 +828,7 @@ def _cpp_profile_targets(profiles: tuple[ProfileRender, ...]) -> str:
                 f"TSL_PROFILE_{profile_slug.upper()})"
             ),
         ]
-        flags = cpp_flags(profile_render.profile, profile_render.profile_family)
+        flags = cpp_flags(emitted_profile.profile, emitted_profile.profile_family)
         if flags:
             lines.append(
                 f"target_compile_options({target} INTERFACE "
@@ -840,20 +840,20 @@ def _cpp_profile_targets(profiles: tuple[ProfileRender, ...]) -> str:
 
 
 def _cpp_profile_detection(
-    profiles: tuple[ProfileRender, ...],
+    profiles: tuple[EmittedProfile, ...],
     fallback_profile: str,
     *,
     auto_gate: str | None,
 ) -> str:
     blocks: list[str] = []
-    for profile_render in _auto_detection_order(profiles):
-        profile = profile_render.profile
+    for emitted_profile in _auto_detection_order(profiles):
+        profile = emitted_profile.profile
         profile_slug = slug(profile.name)
         if profile.auto_detect_gate != auto_gate:
             continue
         if profile_slug == fallback_profile and not profile.features:
             continue
-        source = _cpp_profile_detection_source(profile_render)
+        source = _cpp_profile_detection_source(emitted_profile)
         if source is None:
             continue
         variable = "TSL_CPU_HAS_" + profile_slug.upper()
@@ -869,7 +869,7 @@ def _cpp_profile_detection(
     return "\n".join(blocks)
 
 
-def _cpp_profile_auto_modes(profiles: tuple[ProfileRender, ...]) -> str:
+def _cpp_profile_auto_modes(profiles: tuple[EmittedProfile, ...]) -> str:
     blocks: list[str] = []
     for gate in _cpp_profile_auto_gates(profiles):
         gated_profiles = tuple(
@@ -917,7 +917,7 @@ def _cpp_profile_auto_modes(profiles: tuple[ProfileRender, ...]) -> str:
     return "\n".join(blocks)
 
 
-def _cpp_profile_auto_gates(profiles: tuple[ProfileRender, ...]) -> tuple[str, ...]:
+def _cpp_profile_auto_gates(profiles: tuple[EmittedProfile, ...]) -> tuple[str, ...]:
     return tuple(
         sorted(
             {
@@ -938,8 +938,8 @@ def _indent_lines(text: str, prefix: str) -> str:
 
 
 def _auto_detection_order(
-    profiles: tuple[ProfileRender, ...],
-) -> tuple[ProfileRender, ...]:
+    profiles: tuple[EmittedProfile, ...],
+) -> tuple[EmittedProfile, ...]:
     return tuple(
         sorted(
             profiles,
@@ -952,27 +952,27 @@ def _auto_detection_order(
     )
 
 
-def _profile_family_sort_order(profile: ProfileRender) -> int:
+def _profile_family_sort_order(profile: EmittedProfile) -> int:
     if profile.profile_family is None:
         return ProfileFamilyCapability(profile.profile.family).sort_order
     return profile.profile_family.sort_order
 
 
 def _cpp_profile_detection_source(
-    profile_render: ProfileRender,
+    emitted_profile: EmittedProfile,
 ) -> str | None:
-    profile = profile_render.profile
-    capability = profile_render.profile_family
+    profile = emitted_profile.profile
+    capability = emitted_profile.profile_family
     capability = capability or ProfileFamilyCapability(profile.family)
     if capability.cpp_detection is None:
         return None
     renderer = _CPP_DETECTION_RENDERERS.get(capability.cpp_detection)
     if renderer is None:
         return None
-    guards = _cpp_compile_guards(
-        used_exts(profile_render.specializations("cpp")),
-        profile_render.extensions,
-    )
+    guards = resolve_cpp_compile_guards(
+        used_extensions(emitted_profile.specializations("cpp")),
+        emitted_profile.extensions,
+    ).guards
     return renderer(profile, guards)
 
 

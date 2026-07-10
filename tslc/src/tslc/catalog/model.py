@@ -382,6 +382,7 @@ class BackendCompileGuard:
     equals: str
     hint_flag: str | None = None
     diagnostic: str | None = None
+    source: SourceSpan | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -500,6 +501,7 @@ class Extension:
     # Default for whether a sized extension's impls are unrolled over ``size_bits`` (monomorphized)
     # rather than emitted once as a ``LANES`` template. Off by default; a single impl opts in.
     unroll_variants: bool = False
+    source: SourceSpan | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "compose_prefix", _freeze_mapping(self.compose_prefix))

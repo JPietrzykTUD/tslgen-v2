@@ -2,108 +2,12 @@
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass
-
+from tslc.ir.region_syntax import IntrinsicSelector, split_arg_groups
 from tslc.ir.segments import Region
-from tslc.lower._text import split_selector_terms
 from tslc.lower.context import LoweringSession
 from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
-from tslc.lower.region_handlers.common import _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.render.model import RenderField, literal_text, render_sequence, render_text
-
-
-def _parse_modifier_terms(text: str) -> tuple[tuple[str, str], ...]:
-    modifiers: list[tuple[str, str]] = []
-    for term in split_selector_terms(text):
-        key, sep, value = term.partition("=")
-        if sep:
-            modifiers.append((key.strip(), value.strip()))
-    return tuple(modifiers)
-
-
-@dataclass(frozen=True, slots=True)
-class IntrinsicSelector:
-    """The parsed selector of ``intrin<name[, build[...]]>``."""
-
-    name: str | None
-    build: bool
-    modifiers: tuple[tuple[str, str], ...]
-    unsupported_terms: tuple[str, ...] = ()
-
-    @classmethod
-    def parse(cls, selector_text: str) -> "IntrinsicSelector":
-        terms = split_selector_terms(selector_text)
-        if not terms:
-            return cls(name=None, build=False, modifiers=())
-        if _has_top_level_whitespace(terms[0]):
-            return cls(
-                name=terms[0],
-                build=False,
-                modifiers=(),
-                unsupported_terms=(terms[0],),
-            )
-        modifiers: list[tuple[str, str]] = []
-        unsupported_terms: list[str] = []
-        build = False
-        for term in terms[1:]:
-            if term == "build":
-                build = True
-                continue
-            if term.startswith("build[") and term.endswith("]"):
-                build = True
-                modifiers.extend(_parse_modifier_terms(term[len("build[") : -1]))
-                continue
-            unsupported_terms.append(term)
-        return cls(
-            name=terms[0],
-            build=build,
-            modifiers=tuple(modifiers),
-            unsupported_terms=tuple(unsupported_terms),
-        )
-
-    def get(self, key: str) -> str | None:
-        for name, value in self.modifiers:
-            if name == key:
-                return value
-        return None
-
-    def immediate_forward(self) -> tuple[int, str] | None:
-        """An ``immediate(N)=V`` modifier as ``(position, value)``: intrinsic-arg position ``N``
-        carries the compile-time immediate ``V``. C++ keeps ``V`` as the positional arg the body
-        already supplies; Rust forwards it as a turbofish const and drops that positional arg
-        (the gather scale: a C++ runtime const arg vs a Rust const generic). None when absent."""
-
-        for name, value in self.modifiers:
-            match = re.fullmatch(r"immediate\((\d+)\)", name)
-            if match:
-                return int(match.group(1)), value
-        return None
-
-
-def _has_top_level_whitespace(text: str) -> bool:
-    depth = 0
-    in_string = False
-    escaped = False
-    for char in text:
-        if in_string:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == '"':
-                in_string = False
-            continue
-        if char == '"':
-            in_string = True
-        elif char in "(<[":
-            depth += 1
-        elif char in ")>]" and depth:
-            depth -= 1
-        elif depth == 0 and char.isspace():
-            return True
-    return False
+from tslc.target_text import RenderField, literal_text, render_sequence, render_text
 
 
 class IntrinLowerer:
@@ -239,7 +143,7 @@ class IntrinLowerer:
 
         position, value = forward
         args = tuple(
-            render_text(render(group)).strip() for group in _split_arg_groups(region.body)
+            render_text(render(group)).strip() for group in split_arg_groups(region.body)
         )
         return context.env.backend.intrinsics.render_immediate_intrinsic_call(
             name, value, position, args
@@ -260,7 +164,7 @@ class IntrinLowerer:
         ):
             return None
         args = tuple(
-            render_text(render(group)).strip() for group in _split_arg_groups(region.body)
+            render_text(render(group)).strip() for group in split_arg_groups(region.body)
         )
         return context.env.backend.intrinsics.render_literal_match_intrinsic_call(
             name, context.env.immediate_name, context.env.immediate_range, args

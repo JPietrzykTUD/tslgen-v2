@@ -2,43 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
-
+from tslc.ir.region_syntax import parse_var_selector, segments_text, split_arg_groups
 from tslc.ir.segments import Region, Segment
 from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.queries import QueryEvaluator, TypeValue
-from tslc.lower.region_handlers.common import _segment_text, _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.render.model import (
+from tslc.target_text import (
     RenderField,
     RenderText,
     literal_text,
     render_sequence,
     render_text,
 )
-
-
-VarSelectorKind = Literal["inferred", "typed", "init_register", "runtime_array"]
-
-
-@dataclass(frozen=True, slots=True)
-class VarSelector:
-    variant: str
-    kind: VarSelectorKind
-
-
-def parse_var_selector(selector_text: str, arity: int) -> VarSelector | None:
-    variant = selector_text.strip()
-    if variant in {"infer", "const_infer"} and arity >= 2:
-        return VarSelector(variant, "inferred")
-    if variant in {"typed", "const_typed"} and arity == 3:
-        return VarSelector(variant, "typed")
-    if variant in {"init_register", "const_init_register"} and arity == 1:
-        return VarSelector(variant, "init_register")
-    if variant == "runtime_array" and arity == 3:
-        return VarSelector(variant, "runtime_array")
-    return None
 
 
 class VarLowerer:
@@ -62,7 +37,7 @@ class VarLowerer:
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
-        groups = _split_arg_groups(region.body)
+        groups = split_arg_groups(region.body)
         selector = parse_var_selector(region.selector_text, len(groups))
         if selector is not None and selector.kind == "typed":
             # Both are `(type, name, value)` 3-group forms; `_typed` keys on the variant
@@ -122,7 +97,7 @@ class VarLowerer:
         type_value = render(groups[0])
         name = render_text(render(groups[1])).strip()
         # An uninitialized array uses the type-carrying template (see class docstring).
-        key = "var_array_uninit" if "uninit" in _segment_text(groups[2]) else f"var_{variant}"
+        key = "var_array_uninit" if "uninit" in segments_text(groups[2]) else f"var_{variant}"
         if context.env.backend.templates.template(key) is None:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-VAR",
@@ -193,7 +168,7 @@ class LetLowerer:
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
         variant = region.selector_text.strip()
-        groups = _split_arg_groups(region.body)
+        groups = split_arg_groups(region.body)
         if variant != "type" or len(groups) != 2:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-LET",
@@ -205,7 +180,7 @@ class LetLowerer:
         # A vector-valued alias (`let<type>(OutVec, transform_extension(ToBase))`) is captured
         # structurally too, so a later `generic::length(OutVec)` query arg resolves to the vector
         # (the rendered spelling below still drives type-position substitution like `to_array[OutVec]`).
-        value = self._evaluator.evaluate(_segment_text(groups[1]), context)
+        value = self._evaluator.evaluate(segments_text(groups[1]), context)
         type_tag: str | None = None
         vector: VectorValue | None = None
         if isinstance(value, VectorValue):

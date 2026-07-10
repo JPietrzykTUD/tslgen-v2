@@ -11,7 +11,7 @@ from tslc.api import generate_project
 from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.diagnostics import has_errors
-from tslc.lower.calls import ParsedCallSelector, parse_call_selector
+from tslc.ir.region_syntax import ParsedCallSelector, parse_call_selector
 from tslc.lower.dependencies import (
     CallDependency,
     VectorIdentity,

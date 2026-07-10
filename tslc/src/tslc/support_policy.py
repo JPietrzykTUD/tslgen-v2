@@ -246,39 +246,6 @@ class SupportPolicy:
             register_is_base=register_is_base,
         )
 
-    def cpp_result_type(self, kind: str) -> str:
-        return self.signature_kinds.cpp_result_type(kind)
-
-    def cpp_param_type(self, kind: str, *, index_type: str | None = None) -> str:
-        return self.signature_kinds.cpp_param_type(kind, index_type=index_type)
-
-    def cpp_free_type(self, kind: str, *, base_type: str) -> str:
-        return self.signature_kinds.cpp_free_type(kind, base_type=base_type)
-
-    def rust_owner_type(self, kind: str, *, owner: str) -> str:
-        return self.signature_kinds.rust_owner_type(kind, owner=owner)
-
-    def rust_param_type(self, kind: str, *, owner: str) -> str:
-        return self.signature_kinds.rust_param_type(kind, owner=owner)
-
-    def rust_free_type(self, kind: str, *, base_type: str) -> str:
-        return self.signature_kinds.rust_free_type(kind, base_type=base_type)
-
-    def rust_concrete_type(
-        self,
-        kind: str,
-        *,
-        base_type: str,
-        register_type: str,
-        array_type: str,
-    ) -> str:
-        return self.signature_kinds.rust_concrete_type(
-            kind,
-            base_type=base_type,
-            register_type=register_type,
-            array_type=array_type,
-        )
-
     def is_maskable_signature(self, shape: SignatureShape) -> bool:
         return (
             shape.result_kind in self.maskable_result_kinds

@@ -12,7 +12,7 @@ from tslc.catalog.scalar_types import (
     signed_of,
     unsigned_of,
 )
-from tslc.render.model import RenderField, RenderText
+from tslc.target_text import RenderField, RenderText
 from tslc.backend.registry import create_backend_dialect
 
 
@@ -105,6 +105,7 @@ class BackendSyntaxDialect(Protocol):
     def render_select_expr(
         self, condition: RenderField, if_true: RenderField, if_false: RenderField
     ) -> RenderText: ...
+    def render_unsafe_block(self, body: str) -> str: ...
 
 
 class BackendDialect(Protocol):

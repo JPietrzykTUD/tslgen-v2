@@ -9,6 +9,7 @@ from tslc.backend.primitive_facade import (
     DataparallelPrimitiveFacadeKind,
     classify_dataparallel_primitive_facade,
 )
+from tslc.backend.signature_types import CPP_SIGNATURE_TYPES
 from tslc.documentation import (
     DocumentationBlock,
     documentation_block,
@@ -753,7 +754,7 @@ def _free_kind_type(kind: str, base_spelling: str) -> str:
     """A free function's kind -> concrete type (no `Vec` projection). Pointer spellings
     carry their own mutability; `usize` is a size; `void` is no value."""
 
-    return DEFAULT_SUPPORT_POLICY.cpp_free_type(kind, base_type=base_spelling)
+    return CPP_SIGNATURE_TYPES.free_type(kind, base=base_spelling)
 
 
 def _vector_type(spec: LoweredSpecialization) -> str:
@@ -784,11 +785,15 @@ def _apply_result_type(spec: LoweredSpecialization) -> str:
 
 
 def _result_type(kind: str) -> str:
-    return DEFAULT_SUPPORT_POLICY.cpp_result_type(kind)
+    return CPP_SIGNATURE_TYPES.result_type(kind)
 
 
 def _param_type(kind: str, index_type: str | None = None) -> str:
-    return DEFAULT_SUPPORT_POLICY.cpp_param_type(kind, index_type=index_type)
+    return CPP_SIGNATURE_TYPES.parameter_type(
+        kind,
+        index_type=index_type,
+        target_vector="ToVec",
+    )
 
 
 def _param_type_for(

@@ -21,11 +21,11 @@ from typing import TYPE_CHECKING
 from tslc.backend.translation import BackendDialect
 from tslc.catalog.model import Catalog, Extension, ImplementationSafety
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
-from tslc.lower.implementation_state import (
+from tslc.lower.implementation_facts import (
     ImplementationState,
     ImplementationStateFacts,
 )
-from tslc.render.model import RenderText, as_render_text
+from tslc.target_text import RenderText, as_render_text
 
 if TYPE_CHECKING:
     from tslc.select.selector import SelectedImplementation
@@ -299,27 +299,27 @@ class LoweringEffects:
     def mark_unsafe(self) -> None:
         self.mark_internal_unsafe("unsafe_operation")
 
-    def mark_implementation_direct(self) -> None:
+    def mark_direct(self) -> None:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_direct()
 
-    def mark_implementation_intrinsic(self) -> None:
+    def mark_intrinsic(self) -> None:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_intrinsic()
 
-    def mark_implementation_call(self) -> None:
+    def mark_call(self) -> None:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_call()
 
-    def mark_implementation_composition(self) -> None:
+    def mark_composition(self) -> None:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_composition()
 
-    def mark_implementation_fallback(self) -> None:
+    def mark_fallback(self) -> None:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_fallback()
 
-    def mark_implementation_unknown(self) -> None:
+    def mark_unknown(self) -> None:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_unknown()
 

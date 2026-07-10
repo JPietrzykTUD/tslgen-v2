@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 from tslc.ir.segments import Segment
 from tslc.lower.context import LoweringSession
-from tslc.render.model import RenderText, render_text
+from tslc.target_text import RenderText, render_text
 
 RenderBody = Callable[[tuple[Segment, ...]], RenderText]
 

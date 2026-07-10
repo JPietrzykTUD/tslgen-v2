@@ -13,7 +13,7 @@ from tslc.backend import translation_common
 from tslc.backend.translation import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.lower.lowerer import Lowerer
-from tslc.render.model import (
+from tslc.target_text import (
     LiteralText,
     LoweredBody,
     RenderPlaceholder,
@@ -30,10 +30,7 @@ _BODY_TEXT_NAMES = frozenset({"body", "body_text"})
 
 
 def test_lowered_body_default_render_preserves_rust_vector_owner() -> None:
-    body = LoweredBody.from_text(
-        "return to_array::<Self>(data);",
-        backend_id="rust",
-    )
+    body = LoweredBody.from_text("return to_array::<Self>(data);")
 
     assert body.render() == "return to_array::<Self>(data);"
 
@@ -49,12 +46,10 @@ def test_lowered_body_context_renders_explicit_current_placeholders() -> None:
                 ");",
             )
         ),
-        backend_id="rust",
     )
 
     rendered = body.render(
         RenderContext(
-            backend_id="rust",
             current_vector="Simd<i32, Avx2>",
             current_register="core::arch::x86_64::__m256i",
             current_base="i32",
@@ -68,35 +63,38 @@ def test_lowered_body_context_renders_explicit_current_placeholders() -> None:
 
 
 def test_lowered_body_literal_text_is_not_rewritten_by_context() -> None:
-    body = LoweredBody.from_text(
-        'return "~::<Self> Self::RegisterType";',
-        backend_id="rust",
-    )
+    body = LoweredBody.from_text('return "~::<Self> Self::RegisterType";')
 
-    assert body.render(RenderContext(backend_id="rust", current_vector="Vec")) == (
+    assert body.render(RenderContext(current_vector="Vec")) == (
         'return "~::<Self> Self::RegisterType";'
     )
 
 
-def test_rust_local_unsafe_block_suppresses_inside_body_unsafe_frame() -> None:
+def test_backend_syntax_owns_local_and_body_unsafe_framing() -> None:
+    class FakeSyntax:
+        @staticmethod
+        def render_unsafe_block(body: str) -> str:
+            return f"guarded[{body}]"
+
+    syntax = FakeSyntax()
     body = LoweredBody.from_render_text(
         render_sequence(("let value = ", unsafe_block("make_value()"), ";")),
-        backend_id="rust",
+        unsafe_block_renderer=syntax.render_unsafe_block,
     )
 
-    assert body.render() == "let value = unsafe { make_value() };"
+    assert body.render() == "let value = guarded[make_value()];"
     assert (
         LoweredBody.from_render_text(
             body.content,
-            backend_id="rust",
+            unsafe_block_renderer=syntax.render_unsafe_block,
             requires_unsafe=True,
         ).render()
-        == "unsafe { let value = make_value(); }"
+        == "guarded[let value = make_value();]"
     )
 
 
 def test_lowered_body_from_text_keeps_source_operator_literal() -> None:
-    body = LoweredBody.from_text("return ~mask;", backend_id="rust")
+    body = LoweredBody.from_text("return ~mask;")
 
     assert body.render() == "return ~mask;"
 
@@ -130,8 +128,13 @@ def test_raw_text_lowering_does_not_translate_bitwise_not_operator() -> None:
     assert 'char == "~"' not in text
 
 
-def test_lowered_body_renders_unsafe_wrapper() -> None:
-    body = LoweredBody.from_text("*ptr = data;", backend_id="rust", requires_unsafe=True)
+def test_rust_syntax_dialect_renders_unsafe_wrapper(catalog: Catalog) -> None:
+    syntax = create_backend_dialect(catalog, "rust").syntax
+    body = LoweredBody.from_text(
+        "*ptr = data;",
+        unsafe_block_renderer=syntax.render_unsafe_block,
+        requires_unsafe=True,
+    )
 
     assert body.render() == "unsafe { *ptr = data; }"
 
@@ -227,7 +230,7 @@ def _expr_names(node: ast.AST) -> set[str]:
 
 
 def test_lowered_body_model_does_not_scan_for_semantic_spellings() -> None:
-    text = (_REPO_ROOT / "tslc" / "src" / "tslc" / "render" / "model.py").read_text(
+    text = (_REPO_ROOT / "tslc" / "src" / "tslc" / "target_text.py").read_text(
         encoding="utf-8"
     )
 

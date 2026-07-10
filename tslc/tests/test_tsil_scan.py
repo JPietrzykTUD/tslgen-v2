@@ -13,7 +13,10 @@ from tslc.ir.region_registry import (
 )
 from tslc.ir.scan import KEYWORDS, scan
 from tslc.ir.segments import RawText, Region
-from tslc.lower.region_handlers.registry import DEFAULT_REGION_LOWERERS
+from tslc.lower.region_handlers.registry import (
+    DEFAULT_REGION_LOWERERS,
+    REGION_LOWERING_REGISTRATIONS,
+)
 
 
 def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:
@@ -21,9 +24,14 @@ def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:
         descriptor.keyword for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS
     )
     lowerer_keywords = {lowerer.keyword for lowerer in DEFAULT_REGION_LOWERERS}
+    registration_keywords = {
+        registration.keyword for registration in REGION_LOWERING_REGISTRATIONS
+    }
 
     assert len(descriptor_keywords) == len(set(descriptor_keywords))
+    assert len(REGION_LOWERING_REGISTRATIONS) == len(registration_keywords)
     assert KEYWORDS == TSIL_REGION_KEYWORDS
+    assert registration_keywords == TSIL_REGION_KEYWORDS
     assert lowerer_keywords == TSIL_REGION_KEYWORDS
     assert region_shell_validator("call") == "call_selector"
     assert region_shell_validator("mask") == "mask_selector"

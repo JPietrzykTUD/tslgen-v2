@@ -2,66 +2,36 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from tslc.catalog.signatures import parse_signature
 from tslc.ir.segments import RawText, Region, Segment
+from tslc.lower.implementation_facts import (
+    ImplementationState,
+    ImplementationStateFacts,
+    RegionImplementationEffect,
+    combine_implementation_states,
+)
+from tslc.lower.region_handlers.registry import (
+    IMPLEMENTATION_STATE_CLASSIFIED_KEYWORDS,
+    region_implementation_effect,
+)
 
 if TYPE_CHECKING:
     from tslc.select.selector import SelectedImplementation
 
 
-class ImplementationState(Enum):
-    """Public implementation-state lattice for a selected specialization."""
+class _ImplementationStateRecorder(Protocol):
+    def mark_direct(self) -> None: ...
+    def mark_intrinsic(self) -> None: ...
+    def mark_call(self) -> None: ...
+    def mark_composition(self) -> None: ...
+    def mark_fallback(self) -> None: ...
+    def mark_unknown(self) -> None: ...
 
-    NATIVE = "native"
-    COMPOSED = "composed"
-    FALLBACK = "fallback"
-    UNKNOWN = "unknown"
 
-
-_STATE_RANK = {
-    ImplementationState.NATIVE: 0,
-    ImplementationState.COMPOSED: 1,
-    ImplementationState.UNKNOWN: 2,
-    ImplementationState.FALLBACK: 3,
-}
-
-_SPECIAL_KEYWORDS = frozenset({"intrin", "call", "loop"})
-_NEUTRAL_KEYWORDS = frozenset({"complete", "let", "type", "value"})
-_COMPOSITION_KEYWORDS = frozenset(
-    {
-        "assume_aligned",
-        "cast",
-        "helper",
-        "if",
-        "io",
-        "lanes",
-        "mask",
-        "mem",
-        "op",
-        "select_expr",
-        "switch",
-        "var",
-    }
-)
-IMPLEMENTATION_STATE_CLASSIFIED_KEYWORDS = (
-    _SPECIAL_KEYWORDS | _NEUTRAL_KEYWORDS | _COMPOSITION_KEYWORDS
-)
 _IDENTIFIER = re.compile(r"^[A-Za-z_]\w*$")
-
-
-def combine_implementation_states(
-    states: tuple[ImplementationState, ...] | list[ImplementationState],
-) -> ImplementationState:
-    """Join states conservatively: fallback dominates, then unknown, composed, native."""
-
-    if not states:
-        return ImplementationState.UNKNOWN
-    return max(states, key=lambda state: _STATE_RANK[state])
 
 
 def infer_direct_implementation_state(
@@ -74,113 +44,69 @@ def infer_direct_implementation_state(
         return ImplementationState.FALLBACK
 
     facts = ImplementationStateFacts()
-    facts.visit(segments, selected)
+    _visit_regions(facts, segments, selected)
     return facts.implementation_state(selected)
 
 
-@dataclass(slots=True)
-class ImplementationStateFacts:
-    """Facts collected while rendering the body paths that survive lowering."""
+def record_rendered_region_state(
+    recorder: _ImplementationStateRecorder,
+    region: Region,
+    selected: "SelectedImplementation",
+) -> None:
+    """Record one region that survived generation-time branch lowering."""
 
-    direct: int = 0
-    intrinsics: int = 0
-    calls: int = 0
-    composition_markers: int = 0
-    fallback: bool = False
-    unknown: bool = False
-
-    def implementation_state(
-        self, selected: "SelectedImplementation"
-    ) -> ImplementationState:
-        if selected.extension.family in {"scalar", "generic_like"}:
-            return ImplementationState.FALLBACK
-        if self.fallback:
-            return ImplementationState.FALLBACK
-        if self.unknown:
-            return ImplementationState.UNKNOWN
-        if (
-            self.calls == 0
-            and self.composition_markers == 0
-            and (
-                (self.intrinsics == 1 and self.direct == 0)
-                or (self.intrinsics == 0 and self.direct > 0)
-            )
-        ):
-            return ImplementationState.NATIVE
-        if (
-            self.direct > 0
-            or self.intrinsics > 0
-            or self.calls > 0
-            or self.composition_markers > 0
-        ):
-            return ImplementationState.COMPOSED
-        return ImplementationState.UNKNOWN
-
-    def mark_direct(self) -> None:
-        self.direct += 1
-
-    def mark_intrinsic(self) -> None:
-        self.intrinsics += 1
-
-    def mark_call(self) -> None:
-        self.calls += 1
-
-    def mark_composition(self) -> None:
-        self.composition_markers += 1
-
-    def mark_fallback(self) -> None:
-        self.fallback = True
-
-    def mark_unknown(self) -> None:
-        self.unknown = True
-
-    def visit(
-        self,
-        segments: tuple[Segment, ...] | None,
-        selected: "SelectedImplementation",
-    ) -> None:
-        if segments is None:
-            return
-        for segment in segments:
-            if isinstance(segment, RawText):
-                continue
-            self._visit_region(segment, selected)
-            self.visit(segment.body, selected)
-            self.visit(segment.block, selected)
-            self.visit(segment.else_block, selected)
-            if segment.arms is not None:
-                for _label, arm in segment.arms:
-                    self.visit(arm, selected)
-
-    def _visit_region(
-        self, region: Region, selected: "SelectedImplementation"
-    ) -> None:
-        if region.keyword == "complete" and direct_return_is_native(region, selected):
-            self.mark_direct()
-            return
-        if region.keyword == "intrin":
-            self.mark_intrinsic()
-            return
-        if region.keyword == "call":
-            self.mark_call()
-            return
-        if region.keyword == "loop":
-            if _loop_is_backend_fallback(region.selector_text):
-                self.mark_fallback()
-            else:
-                self.mark_composition()
-            return
-        if region.keyword in _COMPOSITION_KEYWORDS:
-            self.mark_composition()
-            return
-        if region.keyword in _NEUTRAL_KEYWORDS:
-            return
-        self.mark_unknown()
+    _record_region(recorder, region, selected, rendered=True)
 
 
-def _loop_is_backend_fallback(selector_text: str) -> bool:
-    terms = [term.strip() for term in selector_text.split(",")]
-    return bool(terms) and terms[0] == "backend"
+def _visit_regions(
+    facts: ImplementationStateFacts,
+    segments: tuple[Segment, ...] | None,
+    selected: "SelectedImplementation",
+) -> None:
+    if segments is None:
+        return
+    for segment in segments:
+        if isinstance(segment, RawText):
+            continue
+        _record_region(facts, segment, selected, rendered=False)
+        _visit_regions(facts, segment.body, selected)
+        _visit_regions(facts, segment.block, selected)
+        _visit_regions(facts, segment.else_block, selected)
+        if segment.arms is not None:
+            for _label, arm in segment.arms:
+                _visit_regions(facts, arm, selected)
+
+
+def _record_region(
+    recorder: _ImplementationStateRecorder,
+    region: Region,
+    selected: "SelectedImplementation",
+    *,
+    rendered: bool,
+) -> None:
+    effect = region_implementation_effect(region.keyword)
+    if effect is None:
+        recorder.mark_unknown()
+    elif effect is RegionImplementationEffect.DIRECT_RETURN:
+        if direct_return_is_native(region, selected):
+            recorder.mark_direct()
+    elif effect is RegionImplementationEffect.INTRINSIC:
+        recorder.mark_intrinsic()
+    elif effect is RegionImplementationEffect.CALL:
+        recorder.mark_call()
+    elif effect is RegionImplementationEffect.LOOP:
+        selector = region.selector_text.split(",", 1)[0].strip()
+        if selector == "backend":
+            recorder.mark_fallback()
+        elif not rendered or selector != "generation":
+            recorder.mark_composition()
+    elif effect is RegionImplementationEffect.COMPOSITION:
+        recorder.mark_composition()
+    elif effect is RegionImplementationEffect.CONTROL:
+        if not rendered:
+            recorder.mark_composition()
+    elif effect is not RegionImplementationEffect.NEUTRAL:
+        raise AssertionError(f"unhandled implementation-state effect: {effect}")
 
 
 def direct_return_is_native(

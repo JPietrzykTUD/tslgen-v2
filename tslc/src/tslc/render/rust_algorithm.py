@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from tslc.backend.emitted_profile import used_type_specs
+from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
 from tslc.backend.target_capability import rust_extension_tag
 from tslc.catalog.model import Extension
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
-from tslc.render._common import type_bits, used_type_specs
 from tslc.render.rust_facades import (
     rust_algorithm_primitive_facades,
     rust_public_function_names,
@@ -24,7 +25,7 @@ def rust_algorithm_module(
 ) -> str:
     """Profile-local Rust algorithm facade and SIMD policy mappings."""
 
-    if "load" not in by_primitive or "store" not in by_primitive:
+    if not RUST_HELPER_MANIFEST.supports("algorithm", by_primitive):
         return ""
 
     parts = [
@@ -156,7 +157,7 @@ def _rust_algorithm_selected_load_impls(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     extensions: Mapping[str, Extension],
 ) -> str:
-    if not {"set_zero", "to_array", "from_array"}.issubset(by_primitive):
+    if not RUST_HELPER_MANIFEST.supports("selected_load", by_primitive):
         return ""
     registrations = rust_vector_registrations(by_primitive, extensions)
     gather_narrow_vectors = _rust_algorithm_gather_narrow_vectors(by_primitive)
@@ -188,22 +189,26 @@ def _rust_algorithm_selected_load_impls(
 def _rust_algorithm_gather_narrow_vectors(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]]
 ) -> frozenset[tuple[str, str]]:
+    requirement = RUST_HELPER_MANIFEST.requirements("gather_narrow")[0]
     return frozenset(
         (spec.extension_name, spec.base_type_spelling)
-        for spec in by_primitive.get("gather_narrow", ())
+        for spec in RUST_HELPER_MANIFEST.matching_specializations(
+            requirement, by_primitive
+        )
     )
 
 
 def _rust_algorithm_array_selected_load_vectors(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]]
 ) -> frozenset[tuple[str, str]]:
-    required = ("set_zero", "to_array", "from_array")
     vector_sets = [
         {
             (spec.extension_name, spec.base_type_spelling)
-            for spec in by_primitive.get(primitive, ())
+            for spec in RUST_HELPER_MANIFEST.matching_specializations(
+                requirement, by_primitive
+            )
         }
-        for primitive in required
+        for requirement in RUST_HELPER_MANIFEST.requirements("selected_load")
     ]
     return frozenset(set.intersection(*vector_sets)) if vector_sets else frozenset()
 
@@ -269,8 +274,8 @@ def _rust_algorithm_selected_load_impl(
     use_gather_narrow: bool,
 ) -> str:
     base = registration.base_spelling
-    lane_count = registration.vector_bits // type_bits(base)
-    default_scale = type_bits(base) // 8
+    lane_count = registration.vector_bits // registration.type_bits
+    default_scale = registration.type_bits // 8
     vector = f"Simd<{base}, super::{rust_extension_tag(extension)}>"
     if not use_gather_narrow:
         return _rust_algorithm_array_selected_load_impl(vector, base)
@@ -338,7 +343,7 @@ def _rust_algorithm_masked_store_impls(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     extensions: Mapping[str, Extension],
 ) -> str:
-    if "store" not in by_primitive:
+    if not RUST_HELPER_MANIFEST.supports("masked_store", by_primitive):
         return ""
     registrations = rust_vector_registrations(by_primitive, extensions)
     concrete_extensions = sorted(
@@ -401,7 +406,7 @@ def _rust_algorithm_compress_store_impls(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     extensions: Mapping[str, Extension],
 ) -> str:
-    if "compress_store" not in by_primitive:
+    if not RUST_HELPER_MANIFEST.supports("compress_store", by_primitive):
         return ""
     registrations = rust_vector_registrations(by_primitive, extensions)
     concrete_extensions = sorted(
@@ -464,7 +469,7 @@ def _rust_algorithm_mask_population_count_impls(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     extensions: Mapping[str, Extension],
 ) -> str:
-    if "mask_population_count" not in by_primitive:
+    if not RUST_HELPER_MANIFEST.supports("mask_population_count", by_primitive):
         return ""
     registrations = rust_vector_registrations(by_primitive, extensions)
     concrete_extensions = sorted(
@@ -519,7 +524,7 @@ def _rust_algorithm_integral_mask_impls(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     extensions: Mapping[str, Extension],
 ) -> str:
-    if "to_integral" not in by_primitive:
+    if not RUST_HELPER_MANIFEST.supports("integral_mask", by_primitive):
         return ""
     registrations = rust_vector_registrations(by_primitive, extensions)
     concrete_extensions = sorted(
@@ -576,7 +581,7 @@ def _rust_algorithm_mask_from_integral_impls(
     by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
     extensions: Mapping[str, Extension],
 ) -> str:
-    if "to_mask" not in by_primitive:
+    if not RUST_HELPER_MANIFEST.supports("mask_from_integral", by_primitive):
         return ""
     registrations = rust_vector_registrations(by_primitive, extensions)
     concrete_extensions = sorted(

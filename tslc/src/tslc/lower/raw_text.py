@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from tslc.lower.context import LoweringSession
-from tslc.render.model import RenderText, literal_text, render_sequence
+from tslc.target_text import RenderText, literal_text, render_sequence
 
 
 def render_raw_text(text: str, context: LoweringSession) -> RenderText:

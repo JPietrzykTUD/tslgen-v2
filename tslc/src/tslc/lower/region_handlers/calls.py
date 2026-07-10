@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import re
 
+from tslc.ir.region_syntax import parse_call_selector, split_arg_groups
 from tslc.ir.segments import Region
-from tslc.lower.calls import parse_call_selector
 from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue, TypeValue
-from tslc.lower.region_handlers.common import _split_arg_groups, _vector_spelling
+from tslc.lower.region_handlers.common import _vector_spelling
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.render.model import RenderField, as_render_text, literal_text, render_sequence, render_text, unsafe_block
+from tslc.target_text import RenderField, as_render_text, literal_text, render_sequence, render_text, unsafe_block
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 _DECIMAL_INTEGER = re.compile(r"^[0-9]+$")
@@ -21,7 +21,7 @@ class CallLowerer:
 
     Primitives are generated independently; this only renders the *call* (via
     ``backend.syntax.render_call``), it does not inline NAME's body. The selector shape is parsed by
-    :func:`tslc.lower.calls.parse_call_selector`; this lowerer owns only rendering decisions.
+    :func:`tslc.ir.region_syntax.parse_call_selector`; this lowerer owns only rendering decisions.
 
     A callee carrying a boolean-wildcard axis (e.g. ``store``/``load`` with ``aligned``)
     needs that axis passed at the call site: C++ could default it, but Rust const-generics
@@ -122,7 +122,7 @@ class CallLowerer:
         prefix = context.env.backend.syntax.borrowed_call_arg_prefix
         if prefix is None or not borrowed:
             return render(region.body)
-        groups = _split_arg_groups(region.body)
+        groups = split_arg_groups(region.body)
         borrowed_positions = set(borrowed)
         parts: list[RenderField] = []
         for index, group in enumerate(groups):

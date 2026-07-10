@@ -7,7 +7,7 @@ It is a clean restart of the earlier `tslgen` generator. The architecture is a
 small compiler pipeline:
 
 ```
-sources -> parse -> catalog -> select -> scan body -> lower -> emit -> render -> write -> verify
+sources -> parse -> catalog -> select -> scan body -> lower -> finalize/validate/plan -> render -> write -> verify
 ```
 
 - **`sources`** reads `.tsl` files (the only filesystem-read boundary).
@@ -19,10 +19,12 @@ sources -> parse -> catalog -> select -> scan body -> lower -> emit -> render ->
   segments — *not* an abstract syntax tree. Raw target-language text passes
   through verbatim; only recognized TSIL keyword islands are lowered.
 - **`lower`** walks the segment sequence, resolving type/value queries and
-  composing intrinsic names into a backend-ready `LoweredFunction`.
-- **`backend`** emits C++ and Rust function text from lowered functions.
+  composing intrinsic names into a backend-ready `LoweredSpecialization`.
+- **`backend`** owns target-language type projection, helper requirements,
+  emitted profiles, pre-render validation, and C++/Rust function emission.
+- **`value_tests`** plans executable cases from finalized emitted names.
 - **`render`/`output`** assemble and write the `generated/{cpp,rust}/...` tree,
-  then build-verify it with the local toolchains.
+  consuming already-decided semantics, then build-verify it with local toolchains.
 
 See [CHARTER.md](CHARTER.md) for the design rules this project holds itself to.
 

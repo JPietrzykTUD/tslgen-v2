@@ -14,7 +14,7 @@ from tslc.backend.primitive_facade import (
 from tslc.diagnostics import has_errors
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.lower.target_vectors import TargetVector
-from tslc.render.model import LoweredBody
+from tslc.target_text import LoweredBody
 
 
 def _generate(data_root: Path, machine_profiles_path: Path):
@@ -74,7 +74,7 @@ def _facade_spec(
         result_kind=result_kind,
         param_names=tuple(f"p{i}" for i in range(len(param_kinds))),
         param_kinds=param_kinds,
-        body=LoweredBody.from_text("", backend_id="cpp"),
+        body=LoweredBody.from_text(""),
         axis=axis,
         target=target,
     )
