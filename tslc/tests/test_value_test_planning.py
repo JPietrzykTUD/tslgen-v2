@@ -45,11 +45,20 @@ from tslc.value_tests.render_rust import (
 _VALUE_TEST_SUPPORTS = (CPP_VALUE_TEST_SUPPORT, RUST_VALUE_TEST_SUPPORT)
 
 
+def test_emitted_profile_requires_name_finalization_context() -> None:
+    with pytest.raises(TypeError, match="immediate_split_names"):
+        EmittedProfile(  # type: ignore[call-arg]
+            profile=MachineProfile("unit", "generic", frozenset(), {}),
+            specializations_by_backend={},
+        )
+
+
 def test_emitted_profile_freezes_backend_mappings() -> None:
     source_cpp: dict[str, tuple[LoweredSpecialization, ...]] = {}
     profile = EmittedProfile(
         profile=MachineProfile("unit", "generic", frozenset(), {}),
         specializations_by_backend={"cpp": source_cpp, "rust": {}},
+        immediate_split_names=frozenset(),
     )
 
     source_cpp["late"] = ()
@@ -1523,6 +1532,7 @@ def _profile(
     return EmittedProfile(
         profile=MachineProfile("unit", "generic", frozenset(), {}),
         specializations_by_backend={"cpp": cpp or {}, "rust": rust or {}},
+        immediate_split_names=frozenset(),
     )
 
 

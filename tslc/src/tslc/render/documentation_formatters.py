@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from tslc.backend.capability import BackendDocumentationFormatter, DocumentationSpec
 from tslc.backend.cpp import CppBackend
 from tslc.backend.target_capability import rust_extension_tag
@@ -17,10 +15,7 @@ from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
-@dataclass(frozen=True, slots=True)
 class _CppDocumentationFormatter:
-    backend_id: str = "cpp"
-
     def register_type(self, spec: LoweredSpecialization) -> str:
         return CppBackend().documentation_register_type(spec)
 
@@ -75,10 +70,7 @@ class _CppDocumentationFormatter:
         return "\n".join(lines)
 
 
-@dataclass(frozen=True, slots=True)
 class _RustDocumentationFormatter:
-    backend_id: str = "rust"
-
     def register_type(self, spec: LoweredSpecialization) -> str:
         return spec.register_spelling
 

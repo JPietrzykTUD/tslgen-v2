@@ -125,6 +125,7 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
                 )
             }
         },
+        immediate_split_names=frozenset(),
     )
 
     rendered = render_project((profile,), ("fake",), assets=RenderAssets({}))

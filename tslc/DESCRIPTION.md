@@ -156,9 +156,12 @@ Backends differ idiomatically (a `BackendDialect`,
 spellings, intrinsic composition, call syntax, and unsafe framing). The
 [backend registry](src/tslc/backend/registry.py) owns each backend's dialect
 factory, artifact media type and renderers, documentation formatter, validation,
-helper manifest, value-test support, and verification adapter. Signature type
-projection tables remain owned by the corresponding C++ or Rust function
-emitter; they are not registry capabilities.
+helper manifest, value-test support, verification adapter, and post-generation
+formatting/documentation specs. Signature type
+projection machinery and the concrete C++/Rust projection tables are co-located
+in [backend/signature_types.py](src/tslc/backend/signature_types.py), then shared
+by function emitters and documentation formatting. They are backend-owned facts,
+not registry capabilities.
 
 - **C++** — `*_impl<Vec>` struct partial-specializations + wrapper function
   templates ([backend/cpp.py](src/tslc/backend/cpp.py)).

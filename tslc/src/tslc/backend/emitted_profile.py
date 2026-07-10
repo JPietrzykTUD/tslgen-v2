@@ -40,7 +40,7 @@ class EmittedProfile:
         extensions: Mapping[str, Extension] = MappingProxyType({}),
         profile_family: ProfileFamilyCapability | None = None,
         *,
-        immediate_split_names: frozenset[str] = frozenset(),
+        immediate_split_names: frozenset[str],
     ) -> None:
         finalized = {
             backend_id: finalize_emitted_names(

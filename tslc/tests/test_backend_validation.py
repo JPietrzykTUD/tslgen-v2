@@ -119,6 +119,7 @@ def _profile(
         profile=MachineProfile("test", "test", frozenset(), {}),
         specializations_by_backend=by_backend,  # type: ignore[arg-type]
         extensions=extensions,
+        immediate_split_names=frozenset(),
     )
 
 
