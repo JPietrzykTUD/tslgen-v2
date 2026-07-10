@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Protocol
 
 from tslc.backend.helper_requirements import (
@@ -46,9 +47,33 @@ class DocumentationSpec:
     extension: Extension | None
 
 
-class BackendDocumentationFormatter(Protocol):
-    backend_id: str
+@dataclass(frozen=True, slots=True)
+class GeneratedFormatSpec:
+    executable: str
+    label: str
+    patterns: tuple[str, ...]
+    args: tuple[str, ...]
 
+
+class GeneratedDocumentationBuilder(str, Enum):
+    DOXYGEN = "doxygen"
+    RUSTDOC = "rustdoc"
+
+
+class DocumentationSiteInput(str, Enum):
+    DOXYGEN_XML = "doxygen_xml"
+    RUSTDOC = "rustdoc"
+
+
+@dataclass(frozen=True, slots=True)
+class GeneratedDocumentationSpec:
+    builder: GeneratedDocumentationBuilder
+    project_path: str
+    output_path: str
+    site_input: DocumentationSiteInput
+
+
+class BackendDocumentationFormatter(Protocol):
     def register_type(self, spec: LoweredSpecialization) -> str: ...
     def facade(self, doc: DocumentationSpec) -> str: ...
     def expression(self, doc: DocumentationSpec) -> str: ...
@@ -75,6 +100,8 @@ class BackendCapability:
     documentation_formatter_factory: DocumentationFormatterFactory
     helper_manifest: BackendHelperManifest = EMPTY_HELPER_MANIFEST
     profile_validator: ProfileValidator = _no_profile_diagnostics
+    generated_format: GeneratedFormatSpec | None = None
+    generated_documentation: GeneratedDocumentationSpec | None = None
 
     def create_dialect(self, catalog: Catalog) -> BackendDialect:
         return self.dialect_factory(catalog)
@@ -126,5 +153,9 @@ class BackendCapability:
 __all__ = [
     "BackendCapability",
     "BackendDocumentationFormatter",
+    "DocumentationSiteInput",
     "DocumentationSpec",
+    "GeneratedDocumentationBuilder",
+    "GeneratedDocumentationSpec",
+    "GeneratedFormatSpec",
 ]

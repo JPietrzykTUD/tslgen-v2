@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tslc.backend.capability import BackendCapability, BackendDocumentationFormatter
+from tslc.backend.capability import (
+    BackendCapability,
+    BackendDocumentationFormatter,
+    DocumentationSiteInput,
+    GeneratedDocumentationBuilder,
+    GeneratedDocumentationSpec,
+    GeneratedFormatSpec,
+)
 from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
 from tslc.backend.rust_translation import RustBackendDialect
 from tslc.backend.rust_validation import validate_rust_profiles
@@ -71,6 +78,18 @@ RUST_BACKEND = BackendCapability(
     documentation_formatter_factory=rust_documentation_formatter,
     helper_manifest=RUST_HELPER_MANIFEST,
     profile_validator=validate_rust_profiles,
+    generated_format=GeneratedFormatSpec(
+        executable="rustfmt",
+        label="rust",
+        patterns=("rust/**/*.rs",),
+        args=("--edition", "2021"),
+    ),
+    generated_documentation=GeneratedDocumentationSpec(
+        builder=GeneratedDocumentationBuilder.RUSTDOC,
+        project_path="rust",
+        output_path="rust/docs/target/doc",
+        site_input=DocumentationSiteInput.RUSTDOC,
+    ),
 )
 
 

@@ -49,6 +49,13 @@ AfterCommand = Callable[
     ],
     None,
 ]
+PrepareCommandEnvironment = Callable[[BuildCommand, dict[str, str]], None]
+
+
+def _keep_command_environment(
+    command: BuildCommand, environment: dict[str, str]
+) -> None:
+    del command, environment
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +65,7 @@ class VerifyBackendDriver:
     prepare_backend: PrepareBackend
     command_groups: CommandGroups
     after_successful_command: AfterCommand
+    prepare_command_environment: PrepareCommandEnvironment = _keep_command_environment
 
 
 def cpp_verify_driver() -> VerifyBackendDriver:
@@ -83,6 +91,7 @@ __all__ = [
     "AfterCommand",
     "CommandGroups",
     "PrepareBackend",
+    "PrepareCommandEnvironment",
     "VerifyBackendDriver",
     "command_failure_diagnostic",
     "cpp_verify_driver",

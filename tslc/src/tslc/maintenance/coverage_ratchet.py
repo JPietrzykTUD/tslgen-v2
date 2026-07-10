@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tslc.api import _ARITH_TYPE_TAGS, generate_project
+from tslc.backend.registry import registered_backend_ids
 from tslc.diagnostics import has_errors
 from tslc.maintenance.coverage_inventory import (
     PROFILES,
@@ -40,7 +41,7 @@ from tslc.maintenance.coverage_inventory import (
     _category,
 )
 
-_BACKENDS = ("cpp", "rust")
+_BACKENDS = registered_backend_ids()
 # A lockfile-style committed snapshot: machine-generated, diffed by this gate, not hand-edited.
 # It lives at the repo root (it describes whole-repo generation state, spanning tsldata/ and
 # supplementary/), not under tslc/ (source) or docs/ (prose evidence).

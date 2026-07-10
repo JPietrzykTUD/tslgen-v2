@@ -2,7 +2,7 @@
 """Regenerate coverage/primitive-coverage-inventory.md.
 
 Drives the compiler over every primitive in ``tsldata/`` across the canonical
-profile set and both backends, cross-references the build-verified set parsed
+profile set and registered backends, cross-references the build-verified set parsed
 from ``tslc/tests/test_build_verify.py``, and writes the coverage table.
 
 Run from the repository with ``tslc/src`` on ``PYTHONPATH``:
@@ -22,6 +22,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from tslc.api import generate_project
+from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.builder import CatalogBuilder
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import has_errors
@@ -157,6 +158,7 @@ def main() -> int:
         TslParser(load_default_tsl_grammar()).parse(SourceLoader().load_dir(_DATA_ROOT).documents)
     ).catalog
     names = sorted({p.name for p in catalog.primitives})
+    backend_ids = registered_backend_ids()
     sigs: dict[str, set[str]] = defaultdict(set)
     for primitive in catalog.primitives:
         sigs[primitive.name].add(primitive.signature)
@@ -167,6 +169,7 @@ def main() -> int:
         machine_profiles_path=_PROFILES_PATH,
         primitives=names,
         profiles=list(PROFILES),
+        backends=backend_ids,
     )
     if has_errors(result.diagnostics):
         for diagnostic in result.diagnostics:
@@ -174,18 +177,19 @@ def main() -> int:
                 print(f"ERROR {diagnostic.code}: {diagnostic.message}", file=sys.stderr)
         return 1
 
-    cpp: dict[str, set[str]] = defaultdict(set)
-    rust: dict[str, set[str]] = defaultdict(set)
+    coverage_by_backend: dict[str, dict[str, set[str]]] = {
+        backend_id: defaultdict(set) for backend_id in backend_ids
+    }
     skips: Counter[str] = Counter()
     reasons: dict[str, Counter[str]] = defaultdict(Counter)
     for entry in result.coverage:
-        (cpp if entry.backend == "cpp" else rust)[entry.primitive].add(entry.extension)
+        coverage_by_backend[entry.backend][entry.primitive].add(entry.extension)
     for entry in result.skipped:
         skips[entry.primitive] += 1
         reasons[entry.primitive][entry.reason] += 1
 
     def status(name: str) -> str:
-        emitted = bool(cpp[name] or rust[name])
+        emitted = any(coverage[name] for coverage in coverage_by_backend.values())
         if name in verified:
             return "VERIFIED"
         if emitted and skips[name] == 0:
@@ -200,6 +204,11 @@ def main() -> int:
     histogram: Counter[str] = Counter()
     for entry in result.skipped:
         histogram[_category(entry.reason)] += 1
+    backend_label = "/".join(backend_ids)
+    parity = all(
+        len({frozenset(coverage[name]) for coverage in coverage_by_backend.values()}) <= 1
+        for name in names
+    )
 
     out: list[str] = []
     w = out.append
@@ -213,7 +222,7 @@ def main() -> int:
     )
     w("## Summary\n")
     w(f"- **{len(names)} distinct primitives** in `tsldata/`.")
-    w(f"- **{len(tier['VERIFIED'])} build-verified** (compile in C++ *and* Rust via "
+    w(f"- **{len(tier['VERIFIED'])} build-verified** (compile in {backend_label} via "
       "`tslc/tests/test_build_verify.py`).")
     w(f"- **{len(tier['lowers'])} lower cleanly but are not build-verified** "
       "(codegen succeeds, 0 skips; compilation unconfirmed).")
@@ -221,18 +230,21 @@ def main() -> int:
     w(f"- **{len(tier['NONE'])} emit nothing** under the probed profiles.")
     w(f"- **{total_emitted} / {total_emitted + total_skipped} "
       "(profile×backend×ext×type) slots lower**; **0 errors**.")
-    w("- **C++/Rust parity is exact**: every primitive emits the identical extension "
-      "set for both backends.\n")
+    if parity:
+        w(f"- **{backend_label} parity is exact**: every primitive emits the identical "
+          "extension set for every registered backend.\n")
+    else:
+        w(f"- **{backend_label} parity differs** for at least one primitive.\n")
     w("Status legend: **VERIFIED** = has a passing build test; **lowers** = codegen "
       "clean, 0 skips, no build test; **partial** = some slots lower, some skip; "
       "**NONE** = nothing emitted.\n")
-    w("> Caveat: \"lowers\" means the generator produced C++/Rust text without "
+    w(f"> Caveat: \"lowers\" means the generator produced {backend_label} text without "
       "diagnostics — it is *not* a compile guarantee. Only **VERIFIED** primitives are "
       "confirmed to compile. The probe uses the 10 arith type tags (si/ui 8-64, "
       f"f32/f64) across profiles `{', '.join(PROFILES)}`.\n")
 
     w("## Tiers\n")
-    w(f"### Build-verified ({len(tier['VERIFIED'])}) — compile in C++ & Rust\n")
+    w(f"### Build-verified ({len(tier['VERIFIED'])}) — compile in {backend_label}\n")
     w(", ".join(f"`{n}`" for n in tier["VERIFIED"]) + "\n")
     w(f"### Lower but not build-verified ({len(tier['lowers'])}) — codegen clean, "
       "compilation unconfirmed\n")
@@ -243,10 +255,14 @@ def main() -> int:
     w(", ".join(f"`{n}`" for n in tier["NONE"]) + "\n")
 
     w("## Per-primitive table\n")
-    w("| primitive | signatures | status | extensions (cpp=rust) | skipped slots | dominant gap |")
+    w("| primitive | signatures | status | extensions by backend | skipped slots | dominant gap |")
     w("|---|---|---|---|--:|---|")
     for name in names:
-        exts = "/".join(sorted(cpp[name] | rust[name])) or "—"
+        exts = "; ".join(
+            f"{backend_id}="
+            + ("/".join(sorted(coverage_by_backend[backend_id][name])) or "—")
+            for backend_id in backend_ids
+        )
         signatures = " ".join(f"`{s}`" for s in sorted(sigs[name]))
         dominant = (
             _category(reasons[name].most_common(1)[0][0]) if reasons[name] else "—"

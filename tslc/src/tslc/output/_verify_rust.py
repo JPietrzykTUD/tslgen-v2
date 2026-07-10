@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from collections.abc import Mapping
 
@@ -35,6 +36,102 @@ def create_rust_verify_driver() -> VerifyBackendDriver:
         prepare_backend=_prepare_rust_backend,
         command_groups=_rust_command_groups,
         after_successful_command=_after_rust_command,
+        prepare_command_environment=_prepare_rust_command_environment,
+    )
+
+
+def _prepare_rust_command_environment(
+    command: BuildCommand, environment: dict[str, str]
+) -> None:
+    if not command.argv or Path(command.argv[0]).name != "cargo":
+        return
+    wrapper = _rustc_stdin_guard(command.cwd)
+    previous_wrapper = environment.get("RUSTC_WRAPPER")
+    if previous_wrapper and Path(previous_wrapper).resolve() != wrapper:
+        environment["TSLC_RUSTC_WRAPPER_NEXT"] = previous_wrapper
+    else:
+        environment.pop("TSLC_RUSTC_WRAPPER_NEXT", None)
+    environment["RUSTC_WRAPPER"] = str(wrapper)
+
+
+def _rustc_stdin_guard(command_root: Path) -> Path:
+    wrapper = command_root.resolve() / ".tslctmp" / "rust" / "rustc-stdin-guard.py"
+    wrapper.parent.mkdir(parents=True, exist_ok=True)
+    script = _rustc_stdin_guard_script()
+    if not wrapper.exists() or wrapper.read_text(encoding="utf-8") != script:
+        wrapper.write_text(script, encoding="utf-8")
+        wrapper.chmod(0o755)
+    return wrapper
+
+
+def _rustc_stdin_guard_script() -> str:
+    return "\n".join(
+        (
+            f"#!{sys.executable}",
+            "from __future__ import annotations",
+            "",
+            "import os",
+            "import subprocess",
+            "import sys",
+            "",
+            "",
+            "def main() -> int:",
+            "    if len(sys.argv) < 2:",
+            "        return 1",
+            "    rustc_args = sys.argv[2:]",
+            "    delegate = os.environ.get('TSLC_RUSTC_WRAPPER_NEXT')",
+            "    if delegate:",
+            "        argv = (delegate, *sys.argv[1:])",
+            "    else:",
+            "        argv = tuple(sys.argv[1:])",
+            "    stdin_payload = (",
+            "        b'fn main() {}\\n'",
+            "        if _is_cargo_target_info_probe(rustc_args)",
+            "        else None",
+            "    )",
+            "    completed = subprocess.run(",
+            "        argv,",
+            "        input=stdin_payload,",
+            "        check=False,",
+            "        pass_fds=_jobserver_fds(),",
+            "    )",
+            "    return completed.returncode",
+            "",
+            "",
+            "def _is_cargo_target_info_probe(args: list[str]) -> bool:",
+            "    return (",
+            "        '-' in args",
+            "        and '--crate-name' in args",
+            "        and '___' in args",
+            "        and '--print=file-names' in args",
+            "        and '--print=cfg' in args",
+            "    )",
+            "",
+            "",
+            "def _jobserver_fds() -> tuple[int, ...]:",
+            "    fds: set[int] = set()",
+            "    for token in os.environ.get('CARGO_MAKEFLAGS', '').split():",
+            "        if token.startswith('--jobserver-auth='):",
+            "            _add_fds(fds, token.removeprefix('--jobserver-auth='))",
+            "        elif token.startswith('--jobserver-fds='):",
+            "            _add_fds(fds, token.removeprefix('--jobserver-fds='))",
+            "    return tuple(sorted(fds))",
+            "",
+            "",
+            "def _add_fds(fds: set[int], value: str) -> None:",
+            "    for part in value.split(','):",
+            "        try:",
+            "            fd = int(part)",
+            "            os.fstat(fd)",
+            "        except (OSError, ValueError):",
+            "            continue",
+            "        fds.add(fd)",
+            "",
+            "",
+            "if __name__ == '__main__':",
+            "    raise SystemExit(main())",
+            "",
+        )
     )
 
 

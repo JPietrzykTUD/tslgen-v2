@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tslc.backend.capability import BackendCapability, BackendDocumentationFormatter
+from tslc.backend.capability import (
+    BackendCapability,
+    BackendDocumentationFormatter,
+    DocumentationSiteInput,
+    GeneratedDocumentationBuilder,
+    GeneratedDocumentationSpec,
+    GeneratedFormatSpec,
+)
 from tslc.backend.cpp_translation import CppBackendDialect
 from tslc.backend.helper_requirements import CPP_HELPER_MANIFEST
 from tslc.backend.cpp_validation import validate_cpp_profiles
@@ -71,6 +78,18 @@ CPP_BACKEND = BackendCapability(
     documentation_formatter_factory=cpp_documentation_formatter,
     helper_manifest=CPP_HELPER_MANIFEST,
     profile_validator=validate_cpp_profiles,
+    generated_format=GeneratedFormatSpec(
+        executable="clang-format",
+        label="cpp",
+        patterns=("cpp/**/*.hpp", "cpp/**/*.cpp"),
+        args=("-i",),
+    ),
+    generated_documentation=GeneratedDocumentationSpec(
+        builder=GeneratedDocumentationBuilder.DOXYGEN,
+        project_path="cpp",
+        output_path="cpp/docs/doxygen/xml",
+        site_input=DocumentationSiteInput.DOXYGEN_XML,
+    ),
 )
 
 
