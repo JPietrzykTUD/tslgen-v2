@@ -30,13 +30,7 @@ def missing_executable(executable: str) -> str | None:
 def runner_missing_diagnostic(config: BuildVerifierConfig) -> Diagnostic | None:
     if not config.run_value_tests:
         return None
-    for kind, executable in (
-        ("sde", config.sde_path),
-        ("qemu-aarch64", config.qemu_aarch64_path),
-        ("wasmtime", config.wasmtime_path),
-    ):
-        if executable is None:
-            continue
+    for kind, executable in config.runner_paths.items():
         missing = missing_executable(executable)
         if missing is not None:
             return Diagnostic(
@@ -86,26 +80,19 @@ def filter_runner_verifiable_profiles(
 
 
 def configured_runner_kinds(config: BuildVerifierConfig) -> frozenset[str]:
-    configured: set[str] = set()
-    if config.sde_path is not None:
-        configured.add("sde")
-    if config.qemu_aarch64_path is not None:
-        configured.add("qemu-aarch64")
-    if config.wasmtime_path is not None:
-        configured.add("wasmtime")
-    return frozenset(configured)
+    return frozenset(config.runner_paths)
 
 
 def cpp_target(profile: VerifyProfile, config: BuildVerifierConfig) -> str | None:
-    return config.cpp_target or profile.cpp_target
+    return config.toolchain("cpp").target or profile.target
 
 
 def rust_target(profile: VerifyProfile, config: BuildVerifierConfig) -> str | None:
-    return config.rust_target or profile.rust_target
+    return config.toolchain("rust").target or profile.target
 
 
 def rust_linker(profile: VerifyProfile, config: BuildVerifierConfig) -> str | None:
-    return config.rust_linker or profile.rust_linker
+    return config.toolchain("rust").linker or profile.linker
 
 
 def rust_target_args(
@@ -132,24 +119,21 @@ def runner_prefix(
     runner = profile.runner
     if runner is None:
         return ()
+    executable = config.runner_path(runner.kind)
+    if executable is None:
+        return ()
     if runner.kind == "sde":
-        if config.sde_path is None:
-            return ()
-        return (config.sde_path, f"-{runner.profile}", *runner.args, "--")
+        return (executable, f"-{runner.profile}", *runner.args, "--")
     if runner.kind == "qemu-aarch64":
-        if config.qemu_aarch64_path is None:
-            return ()
         return (
-            config.qemu_aarch64_path,
+            executable,
             *_qemu_aarch64_sysroot_args(runner.args),
             "-cpu",
             runner.profile,
             *runner.args,
         )
     if runner.kind == "wasmtime":
-        if config.wasmtime_path is None:
-            return ()
-        return (config.wasmtime_path, *runner.args)
+        return (executable, *runner.args)
     return ()
 
 
@@ -158,8 +142,9 @@ def effective_cpp_compiler(
     backend: VerifyBackend | None = None,
     profile: VerifyProfile | None = None,
 ) -> tuple[str, ...]:
-    if config.cpp_compiler is not None:
-        return config.cpp_compiler
+    configured_compiler = config.toolchain("cpp").compiler
+    if configured_compiler is not None:
+        return configured_compiler
     if profile is not None:
         return _effective_cpp_compiler_for_profile(config, profile)
     if backend is not None and backend.profiles and all(
@@ -198,7 +183,7 @@ def _effective_cpp_compiler_for_profile(
         return (_ONEAPI_CPP_COMPILER,)
     if (
         config.run_value_tests
-        and config.sde_path is not None
+        and config.runner_path("sde") is not None
         and profile.runner is not None
         and profile.runner.kind == "sde"
     ):
@@ -211,7 +196,7 @@ def _native_cpp_compiler() -> tuple[str, ...]:
     if parsed:
         # The CI/devcontainer environment exposes Zig through CXX for cross
         # builds. Zig is not the native host compiler unless the caller asks for
-        # it explicitly through BuildVerifierConfig/--cpp-compiler.
+        # it explicitly through BuildVerifierConfig/--compiler cpp=COMMAND.
         if not _is_zig_driver(parsed[0]):
             return parsed
     return ("c++",)
@@ -273,8 +258,9 @@ def _is_zig_driver(executable: str) -> bool:
 
 
 def effective_rust_compiler(config: BuildVerifierConfig) -> str:
-    if config.rust_compiler is not None:
-        return config.rust_compiler
+    configured = config.toolchain("rust").compiler
+    if configured is not None:
+        return configured[0]
     ambient = os.environ.get("RUSTC")
     if ambient:
         normalized = _normalize_compiler_executable(ambient)
@@ -289,7 +275,7 @@ def cpp_environment(
     profile: VerifyProfile | None = None,
 ) -> tuple[BuildCommandEnvironment, ...]:
     compiler = effective_cpp_compiler(config, backend, profile)
-    if config.cpp_compiler is None and not (
+    if config.toolchain("cpp").compiler is None and not (
         profile is not None and cpp_target(profile, config) is not None
     ) and not (
         profile is None
@@ -312,8 +298,11 @@ def rust_environment(
     config: BuildVerifierConfig,
 ) -> tuple[BuildCommandEnvironment, ...]:
     environment: list[BuildCommandEnvironment] = []
-    if config.rust_compiler is not None:
-        environment.append(BuildCommandEnvironment(key="RUSTC", value=config.rust_compiler))
+    configured_compiler = config.toolchain("rust").compiler
+    if configured_compiler is not None:
+        environment.append(
+            BuildCommandEnvironment(key="RUSTC", value=configured_compiler[0])
+        )
     target = rust_target(profile, config)
     linker = rust_linker(profile, config)
     if target is not None and linker is not None:
@@ -323,8 +312,8 @@ def rust_environment(
                 value=linker,
             )
         )
-    if profile.rust_target_features:
-        joined = ",".join(profile.rust_target_features)
+    if profile.target_features:
+        joined = ",".join(profile.target_features)
         environment.append(
             BuildCommandEnvironment(
                 key="RUSTFLAGS",

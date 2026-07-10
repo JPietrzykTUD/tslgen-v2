@@ -65,7 +65,7 @@ def validate_parsed_documents(
                 and declaration.field.key.text == "target_families"
             ):
                 target_family_fields.append(declaration.field)
-                validate_target_families(declaration.field, diagnostics)
+                validate_target_families(declaration.field, backend_ids, diagnostics)
 
     diagnose_duplicate_fields(
         type_group_fields,

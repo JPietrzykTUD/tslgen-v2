@@ -8,7 +8,7 @@ import pytest
 
 from tslc.api import generate_project
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
-from tslc.catalog.target_families import ProfileFamilyCapability
+from tslc.catalog.target_families import BackendProfileFamily, ProfileFamilyCapability
 from tslc.diagnostics import has_errors
 from tslc.render.cpp_build import cpp_flags, cpp_target
 from tslc.render._common import slug
@@ -201,12 +201,16 @@ def test_cpp_profile_flags_are_profile_family_owned() -> None:
         family="aarch64",
         features=frozenset({"sve"}),
         alternatives={},
-        cpp_flags=("-march=armv8-a+sve",),
+        backend_flags={"cpp": ("-march=armv8-a+sve",)},
     )
     capability = ProfileFamilyCapability(
         "aarch64",
-        cpp_feature_flags=False,
-        cpp_target="aarch64-linux-gnu",
+        backends={
+            "cpp": BackendProfileFamily(
+                feature_flags=False,
+                target="aarch64-linux-gnu",
+            )
+        },
     )
 
     assert cpp_flags(profile, capability) == ("-march=armv8-a+sve",)
@@ -222,9 +226,13 @@ def test_rust_profile_toolchain_is_profile_family_owned() -> None:
     )
     capability = ProfileFamilyCapability(
         "aarch64",
-        rust_target_features=True,
-        rust_target="aarch64-unknown-linux-musl",
-        rust_linker="rust-lld",
+        backends={
+            "rust": BackendProfileFamily(
+                feature_flags=True,
+                target="aarch64-unknown-linux-musl",
+                linker="rust-lld",
+            )
+        },
     )
 
     assert rust_target_features(profile, capability) == ("+neon",)
@@ -232,7 +240,10 @@ def test_rust_profile_toolchain_is_profile_family_owned() -> None:
     assert rust_linker(profile, capability) == "rust-lld"
     assert rust_target_features(
         profile,
-        ProfileFamilyCapability("generic", rust_target_features=False),
+        ProfileFamilyCapability(
+            "generic",
+            backends={"rust": BackendProfileFamily(feature_flags=False)},
+        ),
     ) == ()
 
     fixed_sve = MachineProfile(
@@ -264,8 +275,8 @@ def test_omitted_profiles_use_all_loaded_profiles(
     actual = sorted(result.rendered.verify.backends[0].profiles, key=lambda p: p.profile_name)
     assert [profile.file_stem for profile in actual] == expected
     neon_profile = next(profile for profile in actual if profile.profile_name == "neon")
-    assert neon_profile.cpp_target == "aarch64-linux-gnu"
-    assert neon_profile.cpp_flags == ()
+    assert neon_profile.target == "aarch64-linux-gnu"
+    assert neon_profile.flags == ()
     assert neon_profile.runner is not None
     assert neon_profile.runner.kind == "qemu-aarch64"
     assert neon_profile.runner.profile == "cortex-a76"

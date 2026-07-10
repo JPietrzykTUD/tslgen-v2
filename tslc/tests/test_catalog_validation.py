@@ -594,10 +594,13 @@ def test_target_family_data_makes_new_extension_family_additive() -> None:
         "    riscv:\n"
         "      extension_families [rvv]\n"
         "      sort_order 30\n"
-        "      cpp_feature_flags false\n"
-        '      cpp_target "riscv64-linux-gnu"\n'
-        "      rust_target_features false\n"
-        '      rust_target "riscv64gc-unknown-linux-gnu"\n'
+        "      backends:\n"
+        "        cpp:\n"
+        "          feature_flags false\n"
+        '          target "riscv64-linux-gnu"\n'
+        "        rust:\n"
+        "          feature_flags false\n"
+        '          target "riscv64gc-unknown-linux-gnu"\n'
         "types:\n"
         "  ints {types [si32]}\n"
         "extension scalar:\n"
@@ -1146,13 +1149,13 @@ def test_machine_profile_compile_modes_are_validated(tmp_path: Path) -> None:
     }
 
 
-def test_machine_profile_cpp_flags_are_validated(tmp_path: Path) -> None:
+def test_machine_profile_backend_flags_are_validated(tmp_path: Path) -> None:
     path = tmp_path / "machine_profiles.json"
     path.write_text(
         '{\n'
         '  "aarch64": [\n'
-        '    {"name": "neon", "target_features": "neon", "cpp_flags": []},\n'
-        '    {"name": "bad", "target_features": "sve", "cpp_flags": "-march=armv8-a+sve"}\n'
+        '    {"name": "neon", "target_features": "neon", "backend_flags": {"cpp": []}},\n'
+        '    {"name": "bad", "target_features": "sve", "backend_flags": {"cpp": "-march=armv8-a+sve"}}\n'
         '  ]\n'
         '}\n',
         encoding="utf-8",
@@ -1160,7 +1163,7 @@ def test_machine_profile_cpp_flags_are_validated(tmp_path: Path) -> None:
 
     result = load_machine_profiles_checked(path)
 
-    assert result.profiles["neon"].cpp_flags == ()
+    assert result.profiles["neon"].flags_for_backend("cpp") == ()
     assert "TSL-PROFILE-MALFORMED-FIELD" in {d.code for d in result.diagnostics}
 
 

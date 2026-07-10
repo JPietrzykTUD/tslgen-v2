@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from tslc.backend.registry import registered_backend_ids
@@ -14,6 +14,7 @@ from tslc.output.verify import (
     VerifyProject,
     verify_generated_project,
 )
+from tslc.output.verify_model import BackendToolchain
 from tslc.output.writer import ArtifactWriteMode, ArtifactWriteReport, ArtifactWriter
 from tslc.pipeline import GenerationMode, GenerationRequest, GenerationResult, generate
 
@@ -89,28 +90,16 @@ def verify_project(
     output_root: Path | str,
     verify: VerifyProject,
     *,
-    cpp_compiler: str | Sequence[str] | None = None,
-    rust_compiler: str | None = None,
+    toolchains: Mapping[str, BackendToolchain] | None = None,
+    runner_paths: Mapping[str, str] | None = None,
     run_value_tests: bool = False,
-    sde_path: str | None = None,
-    qemu_aarch64_path: str | None = None,
-    wasmtime_path: str | None = None,
-    cpp_target: str | None = None,
-    rust_target: str | None = None,
-    rust_linker: str | None = None,
 ) -> BuildVerificationReport:
     return verify_generated_project(
         Path(output_root),
         verify,
         config=BuildVerifierConfig.create(
-            cpp_compiler=cpp_compiler,
-            rust_compiler=rust_compiler,
+            toolchains=toolchains,
+            runner_paths=runner_paths,
             run_value_tests=run_value_tests,
-            sde_path=sde_path,
-            qemu_aarch64_path=qemu_aarch64_path,
-            wasmtime_path=wasmtime_path,
-            cpp_target=cpp_target,
-            rust_target=rust_target,
-            rust_linker=rust_linker,
         ),
     )

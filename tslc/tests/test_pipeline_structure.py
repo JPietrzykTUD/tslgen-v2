@@ -17,12 +17,18 @@ from tslc.backend.helper_requirements import (
     RUST_HELPER_MANIFEST,
 )
 from tslc.backend.rust_capability import RUST_BACKEND
-from tslc.catalog.machine_profiles import MachineProfile
+from tslc.catalog.builder import CatalogBuilder
+from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
+from tslc.catalog.validation import validate_catalog
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.output.artifacts import Artifact
+from tslc.output.verify_model import VerifyProfile
 from tslc.render import cpp_build, cpp_project
 from tslc.render.project import render_project
+from tslc.sources import SourceDocument
+from tslc.syntax.parser import TslParser
+from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.target_text import LoweredBody
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -138,6 +144,118 @@ def test_fake_backend_drives_documentation_and_artifact_media_type(monkeypatch) 
     assert artifacts["fake/lib.fake"].media_type == "text/fake"
     assert "fake-register" in documentation["strings"]
     assert "fake facade" in documentation["strings"]
+
+
+def test_third_backend_configuration_reaches_verify_project(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """A backend ID remains data-driven from source validation through render."""
+
+    from tslc.backend import registry
+
+    source = SourceDocument(
+        tmp_path / "fake.tsl",
+        """target_families:
+  known_extension_families [scalar]
+  universal_extension_families [scalar]
+  profile_families:
+    fake_family:
+      extension_families []
+      runner_kinds []
+      backends:
+        fake:
+          feature_flags false
+          target "fake-none-elf"
+          linker "fake-ld"
+types:
+  ints {types [si32]}
+extension scalar:
+  extension_name "scalar"
+  family "scalar"
+language fake:
+  s32 {type "fake_i32"}
+prim<v:=v> id(data):
+  impls:
+    scalar:
+      ints:
+        implementation:
+          tsil "complete(data);"
+""",
+        "detail",
+        "tsl",
+    )
+    parsed = TslParser(load_default_tsl_grammar()).parse((source,))
+    assert parsed.diagnostics == ()
+    catalog_result = CatalogBuilder().build(parsed)
+    assert catalog_result.catalog is not None
+    assert catalog_result.diagnostics == ()
+    catalog = catalog_result.catalog
+    assert validate_catalog(catalog, parsed, required_backends=("fake",)) == ()
+
+    profile_path = tmp_path / "machine_profiles.json"
+    profile_path.write_text(
+        '{"fake_family": [{"name": "fake-fast", '
+        '"target_features": "fast", '
+        '"backend_flags": {"fake": ["--fast"]}}]}\n',
+        encoding="utf-8",
+    )
+    profiles = load_machine_profiles_checked(profile_path, catalog.target_families)
+    assert profiles.diagnostics == ()
+    machine_profile = profiles.profiles["fake-fast"]
+    profile_family = catalog.target_families.profile_families["fake_family"]
+
+    def verify_profiles(
+        emitted: tuple[EmittedProfile, ...],
+    ) -> tuple[VerifyProfile, ...]:
+        return tuple(
+            VerifyProfile(
+                profile_name=item.profile.name,
+                file_stem=item.profile.name,
+                flags=item.profile.flags_for_backend("fake"),
+                target=item.profile_family.backend("fake").target
+                if item.profile_family is not None
+                else None,
+                linker=item.profile_family.backend("fake").linker
+                if item.profile_family is not None
+                else None,
+            )
+            for item in emitted
+        )
+
+    fake = BackendCapability(
+        backend_id="fake",
+        root_path="fake",
+        artifact_media_type="text/fake",
+        dialect_factory=lambda catalog: None,  # type: ignore[arg-type,return-value]
+        project_renderer=lambda profiles, assets, media_type: [],
+        verify_profiles=verify_profiles,
+        value_test_support_factory=lambda: None,  # type: ignore[return-value]
+        test_renderer=lambda plan, assets, media_type: [],
+        verify_driver_factory=lambda: None,  # type: ignore[return-value]
+        documentation_formatter_factory=_FakeDocumentationFormatter,
+    )
+    monkeypatch.setattr(registry, "BACKEND_CAPABILITIES", (fake,))
+    monkeypatch.setattr(registry, "_BY_ID", {"fake": fake})
+    emitted = EmittedProfile(
+        machine_profile,
+        {"fake": {}},
+        profile_family=profile_family,
+        immediate_split_names=frozenset(),
+    )
+
+    rendered = render_project((emitted,), ("fake",), assets=RenderAssets({}))
+
+    assert rendered.verify.backends[0].backend_id == "fake"
+    assert rendered.verify.backends[0].profiles == (
+        VerifyProfile(
+            profile_name="fake-fast",
+            file_stem="fake-fast",
+            flags=("--fast",),
+            target="fake-none-elf",
+            linker="fake-ld",
+        ),
+    )
 
 
 def test_lowerer_imports_region_handlers_directly() -> None:

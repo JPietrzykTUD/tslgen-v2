@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from tslc.backend.cpp_detection import CPP_PROFILE_DETECTION_KINDS
 from tslc.backend.target_capability import (
     cpp_x86_register_helper,
     x86_register_bits,
@@ -78,6 +79,26 @@ def resolve_cpp_compile_guards(
 def validate_cpp_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagnostic, ...]:
     diagnostics: list[Diagnostic] = []
     for profile in profiles:
+        family = profile.profile_family
+        detection = None if family is None else family.backend("cpp").detection
+        if (
+            family is not None
+            and detection is not None
+            and detection not in CPP_PROFILE_DETECTION_KINDS
+        ):
+            backend_family = family.backend("cpp")
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-BACKEND-CPP-UNSUPPORTED-PROFILE-DETECTION",
+                    message=(
+                        f"C++ profile family {family.name!r} declares unsupported "
+                        f"detection strategy {detection!r}; expected one of: "
+                        + ", ".join(sorted(CPP_PROFILE_DETECTION_KINDS))
+                    ),
+                    source=backend_family.source or family.source,
+                )
+            )
         emitted_extensions = profile.used_extensions("cpp")
         for extension_name in emitted_extensions:
             extension = profile.extensions.get(extension_name)

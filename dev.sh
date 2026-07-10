@@ -66,7 +66,7 @@ has_cli_flag() {
 if [[ "$mode" == "generate" ]] && { has_cli_flag --test || has_cli_flag --fuzz; }; then
   echo "ERROR: dev.sh generate does not accept --test or --fuzz." >&2
   echo "Use './dev.sh test ...' so SDE/qemu-aarch64 paths are wired consistently." >&2
-  echo "For manual control, call 'python -m tslc.cli' directly with explicit --sde/--qemu-aarch64/--wasmtime." >&2
+  echo "For manual control, call 'python -m tslc.cli' directly with explicit --runner KIND=PATH options." >&2
   exit 2
 fi
 
@@ -138,7 +138,7 @@ compiler_basename() {
 
 # The CI/devcontainer image exposes Zig via ambient CC/CXX for cross-target
 # flows. Native host builds should use the host toolchain unless the caller
-# passes --cpp-compiler directly to tslc or opts into a different host compiler
+# passes --compiler cpp=COMMAND directly to tslc or opts into a different host compiler
 # through TSLC_HOST_CXX/TSLC_HOST_CC.
 if [[ "$(compiler_basename "${CXX:-}")" == "zig" ]]; then
   export CXX="${TSLC_HOST_CXX:-c++}"
@@ -228,9 +228,9 @@ case "$mode" in
     cli+=( --test --value-test-warnings )
     # Pass the runners only when present, so annotated profiles run rather than fail on a
     # missing binary; absent ones are skipped by the verify step.
-    [[ -e "$sde" ]] && cli+=( --sde "$sde" )
-    [[ -e "$qemu" ]] && cli+=( --qemu-aarch64 "$qemu" )
-    [[ -e "$wasmtime" ]] && cli+=( --wasmtime "$wasmtime" )
+    [[ -e "$sde" ]] && cli+=( --runner "sde=$sde" )
+    [[ -e "$qemu" ]] && cli+=( --runner "qemu-aarch64=$qemu" )
+    [[ -e "$wasmtime" ]] && cli+=( --runner "wasmtime=$wasmtime" )
     ;;
 esac
 (( ${#extra_args[@]} )) && cli+=( "${extra_args[@]}" )

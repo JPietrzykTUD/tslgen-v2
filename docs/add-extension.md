@@ -44,10 +44,13 @@ profile_families:
     extension_families [wasm]
     runner_kinds [wasmtime]
     sort_order 30
-    cpp_feature_flags true
-    cpp_target "wasm32-wasip1"
-    rust_target_features true
-    rust_target "wasm32-wasip1"
+    backends:
+      cpp:
+        feature_flags true
+        target "wasm32-wasip1"
+      rust:
+        feature_flags true
+        target "wasm32-wasip1"
 ```
 
 Keep this file about routing and capabilities. Do not put primitive selection
@@ -64,7 +67,7 @@ For WebAssembly SIMD, the profile is:
   {
     "name": "wasm32-simd128",
     "target_features": "simd128",
-    "cpp_flags": [],
+    "backend_flags": {"cpp": []},
     "runner": {"kind": "wasmtime", "profile": "default"}
   }
 ]

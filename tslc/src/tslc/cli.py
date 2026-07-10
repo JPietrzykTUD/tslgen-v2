@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from tslc.api import generate_project, verify_project, write_artifacts
 from tslc.diagnostics import has_errors
 from tslc.output.verify import BuildVerificationReport
+from tslc.output.verify_model import BackendToolchain
 from tslc.pipeline import GenerationResult
 
 if TYPE_CHECKING:
@@ -69,59 +70,32 @@ def main(argv: list[str] | None = None) -> int:
         "reference over random inputs); implies --test",
     )
     parser.add_argument(
-        "--sde",
-        nargs="?",
-        const="/opt/intel-sde/sde64",
-        default=None,
-        help=(
-            "run value-test executables for SDE-annotated profiles through Intel SDE; "
-            "optionally pass the SDE executable path"
-        ),
+        "--compiler",
+        action="append",
+        default=[],
+        metavar="BACKEND=COMMAND",
+        help="backend compiler command override; repeat for multiple backends",
     )
     parser.add_argument(
-        "--qemu-aarch64",
-        nargs="?",
-        const="/usr/bin/qemu-aarch64",
-        default=None,
-        help=(
-            "run value-test executables for qemu-aarch64-annotated profiles "
-            "through QEMU user-mode; optionally pass the executable path"
-        ),
+        "--target",
+        action="append",
+        default=[],
+        metavar="BACKEND=TRIPLE",
+        help="backend target triple override; repeat for multiple backends",
     )
     parser.add_argument(
-        "--wasmtime",
-        nargs="?",
-        const="wasmtime",
-        default=None,
-        help=(
-            "run value-test executables for Wasm/WASI profiles through Wasmtime; "
-            "optionally pass the executable path"
-        ),
+        "--linker",
+        action="append",
+        default=[],
+        metavar="BACKEND=EXECUTABLE",
+        help="backend linker override; repeat for multiple backends",
     )
     parser.add_argument(
-        "--cpp-compiler",
-        default=None,
-        help="C++ compiler command for build verification, e.g. /usr/bin/c++",
-    )
-    parser.add_argument(
-        "--cpp-target",
-        default=None,
-        help="optional C++ target triple override for build verification",
-    )
-    parser.add_argument(
-        "--rust-compiler",
-        default=None,
-        help="Rust compiler executable for build verification, e.g. rustc",
-    )
-    parser.add_argument(
-        "--rust-target",
-        default=None,
-        help="optional Rust target triple override for build verification",
-    )
-    parser.add_argument(
-        "--rust-linker",
-        default=None,
-        help="optional Rust target linker override for build verification",
+        "--runner",
+        action="append",
+        default=[],
+        metavar="KIND=EXECUTABLE",
+        help="value-test runner path; repeat for multiple runner kinds",
     )
     parser.add_argument(
         "--coverage", action="store_true", help="print a behavior-coverage report"
@@ -144,6 +118,15 @@ def main(argv: list[str] | None = None) -> int:
         help="append a Markdown generation/verification summary to this path",
     )
     args = parser.parse_args(argv)
+    try:
+        toolchains = _toolchain_overrides(
+            _assignments(args.compiler, "--compiler"),
+            _assignments(args.target, "--target"),
+            _assignments(args.linker, "--linker"),
+        )
+        runner_paths = _assignments(args.runner, "--runner")
+    except ValueError as exc:
+        parser.error(str(exc))
 
     # Fuzzing only matters once the value tests are built and run, and it needs the test harness
     # (round-trip primitives) pulled into the closure — so --fuzz implies --test.
@@ -224,9 +207,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if (args.verify or args.test) and result.rendered is not None:
             if args.test:
-                runners = _configured_runner_labels(
-                    args.sde, args.qemu_aarch64, args.wasmtime
-                )
+                runners = _configured_runner_labels(runner_paths)
                 if runners:
                     print(
                         "building and running generated value tests through "
@@ -237,15 +218,9 @@ def main(argv: list[str] | None = None) -> int:
             verify_report = verify_project(
                 args.output_root,
                 result.rendered.verify,
-                cpp_compiler=args.cpp_compiler,
-                rust_compiler=args.rust_compiler,
+                toolchains=toolchains,
+                runner_paths=runner_paths,
                 run_value_tests=args.test,
-                sde_path=args.sde,
-                qemu_aarch64_path=args.qemu_aarch64,
-                wasmtime_path=args.wasmtime,
-                cpp_target=args.cpp_target,
-                rust_target=args.rust_target,
-                rust_linker=args.rust_linker,
             )
             for note in verify_report.skipped:
                 print(f"[verify-skip] {note}", file=sys.stderr)
@@ -287,19 +262,37 @@ def _split(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def _configured_runner_labels(
-    sde: str | None,
-    qemu_aarch64: str | None,
-    wasmtime: str | None,
-) -> list[str]:
-    labels: list[str] = []
-    if sde:
-        labels.append(f"Intel SDE: {sde}")
-    if qemu_aarch64:
-        labels.append(f"qemu-aarch64: {qemu_aarch64}")
-    if wasmtime:
-        labels.append(f"Wasmtime: {wasmtime}")
-    return labels
+def _assignments(values: list[str], option: str) -> dict[str, str]:
+    assignments: dict[str, str] = {}
+    for value in values:
+        key, separator, setting = value.partition("=")
+        key = key.strip()
+        setting = setting.strip()
+        if not separator or not key or not setting:
+            raise ValueError(f"{option} expects NAME=VALUE, got {value!r}")
+        if key in assignments:
+            raise ValueError(f"{option} repeats name {key!r}")
+        assignments[key] = setting
+    return assignments
+
+
+def _toolchain_overrides(
+    compilers: dict[str, str],
+    targets: dict[str, str],
+    linkers: dict[str, str],
+) -> dict[str, BackendToolchain]:
+    return {
+        backend_id: BackendToolchain.create(
+            compiler=compilers.get(backend_id),
+            target=targets.get(backend_id),
+            linker=linkers.get(backend_id),
+        )
+        for backend_id in sorted(compilers.keys() | targets.keys() | linkers.keys())
+    }
+
+
+def _configured_runner_labels(runner_paths: dict[str, str]) -> list[str]:
+    return [f"{kind}: {path}" for kind, path in sorted(runner_paths.items())]
 
 
 def _print_test_output(report: BuildVerificationReport) -> None:

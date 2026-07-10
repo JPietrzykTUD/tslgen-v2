@@ -23,6 +23,7 @@ from tslc.catalog.model import (
     Extension,
     ExtensionMetadata,
 )
+from tslc.catalog.target_families import BackendProfileFamily, ProfileFamilyCapability
 from tslc.diagnostics import SourceSpan
 
 
@@ -71,6 +72,31 @@ def test_compile_guard_conflicts_are_diagnostics_not_exceptions() -> None:
     assert [diagnostic.code for diagnostic in resolution.diagnostics] == [
         "TSL-BACKEND-CPP-CONFLICTING-COMPILE-GUARD-VALUE"
     ]
+
+
+def test_cpp_unknown_profile_detection_is_source_located() -> None:
+    source = SourceSpan(Path("target_families.tsl"), 8, 5, 10, 1)
+    profile = EmittedProfile(
+        profile=MachineProfile("test", "x86", frozenset(), {}),
+        specializations_by_backend={"cpp": {}},
+        profile_family=ProfileFamilyCapability(
+            "x86",
+            backends={
+                "cpp": BackendProfileFamily(
+                    detection="typo_detection",
+                    source=source,
+                )
+            },
+        ),
+        immediate_split_names=frozenset(),
+    )
+
+    diagnostics = validate_cpp_profiles((profile,))
+
+    assert [diagnostic.code for diagnostic in diagnostics] == [
+        "TSL-BACKEND-CPP-UNSUPPORTED-PROFILE-DETECTION"
+    ]
+    assert diagnostics[0].location == source.start
 
 
 def test_rust_unsupported_const_query_type_is_diagnostic() -> None:

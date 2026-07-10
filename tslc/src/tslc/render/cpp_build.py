@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from tslc.backend.cpp_detection import CPP_PROFILE_DETECTION_KINDS
 from tslc.backend.cpp_validation import resolve_cpp_compile_guards
 from tslc.backend.emitted_profile import EmittedProfile, used_extensions
 from tslc.backend.target_capability import feature_spelling
@@ -25,8 +26,8 @@ def cpp_verify_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[VerifyPro
             file_stem=slug(emitted_profile.profile.name),
             family=emitted_profile.profile.family,
             compile_modes=emitted_profile.profile.compile_modes,
-            cpp_flags=cpp_flags(emitted_profile.profile, emitted_profile.profile_family),
-            cpp_target=cpp_target(emitted_profile.profile, emitted_profile.profile_family),
+            flags=cpp_flags(emitted_profile.profile, emitted_profile.profile_family),
+            target=cpp_target(emitted_profile.profile, emitted_profile.profile_family),
             runner=_verify_runner(emitted_profile.profile),
         )
         for emitted_profile in profiles
@@ -38,14 +39,15 @@ def cpp_flags(
     capability: ProfileFamilyCapability | None = None,
 ) -> tuple[str, ...]:
     capability = capability or ProfileFamilyCapability(profile.family)
-    if not capability.cpp_feature_flags:
-        return profile.cpp_flags
+    backend = capability.backend("cpp")
+    if not backend.feature_flags:
+        return profile.flags_for_backend("cpp")
     return (
         *(
             f"-m{feature_spelling(feature, profile.alternatives)}"
             for feature in sorted(profile.features)
         ),
-        *profile.cpp_flags,
+        *profile.flags_for_backend("cpp"),
     )
 
 
@@ -54,7 +56,7 @@ def cpp_target(
     capability: ProfileFamilyCapability | None = None,
 ) -> str | None:
     capability = capability or ProfileFamilyCapability(profile.family)
-    return capability.cpp_target
+    return capability.backend("cpp").target
 
 
 def _verify_runner(profile: MachineProfile) -> VerifyRunner | None:
@@ -299,9 +301,10 @@ def _cpp_profile_detection_source(
     profile = emitted_profile.profile
     capability = emitted_profile.profile_family
     capability = capability or ProfileFamilyCapability(profile.family)
-    if capability.cpp_detection is None:
+    detection = capability.backend("cpp").detection
+    if detection is None:
         return None
-    renderer = _CPP_DETECTION_RENDERERS.get(capability.cpp_detection)
+    renderer = _CPP_DETECTION_RENDERERS.get(detection)
     if renderer is None:
         return None
     guards = resolve_cpp_compile_guards(
@@ -381,6 +384,8 @@ _CPP_DETECTION_RENDERERS = {
     "x86_builtin": _x86_profile_detection_source,
     "aarch64_hwcaps": _aarch64_profile_detection_source,
 }
+
+assert frozenset(_CPP_DETECTION_RENDERERS) == CPP_PROFILE_DETECTION_KINDS
 
 
 def _cmake_list(values: Sequence[str]) -> str:

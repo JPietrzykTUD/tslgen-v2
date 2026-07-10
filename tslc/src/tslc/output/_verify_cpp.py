@@ -339,7 +339,7 @@ def _cpp_target_preflight_command(
             "-x",
             "c++",
             "-std=c++17",
-            *profile.cpp_flags,
+            *profile.flags,
             "-c",
             str(source_path),
             "-o",

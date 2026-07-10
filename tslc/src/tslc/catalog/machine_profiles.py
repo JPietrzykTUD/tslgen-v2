@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -48,9 +48,9 @@ class MachineProfile:
     alternatives: Mapping[str, str]
     # Compiler-selected modes that are not hardware target features, e.g. fixed SVE width.
     compile_modes: frozenset[str] = frozenset()
-    # Extra C++ compiler flags owned by this machine profile. These are full
-    # compiler arguments, not feature-token spellings.
-    cpp_flags: tuple[str, ...] = ()
+    # Extra compiler flags keyed by backend. These are full compiler arguments,
+    # not feature-token spellings.
+    backend_flags: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     # Optional runner profile used by the after-write verifier to execute value
     # tests on hosts that cannot run the profile directly.
     runner: MachineProfileRunner | None = None
@@ -63,7 +63,19 @@ class MachineProfile:
         object.__setattr__(self, "features", frozenset(self.features))
         object.__setattr__(self, "compile_modes", frozenset(self.compile_modes))
         object.__setattr__(self, "alternatives", MappingProxyType(dict(self.alternatives)))
-        object.__setattr__(self, "cpp_flags", tuple(self.cpp_flags))
+        object.__setattr__(
+            self,
+            "backend_flags",
+            MappingProxyType(
+                {
+                    backend_id: tuple(flags)
+                    for backend_id, flags in sorted(self.backend_flags.items())
+                }
+            ),
+        )
+
+    def flags_for_backend(self, backend_id: str) -> tuple[str, ...]:
+        return self.backend_flags.get(backend_id, ())
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,7 +191,7 @@ def load_machine_profiles_checked(
                     "target_features",
                     "compile_modes",
                     "alternatives",
-                    "cpp_flags",
+                    "backend_flags",
                     "runner",
                     "auto_detect_gate",
                 },
@@ -229,10 +241,10 @@ def load_machine_profiles_checked(
                 continue
             alternatives_value = fields.get("alternatives", _JsonObject(()))
             alternatives = _alternatives(name, alternatives_value, path, diagnostics)
-            cpp_flags = _string_list_field(
+            backend_flags = _backend_flags(
                 name,
-                fields.get("cpp_flags", ()),
-                "cpp_flags",
+                fields.get("backend_flags", _JsonObject(())),
+                target_families,
                 path,
                 diagnostics,
             )
@@ -257,7 +269,7 @@ def load_machine_profiles_checked(
                 features=features,
                 alternatives=alternatives,
                 compile_modes=compile_modes,
-                cpp_flags=cpp_flags,
+                backend_flags=backend_flags,
                 runner=runner,
                 auto_detect_gate=auto_detect_gate,
             )
@@ -388,6 +400,49 @@ def _string_list_field(
         )
     )
     return ()
+
+
+def _backend_flags(
+    profile_name: str,
+    value: Any,
+    target_families: TargetFamilyCatalog | None,
+    path: Path,
+    diagnostics: list[Diagnostic],
+) -> dict[str, tuple[str, ...]]:
+    if not isinstance(value, _JsonObject):
+        diagnostics.append(
+            _diagnostic(
+                path,
+                "TSL-PROFILE-MALFORMED-FIELD",
+                f"machine profile {profile_name!r} backend_flags must be an object",
+            )
+        )
+        return {}
+    fields = _object_fields(value, path, diagnostics)
+    known_backends = (
+        target_families.backend_ids if target_families is not None else frozenset()
+    )
+    result: dict[str, tuple[str, ...]] = {}
+    for backend_id, flags in fields.items():
+        if known_backends and backend_id not in known_backends:
+            diagnostics.append(
+                _diagnostic(
+                    path,
+                    "TSL-PROFILE-UNKNOWN-BACKEND",
+                    (
+                        f"machine profile {profile_name!r} backend_flags declares "
+                        f"unknown backend {backend_id!r}"
+                    ),
+                )
+            )
+        result[backend_id] = _string_list_field(
+            profile_name,
+            flags,
+            f"backend_flags {backend_id!r}",
+            path,
+            diagnostics,
+        )
+    return result
 
 
 def _optional_token_field(

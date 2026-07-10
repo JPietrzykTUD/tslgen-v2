@@ -84,16 +84,19 @@ profile_families:
     extension_families [wasm]
     runner_kinds [wasmtime]
     sort_order 30
-    cpp_feature_flags true
-    rust_target_features true
-    rust_target "wasm32-wasip1"
+    backends:
+      cpp:
+        feature_flags true
+      rust:
+        feature_flags true
+        target "wasm32-wasip1"
 ```
 
 Notes:
 
-- `cpp_feature_flags true` is useful because profile feature `simd128` naturally
+- C++ `feature_flags true` is useful because profile feature `simd128` naturally
   becomes `-msimd128`.
-- `rust_target_features true` is useful because profile feature `simd128`
+- Rust `feature_flags true` is useful because profile feature `simd128`
   naturally becomes `+simd128`.
 - The verifier vocabulary uses `runner_kinds` because Wasmtime is a runtime, not
   a CPU emulator.
@@ -113,7 +116,7 @@ Add:
     {
       "name": "wasm32-simd128",
       "target_features": "simd128",
-      "cpp_flags": [],
+      "backend_flags": {"cpp": []},
       "runner": {"kind": "wasmtime", "profile": "default"}
     }
   ]

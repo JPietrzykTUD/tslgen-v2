@@ -299,9 +299,9 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     assert "avx2" in machine_profiles["avx2"].features
     assert "avx2" not in machine_profiles["avx"].features
     assert "avx512f" in machine_profiles["skylake"].features
-    assert machine_profiles["neon"].cpp_flags == ()
+    assert machine_profiles["neon"].flags_for_backend("cpp") == ()
     assert machine_profiles["sve"].features == frozenset({"sve"})
-    assert machine_profiles["sve"].cpp_flags == ("-mcpu=a64fx",)
+    assert machine_profiles["sve"].flags_for_backend("cpp") == ("-mcpu=a64fx",)
     assert machine_profiles["sve128"].runner is not None
     assert (
         machine_profiles["sve128"].runner.profile
@@ -317,7 +317,7 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
         {"sve_vector_bits_512"}
     )
     assert machine_profiles["sve512"].auto_detect_gate is None
-    assert machine_profiles["sve512"].cpp_flags == (
+    assert machine_profiles["sve512"].flags_for_backend("cpp") == (
         "-mcpu=a64fx",
         "-msve-vector-bits=512",
     )
@@ -327,7 +327,7 @@ def test_machine_profiles_loaded(machine_profiles) -> None:
     assert machine_profiles["skylake-oneapi"].auto_detect_gate == "oneapi_fpga"
     assert machine_profiles["wasm32-simd128"].family == "wasm32"
     assert machine_profiles["wasm32-simd128"].features == frozenset({"simd128"})
-    assert machine_profiles["wasm32-simd128"].cpp_flags == ()
+    assert machine_profiles["wasm32-simd128"].flags_for_backend("cpp") == ()
     assert machine_profiles["wasm32-simd128"].runner is not None
     assert machine_profiles["wasm32-simd128"].runner.kind == "wasmtime"
 
@@ -352,8 +352,8 @@ def test_target_families_promoted(catalog: Catalog) -> None:
         {"qemu-aarch64"}
     )
     assert families.profile_families["wasm32"].runner_kinds == frozenset({"wasmtime"})
-    assert families.profile_families["wasm32"].cpp_target == "wasm32-wasip1"
-    assert families.profile_families["wasm32"].rust_target == "wasm32-wasip1"
+    assert families.profile_families["wasm32"].backend("cpp").target == "wasm32-wasip1"
+    assert families.profile_families["wasm32"].backend("rust").target == "wasm32-wasip1"
 
 
 def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:

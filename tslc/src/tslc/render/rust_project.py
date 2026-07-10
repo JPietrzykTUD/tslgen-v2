@@ -44,7 +44,7 @@ def rust_artifacts(
         )
         backend = RustBackend(
             feature_alternatives=emitted_profile.profile.alternatives,
-            emit_target_features=capability.rust_target_features,
+            emit_target_features=capability.backend("rust").feature_flags,
         )
         by_primitive = emitted_profile.specializations("rust")
         registrations = rust_registrations(by_primitive, emitted_profile.extensions)
@@ -113,11 +113,11 @@ def rust_verify_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[VerifyPr
             file_stem=slug(emitted_profile.profile.name),
             family=emitted_profile.profile.family,
             compile_modes=emitted_profile.profile.compile_modes,
-            rust_target_features=rust_target_features(
+            target_features=rust_target_features(
                 emitted_profile.profile, emitted_profile.profile_family
             ),
-            rust_target=rust_target(emitted_profile.profile, emitted_profile.profile_family),
-            rust_linker=rust_linker(emitted_profile.profile, emitted_profile.profile_family),
+            target=rust_target(emitted_profile.profile, emitted_profile.profile_family),
+            linker=rust_linker(emitted_profile.profile, emitted_profile.profile_family),
             runner=_verify_runner(emitted_profile.profile),
         )
         for emitted_profile in profiles
@@ -129,7 +129,7 @@ def rust_target_features(
     capability: ProfileFamilyCapability | None = None,
 ) -> tuple[str, ...]:
     capability = capability or ProfileFamilyCapability(profile.family)
-    if not capability.rust_target_features:
+    if not capability.backend("rust").feature_flags:
         return ()
     return tuple(
         f"+{feature_spelling(feature, profile.alternatives)}"
@@ -142,7 +142,7 @@ def rust_target(
     capability: ProfileFamilyCapability | None = None,
 ) -> str | None:
     capability = capability or ProfileFamilyCapability(profile.family)
-    return capability.rust_target
+    return capability.backend("rust").target
 
 
 def rust_linker(
@@ -150,7 +150,7 @@ def rust_linker(
     capability: ProfileFamilyCapability | None = None,
 ) -> str | None:
     capability = capability or ProfileFamilyCapability(profile.family)
-    return capability.rust_linker
+    return capability.backend("rust").linker
 
 
 def _rust_arch_use(emitted_exts: list[str], extensions: Mapping[str, Extension]) -> str:
