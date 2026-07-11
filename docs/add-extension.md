@@ -97,17 +97,11 @@ The WebAssembly SIMD shape is:
 
 ```tsl
 extension wasm128:
-  vendor "webassembly"
   extension_name "wasm128"
   family "wasm"
   intrinsic_style "wasm"
   vector_bits 128
   native_sort_order 800
-  autodetect false
-  mask_repr "lane_bitmask"
-  mask_width "lanes"
-  mask_vector_loadable false
-  runtime_lanes false
   default_test_target true
   cpp:
     supported true

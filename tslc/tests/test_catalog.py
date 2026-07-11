@@ -174,7 +174,6 @@ def test_extension_inheritance_activation_and_supersession(catalog: Catalog) -> 
     assert sve512.family == "arm"
     assert sve512.vector_bits == 512
     assert sve512.vector_bits_kind == "fixed"
-    assert sve512.metadata.runtime_lanes is False
     assert sve512.active_when.target_features == frozenset({"sve"})
     assert sve512.active_when.compile_modes == frozenset({"sve_vector_bits_512"})
     assert sve512.supersedes == frozenset({"sve"})
@@ -191,9 +190,8 @@ def test_extension_inheritance_activation_and_supersession(catalog: Catalog) -> 
     assert oneapi.mask_policy.kind == "exact_lane_bitmask"
     assert oneapi.mask_policy.spelling("cpp") == "ac_int<LANES, false>"
     assert oneapi.imask_policy.kind == "same_as_mask_type"
-    assert (
-        oneapi.metadata.backend["cpp"].headers
-        == ("sycl/ext/intel/ac_types/ac_int.hpp",)
+    assert oneapi.headers_for_backend("cpp") == (
+        "sycl/ext/intel/ac_types/ac_int.hpp",
     )
     assert compile_guards[0].hint_flag == "-msve-vector-bits=512"
     assert (
@@ -219,30 +217,16 @@ def test_extension_backend_support_is_explicit_and_inherited(catalog: Catalog) -
     assert not rtl.supports_backend("cpp")
 
 
-def test_extension_descriptive_metadata_is_promoted(catalog: Catalog) -> None:
+def test_extension_compiler_metadata_is_promoted(catalog: Catalog) -> None:
     avx2 = catalog.extensions["avx2"]
     neon = catalog.extensions["neon"]
     sve = catalog.extensions["sve"]
 
-    assert avx2.metadata.vendor == "intel"
     assert avx2.metadata.native_sort_order == 300
-    assert avx2.metadata.autodetect is True
-    assert avx2.metadata.mask_repr == "lane_bitmask"
-    assert avx2.metadata.mask_width == "lanes"
-    assert avx2.metadata.mask_vector_loadable is False
-    assert avx2.metadata.runtime_lanes is False
-    assert avx2.metadata.signature_support_exclude == (
-        "void:=(ptr,vidx,v,sImm)",
-        "void:=(m,ptr,vidx,v,sImm)",
-    )
-    assert avx2.metadata.backend["cpp"].test_suite_name == "TslAvx2"
-    assert avx2.metadata.backend["cpp"].test_support_header == "tests/avx2_support.hpp"
-    assert avx2.metadata.backend["cpp"].headers == ("immintrin.h",)
+    assert avx2.headers_for_backend("cpp") == ("immintrin.h",)
     assert avx2.metadata.backend["rust"].type_name == "Avx2"
     assert avx2.metadata.backend["rust"].arch_module == "x86_64"
-    assert avx2.metadata.backend["rust"].generation_support == ("sse",)
     assert neon.metadata.backend["rust"].arch_module == "aarch64"
-    assert neon.metadata.backend["cpp"].header_guard == "__ARM_NEON"
     assert sve.runtime_lane_count["cpp"] == "svcntb() / sizeof({base_type})"
 
 
@@ -379,7 +363,7 @@ def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:
     with pytest.raises(TypeError):
         avx512.mask_policy.backend_spelling_by_lanes["cpp"][16] = "bad"  # type: ignore[index]
     with pytest.raises(TypeError):
-        avx2.metadata.backend["new"] = avx2.metadata.backend["cpp"]  # type: ignore[index]
+        avx2.metadata.backend["new"] = avx2.metadata.backend["rust"]  # type: ignore[index]
     with pytest.raises(TypeError):
         catalog.target_families.profile_families["new"] = (  # type: ignore[index]
             catalog.target_families.profile_families["x86"]

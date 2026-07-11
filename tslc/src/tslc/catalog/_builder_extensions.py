@@ -177,10 +177,6 @@ def _build_extension(
         test_mask_from_bits=_backend_text_map(fields.get("test_mask_from_bits")),
         test_mask_check=_backend_text_map(fields.get("test_mask_check")),
         test_support_headers=_backend_list_map(fields.get("test_support_headers")),
-        test_sizes_bits=tuple(
-            n for n in (_opt_int(t) for t in _list_text(fields.get("test_sizes_bits")))
-            if n is not None
-        ),
         size_bits=tuple(
             n for n in (_opt_int(t) for t in _list_text(fields.get("size_bits")))
             if n is not None
@@ -233,16 +229,7 @@ def _extension_metadata(
     backend_ids: frozenset[str],
 ) -> ExtensionMetadata:
     return ExtensionMetadata(
-        vendor=_field_text(fields.get("vendor")),
         native_sort_order=_opt_int(_field_text(fields.get("native_sort_order"))),
-        autodetect=_bool_text(fields.get("autodetect")),
-        mask_repr=_field_text(fields.get("mask_repr")),
-        mask_width=_field_text(fields.get("mask_width")),
-        mask_vector_loadable=_bool_text(fields.get("mask_vector_loadable")),
-        runtime_lanes=_bool_text(fields.get("runtime_lanes")),
-        signature_support_exclude=_list_text(
-            _child(fields.get("signature_support"), "exclude")
-        ),
         backend=_backend_extension_metadata(fields, backend_ids),
     )
 
@@ -257,14 +244,9 @@ def _backend_extension_metadata(
         if backend is None:
             continue
         metadata = BackendExtensionMetadata(
-            headers=_list_text(_child(backend, "headers")),
-            header_guard=_field_text(_child(backend, "header_guard")),
             compile_guards=_backend_compile_guards(_child(backend, "compile_guards")),
-            test_suite_name=_field_text(_child(backend, "test_suite_name")),
-            test_support_header=_field_text(_child(backend, "test_support_header")),
             type_name=_field_text(_child(backend, "type_name")),
             arch_module=_field_text(_child(backend, "arch_module")),
-            generation_support=_list_text(_child(backend, "generation_support")),
         )
         if metadata != BackendExtensionMetadata():
             result[backend_id] = metadata
@@ -364,21 +346,12 @@ def _merge_backend_metadata(
     for backend_id, child_meta in child.items():
         parent_meta = merged.get(backend_id, BackendExtensionMetadata())
         merged[backend_id] = BackendExtensionMetadata(
-            headers=child_meta.headers or parent_meta.headers,
-            header_guard=child_meta.header_guard or parent_meta.header_guard,
             compile_guards=_merge_backend_compile_guards(
                 parent_meta.compile_guards,
                 child_meta.compile_guards,
             ),
-            test_suite_name=child_meta.test_suite_name or parent_meta.test_suite_name,
-            test_support_header=(
-                child_meta.test_support_header or parent_meta.test_support_header
-            ),
             type_name=child_meta.type_name or parent_meta.type_name,
             arch_module=child_meta.arch_module or parent_meta.arch_module,
-            generation_support=(
-                child_meta.generation_support or parent_meta.generation_support
-            ),
         )
     return merged
 
@@ -405,13 +378,13 @@ def _mask_policy(field: ParsedTslField | None) -> MaskPolicy:
         backend_spelling_by_lanes=_backend_int_map(
             _child(field, "backend_spelling_by_lanes")
         ),
+        source=_source_span(field.source),
     )
 
 
 
 def _imask_policy(field: ParsedTslField | None) -> ImaskPolicy:
-    """Promote an ``integral_mask_type_policy`` block: only its ``kind`` is consumed (it
-    selects the registered ``imask_type`` spelling; see :class:`ImaskPolicy`)."""
+    """Promote the integral-mask representation kind."""
 
     if field is None:
         return ImaskPolicy()

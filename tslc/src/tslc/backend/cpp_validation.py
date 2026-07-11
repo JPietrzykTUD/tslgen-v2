@@ -133,6 +133,21 @@ def validate_cpp_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[Diagnos
                     )
                 )
                 continue
+            if (
+                extension.mask_policy.kind == "exact_lane_bitmask"
+                and extension.mask_policy.spelling("cpp") is None
+            ):
+                diagnostics.append(
+                    diagnostic_at(
+                        severity="error",
+                        code="TSL-BACKEND-CPP-MISSING-MASK-SPELLING",
+                        message=(
+                            "mask_type_policy kind 'exact_lane_bitmask' requires "
+                            "backend_spelling.cpp when C++ is supported"
+                        ),
+                        source=extension.mask_policy.source or extension.source,
+                    )
+                )
             bits = x86_register_bits(extension)
             if bits is not None and cpp_x86_register_helper(extension) is None:
                 diagnostics.append(

@@ -333,6 +333,7 @@ class MaskPolicy:
     kind: str = "lane_bitmask"
     backend_spelling: Mapping[str, str] = field(default_factory=dict)
     backend_spelling_by_lanes: Mapping[str, Mapping[int, str]] = field(default_factory=dict)
+    source: SourceSpan | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -387,39 +388,21 @@ class BackendCompileGuard:
 
 @dataclass(frozen=True, slots=True)
 class BackendExtensionMetadata:
-    """Backend-specific descriptive extension metadata.
+    """Backend-specific extension facts consumed by code generation or validation."""
 
-    These are source-owned facts used by rendering, documentation, test naming, or future build
-    tooling. Selection/lowering semantics remain on the extension and implementation records.
-    """
-
-    headers: tuple[str, ...] = ()
-    header_guard: str | None = None
     compile_guards: tuple[BackendCompileGuard, ...] = ()
-    test_suite_name: str | None = None
-    test_support_header: str | None = None
     type_name: str | None = None
     arch_module: str | None = None
-    generation_support: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "headers", tuple(self.headers))
         object.__setattr__(self, "compile_guards", tuple(self.compile_guards))
-        object.__setattr__(self, "generation_support", tuple(self.generation_support))
 
 
 @dataclass(frozen=True, slots=True)
 class ExtensionMetadata:
-    """Descriptive extension metadata that is not compiler semantics today."""
+    """Shared and backend-specific extension facts consumed by the compiler."""
 
-    vendor: str | None = None
     native_sort_order: int | None = None
-    autodetect: bool | None = None
-    mask_repr: str | None = None
-    mask_width: str | None = None
-    mask_vector_loadable: bool | None = None
-    runtime_lanes: bool | None = None
-    signature_support_exclude: tuple[str, ...] = ()
     backend: Mapping[str, BackendExtensionMetadata] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -483,8 +466,7 @@ class Extension:
     metadata: ExtensionMetadata = field(default_factory=ExtensionMetadata)
     # Test-generation config (corpus-declared). ``default_test_target`` gates whether this
     # extension is exercised as a subject-under-test; ``test_filter_exclude_templates`` drops
-    # named primitive templates (e.g. "scatter"); ``test_sizes_bits`` caps the instantiation
-    # width(s) when a sized extension is itself the subject (modeled now, not yet wired).
+    # named primitive templates (e.g. "scatter").
     default_test_target: bool = False
     test_filter_exclude_templates: frozenset[str] = frozenset()
     runtime_lane_count: Mapping[str, str] = field(default_factory=dict)
@@ -492,7 +474,6 @@ class Extension:
     test_mask_from_bits: Mapping[str, str] = field(default_factory=dict)
     test_mask_check: Mapping[str, str] = field(default_factory=dict)
     test_support_headers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
-    test_sizes_bits: tuple[int, ...] = ()
     # For a sized extension (the generic vector): the concrete total-bit widths it is
     # instantiated/unrolled at, e.g. ``(128, 256, 512)``. Empty means unconstrained. Lets a
     # size-changing primitive (e.g. ``convert_up``) be monomorphized over a finite set instead of

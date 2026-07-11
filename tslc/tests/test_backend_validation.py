@@ -22,6 +22,7 @@ from tslc.catalog.model import (
     BackendExtensionMetadata,
     Extension,
     ExtensionMetadata,
+    MaskPolicy,
 )
 from tslc.catalog.target_families import BackendProfileFamily, ProfileFamilyCapability
 from tslc.diagnostics import SourceSpan
@@ -54,6 +55,29 @@ def test_cpp_unsupported_declared_x86_width_is_source_located() -> None:
     ]
     assert diagnostics[0].location == source.start
     assert CPP_BACKEND.validate_profiles((profile,)) == diagnostics
+
+
+def test_cpp_exact_lane_bitmask_requires_backend_spelling() -> None:
+    source = SourceSpan(Path("extensions.tsl"), 7, 3, 9, 1)
+    extension = _extension(
+        "sized",
+        cpp=True,
+        family="generic_like",
+        vector_bits=0,
+        mask_policy=MaskPolicy(kind="exact_lane_bitmask", source=source),
+    )
+    profile = _profile(
+        cpp={"add": (_Specialization("sized"),)},  # type: ignore[arg-type]
+        extensions={"sized": extension},
+    )
+
+    diagnostics = validate_cpp_profiles((profile,))
+
+    assert [diagnostic.code for diagnostic in diagnostics] == [
+        "TSL-BACKEND-CPP-MISSING-MASK-SPELLING"
+    ]
+    assert diagnostics[0].location == source.start
+    assert "backend_spelling.cpp" in diagnostics[0].message
 
 
 def test_compile_guard_conflicts_are_diagnostics_not_exceptions() -> None:
@@ -157,6 +181,7 @@ def _extension(
     family: str = "x86",
     vector_bits: int = 128,
     guards: tuple[BackendCompileGuard, ...] = (),
+    mask_policy: MaskPolicy | None = None,
     source: SourceSpan | None = None,
 ) -> Extension:
     backend_metadata = (
@@ -171,6 +196,7 @@ def _extension(
         backend_supported={"cpp": cpp, "rust": rust},
         vector_bits=vector_bits,
         vector_bits_kind="fixed" if vector_bits else "",
+        mask_policy=mask_policy or MaskPolicy(),
         metadata=ExtensionMetadata(backend=backend_metadata),
         source=source,
     )

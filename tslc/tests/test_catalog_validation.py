@@ -503,6 +503,48 @@ def test_extension_backend_field_names_follow_supported_backends() -> None:
     assert "lscpu_flags" not in known_extension_fields()
     assert "zig" in known_extension_fields(("zig",))
     assert "zig" not in known_extension_fields()
+    assert "vendor" not in known_extension_fields()
+
+
+@pytest.mark.parametrize(
+    ("fields", "field_name"),
+    (
+        ('  vendor "intel"\n', "vendor"),
+        ("  test_sizes_bits [128]\n", "test_sizes_bits"),
+        ("  signature_support:\n    exclude []\n", "signature_support"),
+        (
+            '  mask_type_policy:\n    kind "lane_bitmask"\n    width "lanes"\n',
+            "width",
+        ),
+        (
+            '  integral_mask_type_policy:\n    kind "unsigned_scalar"\n'
+            '    cpp "std::uint64_t"\n',
+            "cpp",
+        ),
+        ("  size_parameter:\n    kind \"lanes\"\n    name \"LANES\"\n", "kind"),
+        (
+            '  vector_register_type_policy:\n    kind "fixed_array"\n'
+            '    element "base_type"\n',
+            "element",
+        ),
+        (
+            "  cpp:\n    supported true\n"
+            '    test_suite_name "LegacySuite"\n',
+            "test_suite_name",
+        ),
+    ),
+)
+def test_inert_extension_fields_are_rejected(fields: str, field_name: str) -> None:
+    source = _base_source().replace("language cpp:\n", fields + "language cpp:\n")
+
+    diagnostics = _diagnostics(source)
+
+    unknown = [
+        diagnostic
+        for diagnostic in diagnostics
+        if diagnostic.code == "TSL-CATALOG-UNKNOWN-FIELD"
+    ]
+    assert any(field_name in diagnostic.message for diagnostic in unknown)
 
 
 def test_extension_backend_compile_guards_are_validated() -> None:
@@ -677,34 +719,6 @@ def test_missing_backend_spellings_are_diagnosed() -> None:
 
     assert [d.code for d in diagnostics] == ["TSL-CATALOG-MISSING-TYPE-SPELLING"]
     assert "si32" in diagnostics[0].message
-
-
-def test_exact_lane_bitmask_requires_cpp_backend_spelling() -> None:
-    diagnostics = _diagnostics(
-        "types:\n"
-        "  ints {types [si32]}\n"
-        "extension scalar:\n"
-        '  extension_name "scalar"\n'
-        '  family "scalar"\n'
-        "  mask_type_policy:\n"
-        '    kind "exact_lane_bitmask"\n'
-        "  cpp:\n"
-        "    supported true\n"
-        "language cpp:\n"
-        '  s32 {type "int32_t"}\n'
-        "prim<v:=v> id(data):\n"
-        "  impls:\n"
-        "    scalar:\n"
-        "      ints:\n"
-        "        implementation:\n"
-        '          tsil "complete(data);"\n',
-        backends=("cpp",),
-    )
-
-    assert {
-        d.code for d in diagnostics
-    } == {"TSL-CATALOG-MISSING-MASK-BACKEND-SPELLING"}
-    assert "backend_spelling.cpp" in diagnostics[0].message
 
 
 def test_bad_extension_inheritance_is_diagnosed() -> None:
