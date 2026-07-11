@@ -17,6 +17,8 @@ from tslc.lower.lowerer import LoweredSpecialization
 from tslc.target_text import TemplateApplication
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
+_CPP_COMPARISON_LANE_MASK_TYPE = "decltype(register_type{} == register_type{})"
+
 
 def cpp_header_group(extension: Extension | None) -> str | None:
     return None if extension is None else extension.header_group_for_backend("cpp")
@@ -118,6 +120,8 @@ def _cpp_registration(ext: str, extension: Extension | None) -> str:
     )
     if extension is not None and extension.mask_policy.kind == "native_predicate_by_lanes":
         mask = f"typename detail::native_mask<{extension.vector_bits}, T>::type"
+    elif extension is not None and extension.mask_policy.kind == "comparison_lane_vector":
+        mask = _CPP_COMPARISON_LANE_MASK_TYPE
     else:
         mask = "register_type"
     imask = _cpp_imask_type(extension, bits, mask)
@@ -430,6 +434,8 @@ def _cpp_mask_type(
         if concrete is not None:
             return concrete
         return f"typename detail::native_mask<{vector_bits}, {base_type}>::type"
+    if kind == "comparison_lane_vector":
+        return _CPP_COMPARISON_LANE_MASK_TYPE
     return register
 
 

@@ -61,6 +61,7 @@ _KNOWN_MASK_POLICY_KINDS = frozenset(
         "lane_bitmask",
         "native_predicate",
         "native_predicate_by_lanes",
+        "comparison_lane_vector",
     }
 )
 _KNOWN_IMASK_POLICY_KINDS = frozenset(

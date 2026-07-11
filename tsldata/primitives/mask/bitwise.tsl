@@ -17,9 +17,11 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
     - {tags [mask, and, basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 204], expected 136}}
     - {tags [mask, and, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 34952}}
   impls:
-    avx512:
+    [clang_v128, avx512]:
       arith:
-        requires [avx512f]
+        requires:
+          clang_v128 []
+          avx512 [avx512f]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -137,9 +139,11 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
     - {tags [mask, or, basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 204], expected 238}}
     - {tags [mask, or, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 61166}}
   impls:
-    avx512:
+    [clang_v128, avx512]:
       arith:
-        requires [avx512f]
+        requires:
+          clang_v128 []
+          avx512 [avx512f]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -257,9 +261,11 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
     - {tags [mask, xor, basic], extension "avx512", type "ui64", lane_count 8, case {inputs [170, 204], expected 102}}
     - {tags [mask, xor, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690, 52428], expected 26214}}
   impls:
-    avx512:
+    [clang_v128, avx512]:
       arith:
-        requires [avx512f]
+        requires:
+          clang_v128 []
+          avx512 [avx512f]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -380,9 +386,11 @@ prim<m:=m> mask_binary_not(mask):
     - {tags [mask, not, edge], extension "avx512", type "ui64", lane_count 8, case {inputs [0], expected 255}}
     - {tags [mask, not, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690], expected 21845}}
   impls:
-    avx512:
+    [clang_v128, avx512]:
       arith:
-        requires [avx512f]
+        requires:
+          clang_v128 []
+          avx512 [avx512f]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -509,9 +517,10 @@ prim<usize:=m> mask_population_count(mask):
     - {tags [mask, popcnt, edge], extension "avx512", type "ui64", expected_rule "popcnt", lane_count 8, case {inputs [255], expected 8}}
     - {tags [mask, popcnt, zero], extension "avx512", type "ui64", expected_rule "popcnt", lane_count 8, case {inputs [0], expected 0}}
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128, scalar]:
+    [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128, scalar]:
       arith:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]

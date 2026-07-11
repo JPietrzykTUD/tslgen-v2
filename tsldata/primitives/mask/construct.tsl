@@ -15,9 +15,10 @@ prim<m:=()>[value=zero] mask_false():
     - {tags [false], extension "avx512", type "ui64", lane_count 8, case {inputs [], expected 0}}
     - {tags [false], extension "sve", type "ui32", lane_count 16, case {inputs [], expected 0}}
   impls:
-    [avx512, avx2_vl, sse_vl]:
+    [clang_v128, avx512, avx2_vl, sse_vl]:
       arith:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]
@@ -97,9 +98,10 @@ prim<m:=()>[value=all] mask_true():
     - {tags [true], extension "avx512", type "ui64", lane_count 8, case {inputs [], expected 255}}
     - {tags [true], extension "sve", type "ui32", lane_count 16, case {inputs [], expected 65535}}
   impls:
-    [avx512, avx2_vl, sse_vl]:
+    [clang_v128, avx512, avx2_vl, sse_vl]:
       arith:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2_vl [avx512f, avx512vl, avx]
           sse_vl [avx512f, avx512vl, sse, sse2]

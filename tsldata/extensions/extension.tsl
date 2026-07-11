@@ -607,6 +607,8 @@ extension scalar:
 # opt-in profile header. They deliberately do not participate in
 # dataparallel::native/fixed<N> inference: those policies remain the bridge to
 # the hardware-backed extension selected by the enclosing machine profile.
+# Their mask type is Clang's exact vector-comparison result; compact boolean
+# mask variants remain deferred until target-specific benchmarks justify them.
 extension clang_v128:
   extension_name "clang_v128"
   family "compiler_builtin"
@@ -646,7 +648,7 @@ extension clang_v128:
     f64:
       cpp "double __attribute__((ext_vector_type(2)))"
   mask_type_policy:
-    kind "lane_bitmask"
+    kind "comparison_lane_vector"
   integral_mask_type_policy:
     kind "lane_bitmask"
 

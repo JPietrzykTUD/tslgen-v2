@@ -48,6 +48,24 @@ prim<im:=m> to_integral(mask):
     - {tags [wide, edge], extension "avx512", type "f64", case {inputs [255], expected 255}}
     - {tags [scalable, basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690], expected 43690}}
   impls:
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(ImaskT, type(vector::imask));
+            var<infer>(result, cast<static>(ImaskT, 0));
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              if (mask<test>(mask, i)) {
+                result |= (cast<static>(ImaskT, 1)) << i;
+              }
+            }
+            complete(result);
+          """
     [avx512, avx2_vl, sse_vl]:
       arith:
         requires:
@@ -309,6 +327,15 @@ prim<v:=m> to_vector(mask):
     - {tags [basic], type "f64", case {inputs [2], expected [0.0, NAN]}}
     - {tags [edge], type "f64", case {inputs [3], expected [NAN, NAN]}}
   impls:
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(cast<bitcast>(type(vector::register), mask));"
     avx512:
       [ ?i32, ?i64 ]:
         requires [avx512f]
@@ -472,6 +499,24 @@ prim<m:=im> to_mask(mask):
     - {tags [edge], extension "avx512", type "ui64", lane_count 8, case {inputs [129], expected 129}}
     - {tags [basic], extension "sve", type "ui32", lane_count 16, case {inputs [43690], expected 43690}}
   impls:
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(MaskT, type(vector::mask));
+            var<typed>(MaskT, result, mask<zero>());
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              if (mask<test, imask>(mask, i)) {
+                mask<set>(result, i);
+              }
+            }
+            complete(result);
+          """
     avx512:
       arith:
         requires [avx512f]

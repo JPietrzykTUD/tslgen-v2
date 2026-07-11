@@ -96,6 +96,7 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     assert "struct clang_v128 {};" in overlay
     assert "struct clang_v256 {};" in overlay
     assert "struct clang_v512 {};" in overlay
+    assert "using mask_type = decltype(register_type{} == register_type{});" in overlay
     assert "struct clang_fixed" in overlay
     assert "tsl::dataparallel::clang_fixed<N> requires N > 0" in overlay
     assert "struct simd_for<clang_fixed<4>, int32_t>" in overlay

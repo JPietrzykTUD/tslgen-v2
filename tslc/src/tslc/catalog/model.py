@@ -320,6 +320,9 @@ class MaskPolicy:
     - ``"bool"`` (scalar): the mask is a ``bool``.
     - ``"lane_bitmask"`` (sse/avx2): the mask *is* the vector register (all-ones /
       all-zeros per lane), so ``mask_type = register_type``.
+    - ``"comparison_lane_vector"`` (compiler vectors): the mask is the exact
+      lane vector produced by comparing two data registers. It has the data
+      vector's lane count and lane width with all-ones / all-zeros truth values.
     - ``"exact_lane_bitmask"`` (sized generic-like vectors): the mask is an
       integer-like bitset with exactly one bit per lane; backend spellings may
       name a lane-parameterized type such as ``ac_int<LANES, false>``.

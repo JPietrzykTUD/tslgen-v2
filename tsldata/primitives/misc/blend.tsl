@@ -51,6 +51,15 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
                 complete(left);
               }
             """
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(mask ? right : left);"
     [generic, oneapi_fpga]:
       arith:
         requires:

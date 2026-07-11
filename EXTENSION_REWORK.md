@@ -417,9 +417,23 @@ tsl::dataparallel::simd_for_t<
 Bodies explicitly `bit_cast` between the Clang register and the facade's
 register before calling the ordinary primitive. If the profile has no emitted
 fixed-width implementation at that width, lowering records a coverage skip
-instead of generating an incomplete facade use. Mask fallback remains outside
-this first slice because equal-sized mask objects do not imply equal mask
-semantics.
+instead of generating an incomplete facade use.
+
+Clang masks use the `comparison_lane_vector` policy. The generated `mask_type`
+is `decltype(register_type{} == register_type{})`, so it exactly matches
+Clang's comparison result for every lane type, including its distinct 8-bit
+`char` vector. True lanes remain all-one bits and false lanes remain zero. The
+overlay implements comparisons, mask constants and bitwise algebra, blend, and
+mask/vector conversion directly. `to_integral` and `to_mask` are the canonical
+representation bridge: a fallback that crosses into a hardware extension must
+pack and reconstruct its mask through those primitives rather than `bit_cast`
+unrelated mask objects.
+
+Compact Clang boolean-vector masks remain a benchmark-gated future variant.
+Clang documents them as intended, but not guaranteed, to map to hardware mask
+registers. If materialized-mask benchmarks justify them, they should be modeled
+as explicit target-feature-activated extension variants, analogous to
+`avx2_vl`/`sse_vl`, without changing the stable `clang_v*` mask contract.
 
 This delivers the compiler decision without introducing general-purpose
 `compiler_features`, runtime, device, or executable-path taxonomies.

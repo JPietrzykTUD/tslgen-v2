@@ -198,6 +198,42 @@ def test_clang_hadd_fallback_is_typed_and_uses_fixed_facade(
     )
 
 
+def test_clang_mask_kernel_uses_comparison_lane_vectors_and_integral_bridge(
+    catalog: Catalog, machine_profiles
+) -> None:
+    profile = machine_profiles["avx2"]
+
+    equal_slot = _by_key(catalog, profile, "equal")[("f32", "clang_v256")]
+    equal = Lowerer().lower(
+        equal_slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert equal is not None
+    assert "return left == right;" in equal.body_text
+
+    to_integral_slot = _by_key(catalog, profile, "to_integral")[
+        ("f32", "clang_v256")
+    ]
+    to_integral = Lowerer().lower(
+        to_integral_slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert to_integral is not None
+    assert "if (mask[i] != 0)" in to_integral.body_text
+    assert (
+        "result |= (static_cast<typename Vec::imask_type>(1)) << i;"
+        in to_integral.body_text
+    )
+
+    to_mask_slot = _by_key(catalog, profile, "to_mask")[("f32", "clang_v256")]
+    to_mask = Lowerer().lower(
+        to_mask_slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert to_mask is not None
+    assert "typename Vec::mask_type result = static_cast<typename Vec::mask_type>(0);" in (
+        to_mask.body_text
+    )
+    assert "result[i] = -1;" in to_mask.body_text
+
+
 @pytest.mark.parametrize(
     ("type_tag", "suffix"), [("si32", "epi32"), ("ui32", "epi32"), ("f32", "ps")]
 )

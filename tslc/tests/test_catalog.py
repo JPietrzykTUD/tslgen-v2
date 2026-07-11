@@ -349,6 +349,7 @@ def test_clang_vector_extensions_are_cpp_opt_in_overlays(catalog: Catalog) -> No
         assert extension.vector_bits == width
         assert extension.supports_backend("cpp")
         assert not extension.supports_backend("rust")
+        assert extension.mask_policy.kind == "comparison_lane_vector"
         metadata = extension.metadata.backend["cpp"]
         assert metadata.header_group == "clang"
         assert metadata.compiler_ids == ("Clang", "AppleClang")

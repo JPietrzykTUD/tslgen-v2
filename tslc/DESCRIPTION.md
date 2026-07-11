@@ -95,7 +95,13 @@ prim<v:=(v,v)> add(left, right):
   `clang_v128`/`clang_v256`/`clang_v512` extension. A body that needs a hardware
   implementation uses the typed `vector::fixed` query, which dependency closure
   resolves concretely while C++ renders
-  `dataparallel::simd_for_t<fixed<N>, T>`. Rust does not emit these
+  `dataparallel::simd_for_t<fixed<N>, T>`. Their `comparison_lane_vector` mask
+  policy derives `mask_type` from Clang's exact vector-comparison result. Direct
+  mask operations retain all-one/all-zero lane semantics, while
+  `to_integral`/`to_mask` form the representation-safe bridge to hardware masks;
+  mask objects are never assumed bit-cast-compatible. Compact Clang boolean
+  masks are deferred until benchmarks justify explicit target-feature variants.
+  Rust does not emit these
   compiler-builtin extensions: stable Rust's SIMD surface is the
   architecture-specific `core::arch`, while its analogous portable
   `core::simd::Simd<T, N>` and lower-level compiler SIMD facilities remain

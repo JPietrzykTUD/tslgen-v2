@@ -91,7 +91,21 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,
-        primitives=["add", "hadd"],
+        primitives=[
+            "add",
+            "blend",
+            "equal",
+            "hadd",
+            "mask_binary_and",
+            "mask_binary_not",
+            "mask_binary_or",
+            "mask_binary_xor",
+            "mask_false",
+            "mask_population_count",
+            "mask_true",
+            "to_integral",
+            "to_mask",
+        ],
         profiles=["sse2"],
         backends=["cpp"],
     )
@@ -129,10 +143,45 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
             int main() {
               using Vec = tsl::dataparallel::simd_for_t<
                   tsl::dataparallel::clang_fixed<4>, std::int32_t>;
+              using FloatVec = tsl::dataparallel::simd_for_t<
+                  tsl::dataparallel::clang_fixed<4>, float>;
+              using WideVec = tsl::dataparallel::simd_for_t<
+                  tsl::dataparallel::clang_fixed<64>, std::uint8_t>;
               Vec::register_type left = {1, 2, 3, 4};
               Vec::register_type right = {4, 3, 2, 1};
               auto sum = tsl::add<Vec>(left, right);
-              return sum[0] == 5 && sum[3] == 5 && tsl::hadd<Vec>(sum) == 20 ? 0 : 1;
+              Vec::register_type compared_right = {1, 0, 3, 0};
+              auto equal = tsl::equal<Vec>(left, compared_right);
+              auto odd = tsl::to_mask<Vec>(static_cast<Vec::imask_type>(0b1010));
+              auto blended = tsl::blend<Vec>(odd, left, compared_right);
+              auto all = tsl::mask_true<Vec>();
+              auto none = tsl::mask_false<Vec>();
+              auto both = tsl::mask_binary_and<Vec>(equal, odd);
+              auto either = tsl::mask_binary_or<Vec>(equal, odd);
+              auto different = tsl::mask_binary_xor<Vec>(equal, odd);
+              auto inverted = tsl::mask_binary_not<Vec>(equal);
+              FloatVec::register_type float_left = {1.0f, 2.0f, 3.0f, 4.0f};
+              FloatVec::register_type float_right = {1.0f, 0.0f, 3.0f, 0.0f};
+              auto float_equal = tsl::equal<FloatVec>(float_left, float_right);
+              constexpr std::uint64_t wide_bits = 0x8000000000000001ull;
+              auto wide = tsl::to_mask<WideVec>(wide_bits);
+              return sum[0] == 5 && sum[3] == 5 &&
+                             tsl::hadd<Vec>(sum) == 20 &&
+                             tsl::to_integral<Vec>(equal) == 0b0101 &&
+                             tsl::to_integral<Vec>(odd) == 0b1010 &&
+                             tsl::to_integral<Vec>(all) == 0b1111 &&
+                             tsl::to_integral<Vec>(none) == 0 &&
+                             tsl::to_integral<Vec>(both) == 0 &&
+                             tsl::to_integral<Vec>(either) == 0b1111 &&
+                             tsl::to_integral<Vec>(different) == 0b1111 &&
+                             tsl::to_integral<Vec>(inverted) == 0b1010 &&
+                             tsl::mask_population_count<Vec>(odd) == 2 &&
+                             tsl::to_integral<FloatVec>(float_equal) == 0b0101 &&
+                             tsl::to_integral<WideVec>(wide) == wide_bits &&
+                             blended[0] == 1 && blended[1] == 0 &&
+                             blended[2] == 3 && blended[3] == 0
+                         ? 0
+                         : 1;
             }
             """
         ).lstrip(),
