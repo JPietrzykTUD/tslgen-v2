@@ -572,6 +572,25 @@ def test_extension_backend_compile_guards_are_validated() -> None:
     assert "TSL-CATALOG-MALFORMED-COMPILE-GUARD" in codes
 
 
+def test_extension_backend_dataparallel_inference_is_boolean() -> None:
+    diagnostics = _diagnostics(
+        _base_source(
+            "extension overlay:\n"
+            '  extension_name "overlay"\n'
+            '  family "x86"\n'
+            "  cpp:\n"
+            "    supported true\n"
+            '    header_group "clang"\n'
+            '    dataparallel_inference "sometimes"\n'
+        )
+    )
+
+    assert any(
+        diagnostic.code == "TSL-CATALOG-MALFORMED-DATAPARALLEL-INFERENCE"
+        for diagnostic in diagnostics
+    )
+
+
 def test_scalable_cpp_extension_requires_runtime_lane_count() -> None:
     diagnostics = _diagnostics(
         _base_source(

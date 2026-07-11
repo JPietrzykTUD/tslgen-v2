@@ -365,6 +365,7 @@ class Lowerer:
             backend=backend,
             extension=selected.extension,
             type_tag=selected.type_tag,
+            fixed_fallback_extension=selected.fixed_fallback_extension,
             attributes=dict(selected.primitive.attributes),
             primitive_axes=catalog_facts.primitive_axes,
             primitive_arg_generics=catalog_facts.primitive_arg_generics,

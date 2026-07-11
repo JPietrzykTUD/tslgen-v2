@@ -327,7 +327,9 @@ def test_target_families_promoted(catalog: Catalog) -> None:
         "cuda",
         "wasm",
     }
-    assert families.universal_extension_families == frozenset({"scalar", "generic_like"})
+    assert families.universal_extension_families == frozenset(
+        {"scalar", "generic_like", "compiler_builtin"}
+    )
     assert families.profile_families["x86"].extension_families == frozenset({"x86"})
     assert families.profile_families["aarch64"].extension_families == frozenset({"arm"})
     assert families.profile_families["wasm32"].extension_families == frozenset({"wasm"})
@@ -338,6 +340,20 @@ def test_target_families_promoted(catalog: Catalog) -> None:
     assert families.profile_families["wasm32"].runner_kinds == frozenset({"wasmtime"})
     assert families.profile_families["wasm32"].backend("cpp").target == "wasm32-wasip1"
     assert families.profile_families["wasm32"].backend("rust").target == "wasm32-wasip1"
+
+
+def test_clang_vector_extensions_are_cpp_opt_in_overlays(catalog: Catalog) -> None:
+    for width in (128, 256, 512):
+        extension = catalog.extensions[f"clang_v{width}"]
+        assert extension.family == "compiler_builtin"
+        assert extension.vector_bits == width
+        assert extension.supports_backend("cpp")
+        assert not extension.supports_backend("rust")
+        metadata = extension.metadata.backend["cpp"]
+        assert metadata.header_group == "clang"
+        assert metadata.compiler_ids == ("Clang", "AppleClang")
+        assert not metadata.participates_in_dataparallel_inference
+        assert metadata.compile_guards[0].macro == "__clang__"
 
 
 def test_catalog_mappings_are_read_only(catalog: Catalog) -> None:

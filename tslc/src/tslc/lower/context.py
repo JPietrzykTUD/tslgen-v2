@@ -52,6 +52,9 @@ class VectorValue:
     lanes: int | None
     uses_sized_vector: bool = False
     lane_parameter: str | None = None
+    # "fixed_facade" renders through dataparallel::simd_for_t<fixed<N>, T>
+    # while extension_isa remains concrete for dependency closure.
+    spelling_policy: str = "concrete"
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +90,7 @@ class LoweringEnv:
     backend: BackendDialect
     extension: Extension
     type_tag: str
+    fixed_fallback_extension: Extension | None = None
     # the name of the primitive currently being lowered, so a `@self[...]` call can recurse
     # into it for a different vector (e.g. generic delegating per-lane to scalar).
     current_primitive: str = ""

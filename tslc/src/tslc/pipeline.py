@@ -318,6 +318,11 @@ class _GenerationSession:
                 backend = capability.backend_id
                 if backend not in backend_ids:
                     continue
+                if not slot.extension.supports_backend(backend):
+                    # Backend support is an extension admission fact, not a
+                    # lowering coverage attempt. Direct Lowerer use still
+                    # diagnoses an unsupported extension/backend pair.
+                    continue
                 dialect = capability.create_dialect(catalog)
                 lowered = self.lowerer.lower(
                     slot,
@@ -414,6 +419,10 @@ def _record_render_extensions(
     slot: SelectedImplementation,
 ) -> None:
     selected_extensions[slot.extension.isa_name] = slot.extension
+    if slot.fixed_fallback_extension is not None:
+        selected_extensions[
+            slot.fixed_fallback_extension.isa_name
+        ] = slot.fixed_fallback_extension
     if (
         slot.primitive.result_target is None
         or slot.primitive.result_target[0] != RESULT_DIM_EXTENSION

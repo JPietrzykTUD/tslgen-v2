@@ -356,24 +356,58 @@ Runtime/device availability for FPGA boards, PCIe devices, simulators, or
 emulators should be modeled as run/verification requirements only if generated
 tests need to make that decision.
 
-## Compiler-Builtin SIMD Implications
+## Compiler-Builtin SIMD Implementation
 
-Compiler-builtin SIMD extensions are a different contract from ISA extensions.
+The first compiler-builtin SIMD slice is implemented as three C++-only Clang
+overlays: `clang_v128`, `clang_v256`, and `clang_v512`.
 
-They may eventually require facts such as:
+These are not machine profiles and do not supersede hardware extensions. They
+are routed through the universal `compiler_builtin` extension family, selected
+alongside the ordinary profile extensions, and emitted into a dedicated
+`tsl_<profile>_clang.hpp` header. Generated CMake exposes
+`tsl::<profile>_clang` only for Clang/AppleClang and defines
+`TSL_ENABLE_CLANG`; the ordinary `tsl::<profile>` target and profile header stay
+compiler-independent.
 
-- GNU vector extensions;
-- Clang `ext_vector_type`;
-- a specific C++ compiler family;
-- a specific Rust target feature or intrinsic module.
+The smallest consumed backend facts are:
 
-Do not add a `compiler_features` field preemptively. When needed, prefer a name
-that says what decision it supports, such as `compile_requires` or
-`compiler_capabilities`.
+```text
+cpp:
+  header_group "clang"
+  compiler_ids [Clang, AppleClang]
+  dataparallel_inference false
+  compile_guards:
+    clang_compiler:
+      macro "__clang__"
+      equals 1
+```
 
-The extension remains hardware-agnostic only if the selected compiler and target
-actually provide the promised builtin vector semantics. That must be validated
-by the build configuration or verifier, not inferred from CPU features.
+`header_group` owns opt-in artifact separation, while `compiler_ids` gates the
+generated CMake target. `compile_guards` provides the header-level diagnostic.
+`dataparallel_inference false` is essential: Clang
+overlays must never become `dataparallel::native` or
+`dataparallel::simd_for_t<fixed<N>, T>`, because the latter is their escape
+hatch to the hardware-backed profile extension.
+
+Primitive bodies use `vector::fixed` when a compiler-vector operation needs a
+hardware fallback. Selection resolves that query to the best emitted concrete
+extension of the same width so dependency closure can prove the callee exists;
+the C++ backend renders the public facade:
+
+```cpp
+tsl::dataparallel::simd_for_t<
+    tsl::dataparallel::fixed<N>, DataType>
+```
+
+Bodies explicitly `bit_cast` between the Clang register and the facade's
+register before calling the ordinary primitive. If the profile has no emitted
+fixed-width implementation at that width, lowering records a coverage skip
+instead of generating an incomplete facade use. Mask fallback remains outside
+this first slice because equal-sized mask objects do not imply equal mask
+semantics.
+
+This delivers the compiler decision without introducing general-purpose
+`compiler_features`, runtime, device, or executable-path taxonomies.
 
 ## Test Plan
 
@@ -427,59 +461,3 @@ PYTHONPATH=tslc/src python -m pytest -q --run-generated-builds tslc/tests/test_b
 - Do not make local tool paths part of `extension.tsl`.
 - Do not couple `generation_support` cleanup to activation unless its behavior
   is first defined.
-
-
-
-
-
-and for extension/toolchain contracts:
-cpp:
-  compile_requires:
-    compiler_kinds [icpx]
-    compiler_capabilities [sycl, oneapi_fpga]
-  run_requires:
-    runtime_kinds [oneapi-fpga-runtime]
-    device_kinds [fpga]
-    interconnect_kinds [pcie]
-
-
-Extension:
-  substrate facts:
-    vector_bits, register types, mask policy, intrinsic style
-  active_when:
-    target_features needed for this extension variant to exist
-  supersedes:
-    parent/peer extensions hidden when this variant is active
-  backend compile/run contracts:
-    compiler kinds, compiler capabilities, runtime/device needs
-
-Implementation:
-  requires:
-    target_features needed by this exact body
-
-Profile:
-  target family
-  target_features
-  default compiler target/flags/runner kind
-
-Verifier/CLI/devcontainer:
-  concrete executable paths
-
-
-
-  compiler_kinds
-compiler_capabilities
-runtime_kinds
-device_kinds
-interconnect_kinds
-
-For Wasm SIMD, we probably do not need the full taxonomy yet. We can get far with:
-wasm32-simd128 profile has feature simd128
-Wasm impls say requires [simd128]
-target family says Rust target / C++ flag behavior
-verifier config knows wasmtime and WASI SDK path
-For oneAPI FPGA, that is probably when the next taxonomy piece becomes justified, because the compiler actually needs to decide: “this extension cannot be built with ordinary g++.” That is the moment to add a minimal compiler_kind or required_compiler fact.
-
-9:55 AM
-
-One subtle consequence: because selection is profile-level, an active sve512 supersedes scalable sve for all backends in that profile. Since SVE is currently C++-only anyway, that does not take away working Rust support. If Rust SVE support is added later, this is exactly where backend-aware activation would need a real design slice.

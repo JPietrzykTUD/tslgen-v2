@@ -70,6 +70,9 @@ class SelectedImplementation:
     # binding gives lowering one concrete associated base case for generation-time
     # queries such as ``base::generic(IndicesType)``.
     simd_type_base_bindings: tuple[SimdTypeBaseBinding, ...] = ()
+    # Concrete profile extension behind the C++ dataparallel::fixed<N> facade.
+    # This stays typed for dependency closure while the backend renders the facade.
+    fixed_fallback_extension: Extension | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,6 +168,7 @@ class Selector:
 
         selected: list[SelectedImplementation] = []
         warnings: dict[str, Diagnostic] = {}  # keyed by message, so each ambiguity warns once
+        emitted_extensions = self._emit_extensions(catalog, profile)
         for primitive in variants:
             # A non-vector (free-function) primitive (`allocate`/`deallocate`) has no SIMD axis:
             # its type group is a placeholder (`ptr`) that no arith tag matches, and its body is
@@ -188,7 +192,7 @@ class Selector:
                 else type_tags
             )
             emitted_free = False
-            for extension_name in self._emit_extensions(catalog, profile):
+            for extension_name in emitted_extensions:
                 if emitted_free:
                     break
                 for type_tag in primitive_type_tags:
@@ -225,6 +229,17 @@ class Selector:
                                             to_target=to_target,
                                             concrete_lanes=lanes,
                                             simd_type_base_bindings=bindings,
+                                            fixed_fallback_extension=(
+                                                self._fixed_width_fallback(
+                                                    catalog,
+                                                    profile,
+                                                    primitive,
+                                                    extension,
+                                                    type_tag,
+                                                    to_target,
+                                                    emitted_extensions,
+                                                )
+                                            ),
                                         )
                                     )
                             if free_function:
@@ -237,6 +252,70 @@ class Selector:
         return ProfileSelectionResult(
             selected=tuple(selected), diagnostics=tuple(warnings.values())
         )
+
+    def _fixed_width_fallback(
+        self,
+        catalog: Catalog,
+        profile: MachineProfile,
+        primitive: Primitive,
+        source: Extension,
+        type_tag: str,
+        to_target: str | None,
+        emitted_extensions: list[str],
+    ) -> Extension | None:
+        """Best emitted hardware substrate for the source extension's exact width.
+
+        The result mirrors C++ ``simd_for<fixed<N>, T>`` preference, but remains
+        concrete so call dependency closure can prove the fallback specialization
+        exists. Compiler overlays opt out through backend metadata.
+        """
+
+        if source.vector_bits <= 0 or source.vector_bits_kind != "fixed":
+            return None
+        source_cpp = source.metadata.backend.get("cpp")
+        if (
+            source_cpp is None
+            or source_cpp.participates_in_dataparallel_inference
+        ):
+            return None
+        candidates: list[tuple[tuple[int, int, str], Extension]] = []
+        for name in emitted_extensions:
+            extension = catalog.extensions[name]
+            if extension.name == source.name:
+                continue
+            if extension.vector_bits != source.vector_bits:
+                continue
+            if extension.vector_bits_kind != "fixed":
+                continue
+            cpp = extension.metadata.backend.get("cpp")
+            if cpp is not None and not cpp.participates_in_dataparallel_inference:
+                continue
+            if not extension.supports_backend("cpp"):
+                continue
+            if not _extension_declares_type(catalog, extension, type_tag):
+                continue
+            if not self.evaluate_candidates(
+                catalog,
+                profile,
+                primitive,
+                name,
+                type_tag,
+                to_target,
+            ).ranked:
+                continue
+            candidates.append(
+                (
+                    (
+                        extension.metadata.native_sort_order or 0,
+                        extension.vector_bits,
+                        extension.isa_name,
+                    ),
+                    extension,
+                )
+            )
+        if not candidates:
+            return None
+        return max(candidates, key=lambda item: item[0])[1]
 
     def _emit_extensions(self, catalog: Catalog, profile: MachineProfile) -> list[str]:
         """Extensions to emit for a profile.
@@ -473,6 +552,18 @@ def _applicable_flags(
             flags |= clause.flags
             matched = True
     return frozenset(flags) if matched else None
+
+
+def _extension_declares_type(
+    catalog: Catalog,
+    extension: Extension,
+    type_tag: str,
+) -> bool:
+    return any(
+        extension.direct_vector_register_type("cpp", group) is not None
+        and catalog.type_group_contains(group, type_tag)
+        for group in extension.vector_register_types
+    )
 
 
 def _simd_type_base_binding_sets(

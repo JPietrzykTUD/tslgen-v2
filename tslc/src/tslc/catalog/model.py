@@ -391,11 +391,24 @@ class BackendExtensionMetadata:
     """Backend-specific extension facts consumed by code generation or validation."""
 
     compile_guards: tuple[BackendCompileGuard, ...] = ()
+    # Optional generated-header group. Extensions in a named group are emitted in
+    # a dedicated opt-in header instead of the profile's default header.
+    header_group: str | None = None
+    # CMake compiler IDs that expose this opt-in header group.
+    compiler_ids: tuple[str, ...] = ()
+    # None inherits/defaults to true. Compiler-vector overlays set this false so
+    # dataparallel::native/fixed<N> continue to resolve to the hardware substrate.
+    dataparallel_inference: bool | None = None
     type_name: str | None = None
     arch_module: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "compile_guards", tuple(self.compile_guards))
+        object.__setattr__(self, "compiler_ids", tuple(self.compiler_ids))
+
+    @property
+    def participates_in_dataparallel_inference(self) -> bool:
+        return self.dataparallel_inference is not False
 
 
 @dataclass(frozen=True, slots=True)
@@ -558,6 +571,10 @@ class Extension:
 
     def headers_for_backend(self, backend_id: str) -> tuple[str, ...]:
         return self.backend_headers.get(backend_id, ())
+
+    def header_group_for_backend(self, backend_id: str) -> str | None:
+        metadata = self.metadata.backend.get(backend_id)
+        return None if metadata is None else metadata.header_group
 
 
 @dataclass(frozen=True, slots=True)

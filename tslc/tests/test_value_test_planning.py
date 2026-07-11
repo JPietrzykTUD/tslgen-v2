@@ -1149,6 +1149,38 @@ def test_wasm_rust_value_tests_render_native_differential_cases(
     assert "let reference = add::<Ref>(r0, r1);" in values_source
 
 
+def test_opt_in_clang_overlays_are_not_default_differential_targets(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add"],
+        profiles=["avx2"],
+        type_tags=("si32",),
+        backends=("cpp",),
+        test_harness=True,
+    )
+
+    assert result.rendered is not None
+    cases = tuple(
+        case
+        for profile in result.rendered.value_tests.profiles_for("cpp")
+        for case in profile.cases
+    )
+    assert any(
+        case.differential is not None
+        and case.differential.hardware_extension == "avx2"
+        for case in cases
+    )
+    assert all(
+        case.differential is None
+        or not case.differential.hardware_extension.startswith("clang_v")
+        for case in cases
+    )
+
+
 def test_scalable_tiling_is_gated_on_corpus_cross_lane_fact() -> None:
     # Every scalable tiling kind replicates the authored fixed-length pattern across the runtime
     # lane count with `i % authored_lanes`; that identity holds only for lane-local ops. The gate

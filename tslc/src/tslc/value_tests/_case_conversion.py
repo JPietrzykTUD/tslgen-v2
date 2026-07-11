@@ -247,7 +247,12 @@ def differential_fuzz_cases(
     emitted: list[ValueTestCasePlan] = []
     for spec in specs:
         extension = catalog.extensions.get(spec.extension_name)
-        if extension is None or spec.uses_sized_vector or extension.vector_bits <= 0:
+        if (
+            extension is None
+            or not extension.default_test_target
+            or spec.uses_sized_vector
+            or extension.vector_bits <= 0
+        ):
             continue
         type_bits = _type_bits(spec.type_tag)
         base_spelling = _base_spelling((spec,), spec.type_tag)
@@ -307,7 +312,12 @@ def differential_cases(
     emitted: list[ValueTestCasePlan] = []
     for spec in specs:
         extension = catalog.extensions.get(spec.extension_name)
-        if extension is None or spec.uses_sized_vector or extension.vector_bits <= 0:
+        if (
+            extension is None
+            or not extension.default_test_target
+            or spec.uses_sized_vector
+            or extension.vector_bits <= 0
+        ):
             continue
         if spec.type_tag != case.type_tag:
             continue

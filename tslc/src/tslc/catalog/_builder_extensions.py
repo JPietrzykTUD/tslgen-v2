@@ -245,6 +245,11 @@ def _backend_extension_metadata(
             continue
         metadata = BackendExtensionMetadata(
             compile_guards=_backend_compile_guards(_child(backend, "compile_guards")),
+            header_group=_field_text(_child(backend, "header_group")),
+            compiler_ids=_list_text(_child(backend, "compiler_ids")),
+            dataparallel_inference=_bool_text(
+                _child(backend, "dataparallel_inference")
+            ),
             type_name=_field_text(_child(backend, "type_name")),
             arch_module=_field_text(_child(backend, "arch_module")),
         )
@@ -349,6 +354,13 @@ def _merge_backend_metadata(
             compile_guards=_merge_backend_compile_guards(
                 parent_meta.compile_guards,
                 child_meta.compile_guards,
+            ),
+            header_group=child_meta.header_group or parent_meta.header_group,
+            compiler_ids=child_meta.compiler_ids or parent_meta.compiler_ids,
+            dataparallel_inference=(
+                child_meta.dataparallel_inference
+                if child_meta.dataparallel_inference is not None
+                else parent_meta.dataparallel_inference
             ),
             type_name=child_meta.type_name or parent_meta.type_name,
             arch_module=child_meta.arch_module or parent_meta.arch_module,

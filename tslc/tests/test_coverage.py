@@ -31,20 +31,23 @@ def test_coverage_reports_full_emission_when_no_gaps_remain(
     result = representative_coverage_result
     by = {row.primitive: row for row in coverage_by_primitive(result)}
 
-    # These primitives used to provide representative support gaps. The current
-    # primitive-finalization contract is stricter: selected corpus slots should
-    # lower everywhere, so coverage rows are emitted == attempted.
+    # Direct compiler-vector operations lower everywhere. Horizontal Clang
+    # reductions require an exact-width hardware facade, so profiles without
+    # that width report an honest coverage gap.
     assert by["add"].emitted > 0
     assert by["add"].emitted == by["add"].attempted
     assert by["add"].skipped == 0
 
-    assert by["hadd"].emitted == by["hadd"].attempted > 0
-    assert by["hadd"].skipped == 0
+    assert by["hadd"].emitted > 0
+    assert by["hadd"].skipped == 40
+    assert by["hadd"].attempted == by["hadd"].emitted + 40
 
     assert by["cast"].emitted == by["cast"].attempted > 0
     assert by["cast"].skipped == 0
 
-    assert result.skipped == ()
+    assert result.skipped
+    assert {entry.primitive for entry in result.skipped} == {"hadd"}
+    assert all("fixed-width fallback" in entry.reason for entry in result.skipped)
     assert not any(d.severity in ("warning", "error") for d in result.diagnostics)
 
 
@@ -65,7 +68,8 @@ def test_report_text_is_actionable(representative_coverage_result) -> None:
     assert "mask_binary_and" in report
     assert "to_integral" in report
     assert "to_mask" in report
-    assert "skipped because" not in report
+    assert "skipped because" in report
+    assert "fixed-width fallback" in report
 
 
 def test_scalable_fixed_lane_signatures_are_policy_deferred(

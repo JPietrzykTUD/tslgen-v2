@@ -42,6 +42,22 @@ def _compiler_basename(command: str) -> str:
     return Path(parts[0]).name
 
 
+def _native_clangxx() -> str | None:
+    candidates = ("/usr/bin/clang++", shutil.which("clang++"))
+    for candidate in candidates:
+        if candidate is None or not Path(candidate).is_file():
+            continue
+        target = subprocess.run(
+            (candidate, "-dumpmachine"),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if target.returncode == 0 and "linux" in target.stdout and "wasm" not in target.stdout:
+            return candidate
+    return None
+
+
 def test_generated_profiles_build(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
@@ -63,6 +79,94 @@ def test_generated_profiles_build(
     assert report.diagnostics == (), report.diagnostics
     # configure+build for 4 C++ profiles (8) + cargo test for 4 Rust profiles (4).
     assert report.commands, f"nothing verified; skipped={report.skipped}"
+
+
+def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
+    data_root: Path, machine_profiles_path: Path, tmp_path: Path
+) -> None:
+    clangxx = _native_clangxx()
+    if shutil.which("cmake") is None or clangxx is None:
+        pytest.skip("native clang++ and cmake are required")
+
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["add", "hadd"],
+        profiles=["sse2"],
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    generated = tmp_path / "generated"
+    write_report = write_artifacts(result.artifacts, generated)
+    assert not has_errors(write_report.diagnostics), write_report.diagnostics
+
+    consumer = tmp_path / "clang-vector-consumer"
+    consumer.mkdir()
+    (consumer / "CMakeLists.txt").write_text(
+        textwrap.dedent(
+            f"""
+            cmake_minimum_required(VERSION 3.20)
+            project(tsl_clang_vector_consumer LANGUAGES CXX)
+
+            include(FetchContent)
+            set(TSL_PROFILE sse2 CACHE STRING "TSL profile" FORCE)
+            set(TSL_BUILD_TESTS OFF CACHE BOOL "TSL tests" FORCE)
+            FetchContent_Declare(tsl SOURCE_DIR "{(generated / 'cpp').as_posix()}")
+            FetchContent_MakeAvailable(tsl)
+
+            add_executable(clang_vector_probe main.cpp)
+            target_link_libraries(clang_vector_probe PRIVATE tsl::sse2_clang)
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    (consumer / "main.cpp").write_text(
+        textwrap.dedent(
+            """
+            #include <cstdint>
+            #include <tsl.hpp>
+
+            int main() {
+              using Vec = tsl::simd<std::int32_t, tsl::clang_v128>;
+              Vec::register_type left = {1, 2, 3, 4};
+              Vec::register_type right = {4, 3, 2, 1};
+              auto sum = tsl::add<Vec>(left, right);
+              return sum[0] == 5 && sum[3] == 5 && tsl::hadd<Vec>(sum) == 20 ? 0 : 1;
+            }
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+
+    build = tmp_path / "clang-vector-build"
+    configured = subprocess.run(
+        (
+            "cmake",
+            "-S",
+            str(consumer),
+            "-B",
+            str(build),
+            f"-DCMAKE_CXX_COMPILER={clangxx}",
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert configured.returncode == 0, configured.stderr + configured.stdout
+    built = subprocess.run(
+        ("cmake", "--build", str(build), "--target", "clang_vector_probe"),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert built.returncode == 0, built.stderr + built.stdout
+    executed = subprocess.run(
+        (str(build / "clang_vector_probe"),),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert executed.returncode == 0, executed.stderr + executed.stdout
 
 
 def test_rust_target_feature_body_builds_with_typed_vector_owner(

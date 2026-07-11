@@ -23,6 +23,23 @@ prim<s:=v> hadd(vec):
     - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5]], expected -2.0}}
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0]], expected -1.0}}
   impls:
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons [fixed_width_fallback]
+        implementation:
+          tsil """
+            let<type>(FixedVec, type(vector::fixed));
+            var<const_typed>(
+              type(register::generic(FixedVec)),
+              fixed_vec,
+              cast<bitcast>(type(register::generic(FixedVec)), vec)
+            );
+            complete(call<primitive=@self[FixedVec]>(fixed_vec));
+          """
     sve:
       ?i?:
         requires [sve]

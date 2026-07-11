@@ -91,7 +91,13 @@ def test_profile_reachability(catalog: Catalog, machine_profiles) -> None:
     # scalar/generic_like to every profile while keeping ISA-specific and non-emitted
     # families out.
     scalar = {s.extension.name for s in _slots(catalog, machine_profiles["scalar"], "add")}
-    assert scalar == {"scalar", "generic"}
+    assert scalar == {
+        "scalar",
+        "generic",
+        "clang_v128",
+        "clang_v256",
+        "clang_v512",
+    }
 
     # avx profile: avx2 integer add needs the avx2 flag (absent) -> falls to sse;
     # but avx2 float add only needs `avx`, so it IS present.
@@ -157,6 +163,39 @@ def test_type_group_specificity_resolves_hadd(catalog: Catalog, machine_profiles
     slots = _by_key(catalog, machine_profiles["avx2"], "hadd")
     chosen = slots[("f64", "avx2")]
     assert chosen.implementation.type_group == "f64"
+
+
+def test_clang_hadd_fallback_is_typed_and_uses_fixed_facade(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slots = _by_key(catalog, machine_profiles["avx2"], "hadd")
+    slot = slots[("si32", "clang_v256")]
+
+    assert slot.fixed_fallback_extension is not None
+    assert slot.fixed_fallback_extension.isa_name == "avx2"
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    )
+    assert lowered.specialization is not None
+    assert (
+        "::tsl::dataparallel::simd_for_t<"
+        "::tsl::dataparallel::fixed<8>, int32_t>"
+        in lowered.specialization.body_text
+    )
+    dependency = lowered.specialization.call_dependency_origins[0].dependency
+    assert dependency.primitive == "hadd"
+    assert dependency.source.extension_isa == "avx2"
+
+    unsupported = slots[("si32", "clang_v512")]
+    assert unsupported.fixed_fallback_extension is None
+    skipped = Lowerer().lower(
+        unsupported, catalog, create_backend_dialect(catalog, "cpp")
+    )
+    assert skipped.specialization is None
+    assert any(
+        diagnostic.code == "TSL-LOWER-NO-FIXED-FALLBACK"
+        for diagnostic in skipped.diagnostics
+    )
 
 
 @pytest.mark.parametrize(

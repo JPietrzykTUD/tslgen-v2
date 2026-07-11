@@ -11,6 +11,10 @@ def _vector_spelling(value: VectorValue, context: LoweringSession) -> str | None
     base = context.env.backend.types.scalar_spelling(value.base_tag)
     if base is None:
         return None
+    if value.spelling_policy == "fixed_facade":
+        if value.lanes is None:
+            return None
+        return context.env.backend.types.fixed_vector_spelling(base, value.lanes)
     if value.uses_sized_vector:
         # A concrete lane count when known; otherwise the sized vector's lane parameter
         # (e.g. a representation-change's `OutVec`).

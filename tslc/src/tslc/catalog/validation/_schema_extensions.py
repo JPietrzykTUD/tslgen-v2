@@ -46,6 +46,9 @@ KNOWN_EXTENSION_BACKEND_FIELDS = frozenset(
     {
         "arch_module",
         "compile_guards",
+        "compiler_ids",
+        "dataparallel_inference",
+        "header_group",
         "headers",
         "supported",
         "type_name",
@@ -187,6 +190,24 @@ def validate_extension_block(
             diagnostics,
             backend_id,
         )
+        inference_field = child(backend, "dataparallel_inference")
+        inference = field_text(inference_field)
+        if inference is not None and inference not in {"true", "false"}:
+            diagnostics.append(
+                diagnostic_at(
+                    severity="error",
+                    code="TSL-CATALOG-MALFORMED-DATAPARALLEL-INFERENCE",
+                    message=(
+                        f"extension backend {backend_id} field "
+                        "'dataparallel_inference' must be true or false"
+                    ),
+                    source=(
+                        source_span(inference_field.source)
+                        if inference_field is not None
+                        else None
+                    ),
+                )
+            )
     for backend_map_name in (
         "runtime_lane_count",
         "test_runtime_lanes",

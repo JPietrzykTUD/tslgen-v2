@@ -18,6 +18,10 @@ from tslc.target_text import TemplateApplication
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
+def cpp_header_group(extension: Extension | None) -> str | None:
+    return None if extension is None else extension.header_group_for_backend("cpp")
+
+
 def _cpp_includes(
     emitted_exts: Sequence[str],
     extensions: Mapping[str, Extension],
@@ -305,6 +309,9 @@ def _cpp_inferred_simd_registrations(
     for ext, type_tag, base in used_type_specs(by_primitive):
         extension = extensions.get(ext)
         if extension is None or DEFAULT_SUPPORT_POLICY.uses_sized_vector(extension):
+            continue
+        metadata = extension.metadata.backend.get("cpp")
+        if metadata is not None and not metadata.participates_in_dataparallel_inference:
             continue
         if not _cpp_extension_register_is_available(extension, type_tag):
             continue
