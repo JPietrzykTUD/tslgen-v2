@@ -91,10 +91,19 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     assert "clang_v256" not in base
     assert "clang_v512" not in base
     assert "clang_v128" not in base_smoke
+    assert "clang_fixed" not in base
     assert "clang_v128" in overlay_smoke
     assert "struct clang_v128 {};" in overlay
     assert "struct clang_v256 {};" in overlay
     assert "struct clang_v512 {};" in overlay
+    assert "struct clang_fixed" in overlay
+    assert "tsl::dataparallel::clang_fixed<N> requires N > 0" in overlay
+    assert "struct simd_for<clang_fixed<4>, int32_t>" in overlay
+    assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v128>;" in overlay
+    assert "struct simd_for<clang_fixed<8>, int32_t>" in overlay
+    assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v256>;" in overlay
+    assert "struct simd_for<clang_fixed<16>, int32_t>" in overlay
+    assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v512>;" in overlay
     assert "#if defined(__clang__) && __clang__ == 1" in overlay
     assert "return (left + right);" in overlay
     assert "::tsl::dataparallel::fixed<8>, int32_t" in overlay

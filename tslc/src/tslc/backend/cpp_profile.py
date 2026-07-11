@@ -355,6 +355,56 @@ def _cpp_inferred_simd_registrations(
     return "".join(lines)
 
 
+def _cpp_compiler_builtin_fixed_registrations(
+    by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
+    extensions: Mapping[str, Extension],
+    header_group: str,
+) -> str:
+    """Expose an explicit fixed-lane policy for one compiler-builtin overlay."""
+
+    candidates: dict[tuple[str, int], tuple[tuple[int, str], str]] = {}
+    for ext, type_tag, base in used_type_specs(by_primitive):
+        extension = extensions.get(ext)
+        if (
+            extension is None
+            or extension.family != "compiler_builtin"
+            or extension.header_group_for_backend("cpp") != header_group
+            or extension.vector_bits_kind != "fixed"
+            or extension.direct_vector_register_type("cpp", type_tag) is None
+        ):
+            continue
+        lane_count = DEFAULT_SUPPORT_POLICY.lane_count(extension, type_tag)
+        if lane_count is None:
+            continue
+        key = (base, lane_count)
+        preference = (extension.vector_bits, extension.isa_name)
+        current = candidates.get(key)
+        if current is None or preference > current[0]:
+            candidates[key] = (preference, extension.isa_name)
+
+    if not candidates:
+        return ""
+
+    policy = f"{header_group}_fixed"
+    lines = [
+        "namespace dataparallel {\n",
+        "template <std::size_t N>\n",
+        f"struct {policy} {{\n",
+        f'    static_assert(N > 0, "tsl::dataparallel::{policy}<N> requires N > 0");\n',
+        "    static constexpr std::size_t lanes = N;\n",
+        "};\n\n",
+    ]
+    for (base, lane_count), (_preference, ext) in sorted(candidates.items()):
+        lines.append(
+            f"template <>\n"
+            f"struct simd_for<{policy}<{lane_count}>, {base}> {{\n"
+            f"    using type = ::tsl::simd<{base}, ::tsl::{ext}>;\n"
+            f"}};\n\n"
+        )
+    lines.append("}  // namespace dataparallel\n\n")
+    return "".join(lines)
+
+
 def _cpp_extension_register_is_available(extension: Extension, type_tag: str) -> bool:
     if extension.vector_bits <= 0 and not DEFAULT_SUPPORT_POLICY.uses_scalable_vector(extension):
         return True

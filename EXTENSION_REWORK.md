@@ -389,6 +389,21 @@ overlays must never become `dataparallel::native` or
 `dataparallel::simd_for_t<fixed<N>, T>`, because the latter is their escape
 hatch to the hardware-backed profile extension.
 
+The opt-in header exposes the compiler overlay explicitly through the lane-count
+policy `dataparallel::clang_fixed<N>`:
+
+```cpp
+using Vec = tsl::dataparallel::simd_for_t<
+    tsl::dataparallel::clang_fixed<N>, DataType>;
+```
+
+This policy resolves to `clang_v128`, `clang_v256`, or `clang_v512` according
+to `N * sizeof(DataType) * 8`. It is deliberately named after Clang rather than
+`builtin_fixed`: the generated register type is specifically Clang's
+`ext_vector_type`, and no compiler-neutral builtin-vector contract exists yet.
+The policy is emitted only in the guarded Clang overlay header and never changes
+ordinary `fixed<N>` or `native` selection.
+
 Primitive bodies use `vector::fixed` when a compiler-vector operation needs a
 hardware fallback. Selection resolves that query to the best emitted concrete
 extension of the same width so dependency closure can prove the callee exists;
@@ -408,6 +423,16 @@ semantics.
 
 This delivers the compiler decision without introducing general-purpose
 `compiler_features`, runtime, device, or executable-path taxonomies.
+
+Rust is intentionally unsupported for this compiler-builtin family. Stable Rust
+offers hardware-specific SIMD through `core::arch`, which is already represented
+by the ordinary hardware extensions, but its compiler-independent
+`core::simd::Simd<T, N>` API still requires the nightly `portable_simd` feature.
+The lower-level `repr(simd)` representation and compiler SIMD intrinsics are
+unstable as well. If nightly Rust becomes an explicit project target, it should
+be added as a separate opt-in `portable_simd` overlay with Cargo feature gating
+and typed conversions to `core::arch`; it should not be presented as the Rust
+implementation of Clang's compiler-specific extension.
 
 ## Test Plan
 

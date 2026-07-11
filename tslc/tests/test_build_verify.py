@@ -127,7 +127,8 @@ def test_clang_vector_overlay_builds_and_runs_through_opt_in_target(
             #include <tsl.hpp>
 
             int main() {
-              using Vec = tsl::simd<std::int32_t, tsl::clang_v128>;
+              using Vec = tsl::dataparallel::simd_for_t<
+                  tsl::dataparallel::clang_fixed<4>, std::int32_t>;
               Vec::register_type left = {1, 2, 3, 4};
               Vec::register_type right = {4, 3, 2, 1};
               auto sum = tsl::add<Vec>(left, right);

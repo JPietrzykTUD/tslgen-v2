@@ -6,6 +6,7 @@ from collections.abc import Mapping
 
 from tslc.backend.cpp import CppBackend
 from tslc.backend.cpp_profile import (
+    _cpp_compiler_builtin_fixed_registrations,
     _cpp_includes,
     _cpp_inferred_simd_registrations,
     _cpp_native_registration,
@@ -141,6 +142,11 @@ def cpp_artifacts(
             grouped_registrations = _cpp_native_registration(
                 grouped,
                 emitted_profile.extensions,
+            )
+            grouped_registrations += _cpp_compiler_builtin_fixed_registrations(
+                grouped,
+                emitted_profile.extensions,
+                header_group,
             )
             grouped_definitions = "\n\n".join(
                 backend.render_definitions(name, grouped[name])
