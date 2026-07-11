@@ -248,6 +248,24 @@ def _cpp_overlay_test_targets(profiles: tuple[EmittedProfile, ...]) -> str:
                         f"  target_link_libraries(tsl_smoke_{group} PRIVATE "
                         f"tsl_profile_${{TSL_SELECTED_PROFILE}}_{group})"
                     ),
+                    f"  add_executable(tsl_values_{group} tests/values_${{TSL_SELECTED_PROFILE}}.cpp)",
+                    (
+                        f"  target_link_libraries(tsl_values_{group} PRIVATE "
+                        f"tsl_profile_${{TSL_SELECTED_PROFILE}}_{group})"
+                    ),
+                    (
+                        f"  target_compile_options(tsl_values_{group} PRIVATE "
+                        "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-fwrapv>)"
+                    ),
+                    f"  add_dependencies(tsl_values tsl_values_{group})",
+                    "  if(TSL_TEST_LAUNCHER)",
+                    (
+                        f"    add_test(NAME values_{group} COMMAND ${{TSL_TEST_LAUNCHER}} "
+                        f"$<TARGET_FILE:tsl_values_{group}>)"
+                    ),
+                    "  else()",
+                    f"    add_test(NAME values_{group} COMMAND tsl_values_{group})",
+                    "  endif()",
                     "endif()",
                 )
             )

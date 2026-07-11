@@ -449,9 +449,10 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
             var<const_infer>(loaded, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result));
             complete(loaded);
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
+    [clang_v128, avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2 [avx2]
           avx2_vl [avx2]
@@ -587,9 +588,10 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
                 }
               }
             """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
+    [clang_v128, avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
       [bword, dword]:
         requires:
+          clang_v128 []
           avx512:
             bword [avx512f, avx512bw]
             dword [avx512f]
@@ -698,9 +700,10 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
     - {tags [basic], type "si32", index_type "si64", scale 4, case {inputs [[-10, -20, -30, -40], [1, 2, 3, 0]], expected [-20, -30, -40, -10]}}
     - {tags [basic], type "f32", index_type "si64", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [2, 0, 3, 1]], expected [3.5, 1.0, -4.5, -2.0]}}
   impls:
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
+    [clang_v128, avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
       [bword, dword]:
         requires:
+          clang_v128 []
           avx512:
             bword [avx512f, avx512bw]
             dword [avx512f]
@@ -791,14 +794,14 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
     - {tags [masked, gather, merge, edge], type "ui32", scale 4, case {inputs [[10, 11, 12, 13], [0, 1, 2, 3], [100, 101, 102, 103], 0], expected [100, 101, 102, 103]}}
     - {tags [masked, gather, merge, basic], type "si32", scale 4, case {inputs [[10, 11, 12, 13], [0, 1, 2, 3], [100, 101, 102, 103], 10], expected [100, 11, 102, 13]}}
     - {tags [masked, gather, merge, edge], type "si32", scale 4, case {inputs [[10, 11, 12, 13], [0, 1, 2, 3], [100, 101, 102, 103], 0], expected [100, 101, 102, 103]}}
-    - {tags [masked, gather, merge, basic], type "f32", scale 4, case {inputs [[10.0, 11.0, 12.0, 13.0], [0, 1, 2, 3], [100.0, 101.0, 102.0, 103.0], 10], expected [100.0, 11.0, 102.0, 13.0]}}
-    - {tags [masked, gather, merge, edge], type "f32", scale 4, case {inputs [[10.0, 11.0, 12.0, 13.0], [0, 1, 2, 3], [100.0, 101.0, 102.0, 103.0], 0], expected [100.0, 101.0, 102.0, 103.0]}}
+    - {tags [masked, gather, merge, basic], type "f32", index_type "si32", scale 4, case {inputs [[10.0, 11.0, 12.0, 13.0], [0, 1, 2, 3], [100.0, 101.0, 102.0, 103.0], 10], expected [100.0, 11.0, 102.0, 13.0]}}
+    - {tags [masked, gather, merge, edge], type "f32", index_type "si32", scale 4, case {inputs [[10.0, 11.0, 12.0, 13.0], [0, 1, 2, 3], [100.0, 101.0, 102.0, 103.0], 0], expected [100.0, 101.0, 102.0, 103.0]}}
     - {tags [masked, gather, merge, basic], type "ui64", scale 8, case {inputs [[10, 11], [0, 1], [100, 101], 2], expected [100, 11]}}
     - {tags [masked, gather, merge, edge], type "ui64", scale 8, case {inputs [[10, 11], [0, 1], [100, 101], 0], expected [100, 101]}}
     - {tags [masked, gather, merge, basic], type "si64", scale 8, case {inputs [[10, 11], [0, 1], [100, 101], 2], expected [100, 11]}}
     - {tags [masked, gather, merge, edge], type "si64", scale 8, case {inputs [[10, 11], [0, 1], [100, 101], 0], expected [100, 101]}}
-    - {tags [masked, gather, merge, basic], type "f64", scale 8, case {inputs [[10.0, 11.0], [0, 1], [100.0, 101.0], 2], expected [100.0, 11.0]}}
-    - {tags [masked, gather, merge, edge], type "f64", scale 8, case {inputs [[10.0, 11.0], [0, 1], [100.0, 101.0], 0], expected [100.0, 101.0]}}
+    - {tags [masked, gather, merge, basic], type "f64", index_type "si64", scale 8, case {inputs [[10.0, 11.0], [0, 1], [100.0, 101.0], 2], expected [100.0, 11.0]}}
+    - {tags [masked, gather, merge, edge], type "f64", index_type "si64", scale 8, case {inputs [[10.0, 11.0], [0, 1], [100.0, 101.0], 0], expected [100.0, 101.0]}}
   impls:
     avx512:
       ?i32:
@@ -1031,9 +1034,10 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
               }
             }
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneapi_fpga, wasm128]:
+    [clang_v128, avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2 [avx2]
           avx2_vl [avx2]
@@ -1371,9 +1375,10 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
               *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
             }
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
+    [clang_v128, avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2 [avx2]
           avx2_vl [avx2]
@@ -1443,14 +1448,14 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
     - {tags [masked, scatter, edge], type "ui32", scale 4, case {inputs [[0, 1, 2, 3], [0, 1, 2, 3], 0], expected [0, 0, 0, 0]}}
     - {tags [masked, scatter, basic], type "si32", scale 4, case {inputs [[0, 1, 2, 3], [0, 1, 2, 3], 10], expected [0, 1, 0, 3]}}
     - {tags [masked, scatter, edge], type "si32", scale 4, case {inputs [[0, 1, 2, 3], [0, 1, 2, 3], 0], expected [0, 0, 0, 0]}}
-    - {tags [masked, scatter, basic], type "f32", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [0, 1, 2, 3], 10], expected [0.0, -2.0, 0.0, -4.5]}}
-    - {tags [masked, scatter, edge], type "f32", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [0, 1, 2, 3], 0], expected [0.0, 0.0, 0.0, 0.0]}}
+    - {tags [masked, scatter, basic], type "f32", index_type "si32", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [0, 1, 2, 3], 10], expected [0.0, -2.0, 0.0, -4.5]}}
+    - {tags [masked, scatter, edge], type "f32", index_type "si32", scale 4, case {inputs [[1.0, -2.0, 3.5, -4.5], [0, 1, 2, 3], 0], expected [0.0, 0.0, 0.0, 0.0]}}
     - {tags [masked, scatter, basic], type "ui64", scale 8, case {inputs [[1, 2], [0, 1], 2], expected [0, 2]}}
     - {tags [masked, scatter, edge], type "ui64", scale 8, case {inputs [[1, 2], [0, 1], 0], expected [0, 0]}}
     - {tags [masked, scatter, basic], type "si64", scale 8, case {inputs [[1, -2], [0, 1], 2], expected [0, -2]}}
     - {tags [masked, scatter, edge], type "si64", scale 8, case {inputs [[1, -2], [0, 1], 0], expected [0, 0]}}
-    - {tags [masked, scatter, basic], type "f64", scale 8, case {inputs [[1.0, -2.0], [0, 1], 2], expected [0.0, -2.0]}}
-    - {tags [masked, scatter, edge], type "f64", scale 8, case {inputs [[1.0, -2.0], [0, 1], 0], expected [0.0, 0.0]}}
+    - {tags [masked, scatter, basic], type "f64", index_type "si64", scale 8, case {inputs [[1.0, -2.0], [0, 1], 2], expected [0.0, -2.0]}}
+    - {tags [masked, scatter, edge], type "f64", index_type "si64", scale 8, case {inputs [[1.0, -2.0], [0, 1], 0], expected [0.0, 0.0]}}
   impls:
     [avx512, avx2_vl, sse_vl]:
       ?i32:
@@ -1707,9 +1712,10 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
               }
             }
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneapi_fpga, wasm128]:
+    [clang_v128, avx512, avx2, avx2_vl, sse, sse_vl, neon, sve, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2 [avx2]
           avx2_vl [avx2]

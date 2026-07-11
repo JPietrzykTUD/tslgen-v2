@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from tslc.catalog.model import Catalog, Primitive, TestCase
 from tslc.diagnostics import Diagnostic, SourceLocation
@@ -197,7 +197,36 @@ class ValueTestPlanner:
         cases: tuple[ValueTestCasePlan, ...],
         backend: ValueTestBackendSupport,
     ) -> tuple[ValueTestCasePlan, ...]:
-        return tuple(case for case in cases if case.kind in backend.case_kinds)
+        return tuple(
+            self._with_header_group(case, backend.backend_id)
+            for case in cases
+            if case.kind in backend.case_kinds
+        )
+
+    def _with_header_group(
+        self, case: ValueTestCasePlan, backend_id: str
+    ) -> ValueTestCasePlan:
+        extension_names: set[str] = set()
+        if case.differential is not None:
+            extension_names.add(case.differential.hardware_extension)
+        if case.representation is not None:
+            if case.representation.source_extension is not None:
+                extension_names.add(case.representation.source_extension)
+            if case.representation.target_extension is not None:
+                extension_names.add(case.representation.target_extension)
+        groups = {
+            metadata.header_group
+            for name in extension_names
+            if (extension := self._catalog.extensions.get(name)) is not None
+            if (metadata := extension.metadata.backend.get(backend_id)) is not None
+            if metadata.header_group is not None
+        }
+        if len(groups) > 1:
+            raise ValueError(
+                f"value-test case {case.function_name!r} spans incompatible header groups "
+                f"{sorted(groups)}"
+            )
+        return replace(case, header_group=next(iter(groups), None))
 
 
 def _duplicate_case_diagnostics(

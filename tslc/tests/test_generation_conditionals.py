@@ -430,7 +430,7 @@ def test_native_mask_registration_per_profile(
     assert "native_mask<256" in _mask_line("skylake")  # avx2_vl native predicate
 
 
-def test_mask_all_and_zero_lower_for_native_predicate_masks(
+def test_mask_all_and_none_lower_for_native_predicate_masks(
     catalog: Catalog, machine_profiles
 ) -> None:
     cpp_true = _spec(catalog, machine_profiles, "skylake", "mask_true", "avx512", "ui32")

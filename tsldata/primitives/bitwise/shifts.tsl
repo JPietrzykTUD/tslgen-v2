@@ -39,7 +39,7 @@ prim<v:=(v,sImm)> shift_left(data, shift):
     - {tags [imm, basic], type "si64", case {inputs [[1, 2], 1], expected [2, 4]}}
     - {tags [imm, edge], type "si64", case {inputs [[0, -1], 62], expected [0, -4611686018427387904]}}
   impls:
-    scalar:
+    [scalar, clang_v128]:
       arith:
         requires []
         safety:
@@ -290,9 +290,11 @@ prim<v:=(m,v,sImm)>[mask=pass_through] shift_left(mask, data, shift):
     - {tags [mask, passthrough, imm, zero], type "si64", case {inputs [0, [1, 2], 1], expected [1, 2]}}
     - {tags [mask, passthrough, imm, all], type "si64", case {inputs [3, [1, 2], 1], expected [2, 4]}}
   impls:
-    scalar:
+    [scalar, clang_v128]:
       arith:
-        requires []
+        requires:
+          scalar []
+          clang_v128 []
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -430,7 +432,7 @@ prim<v:=(v,s)> shift_left(data, shift):
     - {tags [basic], type "si64", case {inputs [[1, 2], 1], expected [2, 4]}}
     - {tags [edge], type "si64", case {inputs [[0, -1], 62], expected [0, -4611686018427387904]}}
   impls:
-    scalar:
+    [scalar, clang_v128]:
       arith:
         requires []
         safety:
@@ -685,10 +687,11 @@ prim<v:=(v,v)> shift_left(data, shift):
               var<const_infer>(ures, ua << cast<static>(type(base::unsigned_of(type(base::in))), shift));
               complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
-    [generic, oneapi_fpga]:
+    [generic, clang_v128, oneapi_fpga]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
         safety:
           internal_unsafe false
@@ -964,6 +967,49 @@ prim<v:=(v,sImm)> shift_right(data, shift):
                 var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::signed_of(type(base::in)))>]>(data));
                 var<const_infer>(ures, ua >> cast<static>(type(base::signed_of(type(base::in))), shift));
                 complete(call<primitive=reinterpret[Vec<type(base::signed_of(type(base::in)))>, Vec]>(ures));
+              }
+            """
+    clang_v128:
+      ?i?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              if<generation>(value(type::is_signed(type(base::in)))) {
+                if<compile>(!PreserveSign) {
+                  let<type>(UnsignedVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+                  var<const_infer>(udata, call<primitive=reinterpret[Vec, UnsignedVec]>(data));
+                  complete(call<primitive=reinterpret[UnsignedVec, Vec]>(udata >> shift));
+                } else<compile> {
+                  complete(data >> shift);
+                }
+              } else<generation> {
+                complete(data >> shift);
+              }
+            """
+      f?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              if<compile>(!PreserveSign) {
+                let<type>(UnsignedVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+                var<const_infer>(udata, call<primitive=reinterpret[Vec, UnsignedVec]>(data));
+                complete(call<primitive=reinterpret[UnsignedVec, Vec]>(
+                  udata >> cast<static>(type(base::unsigned_of(type(base::in))), shift)
+                ));
+              } else<compile> {
+                let<type>(SignedVec, type(vector::as_base(type(base::signed_of(type(base::in))))));
+                var<const_infer>(sdata, call<primitive=reinterpret[Vec, SignedVec]>(data));
+                complete(call<primitive=reinterpret[SignedVec, Vec]>(
+                  sdata >> cast<static>(type(base::signed_of(type(base::in))), shift)
+                ));
               }
             """
     [generic, oneapi_fpga]:
@@ -1417,6 +1463,49 @@ prim<v:=(v,s)> shift_right(data, shift):
               var<const_infer>(ua, call<primitive=reinterpret[Vec, Vec<type(base::unsigned_of(type(base::in)))>]>(data));
               var<const_infer>(ures, ua >> cast<static>(type(base::unsigned_of(type(base::in))), shift));
               complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
+            """
+    clang_v128:
+      ?i?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              if<generation>(value(type::is_signed(type(base::in)))) {
+                if<compile>(!PreserveSign) {
+                  let<type>(UnsignedVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+                  var<const_infer>(udata, call<primitive=reinterpret[Vec, UnsignedVec]>(data));
+                  complete(call<primitive=reinterpret[UnsignedVec, Vec]>(udata >> shift));
+                } else<compile> {
+                  complete(data >> shift);
+                }
+              } else<generation> {
+                complete(data >> shift);
+              }
+            """
+      f?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              if<compile>(!PreserveSign) {
+                let<type>(UnsignedVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+                var<const_infer>(udata, call<primitive=reinterpret[Vec, UnsignedVec]>(data));
+                complete(call<primitive=reinterpret[UnsignedVec, Vec]>(
+                  udata >> cast<static>(type(base::unsigned_of(type(base::in))), shift)
+                ));
+              } else<compile> {
+                let<type>(SignedVec, type(vector::as_base(type(base::signed_of(type(base::in))))));
+                var<const_infer>(sdata, call<primitive=reinterpret[Vec, SignedVec]>(data));
+                complete(call<primitive=reinterpret[SignedVec, Vec]>(
+                  sdata >> cast<static>(type(base::signed_of(type(base::in))), shift)
+                ));
+              }
             """
     [generic, oneapi_fpga]:
       arith:
@@ -2053,10 +2142,11 @@ prim<v:=(v,v)> shift_right(data, shift):
               var<const_infer>(ures, ua >> cast<static>(type(base::unsigned_of(type(base::in))), shift));
               complete(call<primitive=reinterpret[Vec<type(base::unsigned_of(type(base::in)))>, Vec]>(ures));
             """
-    [generic, oneapi_fpga]:
+    [generic, clang_v128, oneapi_fpga]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
         safety:
           internal_unsafe false

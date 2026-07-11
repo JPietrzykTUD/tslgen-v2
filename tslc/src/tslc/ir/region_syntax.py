@@ -21,7 +21,7 @@ VarSelectorKind = Literal["inferred", "typed", "init_register", "runtime_array"]
 MaskSelectorKind = Literal[
     "lane_true",
     "lane_false",
-    "zero",
+    "none",
     "all",
     "test",
     "test_imask",
@@ -214,7 +214,7 @@ def parse_mask_selector(selector_text: str, arity: int) -> MaskSelector | None:
     kind_by_shape: dict[tuple[tuple[str, ...], int], MaskSelectorKind] = {
         (("lane_true",), 0): "lane_true",
         (("lane_false",), 0): "lane_false",
-        (("zero",), 0): "zero",
+        (("none",), 0): "none",
         (("all",), 0): "all",
         (("test",), 2): "test",
         (("test", "imask"), 2): "test_imask",

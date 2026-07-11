@@ -93,6 +93,28 @@ class ImplementationVariant:
 
 
 @dataclass(frozen=True, slots=True)
+class TargetConstraint:
+    """Relations accepted by a target-axis ``where`` implementation body."""
+
+    family: str | None = None
+    width: str | None = None
+
+    def matches(self, source: "Extension", target: "Extension") -> bool:
+        if self.family is not None:
+            if self.family != "same_as" or source.family != target.family:
+                return False
+        if self.width is None:
+            return True
+        if source.vector_bits_kind != "fixed" or target.vector_bits_kind != "fixed":
+            return False
+        if self.width == "smaller_than":
+            return 0 < target.vector_bits < source.vector_bits
+        if self.width == "larger_than":
+            return target.vector_bits > source.vector_bits > 0
+        return False
+
+
+@dataclass(frozen=True, slots=True)
 class Implementation:
     """One source-authored body for a (extension, type-group) selector path."""
 
@@ -107,6 +129,7 @@ class Implementation:
     # branch below it (the target type-group `?i?` / a target extension name `sse`). The
     # source type-group stays in `type_group`. None for ordinary single-axis primitives.
     to_target_group: str | None = None
+    target_constraint: TargetConstraint | None = None
     # Per-impl override of the extension's ``unroll_variants`` default. None inherits the
     # extension's value; True/False forces it for this body. Only meaningful on a sized
     # extension: when effective-true, a size-changing body is monomorphized over the

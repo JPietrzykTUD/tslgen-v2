@@ -112,7 +112,7 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
         implementation:
           tsil """
               let<type>(MaskT, type(vector::mask));
-              var<typed>(MaskT, result, mask<zero>());
+              var<typed>(MaskT, result, mask<none>());
               loop<backend, unroll>(i, 0, value(vector::length), 1) {
                 if (mask<test>(mask_a, i) && mask<test>(mask_b, i)) {
                   mask<set_to>(result, i, true);
@@ -234,7 +234,7 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
         implementation:
           tsil """
               let<type>(MaskT, type(vector::mask));
-              var<typed>(MaskT, result, mask<zero>());
+              var<typed>(MaskT, result, mask<none>());
               loop<backend, unroll>(i, 0, value(vector::length), 1) {
                 if (mask<test>(mask_a, i) || mask<test>(mask_b, i)) {
                   mask<set_to>(result, i, true);
@@ -356,7 +356,7 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
         implementation:
           tsil """
               let<type>(MaskT, type(vector::mask));
-              var<typed>(MaskT, result, mask<zero>());
+              var<typed>(MaskT, result, mask<none>());
               loop<backend, unroll>(i, 0, value(vector::length), 1) {
                 if (mask<test>(mask_a, i) != mask<test>(mask_b, i)) {
                   mask<set_to>(result, i, true);
@@ -481,7 +481,7 @@ prim<m:=m> mask_binary_not(mask):
         implementation:
           tsil """
               let<type>(MaskT, type(vector::mask));
-              var<typed>(MaskT, result, mask<zero>());
+              var<typed>(MaskT, result, mask<none>());
               loop<backend, unroll>(i, 0, value(vector::length), 1) {
                 if (!mask<test>(mask, i)) {
                   mask<set_to>(result, i, true);
@@ -637,9 +637,10 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
       kind bool
       default true
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128, scalar, generic, oneapi_fpga]:
+    [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128, scalar, generic, oneapi_fpga]:
       ?i?:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
@@ -679,6 +680,7 @@ prim<im:=(im,usize)> shift_right_imask(data, shift):
             """
       f?:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]
@@ -719,9 +721,10 @@ prim<im:=(im,usize)> shift_left_imask(data, shift):
     - {tags [zero], type "ui32", lane_count 16, case {inputs [0, 4], expected 0}}
     - {tags [width], type "ui32", lane_count 16, case {inputs [1, 32], expected 0}}
   impls:
-    [avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128, scalar, generic, oneapi_fpga]:
+    [clang_v128, avx512, avx2_vl, sse_vl, avx2, sse, neon, wasm128, scalar, generic, oneapi_fpga]:
       arith:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2_vl [avx2, avx512f, avx512vl]
           sse_vl [sse2, avx512f, avx512vl]

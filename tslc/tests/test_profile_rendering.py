@@ -107,15 +107,17 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v512>;" in overlay
     assert "#if defined(__clang__) && __clang__ == 1" in overlay
     assert "return (left + right);" in overlay
-    assert "::tsl::dataparallel::fixed<8>, int32_t" in overlay
-    assert "::tsl::hadd<::tsl::dataparallel::simd_for_t<" in overlay
-    assert "struct hadd_impl<tsl::simd<int32_t, tsl::clang_v512>>" not in overlay
+    assert "return __builtin_reduce_add(vec);" in overlay
+    assert "struct hadd_impl<tsl::simd<int32_t, tsl::clang_v512>>" in overlay
     assert "using type = ::tsl::simd<int32_t, ::tsl::clang_v256>;" not in base
     assert "#if defined(TSL_ENABLE_CLANG)" in dispatch
     assert '#  include "tsl_avx2_clang.hpp"' in dispatch
     assert 'if(CMAKE_CXX_COMPILER_ID MATCHES "^(AppleClang|Clang)$")' in cmake
     assert "add_library(tsl::avx2_clang ALIAS tsl_profile_avx2_clang)" in cmake
     assert "target_compile_definitions(tsl_profile_avx2_clang INTERFACE TSL_ENABLE_CLANG)" in cmake
+    assert "add_executable(tsl_values_clang tests/values_${TSL_SELECTED_PROFILE}.cpp)" in cmake
+    assert "add_dependencies(tsl_values tsl_values_clang)" in cmake
+    assert "add_test(NAME values_clang COMMAND tsl_values_clang)" in cmake
     assert "&& __clang__ == 1" not in cmake
 
 

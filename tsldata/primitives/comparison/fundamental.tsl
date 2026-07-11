@@ -58,7 +58,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (left[i] == right[i]) {
                 mask<set>(result, i);
@@ -85,7 +85,7 @@ prim<m:=(v,v)> equal(left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (left[i] == right[i]) {
                 mask<set>(result, i);
@@ -293,7 +293,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (left[i] != right[i]) {
                 mask<set>(result, i);
@@ -320,7 +320,7 @@ prim<m:=(v,v)> nequal(left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (left[i] != right[i]) {
                 mask<set>(result, i);
@@ -509,7 +509,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (left[i] < right[i]) {
                 mask<set>(result, i);
@@ -591,7 +591,7 @@ prim<m:=(v,v)> less_than(left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (left[i] < right[i]) {
                 mask<set>(result, i);
@@ -887,7 +887,7 @@ prim<m:=(v,v)> greater_than(left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (left[i] > right[i]) {
                 mask<set>(result, i);
@@ -969,7 +969,7 @@ prim<m:=(v,v)> greater_than(left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (left[i] > right[i]) {
                 mask<set>(result, i);
@@ -1247,7 +1247,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (left[i] <= right[i]) {
                 mask<set>(result, i);
@@ -1329,7 +1329,7 @@ prim<m:=(v,v)> less_than_or_equal(left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (left[i] <= right[i]) {
                 mask<set>(result, i);
@@ -1536,7 +1536,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (left[i] >= right[i]) {
                 mask<set>(result, i);
@@ -1618,7 +1618,7 @@ prim<m:=(v,v)> greater_than_or_equal(left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (left[i] >= right[i]) {
                 mask<set>(result, i);
@@ -1822,7 +1822,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (
                 (left[i] == right[i]) &&
@@ -1859,7 +1859,7 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (
                 (left[i] == right[i]) &&
@@ -2063,7 +2063,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (
                 (left[i] != right[i]) &&
@@ -2100,7 +2100,7 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (
                 (left[i] != right[i]) &&
@@ -2303,7 +2303,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (
                 (left[i] < right[i]) &&
@@ -2340,7 +2340,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (
                 (left[i] < right[i]) &&
@@ -2543,7 +2543,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (
                 (left[i] > right[i]) &&
@@ -2580,7 +2580,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (
                 (left[i] > right[i]) &&
@@ -2783,7 +2783,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (
                 (left[i] <= right[i]) &&
@@ -2820,7 +2820,7 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (
                 (left[i] <= right[i]) &&
@@ -3023,7 +3023,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (
                 (left[i] >= right[i]) &&
@@ -3060,7 +3060,7 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
         implementation:
           tsil """
             let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<zero>());
+            var<typed>(MaskT, result, mask<none>());
             loop<backend, unroll>(i, 0, value(vector::length), 1) {
               if (
                 (left[i] >= right[i]) &&

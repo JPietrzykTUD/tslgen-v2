@@ -156,6 +156,15 @@ prim<v:=s> set1(value):
           reasons []
         implementation:
           tsil "complete(value);"
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(cast<static>(type(vector::register), value));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -211,9 +220,10 @@ prim<v:=(m,v,s)>[mask=zero] masked_set1(mask, data, scalar):
     - {tags [masked, set1, basic], type "f64", case {inputs [2, [1.0, -2.0], -2.25], expected [1.0, -2.25]}}
     - {tags [masked, set1, edge], type "f64", case {inputs [3, [1.0, -2.0], -2.25], expected [-2.25, -2.25]}}
   impls:
-    [avx512, avx2, sse, neon, wasm128]:
+    [clang_v128, avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]
@@ -325,6 +335,15 @@ prim<v:=()>[value=zero] set_zero():
           reasons []
         implementation:
           tsil "complete(cast<static>(type(base::in), 0));"
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(cast<static>(type(vector::register), cast<static>(type(base::in), 0)));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -438,6 +457,18 @@ prim<v:=()>[value=undef] set_undef():
         implementation:
           tsil """
               var<typed>(type(base::in), result, value(uninit::scalar));
+              complete(result);
+            """
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              var<typed>(type(vector::register), result, value(uninit::array));
               complete(result);
             """
     [generic, oneapi_fpga]:
@@ -671,9 +702,10 @@ prim<v:=(lanes<s>)> set(values):
               )
             );
           """
-    [neon, sve, generic, oneapi_fpga, wasm128]:
+    [clang_v128, neon, sve, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
+          clang_v128 []
           neon [neon]
           sve [sve]
           generic []

@@ -411,6 +411,19 @@ class Selector:
                     )
                 )
                 continue
+            if to_target is not None and implementation.target_constraint is not None:
+                source_extension = catalog.extensions[extension_name]
+                target_extension = catalog.extensions.get(to_target)
+                if target_extension is None or not implementation.target_constraint.matches(
+                    source_extension, target_extension
+                ):
+                    rejected.append(
+                        RejectedCandidate(
+                            implementation,
+                            f"target constraint does not admit target {to_target!r}",
+                        )
+                    )
+                    continue
             flags = _applicable_flags(catalog, implementation, type_tag)
             if flags is None:
                 rejected.append(

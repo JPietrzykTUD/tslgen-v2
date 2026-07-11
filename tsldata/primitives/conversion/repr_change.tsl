@@ -23,6 +23,9 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
     - {tags [high], extension "avx2", type "si32", to_extension "sse", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 1], expected [5, 6, 7, 8]}}
     - {tags [low], extension "avx512", type "f64", to_extension "avx2", case {inputs [[1.0, 2.0, 3.0, 4.0, -1.0, -2.0, -3.0, -4.0], 0], expected [1.0, 2.0, 3.0, 4.0]}}
     - {tags [high], extension "avx512", type "f64", to_extension "avx2", case {inputs [[1.0, 2.0, 3.0, 4.0, -1.0, -2.0, -3.0, -4.0], 1], expected [-1.0, -2.0, -3.0, -4.0]}}
+    - {tags [clang, low], extension "clang_v256", type "si32", to_extension "clang_v128", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 0], expected [1, 2, 3, 4]}}
+    - {tags [clang, high], extension "clang_v512", type "si32", to_extension "clang_v128", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 3], expected [13, 14, 15, 16]}}
+    - {tags [clang, high], extension "clang_v512", type "f64", to_extension "clang_v256", case {inputs [[1.0, 2.0, 3.0, 4.0, -1.0, -2.0, -3.0, -4.0], 1], expected [-1.0, -2.0, -3.0, -4.0]}}
   impls:
     avx2:
       ?i?:
@@ -165,6 +168,31 @@ prim<v:=(v,sImm)>[cast=reinterpret] extract(data, index):
               tsil """
                   complete(intrin<_mm512_extractf64x2_pd>(data, index));
                 """
+    clang_v128:
+      arith:
+        requires []
+        ToExtension:
+          where:
+            family same_as
+            width smaller_than
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [compiler_builtin, raw_memory]
+            implementation:
+              tsl """
+                  let<type>(OutVec, type(vector::as_extension(ToExtension)));
+                  var<typed>(type(register::generic(OutVec)), result, value(uninit::array));
+                  mem<copy>(
+                    &result,
+                    ptr_add(
+                      cast<reinterpret, type=const_ptr>(type(scalar::ui8), &data),
+                      cast<static>(type(scalar::size), index) * sizeof(result)
+                    ),
+                    sizeof(result)
+                  );
+                  complete(result);
+                """
     [generic, wasm128]:
       arith:
         requires:
@@ -286,6 +314,9 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
     - {tags [high], extension "sse", type "si32", to_extension "avx2", case {inputs [[100, 200, 300, 400, 500, 600, 700, 800], [1, 2, 3, 4], 1], expected [100, 200, 300, 400, 1, 2, 3, 4]}}
     - {tags [low], extension "avx2", type "f64", to_extension "avx512", case {inputs [[10.0, 20.0, 30.0, 40.0, -10.0, -20.0, -30.0, -40.0], [1.0, 2.0, 3.0, 4.0], 0], expected [1.0, 2.0, 3.0, 4.0, -10.0, -20.0, -30.0, -40.0]}}
     - {tags [high], extension "avx2", type "f64", to_extension "avx512", case {inputs [[10.0, 20.0, 30.0, 40.0, -10.0, -20.0, -30.0, -40.0], [1.0, 2.0, 3.0, 4.0], 1], expected [10.0, 20.0, 30.0, 40.0, 1.0, 2.0, 3.0, 4.0]}}
+    - {tags [clang, low], extension "clang_v128", type "si32", to_extension "clang_v256", case {inputs [[100, 200, 300, 400, 500, 600, 700, 800], [1, 2, 3, 4], 0], expected [1, 2, 3, 4, 500, 600, 700, 800]}}
+    - {tags [clang, middle], extension "clang_v128", type "f64", to_extension "clang_v512", case {inputs [[10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0], [1.0, 2.0], 2], expected [10.0, 20.0, 30.0, 40.0, 1.0, 2.0, 70.0, 80.0]}}
+    - {tags [clang, high], extension "clang_v256", type "f64", to_extension "clang_v512", case {inputs [[10.0, 20.0, 30.0, 40.0, -10.0, -20.0, -30.0, -40.0], [1.0, 2.0, 3.0, 4.0], 1], expected [10.0, 20.0, 30.0, 40.0, 1.0, 2.0, 3.0, 4.0]}}
   impls:
     sse:
       ?i?:
@@ -390,6 +421,30 @@ prim<v:=(vt,v,sImm)>[cast=reinterpret] insert(orig, data, index):
             implementation:
               tsil """
                   complete(intrin<_mm512_insertf64x4>(orig, data, index));
+                """
+    clang_v128:
+      arith:
+        requires []
+        ToExtension:
+          where:
+            family same_as
+            width larger_than
+            safety:
+              internal_unsafe true
+              caller_unsafe false
+              reasons [compiler_builtin, raw_memory]
+            implementation:
+              tsl """
+                  var<infer>(result, orig);
+                  mem<copy>(
+                    ptr_add_mut(
+                      cast<reinterpret, type=ptr>(type(scalar::ui8), &result),
+                      cast<static>(type(scalar::size), index) * sizeof(data)
+                    ),
+                    &data,
+                    sizeof(data)
+                  );
+                  complete(result);
                 """
     [generic, wasm128]:
       arith:
@@ -1647,7 +1702,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
                     }
                   }
                 """
-    [avx512, avx2, sse, neon, generic, oneapi_fpga, scalar, wasm128]:
+    [clang_v128, avx512, avx2, sse, neon, generic, oneapi_fpga, scalar, wasm128]:
       arith:
         # Monomorphize the sized (generic) software body over the extension's `size_bits`: one
         # concrete `generic<N>` specialization per size, so the width-changed output is a concrete
@@ -1655,6 +1710,7 @@ prim<v:=(v,sImm)>[cast=convert, direction=up] convert_up(data, index):
         # extensions (avx2/sse/…) ignore this — only the sized vector unrolls.
         unroll_variants true
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]
@@ -2211,12 +2267,13 @@ prim<v:=(v,sImm)>[cast=convert, direction=down] convert_down(data, index):
               std::free(out_values);
               complete(result);
             """
-    [avx512, avx2, sse, neon, generic, oneapi_fpga, scalar, wasm128]:
+    [clang_v128, avx512, avx2, sse, neon, generic, oneapi_fpga, scalar, wasm128]:
       arith:
         # Monomorphize the sized (generic) software body over `size_bits` (see convert_up) so the
         # width-changed output is a concrete `generic<N>`; fixed-width extensions ignore it.
         unroll_variants true
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2 [avx2]
           sse [sse2]

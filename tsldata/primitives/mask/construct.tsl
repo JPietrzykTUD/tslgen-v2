@@ -27,7 +27,7 @@ prim<m:=()>[value=zero] mask_false():
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask<zero>());"
+          tsil "complete(mask<none>());"
     [avx2, sse, neon]:
       arith:
         requires:
@@ -69,7 +69,7 @@ prim<m:=()>[value=zero] mask_false():
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask<zero>());"
+          tsil "complete(mask<none>());"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -80,7 +80,7 @@ prim<m:=()>[value=zero] mask_false():
           caller_unsafe false
           reasons []
         implementation:
-          tsil "complete(mask<zero>());"
+          tsil "complete(mask<none>());"
 prim<m:=()>[value=all] mask_true():
   brief_description "Creates a mask with every lane active."
   detailed_description """

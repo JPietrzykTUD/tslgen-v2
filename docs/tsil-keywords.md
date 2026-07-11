@@ -144,7 +144,7 @@ Syntax:
 ```tsil
 mask<lane_true>()
 mask<lane_false>()
-mask<zero>()
+mask<none>()
 mask<all>()
 mask<test>(mask, index)
 mask<test, imask>(imask, index)
@@ -155,14 +155,14 @@ mask<set_to>(mask, index, value)
 
 Use `mask` for backend-neutral mask lane constants and mask bit operations in
 portable fallback bodies. `mask<lane_true>()` and `mask<lane_false>()` produce
-the scalar lane payload values used by lane-register masks. `mask<zero>()` and
+the scalar lane payload values used by lane-register masks. `mask<none>()` and
 `mask<all>()` produce all-inactive/all-active mask containers.
 `mask<test, imask>()` tests a packed integral mask bitset. The other forms
 operate on an existing mask container. Native mask bodies often use intrinsics
 directly instead.
 
 Lowering chooses templates based on the selected extension's mask
-representation: `mask_zero_*`, `mask_all_*`, `mask_test_*`, `mask_set_*`,
+representation: `mask_none_*`, `mask_all_*`, `mask_test_*`, `mask_set_*`,
 `mask_clear_*`, `mask_set_to_*`, or `mask_test_imask`. Unsupported
 operation/representation pairs are skipped with a lowering diagnostic.
 

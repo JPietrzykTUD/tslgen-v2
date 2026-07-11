@@ -22,6 +22,27 @@ prim<s:=v> hand(vec):
     - {tags [basic], type "si32", case {inputs [[-1, 2147483647, -1, 2147483647]], expected 2147483647}}
     - {tags [basic], type "ui64", case {inputs [[15, 3]], expected 3}}
   impls:
+    clang_v128:
+      ?i?:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil "complete(intrin<__builtin_reduce_and>(vec));"
+      f?:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            var<const_infer>(bits, call<primitive=reinterpret[Vec, BitVec]>(vec));
+            complete(cast<bitcast>(type(base::in), intrin<__builtin_reduce_and>(bits)));
+          """
     sve:
       ?i?:
         requires [sve]
@@ -370,6 +391,27 @@ prim<s:=v> hor(vec):
     - {tags [basic], type "si64", case {inputs [[1, 2]], expected 3}}
     - {tags [edge], type "si64", case {inputs [[0, -1]], expected -1}}
   impls:
+    clang_v128:
+      ?i?:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil "complete(intrin<__builtin_reduce_or>(vec));"
+      f?:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil """
+            let<type>(BitVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            var<const_infer>(bits, call<primitive=reinterpret[Vec, BitVec]>(vec));
+            complete(cast<bitcast>(type(base::in), intrin<__builtin_reduce_or>(bits)));
+          """
     sve:
       ?i?:
         requires [sve]
@@ -704,9 +746,10 @@ prim<s:=(m,v)> hand(mask, vec):
             }
             complete(cast<static>(type(base::in), intrin<mask_reduce_and, build[suffix=base::signed_of(base::in)]>(mask, vec)));
           """
-    [scalar, generic, oneapi_fpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128]:
+    [clang_v128, scalar, generic, oneapi_fpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128]:
       ?i?:
         requires:
+          clang_v128 []
           scalar []
           generic []
           oneapi_fpga []
@@ -726,7 +769,7 @@ prim<s:=(m,v)> hand(mask, vec):
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            type(scalar::size) found = 0;
+            var<typed>(type(scalar::size), found, 0);
             loop<backend>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, i)) {
                 if (found == 0) {
@@ -741,6 +784,7 @@ prim<s:=(m,v)> hand(mask, vec):
           """
       f?:
         requires:
+          clang_v128 []
           scalar []
           generic []
           oneapi_fpga []
@@ -761,7 +805,7 @@ prim<s:=(m,v)> hand(mask, vec):
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<infer>(result, cast<static>(UnsignedT, 0));
-            type(scalar::size) found = 0;
+            var<typed>(type(scalar::size), found, 0);
             loop<backend>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, i)) {
                 var<infer>(bits, cast<static>(UnsignedT, 0));
@@ -832,9 +876,10 @@ prim<s:=(m,v)> hor(mask, vec):
           reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type(base::in), intrin<mask_reduce_or, build[suffix=base::signed_of(base::in)]>(mask, vec)));"
-    [scalar, generic, oneapi_fpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128]:
+    [clang_v128, scalar, generic, oneapi_fpga, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128]:
       ?i?:
         requires:
+          clang_v128 []
           scalar []
           generic []
           oneapi_fpga []
@@ -863,6 +908,7 @@ prim<s:=(m,v)> hor(mask, vec):
           """
       f?:
         requires:
+          clang_v128 []
           scalar []
           generic []
           oneapi_fpga []

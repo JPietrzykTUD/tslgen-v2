@@ -19,9 +19,9 @@ def test_views_classify_maskable_and_immediate_splits(catalog: Catalog) -> None:
     gather = catalog.primitives_named("gather", unmasked=False)
 
     assert [is_maskable_primitive(p, policy) for p in add] == [True, True, True]
-    assert [is_maskable_primitive(p, policy) for p in gather] == [False, False]
+    assert [is_maskable_primitive(p, policy) for p in gather] == [True, True]
     assert "add" in policy_split_names(catalog, policy)
-    assert "gather" not in policy_split_names(catalog, policy)
+    assert "gather" in policy_split_names(catalog, policy)
     assert {"shift_left", "shift_right"} <= immediate_split_names(catalog, policy)
     assert "insert" not in immediate_split_names(catalog, policy)
 
@@ -36,7 +36,7 @@ def test_views_select_callable_variants(catalog: Catalog) -> None:
     assert any("mask" in p.attributes for p in add_variants)
     assert all(p.name == "add" for p in add_variants)
     assert gather_variants
-    assert all("mask" not in p.attributes for p in gather_variants)
+    assert any("mask" in p.attributes for p in gather_variants)
 
 
 def test_views_filter_representation_change_targets(catalog: Catalog) -> None:

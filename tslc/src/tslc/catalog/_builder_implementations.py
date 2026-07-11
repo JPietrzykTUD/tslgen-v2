@@ -14,6 +14,7 @@ from tslc.catalog.model import (
     ImplementationSafety,
     ImplementationVariant,
     RequirementClause,
+    TargetConstraint,
 )
 from tslc.syntax.ast import (
     ParsedImplementationVariant,
@@ -58,6 +59,7 @@ def _implementations_from_entries(
                         requirements=requirements,
                         source_order=envelope.source_order,
                         to_target_group=to_target_group,
+                        target_constraint=_target_constraint(entry, target_name),
                         unroll_variants=unroll,
                         safety=safety,
                         variants=_variants(entry.variants),
@@ -152,8 +154,19 @@ def _split_target_selector(
         marker = selector_path.index(target_name)
         source = selector_path[marker - 1] if marker >= 1 else ""
         target = selector_path[marker + 1] if marker + 1 < len(selector_path) else None
+        if target == "where":
+            target = None
         return source, target
     return selector_path[-1], None
+
+
+def _target_constraint(
+    entry: ParsedImplementationSelectorEntry, target_name: str | None
+) -> TargetConstraint | None:
+    if target_name is None or entry.selector.text != "where":
+        return None
+    fields = {field.key.text: _field_text(field) for field in entry.fields}
+    return TargetConstraint(family=fields.get("family"), width=fields.get("width"))
 
 
 def _selector_extensions(head: str) -> tuple[str, ...]:

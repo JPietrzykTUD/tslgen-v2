@@ -265,7 +265,6 @@ DEFAULT_SIGNATURE_KINDS = SignatureKindCatalog(
         SignatureKindCapability("vt", overload_token="target_register"),
         SignatureKindCapability(
             "vidx",
-            mask_deferred_param=True,
             index_vector=True,
             overload_token="index_register",
         ),

@@ -41,6 +41,15 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons []
         implementation:
           tsil "complete(op<mul>(factor1, factor2));"
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(op<mul>(factor1, factor2));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -337,10 +346,11 @@ prim<v:=(m,v,v)>[mask=zero] mul(mask, factor1, factor2):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneapi_fpga, wasm128]:
+    [generic, clang_v128, oneapi_fpga, wasm128]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
           wasm128 [simd128]
         safety:
@@ -497,10 +507,11 @@ prim<v:=(m,v,v)>[mask=pass_through] mul(mask, factor1, factor2):
             }
             complete(factor1);
           """
-    [generic, oneapi_fpga, wasm128]:
+    [generic, clang_v128, oneapi_fpga, wasm128]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
           wasm128 [simd128]
         safety:
@@ -643,6 +654,15 @@ prim<v:=(v,v)> div(divident, divisor):
     - {tags [basic], extension "generic", type "si32", case {inputs [[8, -9, 10, -12], [2, 3, -2, 4]], expected [4, -3, -5, -3]}}
   impls:
     scalar:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(divident / divisor);"
+    clang_v128:
       arith:
         requires []
         safety:
@@ -800,10 +820,11 @@ prim<v:=(m,v,v)>[mask=zero] div(mask, divident, divisor):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneapi_fpga, wasm128]:
+    [generic, clang_v128, oneapi_fpga, wasm128]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
           wasm128 [simd128]
         safety:
@@ -916,10 +937,11 @@ prim<v:=(m,v,v)>[mask=pass_through] div(mask, divident, divisor):
             }
             complete(divident);
           """
-    [generic, oneapi_fpga, wasm128]:
+    [generic, clang_v128, oneapi_fpga, wasm128]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
           wasm128 [simd128]
         safety:
@@ -1026,6 +1048,15 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
           reasons []
         implementation:
           tsil "complete(helper<arith_mul>(data, cast<static>(type(base::in), factor)));"
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(op<mul>(data, cast<static>(type(base::in), factor)));"
     [generic, oneapi_fpga]:
       arith:
         requires:
@@ -1384,10 +1415,11 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [generic, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
+    [generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx]
@@ -1444,10 +1476,11 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
             }
             complete(data);
           """
-    [generic, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
+    [generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx]
@@ -1671,6 +1704,23 @@ prim<v:=(v,v)> mod(dividend, divisor):
             }
             complete(result);
           """
+    clang_v128:
+      ?i?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(dividend % divisor);"
+      f?:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil "complete(intrin<__builtin_elementwise_fmod>(dividend, divisor));"
 prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
   brief_description "Computes the lane-wise remainder for active lanes and writes zero to inactive mask lanes."
   detailed_description """
@@ -1705,7 +1755,7 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [avx512, avx2, sse, sve, generic, wasm128]:
+    [avx512, avx2, sse, sve, generic, clang_v128, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1713,6 +1763,7 @@ prim<v:=(m,v,v)>[mask=zero] mod(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+          clang_v128 []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -1762,7 +1813,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
             }
             complete(dividend);
           """
-    [avx512, avx2, sse, sve, generic, wasm128]:
+    [avx512, avx2, sse, sve, generic, clang_v128, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1770,6 +1821,7 @@ prim<v:=(m,v,v)>[mask=pass_through] mod(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+          clang_v128 []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -1879,6 +1931,23 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
             }
             complete(result);
           """
+    clang_v128:
+      ?i?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil "complete(dividend % cast<static>(type(base::in), divisor));"
+      f?:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil "complete(intrin<__builtin_elementwise_fmod>(dividend, call<primitive=set1[Vec]>(cast<static>(type(base::in), divisor))));"
 prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
   brief_description "Computes the scalar-divisor remainder for active lanes and writes zero to inactive mask lanes."
   detailed_description """
@@ -1913,7 +1982,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
             }
             complete(call<primitive=set_zero[Vec]>());
           """
-    [avx512, avx2, sse, sve, generic, wasm128]:
+    [avx512, avx2, sse, sve, generic, clang_v128, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1921,6 +1990,7 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+          clang_v128 []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -1971,7 +2041,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
             }
             complete(dividend);
           """
-    [avx512, avx2, sse, sve, generic, wasm128]:
+    [avx512, avx2, sse, sve, generic, clang_v128, wasm128]:
       arith:
         requires:
           avx512 [avx512f]
@@ -1979,6 +2049,7 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
           sse [sse]
           sve [sve]
           generic []
+          clang_v128 []
           wasm128 [simd128]
         safety:
           internal_unsafe false

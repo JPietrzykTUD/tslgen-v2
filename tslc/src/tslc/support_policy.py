@@ -279,8 +279,6 @@ DEFAULT_SUPPORT_POLICY = SupportPolicy(
     target_marker_values=frozenset({"==", "*"}),
     deferred_cases=(
         "scalable-vector fixed-lane queries and value tests",
-        "masked gather/scatter forms with vidx parameters",
-        "masked reductions that return scalar values",
         "sized-vector extension-dimension representation changes",
         "different-width reinterpret representation targets",
     ),

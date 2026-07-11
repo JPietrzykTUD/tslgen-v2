@@ -397,9 +397,10 @@ prim<v:=()> sequence():
               indexes
             ));
           """
-    [neon, generic, oneapi_fpga, wasm128]:
+    [clang_v128, neon, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
+          clang_v128 []
           neon [neon]
           generic []
           oneapi_fpga []
@@ -498,9 +499,10 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
               )
             );
           """
-    [avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
+    [clang_v128, avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2 [avx]
           avx2_vl [avx]

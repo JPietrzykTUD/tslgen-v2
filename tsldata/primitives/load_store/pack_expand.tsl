@@ -149,10 +149,11 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
                 }
               }
             """
-    [generic, oneapi_fpga]:
+    [generic, clang_v128, oneapi_fpga]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
         safety:
           internal_unsafe true
@@ -329,10 +330,11 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
               }
                complete(call<primitive=from_array[Vec]>(data_array));
             """
-    [generic, oneapi_fpga]:
+    [generic, clang_v128, oneapi_fpga]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
         safety:
           internal_unsafe true
@@ -870,9 +872,10 @@ prim<v:=cptr+> load_convert_up(ptr):
                    var<const_infer>(loaded, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), ptr));
                    complete(intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[OutVec]>(), loaded));
                 """
-    [sse, sse_vl, neon, sve, generic, oneapi_fpga, scalar, wasm128]:
+    [clang_v128, sse, sse_vl, neon, sve, generic, oneapi_fpga, scalar, wasm128]:
       arith:
         requires:
+          clang_v128 []
           sse [sse2]
           sse_vl [avx512f, avx512vl, sse, sse2]
           neon [neon]

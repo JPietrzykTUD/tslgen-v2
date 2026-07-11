@@ -18,7 +18,10 @@ def finalize_emitted_names(
 ) -> dict[str, tuple[LoweredSpecialization, ...]]:
     """Apply emitted-name splits that depend on the final overload set."""
 
-    return _split_immediates(_split_masked(by_name), immediate_split_names)
+    return _split_immediates(
+        _split_explicit_mask_args(_split_masked(by_name)),
+        immediate_split_names,
+    )
 
 
 def _split_masked(
@@ -65,6 +68,34 @@ def _split_immediates(
             )
         else:
             out[name] = specs
+    return out
+
+
+def _split_explicit_mask_args(
+    by_name: dict[str, tuple[LoweredSpecialization, ...]],
+) -> dict[str, tuple[LoweredSpecialization, ...]]:
+    """Name a different-arity leading-mask overload ``*_mask``.
+
+    C++ could overload ``hadd(vec)`` and ``hadd(mask, vec)``, but Rust cannot.
+    Mask-policy forms already split before this function; this handles the
+    policy-less active-lane reductions using the same public suffix.
+    """
+
+    out: dict[str, tuple[LoweredSpecialization, ...]] = {}
+    for name, specs in by_name.items():
+        arities = {len(spec.param_kinds) for spec in specs}
+        leading_mask = tuple(
+            spec for spec in specs if spec.param_kinds and spec.param_kinds[0] == "m"
+        )
+        other = tuple(spec for spec in specs if spec not in leading_mask)
+        if len(arities) <= 1 or not leading_mask or not other:
+            out[name] = specs
+            continue
+        out[name] = other
+        renamed = f"{name}_mask"
+        out[renamed] = tuple(
+            replace(spec, primitive_name=renamed) for spec in leading_mask
+        )
     return out
 
 

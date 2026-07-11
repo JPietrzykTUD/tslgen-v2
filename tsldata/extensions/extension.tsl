@@ -611,11 +611,12 @@ extension scalar:
 # mask variants remain deferred until target-specific benchmarks justify them.
 extension clang_v128:
   extension_name "clang_v128"
+  inherits "generic"
   family "compiler_builtin"
   intrinsic_style "compiler_builtin"
   vector_bits 128
   native_sort_order 0
-  default_test_target false
+  default_test_target true
   cpp:
     supported true
     header_group "clang"
@@ -626,6 +627,8 @@ extension clang_v128:
         macro "__clang__"
         equals 1
         diagnostic "TSL Clang vector extensions require clang++"
+  rust:
+    supported false
   vector_register_types:
     si8:
       cpp "std::int8_t __attribute__((ext_vector_type(16)))"
@@ -656,7 +659,7 @@ extension clang_v256:
   extension_name "clang_v256"
   inherits "clang_v128"
   vector_bits 256
-  default_test_target false
+  default_test_target true
   vector_register_types:
     si8:
       cpp "std::int8_t __attribute__((ext_vector_type(32)))"
@@ -683,7 +686,7 @@ extension clang_v512:
   extension_name "clang_v512"
   inherits "clang_v256"
   vector_bits 512
-  default_test_target false
+  default_test_target true
   vector_register_types:
     si8:
       cpp "std::int8_t __attribute__((ext_vector_type(64)))"

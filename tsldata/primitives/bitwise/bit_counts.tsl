@@ -42,6 +42,15 @@ prim<v:=v> popcnt(data):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<popcnt, build[suffix=base::signed_of(base::in)]>(data));"
+    clang_v128:
+      ?i?:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil "complete(intrin<__builtin_elementwise_popcount>(data));"
       [?i32, ?i64]:
         requires:
           avx512  [avx512_vpopcntdq, avx512f]
@@ -141,11 +150,12 @@ prim<usize:=s> lzc_scalar(data):
     - {tags [basic], type "ui32", lane_count 8, case {inputs [16], expected 27}}
     - {tags [edge], type "ui32", lane_count 8, case {inputs [0], expected 32}}
   impls:
-    [scalar, generic, wasm128]:
+    [scalar, generic, clang_v128, wasm128]:
       ?i?:
         requires:
           scalar []
           generic []
+          clang_v128 []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -157,6 +167,7 @@ prim<usize:=s> lzc_scalar(data):
         requires:
           scalar []
           generic []
+          clang_v128 []
           wasm128 [simd128]
         safety:
           internal_unsafe true
@@ -231,6 +242,21 @@ prim<v:=v> lzc(data):
           reasons [intrinsic]
         implementation:
           tsil "complete(intrin<lzcnt, build[suffix=base::signed_of(base::in)]>(data));"
+    clang_v128:
+      ?i?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(data_arr, call<primitive=to_array[Vec]>(data));
+            loop<backend, unroll>(i, 0, value(vector::length), 1) {
+              data_arr[i] = cast<static>(type(base::in), call<primitive=lzc_scalar[type(vector::as_extension(scalar))]>(data_arr[i]));
+            }
+            complete(call<primitive=from_array[Vec]>(data_arr));
+          """
     neon:
       [si8, si16, si32, ui8, ui16, ui32]:
         requires [neon]
@@ -263,9 +289,10 @@ prim<v:=v> lzc(data):
               )
             );
           """
-    [avx512, avx2, sse, neon, scalar, generic, wasm128]:
+    [clang_v128, avx512, avx2, sse, neon, scalar, generic, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse2]
@@ -318,9 +345,10 @@ prim<usize:=m> lzc_imask(value):
     - {tags [basic], type "ui32", expected_rule "lzc", lane_count 8, case {inputs [8], expected 60}}
     - {tags [edge], type "ui32", expected_rule "lzc", lane_count 8, case {inputs [0], expected 64}}
   impls:
-    [avx512, avx2, sse, neon, scalar, generic, wasm128]:
+    [clang_v128, avx512, avx2, sse, neon, scalar, generic, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse]
@@ -361,9 +389,10 @@ prim<usize:=m> tzc(value):
     - {tags [basic], type "ui32", expected_rule "tzc", lane_count 8, case {inputs [8], expected 3}}
     - {tags [edge], type "ui32", expected_rule "tzc", lane_count 8, case {inputs [0], expected 64}}
   impls:
-    [avx512, avx2, sse, neon, scalar, generic, wasm128]:
+    [clang_v128, avx512, avx2, sse, neon, scalar, generic, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse]

@@ -342,9 +342,10 @@ prim<v:=(m,v)>[mask=zero, op=keep] mov(mask, src):
                 )
               );
             """
-    [avx2, sse, neon, sve, wasm128, generic, oneapi_fpga]:
+    [clang_v128, avx2, sse, neon, sve, wasm128, generic, oneapi_fpga]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx]
             f? [avx]
@@ -465,9 +466,10 @@ prim<v:=(m,v,v)>[mask=pass_through] mov(mask, src, data):
                 )
               );
             """
-    [avx2, sse, neon, sve, wasm128, generic, oneapi_fpga]:
+    [clang_v128, avx2, sse, neon, sve, wasm128, generic, oneapi_fpga]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx]
             f? [avx]

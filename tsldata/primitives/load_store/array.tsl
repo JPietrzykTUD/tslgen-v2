@@ -176,6 +176,19 @@ prim<s[]:=v> to_array(a):
           reasons []
         implementation:
           tsil "complete(a);"
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, raw_memory]
+        implementation:
+          tsil """
+            var<typed>(array_type<type(base::in), value(vector::length)>, result, value(uninit::array));
+            mem<copy>(result.data(), &a, sizeof(a));
+            complete(result);
+          """
     scalar:
       ?i?:
         requires []
@@ -238,6 +251,19 @@ prim<v:=s[]> from_array(data):
         implementation:
           tsil """
             complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr()));
+          """
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, raw_memory]
+        implementation:
+          tsil """
+            var<typed>(type(vector::register), result, value(uninit::array));
+            mem<copy>(&result, data.as_ptr(), sizeof(result));
+            complete(result);
           """
     sve:
       arith:
@@ -374,10 +400,11 @@ prim<s:=v[idx]> extract_value(a):
                std::free(values);
                complete(result);
             """
-    [generic, oneapi_fpga]:
+    [generic, clang_v128, oneapi_fpga]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
         safety:
           internal_unsafe false

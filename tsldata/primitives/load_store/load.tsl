@@ -60,6 +60,19 @@ prim<v:=cptr>[aligned=*] load(ptr):
               }
               complete(reg);
             """
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [compiler_builtin, raw_memory, raw_pointer]
+        implementation:
+          tsil """
+            var<typed>(type(vector::register), result, value(uninit::array));
+            mem<copy>(&result, ptr, sizeof(result));
+            complete(result);
+          """
     [avx512, avx2, sse]:
       ?i?:
         requires:
@@ -289,9 +302,10 @@ prim<v:=(m,cptr)>[aligned=*, mask=zero] load(mask, ptr):
               );
             }
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2 [avx]
           sse [sse, sse2]
           neon [neon]
@@ -457,9 +471,10 @@ prim<v:=(m,cptr,v)>[aligned=*, mask=pass_through] load(mask, ptr, data):
               );
             }
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2 [avx]
           sse [sse, sse2]
           neon [neon]
@@ -544,10 +559,11 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               );
             }
           """
-    [generic, oneapi_fpga]:
+    [generic, clang_v128, oneapi_fpga]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
         safety:
           internal_unsafe true
@@ -561,7 +577,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               let<type>(MaskT, type(vector::mask));
               let<type>(MaskWord, type(base::unsigned_of(type(base::in))));
               var<const_infer>(words, cast<reinterpret, type=const_ptr>(MaskWord, ptr));
-              var<typed>(MaskT, result, mask<zero>());
+              var<typed>(MaskT, result, mask<none>());
               loop<backend>(i, 0, value(vector::length), 1) {
                 if ((*ptr_add(words, i)) != cast<static>(MaskWord, 0)) {
                   mask<set>(result, i);
@@ -708,10 +724,11 @@ prim<s:=cptr>[aligned=false] load_scalar(ptr):
     - {tags [scalar, basic], type "f64", offset 1, case {inputs [[0, 5, 12345]], expected 5}}
     - {tags [scalar, edge], type "f64", offset 0, case {inputs [[4294967295, 0, 1]], expected 4294967295}}
   impls:
-    [scalar, generic, avx512, avx2, sse, neon, sve, oneapi_fpga, wasm128]:
+    [scalar, generic, clang_v128, avx512, avx2, sse, neon, sve, oneapi_fpga, wasm128]:
       arith:
         requires:
           generic []
+          clang_v128 []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse]

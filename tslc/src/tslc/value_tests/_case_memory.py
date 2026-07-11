@@ -9,7 +9,6 @@ from tslc.value_tests.case_helpers import (
     axis_args as _axis_args,
     effective_lanes as _effective_lanes,
     function_name as _function_name,
-    mask_inputs as _mask_inputs,
     maskish_inputs as _maskish_inputs,
     plan_case as _plan,
     scalar_inputs as _scalar_inputs,
@@ -337,7 +336,11 @@ def indexed_load_case(
     if base_spelling is None or case.scale is None:
         return None
     vector_inputs = _vector_inputs(case)
-    mask_inputs = _mask_inputs(case)
+    # Indexed-memory source cases author the mask literal after the vector-shaped
+    # pointer/index/source operands. Test promotion therefore preserves it as a
+    # scalar token; accept that established source shape just as the other masked
+    # memory planners do.
+    mask_inputs = _maskish_inputs(case)
     expected_len = len(case.expected)
     if len(vector_inputs) not in (2, 3) or expected_len == 0:
         return None
@@ -371,7 +374,7 @@ def indexed_store_case(
     if base_spelling is None or case.scale is None:
         return None
     vector_inputs = _vector_inputs(case)
-    mask_inputs = _mask_inputs(case)
+    mask_inputs = _maskish_inputs(case)
     if len(vector_inputs) != 2 or not case.expected:
         return None
     if case.index_type is not None and index_base_spelling is None:

@@ -419,6 +419,13 @@ register before calling the ordinary primitive. If the profile has no emitted
 fixed-width implementation at that width, lowering records a coverage skip
 instead of generating an incomplete facade use.
 
+Extension-dimension representation changes remain source-driven. A body under
+`ToExtension: where:` promotes `family same_as` and `width smaller_than` or
+`larger_than` into a typed target constraint. Selection expands that constraint
+only to canonical extension identities, so `clang_v512 -> clang_v128` is
+available without duplicating the byte-copy body while activation variants such
+as `sse_vl` do not create duplicate public `sse` targets.
+
 Clang masks use the `comparison_lane_vector` policy. The generated `mask_type`
 is `decltype(register_type{} == register_type{})`, so it exactly matches
 Clang's comparison result for every lane type, including its distinct 8-bit
@@ -429,6 +436,12 @@ representation bridge: a fallback that crosses into a hardware extension must
 pack and reconstruct its mask through those primitives rather than `bit_cast`
 unrelated mask objects.
 
+TSIL spells an all-inactive abstract mask as `mask<none>()`; the mask policy
+owns its concrete scalar-predicate, comparison-vector, or boolean rendering.
+The spelling deliberately describes mask semantics rather than storage. A
+register-backed mask may still reuse the ordinary vector constructors when its
+`mask_type` and `register_type` are identical.
+
 Compact Clang boolean-vector masks remain a benchmark-gated future variant.
 Clang documents them as intended, but not guaranteed, to map to hardware mask
 registers. If materialized-mask benchmarks justify them, they should be modeled
@@ -437,6 +450,14 @@ as explicit target-feature-activated extension variants, analogous to
 
 This delivers the compiler decision without introducing general-purpose
 `compiler_features`, runtime, device, or executable-path taxonomies.
+
+Generated value tests keep the ordinary profile runner compiler-independent.
+Cases whose source or target extension belongs to the Clang header group are
+guarded by `TSL_ENABLE_CLANG`; generated CMake builds and registers a separate
+`tsl_values_clang` executable linked to the opt-in overlay target. Building the
+ordinary `tsl_values` target depends on that executable when Clang support is
+available, so full-corpus verification exercises both paths without exposing
+Clang types to non-Clang compilers.
 
 Rust is intentionally unsupported for this compiler-builtin family. Stable Rust
 offers hardware-specific SIMD through `core::arch`, which is already represented

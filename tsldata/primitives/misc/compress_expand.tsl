@@ -124,9 +124,10 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
               std::free(result_values);
               complete(result);
             """
-    [avx2, sse, neon, generic, oneapi_fpga, wasm128]:
+    [clang_v128, avx2, sse, neon, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2 [avx2]
           sse [sse2]
           neon [neon]
@@ -288,9 +289,10 @@ prim<v:=(m,v,v)>[mask=pass_through, op=expand] expand(mask, to_keep, to_expand):
               std::free(result_values);
               complete(result);
             """
-    [avx2, sse, neon, generic, oneapi_fpga, wasm128]:
+    [clang_v128, avx2, sse, neon, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2 [avx2]
           sse [sse2]
           neon [neon]

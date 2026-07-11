@@ -31,23 +31,21 @@ def test_coverage_reports_full_emission_when_no_gaps_remain(
     result = representative_coverage_result
     by = {row.primitive: row for row in coverage_by_primitive(result)}
 
-    # Direct compiler-vector operations lower everywhere. Horizontal Clang
-    # reductions require an exact-width hardware facade, so profiles without
-    # that width report an honest coverage gap.
+    # Direct compiler-vector operations and reductions lower without a
+    # hardware-width dependency, including profiles that have no matching
+    # fixed-width hardware facade.
     assert by["add"].emitted > 0
     assert by["add"].emitted == by["add"].attempted
     assert by["add"].skipped == 0
 
     assert by["hadd"].emitted > 0
-    assert by["hadd"].skipped == 40
-    assert by["hadd"].attempted == by["hadd"].emitted + 40
+    assert by["hadd"].emitted == by["hadd"].attempted
+    assert by["hadd"].skipped == 0
 
     assert by["cast"].emitted == by["cast"].attempted > 0
     assert by["cast"].skipped == 0
 
-    assert result.skipped
-    assert {entry.primitive for entry in result.skipped} == {"hadd"}
-    assert all("fixed-width fallback" in entry.reason for entry in result.skipped)
+    assert result.skipped == ()
     assert not any(d.severity in ("warning", "error") for d in result.diagnostics)
 
 
@@ -68,8 +66,7 @@ def test_report_text_is_actionable(representative_coverage_result) -> None:
     assert "mask_binary_and" in report
     assert "to_integral" in report
     assert "to_mask" in report
-    assert "skipped because" in report
-    assert "fixed-width fallback" in report
+    assert "skipped because" not in report
 
 
 def test_scalable_fixed_lane_signatures_are_policy_deferred(
@@ -84,19 +81,19 @@ def test_scalable_fixed_lane_signatures_are_policy_deferred(
     )
     by = {row.primitive: row for row in coverage_by_primitive(result)}
 
-    assert by["from_array"].emitted == 20
+    assert by["from_array"].emitted == 50
     assert by["from_array"].skipped == 0
     assert by["from_array"].policy_deferred == 10
-    assert by["to_array"].emitted == 20
+    assert by["to_array"].emitted == 50
     assert by["to_array"].skipped == 0
     assert by["to_array"].policy_deferred == 10
-    assert by["set"].emitted == 20
+    assert by["set"].emitted == 50
     assert by["set"].skipped == 0
     assert by["set"].policy_deferred == 10
     assert {entry.status for entry in result.skipped} == {"policy_deferred"}
 
     report = format_coverage_report(result)
-    assert "1382 emitted / 1382 attempted" in report
+    assert "2294 emitted / 2294 attempted" in report
     assert "30 policy-deferred slots" in report
     assert "skipped because" not in report
     assert "policy-deferred because" in report
@@ -135,3 +132,24 @@ def test_strict_generation_succeeds_when_no_support_gaps_remain(
     assert not has_errors(result.diagnostics)
     assert result.rendered is not None
     assert result.artifacts.artifacts
+
+
+def test_clang_overlay_full_corpus_has_no_lowering_gaps(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        profiles=["icelake_rockerlake"],
+        backends=["cpp"],
+    )
+    clang_extensions = {"clang_v128", "clang_v256", "clang_v512"}
+    emitted = [
+        entry for entry in result.coverage if entry.extension in clang_extensions
+    ]
+    skipped = [
+        entry for entry in result.skipped if entry.extension in clang_extensions
+    ]
+
+    assert emitted
+    assert skipped == []

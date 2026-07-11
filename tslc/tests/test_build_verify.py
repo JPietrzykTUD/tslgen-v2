@@ -502,7 +502,7 @@ def test_generic_masks_build(
     data_root: Path, machine_profiles_path: Path, tmp_path: Path
 ) -> None:
     # The generic vector's emulated mask: comparisons build a bitset mask via `let<type>(MaskT,
-    # vector::mask)` + `var<typed>` + `mask<zero>`/`mask<set>` (the `mask<*>` ops lowered per
+    # vector::mask)` + `var<typed>` + `mask<none>`/`mask<set>` (the `mask<*>` ops lowered per
     # the lane-bitmask representation), and the mask/bitwise primitives (pulled by le/ge)
     # combine them with `mask<test>`/`mask<set_to>`. Builds in both backends; the native
     # comparison bodies are unaffected.

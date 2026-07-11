@@ -45,10 +45,11 @@ prim<m:=v>[value=zero] unequal_zero(data):
           reasons []
         implementation:
           tsil "complete(call<primitive=nequal>(data, call<primitive=set_zero[Vec]>()));"
-    [generic, wasm128]:
+    [generic, clang_v128, wasm128]:
       arith:
         requires:
           generic []
+          clang_v128 []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -160,10 +161,11 @@ prim<s:=(v,s)> count_matches(data, value):
           reasons []
         implementation:
           tsil "complete(cast<static>(type(base::in), call<primitive=mask_population_count>(call<primitive=equal>(data, call<primitive=set1[Vec]>(value)))));"
-    [generic, wasm128]:
+    [generic, clang_v128, wasm128]:
       arith:
         requires:
           generic []
+          clang_v128 []
           wasm128 [simd128]
         safety:
           internal_unsafe false

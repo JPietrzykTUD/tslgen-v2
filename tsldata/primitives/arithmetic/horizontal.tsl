@@ -24,21 +24,28 @@ prim<s:=v> hadd(vec):
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0]], expected -1.0}}
   impls:
     clang_v128:
-      arith:
+      ?i?:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil "complete(intrin<__builtin_reduce_add>(vec));"
+      f?:
         requires []
         safety:
           internal_unsafe false
           caller_unsafe false
-          reasons [fixed_width_fallback]
+          reasons []
         implementation:
           tsil """
-            let<type>(FixedVec, type(vector::fixed));
-            var<const_typed>(
-              type(register::generic(FixedVec)),
-              fixed_vec,
-              cast<bitcast>(type(register::generic(FixedVec)), vec)
-            );
-            complete(call<primitive=@self[FixedVec]>(fixed_vec));
+            var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
+            var<infer>(result, cast<static>(type(base::in), 0));
+            loop<backend>(i, 0, value(vector::length), 1) {
+              result = helper<arith_add>(result, values[i]);
+            }
+            complete(result);
           """
     sve:
       ?i?:
@@ -269,6 +276,15 @@ prim<s:=v> hmax(vec):
     - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected INFINITY}}
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0]], expected 1.0}}
   impls:
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil "complete(intrin<__builtin_reduce_max>(vec));"
     sve:
       ?i?:
         requires [sve]
@@ -447,6 +463,15 @@ prim<s:=v> hmin(vec):
     - {tags [edge], type "f32", case {inputs [[0.0, -0.0, INFINITY, "-INFINITY"]], expected "-INFINITY"}}
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0]], expected -2.0}}
   impls:
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [compiler_builtin, intrinsic]
+        implementation:
+          tsil "complete(intrin<__builtin_reduce_min>(vec));"
     sve:
       ?i?:
         requires [sve]
@@ -575,11 +600,12 @@ prim<s:=v> hmin(vec):
             var<const_infer>(temp, intrin<_mm_min_sd>(vec, intrin<_mm_unpackhi_pd>(vec, vec)));
             complete(intrin<_mm_cvtsd_f64>(temp));
           """
-    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
+    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
           scalar []
           generic []
+          clang_v128 []
           oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx2]
@@ -678,11 +704,12 @@ prim<s:=(m,v)> hadd(mask, vec):
           reasons []
         implementation:
           tsil "complete(call<primitive=hadd>(call<primitive=blend>(mask, call<primitive=set_zero[Vec]>(), vec)));"
-    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
+    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
           scalar []
           generic []
+          clang_v128 []
           oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx2]
@@ -806,11 +833,12 @@ prim<s:=(m,v)> hmax(mask, vec):
             }
             complete(cast<static>(type(base::in), intrin<mask_reduce_max, build>(mask, vec)));
           """
-    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
+    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
           scalar []
           generic []
+          clang_v128 []
           oneapi_fpga []
           avx512 [avx512f]
           avx2 [avx2]
@@ -826,7 +854,7 @@ prim<s:=(m,v)> hmax(mask, vec):
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            type(scalar::size) found = 0;
+            var<typed>(type(scalar::size), found, 0);
             loop<backend>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, i)) {
                 if (found == 0) {
@@ -940,9 +968,10 @@ prim<s:=(m,v)> hmin(mask, vec):
             }
             complete(cast<static>(type(base::in), intrin<mask_reduce_min, build>(mask, vec)));
           """
-    [scalar, generic, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
+    [clang_v128, scalar, generic, oneapi_fpga, avx512, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           scalar []
           generic []
           oneapi_fpga []
@@ -960,7 +989,7 @@ prim<s:=(m,v)> hmin(mask, vec):
             var<const_infer>(mask_scalar, call<primitive=to_integral[Vec]>(mask));
             var<const_infer>(values, call<primitive=to_array[Vec]>(vec));
             var<typed>(type(base::in), result, cast<static>(type(base::in), 0));
-            type(scalar::size) found = 0;
+            var<typed>(type(scalar::size), found, 0);
             loop<backend>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(mask_scalar, i)) {
                 if (found == 0) {

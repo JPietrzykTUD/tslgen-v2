@@ -19,13 +19,28 @@ from tslc.catalog.model import (
     Primitive,
 )
 from tslc.catalog.target_families import ProfileFamilyCapability, TargetFamilyCatalog
+from tslc.catalog.signatures import parse_signature
 from tslc.lower import lowerer as lowerer_module
 from tslc.lower.implementation_state import ImplementationState
 from tslc.lower.lowerer import Lowerer
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
 from tslc.select.selector import SelectedImplementation, Selector, SimdTypeBaseBinding
+from tslc.support_policy import DEFAULT_SUPPORT_POLICY
+from tslc.support_policy_views import concrete_target_candidates
 
 _TYPES = ("si32", "ui32", "f32", "f64")
+_ALL_ARITH_TYPES = (
+    "si8",
+    "ui8",
+    "si16",
+    "ui16",
+    "si32",
+    "ui32",
+    "si64",
+    "ui64",
+    "f32",
+    "f64",
+)
 
 
 def _scalar_target_families() -> TargetFamilyCatalog:
@@ -41,14 +56,22 @@ def _slots(catalog, profile, primitive):
 
 
 def _by_key(catalog, profile, primitive):
-    # The UNMASKED specs keyed by (type, ext). A dual name now also selects masked variants
-    # (same key until the render `_mask`/`_maskz` rename), so filter them out — these tests
-    # exercise the unmasked overload set.
-    return {
-        (s.type_tag, s.extension.name): s
-        for s in _slots(catalog, profile, primitive)
-        if s.primitive.attributes.get("mask") is None
-    }
+    # The ordinary specs keyed by (type, ext). A dual source name can also select
+    # masked-policy variants and explicit leading-mask overloads (same key until
+    # emitted-name finalization), so prefer the declaration with fewer parameters.
+    # Mask-consuming primitives such as to_integral remain visible when they are the
+    # only declaration for the name.
+    result = {}
+    for slot in _slots(catalog, profile, primitive):
+        if slot.primitive.attributes.get("mask") is not None:
+            continue
+        key = (slot.type_tag, slot.extension.name)
+        current = result.get(key)
+        if current is None or len(slot.primitive.parameters) < len(
+            current.primitive.parameters
+        ):
+            result[key] = slot
+    return result
 
 
 def test_lowerer_keeps_target_vector_resolution_boundary() -> None:
@@ -165,7 +188,7 @@ def test_type_group_specificity_resolves_hadd(catalog: Catalog, machine_profiles
     assert chosen.implementation.type_group == "f64"
 
 
-def test_clang_hadd_fallback_is_typed_and_uses_fixed_facade(
+def test_clang_hadd_prefers_compiler_reduction_builtin(
     catalog: Catalog, machine_profiles
 ) -> None:
     slots = _by_key(catalog, machine_profiles["avx2"], "hadd")
@@ -177,25 +200,16 @@ def test_clang_hadd_fallback_is_typed_and_uses_fixed_facade(
         slot, catalog, create_backend_dialect(catalog, "cpp")
     )
     assert lowered.specialization is not None
-    assert (
-        "::tsl::dataparallel::simd_for_t<"
-        "::tsl::dataparallel::fixed<8>, int32_t>"
-        in lowered.specialization.body_text
-    )
-    dependency = lowered.specialization.call_dependency_origins[0].dependency
-    assert dependency.primitive == "hadd"
-    assert dependency.source.extension_isa == "avx2"
+    assert lowered.specialization.body_text == "return __builtin_reduce_add(vec);"
+    assert lowered.specialization.call_dependency_origins == ()
 
     unsupported = slots[("si32", "clang_v512")]
     assert unsupported.fixed_fallback_extension is None
-    skipped = Lowerer().lower(
+    wide = Lowerer().lower(
         unsupported, catalog, create_backend_dialect(catalog, "cpp")
     )
-    assert skipped.specialization is None
-    assert any(
-        diagnostic.code == "TSL-LOWER-NO-FIXED-FALLBACK"
-        for diagnostic in skipped.diagnostics
-    )
+    assert wide.specialization is not None
+    assert wide.specialization.body_text == "return __builtin_reduce_add(vec);"
 
 
 def test_clang_mask_kernel_uses_comparison_lane_vectors_and_integral_bridge(
@@ -232,6 +246,121 @@ def test_clang_mask_kernel_uses_comparison_lane_vectors_and_integral_bridge(
         to_mask.body_text
     )
     assert "result[i] = -1;" in to_mask.body_text
+
+
+def test_clang_representation_change_constraints_select_every_valid_width_pair(
+    catalog: Catalog, machine_profiles
+) -> None:
+    profile = machine_profiles["avx2"]
+
+    def pairs(name: str) -> set[tuple[str, str]]:
+        return {
+            (slot.extension.name, slot.to_target)
+            for slot in _slots(catalog, profile, name)
+            if slot.type_tag == "si32"
+            and slot.extension.name.startswith("clang_v")
+            and slot.to_target is not None
+        }
+
+    assert pairs("extract") == {
+        ("clang_v256", "clang_v128"),
+        ("clang_v512", "clang_v128"),
+        ("clang_v512", "clang_v256"),
+    }
+    assert pairs("insert") == {
+        ("clang_v128", "clang_v256"),
+        ("clang_v128", "clang_v512"),
+        ("clang_v256", "clang_v512"),
+    }
+
+    slot = next(
+        slot
+        for slot in _slots(catalog, profile, "extract")
+        if slot.type_tag == "si32"
+        and slot.extension.name == "clang_v512"
+        and slot.to_target == "clang_v128"
+    )
+    assert slot.implementation.target_constraint is not None
+    assert slot.implementation.target_constraint.family == "same_as"
+    assert slot.implementation.target_constraint.width == "smaller_than"
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+    assert lowered is not None
+    assert "std::memcpy" in lowered.body_text
+    assert "static_cast<std::size_t>(index) * sizeof(result)" in lowered.body_text
+
+
+def test_clang_overlay_has_authored_coverage_for_every_supported_corpus_slot(
+    catalog: Catalog, machine_profiles
+) -> None:
+    selector = Selector()
+    profile = machine_profiles["icelake_rockerlake"]
+    clang_extensions = {"clang_v128", "clang_v256", "clang_v512"}
+    selected_names: set[str] = set()
+    inherited: list[str] = []
+
+    for name in sorted({primitive.name for primitive in catalog.primitives}):
+        selection = selector.select_profile(catalog, profile, name, _ALL_ARITH_TYPES)
+        for slot in selection.selected:
+            if slot.extension.name not in clang_extensions:
+                continue
+            selected_names.add(name)
+            if slot.implementation.extension not in clang_extensions:
+                inherited.append(
+                    f"{name}:{slot.primitive.signature}:{slot.extension.name}:"
+                    f"{slot.type_tag}:{slot.to_target}<-{slot.implementation.extension}"
+                )
+
+    free_names = {
+        primitive.name
+        for primitive in catalog.primitives
+        if (shape := parse_signature(primitive.signature)) is not None
+        and DEFAULT_SUPPORT_POLICY.shape_is_free_function(shape)
+    }
+    assert inherited == []
+    assert (
+        {primitive.name for primitive in catalog.primitives} - selected_names
+        == free_names
+    )
+
+    declaration_gaps: list[str] = []
+    for primitive in catalog.primitives:
+        shape = parse_signature(primitive.signature)
+        if shape is not None and DEFAULT_SUPPORT_POLICY.shape_is_free_function(shape):
+            continue
+        applicable_types = {
+            member
+            for implementation in primitive.implementations
+            for member in catalog.type_group_members(implementation.type_group)
+            if member in _ALL_ARITH_TYPES
+        }
+        for extension_name in sorted(clang_extensions):
+            for type_tag in sorted(applicable_types):
+                targets = concrete_target_candidates(
+                    catalog, primitive, extension_name, type_tag
+                )
+                if primitive.result_target is not None and not targets:
+                    continue
+                for target in targets:
+                    ranked = selector.evaluate_candidates(
+                        catalog,
+                        profile,
+                        primitive,
+                        extension_name,
+                        type_tag,
+                        target,
+                    ).ranked
+                    if (
+                        not ranked
+                        or ranked[0].implementation.extension not in clang_extensions
+                    ):
+                        owner = ranked[0].implementation.extension if ranked else "missing"
+                        declaration_gaps.append(
+                            f"{primitive.name}:{primitive.signature}:{extension_name}:"
+                            f"{type_tag}:{target}<-{owner}"
+                        )
+    assert declaration_gaps == []
 
 
 @pytest.mark.parametrize(

@@ -35,7 +35,7 @@ prim<v:=(v,v)> binary_and(left, right):
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, -2.0]}}
     - {tags [edge], type "f64", case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, -0.0]}}
   impls:
-    scalar:
+    [scalar, clang_v128]:
       ?i?:
         requires []
         safety:
@@ -247,7 +247,7 @@ prim<v:=(v,v)> binary_andnot(left, right):
     - {tags [basic], type "f32", case {inputs [[0.0, 0.0, 0.0, 0.0], [1.0, -2.0, 3.5, -4.5]], expected [1.0, -2.0, 3.5, -4.5]}}
     - {tags [basic], type "f64", case {inputs [[0.0, 0.0], [1.0, -2.0]], expected [1.0, -2.0]}}
   impls:
-    scalar:
+    [scalar, clang_v128]:
       ?i?:
         requires []
         safety:
@@ -467,7 +467,7 @@ prim<v:=(v,v)> binary_or(left, right):
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [1.0, -2.0]}}
     - {tags [edge], type "f64", case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, -0.0]}}
   impls:
-    scalar:
+    [scalar, clang_v128]:
       ?i?:
         requires []
         safety:
@@ -693,7 +693,7 @@ prim<v:=(v,v)> binary_xor(left, right):
     - {tags [basic], type "f64", case {inputs [[1.0, -2.0], [1.0, -2.0]], expected [0.0, 0.0]}}
     - {tags [edge], type "f64", case {inputs [[0.0, -0.0], [0.0, -0.0]], expected [0.0, 0.0]}}
   impls:
-    scalar:
+    [scalar, clang_v128]:
       ?i?:
         requires []
         safety:
@@ -923,10 +923,11 @@ prim<v:=v> inv(data):
           reasons []
         implementation:
           tsil "complete(call<primitive=binary_xor>(data, call<primitive=set1[Vec]>(mask<lane_true>())));"
-    [generic, oneapi_fpga, avx512, avx2, sse, neon, sve]:
+    [generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve]:
       arith:
         requires:
           generic []
+          clang_v128 []
           oneapi_fpga []
           avx512 [avx512f]
           avx2:
@@ -1060,9 +1061,10 @@ prim<v:=(m,v,v)>[mask=zero] binary_and(mask, left, right):
               intrin<maskz_and, build>(mask, left, right)
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -1223,9 +1225,10 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_and(mask, left, right):
               intrin<mask_and, build>(left, mask, left, right)
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -1387,9 +1390,10 @@ prim<v:=(m,v,v)>[mask=zero] binary_andnot(mask, left, right):
               intrin<maskz_andnot, build>(mask, left, right)
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -1551,9 +1555,10 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_andnot(mask, left, right):
               intrin<mask_andnot, build>(left, mask, left, right)
             );
           """
-    [avx2, sse, neon, sve, wasm128]:
+    [clang_v128, avx2, sse, neon, sve, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -1684,9 +1689,10 @@ prim<v:=(m,v,v)>[mask=zero] binary_or(mask, left, right):
               intrin<maskz_or, build>(mask, left, right)
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -1847,9 +1853,10 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_or(mask, left, right):
               intrin<mask_or, build>(left, mask, left, right)
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -2010,9 +2017,10 @@ prim<v:=(m,v,v)>[mask=zero] binary_xor(mask, left, right):
               intrin<maskz_xor, build>(mask, left, right)
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -2173,9 +2181,10 @@ prim<v:=(m,v,v)>[mask=pass_through] binary_xor(mask, left, right):
               intrin<mask_xor, build>(left, mask, left, right)
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -2350,9 +2359,10 @@ prim<v:=(m,v)>[mask=zero] inv(mask, data):
               )
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]
@@ -2535,9 +2545,10 @@ prim<v:=(m,v)>[mask=pass_through] inv(mask, data):
               )
             );
           """
-    [avx2, sse, neon, wasm128]:
+    [clang_v128, avx2, sse, neon, wasm128]:
       arith:
         requires:
+          clang_v128 []
           avx2:
             ?i? [avx, avx2]
             f? [avx]

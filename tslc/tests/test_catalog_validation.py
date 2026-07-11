@@ -73,6 +73,35 @@ def test_valid_tiny_catalog_has_no_validation_diagnostics() -> None:
     assert _diagnostics(_base_source()) == ()
 
 
+def test_target_constraint_relations_are_validated() -> None:
+    source = _base_source().replace(
+        "prim<v:=v> id(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        implementation:\n"
+        '          tsil "complete(data);"\n',
+        "prim<v:=v> id(data):\n"
+        "  return_type:\n"
+        "    extension: ToExtension\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      ints:\n"
+        "        ToExtension:\n"
+        "          where:\n"
+        "            family unrelated\n"
+        "            width sideways\n"
+        "            implementation:\n"
+        '              tsil "complete(data);"\n',
+    )
+
+    diagnostics = _diagnostics(source)
+
+    assert sum(diagnostic.code == "TSL-CATALOG-INVALID-ENUM" for diagnostic in diagnostics) == 2
+    assert any("target constraint family" in diagnostic.message for diagnostic in diagnostics)
+    assert any("target constraint width" in diagnostic.message for diagnostic in diagnostics)
+
+
 def test_primitive_documentation_fields_are_accepted_and_promoted() -> None:
     source = _base_source().replace(
         "  impls:\n",

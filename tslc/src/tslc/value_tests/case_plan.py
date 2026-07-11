@@ -43,6 +43,10 @@ class ValueTestCasePlan:
     representation: ValueTestRepresentation | None = None
     scalable: ValueTestScalable | None = None
     differential: ValueTestDifferential | None = None
+    # Optional generated C++ header group needed by this case (for example
+    # ``clang`` for compiler-builtin overlay extensions). The runner guards
+    # such cases and the build emits a matching opt-in value-test target.
+    header_group: str | None = None
 
     def __post_init__(self) -> None:
         self._validate_common_fields()
@@ -73,6 +77,10 @@ class ValueTestCasePlan:
         if self.lanes <= 0:
             raise ValueError(
                 f"value-test case {self.function_name!r} requires positive lanes"
+            )
+        if self.header_group is not None and not self.header_group:
+            raise ValueError(
+                f"value-test case {self.function_name!r} header_group must be non-empty"
             )
 
     def _validate_required_facts(
