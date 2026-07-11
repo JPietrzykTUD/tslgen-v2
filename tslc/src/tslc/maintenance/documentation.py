@@ -25,6 +25,13 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from tslc.backend.capability import (
+    DocumentationSiteInput,
+    GeneratedDocumentationBuilder,
+    GeneratedDocumentationSpec,
+)
+from tslc.backend.registry import backend_capability
+
 CommandRunner = Callable[[Sequence[str], Path], subprocess.CompletedProcess[str]]
 
 
@@ -47,6 +54,23 @@ class DocumentationReport:
         return not self.errors
 
 
+@dataclass(frozen=True, slots=True)
+class GeneratedDocumentationContext:
+    backend_id: str
+    spec: GeneratedDocumentationSpec
+    root: Path
+    project_name: str
+    tools: Mapping[str, str]
+    dry_run: bool
+    runner: CommandRunner
+    commands: list[DocumentationCommand]
+    outputs: list[Path]
+    errors: list[str]
+
+
+DocumentationBuilder = Callable[[GeneratedDocumentationContext], Path | None]
+
+
 def document_generated(
     output_root: str | Path,
     backends: Sequence[str],
@@ -60,6 +84,7 @@ def document_generated(
     npm_ci: bool = True,
     dry_run: bool = False,
     runner: CommandRunner | None = None,
+    documentation_tools: Mapping[str, str] | None = None,
 ) -> DocumentationReport:
     """Build docs for selected backends in an already-written generated project."""
 
@@ -69,53 +94,63 @@ def document_generated(
     outputs: list[Path] = []
     errors: list[str] = []
     run = runner or _run_subprocess
-
-    unknown = sorted(set(requested) - {"cpp", "rust"})
-    if unknown:
-        errors.append("unsupported documentation backend(s): " + ", ".join(unknown))
+    tools = {
+        "doxygen": doxygen,
+        "cargo": cargo,
+        **(documentation_tools or {}),
+    }
+    capabilities = []
+    for backend_id in requested:
+        try:
+            capability = backend_capability(backend_id)
+        except ValueError:
+            errors.append(f"unsupported documentation backend: {backend_id}")
+            continue
+        if capability.generated_documentation is None:
+            errors.append(f"unsupported documentation backend: {backend_id}")
+            continue
+        capabilities.append(capability)
     if not requested:
         errors.append("no documentation backends requested")
 
-    cpp_xml: Path | None = None
-    rust_doc: Path | None = None
-    if site_only:
-        if "cpp" in requested:
-            cpp_xml = _optional_existing_output(
-                root / "cpp" / "docs" / "doxygen" / "xml",
-                dry_run=dry_run,
+    site_inputs: dict[DocumentationSiteInput, Path] = {}
+    for capability in capabilities:
+        spec = capability.generated_documentation
+        assert spec is not None
+        if site_only:
+            output = _optional_existing_output(
+                root / spec.output_path, dry_run=dry_run
             )
-        if "rust" in requested:
-            rust_doc = _optional_existing_output(
-                root / "rust" / "docs" / "target" / "doc",
-                dry_run=dry_run,
+        else:
+            builder = _DOCUMENTATION_BUILDERS.get(spec.builder)
+            if builder is None:
+                errors.append(
+                    f"unsupported documentation builder {spec.builder.value!r} "
+                    f"for backend {capability.backend_id}"
+                )
+                continue
+            output = builder(
+                GeneratedDocumentationContext(
+                    backend_id=capability.backend_id,
+                    spec=spec,
+                    root=root,
+                    project_name=project_name,
+                    tools=tools,
+                    dry_run=dry_run,
+                    runner=run,
+                    commands=commands,
+                    outputs=outputs,
+                    errors=errors,
+                )
             )
-    elif "cpp" in requested:
-        cpp_xml = _document_cpp(
-            root,
-            project_name=project_name,
-            doxygen=doxygen,
-            dry_run=dry_run,
-            runner=run,
-            commands=commands,
-            outputs=outputs,
-            errors=errors,
-        )
-    if not site_only and "rust" in requested:
-        rust_doc = _document_rust(
-            root,
-            cargo=cargo,
-            dry_run=dry_run,
-            runner=run,
-            commands=commands,
-            outputs=outputs,
-            errors=errors,
-        )
-    if not errors and (site_only or cpp_xml is not None or rust_doc is not None):
+        if output is not None:
+            site_inputs[spec.site_input] = output
+    if not errors and (site_only or site_inputs):
         _document_site(
             root,
             project_name=project_name,
-            doxygen_xml=cpp_xml,
-            rust_doc=rust_doc,
+            doxygen_xml=site_inputs.get(DocumentationSiteInput.DOXYGEN_XML),
+            rust_doc=site_inputs.get(DocumentationSiteInput.RUSTDOC),
             sphinx_build=sphinx_build,
             npm=npm,
             npm_ci=npm_ci,
@@ -201,6 +236,8 @@ def main(argv: list[str] | None = None) -> int:
 def _document_cpp(
     root: Path,
     *,
+    backend_id: str,
+    project_path: str,
     project_name: str,
     doxygen: str,
     dry_run: bool,
@@ -209,7 +246,7 @@ def _document_cpp(
     outputs: list[Path],
     errors: list[str],
 ) -> Path | None:
-    cpp_root = root / "cpp"
+    cpp_root = root / project_path
     facade_header = cpp_root / "docs" / "input" / "tsl_api_docs.hpp"
     docs_root = cpp_root / "docs"
     doxygen_root = docs_root / "doxygen"
@@ -226,7 +263,7 @@ def _document_cpp(
     )
 
     doxygen_command = _command(
-        "cpp",
+        backend_id,
         "doxygen",
         doxygen,
         (str(doxygen_root / "Doxyfile"),),
@@ -252,6 +289,8 @@ def _document_cpp(
 def _document_rust(
     root: Path,
     *,
+    backend_id: str,
+    project_path: str,
     cargo: str,
     dry_run: bool,
     runner: CommandRunner,
@@ -259,7 +298,7 @@ def _document_rust(
     outputs: list[Path],
     errors: list[str],
 ) -> Path | None:
-    rust_root = root / "rust"
+    rust_root = root / project_path
     manifest = rust_root / "Cargo.toml"
     docs_target = rust_root / "docs" / "target"
     if not manifest.is_file():
@@ -267,7 +306,7 @@ def _document_rust(
         return None
     docs_target.mkdir(parents=True, exist_ok=True)
     cargo_command = _command(
-        "rust",
+        backend_id,
         "rustdoc",
         cargo,
         ("doc", "--no-deps", "--target-dir", str(docs_target)),
@@ -287,6 +326,43 @@ def _document_rust(
         errors=errors,
     )
     return rust_doc if len(errors) == error_count else None
+
+
+def _build_cpp_documentation(context: GeneratedDocumentationContext) -> Path | None:
+    return _document_cpp(
+        context.root,
+        backend_id=context.backend_id,
+        project_path=context.spec.project_path,
+        project_name=context.project_name,
+        doxygen=context.tools["doxygen"],
+        dry_run=context.dry_run,
+        runner=context.runner,
+        commands=context.commands,
+        outputs=context.outputs,
+        errors=context.errors,
+    )
+
+
+def _build_rust_documentation(context: GeneratedDocumentationContext) -> Path | None:
+    return _document_rust(
+        context.root,
+        backend_id=context.backend_id,
+        project_path=context.spec.project_path,
+        cargo=context.tools["cargo"],
+        dry_run=context.dry_run,
+        runner=context.runner,
+        commands=context.commands,
+        outputs=context.outputs,
+        errors=context.errors,
+    )
+
+
+_DOCUMENTATION_BUILDERS: Mapping[
+    GeneratedDocumentationBuilder, DocumentationBuilder
+] = {
+    GeneratedDocumentationBuilder.DOXYGEN: _build_cpp_documentation,
+    GeneratedDocumentationBuilder.RUSTDOC: _build_rust_documentation,
+}
 
 
 def _document_site(

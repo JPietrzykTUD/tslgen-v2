@@ -9,11 +9,14 @@ from tslc.value_tests.model import ValueTestCasePlan
 
 
 def _convert(case: ValueTestCasePlan) -> str:
-    target = case.target_base_spelling or case.base_spelling
-    target_lanes = case.target_lanes or case.lanes
-    expected_type = case.expected_type_tag or case.type_tag
-    literals = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = rust_literal_list(case.expected, expected_type)
+    target_plan = case.target
+    index = case.index
+    assert target_plan is not None and index is not None
+    target = target_plan.base_spelling or case.base_spelling
+    target_lanes = target_plan.lanes or case.lanes
+    expected_type = target_plan.type_tag or case.type_tag
+    literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal_list(case.expectation.values, expected_type)
     return "\n".join(
         [
             "    #[test]",
@@ -25,7 +28,7 @@ def _convert(case: ValueTestCasePlan) -> str:
             f"        for i in 0..{case.lanes} {{ a0[i] = in0[i]; }}",
             f"        let expected: [{target}; {target_lanes}] = [{expected}];",
             f"        let result = {rust_raw_identifier(case.call_name)}"
-            f"::<Vec, ToVec, {case.index_value}>(a0);",
+            f"::<Vec, ToVec, {index.value}>(a0);",
             f"        for i in 0..{target_lanes} {{ assert!(result[i].lane_eq(expected[i]), "
             f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
             "i, expected[i], result[i]); }",
@@ -35,13 +38,15 @@ def _convert(case: ValueTestCasePlan) -> str:
 
 
 def _repr_cast(case: ValueTestCasePlan) -> str:
-    if case.source_extension is not None:
+    if case.representation is not None:
         return _fixed_extension_repr_cast(case)
-    target = case.target_base_spelling or case.base_spelling
-    target_lanes = case.target_lanes or len(case.expected)
-    expected_type = case.expected_type_tag or case.type_tag
-    literals = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = rust_literal_list(case.expected, expected_type)
+    target_plan = case.target
+    assert target_plan is not None
+    target = target_plan.base_spelling or case.base_spelling
+    target_lanes = target_plan.lanes or len(case.expectation.values)
+    expected_type = target_plan.type_tag or case.type_tag
+    literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal_list(case.expectation.values, expected_type)
     return "\n".join(
         [
             "    #[test]",
@@ -62,19 +67,22 @@ def _repr_cast(case: ValueTestCasePlan) -> str:
 
 
 def _fixed_extension_repr_cast(case: ValueTestCasePlan) -> str:
-    target = case.target_base_spelling or case.base_spelling
-    target_lanes = case.target_lanes or len(case.expected)
-    expected_type = case.expected_type_tag or case.type_tag
-    literals = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = rust_literal_list(case.expected, expected_type)
-    from_array = _helper_name(case, "from_array_name")
-    to_array = _helper_name(case, "to_array_name")
+    target_plan = case.target
+    representation = case.representation
+    assert target_plan is not None and representation is not None
+    target = target_plan.base_spelling or case.base_spelling
+    target_lanes = target_plan.lanes or len(case.expectation.values)
+    expected_type = target_plan.type_tag or case.type_tag
+    literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal_list(case.expectation.values, expected_type)
+    from_array = _required_name(representation.from_array_name, "from_array_name")
+    to_array = _required_name(representation.to_array_name, "to_array_name")
     return "\n".join(
         [
             "    #[test]",
             f"    fn {case.function_name}() {{",
-            f"        type Vec = Simd<{case.base_spelling}, {rust_extension_tag(case.source_extension)}>;",
-            f"        type ToVec = Simd<{target}, {rust_extension_tag(case.target_extension)}>;",
+            f"        type Vec = Simd<{case.base_spelling}, {rust_extension_tag(representation.source_extension)}>;",
+            f"        type ToVec = Simd<{target}, {rust_extension_tag(representation.target_extension)}>;",
             f"        let in0: [{case.base_spelling}; {case.lanes}] = [{literals}];",
             "        let mut h0: <Vec as SimdVector>::Array = Default::default();",
             f"        for i in 0..{case.lanes} {{ h0[i] = in0[i]; }}",
@@ -91,12 +99,14 @@ def _fixed_extension_repr_cast(case: ValueTestCasePlan) -> str:
 
 
 def _load_convert(case: ValueTestCasePlan) -> str:
-    target = case.target_base_spelling or case.base_spelling
-    target_lanes = case.target_lanes or len(case.expected)
-    expected_type = case.expected_type_tag or case.type_tag
-    literals = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = rust_literal_list(case.expected, expected_type)
-    if case.source_extension is not None and case.target_extension is not None:
+    target_plan = case.target
+    assert target_plan is not None
+    target = target_plan.base_spelling or case.base_spelling
+    target_lanes = target_plan.lanes or len(case.expectation.values)
+    expected_type = target_plan.type_tag or case.type_tag
+    literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal_list(case.expectation.values, expected_type)
+    if case.representation is not None:
         return _fixed_extension_load_convert(case, target, target_lanes, expected, literals)
     return "\n".join(
         [
@@ -126,13 +136,15 @@ def _fixed_extension_load_convert(
     expected: str,
     literals: str,
 ) -> str:
-    to_array = _helper_name(case, "to_array_name")
+    representation = case.representation
+    assert representation is not None
+    to_array = _required_name(representation.to_array_name, "to_array_name")
     return "\n".join(
         [
             "    #[test]",
             f"    fn {case.function_name}() {{",
-            f"        type Vec = Simd<{case.base_spelling}, {rust_extension_tag(case.source_extension)}>;",
-            f"        type ToVec = Simd<{target}, {rust_extension_tag(case.target_extension)}>;",
+            f"        type Vec = Simd<{case.base_spelling}, {rust_extension_tag(representation.source_extension)}>;",
+            f"        type ToVec = Simd<{target}, {rust_extension_tag(representation.target_extension)}>;",
             f"        let in0: [{case.base_spelling}; {case.lanes}] = [{literals}];",
             f"        let mut buf: [{case.base_spelling}; {case.lanes}] = "
             f"[Default::default(); {case.lanes}];",
@@ -150,23 +162,26 @@ def _fixed_extension_load_convert(
 
 
 def _extension_extract(case: ValueTestCasePlan) -> str:
-    out_lanes = len(case.expected)
-    literals = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = rust_literal_list(case.expected, case.type_tag)
-    from_array = _helper_name(case, "from_array_name")
-    to_array = _helper_name(case, "to_array_name")
+    representation = case.representation
+    index = case.index
+    assert representation is not None and index is not None
+    out_lanes = len(case.expectation.values)
+    literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
+    from_array = _required_name(representation.from_array_name, "from_array_name")
+    to_array = _required_name(representation.to_array_name, "to_array_name")
     return "\n".join(
         [
             "    #[test]",
             f"    fn {case.function_name}() {{",
-            f"        type Vec = Simd<{case.base_spelling}, {rust_extension_tag(case.source_extension)}>;",
-            f"        type ToVec = Simd<{case.base_spelling}, {rust_extension_tag(case.target_extension)}>;",
+            f"        type Vec = Simd<{case.base_spelling}, {rust_extension_tag(representation.source_extension)}>;",
+            f"        type ToVec = Simd<{case.base_spelling}, {rust_extension_tag(representation.target_extension)}>;",
             f"        let in0: [{case.base_spelling}; {case.lanes}] = [{literals}];",
             "        let mut h0: <Vec as SimdVector>::Array = Default::default();",
             f"        for i in 0..{case.lanes} {{ h0[i] = in0[i]; }}",
             f"        let expected: [{case.base_spelling}; {out_lanes}] = [{expected}];",
             f"        let result = {rust_raw_identifier(case.call_name)}"
-            f"::<Vec, ToVec, {case.index_value}>({from_array}::<Vec>(&h0));",
+            f"::<Vec, ToVec, {index.value}>({from_array}::<Vec>(&h0));",
             f"        let out = {to_array}::<ToVec>(result);",
             f"        for i in 0..{out_lanes} {{ assert!(out[i].lane_eq(expected[i]), "
             f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
@@ -177,18 +192,21 @@ def _extension_extract(case: ValueTestCasePlan) -> str:
 
 
 def _extension_insert(case: ValueTestCasePlan) -> str:
-    out_lanes = len(case.expected)
-    orig = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    data = rust_literal_list(case.vector_inputs[1], case.type_tag)
-    expected = rust_literal_list(case.expected, case.type_tag)
-    from_array = _helper_name(case, "from_array_name")
-    to_array = _helper_name(case, "to_array_name")
+    representation = case.representation
+    index = case.index
+    assert representation is not None and index is not None
+    out_lanes = len(case.expectation.values)
+    orig = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    data = rust_literal_list(case.inputs.vectors[1], case.type_tag)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
+    from_array = _required_name(representation.from_array_name, "from_array_name")
+    to_array = _required_name(representation.to_array_name, "to_array_name")
     return "\n".join(
         [
             "    #[test]",
             f"    fn {case.function_name}() {{",
-            f"        type DataVec = Simd<{case.base_spelling}, {rust_extension_tag(case.source_extension)}>;",
-            f"        type ResultVec = Simd<{case.base_spelling}, {rust_extension_tag(case.target_extension)}>;",
+            f"        type DataVec = Simd<{case.base_spelling}, {rust_extension_tag(representation.source_extension)}>;",
+            f"        type ResultVec = Simd<{case.base_spelling}, {rust_extension_tag(representation.target_extension)}>;",
             f"        let orig0: [{case.base_spelling}; {out_lanes}] = [{orig}];",
             f"        let data0: [{case.base_spelling}; {case.lanes}] = [{data}];",
             "        let mut orig: <ResultVec as SimdVector>::Array = Default::default();",
@@ -197,7 +215,7 @@ def _extension_insert(case: ValueTestCasePlan) -> str:
             f"        for i in 0..{case.lanes} {{ data[i] = data0[i]; }}",
             f"        let expected: [{case.base_spelling}; {out_lanes}] = [{expected}];",
             f"        let result = {rust_raw_identifier(case.call_name)}"
-            f"::<DataVec, ResultVec, {case.index_value}>("
+            f"::<DataVec, ResultVec, {index.value}>("
             f"{from_array}::<ResultVec>(&orig), {from_array}::<DataVec>(&data));",
             f"        let out = {to_array}::<ResultVec>(result);",
             f"        for i in 0..{out_lanes} {{ assert!(out[i].lane_eq(expected[i]), "
@@ -209,17 +227,19 @@ def _extension_insert(case: ValueTestCasePlan) -> str:
 
 
 def _differential(case: ValueTestCasePlan) -> str:
-    from_array = _helper_name(case, "from_array_name")
-    to_array = _helper_name(case, "to_array_name")
+    differential = case.differential
+    assert differential is not None
+    from_array = differential.from_array_name
+    to_array = _required_name(differential.to_array_name, "to_array_name")
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
-        f"        type Hw = Simd<{case.base_spelling}, {rust_extension_tag(case.hardware_extension)}>;",
+        f"        type Hw = Simd<{case.base_spelling}, {rust_extension_tag(differential.hardware_extension)}>;",
         f"        type Ref = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
     hw_args: list[str] = []
     ref_args: list[str] = []
-    for position, values in enumerate(case.vector_inputs):
+    for position, values in enumerate(case.inputs.vectors):
         literals = rust_literal_list(values, case.type_tag)
         lines.append(
             f"        let in{position}: [{case.base_spelling}; {case.lanes}] = [{literals}];"
@@ -243,8 +263,11 @@ def _differential(case: ValueTestCasePlan) -> str:
     ref_call = (
         f"{rust_raw_identifier(case.call_name)}::<Ref>({', '.join(ref_args)})"
     )
-    if case.result_kind == "m":
-        to_integral = _helper_name(case, "to_integral_name")
+    if case.invocation.result_kind == "m":
+        to_integral = _required_name(
+            differential.to_integral_name,
+            "to_integral_name",
+        )
         lines.append(f"        let hw = {to_integral}::<Hw>({hw_call});")
         lines.append(f"        let reference: <Ref as SimdVector>::MaskType = {ref_call};")
         lines.append(
@@ -264,12 +287,9 @@ def _differential(case: ValueTestCasePlan) -> str:
     return "\n".join(lines)
 
 
-def _helper_name(case: ValueTestCasePlan, field_name: str) -> str:
-    name = getattr(case, field_name)
+def _required_name(name: str | None, field_name: str) -> str:
     if not name:
-        raise ValueError(
-            f"Rust value-test case {case.function_name!r} is missing {field_name}"
-        )
+        raise ValueError(f"Rust value-test case is missing {field_name}")
     return rust_raw_identifier(name)
 
 

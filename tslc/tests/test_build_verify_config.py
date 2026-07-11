@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import tslc.output.verify as verify_module
+import tslc.output._verify_common as verify_common
 from tslc.backend.cpp_capability import create_cpp_verify_driver
 from tslc.backend.rust_capability import create_rust_verify_driver
 from tslc.output.verify import (
@@ -23,8 +24,44 @@ from tslc.output.verify import (
     run_subprocess_build_command,
     verify_generated_project,
 )
-from tslc.output._verify_common import effective_cpp_compiler
+from tslc.output._verify_cpp_config import effective_cpp_compiler
+from tslc.output._verify_runners import runner_prefix
+from tslc.output._verify_rust_config import effective_rust_compiler
 from tslc.output.verify_drivers import VerifyBackendDriver
+from tslc.output.verify_model import BackendToolchain
+
+
+def _config(
+    *,
+    cpp_compiler: str | None = None,
+    rust_compiler: str | None = None,
+    run_value_tests: bool = False,
+    sde_path: str | None = None,
+    qemu_aarch64_path: str | None = None,
+    wasmtime_path: str | None = None,
+) -> BuildVerifierConfig:
+    toolchains = {
+        backend_id: BackendToolchain.create(compiler=compiler)
+        for backend_id, compiler in (
+            ("cpp", cpp_compiler),
+            ("rust", rust_compiler),
+        )
+        if compiler is not None
+    }
+    runner_paths = {
+        kind: path
+        for kind, path in (
+            ("sde", sde_path),
+            ("qemu-aarch64", qemu_aarch64_path),
+            ("wasmtime", wasmtime_path),
+        )
+        if path is not None
+    }
+    return BuildVerifierConfig.create(
+        toolchains=toolchains,
+        runner_paths=runner_paths,
+        run_value_tests=run_value_tests,
+    )
 
 
 def test_backend_capabilities_use_public_verify_driver_surface() -> None:
@@ -39,6 +76,15 @@ def test_backend_capabilities_use_public_verify_driver_surface() -> None:
     assert rust_driver.command_groups.__module__ != verify_module.__name__
     assert not hasattr(verify_module, "cpp_verify_driver")
     assert not hasattr(verify_module, "rust_verify_driver")
+
+
+def test_verifier_configuration_has_focused_module_ownership() -> None:
+    assert effective_cpp_compiler.__module__ == "tslc.output._verify_cpp_config"
+    assert effective_rust_compiler.__module__ == "tslc.output._verify_rust_config"
+    assert runner_prefix.__module__ == "tslc.output._verify_runners"
+    assert not hasattr(verify_common, "effective_cpp_compiler")
+    assert not hasattr(verify_common, "effective_rust_compiler")
+    assert not hasattr(verify_common, "runner_prefix")
 
 
 def test_subprocess_verifier_uses_local_runtime_cache_dirs(tmp_path: Path) -> None:
@@ -89,7 +135,7 @@ def test_cpp_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(cpp_compiler="/usr/bin/c++"),
+        config=_config(cpp_compiler="/usr/bin/c++"),
     )
 
     assert report.diagnostics == ()
@@ -183,7 +229,7 @@ def test_cpp_verifier_skips_missing_explicit_compiler(tmp_path: Path) -> None:
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(cpp_compiler="/definitely/missing/c++"),
+        config=_config(cpp_compiler="/definitely/missing/c++"),
     )
 
     assert report.diagnostics == ()
@@ -213,7 +259,7 @@ def test_rust_verifier_accepts_explicit_compiler(tmp_path: Path) -> None:
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(rust_compiler=sys.executable),
+        config=_config(rust_compiler=sys.executable),
     )
 
     assert report.diagnostics == ()
@@ -238,9 +284,9 @@ def test_rust_build_verifier_cross_target_does_not_run_test_binary(
                         profile_name="neon",
                         file_stem="neon",
                         family="aarch64",
-                        rust_target_features=("+neon",),
-                        rust_target="aarch64-unknown-linux-musl",
-                        rust_linker="rust-lld",
+                        target_features=("+neon",),
+                        target="aarch64-unknown-linux-musl",
+                        linker="rust-lld",
                         runner=VerifyRunner(kind="qemu-aarch64", profile="cortex-a76"),
                     ),
                 ),
@@ -257,7 +303,7 @@ def test_rust_build_verifier_cross_target_does_not_run_test_binary(
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(rust_compiler=sys.executable),
+        config=_config(rust_compiler=sys.executable),
     )
 
     assert report.diagnostics == ()
@@ -289,8 +335,8 @@ def test_rust_target_preflight_failure_skips_only_that_profile(tmp_path: Path) -
                         profile_name="wasm32_simd128",
                         file_stem="wasm32_simd128",
                         family="wasm32",
-                        rust_target_features=("+simd128",),
-                        rust_target="wasm32-wasip1",
+                        target_features=("+simd128",),
+                        target="wasm32-wasip1",
                     ),
                 ),
             ),
@@ -312,7 +358,7 @@ def test_rust_target_preflight_failure_skips_only_that_profile(tmp_path: Path) -
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(rust_compiler=sys.executable),
+        config=_config(rust_compiler=sys.executable),
     )
 
     assert report.diagnostics == ()
@@ -383,7 +429,7 @@ def test_rust_verifier_skips_missing_explicit_compiler(tmp_path: Path) -> None:
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(rust_compiler="/definitely/missing/rustc"),
+        config=_config(rust_compiler="/definitely/missing/rustc"),
     )
 
     assert report.diagnostics == ()
@@ -523,7 +569,7 @@ def test_cpp_value_test_run_configures_sde_as_test_launcher(tmp_path: Path) -> N
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(
+        config=_config(
             cpp_compiler="/usr/bin/c++",
             run_value_tests=True,
             sde_path=sys.executable,
@@ -575,7 +621,7 @@ def test_sde_cpp_value_tests_pin_default_compiler_over_ambient_cxx(
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(
+        config=_config(
             run_value_tests=True,
             sde_path=sys.executable,
         ),
@@ -628,7 +674,7 @@ def test_sde_runner_does_not_override_oneapi_cpp_default_compiler(
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(
+        config=_config(
             run_value_tests=True,
             sde_path=sys.executable,
         ),
@@ -671,7 +717,7 @@ def test_runner_value_tests_skip_non_generic_profiles_without_matching_runner(
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(
+        config=_config(
             run_value_tests=True,
             sde_path=sys.executable,
         ),
@@ -699,8 +745,8 @@ def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(
                         profile_name="neon",
                         file_stem="neon",
                         family="aarch64",
-                        cpp_flags=("-march=armv8-a+simd",),
-                        cpp_target="aarch64-linux-gnu",
+                        flags=("-march=armv8-a+simd",),
+                        target="aarch64-linux-gnu",
                         runner=VerifyRunner(kind="qemu-aarch64", profile="cortex-a76"),
                     ),
                 ),
@@ -725,7 +771,7 @@ def test_cpp_qemu_value_tests_configure_cmake_cross_emulator(
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(
+        config=_config(
             run_value_tests=True,
             qemu_aarch64_path=sys.executable,
         ),
@@ -765,8 +811,8 @@ def test_cpp_qemu_value_tests_fall_back_to_clang_target_when_cross_gpp_missing(
                         profile_name="neon",
                         file_stem="neon",
                         family="aarch64",
-                        cpp_flags=("-march=armv8-a+simd",),
-                        cpp_target="aarch64-linux-gnu",
+                        flags=("-march=armv8-a+simd",),
+                        target="aarch64-linux-gnu",
                         runner=VerifyRunner(kind="qemu-aarch64", profile="cortex-a76"),
                     ),
                 ),
@@ -791,7 +837,7 @@ def test_cpp_qemu_value_tests_fall_back_to_clang_target_when_cross_gpp_missing(
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(
+        config=_config(
             run_value_tests=True,
             qemu_aarch64_path=sys.executable,
         ),
@@ -819,8 +865,8 @@ def test_cpp_wasm_value_tests_configure_wasi_and_wasmtime(tmp_path: Path) -> Non
                         profile_name="wasm32_simd128",
                         file_stem="wasm32_simd128",
                         family="wasm32",
-                        cpp_flags=("-msimd128",),
-                        cpp_target="wasm32-wasip1",
+                        flags=("-msimd128",),
+                        target="wasm32-wasip1",
                         runner=VerifyRunner(kind="wasmtime", profile="default"),
                     ),
                 ),
@@ -837,7 +883,7 @@ def test_cpp_wasm_value_tests_configure_wasi_and_wasmtime(tmp_path: Path) -> Non
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(
+        config=_config(
             cpp_compiler=sys.executable,
             run_value_tests=True,
             wasmtime_path=sys.executable,
@@ -872,12 +918,12 @@ def test_cpp_wasm_default_compiler_uses_wasi_sdk() -> None:
             VerifyProfile(
                 profile_name="wasm32_simd128",
                 file_stem="wasm32_simd128",
-                cpp_target="wasm32-wasip1",
+                target="wasm32-wasip1",
             ),
         ),
     )
 
-    assert effective_cpp_compiler(BuildVerifierConfig.create(), project) == (
+    assert effective_cpp_compiler(_config(), project) == (
         "/opt/wasi-sdk/bin/clang++",
     )
 
@@ -895,11 +941,11 @@ def test_cpp_oneapi_default_compiler_uses_intel_llvm() -> None:
         ),
     )
 
-    assert effective_cpp_compiler(BuildVerifierConfig.create(), project) == (
+    assert effective_cpp_compiler(_config(), project) == (
         "/opt/intel/oneapi/compiler/2025.0/bin/icpx",
     )
     assert effective_cpp_compiler(
-        BuildVerifierConfig.create(),
+        _config(),
         project,
         project.profiles[0],
     ) == ("/opt/intel/oneapi/compiler/2025.0/bin/icpx",)
@@ -919,8 +965,8 @@ def test_sde_runner_does_not_override_wasm_cpp_default_compiler(
                         profile_name="wasm32_simd128",
                         file_stem="wasm32_simd128",
                         family="wasm32",
-                        cpp_flags=("-msimd128",),
-                        cpp_target="wasm32-wasip1",
+                        flags=("-msimd128",),
+                        target="wasm32-wasip1",
                         runner=VerifyRunner(kind="wasmtime", profile="default"),
                     ),
                 ),
@@ -945,7 +991,7 @@ def test_sde_runner_does_not_override_wasm_cpp_default_compiler(
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(
+        config=_config(
             run_value_tests=True,
             sde_path=sys.executable,
             wasmtime_path=sys.executable,
@@ -970,7 +1016,7 @@ def test_cpp_default_compiler_is_profile_scoped_for_mixed_native_and_wasm(
     monkeypatch,
 ) -> None:
     monkeypatch.delenv("CXX", raising=False)
-    config = BuildVerifierConfig.create()
+    config = _config()
     backend = VerifyBackend(
         backend_id="cpp",
         root_path="cpp",
@@ -980,7 +1026,7 @@ def test_cpp_default_compiler_is_profile_scoped_for_mixed_native_and_wasm(
                 profile_name="wasm32_simd128",
                 file_stem="wasm32_simd128",
                 family="wasm32",
-                cpp_target="wasm32-wasip1",
+                target="wasm32-wasip1",
             ),
         ),
     )
@@ -1005,7 +1051,7 @@ def test_cpp_target_preflight_failure_skips_only_that_profile(tmp_path: Path) ->
                         profile_name="neon",
                         file_stem="neon",
                         family="aarch64",
-                        cpp_target="aarch64-linux-gnu",
+                        target="aarch64-linux-gnu",
                     ),
                 ),
             ),
@@ -1047,9 +1093,9 @@ def test_rust_qemu_value_tests_use_target_and_run_binaries(tmp_path: Path) -> No
                         profile_name="neon",
                         file_stem="neon",
                         family="aarch64",
-                        rust_target_features=("+neon",),
-                        rust_target="aarch64-unknown-linux-musl",
-                        rust_linker="rust-lld",
+                        target_features=("+neon",),
+                        target="aarch64-unknown-linux-musl",
+                        linker="rust-lld",
                         runner=VerifyRunner(kind="qemu-aarch64", profile="cortex-a76"),
                     ),
                 ),
@@ -1074,7 +1120,7 @@ def test_rust_qemu_value_tests_use_target_and_run_binaries(tmp_path: Path) -> No
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(
+        config=_config(
             rust_compiler=sys.executable,
             run_value_tests=True,
             qemu_aarch64_path=sys.executable,
@@ -1111,8 +1157,8 @@ def test_rust_wasm_value_tests_use_wasmtime_runner(tmp_path: Path) -> None:
                         profile_name="wasm32_simd128",
                         file_stem="wasm32_simd128",
                         family="wasm32",
-                        rust_target_features=("+simd128",),
-                        rust_target="wasm32-wasip1",
+                        target_features=("+simd128",),
+                        target="wasm32-wasip1",
                         runner=VerifyRunner(kind="wasmtime", profile="default"),
                     ),
                 ),
@@ -1137,7 +1183,7 @@ def test_rust_wasm_value_tests_use_wasmtime_runner(tmp_path: Path) -> None:
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(
+        config=_config(
             rust_compiler=sys.executable,
             run_value_tests=True,
             wasmtime_path=sys.executable,
@@ -1171,7 +1217,7 @@ def test_rust_value_tests_run_built_binaries_through_sde(tmp_path: Path) -> None
                     VerifyProfile(
                         profile_name="avx2",
                         file_stem="avx2",
-                        rust_target_features=("+avx2",),
+                        target_features=("+avx2",),
                         runner=VerifyRunner(kind="sde", profile="hsw"),
                     ),
                 ),
@@ -1201,7 +1247,7 @@ def test_rust_value_tests_run_built_binaries_through_sde(tmp_path: Path) -> None
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(
+        config=_config(
             rust_compiler=sys.executable,
             run_value_tests=True,
             sde_path=sys.executable,
@@ -1242,7 +1288,7 @@ def test_rust_sde_value_tests_diagnose_missing_test_binaries(tmp_path: Path) -> 
         tmp_path,
         project,
         runner,
-        config=BuildVerifierConfig.create(
+        config=_config(
             rust_compiler=sys.executable,
             run_value_tests=True,
             sde_path=sys.executable,
@@ -1274,7 +1320,7 @@ def test_explicit_sde_path_must_exist(tmp_path: Path) -> None:
     report = verify_generated_project(
         tmp_path,
         project,
-        config=BuildVerifierConfig.create(
+        config=_config(
             rust_compiler=sys.executable,
             run_value_tests=True,
             sde_path="/definitely/missing/sde",
@@ -1306,7 +1352,7 @@ def test_explicit_wasmtime_path_must_exist(tmp_path: Path) -> None:
     report = verify_generated_project(
         tmp_path,
         project,
-        config=BuildVerifierConfig.create(
+        config=_config(
             rust_compiler=sys.executable,
             run_value_tests=True,
             wasmtime_path="/definitely/missing/wasmtime",

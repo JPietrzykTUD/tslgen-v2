@@ -2,9 +2,23 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from tslc.catalog.model import Extension
 
 _CPP_X86_HELPER_WIDTHS = frozenset({128, 256, 512})
+
+
+def feature_spelling(feature: str, alternatives: Mapping[str, str]) -> str:
+    """Return a compiler target-feature spelling from a source feature name."""
+
+    if feature in alternatives:
+        return alternatives[feature]
+    if feature.startswith("sse4_"):
+        return "sse4." + feature[len("sse4_") :]
+    if feature.startswith("avx512_"):
+        return "avx512" + feature[len("avx512_") :]
+    return feature
 
 
 def is_x86_register_extension(extension: Extension | None) -> bool:
@@ -63,6 +77,7 @@ def _rust_type_name_from_identifier(identifier: str) -> str:
 
 __all__ = [
     "cpp_x86_register_helper",
+    "feature_spelling",
     "is_x86_register_extension",
     "rust_arch_module",
     "rust_extension_tag",

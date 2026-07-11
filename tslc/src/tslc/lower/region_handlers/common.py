@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from tslc.ir.segments import RawText, Region, Segment
-from tslc.lower._text import skip_string
 from tslc.lower.context import LoweringSession, VectorValue
 
 
@@ -21,53 +19,9 @@ def _vector_spelling(value: VectorValue, context: LoweringSession) -> str | None
             if value.lanes is not None
             else value.lane_parameter
         )
+        if lanes is None:
+            return None
         return context.env.backend.types.sized_vector_spelling(
             base, value.extension_isa, lanes
         )
     return context.env.backend.types.vector_type_spelling(base, value.extension_isa)
-
-
-def _split_arg_groups(segments: tuple[Segment, ...]) -> list[tuple[Segment, ...]]:
-    """Split a body segment sequence into top-level comma-separated argument groups.
-
-    Regions are atomic (their internal commas/brackets stay inside them); only
-    depth-0 commas in raw text separate arguments.
-    """
-
-    groups: list[list[Segment]] = [[]]
-    depth = 0
-    for segment in segments:
-        if isinstance(segment, Region):
-            groups[-1].append(segment)
-            continue
-        text = segment.text
-        start = 0
-        index = 0
-        while index < len(text):
-            char = text[index]
-            if char == '"':
-                index = skip_string(text, index)
-                continue
-            if char in "(<[":
-                depth += 1
-            elif char in ")>]" and depth > 0:
-                depth -= 1
-            elif char == "," and depth == 0:
-                piece = text[start:index]
-                if piece.strip():
-                    groups[-1].append(RawText(piece))
-                groups.append([])
-                start = index + 1
-            index += 1
-        tail = text[start:]
-        if tail.strip():
-            groups[-1].append(RawText(tail))
-    return [tuple(group) for group in groups]
-
-
-def _segment_text(segments: tuple[Segment, ...]) -> str:
-    """Reconstruct the source text of a segment group (for query delegation)."""
-
-    return "".join(
-        seg.full_text if isinstance(seg, Region) else seg.text for seg in segments
-    ).strip()

@@ -56,6 +56,14 @@ class CatalogBuilder:
             and declaration.kind == "extension"
             and declaration.name
         )
+        backend_ids = frozenset(
+            declaration.name
+            for document in parsed.documents
+            for declaration in document.declarations
+            if isinstance(declaration, ParsedBlockDeclaration)
+            and declaration.kind == "language"
+            and declaration.name
+        )
 
         for document in parsed.documents:
             for declaration in document.declarations:
@@ -67,7 +75,7 @@ class CatalogBuilder:
                     if declaration.kind == "types":
                         type_groups.update(_build_type_groups(declaration))
                     elif declaration.kind == "extension":
-                        extension = _build_extension(declaration)
+                        extension = _build_extension(declaration, backend_ids)
                         extensions[extension.name] = extension
                         extension_declared_fields[extension.name] = (
                             _declared_extension_fields(declaration)

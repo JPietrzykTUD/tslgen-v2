@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
+from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.scalar_types import DEFAULT_SCALAR_TYPE_TAGS
 from tslc.output.artifacts import ArtifactSet
 from tslc.output.verify import (
@@ -13,9 +14,9 @@ from tslc.output.verify import (
     VerifyProject,
     verify_generated_project,
 )
-from tslc.output.writer import ArtifactWriteReport, ArtifactWriter
+from tslc.output.verify_model import BackendToolchain
+from tslc.output.writer import ArtifactWriteMode, ArtifactWriteReport, ArtifactWriter
 from tslc.pipeline import GenerationMode, GenerationRequest, GenerationResult, generate
-from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 _ARITH_TYPE_TAGS = DEFAULT_SCALAR_TYPE_TAGS
 
@@ -27,7 +28,7 @@ def generate_project(
     primitives: Iterable[str] | None = None,
     profiles: Iterable[str] | None = None,
     type_tags: Iterable[str] = _ARITH_TYPE_TAGS,
-    backends: Iterable[str] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
+    backends: Iterable[str] = registered_backend_ids(),
     generation_mode: GenerationMode = "partial",
     test_harness: bool = False,
     value_test_warnings: bool = False,
@@ -80,37 +81,25 @@ def _expand_sources(source_paths: Iterable[Path | str]) -> tuple[Path, ...]:
 def write_artifacts(
     artifacts: ArtifactSet,
     output_root: Path | str,
-    mode: str = "manifest-clean",
+    mode: ArtifactWriteMode = "manifest-clean",
 ) -> ArtifactWriteReport:
-    return ArtifactWriter().write(artifacts, output_root, mode)  # type: ignore[arg-type]
+    return ArtifactWriter().write(artifacts, output_root, mode)
 
 
 def verify_project(
     output_root: Path | str,
     verify: VerifyProject,
     *,
-    cpp_compiler: str | Sequence[str] | None = None,
-    rust_compiler: str | None = None,
+    toolchains: Mapping[str, BackendToolchain] | None = None,
+    runner_paths: Mapping[str, str] | None = None,
     run_value_tests: bool = False,
-    sde_path: str | None = None,
-    qemu_aarch64_path: str | None = None,
-    wasmtime_path: str | None = None,
-    cpp_target: str | None = None,
-    rust_target: str | None = None,
-    rust_linker: str | None = None,
 ) -> BuildVerificationReport:
     return verify_generated_project(
         Path(output_root),
         verify,
         config=BuildVerifierConfig.create(
-            cpp_compiler=cpp_compiler,
-            rust_compiler=rust_compiler,
+            toolchains=toolchains,
+            runner_paths=runner_paths,
             run_value_tests=run_value_tests,
-            sde_path=sde_path,
-            qemu_aarch64_path=qemu_aarch64_path,
-            wasmtime_path=wasmtime_path,
-            cpp_target=cpp_target,
-            rust_target=rust_target,
-            rust_linker=rust_linker,
         ),
     )

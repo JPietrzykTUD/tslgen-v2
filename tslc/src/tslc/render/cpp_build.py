@@ -1,0 +1,405 @@
+"""Render C++ build metadata and profile detection."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+
+from tslc.backend.cpp_detection import CPP_PROFILE_DETECTION_KINDS
+from tslc.backend.cpp_validation import resolve_cpp_compile_guards
+from tslc.backend.emitted_profile import EmittedProfile, used_extensions
+from tslc.backend.target_capability import feature_spelling
+from tslc.catalog.machine_profiles import MachineProfile
+from tslc.catalog.model import BackendCompileGuard
+from tslc.catalog.target_families import ProfileFamilyCapability
+from tslc.compiler_assets import RenderAssets
+from tslc.output.verify_model import VerifyProfile, VerifyRunner
+from tslc.render._common import slug
+from tslc.backend.cpp_profile import _cpp_compile_guard_condition
+
+_CMAKE_CXX_FEATURE_FLAG_COMPILERS = "GNU,Clang,AppleClang,IntelLLVM"
+
+
+def cpp_verify_profiles(profiles: tuple[EmittedProfile, ...]) -> tuple[VerifyProfile, ...]:
+    return tuple(
+        VerifyProfile(
+            profile_name=slug(emitted_profile.profile.name),
+            file_stem=slug(emitted_profile.profile.name),
+            family=emitted_profile.profile.family,
+            compile_modes=emitted_profile.profile.compile_modes,
+            flags=cpp_flags(emitted_profile.profile, emitted_profile.profile_family),
+            target=cpp_target(emitted_profile.profile, emitted_profile.profile_family),
+            runner=_verify_runner(emitted_profile.profile),
+        )
+        for emitted_profile in profiles
+    )
+
+
+def cpp_flags(
+    profile: MachineProfile,
+    capability: ProfileFamilyCapability | None = None,
+) -> tuple[str, ...]:
+    capability = capability or ProfileFamilyCapability(profile.family)
+    backend = capability.backend("cpp")
+    if not backend.feature_flags:
+        return profile.flags_for_backend("cpp")
+    return (
+        *(
+            f"-m{feature_spelling(feature, profile.alternatives)}"
+            for feature in sorted(profile.features)
+        ),
+        *profile.flags_for_backend("cpp"),
+    )
+
+
+def cpp_target(
+    profile: MachineProfile,
+    capability: ProfileFamilyCapability | None = None,
+) -> str | None:
+    capability = capability or ProfileFamilyCapability(profile.family)
+    return capability.backend("cpp").target
+
+
+def _verify_runner(profile: MachineProfile) -> VerifyRunner | None:
+    if profile.runner is None:
+        return None
+    return VerifyRunner(
+        kind=profile.runner.kind,
+        profile=profile.runner.profile,
+        args=profile.runner.args,
+    )
+
+def _cpp_cmakelists(profiles: tuple[EmittedProfile, ...], assets: RenderAssets) -> str:
+    slugs = tuple(slug(profile.profile.name) for profile in profiles)
+    ungated_slugs = tuple(
+        slug(profile.profile.name)
+        for profile in profiles
+        if profile.profile.auto_detect_gate is None
+    )
+    fallback = (
+        "scalar"
+        if "scalar" in ungated_slugs
+        else ungated_slugs[0]
+        if ungated_slugs
+        else ""
+    )
+    auto_choices = _cpp_profile_auto_choices(profiles)
+    rendered = assets.fill(
+        "cpp_cmakelists.txt.tmpl",
+        available_profiles=_cmake_list(slugs),
+        profile_choices=" ".join(
+            _cmake_quote(value)
+            for value in (*slugs, *_profile_alias_choices(profiles))
+        ),
+        profile_auto_choices=" ".join(
+            _cmake_quote(value) for value in auto_choices
+        ),
+        profile_aliases=_cpp_profile_aliases(profiles),
+        profile_auto_helpers=_cpp_profile_auto_helpers(profiles, assets),
+        profile_auto_hint=_cpp_profile_auto_hint(auto_choices),
+        fallback_profile=fallback,
+        profile_detection=_cpp_profile_detection(profiles, fallback, auto_gate=None),
+        profile_auto_modes=_cpp_profile_auto_modes(profiles),
+        profile_targets=_cpp_profile_targets(profiles),
+    )
+    return rendered.rstrip("\n") + "\n"
+
+
+def _profile_alias_choices(profiles: tuple[EmittedProfile, ...]) -> tuple[str, ...]:
+    return tuple(
+        profile.profile.name
+        for profile in profiles
+        if profile.profile.name != slug(profile.profile.name)
+    )
+
+
+def _cpp_profile_auto_choices(profiles: tuple[EmittedProfile, ...]) -> tuple[str, ...]:
+    return tuple(
+        _cpp_profile_auto_mode_name(gate)
+        for gate in _cpp_profile_auto_gates(profiles)
+    )
+
+
+def _cpp_profile_auto_hint(auto_choices: tuple[str, ...]) -> str:
+    if not auto_choices:
+        return ""
+    return " or one of: " + ", ".join(auto_choices)
+
+
+def _cpp_profile_auto_helpers(
+    profiles: tuple[EmittedProfile, ...],
+    assets: RenderAssets,
+) -> str:
+    if not _cpp_profile_auto_gates(profiles):
+        return ""
+    return assets.text("cpp_profile_auto_helpers.cmake").strip()
+
+
+def _cpp_profile_aliases(profiles: tuple[EmittedProfile, ...]) -> str:
+    lines: list[str] = []
+    for emitted_profile in profiles:
+        profile_name = emitted_profile.profile.name
+        profile_slug = slug(profile_name)
+        if profile_name == profile_slug:
+            continue
+        lines.append(f'if(_TSL_REQUESTED_PROFILE STREQUAL "{profile_name}")')
+        lines.append(f'  set(_TSL_REQUESTED_PROFILE "{profile_slug}")')
+        lines.append("endif()")
+    return "\n".join(lines)
+
+
+def _cpp_profile_targets(profiles: tuple[EmittedProfile, ...]) -> str:
+    blocks: list[str] = []
+    for emitted_profile in profiles:
+        profile_slug = slug(emitted_profile.profile.name)
+        target = f"tsl_profile_{profile_slug}"
+        lines = [
+            f"add_library({target} INTERFACE)",
+            f"add_library(tsl::{profile_slug} ALIAS {target})",
+            f"target_include_directories({target} INTERFACE",
+            '  "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>"',
+            '  "$<INSTALL_INTERFACE:include>"',
+            ")",
+            f"target_compile_features({target} INTERFACE cxx_std_17)",
+            (
+                f"target_compile_definitions({target} INTERFACE "
+                f"TSL_PROFILE_{profile_slug.upper()})"
+            ),
+        ]
+        flags = cpp_flags(emitted_profile.profile, emitted_profile.profile_family)
+        if flags:
+            lines.append(
+                f"target_compile_options({target} INTERFACE "
+                + " ".join(_cmake_cxx_flag(flag) for flag in flags)
+                + ")"
+            )
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
+
+
+def _cpp_profile_detection(
+    profiles: tuple[EmittedProfile, ...],
+    fallback_profile: str,
+    *,
+    auto_gate: str | None,
+) -> str:
+    blocks: list[str] = []
+    for emitted_profile in _auto_detection_order(profiles):
+        profile = emitted_profile.profile
+        profile_slug = slug(profile.name)
+        if profile.auto_detect_gate != auto_gate:
+            continue
+        if profile_slug == fallback_profile and not profile.features:
+            continue
+        source = _cpp_profile_detection_source(emitted_profile)
+        if source is None:
+            continue
+        variable = "TSL_CPU_HAS_" + profile_slug.upper()
+        block = "\n".join(
+            (
+                f"    check_cxx_source_runs([=[\n{source}\n]=] {variable})",
+                f"    if({variable})",
+                f'      set(TSL_SELECTED_PROFILE "{profile_slug}")',
+                "    endif()",
+            )
+        )
+        blocks.append(block)
+    return "\n".join(blocks)
+
+
+def _cpp_profile_auto_modes(profiles: tuple[EmittedProfile, ...]) -> str:
+    blocks: list[str] = []
+    for gate in _cpp_profile_auto_gates(profiles):
+        gated_profiles = tuple(
+            profile for profile in profiles if profile.profile.auto_detect_gate == gate
+        )
+        gated_slugs = tuple(slug(profile.profile.name) for profile in gated_profiles)
+        if not gated_slugs:
+            continue
+        mode = _cpp_profile_auto_mode_name(gate)
+        detection = _cpp_profile_detection(gated_profiles, "", auto_gate=gate)
+        lines = [
+            f'elseif(_TSL_REQUESTED_PROFILE STREQUAL "{mode}")',
+            '  set(TSL_SELECTED_PROFILE "")',
+            f'  _tsl_detect_profile_gate("{gate}" _TSL_GATE_READY _TSL_GATE_REASON)',
+            "  if(NOT _TSL_GATE_READY)",
+            (
+                f'    message(FATAL_ERROR "TSL_PROFILE={mode} requested, but '
+                f'{gate} auto-detection failed: ${{_TSL_GATE_REASON}}")'
+            ),
+            "  endif()",
+            "  if(CMAKE_CROSSCOMPILING)",
+            (
+                f'    message(FATAL_ERROR "TSL_PROFILE={mode} cannot run CPU '
+                'profile probes while cross-compiling")'
+            ),
+            "  else()",
+            "    include(CheckCXXSourceRuns)",
+        ]
+        if detection:
+            lines.append(detection)
+        lines.extend(
+            [
+                '    if(TSL_SELECTED_PROFILE STREQUAL "")',
+                (
+                    f'      message(FATAL_ERROR "TSL_PROFILE={mode} verified '
+                    f'{gate}, but no generated gated profile matched this CPU. '
+                    f'Available gated profiles: {", ".join(gated_slugs)}")'
+                ),
+                "    endif()",
+                f'    message(STATUS "TSL_PROFILE={mode} selected profile = ${{TSL_SELECTED_PROFILE}}")',
+                "  endif()",
+            ]
+        )
+        blocks.append("\n".join(lines))
+    return "\n".join(blocks)
+
+
+def _cpp_profile_auto_gates(profiles: tuple[EmittedProfile, ...]) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            {
+                profile.profile.auto_detect_gate
+                for profile in profiles
+                if profile.profile.auto_detect_gate is not None
+            }
+        )
+    )
+
+
+def _cpp_profile_auto_mode_name(gate: str) -> str:
+    return "auto-" + slug(gate).replace("_", "-")
+
+
+def _indent_lines(text: str, prefix: str) -> str:
+    return "\n".join(prefix + line if line else line for line in text.splitlines())
+
+
+def _auto_detection_order(
+    profiles: tuple[EmittedProfile, ...],
+) -> tuple[EmittedProfile, ...]:
+    return tuple(
+        sorted(
+            profiles,
+            key=lambda profile: (
+                _profile_family_sort_order(profile),
+                len(profile.profile.features),
+                slug(profile.profile.name),
+            ),
+        )
+    )
+
+
+def _profile_family_sort_order(profile: EmittedProfile) -> int:
+    if profile.profile_family is None:
+        return ProfileFamilyCapability(profile.profile.family).sort_order
+    return profile.profile_family.sort_order
+
+
+def _cpp_profile_detection_source(
+    emitted_profile: EmittedProfile,
+) -> str | None:
+    profile = emitted_profile.profile
+    capability = emitted_profile.profile_family
+    capability = capability or ProfileFamilyCapability(profile.family)
+    detection = capability.backend("cpp").detection
+    if detection is None:
+        return None
+    renderer = _CPP_DETECTION_RENDERERS.get(detection)
+    if renderer is None:
+        return None
+    guards = resolve_cpp_compile_guards(
+        used_extensions(emitted_profile.specializations("cpp")),
+        emitted_profile.extensions,
+    ).guards
+    return renderer(profile, guards)
+
+
+def _x86_profile_detection_source(
+    profile: MachineProfile,
+    guards: Sequence[BackendCompileGuard] = (),
+) -> str:
+    checks = [
+        f'__builtin_cpu_supports("{feature_spelling(feature, profile.alternatives)}")'
+        for feature in sorted(profile.features)
+    ]
+    if guards:
+        checks.append(_cpp_compile_guard_condition(guards))
+    condition = " && ".join(checks) if checks else "1"
+    return "\n".join(
+        (
+            "int main() {",
+            "#if (defined(__x86_64__) || defined(__i386__)) && (defined(__GNUC__) || defined(__clang__))",
+            "  __builtin_cpu_init();",
+            f"  return ({condition}) ? 0 : 1;",
+            "#else",
+            "  return 1;",
+            "#endif",
+            "}",
+        )
+    )
+
+
+def _aarch64_profile_detection_source(
+    profile: MachineProfile,
+    guards: Sequence[BackendCompileGuard] = (),
+) -> str | None:
+    if "sve" in profile.features:
+        guard_condition = (
+            f" && {_cpp_compile_guard_condition(guards)}" if guards else ""
+        )
+        return "\n".join(
+            (
+                "#if defined(__linux__) && defined(__aarch64__)",
+                "#  include <sys/auxv.h>",
+                "#  include <asm/hwcap.h>",
+                "#endif",
+                "int main() {",
+                (
+                    "#if defined(__linux__) && defined(__aarch64__) "
+                    f"&& defined(HWCAP_SVE){guard_condition}"
+                ),
+                "  return (getauxval(AT_HWCAP) & HWCAP_SVE) ? 0 : 1;",
+                "#else",
+                "  return 1;",
+                "#endif",
+                "}",
+            )
+        )
+    if "neon" in profile.features:
+        return "\n".join(
+            (
+                "int main() {",
+                "#if defined(__aarch64__)",
+                "  return 0;",
+                "#else",
+                "  return 1;",
+                "#endif",
+                "}",
+            )
+        )
+    return None
+
+
+_CPP_DETECTION_RENDERERS = {
+    "x86_builtin": _x86_profile_detection_source,
+    "aarch64_hwcaps": _aarch64_profile_detection_source,
+}
+
+assert frozenset(_CPP_DETECTION_RENDERERS) == CPP_PROFILE_DETECTION_KINDS
+
+
+def _cmake_list(values: Sequence[str]) -> str:
+    return " ".join(_cmake_quote(value) for value in values)
+
+
+def _cmake_quote(value: str) -> str:
+    translations: dict[int, str | int | None] = {
+        ord('"'): r"\"",
+        ord("\\"): r"\\",
+    }
+    escaped = value.translate(str.maketrans(translations))
+    return '"' + escaped + '"'
+
+
+def _cmake_cxx_flag(flag: str) -> str:
+    return f"$<$<CXX_COMPILER_ID:{_CMAKE_CXX_FEATURE_FLAG_COMPILERS}>:{flag}>"

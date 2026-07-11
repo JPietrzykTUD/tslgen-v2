@@ -5,8 +5,15 @@ from __future__ import annotations
 import os
 import stat
 import sys
+from dataclasses import replace
 from pathlib import Path
 
+from tslc.backend.capability import (
+    DocumentationSiteInput,
+    GeneratedDocumentationBuilder,
+    GeneratedDocumentationSpec,
+)
+from tslc.backend.rust_capability import RUST_BACKEND
 from tslc.maintenance.documentation import _run_subprocess, document_generated
 
 
@@ -130,6 +137,38 @@ def test_document_generated_reports_missing_generated_projects(tmp_path) -> None
     assert report.commands == ()
     assert any("C++ documentation facade not found" in error for error in report.errors)
     assert any("Rust Cargo.toml not found" in error for error in report.errors)
+
+
+def test_fake_backend_drives_generated_documentation(monkeypatch, tmp_path) -> None:
+    from tslc.backend import registry
+
+    root = tmp_path / "generated"
+    project = root / "fake-language"
+    project.mkdir(parents=True)
+    (project / "Cargo.toml").write_text("[package]\nname='fake'\n", encoding="utf-8")
+    fake = replace(
+        RUST_BACKEND,
+        backend_id="fake",
+        root_path="fake-language",
+        generated_documentation=GeneratedDocumentationSpec(
+            builder=GeneratedDocumentationBuilder.RUSTDOC,
+            project_path="fake-language",
+            output_path="fake-language/docs/target/doc",
+            site_input=DocumentationSiteInput.RUSTDOC,
+        ),
+    )
+    monkeypatch.setattr(registry, "BACKEND_CAPABILITIES", (fake,))
+    monkeypatch.setattr(registry, "_BY_ID", {"fake": fake})
+
+    report = document_generated(root, ("fake",), dry_run=True)
+
+    assert report.errors == ()
+    assert [(command.backend_id, command.step) for command in report.commands] == [
+        ("fake", "rustdoc"),
+        ("site", "sphinx"),
+    ]
+    assert report.commands[0].cwd == project
+    assert root / "fake-language/docs/target/doc" in report.outputs
 
 
 def test_document_generated_reports_command_traceback_tail(tmp_path) -> None:

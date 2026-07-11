@@ -7,7 +7,7 @@ from tslc.lower.context import LoweringSession, VectorValue
 from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
 from tslc.lower.region_handlers.common import _vector_spelling
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.render.model import RenderField
+from tslc.target_text import RenderField
 
 class QueryRegionLowerer:
     """``type(x)`` / ``value(x)`` in raw expression position -> the evaluated

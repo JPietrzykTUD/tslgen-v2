@@ -7,10 +7,8 @@ they should not each grow their own local copy of the same support matrix.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 
-from tslc.backend.registry import registered_backend_ids
 from tslc.catalog.model import RESULT_DIM_BASE, Extension
 from tslc.catalog.scalar_types import (
     same_scalar_width,
@@ -27,7 +25,6 @@ from tslc.catalog.target_families import TargetFamilyCatalog
 
 @dataclass(frozen=True, slots=True)
 class SupportPolicy:
-    backend_ids: frozenset[str]
     signature_kinds: SignatureKindCatalog
     mask_suffixes: tuple[tuple[str, str], ...]
     sized_vector_bits_kinds: frozenset[str]
@@ -76,17 +73,6 @@ class SupportPolicy:
     @property
     def scalable_deferred_signature_kinds(self) -> frozenset[str]:
         return self.signature_kinds.scalable_deferred_kinds
-
-    @property
-    def default_backend_ids(self) -> tuple[str, ...]:
-        return tuple(sorted(self.backend_ids))
-
-    def supports_backend(self, backend_id: str) -> bool:
-        return backend_id in self.backend_ids
-
-    def backend_label(self) -> str:
-        backends = sorted(self.backend_ids)
-        return " or ".join(backends)
 
     def supports_extension_family(
         self,
@@ -246,39 +232,6 @@ class SupportPolicy:
             register_is_base=register_is_base,
         )
 
-    def cpp_result_type(self, kind: str) -> str:
-        return self.signature_kinds.cpp_result_type(kind)
-
-    def cpp_param_type(self, kind: str, *, index_type: str | None = None) -> str:
-        return self.signature_kinds.cpp_param_type(kind, index_type=index_type)
-
-    def cpp_free_type(self, kind: str, *, base_type: str) -> str:
-        return self.signature_kinds.cpp_free_type(kind, base_type=base_type)
-
-    def rust_owner_type(self, kind: str, *, owner: str) -> str:
-        return self.signature_kinds.rust_owner_type(kind, owner=owner)
-
-    def rust_param_type(self, kind: str, *, owner: str) -> str:
-        return self.signature_kinds.rust_param_type(kind, owner=owner)
-
-    def rust_free_type(self, kind: str, *, base_type: str) -> str:
-        return self.signature_kinds.rust_free_type(kind, base_type=base_type)
-
-    def rust_concrete_type(
-        self,
-        kind: str,
-        *,
-        base_type: str,
-        register_type: str,
-        array_type: str,
-    ) -> str:
-        return self.signature_kinds.rust_concrete_type(
-            kind,
-            base_type=base_type,
-            register_type=register_type,
-            array_type=array_type,
-        )
-
     def is_maskable_signature(self, shape: SignatureShape) -> bool:
         return (
             shape.result_kind in self.maskable_result_kinds
@@ -313,12 +266,7 @@ class SupportPolicy:
     def type_bit_width_or_default(self, type_tag: str, default: int = 8) -> int:
         return scalar_bit_width_or_default(type_tag, default)
 
-    def supports_all_backends(self, backend_ids: Iterable[str]) -> bool:
-        return all(self.supports_backend(backend_id) for backend_id in backend_ids)
-
-
 DEFAULT_SUPPORT_POLICY = SupportPolicy(
-    backend_ids=frozenset(registered_backend_ids()),
     signature_kinds=DEFAULT_SIGNATURE_KINDS,
     mask_suffixes=(("pass_through", "_mask"), ("zero", "_maskz")),
     # Sized vectors carry a source-visible `LANES` parameter. Scalable vectors are native runtime

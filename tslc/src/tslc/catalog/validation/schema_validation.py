@@ -34,6 +34,14 @@ def validate_parsed_documents(
     diagnostics: list[Diagnostic],
     target_families: TargetFamilyCatalog = TargetFamilyCatalog(),
 ) -> None:
+    backend_ids = frozenset(
+        declaration.name
+        for document in parsed.documents
+        for declaration in document.declarations
+        if isinstance(declaration, ParsedBlockDeclaration)
+        and declaration.kind == "language"
+        and declaration.name
+    )
     type_group_fields: list[ParsedTslField] = []
     named_blocks: dict[tuple[str, str], ParsedBlockDeclaration] = {}
     target_family_fields: list[ParsedTslField] = []
@@ -42,17 +50,22 @@ def validate_parsed_documents(
         for declaration in document.declarations:
             if isinstance(declaration, ParsedBlockDeclaration):
                 _validate_named_block_duplicates(declaration, named_blocks, diagnostics)
-                _validate_block(declaration, diagnostics, target_families)
+                _validate_block(
+                    declaration,
+                    backend_ids,
+                    diagnostics,
+                    target_families,
+                )
                 if declaration.kind == "types":
                     type_group_fields.extend(declaration.fields)
             elif isinstance(declaration, ParsedPrimitiveDeclaration):
-                validate_primitive(declaration, diagnostics)
+                validate_primitive(declaration, backend_ids, diagnostics)
             elif (
                 isinstance(declaration, ParsedFieldDeclaration)
                 and declaration.field.key.text == "target_families"
             ):
                 target_family_fields.append(declaration.field)
-                validate_target_families(declaration.field, diagnostics)
+                validate_target_families(declaration.field, backend_ids, diagnostics)
 
     diagnose_duplicate_fields(
         type_group_fields,
@@ -99,18 +112,24 @@ def _validate_named_block_duplicates(
 
 def _validate_block(
     declaration: ParsedBlockDeclaration,
+    backend_ids: frozenset[str],
     diagnostics: list[Diagnostic],
     target_families: TargetFamilyCatalog,
 ) -> None:
     if declaration.kind == "extension":
         validate_known_fields(
             declaration.fields,
-            known_extension_fields(),
+            known_extension_fields(backend_ids),
             diagnostics,
             owner=f"extension {declaration.name or '<unnamed>'}",
         )
         diagnose_duplicate_fields(declaration.fields, diagnostics, label="extension field")
-        validate_extension_block(declaration, diagnostics, target_families)
+        validate_extension_block(
+            declaration,
+            backend_ids,
+            diagnostics,
+            target_families,
+        )
     elif declaration.kind == "types":
         for field in declaration.fields:
             validate_known_fields(

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from tslc.ir.region_syntax import segments_text, split_arg_groups
 from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession
 from tslc.lower.generation import evaluate_generation_int_segments
-from tslc.lower.region_handlers.common import _segment_text, _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.render.model import RenderField, literal_text, render_sequence
+from tslc.target_text import RenderField, literal_text, render_sequence
 
 
 class LanesLowerer:
@@ -27,7 +27,7 @@ class LanesLowerer:
             )
             return region.full_text
 
-        groups = _split_arg_groups(region.body)
+        groups = split_arg_groups(region.body)
         if len(groups) != 2:
             context.effects.skip(
                 "TSL-LOWER-LANES-ARITY",
@@ -36,7 +36,7 @@ class LanesLowerer:
             )
             return region.full_text
 
-        name = _segment_text(groups[0])
+        name = segments_text(groups[0])
         param = context.env.lane_list_params.get(name)
         if param is None:
             context.effects.skip(

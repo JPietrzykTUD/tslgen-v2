@@ -20,6 +20,7 @@ from tslc.diagnostics import has_errors
 from tslc.sources import SourceLoader
 from tslc.syntax.parser import TslParser
 from tslc.value_tests.coverage import parity_gaps
+from tslc.output.verify_model import BackendToolchain
 
 pytestmark = pytest.mark.generated_build
 
@@ -114,9 +115,13 @@ def test_neon_native_arithmetic_bitwise_extract_and_cast_value_tests_build_and_p
     report = verify_project(
         tmp_path,
         result.rendered.verify,
-        cpp_compiler=(str(zig), "c++"),
-        cpp_target="aarch64-linux-musl",
-        qemu_aarch64_path=qemu,
+        toolchains={
+            "cpp": BackendToolchain.create(
+                compiler=(str(zig), "c++"),
+                target="aarch64-linux-musl",
+            )
+        },
+        runner_paths={"qemu-aarch64": qemu},
         run_value_tests=True,
     )
     _assert_value_tests_ran(report, backends=("cpp", "rust"))
@@ -179,7 +184,7 @@ def test_shift_imask_value_tests_cover_x86_arm_and_oneapi(
     x86_report = verify_project(
         x86_root,
         x86_result.rendered.verify,
-        sde_path=str(sde),
+        runner_paths={"sde": str(sde)},
         run_value_tests=True,
     )
     _assert_value_tests_ran(x86_report, backends=("cpp",))
@@ -221,9 +226,13 @@ def test_shift_imask_value_tests_cover_x86_arm_and_oneapi(
     neon_report = verify_project(
         neon_root,
         neon_result.rendered.verify,
-        cpp_compiler=(str(zig), "c++"),
-        cpp_target="aarch64-linux-musl",
-        qemu_aarch64_path=qemu,
+        toolchains={
+            "cpp": BackendToolchain.create(
+                compiler=(str(zig), "c++"),
+                target="aarch64-linux-musl",
+            )
+        },
+        runner_paths={"qemu-aarch64": qemu},
         run_value_tests=True,
     )
     _assert_value_tests_ran(neon_report, backends=("cpp",))
@@ -265,7 +274,7 @@ def test_value_full_corpus_avx2_coverage_is_complete(
     }
     assert unpacked_cases[
         "store_mask_repr_f32_aligned_true_packed_false_mask_unpacked"
-    ].expected_type_tag == "ui32"
+    ].target.type_tag == "ui32"
     assert any(entry.status == "compile_only_emitted" for entry in plan.coverage)
     assert len(plan.coverage) >= 1000
 

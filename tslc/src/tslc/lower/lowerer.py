@@ -33,14 +33,15 @@ from tslc.catalog.scalar_types import scalar_bit_width_or_default
 from tslc.catalog.signatures import SignatureShape, parse_signature
 from tslc.diagnostics import Diagnostic, SourceSpan, sort_diagnostics
 from tslc.documentation import PrimitiveDocumentation, primitive_documentation
+from tslc.ir.region_syntax import parse_call_selector
 from tslc.ir.scan import scan
 from tslc.ir.segments import Region, Segment
 from tslc.lower.body_rendering import ExpressionRenderer, body_context, render_body
-from tslc.lower.calls import parse_call_selector
 from tslc.lower.context import (
     LaneListParameter,
     LoweringEnv,
     LoweringScope,
+    LoweringSession,
 )
 from tslc.lower._diagnostics import (
     implementation_source as _implementation_source,
@@ -48,6 +49,7 @@ from tslc.lower._diagnostics import (
     lowering_skip_diagnostic,
     primitive_signature_source as _primitive_signature_source,
 )
+from tslc.lower.dependencies import CallDependencyOrigin, origin_sort_key
 from tslc.lower.region_handlers import (
     DEFAULT_REGION_LOWERERS,
     RegionLowerer,
@@ -56,7 +58,7 @@ from tslc.lower.implementation_state import (
     ImplementationState,
 )
 from tslc.lower.target_vectors import TargetVector, resolve_target_vector
-from tslc.render.model import (
+from tslc.target_text import (
     LoweredBody,
     render_text,
 )
@@ -154,10 +156,12 @@ class LoweredSpecialization:
     # Feature flags required by this body, including call-graph propagation after
     # dependency pruning.
     required_features: frozenset[str] = frozenset()
+    call_dependency_origins: tuple[CallDependencyOrigin, ...] = ()
     implementation_state: ImplementationState = ImplementationState.UNKNOWN
     safety: ImplementationSafety = field(default_factory=ImplementationSafety)
     variant_bodies: tuple[LoweredImplementationVariant, ...] = ()
     documentation: PrimitiveDocumentation = field(default_factory=PrimitiveDocumentation)
+    source: SourceSpan | None = None
 
     @property
     def body_text(self) -> str:
@@ -213,7 +217,7 @@ class Lowerer:
     ) -> None:
         self._region_lowerers = region_lowerers
         self._support = support
-        self._catalog_facts_id: int | None = None
+        self._catalog_facts_catalog: Catalog | None = None
         self._catalog_facts: _LowererCatalogFacts | None = None
 
     def lower(
@@ -230,6 +234,13 @@ class Lowerer:
                 "TSL-LOWER-BAD-SIGNATURE",
                 f"could not parse signature {selected.primitive.signature!r}",
                 source=_primitive_signature_source(selected),
+            )
+        if not selected.extension.supports_backend(backend.backend_id):
+            return _skip(
+                "TSL-LOWER-BACKEND-UNSUPPORTED",
+                f"extension {selected.extension.isa_name!r} is not supported on "
+                f"{backend.backend_id}",
+                source=_implementation_source(selected),
             )
         deferred_kinds = self._support.deferred_signature_kinds_for_extension(
             shape, selected.extension
@@ -291,15 +302,6 @@ class Lowerer:
             )
         )
         if register_spelling is None:
-            if not selected.extension.supports_backend(backend.backend_id):
-                # The corpus declares this extension unemittable for this backend (e.g. SVE on
-                # Rust, which has no stable scalable intrinsics): a coverage gap, not a failure.
-                return _skip(
-                    "TSL-LOWER-BACKEND-UNSUPPORTED",
-                    f"extension {selected.extension.isa_name!r} is not supported on "
-                    f"{backend.backend_id}",
-                    source=_implementation_source(selected),
-                )
             return _error(
                 "TSL-LOWER-NO-REGISTER-TYPE",
                 f"no {backend.backend_id} register-type spelling for "
@@ -409,7 +411,7 @@ class Lowerer:
             else context
         )
         param_type_overrides = _param_type_overrides(
-            selected.primitive,
+            selected,
             parameters,
             param_context,
             self._region_lowerers,
@@ -439,7 +441,7 @@ class Lowerer:
         safety = selected.implementation.safety.merge(default_body.safety)
         body = LoweredBody.from_render_text(
             default_body.rendered,
-            backend_id=backend.backend_id,
+            unsafe_block_renderer=backend.syntax.render_unsafe_block,
             requires_unsafe=safety.internal_unsafe,
         )
 
@@ -453,8 +455,17 @@ class Lowerer:
         variant_bodies: list[LoweredImplementationVariant] = []
         effective_safety = safety
         diagnostics = [*default_body.diagnostics]
+        call_dependency_origins = set(context.effects.call_dependency_origins)
         for variant, variant_segments in variant_sources:
-            variant_context = body_context(env, scope, shape, self._support)
+            variant_context = body_context(
+                replace(
+                    env,
+                    dependency_origin=f"implementation variant {variant.name!r}",
+                ),
+                scope,
+                shape,
+                self._support,
+            )
             rendered_variant = render_body(
                 selected=selected,
                 shape=shape,
@@ -476,12 +487,15 @@ class Lowerer:
             )
             effective_safety = effective_safety.merge(variant_safety)
             diagnostics.extend(rendered_variant.diagnostics)
+            call_dependency_origins.update(
+                variant_context.effects.call_dependency_origins
+            )
             variant_bodies.append(
                 LoweredImplementationVariant(
                     name=variant.name,
                     body=LoweredBody.from_render_text(
                         rendered_variant.rendered,
-                        backend_id=backend.backend_id,
+                        unsafe_block_renderer=backend.syntax.render_unsafe_block,
                         requires_unsafe=variant_safety.internal_unsafe,
                     ),
                     implementation_state=rendered_variant.implementation_state,
@@ -562,6 +576,9 @@ class Lowerer:
             mask_policy=selected.primitive.attributes.get("mask"),
             lane_list_params=tuple(context.env.lane_list_params.values()),
             required_features=selected.required_features,
+            call_dependency_origins=tuple(
+                sorted(call_dependency_origins, key=origin_sort_key)
+            ),
             implementation_state=default_body.implementation_state,
             safety=effective_safety,
             variant_bodies=tuple(variant_bodies),
@@ -570,6 +587,7 @@ class Lowerer:
                 detailed=selected.primitive.detailed_description,
                 semantics=selected.primitive.semantics,
             ),
+            source=_implementation_source(selected),
         )
         return LoweringResult(
             specialization=specialization,
@@ -577,10 +595,9 @@ class Lowerer:
         )
 
     def _facts_for(self, catalog: Catalog) -> _LowererCatalogFacts:
-        catalog_id = id(catalog)
-        if self._catalog_facts_id != catalog_id or self._catalog_facts is None:
+        if self._catalog_facts_catalog is not catalog or self._catalog_facts is None:
             self._catalog_facts = _LowererCatalogFacts.build(catalog, self._support)
-            self._catalog_facts_id = catalog_id
+            self._catalog_facts_catalog = catalog
         return self._catalog_facts
 
 
@@ -831,13 +848,14 @@ def effective_param_types(spec: LoweredSpecialization) -> tuple[str, ...]:
 
 
 def _param_type_overrides(
-    primitive: Primitive,
+    selected: SelectedImplementation,
     parameters: tuple[str, ...],
     context: LoweringSession,
     region_lowerers: tuple[RegionLowerer, ...],
 ) -> tuple[str | None, ...]:
+    primitive = selected.primitive
     overrides: list[str | None] = []
-    renderer = ExpressionRenderer(context, region_lowerers)
+    renderer = ExpressionRenderer(context, selected, region_lowerers)
     for parameter_name in parameters:
         rule = next(
             (

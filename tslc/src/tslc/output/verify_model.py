@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 import shlex
+from types import MappingProxyType
 from typing import Protocol
 
-from tslc.diagnostics import Diagnostic
+from tslc.diagnostics import Diagnostic, Severity
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,12 +25,10 @@ class VerifyProfile:
     file_stem: str
     family: str = "generic"
     compile_modes: frozenset[str] = frozenset()
-    # C++ extra compile flags (e.g. ("-mavx2",)); Rust target features (e.g. ("+avx2",)).
-    cpp_flags: tuple[str, ...] = ()
-    cpp_target: str | None = None
-    rust_target_features: tuple[str, ...] = ()
-    rust_target: str | None = None
-    rust_linker: str | None = None
+    flags: tuple[str, ...] = ()
+    target_features: tuple[str, ...] = ()
+    target: str | None = None
+    linker: str | None = None
     # Optional runner profile used to run value tests for this profile.
     runner: VerifyRunner | None = None
 
@@ -47,48 +46,71 @@ class VerifyProject:
 
 
 @dataclass(frozen=True, slots=True)
-class BuildVerifierConfig:
-    """Optional toolchain configuration for after-write verification."""
+class BackendToolchain:
+    """Caller-supplied toolchain overrides for one registered backend."""
 
-    cpp_compiler: tuple[str, ...] | None = None
-    rust_compiler: str | None = None
-    run_value_tests: bool = False
-    sde_path: str | None = None
-    qemu_aarch64_path: str | None = None
-    wasmtime_path: str | None = None
-    cpp_target: str | None = None
-    rust_target: str | None = None
-    rust_linker: str | None = None
+    compiler: tuple[str, ...] | None = None
+    target: str | None = None
+    linker: str | None = None
 
     @classmethod
     def create(
         cls,
         *,
-        cpp_compiler: str | Sequence[str] | None = None,
-        rust_compiler: str | None = None,
-        run_value_tests: bool = False,
-        sde_path: str | None = None,
-        qemu_aarch64_path: str | None = None,
-        wasmtime_path: str | None = None,
-        cpp_target: str | None = None,
-        rust_target: str | None = None,
-        rust_linker: str | None = None,
-    ) -> "BuildVerifierConfig":
-        normalized_sde_path = _normalize_compiler_executable(sde_path)
-        normalized_qemu_aarch64_path = _normalize_compiler_executable(qemu_aarch64_path)
-        normalized_wasmtime_path = _normalize_compiler_executable(wasmtime_path)
-        normalized_cpp_compiler = _normalize_compiler_command(cpp_compiler)
+        compiler: str | Sequence[str] | None = None,
+        target: str | None = None,
+        linker: str | None = None,
+    ) -> "BackendToolchain":
         return cls(
-            cpp_compiler=normalized_cpp_compiler,
-            rust_compiler=_normalize_compiler_executable(rust_compiler),
-            run_value_tests=run_value_tests,
-            sde_path=normalized_sde_path,
-            qemu_aarch64_path=normalized_qemu_aarch64_path,
-            wasmtime_path=normalized_wasmtime_path,
-            cpp_target=_normalize_compiler_executable(cpp_target),
-            rust_target=_normalize_compiler_executable(rust_target),
-            rust_linker=_normalize_compiler_executable(rust_linker),
+            compiler=_normalize_compiler_command(compiler),
+            target=_normalize_compiler_executable(target),
+            linker=_normalize_compiler_executable(linker),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class BuildVerifierConfig:
+    """Backend-keyed toolchain and runner configuration for verification."""
+
+    toolchains: Mapping[str, BackendToolchain] = field(default_factory=dict)
+    runner_paths: Mapping[str, str] = field(default_factory=dict)
+    run_value_tests: bool = False
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "toolchains",
+            MappingProxyType(dict(sorted(self.toolchains.items()))),
+        )
+        object.__setattr__(
+            self,
+            "runner_paths",
+            MappingProxyType(dict(sorted(self.runner_paths.items()))),
+        )
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        toolchains: Mapping[str, BackendToolchain] | None = None,
+        runner_paths: Mapping[str, str] | None = None,
+        run_value_tests: bool = False,
+    ) -> "BuildVerifierConfig":
+        return cls(
+            toolchains=toolchains or {},
+            runner_paths={
+                kind: normalized
+                for kind, path in (runner_paths or {}).items()
+                if (normalized := _normalize_compiler_executable(path)) is not None
+            },
+            run_value_tests=run_value_tests,
+        )
+
+    def toolchain(self, backend_id: str) -> BackendToolchain:
+        return self.toolchains.get(backend_id, BackendToolchain())
+
+    def runner_path(self, kind: str) -> str | None:
+        return self.runner_paths.get(kind)
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,7 +127,7 @@ class BuildCommand:
     argv: tuple[str, ...]
     cwd: Path
     env: tuple[BuildCommandEnvironment, ...] = ()
-    severity_on_failure: str = "error"
+    severity_on_failure: Severity = "error"
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +174,7 @@ __all__ = [
     "BuildCommandRunner",
     "BuildVerificationReport",
     "BuildVerifierConfig",
+    "BackendToolchain",
     "VerifyBackend",
     "VerifyProfile",
     "VerifyProject",

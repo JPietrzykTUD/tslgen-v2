@@ -20,7 +20,7 @@ def _generic_golden(case: ValueTestCasePlan) -> str:
         f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
     arg_names = []
-    for position, values in enumerate(case.vector_inputs):
+    for position, values in enumerate(case.inputs.vectors):
         literals = rust_literal_list(values, case.type_tag)
         lines.append(f"        let in{position}: [{case.base_spelling}; {case.lanes}] = [{literals}];")
         lines.append(
@@ -30,8 +30,8 @@ def _generic_golden(case: ValueTestCasePlan) -> str:
         lines.append(f"        for i in 0..{case.lanes} {{ a{position}[i] = in{position}[i]; }}")
         arg_names.append(f"a{position}")
     call = f"{rust_raw_identifier(case.call_name)}::<Vec>({', '.join(arg_names)})"
-    if case.result_kind == "m":
-        bits = ", ".join("true" if token_truthy(v) else "false" for v in case.expected)
+    if case.invocation.result_kind == "m":
+        bits = ", ".join("true" if token_truthy(v) else "false" for v in case.expectation.values)
         lines.append(f"        let expected: [bool; {case.lanes}] = [{bits}];")
         lines.append(f"        let result = {call};")
         lines.append(
@@ -39,7 +39,7 @@ def _generic_golden(case: ValueTestCasePlan) -> str:
             f'expected[i], "{case.case_name} lane {{}}", i); }}'
         )
     else:
-        expected = rust_literal_list(case.expected, case.type_tag)
+        expected = rust_literal_list(case.expectation.values, case.type_tag)
         lines.append(f"        let expected: [{case.base_spelling}; {case.lanes}] = [{expected}];")
         lines.append(f"        let result = {call};")
         lines.append(_lane_assert(case, case.lanes, "result"))
@@ -54,7 +54,7 @@ def _immediate(case: ValueTestCasePlan) -> str:
         f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
     arg_names = []
-    for position, values in enumerate(case.vector_inputs):
+    for position, values in enumerate(case.inputs.vectors):
         literals = rust_literal_list(values, case.type_tag)
         lines.append(f"        let in{position}: [{case.base_spelling}; {case.lanes}] = [{literals}];")
         lines.append(
@@ -64,10 +64,10 @@ def _immediate(case: ValueTestCasePlan) -> str:
         lines.append(f"        for i in 0..{case.lanes} {{ a{position}[i] = in{position}[i]; }}")
         arg_names.append(f"a{position}")
     template_args = ["Vec"]
-    if case.immediate_value is not None:
-        template_args.append(case.immediate_value)
-    template_args.extend(case.generic_defaults)
-    expected = rust_literal_list(case.expected, case.type_tag)
+    if case.invocation.immediate is not None:
+        template_args.append(case.invocation.immediate)
+    template_args.extend(case.invocation.generic_defaults)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
     lines.append(f"        let expected: [{case.base_spelling}; {case.lanes}] = [{expected}];")
     lines.append(
         f"        let result = {rust_raw_identifier(case.call_name)}"
@@ -87,10 +87,10 @@ def _array_to_vector(case: ValueTestCasePlan) -> str:
 
 
 def _array_to_vector_like(case: ValueTestCasePlan, local_name: str) -> str:
-    literals = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = rust_literal_list(case.expected, case.type_tag)
-    input_lanes = len(case.vector_inputs[0])
-    expected_lanes = len(case.expected)
+    literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
+    input_lanes = len(case.inputs.vectors[0])
+    expected_lanes = len(case.expectation.values)
     return "\n".join(
         [
             "    #[test]",
@@ -108,10 +108,10 @@ def _array_to_vector_like(case: ValueTestCasePlan, local_name: str) -> str:
 
 
 def _vector_to_array(case: ValueTestCasePlan) -> str:
-    literals = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = rust_literal_list(case.expected, case.type_tag)
-    input_lanes = len(case.vector_inputs[0])
-    expected_lanes = len(case.expected)
+    literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
+    input_lanes = len(case.inputs.vectors[0])
+    expected_lanes = len(case.expectation.values)
     return "\n".join(
         [
             "    #[test]",
@@ -129,13 +129,13 @@ def _vector_to_array(case: ValueTestCasePlan) -> str:
 
 
 def _mask_to_vector(case: ValueTestCasePlan) -> str:
-    expected = rust_literal_list(case.expected, case.type_tag)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
     return "\n".join(
         [
             "    #[test]",
             f"    fn {case.function_name}() {{",
             f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
-            f"        let mask: <Vec as SimdVector>::MaskType = {case.mask_inputs[0]}u64;",
+            f"        let mask: <Vec as SimdVector>::MaskType = {case.inputs.masks[0]}u64;",
             f"        let expected: [{case.base_spelling}; {case.lanes}] = [{expected}];",
             f"        let result = {rust_raw_identifier(case.call_name)}::<Vec>(mask);",
             _lane_assert(case, case.lanes, "result"),
@@ -145,7 +145,7 @@ def _mask_to_vector(case: ValueTestCasePlan) -> str:
 
 
 def _masked(case: ValueTestCasePlan) -> str:
-    expected = rust_literal_list(case.expected, case.type_tag)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
@@ -163,7 +163,7 @@ def _masked(case: ValueTestCasePlan) -> str:
 
 
 def _mask_result(case: ValueTestCasePlan) -> str:
-    expected = int(case.expected[0])
+    expected = int(case.expectation.values[0])
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
@@ -185,14 +185,14 @@ def _mask_result(case: ValueTestCasePlan) -> str:
 
 
 def _mask_logic(case: ValueTestCasePlan) -> str:
-    expected = int(case.expected[0])
+    expected = int(case.expectation.values[0])
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
         f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
     arg_names = []
-    for position, mask in enumerate(case.mask_inputs):
+    for position, mask in enumerate(case.inputs.masks):
         lines.append(
             f"        let m{position}: <Vec as SimdVector>::MaskType = {mask}u64;"
         )
@@ -212,8 +212,8 @@ def _mask_logic(case: ValueTestCasePlan) -> str:
 
 
 def _broadcast(case: ValueTestCasePlan) -> str:
-    value = rust_literal(case.scalar_input or "0", case.type_tag)
-    expected = rust_literal_list(case.expected, case.type_tag)
+    value = rust_literal(case.inputs.scalar or "0", case.type_tag)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
     return "\n".join(
         [
             "    #[test]",
@@ -229,25 +229,35 @@ def _broadcast(case: ValueTestCasePlan) -> str:
 
 
 def _mask_store(case: ValueTestCasePlan) -> str:
-    packed = case.result_kind == "packed"
+    packed = case.invocation.result_kind == "packed"
+    target = case.target
+    memory = case.memory
     storage_type = (
         "<Vec as SimdVector>::ImaskType"
         if packed
-        else case.target_base_spelling or case.base_spelling
+        else (target.base_spelling if target is not None else None)
+        or case.base_spelling
     )
-    expected_type = "ui64" if packed else case.expected_type_tag or case.type_tag
-    expected = rust_literal_list(case.expected, expected_type)
+    expected_type = (
+        "ui64"
+        if packed
+        else (target.type_tag if target is not None else None) or case.type_tag
+    )
+    expected = rust_literal_list(case.expectation.values, expected_type)
     axis = axis_args(case)
-    buflen = case.buffer_length or len(case.expected)
+    buflen = (
+        memory.buffer_length if memory is not None else None
+    ) or len(case.expectation.values)
+    buffer_offset = memory.buffer_offset if memory is not None else 0
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
         f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
-        f"        let mask: <Vec as SimdVector>::MaskType = {case.mask_inputs[0]}u64;",
+        f"        let mask: <Vec as SimdVector>::MaskType = {case.inputs.masks[0]}u64;",
         f"        let mut buf: [{storage_type}; {buflen}] = [Default::default(); {buflen}];",
         f"        let expected: [{storage_type}; {buflen}] = [{expected}];",
         f"        unsafe {{ {rust_raw_identifier(case.call_name)}::<Vec{axis}>(",
-        f"            buf.as_mut_ptr().add({case.buffer_offset}) as *mut <Vec as SimdVector>::BaseType,",
+        f"            buf.as_mut_ptr().add({buffer_offset}) as *mut <Vec as SimdVector>::BaseType,",
         "            mask,",
         "        ); }",
         f"        for i in 0..{buflen} {{ assert!(buf[i].lane_eq(expected[i]), ",
@@ -268,9 +278,9 @@ def _scalar_result(case: ValueTestCasePlan) -> str:
     ]
     args = append_call_args(lines, case)
     template_args = ["Vec"]
-    if case.index_value is not None:
-        template_args.append(case.index_value)
-    template_args.extend(case.generic_defaults)
+    if case.index is not None and case.index.value is not None:
+        template_args.append(case.index.value)
+    template_args.extend(case.invocation.generic_defaults)
     lines.append(
         f"        let result = {rust_raw_identifier(case.call_name)}"
         f"::<{', '.join(template_args)}>({', '.join(args)});"
@@ -285,7 +295,7 @@ def _scalar_result(case: ValueTestCasePlan) -> str:
 
 
 def _scalar_vector(case: ValueTestCasePlan) -> str:
-    expected = rust_literal_list(case.expected, case.type_tag)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
@@ -303,8 +313,8 @@ def _scalar_vector(case: ValueTestCasePlan) -> str:
 
 
 def _reduction(case: ValueTestCasePlan) -> str:
-    values = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = rust_literal(case.expected[0], case.type_tag)
+    values = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal(case.expectation.values[0], case.type_tag)
     return "\n".join(
         [
             "    #[test]",
@@ -330,7 +340,7 @@ def _compile_only(case: ValueTestCasePlan) -> str:
     ]
     args = append_call_args(lines, case)
     call = f"{rust_raw_identifier(case.call_name)}::<Vec>({', '.join(args)})"
-    if case.result_kind == "void":
+    if case.invocation.result_kind == "void":
         lines.append(f"        {call};")
     else:
         lines.append(f"        let result = {call};")

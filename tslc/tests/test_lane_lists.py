@@ -6,7 +6,7 @@ import pytest
 
 from tslc.backend.cpp import CppBackend
 from tslc.backend.rust import RustBackend
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.model import Catalog, Extension, Implementation, Primitive
 from tslc.lower.lowerer import Lowerer
 from tslc.select.selector import SelectedImplementation
@@ -24,7 +24,7 @@ def _lane_list_catalog(
         if family == "x86" and vector_bits == 128
         else {}
     )
-    backend_supported = {"cpp": True} if family == "x86" else {}
+    backend_supported = {"cpp": True, "rust": True}
     extension = Extension(
         name=extension_name,
         isa_name=extension_name,
@@ -81,7 +81,7 @@ def _loop_catalog(
         if vector_bits_kind == "fixed" and vector_bits == 128
         else {}
     )
-    backend_supported = {"cpp": True} if vector_bits_kind == "fixed" else {}
+    backend_supported = {"cpp": True}
     extension = Extension(
         name=extension_name,
         isa_name=extension_name,

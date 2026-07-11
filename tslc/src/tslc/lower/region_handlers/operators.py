@@ -9,11 +9,11 @@ the same template machinery.) A genuinely portable operator stays raw text (e.g.
 
 from __future__ import annotations
 
+from tslc.ir.region_syntax import split_arg_groups
 from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession
-from tslc.lower.region_handlers.common import _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.render.model import RenderField, RenderText, render_text, trimmed_text
+from tslc.target_text import RenderField, RenderText, render_text, trimmed_text
 
 
 class OpLowerer:
@@ -24,7 +24,7 @@ class OpLowerer:
     ) -> RenderField:
         name = region.selector_text.strip()
         args: list[RenderText] = []
-        for group in _split_arg_groups(region.body):
+        for group in split_arg_groups(region.body):
             rendered = render(group)
             if render_text(rendered).strip():
                 args.append(trimmed_text(rendered))

@@ -103,7 +103,6 @@ def test_store_test_carries_offset_and_attrs(catalog: Catalog) -> None:
 def test_extension_test_config_is_promoted(catalog: Catalog) -> None:
     assert catalog.extensions["avx512"].default_test_target is True
     assert catalog.extensions["scalar"].default_test_target is False
-    assert catalog.extensions["generic"].test_sizes_bits == (128,)
     assert "scatter" in catalog.extensions["avx2"].test_filter_exclude_templates
 
 

@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tslc.api import _ARITH_TYPE_TAGS, generate_project
+from tslc.backend.registry import registered_backend_ids
 from tslc.diagnostics import has_errors
 from tslc.maintenance.coverage_inventory import (
     PROFILES,
@@ -40,7 +41,7 @@ from tslc.maintenance.coverage_inventory import (
     _category,
 )
 
-_BACKENDS = ("cpp", "rust")
+_BACKENDS = registered_backend_ids()
 # A lockfile-style committed snapshot: machine-generated, diffed by this gate, not hand-edited.
 # It lives at the repo root (it describes whole-repo generation state, spanning tsldata/ and
 # supplementary/), not under tslc/ (source) or docs/ (prose evidence).
@@ -138,13 +139,25 @@ def compute_snapshot(
     emitted: dict[SlotKey, int] = {}
     skipped: dict[SlotKey, int] = {}
     reasons: dict[SlotKey, set[str]] = {}
-    for entry in result.coverage:
-        key = SlotKey(entry.profile, entry.backend, entry.primitive, entry.extension, entry.type_tag)
+    for coverage_entry in result.coverage:
+        key = SlotKey(
+            coverage_entry.profile,
+            coverage_entry.backend,
+            coverage_entry.primitive,
+            coverage_entry.extension,
+            coverage_entry.type_tag,
+        )
         emitted[key] = emitted.get(key, 0) + 1
-    for entry in result.skipped:
-        key = SlotKey(entry.profile, entry.backend, entry.primitive, entry.extension, entry.type_tag)
+    for skipped_entry in result.skipped:
+        key = SlotKey(
+            skipped_entry.profile,
+            skipped_entry.backend,
+            skipped_entry.primitive,
+            skipped_entry.extension,
+            skipped_entry.type_tag,
+        )
         skipped[key] = skipped.get(key, 0) + 1
-        reasons.setdefault(key, set()).add(_category(entry.reason))
+        reasons.setdefault(key, set()).add(_category(skipped_entry.reason))
 
     slots: dict[SlotKey, SlotRecord] = {}
     for key in emitted.keys() | skipped.keys():

@@ -498,11 +498,53 @@ def test_unknown_extension_backend_metadata_fields_are_diagnosed() -> None:
 
 
 def test_extension_backend_field_names_follow_supported_backends() -> None:
-    assert {"cpp", "rust"} <= known_extension_fields()
+    assert {"cpp", "rust"} <= known_extension_fields(("cpp", "rust"))
     assert {"active_when", "supersedes"} <= known_extension_fields()
     assert "lscpu_flags" not in known_extension_fields()
     assert "zig" in known_extension_fields(("zig",))
     assert "zig" not in known_extension_fields()
+    assert "vendor" not in known_extension_fields()
+
+
+@pytest.mark.parametrize(
+    ("fields", "field_name"),
+    (
+        ('  vendor "intel"\n', "vendor"),
+        ("  test_sizes_bits [128]\n", "test_sizes_bits"),
+        ("  signature_support:\n    exclude []\n", "signature_support"),
+        (
+            '  mask_type_policy:\n    kind "lane_bitmask"\n    width "lanes"\n',
+            "width",
+        ),
+        (
+            '  integral_mask_type_policy:\n    kind "unsigned_scalar"\n'
+            '    cpp "std::uint64_t"\n',
+            "cpp",
+        ),
+        ("  size_parameter:\n    kind \"lanes\"\n    name \"LANES\"\n", "kind"),
+        (
+            '  vector_register_type_policy:\n    kind "fixed_array"\n'
+            '    element "base_type"\n',
+            "element",
+        ),
+        (
+            "  cpp:\n    supported true\n"
+            '    test_suite_name "LegacySuite"\n',
+            "test_suite_name",
+        ),
+    ),
+)
+def test_inert_extension_fields_are_rejected(fields: str, field_name: str) -> None:
+    source = _base_source().replace("language cpp:\n", fields + "language cpp:\n")
+
+    diagnostics = _diagnostics(source)
+
+    unknown = [
+        diagnostic
+        for diagnostic in diagnostics
+        if diagnostic.code == "TSL-CATALOG-UNKNOWN-FIELD"
+    ]
+    assert any(field_name in diagnostic.message for diagnostic in unknown)
 
 
 def test_extension_backend_compile_guards_are_validated() -> None:
@@ -594,10 +636,13 @@ def test_target_family_data_makes_new_extension_family_additive() -> None:
         "    riscv:\n"
         "      extension_families [rvv]\n"
         "      sort_order 30\n"
-        "      cpp_feature_flags false\n"
-        '      cpp_target "riscv64-linux-gnu"\n'
-        "      rust_target_features false\n"
-        '      rust_target "riscv64gc-unknown-linux-gnu"\n'
+        "      backends:\n"
+        "        cpp:\n"
+        "          feature_flags false\n"
+        '          target "riscv64-linux-gnu"\n'
+        "        rust:\n"
+        "          feature_flags false\n"
+        '          target "riscv64gc-unknown-linux-gnu"\n'
         "types:\n"
         "  ints {types [si32]}\n"
         "extension scalar:\n"
@@ -674,34 +719,6 @@ def test_missing_backend_spellings_are_diagnosed() -> None:
 
     assert [d.code for d in diagnostics] == ["TSL-CATALOG-MISSING-TYPE-SPELLING"]
     assert "si32" in diagnostics[0].message
-
-
-def test_exact_lane_bitmask_requires_cpp_backend_spelling() -> None:
-    diagnostics = _diagnostics(
-        "types:\n"
-        "  ints {types [si32]}\n"
-        "extension scalar:\n"
-        '  extension_name "scalar"\n'
-        '  family "scalar"\n'
-        "  mask_type_policy:\n"
-        '    kind "exact_lane_bitmask"\n'
-        "  cpp:\n"
-        "    supported true\n"
-        "language cpp:\n"
-        '  s32 {type "int32_t"}\n'
-        "prim<v:=v> id(data):\n"
-        "  impls:\n"
-        "    scalar:\n"
-        "      ints:\n"
-        "        implementation:\n"
-        '          tsil "complete(data);"\n',
-        backends=("cpp",),
-    )
-
-    assert {
-        d.code for d in diagnostics
-    } == {"TSL-CATALOG-MISSING-MASK-BACKEND-SPELLING"}
-    assert "backend_spelling.cpp" in diagnostics[0].message
 
 
 def test_bad_extension_inheritance_is_diagnosed() -> None:
@@ -1146,13 +1163,13 @@ def test_machine_profile_compile_modes_are_validated(tmp_path: Path) -> None:
     }
 
 
-def test_machine_profile_cpp_flags_are_validated(tmp_path: Path) -> None:
+def test_machine_profile_backend_flags_are_validated(tmp_path: Path) -> None:
     path = tmp_path / "machine_profiles.json"
     path.write_text(
         '{\n'
         '  "aarch64": [\n'
-        '    {"name": "neon", "target_features": "neon", "cpp_flags": []},\n'
-        '    {"name": "bad", "target_features": "sve", "cpp_flags": "-march=armv8-a+sve"}\n'
+        '    {"name": "neon", "target_features": "neon", "backend_flags": {"cpp": []}},\n'
+        '    {"name": "bad", "target_features": "sve", "backend_flags": {"cpp": "-march=armv8-a+sve"}}\n'
         '  ]\n'
         '}\n',
         encoding="utf-8",
@@ -1160,7 +1177,7 @@ def test_machine_profile_cpp_flags_are_validated(tmp_path: Path) -> None:
 
     result = load_machine_profiles_checked(path)
 
-    assert result.profiles["neon"].cpp_flags == ()
+    assert result.profiles["neon"].flags_for_backend("cpp") == ()
     assert "TSL-PROFILE-MALFORMED-FIELD" in {d.code for d in result.diagnostics}
 
 

@@ -1,4 +1,4 @@
-"""Typed render values for lowered backend text.
+"""Typed target-text values shared by lowering, backends, and project rendering.
 
 These values keep semantic substitutions explicit. Literal text is emitted as-is;
 placeholders name compiler-known concepts that a backend renderer may rebind in a
@@ -9,12 +9,13 @@ not the SIMD vector.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Literal, Protocol
 
 RenderPlaceholderKind = Literal[
+    "current_owner",
     "current_vector",
     "current_register",
     "current_base",
@@ -23,6 +24,7 @@ RenderPlaceholderKind = Literal[
     "target_vector",
     "target_register",
 ]
+UnsafeBlockRenderer = Callable[[str], str]
 
 
 class RenderError(ValueError):
@@ -35,7 +37,8 @@ class TemplateRenderError(RenderError):
 
 @dataclass(frozen=True, slots=True)
 class RenderContext:
-    backend_id: str
+    unsafe_block_renderer: UnsafeBlockRenderer | None = None
+    current_owner: str | None = None
     current_vector: str | None = None
     current_register: str | None = None
     current_base: str | None = None
@@ -68,6 +71,7 @@ class RenderPlaceholder:
         if context is None:
             return self.default
         value = {
+            "current_owner": context.current_owner,
             "current_vector": context.current_vector,
             "current_register": context.current_register,
             "current_base": context.current_base,
@@ -103,10 +107,10 @@ class UnsafeBlockText:
         rendered = self.content.render(context)
         if (
             context is not None
-            and context.backend_id == "rust"
+            and context.unsafe_block_renderer is not None
             and not context.in_unsafe_block
         ):
-            return f"unsafe {{ {rendered} }}"
+            return context.unsafe_block_renderer(rendered)
         return rendered
 
 
@@ -176,16 +180,24 @@ class TemplateApplication:
 @dataclass(frozen=True, slots=True)
 class LoweredBody:
     content: RenderText
-    backend_id: str
+    unsafe_block_renderer: UnsafeBlockRenderer | None = None
     requires_unsafe: bool = False
+
+    def __post_init__(self) -> None:
+        if self.requires_unsafe and self.unsafe_block_renderer is None:
+            raise ValueError("an unsafe lowered body requires backend unsafe framing")
 
     @classmethod
     def from_text(
-        cls, text: str, *, backend_id: str, requires_unsafe: bool = False
+        cls,
+        text: str,
+        *,
+        unsafe_block_renderer: UnsafeBlockRenderer | None = None,
+        requires_unsafe: bool = False,
     ) -> "LoweredBody":
         return cls(
             content=LiteralText(text),
-            backend_id=backend_id,
+            unsafe_block_renderer=unsafe_block_renderer,
             requires_unsafe=requires_unsafe,
         )
 
@@ -194,20 +206,25 @@ class LoweredBody:
         cls,
         content: str | RenderText,
         *,
-        backend_id: str,
+        unsafe_block_renderer: UnsafeBlockRenderer | None = None,
         requires_unsafe: bool = False,
     ) -> "LoweredBody":
         return cls(
             content=as_render_text(content),
-            backend_id=backend_id,
+            unsafe_block_renderer=unsafe_block_renderer,
             requires_unsafe=requires_unsafe,
         )
 
     def render(self, context: RenderContext | None = None) -> str:
-        active_context = context or RenderContext(backend_id=self.backend_id)
-        if self.backend_id == "rust" and self.requires_unsafe:
+        active_context = context or RenderContext()
+        if self.unsafe_block_renderer is not None:
+            active_context = replace(
+                active_context,
+                unsafe_block_renderer=self.unsafe_block_renderer,
+            )
+        if self.requires_unsafe and active_context.unsafe_block_renderer is not None:
             body = self.content.render(replace(active_context, in_unsafe_block=True))
-            return f"unsafe {{ {body} }}"
+            return active_context.unsafe_block_renderer(body)
         body = self.content.render(active_context)
         return body
 

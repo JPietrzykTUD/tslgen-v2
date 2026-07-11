@@ -30,27 +30,28 @@ Run from anywhere in the repo (paths default to the repo's ``tsldata`` and machi
 from __future__ import annotations
 
 import argparse
+from collections.abc import Collection, Sequence
 from pathlib import Path
 
 from tslc.api import _expand_sources
-from tslc.backend.registry import registered_backend_ids
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect, registered_backend_ids
+from tslc.catalog.machine_profiles import MachineProfile
+from tslc.catalog.model import Catalog
+from tslc.diagnostics import Diagnostic, SourceLocation, SourceSpan
 from tslc.ir.scan import scan
 from tslc.maintenance._segments_view import format_segment_tree
-from tslc.lower.dependencies import (
-    CallDependency,
-    extract_call_dependencies_from_segments,
-)
+from tslc.lower.dependencies import CallDependency
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer
 from tslc.pipeline import (
     GenerationRequest,
+    GenerationResult,
     _load_inputs,
-    _target_dependency_context,
     generate,
 )
 from tslc.select.selector import (
     CandidateEvaluation,
     RANKING_KEYS,
+    RankedCandidate,
     SelectedImplementation,
     Selector,
 )
@@ -194,8 +195,8 @@ def explain(
 def _explain_selected_slot(
     out: "_Writer",
     selector: Selector,
-    catalog,
-    machine_profile,
+    catalog: Catalog,
+    machine_profile: MachineProfile,
     backend: str,
     slot: SelectedImplementation,
     verdicts: "_PipelineVerdicts",
@@ -251,13 +252,13 @@ def _explain_selected_slot(
 
     # 4. DEPENDENCIES & PRUNING ---------------------------------------------------
     out.line("[4] DEPENDENCIES & VERDICT")
-    callees = extract_call_dependencies_from_segments(
-        segments,
-        slot.primitive.name,
-        extension_tag,
-        slot.type_tag,
-        *_target_dependency_context(slot),
-        catalog,
+    callees = frozenset(
+        origin.dependency
+        for origin in (
+            lowered.specialization.call_dependency_origins
+            if lowered.specialization is not None
+            else ()
+        )
     )
     _print_dependencies(out, callees, verdicts)
     out.blank()
@@ -293,7 +294,10 @@ def _print_ranking(out: "_Writer", evaluation: CandidateEvaluation) -> None:
         _print_rejections(out, evaluation)
 
 
-def _decisive_tiebreak(winner, runner_up) -> str:
+def _decisive_tiebreak(
+    winner: RankedCandidate,
+    runner_up: RankedCandidate,
+) -> str:
     """Name the first ranking key on which the winner beats the runner-up."""
 
     for attribute, description in RANKING_KEYS:
@@ -321,8 +325,8 @@ def _print_rejections(out: "_Writer", evaluation: CandidateEvaluation) -> None:
 def _explain_no_slot(
     out: "_Writer",
     selector: Selector,
-    catalog,
-    machine_profile,
+    catalog: Catalog,
+    machine_profile: MachineProfile,
     primitive: str,
     type_tag: str,
     to_target: str | None,
@@ -441,22 +445,22 @@ def _print_verdict(
         )
 
 
-def _format_flags(flags) -> str:
+def _format_flags(flags: Collection[str]) -> str:
     items = sorted(flags)
     return f"[{', '.join(items)}]" if items else "[]"
 
 
-def _format_source(source) -> str:
+def _format_source(source: SourceSpan | None) -> str:
     if source is None:
         return "(no source span)"
     return f"at {source.path}:{source.line}"
 
 
-def _format_location(location) -> str:
+def _format_location(location: SourceLocation) -> str:
     return f"{location.path}:{location.line}:{location.column}"
 
 
-def _format_load_failure(diagnostics) -> str:
+def _format_load_failure(diagnostics: Sequence[Diagnostic]) -> str:
     lines = ["failed to load inputs:"]
     for diagnostic in diagnostics:
         lines.append(f"  [{diagnostic.severity}] {diagnostic.code}: {diagnostic.message}")
@@ -477,7 +481,12 @@ class _PipelineVerdicts:
         self._skips = skips  # (extension, type_tag) -> reason, for this primitive
 
     @classmethod
-    def from_result(cls, result, primitive: str, backend: str) -> "_PipelineVerdicts":
+    def from_result(
+        cls,
+        result: GenerationResult,
+        primitive: str,
+        backend: str,
+    ) -> "_PipelineVerdicts":
         emitted = {
             (entry.primitive, entry.extension, entry.type_tag)
             for entry in result.coverage

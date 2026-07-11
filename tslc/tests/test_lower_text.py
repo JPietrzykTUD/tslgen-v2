@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from tslc.ir.scan import scan
-from tslc.lower._text import split_selector_terms
-from tslc.lower.region_handlers.common import _split_arg_groups
+from tslc.ir.region_syntax import split_arg_groups
+from tslc.ir.text import split_selector_terms
 
 
 def test_split_selector_terms_keeps_build_modifiers_together() -> None:
@@ -35,7 +35,7 @@ def test_split_arg_groups_respects_strings_and_nested_regions() -> None:
         'select_expr(flag, helper<format>("x,y"), call<primitive=foo>(a, b))'
     )[0]
 
-    assert len(_split_arg_groups(region.body)) == 3
+    assert len(split_arg_groups(region.body)) == 3
 
 
 def test_split_arg_groups_does_not_treat_comparison_as_closing_angle() -> None:
@@ -47,4 +47,4 @@ def test_split_arg_groups_does_not_treat_comparison_as_closing_angle() -> None:
         ")"
     )[0]
 
-    assert len(_split_arg_groups(region.body)) == 3
+    assert len(split_arg_groups(region.body)) == 3

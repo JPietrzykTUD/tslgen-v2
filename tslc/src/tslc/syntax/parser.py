@@ -436,7 +436,10 @@ class _DocumentTransformer:
 
     def _span(self, item: Tree | Token) -> ParsedTslSourceSpan:
         if isinstance(item, Token):
-            return self._span_from_offsets(item.start_pos, item.end_pos)
+            return self._span_from_offsets(
+                _required_offset(item.start_pos),
+                _required_offset(item.end_pos),
+            )
         return self._span_from_offsets(item.meta.start_pos, item.meta.end_pos)
 
     def _header_span(self, tree: Tree) -> ParsedTslSourceSpan:
@@ -444,8 +447,8 @@ class _DocumentTransformer:
 
     def _inner_string_span(self, token: Token, delimiter_width: int) -> ParsedTslSourceSpan:
         return self._span_from_offsets(
-            token.start_pos + delimiter_width,
-            token.end_pos - delimiter_width,
+            _required_offset(token.start_pos) + delimiter_width,
+            _required_offset(token.end_pos) - delimiter_width,
         )
 
     def _span_from_offsets(self, start: int, end: int) -> ParsedTslSourceSpan:
@@ -584,7 +587,7 @@ def _first_direct_token_or_none(tree: Tree) -> Token | None:
 def _first_direct_token_text(tree: Tree, token_type: str) -> str | None:
     for child in tree.children:
         if isinstance(child, Token) and child.type == token_type:
-            return child.value
+            return str(child.value)
     return None
 
 
@@ -607,14 +610,20 @@ def _direct_tokens(tree: Tree) -> tuple[Token, ...]:
 
 
 def _param_text(tree: Tree) -> str:
-    return _first_direct_token(tree, "NAME").value
+    return str(_first_direct_token(tree, "NAME").value)
 
 
 def _header_end_offset(tree: Tree) -> int:
     for child in tree.children:
         if isinstance(child, Token) and child.type == "NEWLINE":
-            return child.start_pos
-    return tree.meta.end_pos
+            return _required_offset(child.start_pos)
+    return _required_offset(tree.meta.end_pos)
+
+
+def _required_offset(value: int | None) -> int:
+    if value is None:
+        raise ValueError("parser position propagation did not provide an offset")
+    return value
 
 
 def _line_starts(text: str) -> tuple[int, ...]:

@@ -5,7 +5,15 @@ from __future__ import annotations
 from tslc.catalog.model import TestCase
 from tslc.catalog.scalar_types import scalar_bit_width
 from tslc.lower.lowerer import LoweredSpecialization
-from tslc.value_tests.model import ValueTestCasePlan
+from tslc.value_tests.model import (
+    ValueTestCasePlan,
+    ValueTestExpectation,
+    ValueTestIndex,
+    ValueTestInputs,
+    ValueTestInvocation,
+    ValueTestMemory,
+    ValueTestTarget,
+)
 
 
 def plan_case(
@@ -37,7 +45,35 @@ def plan_case(
     index_lanes: int | None = None,
     lanes: int | None = None,
 ) -> ValueTestCasePlan:
-    return ValueTestCasePlan.checked(
+    target = None
+    if expected_type_tag is not None or target_base_spelling is not None or target_lanes is not None:
+        target = ValueTestTarget(
+            type_tag=expected_type_tag,
+            base_spelling=target_base_spelling,
+            lanes=target_lanes,
+        )
+    case_index = None
+    index_value = str(case.index) if case.index is not None else None
+    if (
+        index_value is not None
+        or index_type_tag is not None
+        or index_base_spelling is not None
+        or index_lanes is not None
+    ):
+        case_index = ValueTestIndex(
+            value=index_value,
+            type_tag=index_type_tag,
+            base_spelling=index_base_spelling,
+            lanes=index_lanes,
+        )
+    memory = None
+    if buffer_offset or buffer_length is not None or source_offset:
+        memory = ValueTestMemory(
+            buffer_offset=buffer_offset,
+            buffer_length=buffer_length,
+            source_offset=source_offset,
+        )
+    return ValueTestCasePlan(
         kind=kind,
         function_name=function_name(name, index, case),
         case_name=case.name,
@@ -45,27 +81,26 @@ def plan_case(
         type_tag=case.type_tag,
         base_spelling=base_spelling,
         lanes=lanes if lanes is not None else case.lanes or 0,
-        vector_inputs=vector_inputs,
-        mask_inputs=mask_inputs,
-        scalar_input=scalar_input,
-        scalar_inputs=scalar_inputs,
-        expected=case.expected if expected is None else expected,
-        expected_type_tag=expected_type_tag,
-        result_kind=specs[0].result_kind if result_kind is None else result_kind,
-        param_kinds=specs[0].param_kinds,
-        axis_args=axis_args,
-        buffer_offset=buffer_offset,
-        buffer_length=buffer_length,
-        source_offset=source_offset,
-        text_expected=text_expected,
-        index_value=str(case.index) if case.index is not None else None,
-        immediate_value=immediate_value,
-        generic_defaults=generic_defaults,
-        target_base_spelling=target_base_spelling,
-        target_lanes=target_lanes,
-        index_type_tag=index_type_tag,
-        index_base_spelling=index_base_spelling,
-        index_lanes=index_lanes,
+        inputs=ValueTestInputs(
+            vectors=vector_inputs,
+            masks=mask_inputs,
+            scalar=scalar_input,
+            scalars=scalar_inputs,
+        ),
+        expectation=ValueTestExpectation(
+            values=case.expected if expected is None else expected,
+            text=text_expected,
+        ),
+        invocation=ValueTestInvocation(
+            result_kind=specs[0].result_kind if result_kind is None else result_kind,
+            param_kinds=specs[0].param_kinds,
+            axis_args=axis_args,
+            immediate=immediate_value,
+            generic_defaults=generic_defaults,
+        ),
+        target=target,
+        index=case_index,
+        memory=memory,
     )
 
 

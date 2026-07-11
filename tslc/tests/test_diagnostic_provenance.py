@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.builder import CatalogBuildResult, CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.compiler_assets import load_default_tsl_grammar
@@ -97,6 +97,8 @@ def test_lowerer_missing_complete_has_body_source_location() -> None:
         "extension scalar:\n"
         '  extension_name "scalar"\n'
         '  family "scalar"\n'
+        "  cpp:\n"
+        "    supported true\n"
         "language cpp:\n"
         '  s32 {type "int32_t"}\n'
         "prim<v:=v> no_return(data):\n"
@@ -123,7 +125,7 @@ def test_lowerer_missing_complete_has_body_source_location() -> None:
 
     diagnostic = lowered.diagnostics[0]
     assert diagnostic.code == "TSL-LOWER-NO-COMPLETE"
-    assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 13, 17)
+    assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 15, 17)
 
 
 def test_lowerer_handler_diagnostic_has_region_source_location() -> None:
@@ -133,6 +135,8 @@ def test_lowerer_handler_diagnostic_has_region_source_location() -> None:
         "extension scalar:\n"
         '  extension_name "scalar"\n'
         '  family "scalar"\n'
+        "  cpp:\n"
+        "    supported true\n"
         "language cpp:\n"
         '  s32 {type "int32_t"}\n'
         "prim<v:=v> bad_query(data):\n"
@@ -159,7 +163,7 @@ def test_lowerer_handler_diagnostic_has_region_source_location() -> None:
 
     diagnostic = lowered.diagnostics[0]
     assert diagnostic.code == "TSL-LOWER-UNRESOLVED-QUERY-REGION"
-    assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 13, 26)
+    assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 15, 26)
 
 
 def test_intrin_build_unresolved_suffix_has_region_source_location() -> None:
@@ -169,6 +173,8 @@ def test_intrin_build_unresolved_suffix_has_region_source_location() -> None:
         "extension avx2:\n"
         '  extension_name "avx2"\n'
         '  family "x86"\n'
+        "  cpp:\n"
+        "    supported true\n"
         "  intrinsic_compose:\n"
         "    prefix:\n"
         '      cpp "_mm256_"\n'
@@ -206,4 +212,4 @@ def test_intrin_build_unresolved_suffix_has_region_source_location() -> None:
     assert diagnostic.code == "TSL-LOWER-UNRESOLVED-SUFFIX"
     assert diagnostic.severity == "info"
     assert "base::signed_of(si?)" in diagnostic.message
-    assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 19, 26)
+    assert diagnostic.location == SourceLocation(Path("diagnostic_fixture.tsl"), 21, 26)

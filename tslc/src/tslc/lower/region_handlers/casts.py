@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
+from tslc.ir.region_syntax import parse_cast_selector, segments_text, split_arg_groups
 from tslc.ir.segments import Region
-from tslc.lower.cast_selectors import parse_cast_selector
 from tslc.lower.context import LoweringSession
 from tslc.lower.queries import QueryEvaluator, TextValue, TypeValue
-from tslc.lower.region_handlers.common import _segment_text, _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.render.model import RenderField
+from tslc.target_text import RenderField
 
 
 class CastLowerer:
@@ -28,7 +27,7 @@ class CastLowerer:
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
-        args = _split_arg_groups(region.body)
+        args = split_arg_groups(region.body)
         if len(args) != 2:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-CAST",
@@ -46,7 +45,7 @@ class CastLowerer:
             )
             return region.full_text
 
-        type_text = _segment_text(args[0])
+        type_text = segments_text(args[0])
         if selector.type_kind in {"ptr", "const_ptr"}:
             if selector.variant != "reinterpret":
                 context.effects.skip(
@@ -64,7 +63,15 @@ class CastLowerer:
             )
 
         if type_text.rstrip().endswith("*"):
-            return self._legacy_pointer_cast(type_text, region, context, render(args[1]))
+            context.effects.skip(
+                "TSL-LOWER-UNSUPPORTED-CAST",
+                (
+                    "legacy pointer cast syntax is unsupported; use "
+                    "cast<reinterpret, type=ptr|const_ptr>"
+                ),
+                source=region.source,
+            )
+            return region.full_text
 
         key = f"cast_{selector.variant}"
         if context.env.backend.templates.template(key) is None:
@@ -108,24 +115,6 @@ class CastLowerer:
             return region.full_text
         return context.env.backend.syntax.render_pointer_cast(
             inner, is_const=is_const, expr=expr
-        )
-
-    def _legacy_pointer_cast(
-        self,
-        type_text: str,
-        region: Region,
-        context: LoweringSession,
-        expr: RenderField,
-    ) -> RenderField:
-        stripped = type_text.rstrip()[:-1].rstrip()  # drop the trailing `*`
-        is_const = stripped.endswith("const")
-        inner_text = stripped[: -len("const")].rstrip() if is_const else stripped
-        return self._pointer_cast(
-            inner_text,
-            is_const=is_const,
-            region=region,
-            context=context,
-            expr=expr,
         )
 
     def _type_spelling(

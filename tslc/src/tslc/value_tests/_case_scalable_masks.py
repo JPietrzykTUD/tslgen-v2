@@ -19,6 +19,10 @@ from tslc.value_tests.model import (
     HarnessPrimitiveNames,
     ValueTestBackendSupport,
     ValueTestCasePlan,
+    ValueTestExpectation,
+    ValueTestInputs,
+    ValueTestInvocation,
+    ValueTestScalable,
 )
 
 
@@ -90,18 +94,21 @@ def scalable_mask_result_cases(
                 type_tag=case.type_tag,
                 base_spelling=spec.base_type_spelling,
                 lanes=case.lanes,
-                vector_inputs=vector_inputs,
-                expected=case.expected,
-                result_kind=spec.result_kind,
-                param_kinds=spec.param_kinds,
-                source_extension=spec.extension_name,
-                load_name=harness.load,
-                runtime_lanes_expr=runtime_lanes,
-                mask_check_expr=check_expr,
+                inputs=ValueTestInputs(vectors=vector_inputs),
+                expectation=ValueTestExpectation(values=case.expected),
+                invocation=ValueTestInvocation(
+                    result_kind=spec.result_kind,
+                    param_kinds=spec.param_kinds,
+                ),
+                scalable=ValueTestScalable(
+                    source_extension=spec.extension_name,
+                    load_name=harness.load,
+                    runtime_lanes_expr=runtime_lanes,
+                    mask_check_expr=check_expr,
+                ),
             )
         )
     return tuple(plans)
-
 
 def scalable_masked_mask_result_cases(
     name: str,
@@ -184,20 +191,22 @@ def scalable_masked_mask_result_cases(
                 type_tag=case.type_tag,
                 base_spelling=spec.base_type_spelling,
                 lanes=case.lanes,
-                vector_inputs=vector_inputs,
-                expected=case.expected,
-                result_kind=spec.result_kind,
-                param_kinds=spec.param_kinds,
-                mask_inputs=mask_inputs,
-                source_extension=spec.extension_name,
-                load_name=harness.load,
-                runtime_lanes_expr=runtime_lanes,
-                mask_from_bits_exprs=(mask_expr,),
-                mask_check_expr=check_expr,
+                inputs=ValueTestInputs(vectors=vector_inputs, masks=mask_inputs),
+                expectation=ValueTestExpectation(values=case.expected),
+                invocation=ValueTestInvocation(
+                    result_kind=spec.result_kind,
+                    param_kinds=spec.param_kinds,
+                ),
+                scalable=ValueTestScalable(
+                    source_extension=spec.extension_name,
+                    load_name=harness.load,
+                    runtime_lanes_expr=runtime_lanes,
+                    mask_from_bits_exprs=(mask_expr,),
+                    mask_check_expr=check_expr,
+                ),
             )
         )
     return tuple(plans)
-
 
 def scalable_mask_logic_cases(
     name: str,
@@ -279,18 +288,21 @@ def scalable_mask_logic_cases(
                 type_tag=case.type_tag,
                 base_spelling=spec.base_type_spelling,
                 lanes=case.lanes,
-                expected=case.expected,
-                result_kind=spec.result_kind,
-                param_kinds=spec.param_kinds,
-                mask_inputs=mask_inputs,
-                source_extension=spec.extension_name,
-                runtime_lanes_expr=runtime_lanes,
-                mask_from_bits_exprs=mask_exprs,
-                mask_check_expr=check_expr,
+                inputs=ValueTestInputs(masks=mask_inputs),
+                expectation=ValueTestExpectation(values=case.expected),
+                invocation=ValueTestInvocation(
+                    result_kind=spec.result_kind,
+                    param_kinds=spec.param_kinds,
+                ),
+                scalable=ValueTestScalable(
+                    source_extension=spec.extension_name,
+                    runtime_lanes_expr=runtime_lanes,
+                    mask_from_bits_exprs=mask_exprs,
+                    mask_check_expr=check_expr,
+                ),
             )
         )
     return tuple(plans)
-
 
 def scalable_mask_constant_cases(
     name: str,
@@ -356,16 +368,19 @@ def scalable_mask_constant_cases(
                 type_tag=case.type_tag,
                 base_spelling=spec.base_type_spelling,
                 lanes=case.lanes,
-                expected=case.expected,
-                result_kind=spec.result_kind,
-                param_kinds=spec.param_kinds,
-                source_extension=spec.extension_name,
-                runtime_lanes_expr=runtime_lanes,
-                mask_check_expr=check_expr,
+                expectation=ValueTestExpectation(values=case.expected),
+                invocation=ValueTestInvocation(
+                    result_kind=spec.result_kind,
+                    param_kinds=spec.param_kinds,
+                ),
+                scalable=ValueTestScalable(
+                    source_extension=spec.extension_name,
+                    runtime_lanes_expr=runtime_lanes,
+                    mask_check_expr=check_expr,
+                ),
             )
         )
     return tuple(plans)
-
 
 def scalable_mask_conversion_cases(
     name: str,
@@ -446,18 +461,21 @@ def scalable_mask_conversion_cases(
                 type_tag=case.type_tag,
                 base_spelling=spec.base_type_spelling,
                 lanes=case.lanes,
-                expected=case.expected,
-                result_kind=spec.result_kind,
-                param_kinds=spec.param_kinds,
-                mask_inputs=mask_inputs,
-                source_extension=spec.extension_name,
-                runtime_lanes_expr=runtime_lanes,
-                mask_from_bits_exprs=(mask_expr,),
-                mask_check_expr=check_expr,
+                inputs=ValueTestInputs(masks=mask_inputs),
+                expectation=ValueTestExpectation(values=case.expected),
+                invocation=ValueTestInvocation(
+                    result_kind=spec.result_kind,
+                    param_kinds=spec.param_kinds,
+                ),
+                scalable=ValueTestScalable(
+                    source_extension=spec.extension_name,
+                    runtime_lanes_expr=runtime_lanes,
+                    mask_from_bits_exprs=(mask_expr,),
+                    mask_check_expr=check_expr,
+                ),
             )
         )
     return tuple(plans)
-
 
 def _expected_mask_bits(values: tuple[str, ...]) -> int:
     bits = 0
@@ -466,13 +484,11 @@ def _expected_mask_bits(values: tuple[str, ...]) -> int:
             bits |= 1 << index
     return bits
 
-
 def _mask_bits(token: str) -> int | None:
     try:
         return int(token.strip().strip('"'), 0)
     except ValueError:
         return None
-
 
 __all__ = (
     "scalable_mask_constant_cases",

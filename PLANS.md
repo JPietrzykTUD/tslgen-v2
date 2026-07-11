@@ -118,7 +118,7 @@ Choose the smallest useful validation first:
   `PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_catalog.py tslc/tests/test_catalog_validation.py`
 - TSIL scanning/lowering:
   `PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_tsil_scan.py tslc/tests/test_lower_text.py tslc/tests/test_select_and_lower.py`
-- Backend/render model:
+- Target-text/backend/render model:
   `PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_render_model.py tslc/tests/test_generation_conditionals.py`
 - Output/verification/config:
   `PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_build_verify_config.py tslc/tests/test_output_format.py`
@@ -133,6 +133,7 @@ Always consider:
 
 ```bash
 python -m compileall -q tslc/src/tslc
+(cd tslc && python -m mypy)
 git diff --check
 ```
 

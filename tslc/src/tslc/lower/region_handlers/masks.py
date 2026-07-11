@@ -2,53 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
-
+from tslc.ir.region_syntax import parse_mask_selector, split_arg_groups
 from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession
-from tslc.lower._text import split_selector_terms
-from tslc.lower.region_handlers.common import _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.render.model import RenderField, RenderText, render_text, trimmed_text
-
-MaskSelectorKind = Literal[
-    "lane_true",
-    "lane_false",
-    "zero",
-    "all",
-    "test",
-    "test_imask",
-    "set",
-    "clear",
-    "set_to",
-]
-
-
-@dataclass(frozen=True, slots=True)
-class MaskSelector:
-    kind: MaskSelectorKind
-    op: str
-
-
-def parse_mask_selector(selector_text: str, arity: int) -> MaskSelector | None:
-    selector_terms = tuple(split_selector_terms(selector_text))
-    kind_by_shape: dict[tuple[tuple[str, ...], int], MaskSelectorKind] = {
-        (("lane_true",), 0): "lane_true",
-        (("lane_false",), 0): "lane_false",
-        (("zero",), 0): "zero",
-        (("all",), 0): "all",
-        (("test",), 2): "test",
-        (("test", "imask"), 2): "test_imask",
-        (("set",), 2): "set",
-        (("clear",), 2): "clear",
-        (("set_to",), 3): "set_to",
-    }
-    kind = kind_by_shape.get((selector_terms, arity))
-    if kind is None:
-        return None
-    return MaskSelector(kind=kind, op=selector_terms[0])
-
+from tslc.target_text import RenderField, RenderText, render_text, trimmed_text
 
 class MaskLowerer:
     """``mask<...>`` lane values and mask-container operations.
@@ -73,11 +31,13 @@ class MaskLowerer:
         if extension.mask_policy.kind == "lane_bitmask" and extension.vector_bits > 0:
             repr_kind = "lane_register"
         args: list[RenderText] = []
-        for group in _split_arg_groups(region.body):
+        for group in split_arg_groups(region.body):
             rendered = render(group)
             if render_text(rendered).strip():
                 args.append(trimmed_text(rendered))
         selector = parse_mask_selector(region.selector_text, len(args))
+        key: str
+        fields: dict[str, RenderField]
         if selector is not None and selector.kind in ("lane_true", "lane_false"):
             key = "mask_lane_all_true" if selector.op == "lane_true" else "mask_lane_all_false"
             base = context.env.backend.types.scalar_spelling(context.env.type_tag)

@@ -12,8 +12,7 @@ from tslc.catalog.scalar_types import (
     signed_of,
     unsigned_of,
 )
-from tslc.render.model import RenderField, RenderText
-from tslc.backend.registry import create_backend_dialect
+from tslc.target_text import RenderField, RenderText
 
 
 class BackendTypeDialect(Protocol):
@@ -76,7 +75,8 @@ class BackendTemplateDialect(Protocol):
 
 
 class BackendSyntaxDialect(Protocol):
-    borrowed_call_arg_prefix: str | None
+    @property
+    def borrowed_call_arg_prefix(self) -> str | None: ...
 
     def frame_return(self, value: RenderField) -> RenderText: ...
     def render_call(
@@ -105,15 +105,27 @@ class BackendSyntaxDialect(Protocol):
     def render_select_expr(
         self, condition: RenderField, if_true: RenderField, if_false: RenderField
     ) -> RenderText: ...
+    def render_unsafe_block(self, body: str) -> str: ...
 
 
 class BackendDialect(Protocol):
-    backend_id: str
-    supports_sized_vector_lane_expressions: bool
-    types: BackendTypeDialect
-    intrinsics: BackendIntrinsicDialect
-    templates: BackendTemplateDialect
-    syntax: BackendSyntaxDialect
+    @property
+    def backend_id(self) -> str: ...
+
+    @property
+    def supports_sized_vector_lane_expressions(self) -> bool: ...
+
+    @property
+    def types(self) -> BackendTypeDialect: ...
+
+    @property
+    def intrinsics(self) -> BackendIntrinsicDialect: ...
+
+    @property
+    def templates(self) -> BackendTemplateDialect: ...
+
+    @property
+    def syntax(self) -> BackendSyntaxDialect: ...
 
 
 __all__ = [
@@ -122,7 +134,6 @@ __all__ = [
     "BackendSyntaxDialect",
     "BackendTemplateDialect",
     "BackendTypeDialect",
-    "create_backend_dialect",
     "is_signed",
     "is_type_tag",
     "normalize_scalar_tag",

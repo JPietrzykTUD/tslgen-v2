@@ -7,6 +7,7 @@ from tslc.catalog.validation._schema_common import (
     diagnose_duplicate_fields,
     invalid_enum,
     is_scalar_list,
+    validate_backend_key_fields,
     validate_known_fields,
 )
 from tslc.catalog.validation.source_spans import child, children, field_text, source_span
@@ -18,22 +19,20 @@ _KNOWN_TARGET_FAMILIES_FIELDS = frozenset(
 )
 _KNOWN_PROFILE_FAMILY_FIELDS = frozenset(
     {
-        "cpp_detection",
-        "cpp_feature_flags",
-        "cpp_target",
+        "backends",
         "extension_families",
         "runner_kinds",
-        "rust_linker",
-        "rust_target",
-        "rust_target_features",
         "sort_order",
     }
 )
-_KNOWN_CPP_DETECTIONS = frozenset({"x86_builtin", "aarch64_hwcaps"})
+_KNOWN_BACKEND_PROFILE_FIELDS = frozenset(
+    {"detection", "feature_flags", "linker", "target"}
+)
 
 
 def validate_target_families(
     field: ParsedTslField,
+    backend_ids: frozenset[str],
     diagnostics: list[Diagnostic],
 ) -> None:
     target_fields = children(field)
@@ -90,25 +89,40 @@ def validate_target_families(
                         source=source_span(list_field.source),
                     )
                 )
-        for bool_name in ("cpp_feature_flags", "rust_target_features"):
-            bool_field = child(profile, bool_name)
-            value = field_text(bool_field)
-            if bool_field is not None and value not in KNOWN_BOOLEAN_VALUES:
+        backends = child(profile, "backends")
+        backend_fields = children(backends)
+        validate_backend_key_fields(
+            backend_fields,
+            backend_ids,
+            diagnostics,
+            owner=f"profile family {profile.key.text!r} backends",
+        )
+        diagnose_duplicate_fields(
+            backend_fields,
+            diagnostics,
+            label=f"profile family {profile.key.text!r} backend",
+        )
+        for backend in backend_fields:
+            owner = (
+                f"profile family {profile.key.text!r} backend {backend.key.text!r}"
+            )
+            validate_known_fields(
+                children(backend),
+                _KNOWN_BACKEND_PROFILE_FIELDS,
+                diagnostics,
+                owner=owner,
+            )
+            diagnose_duplicate_fields(
+                children(backend),
+                diagnostics,
+                label=f"{owner} field",
+            )
+            feature_flags = child(backend, "feature_flags")
+            value = field_text(feature_flags)
+            if feature_flags is not None and value not in KNOWN_BOOLEAN_VALUES:
                 invalid_enum(
                     diagnostics,
-                    bool_field,
-                    f"profile family {profile.key.text!r} {bool_name} {value!r}",
+                    feature_flags,
+                    f"{owner} feature_flags {value!r}",
                     sorted(KNOWN_BOOLEAN_VALUES),
                 )
-        detection = child(profile, "cpp_detection")
-        detection_value = field_text(detection)
-        if detection is not None and detection_value not in _KNOWN_CPP_DETECTIONS:
-            invalid_enum(
-                diagnostics,
-                detection,
-                (
-                    f"profile family {profile.key.text!r} cpp_detection "
-                    f"{detection_value!r}"
-                ),
-                sorted(_KNOWN_CPP_DETECTIONS),
-            )

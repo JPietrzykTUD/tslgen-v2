@@ -26,14 +26,16 @@ Run from the repository with ``tslc/src`` on ``PYTHONPATH``:
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 import json
 import sys
 from pathlib import Path
 
 from tslc.api import _ARITH_TYPE_TAGS, _expand_sources
-from tslc.backend.registry import registered_backend_ids
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect, registered_backend_ids
+from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, Extension, Primitive
+from tslc.diagnostics import SourceSpan
 from tslc.ir.scan import scan
 from tslc.maintenance._segments_view import format_segment_tree, segment_to_json
 from tslc.maintenance.coverage_inventory import _DATA_ROOT, _PROFILES_PATH
@@ -113,8 +115,12 @@ def run(
     if stage == "catalog":
         return _dump_catalog(catalog, primitive)
     if stage == "segments":
+        if primitive is None:
+            return "", {}, ["segments stage requires a primitive"]
         return _dump_segments(catalog, primitive, extension)
 
+    if profile is None:
+        return "", {}, [f"{stage} stage requires a machine profile"]
     machine_profile = inputs.machine_profiles.get(profile)
     if machine_profile is None:
         known = ", ".join(sorted(inputs.machine_profiles)) or "(none)"
@@ -282,7 +288,11 @@ def _dump_segments(
 
 
 def _dump_selection(
-    catalog, machine_profile, primitive_names, types, extension
+    catalog: Catalog,
+    machine_profile: MachineProfile,
+    primitive_names: Sequence[str],
+    types: tuple[str, ...],
+    extension: str | None,
 ) -> tuple[str, object, list[str]]:
     selector = Selector()
     lines: list[str] = [f"# selection for profile {machine_profile.name}"]
@@ -326,7 +336,12 @@ def _selection_json(slot: SelectedImplementation) -> dict:
 
 
 def _dump_lowered(
-    catalog, machine_profile, backend, primitive_names, types, extension
+    catalog: Catalog,
+    machine_profile: MachineProfile,
+    backend: str,
+    primitive_names: Sequence[str],
+    types: tuple[str, ...],
+    extension: str | None,
 ) -> tuple[str, object, list[str]]:
     selector = Selector()
     lowerer = Lowerer()
@@ -392,7 +407,7 @@ def _lowered_json(spec: LoweredSpecialization) -> dict:
     }
 
 
-def _src(source) -> str:
+def _src(source: SourceSpan | None) -> str:
     return f"{source.path}:{source.line}" if source is not None else "-"
 
 

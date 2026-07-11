@@ -30,17 +30,20 @@ from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 def validate_required_backends(
     catalog: Catalog,
     required_backends: Sequence[str],
+    supported_backends: Sequence[str],
     diagnostics: list[Diagnostic],
 ) -> None:
+    supported = frozenset(supported_backends)
     for backend in required_backends:
-        if not DEFAULT_SUPPORT_POLICY.supports_backend(backend):
+        if backend not in supported:
+            expected = " or ".join(sorted(supported))
             diagnostics.append(
                 Diagnostic(
                     severity="error",
                     code="TSL-CATALOG-UNKNOWN-BACKEND",
                     message=(
                         f"backend {backend!r} is not supported "
-                        f"(expected {DEFAULT_SUPPORT_POLICY.backend_label()})"
+                        f"(expected {expected})"
                     ),
                 )
             )
@@ -57,16 +60,15 @@ def validate_required_backends(
 def validate_backend_type_spellings(
     catalog: Catalog,
     required_backends: Sequence[str],
+    supported_backends: Sequence[str],
     diagnostics: list[Diagnostic],
     parsed: OuterTslParseResult | None,
 ) -> None:
     type_sources = _type_member_sources(parsed) if parsed is not None else {}
     type_tags = _catalog_type_tags(catalog)
+    supported = frozenset(supported_backends)
     for backend in required_backends:
-        if (
-            not DEFAULT_SUPPORT_POLICY.supports_backend(backend)
-            or backend not in catalog.type_spellings
-        ):
+        if backend not in supported or backend not in catalog.type_spellings:
             continue
         spellings = catalog.type_spellings.get(backend, {})
         for type_tag in type_tags:
@@ -330,8 +332,8 @@ def _catalog_type_tags(catalog: Catalog) -> tuple[str, ...]:
 
 def _type_member_sources(
     parsed: OuterTslParseResult,
-) -> dict[str, SourceSpan]:
-    sources: dict[str, SourceSpan] = {}
+) -> dict[str, SourceSpan | None]:
+    sources: dict[str, SourceSpan | None] = {}
     for document in parsed.documents:
         for declaration in document.declarations:
             if not isinstance(declaration, ParsedBlockDeclaration) or declaration.kind != "types":
@@ -349,17 +351,19 @@ def _type_member_sources(
     return sources
 
 
-def _inherit_sources(parsed: OuterTslParseResult | None) -> dict[str, SourceSpan]:
+def _inherit_sources(
+    parsed: OuterTslParseResult | None,
+) -> dict[str, SourceSpan | None]:
     return _extension_field_sources(parsed, "inherits")
 
 
 def _extension_field_sources(
     parsed: OuterTslParseResult | None,
     field_name: str,
-) -> dict[str, SourceSpan]:
+) -> dict[str, SourceSpan | None]:
     if parsed is None:
         return {}
-    sources: dict[str, SourceSpan] = {}
+    sources: dict[str, SourceSpan | None] = {}
     for document in parsed.documents:
         for declaration in document.declarations:
             if not isinstance(declaration, ParsedBlockDeclaration) or declaration.kind != "extension":
@@ -370,10 +374,12 @@ def _extension_field_sources(
     return sources
 
 
-def _extension_sources(parsed: OuterTslParseResult | None) -> dict[str, SourceSpan]:
+def _extension_sources(
+    parsed: OuterTslParseResult | None,
+) -> dict[str, SourceSpan | None]:
     if parsed is None:
         return {}
-    sources: dict[str, SourceSpan] = {}
+    sources: dict[str, SourceSpan | None] = {}
     for document in parsed.documents:
         for declaration in document.declarations:
             if not isinstance(declaration, ParsedBlockDeclaration) or declaration.kind != "extension":

@@ -9,6 +9,7 @@ from tslc import cli
 from tslc.diagnostics import Diagnostic
 from tslc.value_tests.model import (
     ValueTestCasePlan,
+    ValueTestInvocation,
     ValueTestProfilePlan,
     ValueTestProjectPlan,
 )
@@ -97,8 +98,8 @@ def test_cli_test_flag_enables_existing_value_test_paths(
             "--output-root",
             str(tmp_path),
             "--test",
-            "--sde",
-            "/tmp/sde64",
+            "--runner",
+            "sde=/tmp/sde64",
         ]
     )
 
@@ -110,10 +111,9 @@ def test_cli_test_flag_enables_existing_value_test_paths(
     assert generate_kwargs["value_test_warnings"] is True
     _, _, verify_kwargs = calls["verify"]
     assert verify_kwargs["run_value_tests"] is True
-    assert verify_kwargs["sde_path"] == "/tmp/sde64"
-    assert verify_kwargs["qemu_aarch64_path"] is None
+    assert verify_kwargs["runner_paths"] == {"sde": "/tmp/sde64"}
     assert "building and running generated value tests" in captured.out
-    assert "through Intel SDE: /tmp/sde64" in captured.out
+    assert "through sde: /tmp/sde64" in captured.out
     assert "[test-output] cpp avx2: ctest --test-dir build --output-on-failure" in captured.out
     assert "100% tests passed" in captured.out
     assert "[test-output] rust avx2: cargo test --features avx2,value_tests" in captured.out
@@ -164,21 +164,24 @@ def test_cli_qemu_aarch64_flag_is_forwarded(monkeypatch, tmp_path, capsys) -> No
             "--output-root",
             str(tmp_path),
             "--test",
-            "--qemu-aarch64",
-            "/usr/bin/qemu-aarch64",
-            "--rust-target",
-            "aarch64-unknown-linux-musl",
-            "--rust-linker",
-            "rust-lld",
+            "--runner",
+            "qemu-aarch64=/usr/bin/qemu-aarch64",
+            "--target",
+            "rust=aarch64-unknown-linux-musl",
+            "--linker",
+            "rust=rust-lld",
         ]
     )
 
     captured = capsys.readouterr()
     assert rc == 0
     _, _, verify_kwargs = calls["verify"]
-    assert verify_kwargs["qemu_aarch64_path"] == "/usr/bin/qemu-aarch64"
-    assert verify_kwargs["rust_target"] == "aarch64-unknown-linux-musl"
-    assert verify_kwargs["rust_linker"] == "rust-lld"
+    assert verify_kwargs["runner_paths"] == {
+        "qemu-aarch64": "/usr/bin/qemu-aarch64"
+    }
+    rust_toolchain = verify_kwargs["toolchains"]["rust"]
+    assert rust_toolchain.target == "aarch64-unknown-linux-musl"
+    assert rust_toolchain.linker == "rust-lld"
     assert "through qemu-aarch64: /usr/bin/qemu-aarch64" in captured.out
 
 
@@ -449,5 +452,5 @@ def _value_case(call_name: str, function_name: str) -> ValueTestCasePlan:
         type_tag="si32",
         base_spelling="std::int32_t",
         lanes=4,
-        result_kind="v",
+        invocation=ValueTestInvocation(result_kind="v"),
     )

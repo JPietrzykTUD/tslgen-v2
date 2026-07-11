@@ -16,7 +16,7 @@ from pathlib import Path
 import sys
 from typing import Literal, TextIO, cast
 
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect, registered_backend_ids
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog, ImplementationSafety
@@ -25,12 +25,11 @@ from tslc.catalog.signatures import parse_signature
 from tslc.compiler_assets import load_default_tsl_grammar
 from tslc.diagnostics import Diagnostic, has_errors
 from tslc.ir.scan import scan
-from tslc.lower.dependencies import extract_call_dependencies_from_segments
+from tslc.lower.dependencies import CallDependency
 from tslc.lower.lowerer import Lowerer
 from tslc.pipeline import (
     _LoweredSlot,
     _prune_unresolved,
-    _target_dependency_context,
 )
 from tslc.select.selector import SelectedImplementation, Selector
 from tslc.sources import SourceDocument, SourceLoader
@@ -114,7 +113,7 @@ def audit_metadata(
     profiles: Iterable[str] = _DEFAULT_PROFILES,
     primitives: Iterable[str] | None = None,
     type_tags: Iterable[str] = _DEFAULT_TYPES,
-    backends: Iterable[str] = DEFAULT_SUPPORT_POLICY.default_backend_ids,
+    backends: Iterable[str] = registered_backend_ids(),
 ) -> MetadataAuditResult:
     """Return source metadata suggestions without writing files."""
 
@@ -418,15 +417,8 @@ def _requires_suggestions(
                     selected_slot.implementation.body_text,
                     source=selected_slot.implementation.body_source,
                 )
-                callees = extract_call_dependencies_from_segments(
-                    body_segments,
-                    primitive_name,
-                    selected_slot.extension.isa_name,
-                    selected_slot.type_tag,
-                    *_target_dependency_context(selected_slot),
-                    inputs.catalog,
-                )
                 lowered_any = False
+                slot_dependencies: set[CallDependency] = set()
                 for backend in backends:
                     lowered = lowerer.lower(
                         selected_slot,
@@ -436,6 +428,8 @@ def _requires_suggestions(
                     )
                     if lowered.specialization is None:
                         continue
+                    origins = lowered.specialization.call_dependency_origins
+                    callees = frozenset(origin.dependency for origin in origins)
                     audit_slots.append(
                         _AuditSlot(
                             profile_name=profile_name,
@@ -444,12 +438,16 @@ def _requires_suggestions(
                                 backend=backend,
                                 spec=lowered.specialization,
                                 callees=callees,
+                                callee_origins=origins,
                             ),
                         )
                     )
+                    slot_dependencies.update(callees)
                     lowered_any = True
                 if lowered_any:
-                    dependency_names = sorted({dependency.primitive for dependency in callees})
+                    dependency_names = sorted(
+                        {dependency.primitive for dependency in slot_dependencies}
+                    )
                     for dependency_name in dependency_names:
                         if (
                             dependency_name not in processed
@@ -489,12 +487,14 @@ def _requires_suggestions(
             )
 
     suggestions: list[MetadataSuggestion] = []
-    for key, missing in sorted(missing_by_entry.items(), key=lambda item: item[0]):
+    for key, missing_features in sorted(
+        missing_by_entry.items(), key=lambda item: item[0]
+    ):
         primitive, _path, _line, _column = key
         ref = entry_index[key]
         entry = ref.entry
         local_flags, field = _local_requires_flags(entry)
-        after_flags = frozenset(local_flags | frozenset(missing))
+        after_flags = frozenset(local_flags | frozenset(missing_features))
         edit = _requires_edit(inputs, entry, after_flags, field)
         suggestions.append(
             MetadataSuggestion(
@@ -505,7 +505,7 @@ def _requires_suggestions(
                 subject=f"{primitive} {'/'.join(ref.selector_path)}",
                 reason=(
                     "transitive primitive calls require "
-                    f"{_format_list(sorted(missing))} "
+                    f"{_format_list(sorted(missing_features))} "
                     f"({', '.join(sorted(reasons_by_entry[key]))})"
                 ),
                 before=(

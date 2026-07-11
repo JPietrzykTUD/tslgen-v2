@@ -4,93 +4,95 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tslc.backend.capability import BackendCapability
+from tslc.backend.capability import (
+    BackendCapability,
+    BackendDocumentationFormatter,
+    DocumentationSiteInput,
+    GeneratedDocumentationBuilder,
+    GeneratedDocumentationSpec,
+    GeneratedFormatSpec,
+)
+from tslc.backend.helper_requirements import RUST_HELPER_MANIFEST
+from tslc.backend.rust_translation import RustBackendDialect
+from tslc.backend.rust_validation import validate_rust_profiles
 from tslc.catalog.model import Catalog
+from tslc.output._verify_rust import (
+    create_rust_verify_driver as _create_rust_verify_driver,
+)
+from tslc.render.documentation_formatters import RUST_DOCUMENTATION_FORMATTER
+from tslc.render.rust_project import rust_artifacts, rust_verify_profiles
+from tslc.render.tests_project import rust_test_artifacts
+from tslc.value_tests.render_rust import RUST_VALUE_TEST_SUPPORT
 
 if TYPE_CHECKING:
-    from tslc.backend.rust_translation import RustBackendDialect
+    from tslc.backend.translation import BackendDialect
+    from tslc.backend.emitted_profile import EmittedProfile
     from tslc.compiler_assets import RenderAssets
     from tslc.output.artifacts import Artifact
     from tslc.output.verify_drivers import VerifyBackendDriver
     from tslc.output.verify_model import VerifyProfile
-    from tslc.render.project import ProfileRender
     from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
 
 
-def create_rust_dialect(catalog: Catalog) -> RustBackendDialect:
-    from tslc.backend.rust_translation import RustBackendDialect
-
+def create_rust_dialect(catalog: Catalog) -> BackendDialect:
     return RustBackendDialect(catalog)
 
 
 def rust_project_artifacts(
-    profiles: tuple[ProfileRender, ...], assets: RenderAssets
+    profiles: tuple[EmittedProfile, ...], assets: RenderAssets, media_type: str
 ) -> list[Artifact]:
-    from tslc.render.rust_project import rust_artifacts
-
-    return rust_artifacts(profiles, assets)
+    return rust_artifacts(profiles, assets, media_type=media_type)
 
 
 def rust_profile_verification(
-    profiles: tuple[ProfileRender, ...],
+    profiles: tuple[EmittedProfile, ...],
 ) -> tuple[VerifyProfile, ...]:
-    from tslc.render.rust_project import rust_verify_profiles
-
     return rust_verify_profiles(profiles)
 
 
 def rust_value_test_support() -> ValueTestBackendSupport:
-    from tslc.value_tests.render_rust import RUST_VALUE_TEST_SUPPORT
-
     return RUST_VALUE_TEST_SUPPORT
 
 
 def rust_value_test_artifacts(
-    plan: ValueTestProjectPlan, assets: RenderAssets
+    plan: ValueTestProjectPlan, assets: RenderAssets, media_type: str
 ) -> list[Artifact]:
-    from tslc.render.tests_project import rust_test_artifacts
+    return rust_test_artifacts(plan, assets, media_type=media_type)
 
-    return rust_test_artifacts(plan, assets)
+
+def rust_documentation_formatter() -> BackendDocumentationFormatter:
+    return RUST_DOCUMENTATION_FORMATTER
 
 
 def create_rust_verify_driver() -> VerifyBackendDriver:
-    from tslc.output.verify_drivers import rust_verify_driver
-
-    return rust_verify_driver()
-
-
-_RUST_ALGORITHM_SUPPORT_PRIMITIVES = (
-    "load",
-    "store",
-    "set_zero",
-    "to_array",
-    "from_array",
-    "gather_narrow",
-    "compress_store",
-    "mask_population_count",
-    "to_integral",
-    "to_mask",
-)
-
-
-def rust_closure_seed_primitives(catalog: Catalog) -> tuple[str, ...]:
-    return tuple(
-        primitive
-        for primitive in _RUST_ALGORITHM_SUPPORT_PRIMITIVES
-        if catalog.primitives_named(primitive, unmasked=False)
-    )
+    return _create_rust_verify_driver()
 
 
 RUST_BACKEND = BackendCapability(
     backend_id="rust",
     root_path="rust",
+    artifact_media_type="text/rust",
     dialect_factory=create_rust_dialect,
-    project_artifacts=rust_project_artifacts,
+    project_renderer=rust_project_artifacts,
     verify_profiles=rust_profile_verification,
     value_test_support_factory=rust_value_test_support,
-    test_artifacts=rust_value_test_artifacts,
+    test_renderer=rust_value_test_artifacts,
     verify_driver_factory=create_rust_verify_driver,
-    closure_seed_primitives_factory=rust_closure_seed_primitives,
+    documentation_formatter_factory=rust_documentation_formatter,
+    helper_manifest=RUST_HELPER_MANIFEST,
+    profile_validator=validate_rust_profiles,
+    generated_format=GeneratedFormatSpec(
+        executable="rustfmt",
+        label="rust",
+        patterns=("rust/**/*.rs",),
+        args=("--edition", "2021"),
+    ),
+    generated_documentation=GeneratedDocumentationSpec(
+        builder=GeneratedDocumentationBuilder.RUSTDOC,
+        project_path="rust",
+        output_path="rust/docs/target/doc",
+        site_input=DocumentationSiteInput.RUSTDOC,
+    ),
 )
 
 
@@ -98,8 +100,8 @@ __all__ = [
     "RUST_BACKEND",
     "create_rust_dialect",
     "create_rust_verify_driver",
-    "rust_closure_seed_primitives",
     "rust_profile_verification",
+    "rust_documentation_formatter",
     "rust_project_artifacts",
     "rust_value_test_artifacts",
     "rust_value_test_support",

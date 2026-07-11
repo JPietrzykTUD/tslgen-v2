@@ -14,34 +14,35 @@ from pathlib import Path
 from typing import Literal
 
 from tslc._pipeline_closure import (
-    CallDependencyOrigin,
     _LoweredSlot,
     _profile_with_required_features,
     _propagate_transitive_call_facts,
     _prune_unresolved,
-    _target_dependency_context,
 )
 from tslc._pipeline_inputs import _PipelineInputs, _load_inputs
-from tslc.backend.registry import backend_capabilities
+from tslc.backend.emitted_profile import EmittedProfile
+from tslc.backend.registry import backend_capabilities, registered_backend_ids
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import RESULT_DIM_EXTENSION, Catalog, Extension
 from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
 from tslc.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
-from tslc.lower.dependencies import (
-    CallDependency,
-    extract_call_dependencies_from_segments,
-)
+from tslc.lower.dependencies import CallDependency, CallDependencyOrigin
 from tslc.lower.lowerer import LoweredSpecialization, Lowerer, LoweringResult
 from tslc.output.artifacts import ArtifactSet
-from tslc.render.project import ProfileRender, RenderedProject, render_project
+from tslc.render.project import RenderedProject, render_project
 from tslc.select.selector import (
     SelectedImplementation,
     Selector,
 )
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
+from tslc.value_tests import (
+    ValueTestBackendProfileInput,
+    ValueTestPlanner,
+    ValueTestProjectPlan,
+)
 
-_DEFAULT_BACKENDS = DEFAULT_SUPPORT_POLICY.default_backend_ids
+_DEFAULT_BACKENDS = registered_backend_ids()
 GenerationMode = Literal["partial", "strict"]
 SkipStatus = Literal["coverage_gap", "policy_deferred"]
 _TYPE_ORDER = SCALAR_TYPE_ORDER
@@ -136,7 +137,7 @@ class _GenerationSession:
         self.diagnostics = diagnostics
         self.coverage: list[CoverageEntry] = []
         self.skipped: list[SkippedEntry] = []
-        self.profile_renders: list[ProfileRender] = []
+        self.emitted_profiles: list[EmittedProfile] = []
 
     def run(self) -> GenerationResult:
         for profile_name in _expand_requested_profiles(
@@ -149,6 +150,19 @@ class _GenerationSession:
                 continue
             self._generate_profile(profile_name, profile)
 
+        emitted_profiles = tuple(
+            sorted(self.emitted_profiles, key=lambda item: item.profile.name)
+        )
+        backend_diagnostics: list[Diagnostic] = []
+        for capability in self.backends:
+            backend_diagnostics.extend(capability.validate_profiles(emitted_profiles))
+        self.diagnostics.extend(backend_diagnostics)
+
+        if has_errors(backend_diagnostics):
+            return _result_without_artifacts(
+                self.diagnostics, self.coverage, self.skipped
+            )
+
         if self.request.mode == "strict" and (
             _has_strict_skips(self.skipped) or has_errors(self.diagnostics)
         ):
@@ -156,23 +170,46 @@ class _GenerationSession:
                 self.diagnostics, self.coverage, self.skipped
             )
 
+        value_tests = (
+            self._plan_value_tests(emitted_profiles)
+            if emitted_profiles
+            else ValueTestProjectPlan(profiles=())
+        )
+        self.diagnostics.extend(
+            diagnostic
+            for diagnostic in value_tests.diagnostics
+            if self.request.value_test_warnings or diagnostic.severity == "error"
+        )
         rendered = (
             render_project(
-                tuple(self.profile_renders),
+                emitted_profiles,
                 self.request.backends,
-                self.inputs.imm_split_names,
-                catalog=self.inputs.catalog,
-                value_test_warnings=self.request.value_test_warnings,
-                value_test_fuzz=self.request.value_test_fuzz,
+                value_tests,
                 assets=self.inputs.render_assets,
             )
-            if self.profile_renders
+            if self.emitted_profiles
             else None
         )
-        if rendered is not None:
-            self.diagnostics.extend(rendered.diagnostics)
         artifacts = rendered.artifacts if rendered is not None else ArtifactSet.create(())
         return _result(artifacts, rendered, self.diagnostics, self.coverage, self.skipped)
+
+    def _plan_value_tests(
+        self, profiles: tuple[EmittedProfile, ...]
+    ) -> ValueTestProjectPlan:
+        inputs = tuple(
+            ValueTestBackendProfileInput(
+                capability.backend_id,
+                profile.profile.name,
+                capability.specializations(profile),
+            )
+            for profile in profiles
+            for capability in self.backends
+        )
+        return ValueTestPlanner(
+            self.inputs.catalog,
+            tuple(capability.value_test_support() for capability in self.backends),
+            fuzz=self.request.value_test_fuzz,
+        ).plan(inputs)
 
     def _record_unknown_profile(self, profile_name: str) -> None:
         self.diagnostics.append(
@@ -236,8 +273,8 @@ class _GenerationSession:
             self._record_pruned_skip(profile_name, slot)
         self._record_coverage(profile_name, lowered_specs, pruned)
         effective_profile = _profile_with_required_features(profile, grouped)
-        self.profile_renders.append(
-            ProfileRender(
+        self.emitted_profiles.append(
+            EmittedProfile(
                 profile=effective_profile,
                 specializations_by_backend={
                     capability.backend_id: _finalize(
@@ -249,6 +286,7 @@ class _GenerationSession:
                 profile_family=self.inputs.catalog.target_families.profile_family(
                     effective_profile.family
                 ),
+                immediate_split_names=self.inputs.imm_split_names,
             )
         )
 
@@ -274,39 +312,8 @@ class _GenerationSession:
                 slot.implementation.body_text,
                 source=slot.implementation.body_source,
             )
-            dependency_context = _target_dependency_context(slot)
-            callees = set(
-                extract_call_dependencies_from_segments(
-                    body_segments,
-                    primitive,
-                    slot.extension.isa_name,
-                    slot.type_tag,
-                    *dependency_context,
-                    catalog,
-                )
-            )
-            callee_origins = [
-                CallDependencyOrigin(dependency, "implementation")
-                for dependency in sorted(callees, key=_dependency_sort_key)
-            ]
-            for variant in slot.implementation.variants:
-                variant_callees = extract_call_dependencies_from_segments(
-                    scan(variant.body_text, source=variant.body_source),
-                    primitive,
-                    slot.extension.isa_name,
-                    slot.type_tag,
-                    *dependency_context,
-                    catalog,
-                )
-                callees.update(variant_callees)
-                callee_origins.extend(
-                    CallDependencyOrigin(
-                        dependency,
-                        f"implementation variant {variant.name!r}",
-                    )
-                    for dependency in sorted(variant_callees, key=_dependency_sort_key)
-                )
             slot_lowered = False
+            slot_dependencies: set[CallDependency] = set()
             for capability in self.backends:
                 backend = capability.backend_id
                 if backend not in backend_ids:
@@ -323,21 +330,26 @@ class _GenerationSession:
                 )
                 if lowered.specialization is None:
                     continue
+                callee_origins = lowered.specialization.call_dependency_origins
+                callees = frozenset(
+                    origin.dependency for origin in callee_origins
+                )
                 lowered_slots.append(
                     _LoweredSlot(
                         backend=backend,
                         spec=lowered.specialization,
-                        callees=frozenset(callees),
-                        callee_origins=tuple(callee_origins),
+                        callees=callees,
+                        callee_origins=callee_origins,
                     )
                 )
+                slot_dependencies.update(callees)
                 slot_lowered = True
 
             if slot_lowered:
                 discovered_primitives.extend(
                     dependency_primitive
                     for dependency_primitive in sorted(
-                        {dependency.primitive for dependency in callees}
+                        {dependency.primitive for dependency in slot_dependencies}
                     )
                     if catalog.primitives_named(dependency_primitive, unmasked=False)
                 )
@@ -411,19 +423,6 @@ def _record_render_extensions(
     target_extension = catalog.extensions.get(slot.to_target)
     if target_extension is not None:
         selected_extensions[target_extension.isa_name] = target_extension
-
-
-def _dependency_sort_key(
-    dependency: CallDependency,
-) -> tuple[str, str, str, str, str, str]:
-    return (
-        dependency.primitive,
-        dependency.mask_policy or "",
-        dependency.source.extension_isa,
-        dependency.source.base_tag,
-        dependency.target.extension_isa if dependency.target is not None else "",
-        dependency.target.base_tag if dependency.target is not None else "",
-    )
 
 
 def _pruned_reason(slot: "_LoweredSlot") -> str:

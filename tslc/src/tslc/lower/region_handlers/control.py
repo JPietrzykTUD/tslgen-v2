@@ -5,14 +5,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
+from tslc.ir.region_syntax import segments_text, split_arg_groups
 from tslc.ir.segments import Region, Segment
-from tslc.lower._text import skip_string, split_top_level
+from tslc.ir.text import skip_string, split_top_level
 from tslc.lower.context import LoweringSession
 from tslc.lower.generation import evaluate_generation_int_segments
 from tslc.lower.queries import BoolValue, QueryEvaluator, TextValue
-from tslc.lower.region_handlers.common import _segment_text, _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.render.model import RenderField, literal_text, render_sequence, render_text
+from tslc.target_text import (
+    RenderContext,
+    RenderField,
+    RenderText,
+    literal_text,
+    render_sequence,
+    render_text,
+)
 
 
 def _split_top_level_op(text: str, op: str) -> list[str]:
@@ -76,7 +83,7 @@ class _RuntimeCondition:
 
     content: RenderField
 
-    def render(self, context=None) -> str:
+    def render(self, context: RenderContext | None = None) -> str:
         text = (
             self.content
             if isinstance(self.content, str)
@@ -115,12 +122,12 @@ class IfLowerer:
         if selector not in self._SPLICE_SELECTORS:
             return self._runtime(region, context, render)
 
-        condition = _segment_text(region.body)
+        condition = segments_text(region.body)
         taken = self._evaluate_condition(condition, context)
         if taken is not None:
             # Fully generation-resolvable: splice only the taken branch (no surviving `if`).
             if taken:
-                return render(region.block)
+                return render(region.block) if region.block is not None else ""
             return render(region.else_block) if region.else_block is not None else ""
 
         # `if<compile>` second half: the predicate has a *symbolic* term (a `generic_params`
@@ -131,7 +138,7 @@ class IfLowerer:
         if selector == "compile":
             rendered = self._render_condition(condition, context)
             if rendered is not None:
-                context.effects.mark_implementation_composition()
+                context.effects.mark_composition()
                 header = context.env.backend.templates.render_template(
                     "flow_if_static", "if constexpr ({cond})", cond=rendered
                 )
@@ -162,7 +169,7 @@ class IfLowerer:
     ) -> RenderField:
         """A native runtime ``if``: emit the condition + branches verbatim for the target."""
 
-        context.effects.mark_implementation_composition()
+        context.effects.mark_composition()
         then = render(region.block) if region.block is not None else ""
         header = render_sequence(
             (
@@ -232,11 +239,15 @@ class IfLowerer:
         ors = _split_top_level_op(text, "||")
         if len(ors) > 1:
             parts = [self._render_condition(part, context) for part in ors]
-            return None if None in parts else " || ".join(parts)
+            if any(part is None for part in parts):
+                return None
+            return " || ".join(part for part in parts if part is not None)
         ands = _split_top_level_op(text, "&&")
         if len(ands) > 1:
             parts = [self._render_condition(part, context) for part in ands]
-            return None if None in parts else " && ".join(parts)
+            if any(part is None for part in parts):
+                return None
+            return " && ".join(part for part in parts if part is not None)
         leaf = text.strip()
         value = self._evaluator.evaluate(leaf, context)
         if isinstance(value, BoolValue):
@@ -257,7 +268,7 @@ class SelectExprLowerer:
     def lower(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
-        groups = _split_arg_groups(region.body)
+        groups = split_arg_groups(region.body)
         if region.selector_text.strip() or len(groups) != 3:
             context.effects.skip(
                 "TSL-LOWER-BAD-SELECT-EXPR",
@@ -345,7 +356,7 @@ class LoopLowerer:
                 source=region.source,
             )
             return region.full_text
-        groups = _split_arg_groups(region.body)
+        groups = split_arg_groups(region.body)
         if len(groups) != 4 or region.block is None:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-LOOP",
@@ -405,7 +416,7 @@ class LoopLowerer:
     def _generation(
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
-        groups = _split_arg_groups(region.body)
+        groups = split_arg_groups(region.body)
         if len(groups) != 4 or region.block is None:
             context.effects.skip(
                 "TSL-LOWER-UNSUPPORTED-GENERATION-LOOP",
@@ -414,7 +425,7 @@ class LoopLowerer:
                 source=region.source,
             )
             return region.full_text
-        var = _segment_text(groups[0])
+        var = segments_text(groups[0])
         if self._VAR.fullmatch(var) is None:
             context.effects.skip(
                 "TSL-LOWER-GENERATION-LOOP-BAD-VAR",
@@ -485,7 +496,7 @@ class SwitchLowerer:
         selector = render_text(render(region.body)).strip()
         selected_label = _selected_switch_label(selector, region.arms)
         if selected_label is None:
-            context.effects.mark_implementation_composition()
+            context.effects.mark_composition()
         arms = tuple(
             (
                 label,
@@ -511,6 +522,6 @@ def _selected_switch_label(
 
 def _render_without_state(
     context: LoweringSession, render: RenderBody, body: tuple[Segment, ...]
-):
+) -> RenderText:
     with context.effects.suppress_implementation_state():
         return render(body)

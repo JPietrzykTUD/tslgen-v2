@@ -60,14 +60,24 @@ def resolve_target_vector(
     if selected.primitive.result_target is None or selected.to_target is None:
         return None
     dim, alias = selected.primitive.result_target
+    to_target = selected.to_target
     if support.uses_sized_vector(selected.extension):
         return _resolve_sized_target(
-            selected, backend, dim, alias, scope, support
+            selected, backend, dim, alias, to_target, scope, support
         )
     if dim == RESULT_DIM_BASE:
-        return _resolve_base_target(selected, catalog, backend, alias, scope, support)
+        return _resolve_base_target(
+            selected, catalog, backend, alias, to_target, scope, support
+        )
     return _resolve_extension_target(
-        selected, catalog, backend, base_type_spelling, alias, support, scope
+        selected,
+        catalog,
+        backend,
+        base_type_spelling,
+        alias,
+        to_target,
+        support,
+        scope,
     )
 
 
@@ -76,6 +86,7 @@ def _resolve_sized_target(
     backend: BackendDialect,
     dim: str,
     alias: str,
+    to_target: str,
     scope: LoweringScope,
     support: SupportPolicy,
 ) -> TargetVector | Diagnostic:
@@ -86,14 +97,16 @@ def _resolve_sized_target(
             f"supported: {selected.primitive.name!r}",
             source=implementation_source(selected),
         )
-    to_base_spelling = backend.types.scalar_spelling(selected.to_target)
+    to_base_spelling = backend.types.scalar_spelling(to_target)
     if to_base_spelling is None:
         return _no_target_base_type(selected, backend)
-    scope.bind_target_type_symbol(alias, selected.to_target)
-    scope.bind_target_type_symbol("ToType", selected.to_target)
-    lane_parameter, windowing = _sized_target_lane_parameter(selected, support)
+    scope.bind_target_type_symbol(alias, to_target)
+    scope.bind_target_type_symbol("ToType", to_target)
+    lane_parameter, windowing = _sized_target_lane_parameter(
+        selected, to_target, support
+    )
     register_spelling = backend.types.target_register_spelling(
-        selected.to_target,
+        to_target,
         selected.extension.isa_name,
         uses_sized_vector=True,
         lane_parameter=lane_parameter,
@@ -106,7 +119,7 @@ def _resolve_sized_target(
         ),
         register_spelling=register_spelling,
         extension_isa=selected.extension.isa_name,
-        base_tag=selected.to_target,
+        base_tag=to_target,
         base_spelling=to_base_spelling,
         uses_sized_vector=True,
         lane_parameter=lane_parameter,
@@ -119,20 +132,21 @@ def _resolve_base_target(
     catalog: Catalog,
     backend: BackendDialect,
     alias: str,
+    to_target: str,
     scope: LoweringScope,
     support: SupportPolicy,
 ) -> TargetVector | Diagnostic:
-    to_base_spelling = backend.types.scalar_spelling(selected.to_target)
+    to_base_spelling = backend.types.scalar_spelling(to_target)
     if to_base_spelling is None:
         return _no_target_base_type(selected, backend)
-    scope.bind_target_type_symbol(alias, selected.to_target)
-    scope.bind_target_type_symbol("ToType", selected.to_target)
+    scope.bind_target_type_symbol(alias, to_target)
+    scope.bind_target_type_symbol("ToType", to_target)
     uses_sized_vector = support.uses_sized_vector(selected.extension)
     lane_parameter = (
         support.size_parameter_name(selected.extension) if uses_sized_vector else None
     )
     register_spelling = backend.types.target_register_spelling(
-        selected.to_target,
+        to_target,
         selected.extension.isa_name,
         uses_sized_vector=uses_sized_vector,
         lane_parameter=lane_parameter,
@@ -151,7 +165,7 @@ def _resolve_base_target(
         ),
         register_spelling=register_spelling,
         extension_isa=selected.extension.isa_name,
-        base_tag=selected.to_target,
+        base_tag=to_target,
         base_spelling=to_base_spelling,
         uses_sized_vector=uses_sized_vector,
         lane_parameter=lane_parameter,
@@ -159,7 +173,7 @@ def _resolve_base_target(
             catalog,
             backend.backend_id,
             selected.extension.isa_name,
-            selected.to_target,
+            to_target,
         ),
     )
 
@@ -170,11 +184,12 @@ def _resolve_extension_target(
     backend: BackendDialect,
     base_type_spelling: str,
     alias: str,
+    to_target: str,
     support: SupportPolicy,
     scope: LoweringScope,
 ) -> TargetVector | Diagnostic:
-    target_ext = catalog.extensions.get(selected.to_target)
-    target_isa = target_ext.isa_name if target_ext else selected.to_target
+    target_ext = catalog.extensions.get(to_target)
+    target_isa = target_ext.isa_name if target_ext else to_target
     target_uses_sized_vector = (
         target_ext is not None and support.uses_sized_vector(target_ext)
     )
@@ -217,7 +232,9 @@ def _resolve_extension_target(
 
 
 def _sized_target_lane_parameter(
-    selected: SelectedImplementation, support: SupportPolicy
+    selected: SelectedImplementation,
+    to_target: str,
+    support: SupportPolicy,
 ) -> tuple[str, bool]:
     """Lane parameter for sized target vectors, including width-changing windows."""
 
@@ -226,7 +243,7 @@ def _sized_target_lane_parameter(
         return (
             str(
                 support.windowed_lane_count(
-                    selected.type_tag, selected.to_target, selected.concrete_lanes
+                    selected.type_tag, to_target, selected.concrete_lanes
                 )
                 if windowing
                 else selected.concrete_lanes
@@ -236,7 +253,7 @@ def _sized_target_lane_parameter(
     if windowing:
         return (
             support.windowed_lane_parameter(
-                selected.extension, selected.type_tag, selected.to_target
+                selected.extension, selected.type_tag, to_target
             ),
             windowing,
         )

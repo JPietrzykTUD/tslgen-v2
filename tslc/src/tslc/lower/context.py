@@ -16,21 +16,24 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from types import TracebackType
+from typing import TYPE_CHECKING, TypeVar
 
 from tslc.backend.translation import BackendDialect
 from tslc.catalog.model import Catalog, Extension, ImplementationSafety
 from tslc.diagnostics import Diagnostic, SourceSpan, diagnostic_at
-from tslc.lower.implementation_state import (
+from tslc.lower.implementation_facts import (
     ImplementationState,
     ImplementationStateFacts,
 )
-from tslc.render.model import RenderText, as_render_text
+from tslc.target_text import RenderText, as_render_text
 
 if TYPE_CHECKING:
+    from tslc.lower.dependencies import CallDependencyOrigin
     from tslc.select.selector import SelectedImplementation
 
-_MAPPING_PROXY_TYPE = type(MappingProxyType({}))
+_K = TypeVar("_K")
+_V = TypeVar("_V")
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +90,9 @@ class LoweringEnv:
     # the name of the primitive currently being lowered, so a `@self[...]` call can recurse
     # into it for a different vector (e.g. generic delegating per-lane to scalar).
     current_primitive: str = ""
+    # Human-readable provenance for call edges recorded while this body is
+    # lowered. Variants replace this with their authored variant name.
+    dependency_origin: str = "implementation"
     # the selected primitive's attribute values (concrete after wildcard expansion),
     # e.g. {"aligned": "false"} — read by the `primitive::attribute` query.
     attributes: Mapping[str, str] = field(default_factory=dict)
@@ -263,6 +269,9 @@ class LoweringEffects:
     implementation_state_facts: ImplementationStateFacts = field(
         default_factory=ImplementationStateFacts
     )
+    call_dependency_origins: list["CallDependencyOrigin"] = field(
+        default_factory=list
+    )
     _implementation_state_suppression_depth: int = 0
 
     def error(
@@ -299,27 +308,30 @@ class LoweringEffects:
     def mark_unsafe(self) -> None:
         self.mark_internal_unsafe("unsafe_operation")
 
-    def mark_implementation_direct(self) -> None:
+    def mark_direct(self) -> None:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_direct()
 
-    def mark_implementation_intrinsic(self) -> None:
+    def mark_intrinsic(self) -> None:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_intrinsic()
 
-    def mark_implementation_call(self) -> None:
+    def mark_call(self) -> None:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_call()
 
-    def mark_implementation_composition(self) -> None:
+    def record_call_dependency(self, origin: "CallDependencyOrigin") -> None:
+        self.call_dependency_origins.append(origin)
+
+    def mark_composition(self) -> None:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_composition()
 
-    def mark_implementation_fallback(self) -> None:
+    def mark_fallback(self) -> None:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_fallback()
 
-    def mark_implementation_unknown(self) -> None:
+    def mark_unknown(self) -> None:
         if self._implementation_state_suppression_depth == 0:
             self.implementation_state_facts.mark_unknown()
 
@@ -347,7 +359,12 @@ class _ImplementationStateSuppression:
     def __enter__(self) -> None:
         self._effects._implementation_state_suppression_depth += 1
 
-    def __exit__(self, exc_type, exc, traceback) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
         self._effects._implementation_state_suppression_depth -= 1
 
 
@@ -358,7 +375,7 @@ class LoweringSession:
     effects: LoweringEffects = field(default_factory=LoweringEffects)
 
 
-def _frozen_mapping(value: Mapping) -> Mapping:
-    if isinstance(value, _MAPPING_PROXY_TYPE):
+def _frozen_mapping(value: Mapping[_K, _V]) -> Mapping[_K, _V]:
+    if isinstance(value, MappingProxyType):
         return value
     return MappingProxyType(dict(value))

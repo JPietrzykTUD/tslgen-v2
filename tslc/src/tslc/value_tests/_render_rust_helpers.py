@@ -12,9 +12,9 @@ def append_call_args(lines: list[str], case: ValueTestCasePlan) -> list[str]:
     vector_index = 0
     mask_index = 0
     scalar_index = 0
-    for kind in case.param_kinds:
+    for kind in case.invocation.param_kinds:
         if kind == "v":
-            values = case.vector_inputs[vector_index]
+            values = case.inputs.vectors[vector_index]
             literals = rust_literal_list(values, case.type_tag)
             lines.append(
                 f"        let in{vector_index}: [{case.base_spelling}; {case.lanes}] = "
@@ -33,26 +33,26 @@ def append_call_args(lines: list[str], case: ValueTestCasePlan) -> list[str]:
         elif kind == "m":
             lines.append(
                 f"        let m{mask_index}: <Vec as SimdVector>::MaskType = "
-                f"{case.mask_inputs[mask_index]}u64;"
+                f"{case.inputs.masks[mask_index]}u64;"
             )
             args.append(f"m{mask_index}")
             mask_index += 1
         elif kind == "im":
             lines.append(
                 f"        let im{mask_index}: <Vec as SimdVector>::ImaskType = "
-                f"{case.mask_inputs[mask_index]}u64;"
+                f"{case.inputs.masks[mask_index]}u64;"
             )
             args.append(f"im{mask_index}")
             mask_index += 1
         elif kind in {"s", "sImm"}:
-            value = rust_literal(case.scalar_inputs[scalar_index], case.type_tag)
+            value = rust_literal(case.inputs.scalars[scalar_index], case.type_tag)
             lines.append(f"        let s{scalar_index}: {case.base_spelling} = {value};")
             args.append(f"s{scalar_index}")
             scalar_index += 1
         elif kind == "usize":
             lines.append(
                 f"        let s{scalar_index}: usize = "
-                f"{case.scalar_inputs[scalar_index]}usize;"
+                f"{case.inputs.scalars[scalar_index]}usize;"
             )
             args.append(f"s{scalar_index}")
             scalar_index += 1
@@ -62,19 +62,19 @@ def append_call_args(lines: list[str], case: ValueTestCasePlan) -> list[str]:
 
 
 def axis_args(case: ValueTestCasePlan) -> str:
-    return "".join(f", {value}" for value in case.axis_args)
+    return "".join(f", {value}" for value in case.invocation.axis_args)
 
 
 def scalar_result_type(case: ValueTestCasePlan) -> str:
-    if case.result_kind == "usize":
+    if case.invocation.result_kind == "usize":
         return "usize"
-    if case.result_kind == "im":
+    if case.invocation.result_kind == "im":
         return "<Vec as SimdVector>::ImaskType"
     return case.base_spelling
 
 
 def scalar_expected(case: ValueTestCasePlan, result_type: str) -> str:
-    token = case.expected[0]
+    token = case.expectation.values[0]
     if result_type == "usize":
         return f"{token}usize"
     if result_type == "<Vec as SimdVector>::ImaskType":

@@ -9,8 +9,10 @@ from pathlib import Path
 from tslc.diagnostics import Diagnostic
 from tslc.output._verify_common import (
     command_failure_diagnostic,
-    filter_runner_verifiable_profiles,
     missing_executable,
+)
+from tslc.output._verify_runners import (
+    filter_runner_verifiable_profiles,
     runner_missing_diagnostic,
 )
 from tslc.output.verify_model import (
@@ -49,6 +51,13 @@ AfterCommand = Callable[
     ],
     None,
 ]
+PrepareCommandEnvironment = Callable[[BuildCommand, dict[str, str]], None]
+
+
+def _keep_command_environment(
+    command: BuildCommand, environment: dict[str, str]
+) -> None:
+    del command, environment
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,18 +67,7 @@ class VerifyBackendDriver:
     prepare_backend: PrepareBackend
     command_groups: CommandGroups
     after_successful_command: AfterCommand
-
-
-def cpp_verify_driver() -> VerifyBackendDriver:
-    from tslc.output._verify_cpp import create_cpp_verify_driver
-
-    return create_cpp_verify_driver()
-
-
-def rust_verify_driver() -> VerifyBackendDriver:
-    from tslc.output._verify_rust import create_rust_verify_driver
-
-    return create_rust_verify_driver()
+    prepare_command_environment: PrepareCommandEnvironment = _keep_command_environment
 
 
 def missing_verify_tool(driver: VerifyBackendDriver) -> str | None:
@@ -83,11 +81,10 @@ __all__ = [
     "AfterCommand",
     "CommandGroups",
     "PrepareBackend",
+    "PrepareCommandEnvironment",
     "VerifyBackendDriver",
     "command_failure_diagnostic",
-    "cpp_verify_driver",
     "filter_runner_verifiable_profiles",
     "missing_verify_tool",
     "runner_missing_diagnostic",
-    "rust_verify_driver",
 ]

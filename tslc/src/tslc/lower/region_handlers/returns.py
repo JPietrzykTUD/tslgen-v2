@@ -5,7 +5,7 @@ from __future__ import annotations
 from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.render.model import RenderField
+from tslc.target_text import RenderField
 
 class CompleteLowerer:
     """``complete(expr)`` -> the backend's return framing around the value.

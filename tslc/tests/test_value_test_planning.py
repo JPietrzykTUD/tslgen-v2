@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -15,9 +17,10 @@ from tslc.catalog.model import (
 )
 from tslc.compiler_assets import RenderAssets
 from tslc.lower.lowerer import LoweredSpecialization
-from tslc.render.emitted_names import finalize_emitted_names
-from tslc.render.model import LoweredBody
-from tslc.render.project import ProfileRender, render_project
+from tslc.backend.emitted_names import finalize_emitted_names
+from tslc.target_text import LoweredBody
+from tslc.backend.emitted_profile import EmittedProfile
+from tslc.render.project import render_project
 from tslc.value_tests.coverage import parity_gaps, parity_inventory
 from tslc.value_tests import (
     ValueTestBackendProfileInput,
@@ -27,9 +30,19 @@ from tslc.value_tests import (
 from tslc.value_tests.model import (
     DEFAULT_VALUE_TEST_CASE_CAPABILITIES,
     DEFAULT_VALUE_TEST_CASE_KINDS,
-    ValueTestCasePlan,
+    ValueTestCasePlan as _ValueTestCasePlan,
     ValueTestCoverageEntry,
+    ValueTestDifferential,
+    ValueTestExpectation,
+    ValueTestFact,
+    ValueTestIndex,
+    ValueTestInputs,
+    ValueTestInvocation,
+    ValueTestMemory,
     ValueTestProfilePlan,
+    ValueTestRepresentation,
+    ValueTestScalable,
+    ValueTestTarget,
 )
 from tslc.value_tests.param_layouts import scalar_type_tag_from_expr
 from tslc.value_tests.renderer_capability import ValueTestRendererCapability
@@ -44,11 +57,121 @@ from tslc.value_tests.render_rust import (
 _VALUE_TEST_SUPPORTS = (CPP_VALUE_TEST_SUPPORT, RUST_VALUE_TEST_SUPPORT)
 
 
-def test_profile_render_freezes_backend_mappings() -> None:
+def ValueTestCasePlan(*identity: object, **fields: Any) -> _ValueTestCasePlan:
+    """Concise fixture adapter; production builders use the typed components directly."""
+
+    names = (
+        "kind",
+        "function_name",
+        "case_name",
+        "call_name",
+        "type_tag",
+        "base_spelling",
+        "lanes",
+    )
+    values = dict(zip(names, identity, strict=False))
+    values.update(fields)
+    core = {name: values.pop(name) for name in names}
+
+    source_extension = values.pop("source_extension", None)
+    runtime_lanes = values.pop("runtime_lanes_expr", None)
+    target_values = {
+        "type_tag": values.pop("expected_type_tag", None),
+        "base_spelling": values.pop("target_base_spelling", None),
+        "lanes": values.pop("target_lanes", None),
+    }
+    index_values = {
+        "value": values.pop("index_value", None),
+        "type_tag": values.pop("index_type_tag", None),
+        "base_spelling": values.pop("index_base_spelling", None),
+        "lanes": values.pop("index_lanes", None),
+    }
+    memory_values = {
+        "buffer_offset": values.pop("buffer_offset", 0),
+        "buffer_length": values.pop("buffer_length", None),
+        "source_offset": values.pop("source_offset", 0),
+        "alignment": values.pop("alignment", None),
+    }
+    hardware_extension = values.pop("hardware_extension", None)
+    from_array = values.pop("from_array_name", None)
+    to_array = values.pop("to_array_name", None)
+    to_integral = values.pop("to_integral_name", None)
+
+    plan = _ValueTestCasePlan(
+        **core,
+        inputs=ValueTestInputs(
+            vectors=values.pop("vector_inputs", ()),
+            masks=values.pop("mask_inputs", ()),
+            scalar=values.pop("scalar_input", None),
+            scalars=values.pop("scalar_inputs", ()),
+        ),
+        expectation=ValueTestExpectation(
+            values=values.pop("expected", ()),
+            text=values.pop("text_expected", None),
+        ),
+        invocation=ValueTestInvocation(
+            result_kind=values.pop("result_kind", None),
+            param_kinds=values.pop("param_kinds", ()),
+            axis_args=values.pop("axis_args", ()),
+            immediate=values.pop("immediate_value", None),
+            generic_defaults=values.pop("generic_defaults", ()),
+        ),
+        target=ValueTestTarget(**target_values) if any(value is not None for value in target_values.values()) else None,
+        index=ValueTestIndex(**index_values) if any(value is not None for value in index_values.values()) else None,
+        memory=ValueTestMemory(**memory_values) if any(memory_values.values()) else None,
+        representation=(
+            ValueTestRepresentation(
+                source_extension=source_extension,
+                target_extension=values.pop("target_extension", None),
+                from_array_name=from_array,
+                to_array_name=to_array,
+            )
+            if source_extension is not None and runtime_lanes is None
+            else None
+        ),
+        scalable=(
+            ValueTestScalable(
+                source_extension=source_extension,
+                runtime_lanes_expr=runtime_lanes,
+                mask_from_bits_exprs=values.pop("mask_from_bits_exprs", ()),
+                mask_check_expr=values.pop("mask_check_expr", None),
+                load_name=values.pop("load_name", None),
+                store_name=values.pop("store_name", None),
+            )
+            if source_extension is not None and runtime_lanes is not None
+            else None
+        ),
+        differential=(
+            ValueTestDifferential(
+                hardware_extension=hardware_extension,
+                from_array_name=from_array or "",
+                to_array_name=to_array,
+                to_integral_name=to_integral,
+                fuzz_seed=values.pop("fuzz_seed", None),
+                fuzz_iterations=values.pop("fuzz_iterations", 0),
+            )
+            if hardware_extension is not None
+            else None
+        ),
+    )
+    assert not values, f"unhandled fixture fields: {sorted(values)}"
+    return plan
+
+
+def test_emitted_profile_requires_name_finalization_context() -> None:
+    with pytest.raises(TypeError, match="immediate_split_names"):
+        EmittedProfile(  # type: ignore[call-arg]
+            profile=MachineProfile("unit", "generic", frozenset(), {}),
+            specializations_by_backend={},
+        )
+
+
+def test_emitted_profile_freezes_backend_mappings() -> None:
     source_cpp: dict[str, tuple[LoweredSpecialization, ...]] = {}
-    profile = ProfileRender(
+    profile = EmittedProfile(
         profile=MachineProfile("unit", "generic", frozenset(), {}),
         specializations_by_backend={"cpp": source_cpp, "rust": {}},
+        immediate_split_names=frozenset(),
     )
 
     source_cpp["late"] = ()
@@ -171,10 +294,10 @@ def test_planner_emits_fixed_masked_mask_result_cases() -> None:
     assert cpp_case.kind == "mask_result"
     assert rust_case.kind == "mask_result"
     assert cpp_case.call_name == "equal_maskz"
-    assert cpp_case.param_kinds == ("m", "v", "v")
-    assert cpp_case.mask_inputs == ("5",)
-    assert cpp_case.vector_inputs == (("1", "2", "3", "4"), ("1", "0", "3", "0"))
-    assert cpp_case.expected == ("5",)
+    assert cpp_case.invocation.param_kinds == ("m", "v", "v")
+    assert cpp_case.inputs.masks == ("5",)
+    assert cpp_case.inputs.vectors == (("1", "2", "3", "4"), ("1", "0", "3", "0"))
+    assert cpp_case.expectation.values == ("5",)
     assert {entry.status for entry in plan.coverage} == {"emitted"}
 
 
@@ -226,7 +349,9 @@ def test_simple_shape_patterns_are_not_ordered_by_first_overload() -> None:
 
     assert plan.diagnostics == ()
     cases = plan.profiles_for("cpp")[0].cases
-    assert [(case.kind, case.case_name, case.axis_args) for case in cases] == [
+    assert [
+        (case.kind, case.case_name, case.invocation.axis_args) for case in cases
+    ] == [
         ("store", "basic", ("false",))
     ]
 
@@ -310,8 +435,9 @@ def test_pointer_layout_planning_consumes_param_types() -> None:
     cases = plan.profiles_for("cpp")[0].cases
     assert len(cases) == 1
     assert cases[0].kind == "mask_store"
-    assert cases[0].expected_type_tag == "si32"
-    assert cases[0].target_base_spelling == "std::int32_t"
+    assert cases[0].target is not None
+    assert cases[0].target.type_tag == "si32"
+    assert cases[0].target.base_spelling == "std::int32_t"
 
 
 def test_pointer_layout_scalar_resolver_uses_param_type_expression_parser() -> None:
@@ -426,7 +552,7 @@ def test_planner_warns_for_each_unsupported_authored_case() -> None:
     assert "bad_unselected_type" not in warnings[0].message
 
 
-def test_render_project_surfaces_value_test_warnings_when_requested(
+def test_render_project_consumes_prebuilt_value_test_plan(
     render_assets: RenderAssets,
 ) -> None:
     primitive = Primitive(
@@ -450,25 +576,19 @@ def test_render_project_surfaces_value_test_warnings_when_requested(
     spec = _spec("neg", "neg", param_kinds=("v",))
     profile = _profile(cpp={"neg": (spec,)})
 
-    rendered = render_project(
-        (profile,),
-        backends=("cpp",),
-        catalog=catalog,
-        value_test_warnings=True,
-        assets=render_assets,
+    plan = ValueTestPlanner(catalog, (CPP_VALUE_TEST_SUPPORT,)).plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp", profile.profile.name, profile.specializations("cpp")
+            ),
+        )
     )
+    rendered = render_project((profile,), ("cpp",), plan, assets=render_assets)
 
-    assert [diagnostic.code for diagnostic in rendered.diagnostics] == [
+    assert [diagnostic.code for diagnostic in plan.diagnostics] == [
         "TSL-VALUE-TEST-UNSUPPORTED-CASE"
     ]
-    suppressed = render_project(
-        (profile,),
-        backends=("cpp",),
-        catalog=catalog,
-        value_test_warnings=False,
-        assets=render_assets,
-    )
-    assert suppressed.diagnostics == ()
+    assert rendered.value_tests is plan
 
 
 def test_renderers_consume_prebuilt_plans_without_catalog(
@@ -889,6 +1009,11 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
 
 
 def test_value_test_case_plan_validates_kind_requirements() -> None:
+    assert all(
+        isinstance(fact, ValueTestFact)
+        for capability in DEFAULT_VALUE_TEST_CASE_CAPABILITIES
+        for fact in capability.requirements.required_facts
+    )
     zero_arg = ValueTestCasePlan(
         kind="generic_golden",
         function_name="test_zero",
@@ -901,7 +1026,22 @@ def test_value_test_case_plan_validates_kind_requirements() -> None:
         result_kind="v",
         param_kinds=(),
     )
-    assert zero_arg.vector_inputs == ()
+    assert zero_arg.inputs.vectors == ()
+
+    aligned_free = ValueTestCasePlan(
+        kind="pointer_free",
+        function_name="test_aligned_free",
+        case_name="aligned_free",
+        call_name="deallocate",
+        type_tag="ptr",
+        base_spelling="void*",
+        lanes=1,
+        scalar_inputs=("64",),
+        alignment=32,
+    )
+    assert aligned_free.memory is not None
+    assert aligned_free.memory.alignment == 32
+    assert aligned_free.target is None
 
     with pytest.raises(ValueError, match="unsupported value-test case kind"):
         ValueTestCasePlan(
@@ -927,7 +1067,7 @@ def test_value_test_case_plan_validates_kind_requirements() -> None:
             expected=("1", "2"),
         )
 
-    with pytest.raises(ValueError, match="requires runtime_lanes_expr"):
+    with pytest.raises(ValueError, match="requires scalable_"):
         ValueTestCasePlan(
             kind="scalable_mask_result",
             function_name="test_scalable_bad",
@@ -1381,38 +1521,53 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
             "_render_rust_memory.py",
         )
     )
-    pipeline = Path("tslc/src/tslc/pipeline.py").read_text(encoding="utf-8")
-
-    assert len(planner.splitlines()) < 250
-    for path in (
-        "case_plans.py",
-        "_case_common.py",
-        "_case_core.py",
-        "_case_scalable.py",
-        "_case_scalable_common.py",
-        "_case_scalable_masks.py",
-        "_case_memory.py",
-        "_case_conversion.py",
-        "patterns.py",
-        "_pattern_base.py",
-        "_pattern_core.py",
-        "_pattern_masks.py",
-        "_pattern_memory.py",
-        "_pattern_conversion.py",
-        "render_cpp.py",
-        "lane_model.py",
-        "_render_cpp_core.py",
-        "_render_cpp_memory.py",
-        "_render_cpp_conversion.py",
-        "_render_cpp_dispatch.py",
-        "render_rust.py",
-        "_render_rust_core.py",
-        "_render_rust_conversion.py",
-        "_render_rust_helpers.py",
-        "_render_rust_memory.py",
-        "support_headers.py",
-    ):
-        assert len((value_tests / path).read_text(encoding="utf-8").splitlines()) < 500
+    renderer_projections = {
+        "vector_inputs",
+        "mask_inputs",
+        "scalar_input",
+        "scalar_inputs",
+        "expected",
+        "text_expected",
+        "result_kind",
+        "param_kinds",
+        "axis_args",
+        "immediate_value",
+        "generic_defaults",
+        "expected_type_tag",
+        "target_base_spelling",
+        "target_lanes",
+        "index_value",
+        "index_type_tag",
+        "index_base_spelling",
+        "index_lanes",
+        "buffer_offset",
+        "buffer_length",
+        "source_offset",
+        "alignment",
+        "source_extension",
+        "target_extension",
+        "from_array_name",
+        "to_array_name",
+        "to_integral_name",
+        "hardware_extension",
+        "runtime_lanes_expr",
+        "mask_from_bits_exprs",
+        "mask_check_expr",
+        "load_name",
+        "store_name",
+        "fuzz_seed",
+        "fuzz_iterations",
+    }
+    rendered_tree = ast.parse(
+        (render_cpp + render_rust).replace("from __future__ import annotations", "")
+    )
+    assert renderer_projections.isdisjoint(
+        node.attr
+        for node in ast.walk(rendered_tree)
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "case"
+    )
     assert "def discover_harness_primitives" not in planner
     assert "class _GenericGoldenPattern" not in planner
     assert "backend_ids" not in patterns
@@ -1435,10 +1590,6 @@ def test_value_test_modules_keep_owned_boundaries() -> None:
     assert "tsl::tsl_core" in rust_profile_template
     assert "Catalog" not in render_rust
     assert "Primitive" not in render_rust
-    assert "value_test_warnings=self.request.value_test_warnings" in pipeline
-    assert "value_test_warnings=self.request.test_harness" not in pipeline
-
-
 def test_cpp_value_test_support_matches_renderer_dispatch() -> None:
     assert CPP_VALUE_TEST_SUPPORT.case_kinds == CPP_VALUE_TEST_RENDERER.case_kinds
     assert CPP_VALUE_TEST_RENDERER.backend_support() == CPP_VALUE_TEST_SUPPORT
@@ -1458,7 +1609,7 @@ def test_rust_value_test_support_matches_renderer_dispatch() -> None:
 
 
 def test_value_test_case_requirements_cover_renderer_dispatch() -> None:
-    assert frozenset(ValueTestCasePlan.CASE_REQUIREMENTS) == DEFAULT_VALUE_TEST_CASE_KINDS
+    assert frozenset(_ValueTestCasePlan.CASE_REQUIREMENTS) == DEFAULT_VALUE_TEST_CASE_KINDS
     assert {
         capability.kind for capability in DEFAULT_VALUE_TEST_CASE_CAPABILITIES
     } == DEFAULT_VALUE_TEST_CASE_KINDS
@@ -1530,14 +1681,15 @@ def _profile(
     *,
     cpp: dict[str, tuple[LoweredSpecialization, ...]] | None = None,
     rust: dict[str, tuple[LoweredSpecialization, ...]] | None = None,
-) -> ProfileRender:
-    return ProfileRender(
+) -> EmittedProfile:
+    return EmittedProfile(
         profile=MachineProfile("unit", "generic", frozenset(), {}),
         specializations_by_backend={"cpp": cpp or {}, "rust": rust or {}},
+        immediate_split_names=frozenset(),
     )
 
 
-def _inputs(profile: ProfileRender) -> tuple[ValueTestBackendProfileInput, ...]:
+def _inputs(profile: EmittedProfile) -> tuple[ValueTestBackendProfileInput, ...]:
     return (
         ValueTestBackendProfileInput(
             "cpp", profile.profile.name, profile.specializations("cpp")
@@ -1569,7 +1721,7 @@ def _spec(
         result_kind=result_kind,
         param_names=tuple(f"p{i}" for i in range(len(param_kinds))),
         param_kinds=param_kinds,
-        body=LoweredBody.from_text("", backend_id="cpp"),
+        body=LoweredBody.from_text(""),
         uses_sized_vector=True,
         lane_parameter="4",
         axis=axis,

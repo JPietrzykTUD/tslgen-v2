@@ -17,7 +17,17 @@ from tslc.value_tests.case_helpers import (
     valid_generic_lanes as _valid_generic_lanes,
     vector_inputs as _vector_inputs,
 )
-from tslc.value_tests.model import HarnessPrimitiveNames, ValueTestCasePlan
+from tslc.value_tests.model import (
+    HarnessPrimitiveNames,
+    ValueTestCasePlan,
+    ValueTestDifferential,
+    ValueTestExpectation,
+    ValueTestIndex,
+    ValueTestInputs,
+    ValueTestInvocation,
+    ValueTestRepresentation,
+    ValueTestTarget,
+)
 
 def load_convert_case(
     name: str,
@@ -45,16 +55,26 @@ def load_convert_case(
         type_tag=case.type_tag,
         base_spelling=match.base_type_spelling,
         lanes=source_lanes,
-        vector_inputs=vector_inputs,
-        expected=case.expected,
-        expected_type_tag=case.to_type,
-        target_base_spelling=match.target.base_spelling,
-        target_lanes=len(case.expected),
-        result_kind=match.result_kind,
-        param_kinds=match.param_kinds,
-        source_extension=match.extension_name if case.extension is not None else None,
-        target_extension=match.target.extension_isa if case.extension is not None else None,
-        to_array_name=harness.to_array if case.extension is not None and harness else None,
+        inputs=ValueTestInputs(vectors=vector_inputs),
+        expectation=ValueTestExpectation(values=case.expected),
+        invocation=ValueTestInvocation(
+            result_kind=match.result_kind,
+            param_kinds=match.param_kinds,
+        ),
+        target=ValueTestTarget(
+            type_tag=case.to_type,
+            base_spelling=match.target.base_spelling,
+            lanes=len(case.expected),
+        ),
+        representation=(
+            ValueTestRepresentation(
+                source_extension=match.extension_name,
+                target_extension=match.target.extension_isa,
+                to_array_name=harness.to_array if harness else None,
+            )
+            if case.extension is not None
+            else None
+        ),
     )
 
 def convert_case(
@@ -84,12 +104,14 @@ def convert_case(
         type_tag=case.type_tag,
         base_spelling=match.base_type_spelling,
         lanes=case.lanes or 0,
-        vector_inputs=vector_inputs,
-        expected=case.expected,
-        expected_type_tag=case.to_type,
-        target_base_spelling=match.target.base_spelling,
-        target_lanes=out_lanes,
-        index_value=str(case.index),
+        inputs=ValueTestInputs(vectors=vector_inputs),
+        expectation=ValueTestExpectation(values=case.expected),
+        target=ValueTestTarget(
+            type_tag=case.to_type,
+            base_spelling=match.target.base_spelling,
+            lanes=out_lanes,
+        ),
+        index=ValueTestIndex(value=str(case.index)),
     )
 
 def repr_cast_case(
@@ -122,15 +144,23 @@ def repr_cast_case(
         type_tag=case.type_tag,
         base_spelling=match.base_type_spelling,
         lanes=case.lanes,
-        vector_inputs=vector_inputs,
-        expected=case.expected,
-        expected_type_tag=case.to_type,
-        target_base_spelling=match.target.base_spelling,
-        target_lanes=target_lanes,
-        source_extension=match.extension_name if case.extension is not None else None,
-        target_extension=match.target.extension_isa if case.extension is not None else None,
-        from_array_name=harness.from_array if case.extension is not None and harness else None,
-        to_array_name=harness.to_array if case.extension is not None and harness else None,
+        inputs=ValueTestInputs(vectors=vector_inputs),
+        expectation=ValueTestExpectation(values=case.expected),
+        target=ValueTestTarget(
+            type_tag=case.to_type,
+            base_spelling=match.target.base_spelling,
+            lanes=target_lanes,
+        ),
+        representation=(
+            ValueTestRepresentation(
+                source_extension=match.extension_name,
+                target_extension=match.target.extension_isa,
+                from_array_name=harness.from_array if harness else None,
+                to_array_name=harness.to_array if harness else None,
+            )
+            if case.extension is not None
+            else None
+        ),
     )
 
 def extension_repr_case(
@@ -166,13 +196,15 @@ def extension_repr_case(
         type_tag=case.type_tag,
         base_spelling=match.base_type_spelling,
         lanes=lanes,
-        vector_inputs=vector_inputs,
-        expected=case.expected,
-        source_extension=case.extension,
-        target_extension=case.to_extension,
-        index_value=imm_inputs[0],
-        from_array_name=harness.from_array,
-        to_array_name=harness.to_array,
+        inputs=ValueTestInputs(vectors=vector_inputs),
+        expectation=ValueTestExpectation(values=case.expected),
+        index=ValueTestIndex(value=imm_inputs[0]),
+        representation=ValueTestRepresentation(
+            source_extension=case.extension or match.extension_name,
+            target_extension=case.to_extension,
+            from_array_name=harness.from_array,
+            to_array_name=harness.to_array,
+        ),
     )
 
 # Random inputs swept per (primitive, type, extension) by one compiled fuzz function. 256 keeps
@@ -206,6 +238,8 @@ def differential_fuzz_cases(
     count from the extension width."""
 
     spec0 = specs[0]
+    if harness.from_array is None:
+        return []
     if not spec0.param_kinds or any(kind != "v" for kind in spec0.param_kinds):
         return []
     if spec0.result_kind == "m" and harness.to_integral is None:
@@ -232,14 +266,18 @@ def differential_fuzz_cases(
                 type_tag=spec.type_tag,
                 base_spelling=base_spelling,
                 lanes=lanes,
-                result_kind=spec.result_kind,
-                param_kinds=spec.param_kinds,
-                hardware_extension=spec.extension_name,
-                from_array_name=harness.from_array,
-                to_array_name=harness.to_array,
-                to_integral_name=harness.to_integral,
-                fuzz_seed=_fuzz_seed(function_name),
-                fuzz_iterations=iterations,
+                invocation=ValueTestInvocation(
+                    result_kind=spec.result_kind,
+                    param_kinds=spec.param_kinds,
+                ),
+                differential=ValueTestDifferential(
+                    hardware_extension=spec.extension_name,
+                    from_array_name=harness.from_array,
+                    to_array_name=harness.to_array,
+                    to_integral_name=harness.to_integral,
+                    fuzz_seed=_fuzz_seed(function_name),
+                    fuzz_iterations=iterations,
+                ),
             )
         )
     return emitted
@@ -254,6 +292,8 @@ def differential_cases(
     harness: HarnessPrimitiveNames,
 ) -> list[ValueTestCasePlan]:
     if case.lanes is None or case.expected_rule is not None:
+        return []
+    if harness.from_array is None:
         return []
     base_spelling = _base_spelling(specs, case.type_tag)
     type_bits = _type_bits(case.type_tag)
@@ -282,13 +322,17 @@ def differential_cases(
                 type_tag=case.type_tag,
                 base_spelling=base_spelling,
                 lanes=case.lanes,
-                vector_inputs=vector_inputs,
-                result_kind=specs[0].result_kind,
-                param_kinds=specs[0].param_kinds,
-                hardware_extension=spec.extension_name,
-                from_array_name=harness.from_array,
-                to_array_name=harness.to_array,
-                to_integral_name=harness.to_integral,
+                inputs=ValueTestInputs(vectors=vector_inputs),
+                invocation=ValueTestInvocation(
+                    result_kind=specs[0].result_kind,
+                    param_kinds=specs[0].param_kinds,
+                ),
+                differential=ValueTestDifferential(
+                    hardware_extension=spec.extension_name,
+                    from_array_name=harness.from_array,
+                    to_array_name=harness.to_array,
+                    to_integral_name=harness.to_integral,
+                ),
             )
         )
     return emitted

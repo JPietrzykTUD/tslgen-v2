@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from tslc.ir.region_syntax import split_arg_groups
 from tslc.ir.segments import Region
 from tslc.lower.context import LoweringSession
-from tslc.lower.region_handlers.common import _split_arg_groups
 from tslc.lower.region_handlers.protocol import RenderBody
-from tslc.render.model import RenderField, trimmed_text
+from tslc.target_text import RenderField, trimmed_text
 
 
 class IoLowerer:
@@ -21,7 +21,7 @@ class IoLowerer:
         self, region: Region, context: LoweringSession, render: RenderBody
     ) -> RenderField:
         op = region.selector_text.strip()
-        args = [trimmed_text(render(group)) for group in _split_arg_groups(region.body)]
+        args = [trimmed_text(render(group)) for group in split_arg_groups(region.body)]
         if op == "format" and len(args) == 3:
             key = "io_format"
             fields = {"out": args[0], "array": args[1], "modifier": args[2]}

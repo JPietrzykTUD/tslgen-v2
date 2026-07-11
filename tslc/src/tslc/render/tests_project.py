@@ -11,11 +11,20 @@ from tslc.value_tests.render_rust import render_rust_values_file
 
 
 def cpp_test_artifacts(
-    plan: ValueTestProjectPlan, assets: RenderAssets
+    plan: ValueTestProjectPlan,
+    assets: RenderAssets,
+    *,
+    media_type: str,
 ) -> list[Artifact]:
     """C++ value-test sources: the shared helper asset plus one runner per profile."""
 
-    artifacts = [text("cpp/include/tsl_test_core.hpp", assets.text("tsl_test_core.hpp"))]
+    artifacts = [
+        text(
+            "cpp/include/tsl_test_core.hpp",
+            assets.text("tsl_test_core.hpp"),
+            media_type=media_type,
+        )
+    ]
     support_headers = sorted(
         {
             header
@@ -24,24 +33,39 @@ def cpp_test_artifacts(
         }
     )
     artifacts.extend(
-        text(f"cpp/include/{header}", assets.text(header)) for header in support_headers
+        text(f"cpp/include/{header}", assets.text(header), media_type=media_type)
+        for header in support_headers
     )
     for profile in plan.profiles_for("cpp"):
         source = render_cpp_values_runner(profile, assets)
-        artifacts.append(text(f"cpp/tests/values_{slug(profile.profile_name)}.cpp", source))
+        artifacts.append(
+            text(
+                f"cpp/tests/values_{slug(profile.profile_name)}.cpp",
+                source,
+                media_type=media_type,
+            )
+        )
     return artifacts
 
 
 def rust_test_artifacts(
-    plan: ValueTestProjectPlan, assets: RenderAssets
+    plan: ValueTestProjectPlan,
+    assets: RenderAssets,
+    *,
+    media_type: str,
 ) -> list[Artifact]:
     """Rust value-test sources: shared helper module plus the cfg-gated test file."""
 
     return [
-        text("rust/src/tsl_test_core.rs", assets.text("tsl_test_core.rs")),
+        text(
+            "rust/src/tsl_test_core.rs",
+            assets.text("tsl_test_core.rs"),
+            media_type=media_type,
+        ),
         text(
             "rust/tests/values.rs",
             render_rust_values_file(plan.profiles_for("rust"), assets),
+            media_type=media_type,
         ),
     ]
 

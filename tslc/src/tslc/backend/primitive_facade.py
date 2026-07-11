@@ -67,6 +67,13 @@ def classify_dataparallel_primitive_facade(
     )
 
 
+__all__ = (
+    "DataparallelPrimitiveFacade",
+    "DataparallelPrimitiveFacadeKind",
+    "classify_dataparallel_primitive_facade",
+)
+
+
 def _memory_facade_shape(
     primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
 ) -> LoweredSpecialization | None:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from tslc.backend.cpp import CppBackend
 from tslc.backend.rust import RustBackend
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile
 from tslc.catalog.model import Catalog, ImplementationSafety
@@ -25,7 +25,7 @@ from tslc.pipeline import (
     _prune_unresolved,
     _propagate_transitive_call_facts,
 )
-from tslc.render.model import LoweredBody
+from tslc.target_text import LoweredBody, RenderPlaceholder, render_sequence
 from tslc.select.selector import Selector
 from tslc.sources import SourceDocument, SourceLoader
 from tslc.syntax.ast import ParsedImplementationSelectorEntry
@@ -337,9 +337,18 @@ def test_rust_backend_formats_caller_unsafe_contract() -> None:
 
 
 def test_rust_backend_emits_target_features_on_impl_body() -> None:
+    body = LoweredBody.from_render_text(
+        render_sequence(
+            (
+                "return ",
+                RenderPlaceholder("current_owner", "Self"),
+                "::lane_count() as i32;",
+            )
+        )
+    )
     spec = _spec(
         "needs_features",
-        body="return Self::lane_count() as i32;",
+        body=body,
         required_features=frozenset({"avx2", "sse4_1"}),
     )
 
@@ -355,6 +364,35 @@ def test_rust_backend_emits_target_features_on_impl_body() -> None:
     assert "return <Simd<i32, Scalar> as SimdVector>::lane_count() as i32;" in rendered
     assert "return Self::lane_count() as i32;" not in rendered
     assert "unsafe { __tsl_target_feature_body(data) }" in rendered
+
+
+def test_rust_target_features_preserve_raw_self_text() -> None:
+    body = LoweredBody.from_render_text(
+        render_sequence(
+            (
+                'let literal = "Self::literal";\n',
+                "// Self::line_comment\n",
+                "/* Self::block_comment */\n",
+                "let Selfish = data;\n",
+                "return ",
+                RenderPlaceholder("current_owner", "Self"),
+                "::lane_count() as i32;",
+            )
+        )
+    )
+    spec = _spec(
+        "preserves_raw_text",
+        body=body,
+        required_features=frozenset({"avx2"}),
+    )
+
+    rendered = RustBackend().render_primitive("preserves_raw_text", (spec,))
+
+    assert 'let literal = "Self::literal";' in rendered
+    assert "// Self::line_comment" in rendered
+    assert "/* Self::block_comment */" in rendered
+    assert "let Selfish = data;" in rendered
+    assert "return <Simd<i32, Scalar> as SimdVector>::lane_count() as i32;" in rendered
 
 
 def test_rust_backend_can_disable_target_feature_emission() -> None:
@@ -595,6 +633,10 @@ def _base_source(impls: str) -> str:
         "extension scalar:\n"
         '  extension_name "scalar"\n'
         '  family "scalar"\n'
+        "  cpp:\n"
+        "    supported true\n"
+        "  rust:\n"
+        "    supported true\n"
         "language cpp:\n"
         '  s32 {type "int32_t"}\n'
         "language rust:\n"
@@ -636,7 +678,7 @@ def _slot(
 def _spec(
     primitive_name: str,
     *,
-    body: str = "return data;",
+    body: str | LoweredBody = "return data;",
     safety: ImplementationSafety = ImplementationSafety(),
     required_features: frozenset[str] = frozenset(),
     implementation_state: ImplementationState = ImplementationState.UNKNOWN,
@@ -644,6 +686,15 @@ def _spec(
     immediate: tuple[str, str] | None = None,
 ) -> LoweredSpecialization:
     param_names = ("data", "shift") if param_kinds == ("v", "sImm") else ("data",)
+    lowered_body = (
+        body
+        if isinstance(body, LoweredBody)
+        else LoweredBody.from_text(
+            body,
+            unsafe_block_renderer=lambda rendered: f"unsafe {{ {rendered} }}",
+            requires_unsafe=safety.internal_unsafe,
+        )
+    )
     return LoweredSpecialization(
         backend_id="rust",
         primitive_name=primitive_name,
@@ -655,11 +706,7 @@ def _spec(
         result_kind="v",
         param_names=param_names,
         param_kinds=param_kinds,
-        body=LoweredBody.from_text(
-            body,
-            backend_id="rust",
-            requires_unsafe=safety.internal_unsafe,
-        ),
+        body=lowered_body,
         immediate=immediate,
         register_is_base=True,
         required_features=required_features,

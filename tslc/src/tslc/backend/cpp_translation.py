@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from tslc.backend import translation_common as common
 from tslc.catalog.model import Catalog, Extension
-from tslc.render.model import RenderField, RenderText, literal_text, render_sequence
+from tslc.target_text import RenderField, RenderText, literal_text, render_sequence
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +39,8 @@ class _CppTypes:
         if base is None:
             return None
         if uses_sized_vector:
+            if lane_parameter is None:
+                return None
             # A sized-vector target is projected through the generated sized-vector substrate.
             return (
                 f"typename "
@@ -254,6 +256,9 @@ class _CppSyntax:
                 literal_text("))"),
             )
         )
+
+    def render_unsafe_block(self, body: str) -> str:
+        return body
 
 
 @dataclass(frozen=True, slots=True)

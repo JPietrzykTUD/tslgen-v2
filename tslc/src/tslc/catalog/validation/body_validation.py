@@ -9,16 +9,22 @@ from collections.abc import Callable
 from tslc.catalog.validation.source_spans import source_span
 from tslc.diagnostics import Diagnostic, diagnostic_at
 from tslc.ir.region_registry import DEFAULT_TSIL_REGION_DESCRIPTORS, region_shell_validator
+from tslc.ir.region_syntax import (
+    IntrinsicSelector,
+    parse_call_selector,
+    parse_cast_selector,
+    parse_mask_selector,
+    parse_var_selector,
+    split_arg_groups,
+)
 from tslc.ir.scan import find_malformed_regions, scan
 from tslc.ir.segments import RawText, Region, Segment
-from tslc.lower._text import split_selector_terms, split_top_level
-from tslc.lower.calls import parse_call_selector
-from tslc.lower.cast_selectors import parse_cast_selector
-from tslc.lower.region_handlers.common import _split_arg_groups
-from tslc.lower.region_handlers.declarations import parse_var_selector
-from tslc.lower.region_handlers.intrinsics import IntrinsicSelector
-from tslc.lower.region_handlers.masks import parse_mask_selector
-from tslc.syntax.ast import OuterTslParseResult, ParsedImplementationBodyEnvelope
+from tslc.ir.text import split_selector_terms, split_top_level
+from tslc.syntax.ast import (
+    OuterTslParseResult,
+    ParsedImplementationBodyEnvelope,
+    ParsedImplementationSelectorEntry,
+)
 
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -35,12 +41,16 @@ def validate_body_regions(
                 _validate_envelope(primitive.name, envelope, diagnostics)
 
 
-def _implementation_body_envelopes(entries):
+def _implementation_body_envelopes(
+    entries: tuple[ParsedImplementationSelectorEntry, ...],
+) -> tuple[ParsedImplementationBodyEnvelope, ...]:
+    envelopes: list[ParsedImplementationBodyEnvelope] = []
     for entry in entries:
-        yield from entry.body_envelopes
+        envelopes.extend(entry.body_envelopes)
         for variant in entry.variants:
-            yield from variant.body_envelopes
-        yield from _implementation_body_envelopes(entry.children)
+            envelopes.extend(variant.body_envelopes)
+        envelopes.extend(_implementation_body_envelopes(entry.children))
+    return tuple(envelopes)
 
 
 def _validate_envelope(
@@ -356,7 +366,7 @@ def _validate_select_expr_region(
     region: Region,
     diagnostics: list[Diagnostic],
 ) -> None:
-    if not region.selector_text.strip() and len(_split_arg_groups(region.body)) == 3:
+    if not region.selector_text.strip() and len(split_arg_groups(region.body)) == 3:
         return
     diagnostics.append(
         diagnostic_at(

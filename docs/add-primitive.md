@@ -206,8 +206,9 @@ PYTHONPATH=tslc/src python -m tslc.cli \
   --value-test-warnings
 ```
 
-Use `--sde` or configured QEMU runners only when testing profiles that need an
-emulator.
+Use `--runner sde=/path/to/sde64` or
+`--runner qemu-aarch64=/path/to/qemu-aarch64` only when testing profiles that
+need an emulator.
 
 ## 9. Review The Boundary
 

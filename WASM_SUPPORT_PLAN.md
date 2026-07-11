@@ -84,16 +84,19 @@ profile_families:
     extension_families [wasm]
     runner_kinds [wasmtime]
     sort_order 30
-    cpp_feature_flags true
-    rust_target_features true
-    rust_target "wasm32-wasip1"
+    backends:
+      cpp:
+        feature_flags true
+      rust:
+        feature_flags true
+        target "wasm32-wasip1"
 ```
 
 Notes:
 
-- `cpp_feature_flags true` is useful because profile feature `simd128` naturally
+- C++ `feature_flags true` is useful because profile feature `simd128` naturally
   becomes `-msimd128`.
-- `rust_target_features true` is useful because profile feature `simd128`
+- Rust `feature_flags true` is useful because profile feature `simd128`
   naturally becomes `+simd128`.
 - The verifier vocabulary uses `runner_kinds` because Wasmtime is a runtime, not
   a CPU emulator.
@@ -113,7 +116,7 @@ Add:
     {
       "name": "wasm32-simd128",
       "target_features": "simd128",
-      "cpp_flags": [],
+      "backend_flags": {"cpp": []},
       "runner": {"kind": "wasmtime", "profile": "default"}
     }
   ]
@@ -131,28 +134,19 @@ Add a fixed-width extension similar in shape to NEON:
 
 ```tsl
 extension wasm128:
-  vendor "webassembly"
   extension_name "wasm128"
   family "wasm"
   intrinsic_style "wasm"
   vector_bits 128
   native_sort_order 800
-  autodetect false
-  mask_repr "lane_bitmask"
-  mask_width "lanes"
-  mask_vector_loadable false
-  runtime_lanes false
   default_test_target true
   cpp:
     supported true
     headers ["wasm_simd128.h"]
-    test_suite_name "TslWasm128"
-    test_support_header "tests/scalar_support.hpp"
   rust:
     supported true
     type_name "Wasm128"
     arch_module "wasm32"
-    generation_support []
   vector_register_types:
     ?i?:
       cpp "v128_t"
@@ -181,13 +175,11 @@ extension wasm128:
         ui64 "i64x2"
   mask_type_policy:
     kind "lane_bitmask"
-    width "lanes"
   integral_mask_type_policy:
     kind "lane_bitmask"
-    width "lanes"
 ```
 
-The exact `mask_repr`/policy may need adjustment once comparison and mask logic
+The exact mask policy may need adjustment once comparison and mask logic
 are implemented. For the first vertical slice, focus on value vectors,
 load/store, and arithmetic.
 

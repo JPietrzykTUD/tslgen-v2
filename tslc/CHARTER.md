@@ -16,7 +16,7 @@ vocabulary that represents something real.
 
 What stays minimal is **plumbing**: never a `Discovery → DiscoveryResult →
 Handoff → HandoffResult` quartet for one concept. There is one body model
-(`Segment`), one lowered form (`LoweredFunction`). Result objects carry only
+(`Segment`), one lowered form (`LoweredSpecialization`). Result objects carry only
 `(value, diagnostics)`. If you are about to add a wrapper whose only job is to
 carry another type between two functions, don't.
 
@@ -50,6 +50,8 @@ promoted to typed TSIL regions before such a backend relies on them.
   artifact writing. Parsing, catalog building, selection, lowering, and
   rendering consume loaded inputs and are pure.
 - Deterministic ordering everywhere (sorted artifacts, stable iteration).
+- Selection closure, emitted-name finalization, backend validation, and test
+  planning finish before project rendering begins.
 - Templates format already-decided values. No backend semantics in templates.
 
 ## 6. Scratch and output go in `./tslctmp`, never `/tmp`

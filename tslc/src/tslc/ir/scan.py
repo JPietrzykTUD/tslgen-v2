@@ -15,10 +15,17 @@ expression streams, so their punctuation stays owned by the surrounding source.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
 from tslc.diagnostics import SourceSpan
-from tslc.ir.region_registry import TSIL_REGION_KEYWORDS, region_body_shape
+from tslc.ir.region_registry import (
+    DEFAULT_TSIL_REGION_DESCRIPTORS,
+    RegionBodyShape,
+    TSIL_REGION_KEYWORDS,
+    region_body_shape,
+)
 from tslc.ir.segments import RawText, Region, Segment
 
 KEYWORDS: frozenset[str] = TSIL_REGION_KEYWORDS
@@ -63,10 +70,11 @@ def _find_malformed_regions(
     n = len(text)
     i = 0
     while i < n:
-        ch = text[i]
-        if ch == '"':
-            i = _skip_string(text, i)
+        opaque_end = _skip_opaque(text, i)
+        if opaque_end is not None:
+            i = opaque_end
             continue
+        ch = text[i]
         if ch in _IDENT_START and _boundary_before(text, i):
             keyword, after = _read_ident(text, i)
             if keyword in KEYWORDS:
@@ -96,10 +104,11 @@ def _scan(
     i = 0
     raw_start = 0
     while i < n:
-        ch = text[i]
-        if ch == '"':
-            i = _skip_string(text, i)
+        opaque_end = _skip_opaque(text, i)
+        if opaque_end is not None:
+            i = opaque_end
             continue
+        ch = text[i]
         if ch in _IDENT_START and _boundary_before(text, i):
             keyword, after = _read_ident(text, i)
             if keyword in KEYWORDS:
@@ -185,37 +194,14 @@ def _try_region(
         )
     )
     shape = region_body_shape(keyword)
-    if shape == "if_block":
-        # A block-bearing region: capture the `{ ... }` body (and any `else`) too.
-        return _try_if_region(
+    if shape != "call":
+        parser = _REGION_SHAPE_PARSERS.get(shape)
+        if parser is None:
+            raise ValueError(f"unregistered TSIL region body shape {shape!r}")
+        return parser(
             text,
             start,
-            selector_text,
-            body,
-            close + 1,
-            source,
-            root_text,
-            base_offset,
-        )
-    if shape == "loop_block":
-        # `loop<backend>(…) { body }` and `loop<backend, unroll>(…) { body }`
-        # capture their `{ ... }` block. The lowerer translates them to native loop constructs.
-        return _try_loop_region(
-            text,
-            start,
-            selector_text,
-            body,
-            close + 1,
-            source,
-            root_text,
-            base_offset,
-        )
-    if shape == "switch_block":
-        # `switch<compile>(sel) { label => { body } … }`: capture the arm blocks so the lowerer
-        # can emit a compile-time multi-way selection over the selector.
-        return _try_switch_region(
-            text,
-            start,
+            keyword,
             selector_text,
             body,
             close + 1,
@@ -236,6 +222,7 @@ def _try_region(
 def _try_if_region(
     text: str,
     start: int,
+    keyword: str,
     selector_text: str,
     condition: tuple[Segment, ...],
     after_condition: int,
@@ -274,7 +261,7 @@ def _try_if_region(
             return None, start
 
     region = Region(
-        keyword="if",
+        keyword=keyword,
         selector_text=selector_text,
         body=condition,
         full_text=text[start:end],
@@ -288,6 +275,7 @@ def _try_if_region(
 def _try_loop_region(
     text: str,
     start: int,
+    keyword: str,
     selector_text: str,
     body: tuple[Segment, ...],
     after_body: int,
@@ -317,7 +305,7 @@ def _try_loop_region(
         )
         end = close + 1
     region = Region(
-        keyword="loop",
+        keyword=keyword,
         selector_text=selector_text,
         body=body,
         full_text=text[start:end],
@@ -330,6 +318,7 @@ def _try_loop_region(
 def _try_switch_region(
     text: str,
     start: int,
+    keyword: str,
     selector_text: str,
     selector: tuple[Segment, ...],
     after_selector: int,
@@ -353,7 +342,7 @@ def _try_switch_region(
     if arms is None:
         return None, start
     region = Region(
-        keyword="switch",
+        keyword=keyword,
         selector_text=selector_text,
         body=selector,
         full_text=text[start : outer_close + 1],
@@ -430,16 +419,11 @@ def _try_malformed_region(
         )
 
     shape = region_body_shape(keyword)
-    if shape == "if_block":
-        return _try_malformed_if_region(
-            text, start, keyword, close + 1, source, root_text, base_offset
-        )
-    if shape == "loop_block":
-        return _try_malformed_loop_region(
-            text, start, keyword, close + 1, source, root_text, base_offset
-        )
-    if shape == "switch_block":
-        return _try_malformed_switch_region(
+    if shape != "call":
+        parser = _MALFORMED_REGION_SHAPE_PARSERS.get(shape)
+        if parser is None:
+            raise ValueError(f"unregistered malformed TSIL region shape {shape!r}")
+        return parser(
             text, start, keyword, close + 1, source, root_text, base_offset
         )
     return None, close + 1
@@ -666,6 +650,50 @@ def _try_malformed_switch_region(
     return None, outer_close + 1
 
 
+RegionShapeParser = Callable[
+    [str, int, str, str, tuple[Segment, ...], int, SourceSpan | None, str, int],
+    tuple[Region | None, int],
+]
+MalformedRegionShapeParser = Callable[
+    [str, int, str, int, SourceSpan | None, str, int],
+    tuple[MalformedRegion | None, int],
+]
+
+_REGION_SHAPE_PARSERS: Mapping[RegionBodyShape, RegionShapeParser] = MappingProxyType(
+    {
+        "if_block": _try_if_region,
+        "loop_block": _try_loop_region,
+        "switch_block": _try_switch_region,
+    }
+)
+_MALFORMED_REGION_SHAPE_PARSERS: Mapping[
+    RegionBodyShape, MalformedRegionShapeParser
+] = MappingProxyType(
+    {
+        "if_block": _try_malformed_if_region,
+        "loop_block": _try_malformed_loop_region,
+        "switch_block": _try_malformed_switch_region,
+    }
+)
+STRUCTURAL_REGION_BODY_SHAPES = frozenset(_REGION_SHAPE_PARSERS)
+
+
+def _validate_region_shape_parsers() -> None:
+    declared = frozenset(
+        descriptor.body_shape
+        for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS
+        if descriptor.body_shape != "call"
+    )
+    malformed = frozenset(_MALFORMED_REGION_SHAPE_PARSERS)
+    if declared != STRUCTURAL_REGION_BODY_SHAPES or declared != malformed:
+        raise ValueError(
+            "TSIL structural region shapes must have matching scan and malformed parsers"
+        )
+
+
+_validate_region_shape_parsers()
+
+
 def _malformed_region(
     text: str,
     start: int,
@@ -797,10 +825,11 @@ def _match_bracket(text: str, open_index: int, open_ch: str, close_ch: str) -> i
     i = open_index
     n = len(text)
     while i < n:
-        ch = text[i]
-        if ch == '"':
-            i = _skip_string(text, i)
+        opaque_end = _skip_opaque(text, i)
+        if opaque_end is not None:
+            i = opaque_end
             continue
+        ch = text[i]
         if ch == open_ch:
             depth += 1
         elif ch == close_ch:
@@ -809,6 +838,43 @@ def _match_bracket(text: str, open_index: int, open_ch: str, close_ch: str) -> i
                 return i
         i += 1
     return None
+
+
+def _skip_opaque(text: str, index: int) -> int | None:
+    """Skip target text whose contents cannot contain a TSIL region."""
+
+    if text[index] == '"':
+        return _skip_string(text, index)
+    if text.startswith("//", index):
+        return _skip_line_comment(text, index)
+    if text.startswith("/*", index):
+        return _skip_block_comment(text, index)
+    return None
+
+
+def _skip_line_comment(text: str, index: int) -> int:
+    newline = text.find("\n", index + 2)
+    return len(text) if newline == -1 else newline
+
+
+def _skip_block_comment(text: str, index: int) -> int:
+    """Skip a C-like block comment, including Rust's nested block comments."""
+
+    depth = 1
+    i = index + 2
+    while i < len(text):
+        if text.startswith("/*", i):
+            depth += 1
+            i += 2
+            continue
+        if text.startswith("*/", i):
+            depth -= 1
+            i += 2
+            if depth == 0:
+                return i
+            continue
+        i += 1
+    return len(text)
 
 
 def _skip_string(text: str, index: int) -> int:

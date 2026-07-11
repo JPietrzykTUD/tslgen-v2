@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tslc.api import generate_project
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.lower.context import (
     LoweringEnv,
@@ -22,6 +22,7 @@ from tslc.lower.context import (
     VectorValue,
 )
 from tslc.lower.lowerer import Lowerer
+from tslc.lower.region_handlers.casts import CastLowerer
 from tslc.lower.queries import (
     DEFAULT_QUERY_FUNCTIONS,
     BoolValue,
@@ -30,6 +31,9 @@ from tslc.lower.queries import (
     TypeValue,
 )
 from tslc.select.selector import Selector
+from tslc.ir.scan import scan
+from tslc.ir.segments import Region
+from tslc.target_text import literal_text
 
 
 def _spec(catalog, machine_profiles, profile, primitive, ext, type_tag, backend="cpp"):
@@ -109,6 +113,26 @@ def test_select_query_chooses_same_kind_generation_value(catalog: Catalog) -> No
         "ui32, scalar::size)",
         ctx_f32,
     ) is None
+
+
+def test_lowering_rejects_legacy_pointer_cast_instead_of_repairing_it(
+    catalog: Catalog,
+) -> None:
+    region = scan("cast<reinterpret>(type(base::in) const *, data)")[0]
+    assert isinstance(region, Region)
+    context = _ctx(catalog, "avx2", "si32")
+
+    rendered = CastLowerer().lower(
+        region,
+        context,
+        lambda _segments: literal_text("data"),
+    )
+
+    assert rendered == region.full_text
+    assert [diagnostic.code for diagnostic in context.effects.diagnostics] == [
+        "TSL-LOWER-UNSUPPORTED-CAST"
+    ]
+    assert "type=ptr|const_ptr" in context.effects.diagnostics[0].message
 
 
 def test_runtime_vector_length_query_uses_static_or_declared_runtime_count(

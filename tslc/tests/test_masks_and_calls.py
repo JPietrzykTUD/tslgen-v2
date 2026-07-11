@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import re
 from pathlib import Path
 
 import pytest
 
 from tslc.api import generate_project
-from tslc.backend.translation import create_backend_dialect
+from tslc.backend.registry import create_backend_dialect
 from tslc.catalog.model import Catalog
 from tslc.diagnostics import has_errors
-from tslc.lower.calls import ParsedCallSelector, parse_call_selector
+from tslc.ir.region_syntax import ParsedCallSelector, parse_call_selector
 from tslc.lower.dependencies import (
     CallDependency,
     VectorIdentity,
-    extract_call_dependencies_from_segments,
 )
 from tslc.lower.lowerer import Lowerer, _type_param_bounds
 from tslc.ir.scan import scan
@@ -32,6 +32,31 @@ def _scalar_spec(catalog, machine_profiles, primitive, backend, type_tag="si32")
         if s.extension.name == "scalar"
     )
     return Lowerer().lower(slot, catalog, create_backend_dialect(catalog, backend)).specialization
+
+
+def _dependencies_for_body(catalog, machine_profiles, body):
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "add", ("si32",))
+        .selected
+        if selected.extension.name == "avx2"
+        and selected.primitive.attributes.get("mask") is None
+    )
+    selected = replace(
+        slot,
+        implementation=replace(slot.implementation, body_text=body),
+    )
+    lowered = Lowerer().lower(
+        selected,
+        catalog,
+        create_backend_dialect(catalog, "cpp"),
+    )
+    assert lowered.specialization is not None, lowered.diagnostics
+    return frozenset(
+        origin.dependency
+        for origin in lowered.specialization.call_dependency_origins
+    )
 
 
 def test_m_kind_lowers_to_mask_type(catalog: Catalog, machine_profiles) -> None:
@@ -113,24 +138,15 @@ def test_call_selector_parser_keeps_syntax_only_shape() -> None:
     assert parse_call_selector("primitive=set_zero trailing") is None
 
 
-def test_dependency_extraction_resolves_queries_without_backend_dialect(
-    catalog: Catalog,
+def test_lowering_records_dependencies_after_resolving_type_aliases(
+    catalog: Catalog, machine_profiles
 ) -> None:
     body = """
       let<type>(ScalarVec, type(vector::as_extension(scalar)));
-      call<primitive=@self[ScalarVec], attrs[mask=zero]>(left, right);
+      complete(call<primitive=@self[ScalarVec], attrs[mask=zero]>(left, right));
     """
 
-    dependencies = extract_call_dependencies_from_segments(
-        scan(body),
-        "add",
-        "avx2",
-        "si32",
-        None,
-        None,
-        None,
-        catalog,
-    )
+    dependencies = _dependencies_for_body(catalog, machine_profiles, body)
 
     assert dependencies == frozenset(
         {
@@ -143,7 +159,9 @@ def test_dependency_extraction_resolves_queries_without_backend_dialect(
     )
 
 
-def test_dependency_extraction_uses_shared_query_functions(catalog: Catalog) -> None:
+def test_lowering_dependency_facts_use_shared_query_functions(
+    catalog: Catalog, machine_profiles
+) -> None:
     body = """
       let<type>(
         SourceVec,
@@ -155,23 +173,52 @@ def test_dependency_extraction_uses_shared_query_functions(catalog: Catalog) -> 
           )
         )
       );
-      call<primitive=@self[SourceVec]>(left, right);
+      complete(call<primitive=@self[SourceVec]>(left, right));
     """
 
-    dependencies = extract_call_dependencies_from_segments(
-        scan(body),
-        "add",
-        "avx2",
-        "si32",
-        None,
-        None,
-        None,
-        catalog,
-    )
+    dependencies = _dependencies_for_body(catalog, machine_profiles, body)
 
     assert dependencies == frozenset(
         {CallDependency("add", None, VectorIdentity("si32", "scalar"))}
     )
+
+
+def test_dependency_closure_ignores_dead_generation_branch_calls(
+    data_root: Path,
+    machine_profiles_path: Path,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "dependency_probe.tsl"
+    source.write_text(
+        "prim<v:=v> dependency_probe(data):\n"
+        "  impls:\n"
+        "    scalar:\n"
+        "      arith:\n"
+        "        implementation:\n"
+        '          tsil """\n'
+        "            if<generation>(type::is_same(type(base::in), si32)) {\n"
+        "              complete(call<primitive=set_zero[Vec]>());\n"
+        "            } else {\n"
+        "              complete(call<primitive=dead_branch_only[Vec]>());\n"
+        "            }\n"
+        '          """\n',
+        encoding="utf-8",
+    )
+
+    result = generate_project(
+        [data_root, source],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["dependency_probe"],
+        profiles=["scalar"],
+        type_tags=["si32"],
+        backends=["cpp"],
+    )
+
+    assert not has_errors(result.diagnostics), result.diagnostics
+    emitted = {entry.primitive for entry in result.coverage}
+    assert {"dependency_probe", "set_zero"} <= emitted
+    assert "dead_branch_only" not in emitted
+    assert not any(entry.primitive == "dependency_probe" for entry in result.skipped)
 
 
 def test_primitive_corpus_uses_comma_separated_call_attrs(data_root: Path) -> None:

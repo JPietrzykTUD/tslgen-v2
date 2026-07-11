@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from tslc.catalog.model import Catalog
+from tslc.catalog.model import Catalog, Primitive, TestCase
 from tslc.diagnostics import Diagnostic, SourceLocation
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
@@ -129,6 +129,7 @@ class ValueTestPlanner:
                 case_context = self._case_context(
                     backend, emitted_name, index, test_case, specs, harness
                 )
+                planned: tuple[ValueTestCasePlan, ...]
                 if test_case.role == "compile":
                     plan = compile_only_case(emitted_name, index, test_case, specs)
                     planned = (plan,) if plan is not None else ()
@@ -161,12 +162,26 @@ class ValueTestPlanner:
             support_headers=support_headers_for_cases(cases, self._catalog, profile.backend_id),
         )
 
-    def _case_context(self, backend, emitted_name, index, case, specs, harness):  # noqa: ANN001
+    def _case_context(
+        self,
+        backend: ValueTestBackendSupport,
+        emitted_name: str,
+        index: int,
+        case: TestCase,
+        specs: tuple[LoweredSpecialization, ...],
+        harness: HarnessPrimitiveNames,
+    ) -> ValueTestCaseContext:
         return ValueTestCaseContext(
             backend, emitted_name, index, case, specs, self._catalog, harness
         )
 
-    def _fuzz_context(self, backend, emitted_name, specs, harness):  # noqa: ANN001
+    def _fuzz_context(
+        self,
+        backend: ValueTestBackendSupport,
+        emitted_name: str,
+        specs: tuple[LoweredSpecialization, ...],
+        harness: HarnessPrimitiveNames,
+    ) -> ValueTestFuzzContext:
         return ValueTestFuzzContext(
             backend, emitted_name, specs, self._catalog, harness, self._fuzz_iterations
         )
@@ -177,7 +192,11 @@ class ValueTestPlanner:
                 return pattern
         return None
 
-    def _supported_cases(self, cases, backend):  # noqa: ANN001
+    def _supported_cases(
+        self,
+        cases: tuple[ValueTestCasePlan, ...],
+        backend: ValueTestBackendSupport,
+    ) -> tuple[ValueTestCasePlan, ...]:
         return tuple(case for case in cases if case.kind in backend.case_kinds)
 
 
@@ -206,12 +225,12 @@ def _duplicate_case_diagnostics(
     return tuple(diagnostics)
 
 
-def _primitive_location(primitive) -> SourceLocation | None:  # noqa: ANN001
+def _primitive_location(primitive: Primitive) -> SourceLocation | None:
     return primitive.source.start if primitive.source is not None else None
 
 
 def _representation_case_unselected(
-    case,
+    case: TestCase,
     specs: tuple[LoweredSpecialization, ...],
 ) -> bool:  # noqa: ANN001
     if case.to_extension is not None:
@@ -234,7 +253,7 @@ def _representation_case_unselected(
 
 
 def _case_extension_unselected(
-    case,
+    case: TestCase,
     specs: tuple[LoweredSpecialization, ...],
 ) -> bool:  # noqa: ANN001
     if case.extension is None:

@@ -4,36 +4,85 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from enum import Enum
+from typing import TYPE_CHECKING, Protocol
+
+from tslc.backend.helper_requirements import (
+    BackendHelperManifest,
+    EMPTY_HELPER_MANIFEST,
+)
+from tslc.output.verify_model import VerifyBackend
 
 if TYPE_CHECKING:
+    from tslc.backend.emitted_profile import EmittedProfile
     from tslc.backend.translation import BackendDialect
-    from tslc.catalog.model import Catalog
+    from tslc.catalog.model import Catalog, Extension
     from tslc.compiler_assets import RenderAssets
+    from tslc.diagnostics import Diagnostic
     from tslc.lower.lowerer import LoweredSpecialization
     from tslc.output.artifacts import Artifact
     from tslc.output.verify_drivers import VerifyBackendDriver
-    from tslc.output.verify_model import VerifyBackend, VerifyProfile
-    from tslc.render.project import ProfileRender
+    from tslc.output.verify_model import VerifyProfile
     from tslc.value_tests.model import ValueTestBackendSupport, ValueTestProjectPlan
 
 DialectFactory = Callable[["Catalog"], "BackendDialect"]
 ProjectArtifactRenderer = Callable[
-    [tuple["ProfileRender", ...], "RenderAssets"], list["Artifact"]
+    [tuple["EmittedProfile", ...], "RenderAssets", str], list["Artifact"]
 ]
 VerifyProfileRenderer = Callable[
-    [tuple["ProfileRender", ...]], tuple["VerifyProfile", ...]
+    [tuple["EmittedProfile", ...]], tuple["VerifyProfile", ...]
 ]
 TestArtifactRenderer = Callable[
-    ["ValueTestProjectPlan", "RenderAssets"], list["Artifact"]
+    ["ValueTestProjectPlan", "RenderAssets", str], list["Artifact"]
 ]
+DocumentationFormatterFactory = Callable[[], "BackendDocumentationFormatter"]
 ValueTestSupportFactory = Callable[[], "ValueTestBackendSupport"]
 VerifyDriverFactory = Callable[[], "VerifyBackendDriver"]
-ClosureSeedPrimitiveFactory = Callable[["Catalog"], tuple[str, ...]]
+ProfileValidator = Callable[[tuple["EmittedProfile", ...]], tuple["Diagnostic", ...]]
 
 
-def _no_closure_seed_primitives(catalog: Catalog) -> tuple[str, ...]:
-    del catalog
+@dataclass(frozen=True, slots=True)
+class DocumentationSpec:
+    spec: LoweredSpecialization
+    extension: Extension | None
+
+
+@dataclass(frozen=True, slots=True)
+class GeneratedFormatSpec:
+    executable: str
+    label: str
+    patterns: tuple[str, ...]
+    args: tuple[str, ...]
+
+
+class GeneratedDocumentationBuilder(str, Enum):
+    DOXYGEN = "doxygen"
+    RUSTDOC = "rustdoc"
+
+
+class DocumentationSiteInput(str, Enum):
+    DOXYGEN_XML = "doxygen_xml"
+    RUSTDOC = "rustdoc"
+
+
+@dataclass(frozen=True, slots=True)
+class GeneratedDocumentationSpec:
+    builder: GeneratedDocumentationBuilder
+    project_path: str
+    output_path: str
+    site_input: DocumentationSiteInput
+
+
+class BackendDocumentationFormatter(Protocol):
+    def register_type(self, spec: LoweredSpecialization) -> str: ...
+    def facade(self, doc: DocumentationSpec) -> str: ...
+    def expression(self, doc: DocumentationSpec) -> str: ...
+
+
+def _no_profile_diagnostics(
+    profiles: tuple[EmittedProfile, ...],
+) -> tuple[Diagnostic, ...]:
+    del profiles
     return ()
 
 
@@ -41,15 +90,18 @@ def _no_closure_seed_primitives(catalog: Catalog) -> tuple[str, ...]:
 class BackendCapability:
     backend_id: str
     root_path: str
+    artifact_media_type: str
     dialect_factory: DialectFactory
-    project_artifacts: ProjectArtifactRenderer
+    project_renderer: ProjectArtifactRenderer
     verify_profiles: VerifyProfileRenderer
     value_test_support_factory: ValueTestSupportFactory
-    test_artifacts: TestArtifactRenderer
+    test_renderer: TestArtifactRenderer
     verify_driver_factory: VerifyDriverFactory
-    closure_seed_primitives_factory: ClosureSeedPrimitiveFactory = (
-        _no_closure_seed_primitives
-    )
+    documentation_formatter_factory: DocumentationFormatterFactory
+    helper_manifest: BackendHelperManifest = EMPTY_HELPER_MANIFEST
+    profile_validator: ProfileValidator = _no_profile_diagnostics
+    generated_format: GeneratedFormatSpec | None = None
+    generated_documentation: GeneratedDocumentationSpec | None = None
 
     def create_dialect(self, catalog: Catalog) -> BackendDialect:
         return self.dialect_factory(catalog)
@@ -57,14 +109,29 @@ class BackendCapability:
     def value_test_support(self) -> ValueTestBackendSupport:
         return self.value_test_support_factory()
 
+    def render_project_artifacts(
+        self,
+        profiles: tuple[EmittedProfile, ...],
+        assets: RenderAssets,
+    ) -> list[Artifact]:
+        return self.project_renderer(profiles, assets, self.artifact_media_type)
+
+    def render_test_artifacts(
+        self,
+        plan: ValueTestProjectPlan,
+        assets: RenderAssets,
+    ) -> list[Artifact]:
+        return self.test_renderer(plan, assets, self.artifact_media_type)
+
+    def documentation_formatter(self) -> BackendDocumentationFormatter:
+        return self.documentation_formatter_factory()
+
     def specializations(
-        self, profile: ProfileRender
+        self, profile: EmittedProfile
     ) -> Mapping[str, tuple[LoweredSpecialization, ...]]:
         return profile.specializations(self.backend_id)
 
-    def verify_backend(self, profiles: tuple[ProfileRender, ...]) -> VerifyBackend:
-        from tslc.output.verify_model import VerifyBackend
-
+    def verify_backend(self, profiles: tuple[EmittedProfile, ...]) -> VerifyBackend:
         return VerifyBackend(
             backend_id=self.backend_id,
             root_path=self.root_path,
@@ -75,7 +142,20 @@ class BackendCapability:
         return self.verify_driver_factory()
 
     def closure_seed_primitives(self, catalog: Catalog) -> tuple[str, ...]:
-        return self.closure_seed_primitives_factory(catalog)
+        return self.helper_manifest.closure_seed_primitives(catalog)
+
+    def validate_profiles(
+        self, profiles: tuple[EmittedProfile, ...]
+    ) -> tuple[Diagnostic, ...]:
+        return self.profile_validator(profiles)
 
 
-__all__ = ["BackendCapability", "ClosureSeedPrimitiveFactory"]
+__all__ = [
+    "BackendCapability",
+    "BackendDocumentationFormatter",
+    "DocumentationSiteInput",
+    "DocumentationSpec",
+    "GeneratedDocumentationBuilder",
+    "GeneratedDocumentationSpec",
+    "GeneratedFormatSpec",
+]

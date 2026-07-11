@@ -2,35 +2,22 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Protocol
-
+from tslc.backend.capability import BackendDocumentationFormatter, DocumentationSpec
+from tslc.backend.cpp import CppBackend
 from tslc.backend.target_capability import rust_extension_tag
 from tslc.backend.rust_translation import rust_raw_identifier
-from tslc.catalog.model import Extension
+from tslc.backend.signature_types import (
+    CPP_SIGNATURE_TYPES,
+    RUST_SIGNATURE_TYPES,
+    rust_free_type,
+)
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY
 
 
-@dataclass(frozen=True, slots=True)
-class DocumentationSpec:
-    spec: LoweredSpecialization
-    extension: Extension | None
-
-
-class BackendDocumentationFormatter(Protocol):
-    backend_id: str
-
-    def facade(self, doc: DocumentationSpec) -> str:
-        """Return a compact callable facade for documentation tables."""
-
-    def expression(self, doc: DocumentationSpec) -> str:
-        """Return a small example expression for documentation tables."""
-
-
-@dataclass(frozen=True, slots=True)
 class _CppDocumentationFormatter:
-    backend_id: str = "cpp"
+    def register_type(self, spec: LoweredSpecialization) -> str:
+        return CppBackend().documentation_register_type(spec)
 
     def facade(self, doc: DocumentationSpec) -> str:
         spec = doc.spec
@@ -83,9 +70,9 @@ class _CppDocumentationFormatter:
         return "\n".join(lines)
 
 
-@dataclass(frozen=True, slots=True)
 class _RustDocumentationFormatter:
-    backend_id: str = "rust"
+    def register_type(self, spec: LoweredSpecialization) -> str:
+        return spec.register_spelling
 
     def facade(self, doc: DocumentationSpec) -> str:
         spec = doc.spec
@@ -144,14 +131,6 @@ class _RustDocumentationFormatter:
         return "\n".join(lines)
 
 
-def documentation_formatter(backend_id: str) -> BackendDocumentationFormatter | None:
-    if backend_id == CPP_DOCUMENTATION_FORMATTER.backend_id:
-        return CPP_DOCUMENTATION_FORMATTER
-    if backend_id == RUST_DOCUMENTATION_FORMATTER.backend_id:
-        return RUST_DOCUMENTATION_FORMATTER
-    return None
-
-
 def is_free_function(spec: LoweredSpecialization) -> bool:
     return DEFAULT_SUPPORT_POLICY.is_free_function_signature(
         spec.result_kind,
@@ -171,24 +150,18 @@ def static_lane_count(doc: DocumentationSpec) -> int | None:
 
 def _cpp_facade_result_type(spec: LoweredSpecialization) -> str:
     if is_free_function(spec):
-        return DEFAULT_SUPPORT_POLICY.cpp_free_type(
-            spec.result_kind,
-            base_type=spec.base_type_spelling,
-        )
+        return CPP_SIGNATURE_TYPES.free_type(spec.result_kind, base=spec.base_type_spelling)
     if spec.target is not None:
         return "typename ToVec::register_type"
-    return DEFAULT_SUPPORT_POLICY.cpp_result_type(spec.result_kind)
+    return CPP_SIGNATURE_TYPES.result_type(spec.result_kind)
 
 
 def _rust_facade_result_type(spec: LoweredSpecialization) -> str:
     if is_free_function(spec):
-        return DEFAULT_SUPPORT_POLICY.rust_free_type(
-            spec.result_kind,
-            base_type=spec.base_type_spelling,
-        )
+        return rust_free_type(spec.result_kind, spec.base_type_spelling)
     if spec.target is not None:
         return "T::RegisterType"
-    return DEFAULT_SUPPORT_POLICY.rust_owner_type(spec.result_kind, owner="S")
+    return RUST_SIGNATURE_TYPES.owner_type(spec.result_kind, owner="S")
 
 
 def _cpp_call_block(
@@ -373,8 +346,9 @@ RUST_DOCUMENTATION_FORMATTER = _RustDocumentationFormatter()
 
 __all__ = [
     "BackendDocumentationFormatter",
+    "CPP_DOCUMENTATION_FORMATTER",
     "DocumentationSpec",
-    "documentation_formatter",
+    "RUST_DOCUMENTATION_FORMATTER",
     "is_free_function",
     "static_lane_count",
 ]

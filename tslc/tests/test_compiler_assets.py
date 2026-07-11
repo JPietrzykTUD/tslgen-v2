@@ -57,7 +57,10 @@ def test_rust_project_renderer_consumes_injected_assets() -> None:
         }
     )
 
-    rendered = {artifact.logical_path: artifact.content for artifact in rust_artifacts((), assets)}
+    rendered = {
+        artifact.logical_path: artifact.content
+        for artifact in rust_artifacts((), assets, media_type="text/rust")
+    }
 
     assert rendered["rust/src/tsl_core.rs"] == "// injected core\n"
     assert rendered["rust/src/tsl_algorithm.rs"] == "// injected algorithm\n"

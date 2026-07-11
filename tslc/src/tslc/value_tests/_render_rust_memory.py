@@ -5,14 +5,19 @@ from __future__ import annotations
 from tslc.backend.rust_translation import rust_raw_identifier
 from tslc.value_tests._render_rust_helpers import axis_args, rust_string_literal
 from tslc.value_tests.literals import rust_literal, rust_literal_list
-from tslc.value_tests.model import ValueTestCasePlan
+from tslc.value_tests.model import ValueTestCasePlan, ValueTestMemory
+
+
+def _memory(case: ValueTestCasePlan) -> ValueTestMemory:
+    return case.memory if case.memory is not None else ValueTestMemory()
 
 
 def _load(case: ValueTestCasePlan) -> str:
-    literals = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = rust_literal_list(case.expected, case.type_tag)
+    memory = _memory(case)
+    literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
     axis = axis_args(case)
-    buflen = case.buffer_offset + case.lanes
+    buflen = memory.buffer_offset + case.lanes
     return "\n".join(
         [
             "    #[test]",
@@ -21,10 +26,10 @@ def _load(case: ValueTestCasePlan) -> str:
             f"        let in0: [{case.base_spelling}; {case.lanes}] = [{literals}];",
             f"        let mut buf: [{case.base_spelling}; {buflen}] = "
             f"[Default::default(); {buflen}];",
-            f"        for i in 0..{case.lanes} {{ buf[{case.buffer_offset} + i] = in0[i]; }}",
+            f"        for i in 0..{case.lanes} {{ buf[{memory.buffer_offset} + i] = in0[i]; }}",
             f"        let expected: [{case.base_spelling}; {case.lanes}] = [{expected}];",
             f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}"
-            f"::<Vec{axis}>(buf.as_ptr().add({case.buffer_offset})) }};",
+            f"::<Vec{axis}>(buf.as_ptr().add({memory.buffer_offset})) }};",
             f"        for i in 0..{case.lanes} {{ assert!(result[i].lane_eq(expected[i]), "
             f'"{case.case_name} lane {{}}: expected {{:?}}, got {{:?}}", '
             "i, expected[i], result[i]); }",
@@ -34,10 +39,11 @@ def _load(case: ValueTestCasePlan) -> str:
 
 
 def _store(case: ValueTestCasePlan) -> str:
-    literals = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = rust_literal_list(case.expected, case.type_tag)
+    memory = _memory(case)
+    literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
     axis = axis_args(case)
-    buflen = case.buffer_length or len(case.expected)
+    buflen = memory.buffer_length or len(case.expectation.values)
     return "\n".join(
         [
             "    #[test]",
@@ -49,7 +55,7 @@ def _store(case: ValueTestCasePlan) -> str:
             f"        let mut buf: [{case.base_spelling}; {buflen}] = "
             f"[Default::default(); {buflen}];",
             f"        unsafe {{ {rust_raw_identifier(case.call_name)}::<Vec{axis}, _>(",
-            f"            buf.as_mut_ptr().add({case.buffer_offset}),",
+            f"            buf.as_mut_ptr().add({memory.buffer_offset}),",
             "            v0,",
             "        ); }",
             f"        let expected: [{case.base_spelling}; {buflen}] = [{expected}];",
@@ -62,10 +68,11 @@ def _store(case: ValueTestCasePlan) -> str:
 
 
 def _scalar_pointer_load(case: ValueTestCasePlan) -> str:
-    literals = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = rust_literal(case.expected[0], case.type_tag)
+    memory = _memory(case)
+    literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal(case.expectation.values[0], case.type_tag)
     axis = axis_args(case)
-    buflen = case.buffer_length or len(case.vector_inputs[0])
+    buflen = memory.buffer_length or len(case.inputs.vectors[0])
     return "\n".join(
         [
             "    #[test]",
@@ -76,7 +83,7 @@ def _scalar_pointer_load(case: ValueTestCasePlan) -> str:
             f"[Default::default(); {buflen}];",
             f"        for i in 0..{buflen} {{ buf[i] = in0[i]; }}",
             f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}"
-            f"::<Vec{axis}>(buf.as_ptr().add({case.buffer_offset})) }};",
+            f"::<Vec{axis}>(buf.as_ptr().add({memory.buffer_offset})) }};",
             f"        let expected: {case.base_spelling} = {expected};",
             f"        assert!(result.lane_eq(expected), "
             f'"{case.case_name}: expected {{:?}}, got {{:?}}", expected, result);',
@@ -86,12 +93,16 @@ def _scalar_pointer_load(case: ValueTestCasePlan) -> str:
 
 
 def _mask_pointer_load(case: ValueTestCasePlan) -> str:
-    input_type = case.expected_type_tag or case.type_tag
-    storage_type = case.target_base_spelling or case.base_spelling
-    literals = rust_literal_list(case.vector_inputs[0], input_type)
-    expected = int(case.expected[0])
+    memory = _memory(case)
+    target = case.target
+    input_type = (target.type_tag if target is not None else None) or case.type_tag
+    storage_type = (
+        target.base_spelling if target is not None else None
+    ) or case.base_spelling
+    literals = rust_literal_list(case.inputs.vectors[0], input_type)
+    expected = int(case.expectation.values[0])
     axis = axis_args(case)
-    buflen = case.buffer_length or len(case.vector_inputs[0])
+    buflen = memory.buffer_length or len(case.inputs.vectors[0])
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
@@ -100,7 +111,7 @@ def _mask_pointer_load(case: ValueTestCasePlan) -> str:
         f"        let mut buf: [{storage_type}; {buflen}] = [Default::default(); {buflen}];",
         f"        for i in 0..{buflen} {{ buf[i] = in0[i]; }}",
         f"        let result = unsafe {{ {rust_raw_identifier(case.call_name)}::<Vec{axis}>(",
-        f"            buf.as_ptr().add({case.buffer_offset}) as *const <Vec as SimdVector>::BaseType",
+        f"            buf.as_ptr().add({memory.buffer_offset}) as *const <Vec as SimdVector>::BaseType",
         "        ) };",
     ]
     for lane in range(case.lanes):
@@ -114,15 +125,15 @@ def _mask_pointer_load(case: ValueTestCasePlan) -> str:
 
 
 def _masked_pointer_load(case: ValueTestCasePlan) -> str:
-    literals = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = rust_literal_list(case.expected, case.type_tag)
+    literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
     axis = axis_args(case)
     return "\n".join(
         [
             "    #[test]",
             f"    fn {case.function_name}() {{",
             f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
-            f"        let mask: <Vec as SimdVector>::MaskType = {case.mask_inputs[0]}u64;",
+            f"        let mask: <Vec as SimdVector>::MaskType = {case.inputs.masks[0]}u64;",
             f"        let in0: [{case.base_spelling}; {case.lanes}] = [{literals}];",
             f"        let mut buf: [{case.base_spelling}; {case.lanes}] = "
             f"[Default::default(); {case.lanes}];",
@@ -139,16 +150,17 @@ def _masked_pointer_load(case: ValueTestCasePlan) -> str:
 
 
 def _masked_pointer_store(case: ValueTestCasePlan) -> str:
-    literals = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = rust_literal_list(case.expected, case.type_tag)
+    memory = _memory(case)
+    literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
     axis = axis_args(case)
-    buflen = case.buffer_length or len(case.expected)
+    buflen = memory.buffer_length or len(case.expectation.values)
     return "\n".join(
         [
             "    #[test]",
             f"    fn {case.function_name}() {{",
             f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
-            f"        let mask: <Vec as SimdVector>::MaskType = {case.mask_inputs[0]}u64;",
+            f"        let mask: <Vec as SimdVector>::MaskType = {case.inputs.masks[0]}u64;",
             f"        let in0: [{case.base_spelling}; {case.lanes}] = [{literals}];",
             "        let mut v0: <Vec as SimdVector>::RegisterType = Default::default();",
             f"        for i in 0..{case.lanes} {{ v0[i] = in0[i]; }}",
@@ -156,7 +168,7 @@ def _masked_pointer_store(case: ValueTestCasePlan) -> str:
             f"[Default::default(); {buflen}];",
             f"        unsafe {{ {rust_raw_identifier(case.call_name)}::<Vec{axis}>(",
             "            mask,",
-            f"            buf.as_mut_ptr().add({case.buffer_offset}),",
+            f"            buf.as_mut_ptr().add({memory.buffer_offset}),",
             "            v0,",
             "        ); }",
             f"        let expected: [{case.base_spelling}; {buflen}] = [{expected}];",
@@ -169,11 +181,12 @@ def _masked_pointer_store(case: ValueTestCasePlan) -> str:
 
 
 def _memory_copy(case: ValueTestCasePlan) -> str:
-    src = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    expected = rust_literal_list(case.expected, case.type_tag)
-    src_len = len(case.vector_inputs[0])
-    dst_len = case.buffer_length or len(case.expected)
-    count = rust_literal(case.scalar_inputs[0] if case.scalar_inputs else str(src_len), case.type_tag)
+    memory = _memory(case)
+    src = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
+    src_len = len(case.inputs.vectors[0])
+    dst_len = memory.buffer_length or len(case.expectation.values)
+    count = rust_literal(case.inputs.scalars[0] if case.inputs.scalars else str(src_len), case.type_tag)
     zero = rust_literal("0", case.type_tag)
     return "\n".join(
         [
@@ -181,14 +194,14 @@ def _memory_copy(case: ValueTestCasePlan) -> str:
             f"    fn {case.function_name}() {{",
             f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
             f"        let src_in: [{case.base_spelling}; {src_len}] = [{src}];",
-            f"        let mut src: [{case.base_spelling}; {src_len + case.source_offset}] = "
-            f"[Default::default(); {src_len + case.source_offset}];",
+            f"        let mut src: [{case.base_spelling}; {src_len + memory.source_offset}] = "
+            f"[Default::default(); {src_len + memory.source_offset}];",
             f"        let mut dst: [{case.base_spelling}; {dst_len}] = "
             f"[Default::default(); {dst_len}];",
-            f"        for i in 0..{src_len} {{ src[{case.source_offset} + i] = src_in[i]; }}",
+            f"        for i in 0..{src_len} {{ src[{memory.source_offset} + i] = src_in[i]; }}",
             f"        unsafe {{ {rust_raw_identifier(case.call_name)}::<Vec>(",
-            f"            dst.as_mut_ptr().add({case.buffer_offset}),",
-            f"            src.as_ptr().add({case.source_offset}),",
+            f"            dst.as_mut_ptr().add({memory.buffer_offset}),",
+            f"            src.as_ptr().add({memory.source_offset}),",
             f"            {count},",
             f"            {zero},",
             "        ); }",
@@ -202,8 +215,8 @@ def _memory_copy(case: ValueTestCasePlan) -> str:
 
 
 def _pointer_lifetime(case: ValueTestCasePlan) -> str:
-    args = ", ".join(f"{value}usize" for value in case.scalar_inputs)
-    alignment = case.scalar_inputs[1] if len(case.scalar_inputs) > 1 else None
+    args = ", ".join(f"{value}usize" for value in case.inputs.scalars)
+    alignment = case.inputs.scalars[1] if len(case.inputs.scalars) > 1 else None
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
@@ -221,11 +234,12 @@ def _pointer_lifetime(case: ValueTestCasePlan) -> str:
 
 
 def _pointer_free(case: ValueTestCasePlan) -> str:
-    count = case.scalar_inputs[0] if case.scalar_inputs else "1"
-    if case.target_base_spelling is None:
+    memory = _memory(case)
+    count = case.inputs.scalars[0] if case.inputs.scalars else "1"
+    if memory.alignment is None:
         alloc = f"mem_alloc({count}usize)"
     else:
-        alloc = f"mem_alloc_aligned({case.target_base_spelling}usize, {count}usize)"
+        alloc = f"mem_alloc_aligned({memory.alignment}usize, {count}usize)"
     return "\n".join(
         [
             "    #[test]",
@@ -239,25 +253,30 @@ def _pointer_free(case: ValueTestCasePlan) -> str:
 
 
 def _indexed_load(case: ValueTestCasePlan) -> str:
-    data = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    index_type = case.index_type_tag or case.type_tag
-    index_base = case.index_base_spelling or case.base_spelling
-    indices = rust_literal_list(case.vector_inputs[1], index_type)
-    expected = rust_literal_list(case.expected, case.type_tag)
-    lanes = case.target_lanes or len(case.expected)
-    index_lanes = case.index_lanes or lanes
-    scale = case.immediate_value or "1"
-    pointer_indices = tuple(case.param_kinds) == ("cptr", "cptr", "sImm")
+    index = case.index
+    target = case.target
+    assert target is not None
+    data = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    index_type = (index.type_tag if index is not None else None) or case.type_tag
+    index_base = (
+        index.base_spelling if index is not None else None
+    ) or case.base_spelling
+    indices = rust_literal_list(case.inputs.vectors[1], index_type)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
+    lanes = target.lanes or len(case.expectation.values)
+    index_lanes = (index.lanes if index is not None else None) or lanes
+    scale = case.invocation.immediate or "1"
+    pointer_indices = tuple(case.invocation.param_kinds) == ("cptr", "cptr", "sImm")
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
         f"        type Vec = Simd<{case.base_spelling}, Generic<{lanes}>>;",
         f"        type Indices = Simd<{index_base}, Generic<{index_lanes}>>;",
-        f"        let data_in: [{case.base_spelling}; {len(case.vector_inputs[0])}] = [{data}];",
+        f"        let data_in: [{case.base_spelling}; {len(case.inputs.vectors[0])}] = [{data}];",
         f"        let idx_in: [{index_base}; {index_lanes}] = [{indices}];",
-        f"        let mut data: [{case.base_spelling}; {len(case.vector_inputs[0])}] = "
-        f"[Default::default(); {len(case.vector_inputs[0])}];",
-        f"        for i in 0..{len(case.vector_inputs[0])} {{ data[i] = data_in[i]; }}",
+        f"        let mut data: [{case.base_spelling}; {len(case.inputs.vectors[0])}] = "
+        f"[Default::default(); {len(case.inputs.vectors[0])}];",
+        f"        for i in 0..{len(case.inputs.vectors[0])} {{ data[i] = data_in[i]; }}",
     ]
     if not pointer_indices:
         lines.extend(
@@ -266,9 +285,9 @@ def _indexed_load(case: ValueTestCasePlan) -> str:
                 f"        for i in 0..{index_lanes} {{ idx[i] = idx_in[i]; }}",
             ]
         )
-    if case.mask_inputs:
-        source = rust_literal_list(case.vector_inputs[2], case.type_tag)
-        lines.append(f"        let mask: <Vec as SimdVector>::MaskType = {case.mask_inputs[0]}u64;")
+    if case.inputs.masks:
+        source = rust_literal_list(case.inputs.vectors[2], case.type_tag)
+        lines.append(f"        let mask: <Vec as SimdVector>::MaskType = {case.inputs.masks[0]}u64;")
         lines.append(f"        let source_in: [{case.base_spelling}; {lanes}] = [{source}];")
         lines.append("        let mut source: <Vec as SimdVector>::RegisterType = Default::default();")
         lines.append(f"        for i in 0..{lanes} {{ source[i] = source_in[i]; }}")
@@ -299,15 +318,19 @@ def _indexed_load(case: ValueTestCasePlan) -> str:
 
 
 def _indexed_store(case: ValueTestCasePlan) -> str:
-    values = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    index_type = case.index_type_tag or case.type_tag
-    index_base = case.index_base_spelling or case.base_spelling
-    indices = rust_literal_list(case.vector_inputs[1], index_type)
-    expected = rust_literal_list(case.expected, case.type_tag)
+    memory = _memory(case)
+    index = case.index
+    values = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    index_type = (index.type_tag if index is not None else None) or case.type_tag
+    index_base = (
+        index.base_spelling if index is not None else None
+    ) or case.base_spelling
+    indices = rust_literal_list(case.inputs.vectors[1], index_type)
+    expected = rust_literal_list(case.expectation.values, case.type_tag)
     lanes = case.lanes
-    index_lanes = case.index_lanes or lanes
-    scale = case.immediate_value or "1"
-    buflen = case.buffer_length or len(case.expected)
+    index_lanes = (index.lanes if index is not None else None) or lanes
+    scale = case.invocation.immediate or "1"
+    buflen = memory.buffer_length or len(case.expectation.values)
     lines = [
         "    #[test]",
         f"    fn {case.function_name}() {{",
@@ -321,8 +344,8 @@ def _indexed_store(case: ValueTestCasePlan) -> str:
         f"        for i in 0..{lanes} {{ values[i] = value_in[i]; }}",
         f"        for i in 0..{index_lanes} {{ idx[i] = idx_in[i]; }}",
     ]
-    if case.mask_inputs:
-        lines.append(f"        let mask: <Vec as SimdVector>::MaskType = {case.mask_inputs[0]}u64;")
+    if case.inputs.masks:
+        lines.append(f"        let mask: <Vec as SimdVector>::MaskType = {case.inputs.masks[0]}u64;")
         lines.append(
             f"        unsafe {{ {rust_raw_identifier(case.call_name)}"
             f"::<Vec, Indices, {scale}, {index_lanes}>(mask, data.as_mut_ptr(), idx, values); }}"
@@ -345,9 +368,9 @@ def _indexed_store(case: ValueTestCasePlan) -> str:
 
 
 def _stream(case: ValueTestCasePlan) -> str:
-    literals = rust_literal_list(case.vector_inputs[0], case.type_tag)
-    modifier = rust_literal(case.scalar_inputs[0] if case.scalar_inputs else "0", case.type_tag)
-    expected = rust_string_literal(case.text_expected or "")
+    literals = rust_literal_list(case.inputs.vectors[0], case.type_tag)
+    modifier = rust_literal(case.inputs.scalars[0] if case.inputs.scalars else "0", case.type_tag)
+    expected = rust_string_literal(case.expectation.text or "")
     return "\n".join(
         [
             "    #[test]",

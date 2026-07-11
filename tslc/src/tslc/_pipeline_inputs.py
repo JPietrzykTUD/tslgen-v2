@@ -11,6 +11,7 @@ from tslc.catalog.builder import CatalogBuilder
 from tslc.catalog.machine_profiles import MachineProfile, load_machine_profiles_checked
 from tslc.catalog.model import Catalog
 from tslc.catalog.validation import validate_catalog
+from tslc.backend.registry import registered_backend_ids
 from tslc.compiler_assets import (
     RenderAssets,
     load_default_render_assets,
@@ -23,10 +24,17 @@ from tslc.value_tests import HarnessPrimitiveNames, discover_harness_primitives
 
 
 class _InputRequest(Protocol):
-    source_paths: tuple[Path, ...]
-    machine_profiles_path: Path
-    backends: tuple[str, ...]
-    test_harness: bool
+    @property
+    def source_paths(self) -> tuple[Path, ...]: ...
+
+    @property
+    def machine_profiles_path(self) -> Path: ...
+
+    @property
+    def backends(self) -> tuple[str, ...]: ...
+
+    @property
+    def test_harness(self) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +72,7 @@ def _load_inputs(request: _InputRequest) -> tuple[_PipelineInputs | None, list[D
             catalog,
             parse_result,
             required_backends=request.backends,
+            supported_backends=registered_backend_ids(),
         )
     )
     if has_errors(diagnostics):

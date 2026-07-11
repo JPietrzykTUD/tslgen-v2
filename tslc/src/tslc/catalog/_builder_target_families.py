@@ -11,7 +11,11 @@ from tslc.catalog._builder_common import (
     _opt_int,
     _source_span,
 )
-from tslc.catalog.target_families import ProfileFamilyCapability, TargetFamilyCatalog
+from tslc.catalog.target_families import (
+    BackendProfileFamily,
+    ProfileFamilyCapability,
+    TargetFamilyCatalog,
+)
 from tslc.syntax.ast import ParsedTslField
 
 
@@ -29,18 +33,7 @@ def _build_target_families(fields: list[ParsedTslField]) -> TargetFamilyCatalog:
                 extension_families=_list_text_set(_child(entry, "extension_families")),
                 runner_kinds=_list_text_set(_child(entry, "runner_kinds")),
                 sort_order=_int_field(_child(entry, "sort_order"), default=100),
-                cpp_feature_flags=_bool_field(
-                    _child(entry, "cpp_feature_flags"),
-                    default=True,
-                ),
-                cpp_target=_field_text(_child(entry, "cpp_target")),
-                cpp_detection=_field_text(_child(entry, "cpp_detection")),
-                rust_target_features=_bool_field(
-                    _child(entry, "rust_target_features"),
-                    default=True,
-                ),
-                rust_target=_field_text(_child(entry, "rust_target")),
-                rust_linker=_field_text(_child(entry, "rust_linker")),
+                backends=_build_backend_profile_families(_child(entry, "backends")),
                 source=_source_span(entry.source),
             )
     return TargetFamilyCatalog(
@@ -48,6 +41,24 @@ def _build_target_families(fields: list[ParsedTslField]) -> TargetFamilyCatalog:
         universal_extension_families=frozenset(universal),
         profile_families=profiles,
     )
+
+
+def _build_backend_profile_families(
+    field: ParsedTslField | None,
+) -> dict[str, BackendProfileFamily]:
+    return {
+        entry.key.text: BackendProfileFamily(
+            feature_flags=_bool_field(
+                _child(entry, "feature_flags"),
+                default=True,
+            ),
+            target=_field_text(_child(entry, "target")),
+            linker=_field_text(_child(entry, "linker")),
+            detection=_field_text(_child(entry, "detection")),
+            source=_source_span(entry.source),
+        )
+        for entry in _children(field)
+    }
 
 
 def _bool_field(field: ParsedTslField | None, *, default: bool) -> bool:

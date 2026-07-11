@@ -10,20 +10,36 @@ from tslc.diagnostics import SourceSpan
 
 
 @dataclass(frozen=True, slots=True)
+class BackendProfileFamily:
+    """One backend's behavior for a machine-profile family."""
+
+    feature_flags: bool = True
+    target: str | None = None
+    linker: str | None = None
+    detection: str | None = None
+    source: SourceSpan | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ProfileFamilyCapability:
-    """One machine-profile family and the extension/toolchain behavior it owns."""
+    """One machine-profile family and the backend behavior it owns."""
 
     name: str
     extension_families: frozenset[str] = frozenset()
     runner_kinds: frozenset[str] = frozenset()
     sort_order: int = 100
-    cpp_feature_flags: bool = True
-    cpp_target: str | None = None
-    cpp_detection: str | None = None
-    rust_target_features: bool = True
-    rust_target: str | None = None
-    rust_linker: str | None = None
+    backends: Mapping[str, BackendProfileFamily] = field(default_factory=dict)
     source: SourceSpan | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "backends",
+            MappingProxyType(dict(sorted(self.backends.items()))),
+        )
+
+    def backend(self, backend_id: str) -> BackendProfileFamily:
+        return self.backends.get(backend_id, BackendProfileFamily())
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +88,14 @@ class TargetFamilyCatalog:
     def profile_family_names(self) -> frozenset[str]:
         return frozenset(self.profile_families)
 
+    @property
+    def backend_ids(self) -> frozenset[str]:
+        return frozenset(
+            backend_id
+            for capability in self.profile_families.values()
+            for backend_id in capability.backends
+        )
+
     def supports_extension_family(self, family: str) -> bool:
         return family in self.emitted_extension_families
 
@@ -96,4 +120,8 @@ class TargetFamilyCatalog:
         return frozenset() if capability is None else capability.runner_kinds
 
 
-__all__ = ("ProfileFamilyCapability", "TargetFamilyCatalog")
+__all__ = (
+    "BackendProfileFamily",
+    "ProfileFamilyCapability",
+    "TargetFamilyCatalog",
+)

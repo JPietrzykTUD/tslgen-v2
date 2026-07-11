@@ -7,7 +7,7 @@ from typing import Protocol, runtime_checkable
 
 from tslc.ir.segments import Region, Segment
 from tslc.lower.context import LoweringSession
-from tslc.render.model import RenderField, RenderText
+from tslc.target_text import RenderField, RenderText
 
 RenderBody = Callable[[tuple[Segment, ...]], RenderText]
 
