@@ -6,15 +6,17 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from tslc.diagnostics import Diagnostic
-from tslc.output._verify_common import (
+from tslc.output._verify_common import missing_executable
+from tslc.output._verify_cpp_config import (
     cmake_cross_emulator,
-    configured_runner_kinds,
     cpp_environment,
     cpp_target,
     cpp_compiler_accepts_explicit_target,
     effective_cpp_compiler,
+)
+from tslc.output._verify_runners import (
+    configured_runner_kinds,
     runner_prefix,
-    missing_executable,
 )
 from tslc.output.verify_drivers import VerifyBackendDriver
 from tslc.output.verify_model import (

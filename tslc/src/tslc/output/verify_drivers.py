@@ -9,8 +9,10 @@ from pathlib import Path
 from tslc.diagnostics import Diagnostic
 from tslc.output._verify_common import (
     command_failure_diagnostic,
-    filter_runner_verifiable_profiles,
     missing_executable,
+)
+from tslc.output._verify_runners import (
+    filter_runner_verifiable_profiles,
     runner_missing_diagnostic,
 )
 from tslc.output.verify_model import (

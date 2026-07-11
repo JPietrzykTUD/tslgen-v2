@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import tslc.output.verify as verify_module
+import tslc.output._verify_common as verify_common
 from tslc.backend.cpp_capability import create_cpp_verify_driver
 from tslc.backend.rust_capability import create_rust_verify_driver
 from tslc.output.verify import (
@@ -23,7 +24,9 @@ from tslc.output.verify import (
     run_subprocess_build_command,
     verify_generated_project,
 )
-from tslc.output._verify_common import effective_cpp_compiler
+from tslc.output._verify_cpp_config import effective_cpp_compiler
+from tslc.output._verify_runners import runner_prefix
+from tslc.output._verify_rust_config import effective_rust_compiler
 from tslc.output.verify_drivers import VerifyBackendDriver
 from tslc.output.verify_model import BackendToolchain
 
@@ -73,6 +76,15 @@ def test_backend_capabilities_use_public_verify_driver_surface() -> None:
     assert rust_driver.command_groups.__module__ != verify_module.__name__
     assert not hasattr(verify_module, "cpp_verify_driver")
     assert not hasattr(verify_module, "rust_verify_driver")
+
+
+def test_verifier_configuration_has_focused_module_ownership() -> None:
+    assert effective_cpp_compiler.__module__ == "tslc.output._verify_cpp_config"
+    assert effective_rust_compiler.__module__ == "tslc.output._verify_rust_config"
+    assert runner_prefix.__module__ == "tslc.output._verify_runners"
+    assert not hasattr(verify_common, "effective_cpp_compiler")
+    assert not hasattr(verify_common, "effective_rust_compiler")
+    assert not hasattr(verify_common, "runner_prefix")
 
 
 def test_subprocess_verifier_uses_local_runtime_cache_dirs(tmp_path: Path) -> None:

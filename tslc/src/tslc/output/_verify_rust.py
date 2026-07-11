@@ -8,11 +8,10 @@ from pathlib import Path
 from collections.abc import Mapping
 
 from tslc.diagnostics import Diagnostic, Severity
-from tslc.output._verify_common import (
-    command_failure_diagnostic,
+from tslc.output._verify_common import command_failure_diagnostic, missing_executable
+from tslc.output._verify_runners import runner_prefix
+from tslc.output._verify_rust_config import (
     effective_rust_compiler,
-    missing_executable,
-    runner_prefix,
     rust_environment,
     rust_linker,
     rust_target,
