@@ -93,7 +93,9 @@ def test_scalable_fixed_lane_signatures_are_policy_deferred(
     assert {entry.status for entry in result.skipped} == {"policy_deferred"}
 
     report = format_coverage_report(result)
-    assert "2294 emitted / 2294 attempted" in report
+    # Compile/runtime branch-local type aliases no longer leak into the opposite arm's
+    # dependency closure, so only the dependencies reachable with each arm's own types count.
+    assert "2018 emitted / 2018 attempted" in report
     assert "30 policy-deferred slots" in report
     assert "skipped because" not in report
     assert "policy-deferred because" in report

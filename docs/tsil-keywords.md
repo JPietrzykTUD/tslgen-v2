@@ -321,17 +321,24 @@ Syntax:
 loop<backend>(var, start, end, step) { body }
 loop<backend, unroll>(var, start, end, step) { body }
 loop<generation>(var, start, end, step) { body }
+loop<generation, scoped>(var, start, end, step) { body }
 ```
 
 Use `loop<backend>` for loops that should remain in generated target code. Add
 `unroll` when a backend unroll hint should be emitted if the trip count is known
-at generation time. Use `loop<generation>` when the loop should expand during
-lowering, for example to build an intrinsic argument list.
+at generation time. Use `loop<generation>` when the loop should expand fragments
+during lowering, for example to build an intrinsic argument list. Add `scoped`
+when the expanded body contains statements or declarations that require a
+separate lexical block per iteration.
 
 Lowering renders backend loops with the `loop_backend` template and optional
 `loop_backend_unroll` template. Generation loops evaluate integer bounds,
 temporarily bind the loop variable as a generation-time integer, render the
-body once per iteration, and emit the concatenated result. Zero steps are
+body once per iteration, and emit the concatenated result. A `scoped`
+generation loop wraps each expanded iteration in its own lexical block,
+matching the declaration scope of a real loop iteration; an ordinary generation
+loop emits the fragments directly. The binding is available to `value(...)`
+queries and intrinsic `immediate(N)=...` modifiers in the body. Zero steps are
 diagnosed as errors.
 
 ### `switch`

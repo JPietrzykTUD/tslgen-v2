@@ -52,9 +52,8 @@ prim<void:=(ptr,v)>[aligned=*] store(ptr, data):
           reasons [raw_pointer]
         implementation:
           tsil """
-            var<const_infer>(values, call<primitive=to_array[Vec]>(data));
             loop<backend, unroll>(idx, 0, value(vector::length), 1)  {
-              *ptr_add_mut(ptr, idx) = values[idx];
+              *ptr_add_mut(ptr, idx) = data[idx];
             }
           """
     clang_v128:

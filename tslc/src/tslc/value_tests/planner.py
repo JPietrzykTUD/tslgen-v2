@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 from tslc.catalog.model import Catalog, Primitive, TestCase
 from tslc.diagnostics import Diagnostic, SourceLocation
 from tslc.lower.lowerer import LoweredSpecialization
+from tslc.lower.lowerer import varying_positions
 from tslc.support_policy import DEFAULT_SUPPORT_POLICY, SupportPolicy
 from tslc.value_tests._case_conversion import FUZZ_ITERATIONS
 from tslc.value_tests._pattern_base import (
@@ -89,72 +90,93 @@ class ValueTestPlanner:
         backend = self._backend_supports[profile.backend_id]
         cases: list[ValueTestCasePlan] = []
         for emitted_name in sorted(profile.specializations):
-            specs = profile.specializations[emitted_name]
-            if not specs:
-                continue
-            pattern = self._pattern_for(specs)
-            source_name = specs[0].source_primitive_name
-            primitive = (
-                pattern.source_primitive(self._catalog, source_name, specs[0])
-                if pattern is not None
-                else self._catalog.primitive(source_name, unmasked=False)
+            emitted_specs = profile.specializations[emitted_name]
+            inferred_type_args = (
+                1
+                if profile.backend_id == "rust" and varying_positions(emitted_specs)
+                else 0
             )
-            if primitive is None:
-                continue
-            fuzz_builder = getattr(pattern, "fuzz_cases", None) if self._fuzz else None
-            if fuzz_builder is not None:
-                fuzz_planned = fuzz_builder(
-                    self._fuzz_context(backend, emitted_name, specs, harness)
+            for specs in _value_test_spec_groups(emitted_specs):
+                pattern = self._pattern_for(specs)
+                source_name = specs[0].source_primitive_name
+                primitive = (
+                    pattern.source_primitive(self._catalog, source_name, specs[0])
+                    if pattern is not None
+                    else self._catalog.primitive(source_name, unmasked=False)
                 )
-                cases.extend(self._supported_cases(fuzz_planned, backend))
-            if not primitive.tests:
-                entry = ValueTestCoverageEntry(
-                    backend_id=profile.backend_id,
-                    profile_name=profile.profile_name,
-                    primitive_name=source_name,
-                    case_name=None,
-                    status="missing_authored_tests",
-                    reason="selected primitive has no authored tests",
-                )
-                coverage.append(entry)
-                coverage_locations.setdefault(coverage_identity(entry), _primitive_location(primitive))
-                continue
-            for index, test_case in enumerate(primitive.tests):
-                if not any(spec.type_tag == test_case.type_tag for spec in specs):
+                if primitive is None:
                     continue
-                if _case_extension_unselected(test_case, specs):
+                fuzz_builder = getattr(pattern, "fuzz_cases", None) if self._fuzz else None
+                if fuzz_builder is not None:
+                    fuzz_planned = fuzz_builder(
+                        self._fuzz_context(backend, emitted_name, specs, harness)
+                    )
+                    cases.extend(self._supported_cases(fuzz_planned, backend))
+                if not primitive.tests:
+                    entry = ValueTestCoverageEntry(
+                        backend_id=profile.backend_id,
+                        profile_name=profile.profile_name,
+                        primitive_name=source_name,
+                        case_name=None,
+                        status="missing_authored_tests",
+                        reason="selected primitive has no authored tests",
+                    )
+                    coverage.append(entry)
+                    coverage_locations.setdefault(
+                        coverage_identity(entry), _primitive_location(primitive)
+                    )
                     continue
-                if _representation_case_unselected(test_case, specs):
-                    continue
-                case_context = self._case_context(
-                    backend, emitted_name, index, test_case, specs, harness
-                )
-                planned: tuple[ValueTestCasePlan, ...]
-                if test_case.role == "compile":
-                    plan = compile_only_case(emitted_name, index, test_case, specs)
-                    planned = (plan,) if plan is not None else ()
-                else:
-                    planned = pattern.plan_case(case_context) if pattern is not None else ()
-                supported = self._supported_cases(planned, backend)
-                cases.extend(supported)
-                entry = case_coverage(
-                    backend=backend,
-                    profile_name=profile.profile_name,
-                    primitive_name=source_name,
-                    case_name=test_case.name,
-                    planned=planned,
-                    supported=supported,
-                    unplanned_reason=unplanned_case_reason(pattern, planned, case_context),
-                )
-                coverage.append(entry)
-                coverage_locations.setdefault(
-                    coverage_identity(entry),
-                    (
-                        test_case.source.start
-                        if test_case.source is not None
-                        else _primitive_location(primitive)
-                    ),
-                )
+                for index, test_case in enumerate(primitive.tests):
+                    if not any(spec.type_tag == test_case.type_tag for spec in specs):
+                        continue
+                    if _case_extension_unselected(test_case, specs):
+                        continue
+                    if _representation_case_unselected(test_case, specs):
+                        continue
+                    case_context = self._case_context(
+                        backend, emitted_name, index, test_case, specs, harness
+                    )
+                    planned: tuple[ValueTestCasePlan, ...]
+                    if test_case.role == "compile":
+                        plan = compile_only_case(emitted_name, index, test_case, specs)
+                        planned = (plan,) if plan is not None else ()
+                    else:
+                        planned = (
+                            pattern.plan_case(case_context) if pattern is not None else ()
+                        )
+                    if inferred_type_args:
+                        planned = tuple(
+                            replace(
+                                case,
+                                invocation=replace(
+                                    case.invocation,
+                                    inferred_type_args=inferred_type_args,
+                                ),
+                            )
+                            for case in planned
+                        )
+                    supported = self._supported_cases(planned, backend)
+                    cases.extend(supported)
+                    entry = case_coverage(
+                        backend=backend,
+                        profile_name=profile.profile_name,
+                        primitive_name=source_name,
+                        case_name=test_case.name,
+                        planned=planned,
+                        supported=supported,
+                        unplanned_reason=unplanned_case_reason(
+                            pattern, planned, case_context
+                        ),
+                    )
+                    coverage.append(entry)
+                    coverage_locations.setdefault(
+                        coverage_identity(entry),
+                        (
+                            test_case.source.start
+                            if test_case.source is not None
+                            else _primitive_location(primitive)
+                        ),
+                    )
         return ValueTestProfilePlan(
             backend_id=profile.backend_id,
             profile_name=profile.profile_name,
@@ -252,6 +274,37 @@ def _duplicate_case_diagnostics(
                 )
             )
     return tuple(diagnostics)
+
+
+def _value_test_spec_groups(
+    specs: tuple[LoweredSpecialization, ...],
+) -> tuple[tuple[LoweredSpecialization, ...], ...]:
+    """Keep overload signatures independent while retaining their type/profile matrix."""
+
+    groups: dict[
+        tuple[
+            str,
+            str,
+            tuple[str, ...],
+            str,
+            str,
+            tuple[str, ...],
+            tuple[str, ...],
+        ],
+        list[LoweredSpecialization],
+    ] = {}
+    for spec in specs:
+        key = (
+            spec.source_primitive_name,
+            spec.result_kind,
+            spec.param_kinds,
+            spec.mask_policy or "",
+            spec.immediate[0] if spec.immediate is not None else "",
+            tuple(name for name, _type, _default in spec.generic_params),
+            tuple(param.name for param in spec.type_params),
+        )
+        groups.setdefault(key, []).append(spec)
+    return tuple(tuple(groups[key]) for key in sorted(groups))
 
 
 def _primitive_location(primitive: Primitive) -> SourceLocation | None:

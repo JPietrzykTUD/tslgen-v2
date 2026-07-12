@@ -142,6 +142,9 @@ class IntrinLowerer:
         (`name(all args)`) — the same intrinsic shape differs between backends (gather's scale)."""
 
         position, value = forward
+        generation_value = context.scope.resolve_generation_int(value)
+        if generation_value is not None:
+            value = str(generation_value)
         args = tuple(
             render_text(render(group)).strip() for group in split_arg_groups(region.body)
         )

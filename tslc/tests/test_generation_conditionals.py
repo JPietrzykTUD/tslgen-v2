@@ -323,13 +323,17 @@ def test_hand_float_bitwise_carrier_type_query_lowers(catalog: Catalog, machine_
     spec_f64 = _spec(catalog, machine_profiles, "avx2", "hand", "avx2", "f64")
     rust_f32 = _spec(catalog, machine_profiles, "avx2", "hand", "avx2", "f32", backend="rust")
 
-    assert spec_f32 is not None and "static_cast<uint32_t>(0)" in spec_f32.body_text
-    assert spec_f64 is not None and "static_cast<uint64_t>(0)" in spec_f64.body_text
+    assert spec_f32 is not None
+    assert "tsl::simd<uint32_t, tsl::avx2>" in spec_f32.body_text
+    assert "::tsl::hand<tsl::simd<uint32_t, tsl::avx2>>" in spec_f32.body_text
+    assert spec_f64 is not None
+    assert "tsl::simd<uint64_t, tsl::avx2>" in spec_f64.body_text
+    assert "::tsl::hand<tsl::simd<uint64_t, tsl::avx2>>" in spec_f64.body_text
     assert "select(" not in spec_f32.body_text
     assert "select(" not in spec_f64.body_text
     assert rust_f32 is not None
-    assert "core::ptr::addr_of_mut!(result).cast::<u8>()" in rust_f32.body_text
-    assert "core::ptr::addr_of!(data_arr[0]).cast::<u8>()" in rust_f32.body_text
+    assert "Simd<u32, Avx2>" in rust_f32.body_text
+    assert "hand::<Simd<u32, Avx2>>" in rust_f32.body_text
 
 
 def test_lzc_scalar_float_bitwise_path_does_not_need_offset_base(

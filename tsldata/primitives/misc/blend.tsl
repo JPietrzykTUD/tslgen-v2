@@ -71,14 +71,13 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           reasons []
         implementation:
           tsil """
-              var<infer>(result, call<primitive=to_array[Vec]>(left));
-              var<const_infer>(right_array, call<primitive=to_array[Vec]>(right));
+              var<infer>(result, left);
               loop<backend, unroll>(i, 0, value(vector::length), 1)  {
                 if (mask<test>(mask, i)) {
-                  result[i] = right_array[i];
+                  result[i] = right[i];
                 }
               }
-              complete(call<primitive=from_array[Vec]>(result));
+              complete(result);
             """
     [avx512, avx2_vl, sse_vl]:
       f?:
@@ -169,14 +168,17 @@ prim<v:=(m,v,v)>[mask=pass_through] blend(mask, left, right):
           reasons []
         implementation:
           tsil """
-              var<infer>(result, call<primitive=to_array[Vec]>(left));
-              var<const_infer>(right_array, call<primitive=to_array[Vec]>(right));
-              loop<backend, unroll>(i, 0, value(vector::length), 1)  {
-                if (mask<test>(mask, i)) {
-                  result[i] = right_array[i];
-                }
-              }
-              complete(call<primitive=from_array[Vec]>(result));
+              let<type>(FloatVec, type(vector::as_base(f32)));
+              var<const_infer>(mask_bits, call<primitive=reinterpret[Vec, FloatVec]>(call<primitive=to_vector>(mask)));
+              var<const_infer>(left_bits, call<primitive=reinterpret[Vec, FloatVec]>(left));
+              var<const_infer>(right_bits, call<primitive=reinterpret[Vec, FloatVec]>(right));
+              var<const_infer>(selected_bits,
+                call<primitive=binary_or[FloatVec]>(
+                  call<primitive=binary_andnot[FloatVec]>(mask_bits, left_bits),
+                  call<primitive=binary_and[FloatVec]>(mask_bits, right_bits)
+                )
+              );
+              complete(call<primitive=reinterpret[FloatVec, Vec]>(selected_bits));
             """
     sse:
       arith:

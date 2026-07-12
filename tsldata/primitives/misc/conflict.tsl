@@ -83,49 +83,310 @@ prim<v:=v> conflict(data):
               );
             """
     sve:
-      ?i?:
+      [si8, ui8]:
         requires [sve]
         safety:
           internal_unsafe true
           caller_unsafe false
-          reasons [intrinsic, raw_pointer]
+          reasons [intrinsic]
         implementation:
           tsil """
               let<type>(Base, type(base::in));
+              let<type>(UBase, type(base::unsigned_of(type(base::in))));
+              let<type>(UVec, type(vector::as_base(UBase)));
               let<type>(ConflictT, type(scalar::size));
               var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-              var<const_infer>(bit_limit, (sizeof(Base) * 8));
-              var<const_infer>(values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
-              var<const_infer>(result_values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
-              intrin<svst1, build>(call<primitive=mask_true[Vec]>(), values, data);
-              result_values[0] = cast<static>(Base, 0);
-              loop<backend>(idx, 1, lanes, 1) {
-                var<infer>(conflict, cast<static>(ConflictT, 0));
-                loop<backend>(cur, 0, idx, 1) {
-                  if ((cur < bit_limit) && (values[idx] == values[cur])) {
-                    conflict |= (cast<static>(ConflictT, 1)) << cur;
-                  }
+              var<const_infer>(all, call<primitive=mask_true[Vec]>());
+              var<const_infer>(indexes, intrin<svindex, build[suffix=UBase]>(
+                cast<static>(UBase, 0),
+                cast<static>(UBase, 1)
+              ));
+              var<infer>(result, call<primitive=set_zero[UVec]>());
+              loop<backend>(cur, 0, (sizeof(Base) * 8), 1) {
+                if (cur < lanes) {
+                  var<const_infer>(through_current, intrin<svwhilelt_b8>(
+                    cast<static>(type(scalar::size), 0),
+                    cast<static>(type(scalar::size), cur + 1)
+                  ));
+                  var<const_infer>(current, intrin<svlastb, build>(through_current, data));
+                  var<const_infer>(matches, intrin<svcmpeq_n, build[suffix=base::in]>(
+                    all,
+                    data,
+                    current
+                  ));
+                  var<const_infer>(later, intrin<svcmpgt_n, build[suffix=UBase]>(
+                    all,
+                    indexes,
+                    cast<static>(UBase, cur)
+                  ));
+                  var<const_infer>(active, intrin<svand_b_z>(all, matches, later));
+                  result = intrin<svorr_n, build[suffix=UBase, post=m]>(
+                    active,
+                    result,
+                    cast<static>(
+                      UBase,
+                      (cast<static>(ConflictT, 1)) << cur
+                    )
+                  );
                 }
-                result_values[idx] = cast<static>(Base, conflict);
               }
-              var<const_infer>(result, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result_values));
-              std::free(values);
-              std::free(result_values);
-              complete(result);
+              complete(call<primitive=reinterpret[UVec, Vec]>(result));
             """
-    [clang_v128, avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
+      [si16, ui16]:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              let<type>(Base, type(base::in));
+              let<type>(UBase, type(base::unsigned_of(type(base::in))));
+              let<type>(UVec, type(vector::as_base(UBase)));
+              let<type>(ConflictT, type(scalar::size));
+              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+              var<const_infer>(all, call<primitive=mask_true[Vec]>());
+              var<const_infer>(indexes, intrin<svindex, build[suffix=UBase]>(
+                cast<static>(UBase, 0),
+                cast<static>(UBase, 1)
+              ));
+              var<infer>(result, call<primitive=set_zero[UVec]>());
+              loop<backend>(cur, 0, (sizeof(Base) * 8), 1) {
+                if (cur < lanes) {
+                  var<const_infer>(through_current, intrin<svwhilelt_b16>(
+                    cast<static>(type(scalar::size), 0),
+                    cast<static>(type(scalar::size), cur + 1)
+                  ));
+                  var<const_infer>(current, intrin<svlastb, build>(through_current, data));
+                  var<const_infer>(matches, intrin<svcmpeq_n, build[suffix=base::in]>(
+                    all,
+                    data,
+                    current
+                  ));
+                  var<const_infer>(later, intrin<svcmpgt_n, build[suffix=UBase]>(
+                    all,
+                    indexes,
+                    cast<static>(UBase, cur)
+                  ));
+                  var<const_infer>(active, intrin<svand_b_z>(all, matches, later));
+                  result = intrin<svorr_n, build[suffix=UBase, post=m]>(
+                    active,
+                    result,
+                    cast<static>(
+                      UBase,
+                      (cast<static>(ConflictT, 1)) << cur
+                    )
+                  );
+                }
+              }
+              complete(call<primitive=reinterpret[UVec, Vec]>(result));
+            """
+      [si32, ui32]:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              let<type>(Base, type(base::in));
+              let<type>(UBase, type(base::unsigned_of(type(base::in))));
+              let<type>(UVec, type(vector::as_base(UBase)));
+              let<type>(ConflictT, type(scalar::size));
+              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+              var<const_infer>(all, call<primitive=mask_true[Vec]>());
+              var<const_infer>(indexes, intrin<svindex, build[suffix=UBase]>(
+                cast<static>(UBase, 0),
+                cast<static>(UBase, 1)
+              ));
+              var<infer>(result, call<primitive=set_zero[UVec]>());
+              loop<backend>(cur, 0, (sizeof(Base) * 8), 1) {
+                if (cur < lanes) {
+                  var<const_infer>(through_current, intrin<svwhilelt_b32>(
+                    cast<static>(type(scalar::size), 0),
+                    cast<static>(type(scalar::size), cur + 1)
+                  ));
+                  var<const_infer>(current, intrin<svlastb, build>(through_current, data));
+                  var<const_infer>(matches, intrin<svcmpeq_n, build[suffix=base::in]>(
+                    all,
+                    data,
+                    current
+                  ));
+                  var<const_infer>(later, intrin<svcmpgt_n, build[suffix=UBase]>(
+                    all,
+                    indexes,
+                    cast<static>(UBase, cur)
+                  ));
+                  var<const_infer>(active, intrin<svand_b_z>(all, matches, later));
+                  result = intrin<svorr_n, build[suffix=UBase, post=m]>(
+                    active,
+                    result,
+                    cast<static>(
+                      UBase,
+                      (cast<static>(ConflictT, 1)) << cur
+                    )
+                  );
+                }
+              }
+              complete(call<primitive=reinterpret[UVec, Vec]>(result));
+            """
+      [si64, ui64]:
+        requires [sve]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+              let<type>(Base, type(base::in));
+              let<type>(UBase, type(base::unsigned_of(type(base::in))));
+              let<type>(UVec, type(vector::as_base(UBase)));
+              let<type>(ConflictT, type(scalar::size));
+              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+              var<const_infer>(all, call<primitive=mask_true[Vec]>());
+              var<const_infer>(indexes, intrin<svindex, build[suffix=UBase]>(
+                cast<static>(UBase, 0),
+                cast<static>(UBase, 1)
+              ));
+              var<infer>(result, call<primitive=set_zero[UVec]>());
+              loop<backend>(cur, 0, (sizeof(Base) * 8), 1) {
+                if (cur < lanes) {
+                  var<const_infer>(through_current, intrin<svwhilelt_b64>(
+                    cast<static>(type(scalar::size), 0),
+                    cast<static>(type(scalar::size), cur + 1)
+                  ));
+                  var<const_infer>(current, intrin<svlastb, build>(through_current, data));
+                  var<const_infer>(matches, intrin<svcmpeq_n, build[suffix=base::in]>(
+                    all,
+                    data,
+                    current
+                  ));
+                  var<const_infer>(later, intrin<svcmpgt_n, build[suffix=UBase]>(
+                    all,
+                    indexes,
+                    cast<static>(UBase, cur)
+                  ));
+                  var<const_infer>(active, intrin<svand_b_z>(all, matches, later));
+                  result = intrin<svorr_n, build[suffix=UBase, post=m]>(
+                    active,
+                    result,
+                    cast<static>(
+                      UBase,
+                      (cast<static>(ConflictT, 1)) << cur
+                    )
+                  );
+                }
+              }
+              complete(call<primitive=reinterpret[UVec, Vec]>(result));
+            """
+    clang_v128:
+      ?i?:
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            let<type>(ConflictT, type(scalar::size));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation, scoped>(idx, 1, value(vector::length), 1) {
+              var<infer>(conflict, cast<static>(ConflictT, 0));
+              loop<generation, scoped>(cur, 0, value(idx), 1) {
+                if ((value(cur) < (value(type::size_bytes(type(base::in))) * 8)) &&
+                    (data[value(idx)] == data[value(cur)])) {
+                  conflict |= (cast<static>(ConflictT, 1)) << value(cur);
+                }
+              }
+              result[value(idx)] = cast<static>(type(base::in), conflict);
+            }
+            complete(result);
+          """
+    wasm128:
+      ?i?:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(ConflictT, type(scalar::size));
+            let<type>(CarrierBase, type(base::signed_of(type(base::in))));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation, scoped>(idx, 1, value(vector::length), 1) {
+              var<const_infer>(current, cast<static>(
+                type(base::in),
+                intrin<extract_lane, build[suffix=base::in, immediate(1)=idx]>(
+                  data,
+                  value(idx)
+                )
+              ));
+              var<infer>(conflict, cast<static>(ConflictT, 0));
+              loop<generation, scoped>(cur, 0, value(idx), 1) {
+                var<const_infer>(previous, cast<static>(
+                  type(base::in),
+                  intrin<extract_lane, build[suffix=base::in, immediate(1)=cur]>(
+                    data,
+                    value(cur)
+                  )
+                ));
+                if ((value(cur) < (value(type::size_bytes(type(base::in))) * 8)) &&
+                    (current == previous)) {
+                  conflict |= (cast<static>(ConflictT, 1)) << value(cur);
+                }
+              }
+              result = intrin<replace_lane, build[suffix=base::in, immediate(1)=idx]>(
+                result,
+                value(idx),
+                cast<static>(CarrierBase, conflict)
+              );
+            }
+            complete(result);
+          """
+    neon:
+      ?i?:
+        requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(ConflictT, type(scalar::size));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation, scoped>(idx, 1, value(vector::length), 1) {
+              var<const_infer>(current, intrin<
+                vgetq_lane,
+                build[suffix=base::in, immediate(1)=idx]
+              >(data, value(idx)));
+              var<infer>(conflict, cast<static>(ConflictT, 0));
+              loop<generation, scoped>(cur, 0, value(idx), 1) {
+                var<const_infer>(previous, intrin<
+                  vgetq_lane,
+                  build[suffix=base::in, immediate(1)=cur]
+                >(data, value(cur)));
+                if ((value(cur) < (value(type::size_bytes(type(base::in))) * 8)) &&
+                    (current == previous)) {
+                  conflict |= (cast<static>(ConflictT, 1)) << value(cur);
+                }
+              }
+              result = intrin<vsetq_lane, build[suffix=base::in, immediate(2)=idx]>(
+                cast<static>(type(base::in), conflict),
+                result,
+                value(idx)
+              );
+            }
+            complete(result);
+          """
+    [avx512, avx2, avx2_vl, sse, sse_vl]:
       ?i?:
         requires:
-          clang_v128 []
           avx512 [avx512f]
           avx2 [avx2]
           avx2_vl [avx]
           sse [sse2]
           sse_vl [sse2]
-          neon [neon]
-          generic []
-          oneapi_fpga []
-          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -145,6 +406,30 @@ prim<v:=v> conflict(data):
                 result[idx] = cast<static>(type(base::in), conflict);
               }
               complete(call<primitive=from_array[Vec]>(result));
+            """
+    [generic, oneapi_fpga]:
+      ?i?:
+        requires:
+          generic []
+          oneapi_fpga []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              let<type>(ConflictT, type(scalar::size));
+              var<infer>(result, call<primitive=set_zero[Vec]>());
+              loop<backend>(idx, 1, value(vector::length), 1) {
+                var<infer>(conflict, cast<static>(ConflictT, 0));
+                loop<backend>(cur, 0, idx, 1) {
+                  if ((cur < (value(type::size_bytes(type(base::in))) * 8)) && (data[idx] == data[cur])) {
+                    conflict |= (cast<static>(ConflictT, 1)) << cur;
+                  }
+                }
+                result[idx] = cast<static>(type(base::in), conflict);
+              }
+              complete(result);
             """
     scalar:
       ?i?:

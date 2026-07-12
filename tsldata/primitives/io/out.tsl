@@ -33,15 +33,13 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
     - {tags [basic], type "f64", case {inputs [[1.0, 2.0], 0], expected "0000000000000000000000000000000000000000000000000000000000000010|0000000000000000000000000000000000000000000000000000000000000001|\n"}}
     - {tags [edge], type "f64", case {inputs [[0.0, 255.0], 0], expected "0000000000000000000000000000000000000000000000000000000011111111|0000000000000000000000000000000000000000000000000000000000000000|\n"}}
   impls:
-    [clang_v128, avx512, avx2, sse, generic, oneapi_fpga, wasm128]:
+    [clang_v128, avx512, avx2, sse, wasm128]:
       arith:
         requires:
           clang_v128 []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse2]
-          generic []
-          oneapi_fpga []
           wasm128 [simd128]
         safety:
           internal_unsafe false
@@ -52,6 +50,20 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
                var<const_infer>(arr, call<primitive=to_array[Vec]>(data));
                io<format>(out, arr, cast<static>(si32, ostream_modifier)) ;
                complete(out) ;
+            """
+    [generic, oneapi_fpga]:
+      arith:
+        requires:
+          generic []
+          oneapi_fpga []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+               io<format>(out, data, cast<static>(si32, ostream_modifier));
+               complete(out);
             """
     sve:
       arith:
@@ -64,7 +76,7 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
           tsil """
                let<type>(Base, type(base::in));
                var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-               var<const_infer>(values, static_cast<Base *>(std::malloc(lanes * sizeof(Base))));
+               var<runtime_array>(Base, values, lanes);
                intrin<svst1, build>(call<primitive=mask_true[Vec]>(), values, data);
                var<const_infer>(modifier, cast<static>(si32, ostream_modifier));
                var<const_infer>(bits, sizeof(Base) * 8);
@@ -97,7 +109,6 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
                  out += '|';
                }
                out += '\n';
-               std::free(values);
                complete(out) ;
             """
     neon:

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from tslc.catalog.model import Catalog, Primitive, TestCase
+from tslc.catalog.signatures import parse_signature
 from tslc.lower.lowerer import LoweredSpecialization
 from tslc.value_tests.model import (
     HarnessPrimitiveNames,
@@ -83,7 +84,16 @@ class _BasePattern:
         source_name: str,
         spec: LoweredSpecialization,
     ) -> Primitive | None:
-        return catalog.primitive(source_name, unmasked=True)
+        for primitive in catalog.primitives_named(source_name, unmasked=True):
+            shape = parse_signature(primitive.signature)
+            if shape is None:
+                continue
+            if (
+                shape.result_kind == spec.result_kind
+                and shape.param_kinds == spec.param_kinds
+            ):
+                return primitive
+        return None
 
     def unplanned_reason(self, context: ValueTestCaseContext) -> str | None:
         del context

@@ -13,7 +13,8 @@ dependency explicit: selected facts live under ``env``, alias mutation under
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from types import TracebackType
@@ -263,6 +264,38 @@ class LoweringScope:
 
     def unbind_generation_int(self, name: str) -> None:
         self.generation_ints.pop(name, None)
+
+    @contextmanager
+    def lexical_scope(self) -> Iterator[None]:
+        """Keep aliases introduced by one emitted target-language block local to it.
+
+        Generation-time branches that are spliced into their parent deliberately do not use
+        this scope: their aliases become part of the surviving body. Runtime branches and
+        unresolved ``if<compile>`` arms do use it, matching the braces emitted around them and
+        preventing a same-named alias in one arm from changing the other arm.
+        """
+
+        type_aliases = dict(self.type_aliases)
+        target_type_symbols = dict(self.target_type_symbols)
+        type_symbols = dict(self.type_symbols)
+        extension_symbols = dict(self.extension_symbols)
+        vector_aliases = dict(self.vector_aliases)
+        generation_ints = dict(self.generation_ints)
+        try:
+            yield
+        finally:
+            self.type_aliases.clear()
+            self.type_aliases.update(type_aliases)
+            self.target_type_symbols.clear()
+            self.target_type_symbols.update(target_type_symbols)
+            self.type_symbols.clear()
+            self.type_symbols.update(type_symbols)
+            self.extension_symbols.clear()
+            self.extension_symbols.update(extension_symbols)
+            self.vector_aliases.clear()
+            self.vector_aliases.update(vector_aliases)
+            self.generation_ints.clear()
+            self.generation_ints.update(generation_ints)
 
 
 @dataclass(slots=True)

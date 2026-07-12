@@ -221,6 +221,60 @@ def test_dependency_closure_ignores_dead_generation_branch_calls(
     assert not any(entry.primitive == "dependency_probe" for entry in result.skipped)
 
 
+def test_dependency_closure_pulls_concrete_callee_source_types(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["shift_left"],
+        profiles=["avx2"],
+        type_tags=["si32"],
+        backends=["cpp"],
+    )
+
+    assert not has_errors(result.diagnostics), result.diagnostics
+    coverage = {
+        (entry.primitive, entry.extension, entry.type_tag)
+        for entry in result.coverage
+    }
+    for extension in ("clang_v128", "clang_v256", "clang_v512"):
+        assert ("shift_left", extension, "si32") in coverage
+        assert ("reinterpret", extension, "ui32") in coverage
+    assert not any(
+        entry.primitive == "shift_left"
+        and entry.extension.startswith("clang_v")
+        and entry.type_tag == "si32"
+        for entry in result.skipped
+    )
+
+
+def test_active_extension_variant_outweighs_fixed_fallback_registration(
+    data_root: Path,
+    machine_profiles_path: Path,
+) -> None:
+    result = generate_project(
+        [data_root],
+        machine_profiles_path=machine_profiles_path,
+        primitives=["shift_left"],
+        profiles=["skylake"],
+        type_tags=["si32"],
+        backends=["cpp"],
+    )
+
+    assert not has_errors(result.diagnostics), result.diagnostics
+    header = next(
+        artifact.content
+        for artifact in result.artifacts.artifacts
+        if artifact.logical_path == "cpp/include/tsl_skylake.hpp"
+    )
+    avx2_traits = header.split("struct simd<T, avx2> {", 1)[1].split("};", 1)[0]
+    sse_traits = header.split("struct simd<T, sse> {", 1)[1].split("};", 1)[0]
+    assert "using mask_type = typename detail::native_mask<256, T>::type;" in avx2_traits
+    assert "using mask_type = typename detail::native_mask<128, T>::type;" in sse_traits
+
+
 def test_primitive_corpus_uses_comma_separated_call_attrs(data_root: Path) -> None:
     stale: list[str] = []
     pattern = re.compile(r"call<[^>\n]*[^,]\s+attrs\[")

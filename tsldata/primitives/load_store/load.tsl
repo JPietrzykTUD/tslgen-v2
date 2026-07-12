@@ -538,6 +538,7 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
   tests:
     - {tags [mask, none], attrs [aligned=false, packed=true], type "ui32", offset 1, case {inputs [[0, 0, 0]], expected 0}}
     - {tags [mask, none], attrs [aligned=false, packed=false], type "ui32", offset 0, case {inputs [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]], expected 0}}
+    - {tags [mask, clang, unpacked], extension "clang_v256", attrs [aligned=false, packed=false], type "ui32", lane_count 8, offset 0, case {inputs [[0, 1, 0, 2, 0, 0, 3, 0]], expected 74}}
   impls:
     scalar:
       arith:
@@ -559,11 +560,33 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
               );
             }
           """
-    [generic, clang_v128, oneapi_fpga]:
+    clang_v128:
+      arith:
+        requires []
+        safety:
+          internal_unsafe true
+          caller_unsafe true
+          reasons [raw_pointer]
+        implementation:
+          tsil """
+            if<generation>(value(primitive::attribute(packed))) {
+              complete(call<primitive=to_mask[Vec]>(cast<static>(type(vector::imask), *ptr)));
+            } else<generation> {
+              let<type>(MaskWord, type(base::unsigned_of(type(base::in))));
+              let<type>(MaskVec, type(vector::as_base(MaskWord)));
+              var<const_infer>(words, call<primitive=load[MaskVec], attrs[aligned=value(primitive::attribute(aligned))]>(
+                cast<reinterpret, type=const_ptr>(MaskWord, ptr)
+              ));
+              complete(call<primitive=nequal[MaskVec]>(
+                words,
+                call<primitive=set_zero[MaskVec]>()
+              ));
+            }
+          """
+    [generic, oneapi_fpga]:
       arith:
         requires:
           generic []
-          clang_v128 []
           oneapi_fpga []
         safety:
           internal_unsafe true
@@ -727,6 +750,7 @@ prim<s:=cptr>[aligned=false] load_scalar(ptr):
     [scalar, generic, clang_v128, avx512, avx2, sse, neon, sve, oneapi_fpga, wasm128]:
       arith:
         requires:
+          scalar []
           generic []
           clang_v128 []
           avx512 [avx512f]

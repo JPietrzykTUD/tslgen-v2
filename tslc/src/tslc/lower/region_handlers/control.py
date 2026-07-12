@@ -142,7 +142,7 @@ class IfLowerer:
                 header = context.env.backend.templates.render_template(
                     "flow_if_static", "if constexpr ({cond})", cond=rendered
                 )
-                then = render(region.block) if region.block is not None else ""
+                then = self._render_scoped(region.block, context, render)
                 out: RenderField = render_sequence(
                     (header, literal_text(" {\n        "), then, literal_text("\n      }"))
                 )
@@ -151,7 +151,7 @@ class IfLowerer:
                         (
                             out,
                             literal_text(" else {\n        "),
-                            render(region.else_block),
+                            self._render_scoped(region.else_block, context, render),
                             literal_text("\n      }"),
                         )
                     )
@@ -170,7 +170,7 @@ class IfLowerer:
         """A native runtime ``if``: emit the condition + branches verbatim for the target."""
 
         context.effects.mark_composition()
-        then = render(region.block) if region.block is not None else ""
+        then = self._render_scoped(region.block, context, render)
         header = render_sequence(
             (
                 context.env.backend.templates.render_template(
@@ -196,17 +196,34 @@ class IfLowerer:
                 and isinstance(region.else_block[0], Region)
                 and region.else_block[0].keyword == "if"
             ):
-                out = render_sequence((out, literal_text(" else "), render(region.else_block)))
+                out = render_sequence(
+                    (
+                        out,
+                        literal_text(" else "),
+                        self._render_scoped(region.else_block, context, render),
+                    )
+                )
             else:
                 out = render_sequence(
                     (
                         out,
                         literal_text(" else {\n        "),
-                        render(region.else_block),
+                        self._render_scoped(region.else_block, context, render),
                         literal_text("\n      }"),
                     )
                 )
         return out
+
+    @staticmethod
+    def _render_scoped(
+        segments: tuple[Segment, ...] | None,
+        context: LoweringSession,
+        render: RenderBody,
+    ) -> RenderField:
+        if segments is None:
+            return ""
+        with context.scope.lexical_scope():
+            return render(segments)
 
     def _evaluate_condition(self, text: str, context: LoweringSession) -> bool | None:
         """Evaluate a generation-time boolean condition. Supports ``||`` / ``&&`` of
@@ -316,7 +333,9 @@ class LoopLowerer:
     ``loop<backend, unroll>(...)`` adds an explicit unroll hint when the backend
     declares one and the trip count is generation-known. ``loop<generation>``
     evaluates integer bounds now, binds ``var`` as a generation-time integer,
-    and renders the block once per iteration.
+    and renders the block once per iteration. ``loop<generation, scoped>`` gives
+    each expanded statement body its own lexical block; ordinary generation
+    loops concatenate fragments so they can construct argument and lane lists.
     """
 
     keyword = "loop"
@@ -328,7 +347,8 @@ class LoopLowerer:
         terms = split_top_level(region.selector_text.strip())
         variant = terms[0] if terms else ""
         if variant == "generation":
-            if len(terms) != 1:
+            scoped = terms[1:] == ["scoped"]
+            if len(terms) != 1 and not scoped:
                 context.effects.skip(
                     "TSL-LOWER-UNSUPPORTED-LOOP",
                     f"unsupported loop selector {region.selector_text!r}: "
@@ -336,7 +356,7 @@ class LoopLowerer:
                     source=region.source,
                 )
                 return region.full_text
-            return self._generation(region, context, render)
+            return self._generation(region, context, render, scoped=scoped)
 
         unroll = "unroll" in terms[1:]
         if variant != "backend" or any(term != "unroll" for term in terms[1:]):
@@ -414,7 +434,12 @@ class LoopLowerer:
         return len(range(start, end, step))
 
     def _generation(
-        self, region: Region, context: LoweringSession, render: RenderBody
+        self,
+        region: Region,
+        context: LoweringSession,
+        render: RenderBody,
+        *,
+        scoped: bool,
     ) -> RenderField:
         groups = split_arg_groups(region.body)
         if len(groups) != 4 or region.block is None:
@@ -461,7 +486,19 @@ class LoopLowerer:
         try:
             for value in range(start, end, step):
                 context.scope.bind_generation_int(var, value)
-                parts.append(render(region.block))
+                if scoped:
+                    # Statement unrolling preserves a real loop body's
+                    # per-iteration declaration scope. Fragment/list unrolling must
+                    # not inject braces, so scoping is an explicit source choice.
+                    with context.scope.lexical_scope():
+                        body = render(region.block)
+                    parts.append(
+                        render_sequence(
+                            (literal_text("{\n"), body, literal_text("\n}\n"))
+                        )
+                    )
+                else:
+                    parts.append(render(region.block))
         finally:
             if had_previous and previous is not None:
                 context.scope.bind_generation_int(var, previous)

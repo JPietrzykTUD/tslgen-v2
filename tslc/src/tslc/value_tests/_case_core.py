@@ -33,6 +33,7 @@ def generic_golden_case(
         return None
     if len(case.expected) != case.lanes:
         return None
+    generic_defaults = tuple(default for _name, _type, default in specs[0].generic_params)
     return _plan(
         "generic_golden",
         name,
@@ -42,6 +43,7 @@ def generic_golden_case(
         base_spelling,
         vector_inputs=vector_inputs,
         expected=case.expected,
+        generic_defaults=generic_defaults,
     )
 
 
@@ -349,6 +351,9 @@ def scalar_vector_case(
         vector_inputs=_vector_inputs(case),
         mask_inputs=_mask_inputs(case),
         scalar_inputs=_scalar_inputs(case),
+        generic_defaults=tuple(
+            default for _name, _type, default in specs[0].generic_params
+        ),
     )
 
 def immediate_case(

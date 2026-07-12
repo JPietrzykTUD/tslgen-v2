@@ -28,8 +28,10 @@ prim<m:=(v,v)> equal(left, right):
     - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [-1, -1, -1, -1, -1, -1, -1, -1]}}
     - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [18446744073709551615, 18446744073709551615]}}
     - {tags [edge], type "ui64", case {inputs [[0, 1], [0, 1]], expected [18446744073709551615, 18446744073709551615]}}
+    - {tags [edge, half_mismatch], type "ui64", case {inputs [[4294967296, 4294967295], [0, 8589934591]], expected [0, 0]}}
     - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [-1, -1]}}
     - {tags [edge], type "si64", case {inputs [[0, -1], [0, -1]], expected [-1, -1]}}
+    - {tags [edge, half_mismatch], type "si64", case {inputs [[4294967296, -4294967296], [0, 0]], expected [0, 0]}}
     - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [NAN, NAN, NAN, NAN]}}
     - {tags [edge], type "f32", case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, NAN, NAN, NAN]}}
     - {tags [nan, mixed], type "f32", case {inputs [[NAN, 1.0, -2.0, 3.0], [0.0, 1.0, NAN, 3.0]], expected [0.0, NAN, 0.0, NAN]}}
@@ -187,20 +189,18 @@ prim<m:=(v,v)> equal(left, right):
       arith:
         requires [sse, sse2]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-            var<const_infer>(left_values, call<primitive=to_array[Vec]>(left));
-            var<const_infer>(right_values, call<primitive=to_array[Vec]>(right));
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              if (left_values[i] == right_values[i]) {
-                result[i] = mask<lane_true>();
-              }
-            }
-            complete(call<primitive=from_array[Vec]>(result));
+            var<const_infer>(halves_equal, intrin<_mm_cmpeq_epi32>(left, right));
+            complete(
+              intrin<_mm_and_si128>(
+                halves_equal,
+                intrin<_mm_shuffle_epi32>(halves_equal, 0xB1)
+              )
+            );
           """
     neon:
       arith:
@@ -263,8 +263,12 @@ prim<m:=(v,v)> nequal(left, right):
     - {tags [edge], type "si16", case {inputs [[0, -1, -32768, 32767, 1, -2, 2, 32766], [0, -1, -32768, 32767, 1, -2, 2, 32766]], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
     - {tags [basic], type "ui64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
     - {tags [edge], type "ui64", case {inputs [[0, 1], [0, 1]], expected [0, 0]}}
+    - {tags [edge, high_word], type "ui64", case {inputs [[4294967295, 4294967296], [4294967296, 4294967295]], expected [18446744073709551615, 18446744073709551615]}}
+    - {tags [edge, low_word], type "ui64", case {inputs [[4294967294, 4294967295], [4294967295, 4294967294]], expected [18446744073709551615, 18446744073709551615]}}
     - {tags [basic], type "si64", case {inputs [[1, 2], [1, 2]], expected [0, 0]}}
     - {tags [edge], type "si64", case {inputs [[0, -1], [0, -1]], expected [0, 0]}}
+    - {tags [edge, high_word], type "si64", case {inputs [[-1, 0], [0, -1]], expected [-1, -1]}}
+    - {tags [edge, low_word], type "si64", case {inputs [[4294967294, 4294967295], [4294967295, 4294967294]], expected [-1, -1]}}
     - {tags [basic], type "f32", case {inputs [[1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, 0.0, 0.0, 0.0]}}
     - {tags [edge], type "f32", case {inputs [[NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [NAN, 0.0, 0.0, 0.0]}}
     - {tags [nan, mixed], type "f32", case {inputs [[NAN, 1.0, -2.0, 3.0], [0.0, 1.0, NAN, 4.0]], expected [NAN, 0.0, NAN, NAN]}}
@@ -783,20 +787,33 @@ prim<m:=(v,v)> less_than(left, right):
       arith:
         requires [sse, sse2]
         safety:
-          internal_unsafe false
+          internal_unsafe true
           caller_unsafe false
-          reasons []
+          reasons [intrinsic]
         implementation:
           tsil """
-            var<infer>(result, call<primitive=to_array[Vec]>(call<primitive=set_zero[Vec]>()));
-            var<const_infer>(left_values, call<primitive=to_array[Vec]>(left));
-            var<const_infer>(right_values, call<primitive=to_array[Vec]>(right));
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              if (left_values[i] < right_values[i]) {
-                result[i] = mask<lane_true>();
-              }
+            var<const_infer>(left_high, intrin<_mm_shuffle_epi32>(left, 0xF5));
+            var<const_infer>(right_high, intrin<_mm_shuffle_epi32>(right, 0xF5));
+            var<const_infer>(left_low, intrin<_mm_shuffle_epi32>(left, 0xA0));
+            var<const_infer>(right_low, intrin<_mm_shuffle_epi32>(right, 0xA0));
+            var<const_infer>(sign_bit, intrin<_mm_set1_epi32>(-2147483648));
+            var<const_infer>(low_less, intrin<_mm_cmpgt_epi32>(
+              intrin<_mm_xor_si128>(right_low, sign_bit),
+              intrin<_mm_xor_si128>(left_low, sign_bit)
+            ));
+            var<const_infer>(high_equal, intrin<_mm_cmpeq_epi32>(left_high, right_high));
+            if<generation>(value(type::is_signed(type(base::in)))) {
+              var<const_infer>(high_less, intrin<_mm_cmpgt_epi32>(right_high, left_high));
+            } else {
+              var<const_infer>(high_less, intrin<_mm_cmpgt_epi32>(
+                intrin<_mm_xor_si128>(right_high, sign_bit),
+                intrin<_mm_xor_si128>(left_high, sign_bit)
+              ));
             }
-            complete(call<primitive=from_array[Vec]>(result));
+            complete(intrin<_mm_or_si128>(
+              high_less,
+              intrin<_mm_and_si128>(high_equal, low_less)
+            ));
           """
     neon:
       arith:
@@ -1794,11 +1811,14 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
     - {tags [equal, mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.5, -4.5], [1.0, -2.0, 3.5, -4.5]], expected [0.0, NAN, 0.0, NAN]}}
     - {tags [equal, mask, nan, edge], type "f32", case {inputs [6, [NAN, 0.0, -0.0, INFINITY], [NAN, 0.0, -0.0, INFINITY]], expected [0.0, NAN, NAN, 0.0]}}
   impls:
-    [scalar, clang_v128]:
+    [scalar, clang_v128, generic, oneapi_fpga, wasm128]:
       arith:
         requires:
           scalar []
           clang_v128 []
+          generic []
+          oneapi_fpga []
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1811,64 +1831,6 @@ prim<m:=(m,v,v)>[mask=zero] equal(mask, left, right):
                 call<primitive=equal[Vec]>(left, right)
               )
             );
-          """
-    generic:
-      arith:
-        requires []
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<none>());
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              if (
-                (left[i] == right[i]) &&
-                (mask<test>(mask, i))
-              ) {
-                mask<set>(result, i);
-              }
-            }
-            complete(result);
-          """
-    wasm128:
-      arith:
-        requires [simd128]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            complete(
-              call<primitive=mask_binary_and[Vec]>(
-                mask,
-                call<primitive=equal[Vec]>(left, right)
-              )
-            );
-          """
-    oneapi_fpga:
-      arith:
-        requires []
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<none>());
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              if (
-                (left[i] == right[i]) &&
-                (mask<test>(mask, i))
-              ) {
-                mask<set>(result, i);
-              }
-            }
-            complete(result);
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -2062,17 +2024,12 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<none>());
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              if (
-                (left[i] != right[i]) &&
-                (mask<test>(mask, i))
-              ) {
-                mask<set>(result, i);
-              }
-            }
-            complete(result);
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=nequal[Vec]>(left, right)
+              )
+            );
           """
     wasm128:
       arith:
@@ -2099,17 +2056,12 @@ prim<m:=(m,v,v)>[mask=zero] nequal(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<none>());
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              if (
-                (left[i] != right[i]) &&
-                (mask<test>(mask, i))
-              ) {
-                mask<set>(result, i);
-              }
-            }
-            complete(result);
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=nequal[Vec]>(left, right)
+              )
+            );
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -2302,17 +2254,12 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<none>());
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              if (
-                (left[i] < right[i]) &&
-                (mask<test>(mask, i))
-              ) {
-                mask<set>(result, i);
-              }
-            }
-            complete(result);
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=less_than[Vec]>(left, right)
+              )
+            );
           """
     wasm128:
       arith:
@@ -2339,17 +2286,12 @@ prim<m:=(m,v,v)>[mask=zero] less_than(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<none>());
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              if (
-                (left[i] < right[i]) &&
-                (mask<test>(mask, i))
-              ) {
-                mask<set>(result, i);
-              }
-            }
-            complete(result);
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=less_than[Vec]>(left, right)
+              )
+            );
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -2542,17 +2484,12 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<none>());
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              if (
-                (left[i] > right[i]) &&
-                (mask<test>(mask, i))
-              ) {
-                mask<set>(result, i);
-              }
-            }
-            complete(result);
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=greater_than[Vec]>(left, right)
+              )
+            );
           """
     wasm128:
       arith:
@@ -2579,17 +2516,12 @@ prim<m:=(m,v,v)>[mask=zero] greater_than(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<none>());
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              if (
-                (left[i] > right[i]) &&
-                (mask<test>(mask, i))
-              ) {
-                mask<set>(result, i);
-              }
-            }
-            complete(result);
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=greater_than[Vec]>(left, right)
+              )
+            );
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -2782,17 +2714,12 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<none>());
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              if (
-                (left[i] <= right[i]) &&
-                (mask<test>(mask, i))
-              ) {
-                mask<set>(result, i);
-              }
-            }
-            complete(result);
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=less_than_or_equal[Vec]>(left, right)
+              )
+            );
           """
     wasm128:
       arith:
@@ -2819,17 +2746,12 @@ prim<m:=(m,v,v)>[mask=zero] less_than_or_equal(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<none>());
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              if (
-                (left[i] <= right[i]) &&
-                (mask<test>(mask, i))
-              ) {
-                mask<set>(result, i);
-              }
-            }
-            complete(result);
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=less_than_or_equal[Vec]>(left, right)
+              )
+            );
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:
@@ -3022,17 +2944,12 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<none>());
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              if (
-                (left[i] >= right[i]) &&
-                (mask<test>(mask, i))
-              ) {
-                mask<set>(result, i);
-              }
-            }
-            complete(result);
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=greater_than_or_equal[Vec]>(left, right)
+              )
+            );
           """
     wasm128:
       arith:
@@ -3059,17 +2976,12 @@ prim<m:=(m,v,v)>[mask=zero] greater_than_or_equal(mask, left, right):
           reasons []
         implementation:
           tsil """
-            let<type>(MaskT, type(vector::mask));
-            var<typed>(MaskT, result, mask<none>());
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              if (
-                (left[i] >= right[i]) &&
-                (mask<test>(mask, i))
-              ) {
-                mask<set>(result, i);
-              }
-            }
-            complete(result);
+            complete(
+              call<primitive=mask_binary_and[Vec]>(
+                mask,
+                call<primitive=greater_than_or_equal[Vec]>(left, right)
+              )
+            );
           """
     [avx512, avx2_vl, sse_vl]:
       ?i?:

@@ -702,15 +702,84 @@ prim<v:=(lanes<s>)> set(values):
               )
             );
           """
-    [clang_v128, neon, sve, generic, oneapi_fpga, wasm128]:
+    clang_v128:
       arith:
-        requires:
-          clang_v128 []
-          neon [neon]
-          sve [sve]
-          generic []
-          oneapi_fpga []
-          wasm128 [simd128]
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          # ext_vector_type aggregate initialization is lane-zero first, while set's
+          # public lane-list contract is highest-lane first.
+          tsil """
+            complete(type(vector::register){
+              lanes<at>(values, value(vector::length) - 1)
+              loop<generation>(i, 1, value(vector::length), 1) {
+                , lanes<at>(values, value(vector::length) - 1 - i)
+              }
+            });
+          """
+    neon:
+      arith:
+        requires [neon]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation>(i, 0, value(vector::length), 1) {
+              result = intrin<vsetq_lane, build[suffix=base::in, immediate(2)=i]>(
+                lanes<at>(values, value(vector::length) - 1 - i),
+                result,
+                value(i)
+              );
+            }
+            complete(result);
+          """
+    wasm128:
+      ?i?:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            let<type>(CarrierBase, type(base::signed_of(type(base::in))));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation>(i, 0, value(vector::length), 1) {
+              result = intrin<replace_lane, build[suffix=base::in, immediate(1)=i]>(
+                result,
+                value(i),
+                cast<static>(CarrierBase, lanes<at>(values, value(vector::length) - 1 - i))
+              );
+            }
+            complete(result);
+          """
+      f?:
+        requires [simd128]
+        safety:
+          internal_unsafe true
+          caller_unsafe false
+          reasons [intrinsic]
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation>(i, 0, value(vector::length), 1) {
+              result = intrin<replace_lane, build[suffix=base::in, immediate(1)=i]>(
+                result,
+                value(i),
+                cast<static>(type(base::in), lanes<at>(values, value(vector::length) - 1 - i))
+              );
+            }
+            complete(result);
+          """
+    sve:
+      arith:
+        requires [sve]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -724,6 +793,26 @@ prim<v:=(lanes<s>)> set(values):
               }
                complete(call<primitive=load[Vec], attrs[aligned=false]>(data.as_ptr())) ;
             """
+    [generic, oneapi_fpga]:
+      arith:
+        requires:
+          generic []
+          oneapi_fpga []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<backend>(i, 0, value(vector::length), 1) {
+              result[i] = cast<static>(
+                type(base::in),
+                values[value(vector::length) - 1 - i]
+              );
+            }
+            complete(result);
+          """
     scalar:
       arith:
         requires []

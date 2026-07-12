@@ -111,14 +111,8 @@ prim<m:=(m,m)> mask_binary_and(mask_a, mask_b):
           reasons []
         implementation:
           tsil """
-              let<type>(MaskT, type(vector::mask));
-              var<typed>(MaskT, result, mask<none>());
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                if (mask<test>(mask_a, i) && mask<test>(mask_b, i)) {
-                  mask<set_to>(result, i, true);
-                }
-              }
-              complete(result);
+              var<const_infer>(valid_lanes, mask<all>());
+              complete((mask_a & mask_b) & valid_lanes);
             """
 prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
   brief_description "Computes the bitwise OR of two masks."
@@ -233,14 +227,8 @@ prim<m:=(m,m)> mask_binary_or(mask_a, mask_b):
           reasons []
         implementation:
           tsil """
-              let<type>(MaskT, type(vector::mask));
-              var<typed>(MaskT, result, mask<none>());
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                if (mask<test>(mask_a, i) || mask<test>(mask_b, i)) {
-                  mask<set_to>(result, i, true);
-                }
-              }
-              complete(result);
+              var<const_infer>(valid_lanes, mask<all>());
+              complete((mask_a | mask_b) & valid_lanes);
             """
 prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
   brief_description "Computes the bitwise XOR of two masks."
@@ -355,14 +343,8 @@ prim<m:=(m,m)> mask_binary_xor(mask_a, mask_b):
           reasons []
         implementation:
           tsil """
-              let<type>(MaskT, type(vector::mask));
-              var<typed>(MaskT, result, mask<none>());
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                if (mask<test>(mask_a, i) != mask<test>(mask_b, i)) {
-                  mask<set_to>(result, i, true);
-                }
-              }
-              complete(result);
+              var<const_infer>(valid_lanes, mask<all>());
+              complete((mask_a ^ mask_b) & valid_lanes);
             """
 prim<m:=m> mask_binary_not(mask):
   brief_description "Computes the bitwise inversion of a mask."
@@ -480,14 +462,8 @@ prim<m:=m> mask_binary_not(mask):
           reasons []
         implementation:
           tsil """
-              let<type>(MaskT, type(vector::mask));
-              var<typed>(MaskT, result, mask<none>());
-              loop<backend, unroll>(i, 0, value(vector::length), 1) {
-                if (!mask<test>(mask, i)) {
-                  mask<set_to>(result, i, true);
-                }
-              }
-              complete(result);
+              var<const_infer>(valid_lanes, mask<all>());
+              complete(op<bit_negate>(mask) & valid_lanes);
             """
 prim<usize:=m> mask_population_count(mask):
   brief_description "Counts active lanes in a mask."
@@ -592,11 +568,20 @@ prim<usize:=m> mask_population_count(mask):
           reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type(scalar::size), intrin<svcntp_b64>(call<primitive=mask_true[Vec]>(), mask)));"
-    [generic, oneapi_fpga]:
+    generic:
       arith:
-        requires:
-          generic []
-          oneapi_fpga []
+        requires []
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+              complete(cast<static>(type(scalar::size), helper<popcount>(mask)));
+            """
+    oneapi_fpga:
+      arith:
+        requires []
         safety:
           internal_unsafe false
           caller_unsafe false

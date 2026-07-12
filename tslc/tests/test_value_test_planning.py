@@ -22,6 +22,7 @@ from tslc.target_text import LoweredBody
 from tslc.backend.emitted_profile import EmittedProfile
 from tslc.render.project import render_project
 from tslc.value_tests.coverage import parity_gaps, parity_inventory
+from tslc.value_tests.literals import cpp_literal
 from tslc.value_tests import (
     ValueTestBackendProfileInput,
     ValueTestPlanner,
@@ -214,6 +215,76 @@ def test_emitted_name_split_preserves_source_primitive_identity() -> None:
 
     assert finalized["shift_imm"][0].primitive_name == "shift_imm"
     assert finalized["shift_imm"][0].source_primitive_name == "shift"
+
+
+def test_planner_selects_authored_tests_by_source_signature() -> None:
+    immediate_primitive = Primitive(
+        "shift",
+        "v:=(v,sImm)",
+        ("data", "amount"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="immediate",
+                type_tag="si32",
+                tags=("immediate",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("scalar", scalar="1"),
+                ),
+                expected=("2", "4", "6", "8"),
+            ),
+        ),
+    )
+    runtime_primitive = Primitive(
+        "shift",
+        "v:=(v,s)",
+        ("data", "amount"),
+        (),
+        (),
+        tests=(
+            TslTestCase(
+                name="runtime",
+                type_tag="si32",
+                tags=("runtime",),
+                lanes=4,
+                inputs=(
+                    TslTestArg("vector", values=("1", "2", "3", "4")),
+                    TslTestArg("scalar", scalar="1"),
+                ),
+                expected=("2", "4", "6", "8"),
+            ),
+        ),
+    )
+    immediate = _spec(
+        "shift_imm",
+        "shift",
+        param_kinds=("v", "sImm"),
+        immediate=("amount", "std::uint32_t"),
+    )
+    runtime = _spec("shift", "shift", param_kinds=("v", "s"))
+    profile = _profile(
+        cpp={"shift": (runtime,), "shift_imm": (immediate,)},
+    )
+
+    plan = ValueTestPlanner(
+        _catalog(immediate_primitive, runtime_primitive, *_harness_primitives()),
+        (CPP_VALUE_TEST_SUPPORT,),
+    ).plan(
+        (
+            ValueTestBackendProfileInput(
+                "cpp", "unit", profile.specializations("cpp")
+            ),
+        )
+    )
+
+    assert plan.diagnostics == ()
+    assert [
+        (case.call_name, case.case_name)
+        for case in plan.profiles_for("cpp")[0].cases
+    ] == [("shift", "runtime"), ("shift_imm", "immediate")]
 
 
 def test_different_arity_leading_mask_form_gets_portable_emitted_name() -> None:
@@ -764,7 +835,7 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
         "using Indices = tsl::simd<std::uint64_t, tsl::generic<2>>;"
         in cpp_indexed_source
     )
-    assert "static const std::uint64_t idx_in[2] = {0, 4};" in cpp_indexed_source
+    assert "static const std::uint64_t idx_in[2] = {0ULL, 4ULL};" in cpp_indexed_source
     assert (
         "tsl::gather_narrow_partial<Vec, Indices, 2>(data, idx);"
         in cpp_indexed_source
@@ -1767,6 +1838,15 @@ def test_cpp_value_test_support_matches_renderer_dispatch() -> None:
         CPP_VALUE_TEST_RENDERER.case_renderers["new_case"] = (  # type: ignore[index]
             lambda case: ""
         )
+
+
+def test_cpp_integer_literals_are_valid_at_64_bit_boundaries() -> None:
+    assert cpp_literal("-9223372036854775808", "si64") == (
+        "(-9223372036854775807LL - 1LL)"
+    )
+    assert cpp_literal("18446744073709551615", "ui64") == (
+        "18446744073709551615ULL"
+    )
 
 
 def test_rust_value_test_support_matches_renderer_dispatch() -> None:

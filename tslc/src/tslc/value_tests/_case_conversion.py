@@ -336,6 +336,10 @@ def differential_cases(
                 invocation=ValueTestInvocation(
                     result_kind=specs[0].result_kind,
                     param_kinds=specs[0].param_kinds,
+                    generic_defaults=tuple(
+                        default
+                        for _name, _type, default in specs[0].generic_params
+                    ),
                 ),
                 differential=ValueTestDifferential(
                     hardware_extension=spec.extension_name,

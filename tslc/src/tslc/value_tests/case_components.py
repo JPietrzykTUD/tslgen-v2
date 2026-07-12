@@ -82,6 +82,7 @@ class ValueTestInvocation:
     axis_args: tuple[str, ...] = ()
     immediate: str | None = None
     generic_defaults: tuple[str, ...] = ()
+    inferred_type_args: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,4 +206,3 @@ class ValueTestDifferential:
             raise ValueError(
                 "differential value-test fuzz iterations must be non-negative"
             )
-
