@@ -168,6 +168,12 @@ class LoweredSpecialization:
         return self.body.render()
 
     @property
+    def variant_names(self) -> tuple[str, ...]:
+        """Stable authored identities of the lowered alternative bodies."""
+
+        return tuple(variant.name for variant in self.variant_bodies)
+
+    @property
     def effective_param_type_overrides(self) -> tuple[str | None, ...]:
         if len(self.param_type_overrides) == len(self.param_kinds):
             return self.param_type_overrides

@@ -25,8 +25,14 @@ from tslc.backend.registry import backend_capabilities, registered_backend_ids
 from tslc.benchmark import BenchmarkPlanner
 from tslc.benchmark.model import EMPTY_BENCHMARK_PROJECT_PLAN
 from tslc.catalog.machine_profiles import MachineProfile
-from tslc.catalog.model import RESULT_DIM_EXTENSION, Catalog, Extension
+from tslc.catalog.model import (
+    BOOLEAN_WILDCARD_ATTRIBUTES,
+    RESULT_DIM_EXTENSION,
+    Catalog,
+    Extension,
+)
 from tslc.catalog.scalar_types import SCALAR_TYPE_ORDER
+from tslc.catalog.signatures import parse_signature
 from tslc.diagnostics import Diagnostic, SourceLocation, has_errors, sort_diagnostics
 from tslc.ir.scan import scan
 from tslc.lower.dependencies import CallDependency, CallDependencyOrigin
@@ -80,6 +86,12 @@ class CoverageEntry:
     primitive: str
     extension: str
     type_tag: str
+    source_primitive_name: str = ""
+    result_kind: str = ""
+    param_kinds: tuple[str, ...] = ()
+    mask_policy: str | None = None
+    axis: tuple[tuple[str, str], ...] = ()
+    variant_names: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +105,12 @@ class SkippedEntry:
     type_tag: str
     reason: str
     status: SkipStatus = "coverage_gap"
+    source_primitive_name: str = ""
+    result_kind: str = ""
+    param_kinds: tuple[str, ...] = ()
+    mask_policy: str | None = None
+    axis: tuple[tuple[str, str], ...] = ()
+    variant_names: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -411,6 +429,12 @@ class _GenerationSession:
             extension=slot.spec.extension_name,
             type_tag=slot.spec.type_tag,
             reason=_pruned_reason(slot),
+            source_primitive_name=slot.spec.source_primitive_name,
+            result_kind=slot.spec.result_kind,
+            param_kinds=slot.spec.param_kinds,
+            mask_policy=slot.spec.mask_policy,
+            axis=slot.spec.axis,
+            variant_names=slot.spec.variant_names,
         )
         self.skipped.append(entry)
         if self.request.mode == "strict":
@@ -429,6 +453,12 @@ class _GenerationSession:
                 primitive=slot.spec.primitive_name,
                 extension=slot.spec.extension_name,
                 type_tag=slot.spec.type_tag,
+                source_primitive_name=slot.spec.source_primitive_name,
+                result_kind=slot.spec.result_kind,
+                param_kinds=slot.spec.param_kinds,
+                mask_policy=slot.spec.mask_policy,
+                axis=slot.spec.axis,
+                variant_names=slot.spec.variant_names,
             )
             for slot in lowered_specs
             if slot not in pruned
@@ -512,6 +542,7 @@ def _lowering_skipped_entry(
     slot: SelectedImplementation,
     lowered: LoweringResult,
 ) -> SkippedEntry:
+    shape = parse_signature(slot.primitive.signature)
     return SkippedEntry(
         profile=profile_name,
         backend=backend,
@@ -520,6 +551,18 @@ def _lowering_skipped_entry(
         type_tag=slot.type_tag,
         reason=next((d.message for d in lowered.diagnostics), "unsupported body"),
         status=_skip_status(lowered.diagnostics),
+        source_primitive_name=slot.primitive.name,
+        result_kind="" if shape is None else shape.result_kind,
+        param_kinds=() if shape is None else shape.param_kinds,
+        mask_policy=slot.primitive.attributes.get("mask"),
+        axis=tuple(
+            (key, slot.primitive.attributes[key])
+            for key in sorted(slot.primitive.attributes)
+            if key in BOOLEAN_WILDCARD_ATTRIBUTES
+        ),
+        variant_names=tuple(
+            variant.name for variant in slot.implementation.variants
+        ),
     )
 
 
@@ -629,7 +672,7 @@ def _expand_requested_profiles(
     return tuple(sorted(names))
 
 
-def _coverage_key(entry: CoverageEntry) -> tuple[str, str, str, str, int, str]:
+def _coverage_key(entry: CoverageEntry) -> tuple[object, ...]:
     return (
         entry.profile,
         entry.primitive,
@@ -637,10 +680,16 @@ def _coverage_key(entry: CoverageEntry) -> tuple[str, str, str, str, int, str]:
         entry.extension,
         _TYPE_ORDER.get(entry.type_tag, 99),
         entry.type_tag,
+        entry.source_primitive_name,
+        entry.result_kind,
+        entry.param_kinds,
+        entry.mask_policy or "",
+        entry.axis,
+        entry.variant_names,
     )
 
 
-def _skipped_key(entry: SkippedEntry) -> tuple[str, str, str, str, int, str]:
+def _skipped_key(entry: SkippedEntry) -> tuple[object, ...]:
     return (
         entry.profile,
         entry.primitive,
@@ -648,6 +697,12 @@ def _skipped_key(entry: SkippedEntry) -> tuple[str, str, str, str, int, str]:
         entry.extension,
         _TYPE_ORDER.get(entry.type_tag, 99),
         entry.type_tag,
+        entry.source_primitive_name,
+        entry.result_kind,
+        entry.param_kinds,
+        entry.mask_policy or "",
+        entry.axis,
+        entry.variant_names,
     )
 
 

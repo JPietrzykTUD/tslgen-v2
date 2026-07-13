@@ -689,6 +689,19 @@ prim<v:=(v,s)> insert_value(a, value):
               call<primitive=set1[Vec]>(value)
             ));
           """
+    sse:
+      f32:
+        requires [sse]
+        safety:
+          internal_unsafe false
+          caller_unsafe false
+          reasons []
+        implementation:
+          tsil """
+            var<infer>(lanes, call<primitive=to_array[Vec]>(a));
+            lanes[Index] = value;
+            complete(call<primitive=from_array[Vec]>(lanes));
+          """
     [generic, clang_v128, avx512, avx2_vl, avx2, sse_vl, sse, neon, wasm128, sve]:
       arith:
         requires:

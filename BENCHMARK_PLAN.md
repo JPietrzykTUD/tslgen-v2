@@ -144,6 +144,15 @@ filter already uses the whole catalog. Authored value-test tags do not admit or
 exclude benchmark candidates; matching uses typed primitive, signature, type,
 lane, input, and expectation facts.
 
+The repository maintenance gate runs that same planner over every loaded C++
+machine profile and arithmetic type. It requires every selected variant slot to
+reach an emitted candidate set and keeps a deterministic inventory of every
+corpus signature and planner-sensitive special case. Default-only shapes remain
+visible as `not applicable`; this is deliberately not a request to invent timing
+semantics for primitives that have no selectable implementation variants. Run
+the gate with `./dev.sh benchmark-ratchet`, or refresh the inventory after an
+intentional complete change with `./dev.sh benchmark-ratchet --update`.
+
 The implemented scenario families are fixed-width pure-register operations with
 vector inputs, vector-plus-scalar operations, vector-plus-immediate operations,
 single-vector scalar-result reductions, vector-input mask-result comparisons,
@@ -797,6 +806,10 @@ target.
   scenarios are insufficient.
 - Track benchmark eligibility/skip coverage separately from primitive compile
   and value-test coverage.
+- Keep the full-corpus benchmark coverage ratchet at zero unsupported,
+  missing-correctness, inactive-authored-shape, and candidate/coverage identity
+  gaps. A new variant shape must add its typed workload family in the same
+  coherent slice.
 
 ### Slice 6: Rust Policy Evaluation
 

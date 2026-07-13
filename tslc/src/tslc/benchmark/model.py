@@ -544,8 +544,14 @@ class BenchmarkCoverageEntry:
     backend_id: str
     profile_name: str
     primitive_name: str
+    source_primitive_name: str
     extension_name: str
     type_tag: str
+    result_kind: str
+    param_kinds: tuple[str, ...]
+    mask_policy: str | None
+    axis: tuple[tuple[str, str], ...]
+    variant_names: tuple[str, ...]
     status: BenchmarkCoverageStatus
     reason: str = ""
 

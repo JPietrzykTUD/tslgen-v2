@@ -172,7 +172,8 @@ scoped:
 
 - remove retired dependencies from active code and workflow;
 - keep generated baselines such as `coverage/baseline.json` and
-  `coverage/primitive-coverage-inventory.md`;
+  `coverage/primitive-coverage-inventory.md`, plus the strict variant benchmark
+  inventory `coverage/benchmark-shape-inventory.md`;
 - preserve `supplementary/docs/`; it contains generated-TSL documentation
   assets;
 - do not mix large deletion-only cleanup with semantic generator changes unless

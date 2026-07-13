@@ -17,6 +17,8 @@ Modes:
                        rebuild only the docs website from existing generated docs/data
   ./${self} explain    diagnose ONE primitive/profile/backend/ext/type slot (no compiler needed)
   ./${self} ratchet    coverage regression gate vs the committed baseline   (no compiler needed)
+  ./${self} benchmark-ratchet
+                       require complete variant benchmark coverage/inventory (no compiler needed)
   ./${self} dump       dump one pipeline stage (catalog/segments/selection/lowered) (no compiler)
 
 Extra flags pass through after generator modes; document-site honors --output-root
@@ -27,10 +29,11 @@ and --backends for the existing tree, e.g.:
   ./${self} test    --profiles skylake --primitives add,convert_up
   ./${self} explain --primitive add --profile avx2 --type si32 --backend cpp
   ./${self} ratchet --update
+  ./${self} benchmark-ratchet --update
   ./${self} dump    --stage segments --primitive add
 
 generate/build/test/document drive \`python -m tslc.cli\`; document-site rebuilds
-the website from an existing output tree; explain/ratchet/dump
+the website from an existing output tree; explain/ratchet/benchmark-ratchet/dump
 drive the \`tslc.maintenance\` tools directly and need no toolchain.
 
 Env knobs (build/test only): TSLC_OUTPUT_ROOT TSLC_SOURCES TSLC_MACHINE_PROFILES
@@ -47,9 +50,9 @@ EOF
 mode="build"
 if (( $# > 0 )); then
   case "$1" in
-    generate|build|test|document|document-site|explain|ratchet|dump) mode="$1"; shift ;;
+    generate|build|test|document|document-site|explain|ratchet|benchmark-ratchet|dump) mode="$1"; shift ;;
     -h|--help|help) usage; exit 0 ;;
-    *) echo "usage: $0 [generate|build|test|document|document-site|explain|ratchet|dump] [extra flags...]" >&2; exit 2 ;;
+    *) echo "usage: $0 [generate|build|test|document|document-site|explain|ratchet|benchmark-ratchet|dump] [extra flags...]" >&2; exit 2 ;;
   esac
 fi
 extra_args=("$@")
@@ -112,6 +115,7 @@ export PYTHONPATH="tslc/src${PYTHONPATH:+:$PYTHONPATH}"
 case "$mode" in
   explain) exec python -m tslc.maintenance.explain "${extra_args[@]}" ;;
   ratchet) exec python -m tslc.maintenance.coverage_ratchet "${extra_args[@]}" ;;
+  benchmark-ratchet) exec python -m tslc.maintenance.benchmark_coverage "${extra_args[@]}" ;;
   dump)    exec python -m tslc.maintenance.stage_dump "${extra_args[@]}" ;;
 esac
 

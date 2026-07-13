@@ -34,6 +34,22 @@ catalog. Value-test tags do not control benchmark eligibility. Authored tests
 are reused only as typed correctness oracles, while timing workloads come from
 the separately planned scenarios below.
 
+The repository gate audits that boundary over every loaded C++ machine profile
+and arithmetic type:
+
+```bash
+./dev.sh benchmark-ratchet
+```
+
+It fails if an authored variant shape is never selected, a selected variant slot
+is lost during lowering or dependency closure, correctness/scenario planning is
+unsupported, or an emitted candidate and its coverage identity disagree. The
+generated `coverage/benchmark-shape-inventory.md` also lists every current
+signature and planner-sensitive special case. Shapes without authored variants
+are recorded as `not applicable`, rather than assigned speculative timing
+semantics. After an intentional complete corpus change, refresh it with
+`./dev.sh benchmark-ratchet --update`.
+
 ## Workload Ownership
 
 TSL source data does not contain benchmark functions or target-language setup.
