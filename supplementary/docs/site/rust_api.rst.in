@@ -1,6 +1,21 @@
 Rust API
 ========
 
-Rustdoc is generated with ``cargo doc --no-deps`` for the selected Rust output.
+Rustdoc is generated with
+``cargo doc --no-deps --no-default-features`` for the selected Rust output.
+The generated crate exposes primitive functions through the public ``profile``
+module. This reference renders a profile-neutral union of the generated Rust
+primitive APIs, so no concrete machine-profile Cargo feature is selected and
+each primitive appears once. Concrete profile availability and implementation
+state belong to the specialization reference.
+
+Normal crate builds still select exactly one machine profile through Cargo
+features. Rust target-feature auto-selection is not implemented yet, so
+selecting a non-default machine profile remains explicit.
+
+``tsl_core`` and ``tsl_algorithm`` are the current public vector and algorithm
+substrates used by those primitive functions. Generated test helpers and the
+physical ``tsl_<profile>`` module names are implementation details and are
+hidden from the API index.
 
 `Open the Rust API reference <rust/index.html>`_

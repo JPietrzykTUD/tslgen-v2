@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from tslc.catalog.validation.body_validation import _SHELL_VALIDATORS
@@ -22,6 +23,7 @@ from tslc.lower.region_handlers.registry import (
     DEFAULT_REGION_LOWERERS,
     REGION_LOWERING_REGISTRATIONS,
 )
+from tslc.lower.queries import DEFAULT_QUERY_FUNCTIONS
 
 
 def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:
@@ -55,6 +57,37 @@ def test_region_descriptor_registry_drives_scanning_and_lowering() -> None:
         if descriptor.shell_validator is not None
     }
     assert declared_validators <= frozenset(_SHELL_VALIDATORS)
+
+
+def test_tsil_keyword_documentation_matches_registered_surface() -> None:
+    documentation = (
+        Path(__file__).resolve().parents[2] / "docs" / "tsil-keywords.md"
+    ).read_text(encoding="utf-8")
+    headings = tuple(re.finditer(r"^### `([^`]+)`$", documentation, re.MULTILINE))
+    query_inventory_start = documentation.index("\n## Query Function Inventory")
+
+    assert tuple(match.group(1) for match in headings) == tuple(
+        descriptor.keyword for descriptor in DEFAULT_TSIL_REGION_DESCRIPTORS
+    )
+    for index, match in enumerate(headings):
+        end = (
+            headings[index + 1].start()
+            if index + 1 < len(headings)
+            else query_inventory_start
+        )
+        section = documentation[match.start() : end]
+        assert "<details>" in section, match.group(1)
+        assert "```tsil" in section, match.group(1)
+        assert "```cpp" in section, match.group(1)
+        assert "```rust" in section, match.group(1)
+
+    query_inventory = documentation.split("## Query Function Inventory", 1)[1]
+    documented_query_heads = tuple(
+        re.findall(r"^\| `([^`]+)` \|", query_inventory, re.MULTILINE)
+    )
+    assert documented_query_heads == tuple(
+        function.head for function in DEFAULT_QUERY_FUNCTIONS
+    )
 
 
 def test_raw_text_passes_through() -> None:

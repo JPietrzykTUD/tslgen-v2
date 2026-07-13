@@ -6716,6 +6716,37 @@ def test_avx512f_load_convert_up_avoids_bw_gated_array_fallback(
         assert "from_array" not in lowered.body_text
 
 
+@pytest.mark.parametrize("profile", ["knl", "kml"])
+@pytest.mark.parametrize("type_tag", ["si8", "ui8", "si16", "ui16"])
+def test_avx512f_to_array_materializes_small_integer_registers(
+    catalog: Catalog,
+    machine_profiles,
+    profile: str,
+    type_tag: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile],
+            "to_array",
+            (type_tag,),
+        )
+        .selected
+        if selected.extension.name == "avx512"
+    )
+
+    assert slot.required_features == frozenset({"avx512f"})
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "store" in lowered.body_text
+
+
 @pytest.mark.parametrize(
     ("source_type", "target_type", "intrinsic"),
     [

@@ -33,15 +33,7 @@ prim<s[]:=v> to_array(a):
   impls:
     avx512:
       ?i?:
-        requires:
-          si8 [avx512bw, avx512f]
-          ui8 [avx512bw, avx512f]
-          si16 [avx512bw, avx512f]
-          ui16 [avx512bw, avx512f]
-          si32 [avx512f]
-          ui32 [avx512f]
-          si64 [avx512f]
-          ui64 [avx512f]
+        requires [avx512f]
         safety:
           internal_unsafe false
           caller_unsafe false

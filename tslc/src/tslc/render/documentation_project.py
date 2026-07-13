@@ -29,6 +29,7 @@ def documentation_artifacts(profiles: tuple[EmittedProfile, ...]) -> list[Artifa
 def _specializations_json(profiles: tuple[EmittedProfile, ...]) -> str:
     strings = _StringTable()
     features = _IndexedTuples()
+    compiler_sets = _IndexedTuples()
     safeties = _IndexedTuples()
     expressions = _IndexedTuples()
     target_classes = _IndexedTargetClasses(strings)
@@ -39,6 +40,7 @@ def _specializations_json(profiles: tuple[EmittedProfile, ...]) -> str:
     primitive_specs: dict[str, list[_DocSpec]] = {}
     grouped: dict[int, dict[tuple[int, ...], int]] = {}
     backend_ids: set[str] = set()
+    compiler_ids: set[str] = set()
     type_tags: set[str] = set()
     for profile in profiles:
         for backend_id, by_primitive in profile.specializations_by_backend.items():
@@ -53,14 +55,18 @@ def _specializations_json(profiles: tuple[EmittedProfile, ...]) -> str:
                         )
                     )
                     primitive_id = strings.id(spec.primitive_name)
+                    extension = profile.extensions.get(spec.extension_name)
+                    specialization_compilers = _compiler_ids(extension, backend_id)
+                    compiler_ids.update(specialization_compilers)
                     row = _specialization_row(
                         spec,
                         backend_id=backend_id,
                         profile_name=profile.profile.name,
                         extension_family=_extension_family(profile, spec),
-                        extension=profile.extensions.get(spec.extension_name),
+                        extension=extension,
                         strings=strings,
                         features=features,
+                        compiler_sets=compiler_sets,
                         safeties=safeties,
                         target_classes=target_classes,
                     )
@@ -71,7 +77,7 @@ def _specializations_json(profiles: tuple[EmittedProfile, ...]) -> str:
         for name, specs in sorted(primitive_specs.items())
     }
     payload = {
-        "schema_version": 9,
+        "schema_version": 10,
         "columns": [
             "backend",
             "profile",
@@ -88,6 +94,7 @@ def _specializations_json(profiles: tuple[EmittedProfile, ...]) -> str:
             "extension_group",
             "extension_rank",
             "family_rank",
+            "compiler_set",
             "count",
         ],
         "profile_columns": [
@@ -121,6 +128,10 @@ def _specializations_json(profiles: tuple[EmittedProfile, ...]) -> str:
         ],
         "strings": strings.values,
         "features": features.values,
+        "compiler_sets": compiler_sets.values,
+        "compilers": [
+            strings.id(compiler_id) for compiler_id in sorted(compiler_ids)
+        ],
         "expressions": expressions.values,
         "safeties": [
             [caller, internal, list(reasons)]
@@ -281,6 +292,7 @@ def _specialization_row(
     extension: Extension | None,
     strings: _StringTable,
     features: _IndexedTuples,
+    compiler_sets: _IndexedTuples,
     safeties: _IndexedTuples,
     target_classes: "_IndexedTargetClasses",
 ) -> tuple[int, ...]:
@@ -293,6 +305,9 @@ def _specialization_row(
             spec.safety.internal_unsafe,
             tuple(strings.id(reason) for reason in sorted(spec.safety.reasons)),
         )
+    )
+    compiler_set_id = compiler_sets.id(
+        tuple(strings.id(item) for item in _compiler_ids(extension, backend_id))
     )
     return (
         strings.id(backend_id),
@@ -310,6 +325,7 @@ def _specialization_row(
         strings.id(_extension_group(spec)),
         strings.id(_extension_rank(spec, extension_family, extension)),
         strings.id(_text_rank(extension_family)),
+        compiler_set_id,
     )
 
 
@@ -412,6 +428,15 @@ def _target_class_sort_key(family: str, width: str) -> str:
 def _extension_family(profile: EmittedProfile, spec: LoweredSpecialization) -> str:
     extension = profile.extensions.get(spec.extension_name)
     return extension.family if extension is not None else ""
+
+
+def _compiler_ids(extension: Extension | None, backend_id: str) -> tuple[str, ...]:
+    if extension is None:
+        return ()
+    metadata = extension.metadata.backend.get(backend_id)
+    if metadata is None:
+        return ()
+    return tuple(sorted(metadata.compiler_ids))
 
 
 def _profile_group(profile: EmittedProfile) -> tuple[str, str, str]:

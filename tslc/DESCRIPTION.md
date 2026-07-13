@@ -197,6 +197,10 @@ live in focused sibling modules rather than the function emitters.
   templates ([backend/cpp.py](src/tslc/backend/cpp.py)).
 - **Rust** — traits + impls + turbofish wrappers, explicit `unsafe {}` framing,
   `core::arch` intrinsic qualification ([backend/rust.py](src/tslc/backend/rust.py)).
+  Generated rustdoc uses a `cfg(doc)` profile-neutral facade containing one
+  public signature per emitted Rust primitive; concrete profile availability
+  stays in the specialization explorer, while normal builds retain their
+  Cargo-feature-selected `profile` alias.
 
 A static substrate ships as assets
 ([backend/assets/tsl_core.hpp](src/tslc/backend/assets/tsl_core.hpp),

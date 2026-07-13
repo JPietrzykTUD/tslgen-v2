@@ -131,6 +131,35 @@ class RustBackend:
             )
         return self._wrapper(primitive_name, shape, caller_unsafe=caller_unsafe)
 
+    def render_documentation_api(
+        self, primitive_name: str, specializations: tuple[LoweredSpecialization, ...]
+    ) -> str:
+        """Render one profile-neutral public API stub for rustdoc.
+
+        The generated function preserves the public parameter, result, generic,
+        safety, and documentation shape without depending on a profile-local
+        dispatch trait or implementation body.
+        """
+
+        shape = specializations[0]
+        if DEFAULT_SUPPORT_POLICY.is_free_function_signature(
+            shape.result_kind,
+            shape.param_kinds,
+        ):
+            return _documentation_free_function(shape)
+        caller_unsafe = _any_caller_unsafe(specializations)
+        if varying_positions(specializations):
+            return _documentation_overloaded_wrapper(
+                primitive_name,
+                specializations,
+                caller_unsafe=caller_unsafe,
+            )
+        return _documentation_wrapper(
+            primitive_name,
+            shape,
+            caller_unsafe=caller_unsafe,
+        )
+
     def render_implementation_state_queries(
         self,
         by_primitive: Mapping[str, tuple[LoweredSpecialization, ...]],
@@ -593,6 +622,98 @@ def _free_function(spec: LoweredSpecialization, *, backend: RustBackend) -> str:
     )
 
 
+def _documentation_wrapper(
+    primitive_name: str,
+    shape: LoweredSpecialization,
+    *,
+    caller_unsafe: bool,
+) -> str:
+    declarations = _generic_decls(shape)
+    result_type = _kind_type(shape.result_kind, "S")
+    target_type: str | None = None
+    if shape.target is not None:
+        declarations = ["T: StaticSimdVector", *declarations]
+        result_type = "T::RegisterType"
+        target_type = "T::RegisterType"
+    index_type: str | None = None
+    if shape.type_params:
+        declarations = [
+            *(f"{param.name}: StaticSimdVector" for param in shape.type_params),
+            *declarations,
+        ]
+        index_type = f"{shape.type_params[0].name}::RegisterType"
+    generics = ", ".join(("S: StaticSimdVector", *declarations))
+    params = _params(
+        shape,
+        "S",
+        vt_type=target_type,
+        vidx_type=index_type,
+    )
+    doc = _rust_doc(shape, context="Rust documentation facade", concrete=False)
+    return (
+        (f"{doc}\n" if doc else "")
+        + f"pub {_unsafe_prefix(caller_unsafe)}fn {rust_raw_identifier(primitive_name)}"
+        f"<{generics}>({params}) -> {result_type}"
+        f"{_index_where(shape, base_dispatch='projection')} {{\n"
+        "    unimplemented!()\n"
+        "}"
+    )
+
+
+def _documentation_overloaded_wrapper(
+    primitive_name: str,
+    specs: tuple[LoweredSpecialization, ...],
+    *,
+    caller_unsafe: bool,
+) -> str:
+    shape = specs[0]
+    varying_index = varying_positions(specs)[0]
+    declarations = [
+        "S: StaticSimdVector",
+        *_generic_decls(shape),
+        "V",
+    ]
+    params = ", ".join(
+        (
+            f"{name}: V"
+            if index == varying_index
+            else f"{name}: {_param_kind_type(kind, 'S')}"
+        )
+        for index, (name, kind) in enumerate(
+            zip(shape.param_names, shape.param_kinds)
+        )
+    )
+    result_type = _kind_type(shape.result_kind, "S")
+    doc = _rust_doc(shape, context="Rust documentation facade", concrete=False)
+    return (
+        (f"{doc}\n" if doc else "")
+        + f"pub {_unsafe_prefix(caller_unsafe)}fn {rust_raw_identifier(primitive_name)}"
+        f"<{', '.join(declarations)}>({params}) -> {result_type} {{\n"
+        "    unimplemented!()\n"
+        "}"
+    )
+
+
+def _documentation_free_function(spec: LoweredSpecialization) -> str:
+    params = ", ".join(
+        f"{name}: {_free_kind_type(kind, spec.base_type_spelling)}"
+        for name, kind in zip(spec.param_names, spec.param_kinds)
+    )
+    result = (
+        ""
+        if spec.result_kind == "void"
+        else f" -> {_free_kind_type(spec.result_kind, spec.base_type_spelling)}"
+    )
+    doc = _rust_doc(spec, context="Rust documentation facade")
+    return (
+        (f"{doc}\n" if doc else "")
+        + f"pub {_unsafe_prefix(spec.safety.caller_unsafe)}fn "
+        f"{rust_raw_identifier(spec.primitive_name)}({params}){result} {{\n"
+        "    unimplemented!()\n"
+        "}"
+    )
+
+
 def _spec_implementation_state(
     spec: LoweredSpecialization,
     variant_name: str | None,
@@ -679,6 +800,7 @@ def _variant_primitive_name(
 
 def _primitive_module(internal: str) -> str:
     return (
+        "#[doc(hidden)]\n"
         "pub mod detail {\n"
         "    pub mod primitives {\n"
         "        use super::super::*;\n\n"

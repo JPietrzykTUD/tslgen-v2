@@ -18,6 +18,7 @@ function App() {
   const [selectedBackend, setSelectedBackend] = useState(null);
   const [activeCell, setActiveCell] = useState(null);
   const [enabledProfiles, setEnabledProfiles] = useState(null);
+  const [enabledCompilers, setEnabledCompilers] = useState(null);
   const [enabledRequirements, setEnabledRequirements] = useState(null);
   const [enabledFamilies, setEnabledFamilies] = useState(null);
   const [enabledTypes, setEnabledTypes] = useState(null);
@@ -37,6 +38,7 @@ function App() {
         setSelectedBackend(decoded.backends[0]?.id ?? null);
         setActiveCell(null);
         setEnabledProfiles(new Set(decoded.profiles.map((profile) => profile.name)));
+        setEnabledCompilers(new Set(decoded.compilers));
         setEnabledRequirements(new Set(decoded.requirements));
         setEnabledFamilies(new Set(decoded.families));
         setEnabledTypes(new Set(decoded.types));
@@ -73,6 +75,13 @@ function App() {
         : [],
     [payload, enabledRequirements]
   );
+  const visibleCompilers = useMemo(
+    () =>
+      payload
+        ? payload.compilers.filter((compiler) => enabledCompilers?.has(compiler))
+        : [],
+    [enabledCompilers, payload]
+  );
   const visibleFamilies = useMemo(
     () =>
       payload
@@ -92,7 +101,8 @@ function App() {
     return payload.records.filter(
       (record) =>
         recordRequirementsVisible(record, enabledRequirements) &&
-        enabledProfiles?.has(record.profile) &&
+        (record.compiler_ids.length > 0 || enabledProfiles?.has(record.profile)) &&
+        recordCompilerVisible(record, enabledCompilers) &&
         enabledFamilies?.has(record.family) &&
         recordTypeVisible(record, enabledTypes, payload.typeByTag) &&
         enabledBackends?.has(record.backend) &&
@@ -100,6 +110,7 @@ function App() {
     );
   }, [
     enabledBackends,
+    enabledCompilers,
     enabledFamilies,
     enabledProfiles,
     enabledRequirements,
@@ -149,6 +160,7 @@ function App() {
   if (
     !payload ||
     !enabledProfiles ||
+    !enabledCompilers ||
     !enabledRequirements ||
     !enabledFamilies ||
     !enabledTypes ||
@@ -184,10 +196,9 @@ function App() {
           </div>
           <h1>TSL Primitive Specialization Reference</h1>
           <p>
-            Profile capabilities are shown separately from the selected
-            implementation requirements, so a narrower implementation inside a
-            broader machine profile still shows only the features it actually
-            requires.
+            Profile capabilities and compiler availability are shown separately
+            from selected implementation requirements, so each specialization
+            reports the condition that actually makes it available.
           </p>
         </div>
         <div className="headerControls">
@@ -252,6 +263,8 @@ function App() {
             setEnabledRequirements={setEnabledRequirements}
             enabledProfiles={enabledProfiles}
             setEnabledProfiles={setProfileSelection}
+            enabledCompilers={enabledCompilers}
+            setEnabledCompilers={setEnabledCompilers}
             enabledFamilies={enabledFamilies}
             setEnabledFamilies={setEnabledFamilies}
             enabledTypes={enabledTypes}
@@ -262,12 +275,14 @@ function App() {
             setEnabledSafety={setEnabledSafety}
             requirements={payload.requirements}
             profiles={payload.profiles}
+            compilers={payload.compilers}
             families={payload.families}
             types={payload.types}
             typeByTag={payload.typeByTag}
             backends={payload.backends.map((backend) => backend.id)}
             backendLabels={payload.backendLabels}
             visibleProfiles={visibleProfiles}
+            visibleCompilers={visibleCompilers}
             visibleRequirements={visibleRequirements}
             visibleFamilies={visibleFamilies}
             visibleTypes={visibleTypes}
@@ -493,7 +508,9 @@ function PrimitiveStatus({ records, backends }) {
 }
 
 function ProfileRollup({ records }) {
-  const groups = profileCapabilityRollups(records);
+  const groups = profileCapabilityRollups(
+    records.filter((record) => record.compiler_ids.length === 0)
+  );
   if (groups.length === 0) {
     return <section className="rollupSection emptyPanel">No visible profile groups.</section>;
   }
@@ -652,8 +669,8 @@ function Drilldown({ primitive, records, activeCell, visibleBackends, typeByTag 
         <span className="eyebrow">Drilldown</span>
         <h2>Select a heatmap cell</h2>
         <p>
-          The panel will show concrete profiles, selected extensions,
-          implementation requirements, and implementation state.
+          The panel will show compiler availability or concrete profiles,
+          selected extensions, implementation requirements, and state.
         </p>
       </section>
     );
@@ -674,7 +691,10 @@ function Drilldown({ primitive, records, activeCell, visibleBackends, typeByTag 
     );
   }
 
-  const profileRows = supportedProfileRows(cellRecords, visibleBackends);
+  const compilerGated = cellRecords.some((record) => record.compiler_ids.length > 0);
+  const supportRows = compilerGated
+    ? supportedCompilerRows(cellRecords, visibleBackends)
+    : supportedProfileRows(cellRecords, visibleBackends);
   const targetClass = first.targetClass;
   return (
     <section className="drilldownPanel">
@@ -701,20 +721,29 @@ function Drilldown({ primitive, records, activeCell, visibleBackends, typeByTag 
       <section className="supportedOn">
         <div className="supportedOnHeader">
           <span className="eyebrow">Supported on</span>
-          <small>{profileRows.length} concrete profiles</small>
+          <small>
+            {supportRows.length} {compilerGated ? "compilers" : "concrete profiles"}
+          </small>
         </div>
         <div className="supportedProfileList">
-          {profileRows.map((row) => (
-            <article className="supportedProfile" key={row.profile.name}>
-              <strong>{row.profile.name}</strong>
+          {supportRows.map((row) => (
+            <article
+              className="supportedProfile"
+              key={compilerGated ? row.compiler : row.profile.name}
+            >
+              <strong>{compilerGated ? row.compiler : row.profile.name}</strong>
               <small className="profileClassSummary">
-                {profileClassSummary(row.profile)}
+                {compilerGated
+                  ? "compiler-provided vector extension"
+                  : profileClassSummary(row.profile)}
               </small>
               {visibleBackends.map((backend) => (
                 <BackendSupportLine
                   key={backend}
                   backend={backend}
-                  records={row.records.filter((record) => record.backend === backend)}
+                  records={distinctSupportRecords(
+                    row.records.filter((record) => record.backend === backend)
+                  )}
                 />
               ))}
             </article>
@@ -779,6 +808,8 @@ function FilterPanel({
   setEnabledRequirements,
   enabledProfiles,
   setEnabledProfiles,
+  enabledCompilers,
+  setEnabledCompilers,
   enabledFamilies,
   setEnabledFamilies,
   enabledTypes,
@@ -789,6 +820,7 @@ function FilterPanel({
   setEnabledSafety,
   requirements,
   profiles,
+  compilers,
   families,
   types,
   typeByTag,
@@ -799,9 +831,11 @@ function FilterPanel({
   visibleTypes,
   visibleBackends,
   visibleProfiles,
+  visibleCompilers,
 }) {
   const activeCount =
     visibleProfiles.length +
+    visibleCompilers.length +
     visibleRequirements.length +
     visibleFamilies.length +
     visibleTypes.length +
@@ -865,6 +899,29 @@ function FilterPanel({
           onClick={(value) => setEnabledProfiles(toggledSet(enabledProfiles, value))}
         />
       </FilterSection>
+
+      {compilers.length > 0 && (
+        <FilterSection
+          title="Compilers"
+          actions={
+            <>
+              <FilterAction onClick={() => setEnabledCompilers(new Set(compilers))}>
+                All
+              </FilterAction>
+              <FilterAction onClick={() => setEnabledCompilers(new Set())}>
+                None
+              </FilterAction>
+            </>
+          }
+        >
+          <ChipGroup
+            values={compilers}
+            active={enabledCompilers}
+            label={(value) => value}
+            onClick={(value) => toggleSetValue(setEnabledCompilers, value)}
+          />
+        </FilterSection>
+      )}
 
       <FilterSection
         title="Requirements"
@@ -1052,7 +1109,7 @@ function Tooltip({ content, children }) {
 }
 
 function decodePayload(payload) {
-  if (payload.schema_version !== 9) {
+  if (payload.schema_version !== 10) {
     throw new Error(`unsupported specialization schema ${payload.schema_version}`);
   }
 
@@ -1060,6 +1117,10 @@ function decodePayload(payload) {
   const featureSets = payload.features.map((featureSet) =>
     featureSet.map((index) => strings[index])
   );
+  const compilerSets = payload.compiler_sets.map((compilerSet) =>
+    compilerSet.map((index) => strings[index])
+  );
+  const compilers = payload.compilers.map((index) => strings[index]);
   const expressionSets = payload.expressions.map((expressionSet) =>
     expressionSet.map(([backend, label, facade, example]) => ({
       backend: strings[backend],
@@ -1152,7 +1213,8 @@ function decodePayload(payload) {
         extensionGroup: strings[row[12]],
         extensionRank: strings[row[13]],
         familyRank: strings[row[14]],
-        count: row[15] ?? 1,
+        compiler_ids: compilerSets[row[15]] ?? [],
+        count: row[16] ?? 1,
       };
       records.push({
         ...baseRecord,
@@ -1172,6 +1234,7 @@ function decodePayload(payload) {
     primitiveByName: new Map(primitives.map((primitive) => [primitive.name, primitive])),
     primitives,
     profiles,
+    compilers,
     targetClasses,
     records,
     requirements: uniqueRequirements(records),
@@ -1381,6 +1444,34 @@ function supportedProfileRows(records, visibleBackends) {
   return sortedValues(grouped.values(), (row) => row.profile.name);
 }
 
+function supportedCompilerRows(records, visibleBackends) {
+  const grouped = new Map();
+  for (const record of records) {
+    if (!visibleBackends.includes(record.backend)) continue;
+    for (const compiler of record.compiler_ids) {
+      const row = grouped.get(compiler) ?? { compiler, records: [] };
+      row.records.push(record);
+      grouped.set(compiler, row);
+    }
+  }
+  return sortedValues(grouped.values(), (row) => row.compiler);
+}
+
+function distinctSupportRecords(records) {
+  const unique = new Map();
+  for (const record of records) {
+    const key = [
+      record.backend,
+      record.extension,
+      record.displayWidth,
+      record.implementation_state,
+      record.required_features.join("\u0000"),
+    ].join("\u0001");
+    if (!unique.has(key)) unique.set(key, record);
+  }
+  return [...unique.values()];
+}
+
 function selectedExpression(primitive, backend) {
   return (
     primitive.expressions.find((expression) => expression.backend === backend) ??
@@ -1465,6 +1556,7 @@ function recordMatchesSearch(record, query) {
     record.overviewTargetLabel,
     record.overviewRequirementLabel,
     record.required_features.join(" "),
+    record.compiler_ids.join(" "),
     record.profileInfo.features.join(" "),
     record.implementation_state,
     safetySummary(record.safety),
@@ -1482,6 +1574,12 @@ function recordRequirementsVisible(record, enabledRequirements) {
   return record.required_features.every((requirement) =>
     enabledRequirements.has(requirement)
   );
+}
+
+function recordCompilerVisible(record, enabledCompilers) {
+  if (!enabledCompilers) return false;
+  if (record.compiler_ids.length === 0) return true;
+  return record.compiler_ids.some((compiler) => enabledCompilers.has(compiler));
 }
 
 function recordTypeVisible(record, enabledTypes, typeByTag) {

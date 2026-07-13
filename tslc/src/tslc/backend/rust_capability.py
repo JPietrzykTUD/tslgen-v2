@@ -92,6 +92,7 @@ RUST_BACKEND = BackendCapability(
         project_path="rust",
         output_path="rust/docs/target/doc",
         site_input=DocumentationSiteInput.RUSTDOC,
+        args=("--no-default-features",),
     ),
 )
 
