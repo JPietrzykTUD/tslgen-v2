@@ -1,135 +1,173 @@
 # Variant Benchmark And Autotune Plan
 
+## Decision
+
+Variant benchmarking is a useful feature, but it must be introduced as a
+measurement facility before it becomes a build-time optimizer.
+
+The intended end state is:
+
+1. `TSL_PROFILE=auto` detects one generated profile for the native machine;
+2. an explicitly enabled benchmark target compares the default implementation
+   with authored variants for specializations in that profile;
+3. a conservative reducer emits a build-local variant policy; and
+4. final consumer translation units compile with that policy and no runtime
+   dispatch.
+
+Four constraints materially change the original implementation order:
+
+- Benchmarking can compare only implementations that coexist as the default
+  body and named `variants:`. A body removed by a recent refactor is not a
+  candidate. At the 2026-07-13 review, the corpus had only 15 `variants:`
+  blocks, 14 named `generic_fallback` and one named `intrinsic_gather`; it did
+  not yet represent most of the recent scalar-to-composed changes. Slice 0 must
+  regenerate this inventory rather than treating those counts as configuration.
+- Benchmarks answer a performance question, not a semantic-correctness question.
+  Every candidate must pass the authored value-test semantics before it is
+  timed. Agreement with the default alone is not a correctness oracle because
+  the default may be the implementation under review.
+- A tiny value-test input is useful for correctness but is not a valid timing
+  workload. Constant folding, cache state, mask density, index distribution,
+  dependency chains, and setup cost can otherwise decide the winner.
+- A one-build CMake workflow is possible, but it is not the first milestone.
+  The generated library is header-only, so the benchmark must compile against a
+  policy-free profile target and the public interface target must depend on the
+  subsequently generated policy. A report-only and then a two-phase workflow
+  should prove the model before this dependency chain is automated.
+
+The first implementation is C++-only. Rust policy consumption and benchmarking
+are deferred until the C++ policy and measurement protocol have demonstrated
+stable value. Benchmarks must never execute from `build.rs`.
+
 ## Goal
 
-Add an optional benchmarking and autotuning workflow for implementation
-variants.
+Add an optional, native-machine workflow for measuring explicitly authored
+implementation variants and, once the measurements are trustworthy, selecting
+a compile-time winner for a concrete specialization.
 
-Generated libraries already contain the default implementation and every
-authored variant. Benchmarking should use those emitted symbols to decide which
-variant is fastest for a concrete specialization on a concrete build/runtime
-environment, then feed that decision back as a build-local policy.
+Ordinary generation and dependency inclusion remain deterministic and
+non-executing. Without an explicit policy, public wrappers call the authored
+default implementation exactly as they do today.
 
-This feature must not make ordinary generation or ordinary dependency inclusion
-host-sensitive. Default behavior remains deterministic: public API wrappers call
-the default `implementation` unless an explicit variant policy selects a
-variant.
+The feature has three distinct modes:
 
-## Design Principles
+| Mode | Purpose | Changes wrapper selection? |
+|---|---|---|
+| report | Build/run candidates and emit measurements | no |
+| policy consumption | Validate and consume a previously produced policy | yes |
+| autotune | Report, reduce, and consume a policy in one explicit native build | yes |
 
-- `tslc` remains a compiler, not a benchmarking framework.
-- Variants remain typed source/catalog/lowered/rendered data.
-- Benchmarking is opt-in, explicit, and build-local.
-- Benchmark winners are not source truth and do not belong in `tsldata`.
-- Public wrappers must always have a safe default fallback.
-- Cross-compilation must not accidentally try to execute target binaries.
-- C++ and Rust should share a neutral policy format, while each ecosystem uses
-  its native build integration.
+Keeping these modes separate is important: measurement remains useful when the
+reducer concludes that no variant is reliably better.
 
 ## Non-Goals
 
-- No benchmarking during normal `tslc generate`.
-- No benchmarking during normal `FetchContent` inclusion.
-- No automatic source-data rewrites based on benchmark results.
-- No global "fastest variant" baked into `tsldata`.
-- No mandatory Google Benchmark, Criterion, or external benchmark framework in
-  the first slice.
-- No profile-specific magic hidden in render templates.
-- No Rust selection through CMake as the primary interface.
+- No benchmarking during `tslc generate`, an ordinary CMake build, or ordinary
+  `FetchContent` inclusion.
+- No use of timing as a substitute for generated value or differential tests.
+- No comparison with an implementation that is no longer present in the
+  generated candidate set.
+- No selection between profiles, extensions, or ISAs. Profile auto-detection
+  happens first; tuning chooses only among bodies for one selected
+  specialization.
+- No runtime dispatch or startup calibration.
+- No source-data rewrite or global winner committed to `tsldata`.
+- No mandatory third-party benchmark framework in the first slices.
+- No memory, gather/scatter, masked, reduction, or scalable-vector policy
+  decisions until their workload semantics are explicitly modeled.
+- No Rust autotuning in `build.rs`.
 
-## Key Concepts
+## Compiler Boundary And Candidate Model
 
-### Variant
+The implementation follows the current compiler pipeline:
 
-An authored alternative implementation body attached to one implementation leaf.
-Variants inherit the same requirements and public caller-safety contract as the
-default implementation.
-
-### Benchmark Manifest
-
-A generated machine-readable inventory of emitted benchmarkable variant choices.
-It should contain enough typed identity to generate benchmark calls without
-parsing symbol names:
-
-```json
-{
-  "backend": "cpp",
-  "profile": "skylake",
-  "primitive": "gather_narrow_partial",
-  "extension": "avx512",
-  "type": "ui32",
-  "signature": "v:=(cptr,vidx,sImm)",
-  "axes": {
-    "scale": "4"
-  },
-  "generic_params": {
-    "IndicesType": "simd<ui64,avx512>",
-    "N": "8"
-  },
-  "default_symbol": "gather_narrow_partial_impl",
-  "variants": [
-    {
-      "id": "intrinsic_gather",
-      "symbol": "gather_narrow_partial_impl_intrinsic_gather"
-    }
-  ]
-}
+```text
+typed catalog
+  -> selected implementation
+  -> lowered default and variant bodies
+  -> finalized emitted profile
+  -> benchmark plan
+  -> backend benchmark artifacts
+  -> result records
+  -> validated variant policy
+  -> backend policy artifact
 ```
 
-The exact format can evolve, but it must be generated from typed lowered data,
-not by regexing generated source.
+Raw JSON belongs only at manifest/result/policy I/O boundaries. Planning,
+validation, reduction, and rendering use frozen typed values. The benchmark
+renderer must not rediscover variants by parsing generated C++ names.
 
-### Variant Policy
+### Specialization Identity
 
-A build-local decision artifact saying which variant to use for a concrete
-specialization.
+A policy key identifies the complete specialization, not just
+`primitive + extension + type`. It carries every applicable dimension:
 
-Neutral policy example:
+- backend and selected profile;
+- emitted and source primitive names;
+- extension and input type;
+- representation-change target;
+- boolean axes and immediate value;
+- generic constant values and specialized SIMD-type base bindings;
+- sized-vector lane count; and
+- opt-in header group, when applicable.
 
-```json
-{
-  "version": 1,
-  "producer": "tsl-variant-bench",
-  "compiler": {
-    "id": "clang",
-    "version": "18.1.8",
-    "flags_hash": "..."
-  },
-  "host": {
-    "cpu": "Intel(R) Xeon...",
-    "features": ["avx512f", "avx512dq"]
-  },
-  "decisions": [
-    {
-      "backend": "cpp",
-      "profile": "skylake",
-      "primitive": "gather_narrow_partial",
-      "extension": "avx512",
-      "type": "ui32",
-      "axes": {
-        "scale": "4"
-      },
-      "generic_params": {
-        "IndicesType": "simd<ui64,avx512>",
-        "N": "8"
-      },
-      "selected": "intrinsic_gather",
-      "reason": "median_ns_per_call improved by 18.4%",
-      "correctness": "passed"
-    }
-  ]
-}
+Target-language symbols and rendered C++ type spellings are not neutral
+identity. A backend renderer derives them from the typed key.
+
+```python
+@dataclass(frozen=True, slots=True)
+class BenchmarkCandidateSet:
+    key: SpecializationKey
+    default: VariantChoice
+    alternatives: tuple[VariantChoice, ...]
+    correctness_cases: tuple[BenchmarkCorrectnessCase, ...]
+    scenarios: tuple[BenchmarkScenario, ...]
 ```
 
-The policy should also be able to say "default" explicitly.
+### Eligibility
+
+A specialization is benchmarkable only when it has at least one successfully
+lowered named variant, all candidates and dependencies are emitted in the
+selected C++ profile, authored correctness cases cover the specialization, and
+the planner supports its scenario kind.
+
+The first supported scenario is a pure register operation with vector inputs
+and a vector or scalar result. Pointer parameters, memory effects, lane lists,
+masks, immediates, reductions, scalable vectors, and caller-unsafe APIs are
+skipped with structured reasons.
+
+This deliberately excludes `gather_narrow_partial` as the first policy-bearing
+benchmark. It is useful later, but cache and index distributions make it a poor
+test of whether the basic tuner is trustworthy.
+
+### Making Recent Refactors Comparable
+
+To test a composed body against its former scalar/generic fallback, both must
+coexist on the same reviewed implementation leaf:
+
+```tsl
+implementation:
+  tsil "...current composed body..."
+variants:
+  generic_fallback:
+    tsil "...preserved previous fallback body..."
+```
+
+Do not mechanically restore every removed body. Inventory the changes, select
+one or two pure-register specializations, and retain only semantically
+equivalent candidates that pass the same tests. Variant names may describe an
+implementation strategy; primitive names continue to describe semantics.
+
+Commit-to-commit performance comparison is a separate developer benchmark and
+must not be confused with generated variant autotuning.
 
 ## C++ Integration
 
 ### Default Generated Selection
 
-The generated C++ library should provide a typed variant selector for each
-primitive that has variants. The default selector always chooses the default
-implementation.
+Only after report-only measurements demonstrate a stable signal should the
+generated C++ library gain a typed variant selector. The default selector always
+chooses the authored default implementation.
 
 Example shape:
 
@@ -215,142 +253,102 @@ struct gather_narrow_partial_selector<
 The override header must be generated in the build tree, never written into the
 source or installed include tree unless explicitly packaged as a named policy.
 
+Rendering order is a real constraint: all variant enums and selector primaries
+must be visible before the policy header, and the policy specializations must be
+visible before public wrapper definitions. This needs an owned render-model
+boundary; it must not be solved by template string surgery.
+
 ### CMake Options
 
-Recommended options:
+Initial options:
 
 ```cmake
 option(TSL_BUILD_BENCHMARKS "Build TSL variant benchmarks" OFF)
-option(TSL_AUTOTUNE_VARIANTS "Run TSL variant benchmarks and select variants" OFF)
 set(TSL_VARIANT_POLICY_FILE "" CACHE FILEPATH "Precomputed TSL variant policy")
-set(TSL_BENCHMARK_RUNNER "" CACHE STRING "Optional runner for target benchmark binaries")
 ```
 
 Behavior:
 
 - default: use default implementation selectors;
 - `TSL_BUILD_BENCHMARKS=ON`: build benchmark binaries, do not run them;
-- `TSL_AUTOTUNE_VARIANTS=ON`: build and run benchmarks, then write a build-local
-  selector override header;
 - `TSL_VARIANT_POLICY_FILE=...`: consume an existing policy and generate the
   selector override header without running benchmarks.
 
-`TSL_AUTOTUNE_VARIANTS=ON` must be explicit. It should fail clearly when CMake
-is cross-compiling and no benchmark runner is configured.
+After report-only measurement and policy consumption are proven, add:
+
+```cmake
+option(TSL_AUTOTUNE_VARIANTS "Benchmark and select variants for this native build" OFF)
+set(TSL_BENCHMARK_COMPILE_OPTIONS "" CACHE STRING "Additional code-generation options used for tuning")
+```
+
+The first autotune implementation is native-only and rejects cross-compilation.
+Remote runners belong to the later two-phase workflow because their target and
+runtime identity must be explicit.
 
 ### CMake Ordering Constraint
 
-Autotune must complete before user translation units compile.
-
-For a header-only/interface style library this is tricky because consumers may
-start compiling as soon as they link the interface target. The CMake package
-should therefore expose a concrete generated policy target and make the public
-TSL target depend on it when autotune is enabled.
-
-Conceptual shape:
-
-```cmake
-add_custom_command(
-  OUTPUT ${CMAKE_BINARY_DIR}/tsl/generated/tsl_variant_policy_autotuned.hpp
-  COMMAND tsl_variant_bench_runner ...
-  DEPENDS tsl_variant_benchmarks
-)
-
-add_custom_target(tsl_variant_policy
-  DEPENDS ${CMAKE_BINARY_DIR}/tsl/generated/tsl_variant_policy_autotuned.hpp
-)
-
-add_dependencies(tsl tsl_variant_policy)
-target_compile_definitions(tsl INTERFACE TSL_HAS_AUTOTUNED_VARIANT_POLICY=1)
-target_include_directories(tsl INTERFACE ${CMAKE_BINARY_DIR})
-```
-
-The exact target shape depends on the current generated CMake layout, but the
-dependency direction must be:
+The first supported workflow is explicitly two-phase:
 
 ```text
-benchmarks -> policy header -> user compilation
+configure with TSL_PROFILE=auto and TSL_BUILD_BENCHMARKS=ON
+  -> build and run the selected-profile benchmark
+  -> reduce results to a policy
+  -> configure the final build with TSL_VARIANT_POLICY_FILE=<policy>
+  -> compile consumers
 ```
+
+This is operationally similar to profile-guided optimization and keeps the
+measurement, policy, and final compilation independently inspectable.
+
+The eventual one-build convenience workflow must avoid a policy cycle:
+
+```text
+policy-free tsl_profile_${TSL_SELECTED_PROFILE}
+  -> benchmark executable
+  -> raw results
+  -> validated policy JSON and C++ header
+  -> tsl_variant_policy target
+  -> policy-enabled tsl_generated interface target
+  -> consumer object compilation
+```
+
+The benchmark executable must not link the policy-enabled `tsl_generated`
+target. It compiles against the selected concrete profile target and includes
+the concrete profile header. Only the public interface target depends on the
+generated policy target.
+
+CMake follows dependencies added to interface libraries transitively to their
+consumers, but this ordering must still be tested with Ninja and Makefiles, both
+standalone and when the generated project is a subproject. CMake only
+orchestrates commands and dependencies; compiler-owned code validates results,
+chooses a winner, and renders the policy header.
+
+The standalone generated C++ project currently has no runtime dependency on the
+Python compiler. One-build autotune must not duplicate the reducer in CMake or a
+second ad-hoc implementation merely to preserve that property. Before Slice 4,
+choose one owned distribution model: ship a generated standalone reducer, ship
+an explicitly required `tslc` benchmark tool, or keep autotune two-phase. This
+is a go/no-go decision for the one-build convenience path.
+
+An explicitly requested autotune fails on setup, compilation, execution,
+correctness, or policy-validation failure. A statistically inconclusive result
+is not an infrastructure failure: it produces a documented `default` decision.
 
 ## Rust Integration
 
-Rust should not be controlled primarily through CMake. The Rust integration
-should use Cargo-native build behavior.
+The neutral manifest/result/policy schema should avoid C++-only identities, but
+no Rust selector or benchmark runner belongs in the initial feature.
 
-### Rust Policy Module
+If C++ validates the model, Rust may later consume a precomputed policy through
+a generated policy module. Benchmark execution remains a separate explicit
+command or target. It must not run from `build.rs`: build scripts may execute in
+host/target configurations that do not represent the final runtime machine and
+must not unexpectedly perform noisy host-sensitive work.
 
-Rust does not have C++-style partial specialization. The Rust way is to generate
-a policy module from a neutral policy file.
-
-Default generated policy:
-
-```rust
-pub enum GatherNarrowPartialVariant {
-    Default,
-    IntrinsicGather,
-}
-
-pub mod variant_policy {
-    pub const GATHER_NARROW_PARTIAL_UI32_AVX512_UI64_SCALE4_N8:
-        super::GatherNarrowPartialVariant =
-        super::GatherNarrowPartialVariant::Default;
-}
-```
-
-Autotuned policy module:
-
-```rust
-pub mod variant_policy {
-    pub const GATHER_NARROW_PARTIAL_UI32_AVX512_UI64_SCALE4_N8:
-        super::GatherNarrowPartialVariant =
-        super::GatherNarrowPartialVariant::IntrinsicGather;
-}
-```
-
-Wrapper dispatch:
-
-```rust
-match variant_policy::GATHER_NARROW_PARTIAL_UI32_AVX512_UI64_SCALE4_N8 {
-    GatherNarrowPartialVariant::IntrinsicGather => {
-        <S as detail::primitives::GatherNarrowPartialIntrinsicGatherImpl<
-            IndicesType, scale, N,
-        >>::apply(base_ptr, index)
-    }
-    GatherNarrowPartialVariant::Default => {
-        <S as detail::primitives::GatherNarrowPartialImpl<
-            IndicesType, scale, N,
-        >>::apply(base_ptr, index)
-    }
-}
-```
-
-Because the selected constant is known at compile time, the unused branch should
-be eliminated by the optimizer.
-
-### Cargo Build Script
-
-Recommended shape:
-
-```text
-build.rs
-  reads TSL_VARIANT_POLICY or defaults to generated default policy
-  writes OUT_DIR/variant_policy.rs
-
-lib.rs
-  include!(concat!(env!("OUT_DIR"), "/variant_policy.rs"));
-```
-
-Environment knobs:
-
-```bash
-TSL_VARIANT_POLICY=/path/to/policy.json cargo build
-TSL_AUTOTUNE_VARIANTS=1 cargo build
-TSL_BUILD_BENCHMARKS=1 cargo build
-```
-
-First Rust slice can consume a policy file only. Running benchmarks from
-`build.rs` should be treated carefully because Cargo build scripts that execute
-host-sensitive benchmarks can surprise users. If supported, it must be opt-in.
+Rust selection also needs its own code-generation proof. A constant `match` is
+not accepted merely on the assumption that unused branches optimize exactly
+like C++ `if constexpr`. Add policy consumption first; consider Rust benchmark
+generation only after zero-overhead selection is demonstrated on stable Rust.
 
 ## Benchmark Harness
 
@@ -363,81 +361,52 @@ The benchmark harness should be generated from typed facts:
 - extension;
 - boolean axes and generic params;
 - available variant IDs;
-- existing value-test cases where usable.
+- authored correctness cases; and
+- typed benchmark scenarios.
 
 It must not classify primitive names like `gather` or `add` in production
 benchmark generation. If benchmark setup needs primitive-family-specific data,
 that should be represented by typed benchmark scenarios later.
 
-### Benchmark Inputs
+### Correctness Inputs And Timing Scenarios Are Separate
 
-The first benchmark slice should reuse authored value-test inputs.
-
-Reasons:
-
-- value tests already provide valid inputs for the primitive shape;
-- value tests already encode expected behavior;
-- the value-test planner already knows how to materialize vectors, masks,
-  scalars, pointers, lane lists, buffers, and memory effects;
-- no new benchmark data DSL is needed for the first slice.
-
-The benchmark planner should therefore derive benchmark cases from value-test
-plans:
+The benchmark subsystem should reuse value-test materialization and assertion
+facts for correctness. It must not embed an entire `ValueTestCasePlan` as its
+timing workload.
 
 ```text
-ValueTestCasePlan
-  -> BenchmarkCasePlan
+value-test facts -> BenchmarkCorrectnessCase
+signature/scenario facts -> BenchmarkScenario
 ```
 
-The benchmark layer should add timing and call-target information only. It
-should not rediscover how to build arguments.
+The first pure-register timing scenario generates a deterministic batch from an
+explicit seed, covers ordinary and edge values, cycles through many input
+instances, keeps setup outside the timed region, and consumes every result. This
+prevents one tiny authored example from becoming a constant-folded hot loop.
 
-Conceptual typed shape:
-
-```python
-@dataclass(frozen=True, slots=True)
-class BenchmarkCasePlan:
-    value_case: ValueTestCasePlan
-    default_target: DetailCallTarget
-    variant_targets: tuple[DetailCallTarget, ...]
-    scenario_name: str
-    samples: int
-    iterations: int
-    warmup_iterations: int
-```
-
-The scenario name can initially come from the value-test case name or tags, for
-example:
-
-```text
-basic
-edge
-misaligned
-basic_partial
-```
-
-Benchmark-specific authored scenarios are a later feature. Add them only when
-value-test-derived inputs prove too synthetic for a primitive family.
+Latency and throughput are different performance questions. When both are
+valid for a signature, emit both a dependency-chain scenario and an independent
+calls scenario. A candidate is policy-selectable only if it dominates the
+default across the canonical scenarios; conflicting winners are
+`inconclusive`.
 
 ### Correctness Before Timing
 
-For every benchmarked variant:
+For every candidate, including the default:
 
-1. materialize the value-test inputs;
-2. run the default implementation;
-3. run the variant implementation;
-4. compare default output against the authored expected output when available;
-5. compare variant output against the authored expected output when available;
-6. always compare variant output against the default output;
-7. compare side effects such as output buffers for store/scatter-like cases;
-8. benchmark only if correctness passes.
+1. materialize an authored input outside the timed region;
+2. run the detail implementation directly;
+3. compare its result and observable side effects with the authored expected
+   result using the same comparison semantics as generated value tests; and
+4. reject the candidate set if any candidate fails.
 
 For memory primitives, correctness must include memory output buffers. For
 masked/scatter/store-like primitives, the benchmark harness may initially limit
 itself to shapes already supported by value-test planning.
 
-Correctness must happen outside the timed loop, and should fail the benchmark
-case clearly rather than produce a timing result.
+Default-versus-variant agreement is an additional diagnostic, not the primary
+oracle. Correctness happens outside the timed loop and a failure never produces
+a timing result.
 
 ### Detail-Symbol Calls
 
@@ -452,34 +421,23 @@ They should not call the public wrapper, because the public wrapper may already
 be policy-selected. The public wrapper is what the policy changes; the
 benchmark must measure each candidate independently.
 
-Rust should likewise call the generated detail traits/functions directly rather
-than the public wrapper.
-
 ### Generated C++ Harness Shape
 
 First-slice C++ benchmark code can use a small built-in harness instead of
-Google Benchmark.
+Google Benchmark. It calibrates to a minimum sample duration and executes a
+seeded, interleaved schedule of candidates over an input batch. The exact loop
+shape belongs to the benchmark renderer; a single closure repeatedly returning
+the same value is specifically insufficient.
 
 Conceptual shape:
 
 ```cpp
-template <class Fn>
-bench_result run_bench(Fn&& fn) {
-  for (std::size_t i = 0; i < warmup_iterations; ++i) {
-    do_not_optimize(fn());
+for (auto const& round : seeded_interleaved_schedule) {
+  for (auto candidate : round.candidates) {
+    auto iterations = calibrate(candidate, input_batch, minimum_sample_time);
+    raw_samples.push_back(
+        measure(candidate, input_batch, iterations, compiler_barrier));
   }
-
-  std::array<double, samples> sample_ns{};
-  for (std::size_t sample = 0; sample < samples; ++sample) {
-    auto start = clock::now();
-    for (std::size_t i = 0; i < iterations; ++i) {
-      do_not_optimize(fn());
-    }
-    auto end = clock::now();
-    sample_ns[sample] = elapsed_ns(end - start) / iterations;
-  }
-
-  return summarize(sample_ns);
 }
 ```
 
@@ -499,50 +457,14 @@ auto intrinsic_fn = [&] {
 };
 ```
 
-The generated benchmark source should be placed under the generated C++ project,
+This example only illustrates direct detail calls; it does not make gather an
+eligible first-slice timing scenario. The generated benchmark source lives under
+the generated C++ project,
 for example:
 
 ```text
 cpp/bench/tsl_variant_bench_<profile>.cpp
 ```
-
-### Generated Rust Harness Shape
-
-First-slice Rust benchmark code can use `std::time::Instant` and
-`std::hint::black_box` instead of Criterion.
-
-Conceptual shape:
-
-```rust
-fn run_bench<F, R>(mut f: F) -> BenchResult
-where
-    F: FnMut() -> R,
-{
-    for _ in 0..WARMUP_ITERATIONS {
-        std::hint::black_box(f());
-    }
-
-    let mut samples = [0.0; SAMPLES];
-    for sample in 0..SAMPLES {
-        let start = std::time::Instant::now();
-        for _ in 0..ITERATIONS {
-            std::hint::black_box(f());
-        }
-        samples[sample] = start.elapsed().as_nanos() as f64 / ITERATIONS as f64;
-    }
-
-    summarize(samples)
-}
-```
-
-Generated Rust benchmark binaries can live under:
-
-```text
-rust/src/bin/variant_bench_<profile>.rs
-```
-
-Rust benchmark execution must remain opt-in. A normal `cargo build` must not run
-benchmark binaries.
 
 ### Anti-Optimization Rules
 
@@ -563,30 +485,23 @@ inline void do_not_optimize(T const& value) {
 }
 ```
 
-Rust should use:
-
-```rust
-std::hint::black_box(value)
-```
-
 For store/scatter/memory-output primitives, the harness must also consume or
 validate the output buffer so writes cannot be optimized away.
 
 ### Timing Rules
 
-The first version should use minimal built-in timing:
+The first version uses `std::chrono::steady_clock`, warmup, calibrated repeated
+iterations, deterministic input batches, and a local compiler barrier.
 
-- C++: `std::chrono`, warmup loop, repeated iterations, anti-optimization helper;
-- Rust: `std::time::Instant`, warmup loop, repeated iterations,
-  `std::hint::black_box`.
+Candidates run in paired, interleaved, seed-derived order so drift affects them
+as evenly as practical. Results retain raw samples rather than only aggregates.
+The reducer requires correctness, repeated agreement on direction, and a
+practical improvement larger than observed noise. Ties, excessive dispersion,
+or latency/throughput disagreement select the default with an `inconclusive`
+reason.
 
-Decision should be conservative:
-
-- require correctness;
-- require a clear threshold, e.g. 5-10 percent median improvement;
-- use multiple runs;
-- record min/median/p95 or at least min/median;
-- keep default when results are too close or too noisy.
+The exact statistical rule should be chosen from pilot measurements. A fixed
+"seven samples and five percent" rule is not an acceptance criterion.
 
 ### Result Records
 
@@ -602,32 +517,30 @@ Example record:
   "primitive": "gather_narrow_partial",
   "extension": "avx512",
   "type": "ui32",
-  "scenario": "basic_partial",
+  "scenario": "throughput_independent",
   "variant": "intrinsic_gather",
   "correct": true,
   "warmup_iterations": 10000,
+  "seed": 41731,
   "iterations": 1000000,
-  "samples": 7,
-  "min_ns_per_call": 1.18,
-  "median_ns_per_call": 1.25,
-  "p95_ns_per_call": 1.34
+  "raw_ns_per_call": [1.18, 1.31, 1.22, 1.27]
 }
 ```
 
 Policy reduction is a separate step:
 
 ```text
-benchmark result records -> neutral policy JSON -> C++ policy header / Rust policy module
+benchmark result records -> neutral policy JSON -> C++ policy header
 ```
 
-The reducer should select a variant only when correctness passed and the median
-improvement beats the configured threshold. Otherwise it should select
-`default`.
+The reducer selects a variant only when all required correctness and scenario
+records exist, their manifest/tune-context identities match, and paired results
+show stable dominance. Otherwise it selects `default` with a structured reason.
 
 ### Later Benchmark Scenarios
 
-Value-test inputs are correct and useful first inputs, but they may not be
-performance-representative for every primitive family.
+Value-test inputs remain correctness inputs. Later timing scenarios model the
+performance-relevant distributions for each supported family.
 
 Examples:
 
@@ -645,154 +558,160 @@ benchmarks:
     case { ... }
 ```
 
-Do not add this DSL in the first slice. Start with value-test-derived
-benchmarking and let real gaps justify benchmark-specific source data.
+Do not add this DSL in the first slice. Start with typed pure-register scenarios
+and let real gaps justify benchmark-specific source data.
 
 ## Cache And Reproducibility
 
-Autotune decisions are valid only for the environment that produced them. The
-policy output should record enough data to detect stale choices:
+Autotune decisions are valid only for the candidate and tune context that
+produced them. The fingerprint includes at least:
 
-- generated library/version hash;
-- variant manifest hash;
-- compiler ID and version;
-- compile flags hash;
-- profile name;
-- target triple;
-- CPU identity and feature set;
-- benchmark runner, if any;
-- timestamp;
-- benchmark command.
+- generated candidate/manifest content hash;
+- compiler executable, ID, version, and target triple;
+- complete benchmark compile and link options, including optimization,
+  floating-point, sanitizer, and LTO state;
+- selected profile and its feature flags;
+- CMake configuration/build type;
+- CPU identity and detected feature set;
+- benchmark protocol/schema version, seeds, and runner; and
+- best-effort runtime metadata such as OS and CPU affinity.
 
-CMake/Cargo should rerun or reject stale policy output when relevant inputs
-change.
+A timestamp is provenance, not a cache-validity input. Policy consumption
+rejects a mismatched manifest or tune context; it does not silently rerun a
+benchmark during an ordinary build.
 
-## Suggested Slices
+Consumer-private compiler options cannot always be inferred by the benchmark
+target. A policy is valid only when benchmark and consumer code-generation
+options match. `TSL_BENCHMARK_COMPILE_OPTIONS` makes extra tuning options
+explicit, but it cannot prove equivalence with arbitrary downstream targets.
 
-### Slice 1: Selection Hook Metadata
+## Implementation Slices
 
-- Generate C++ default selector enums/templates for primitives with variants.
-- Keep all selectors defaulting to `default_`.
-- Public wrappers dispatch through selectors.
-- No benchmark execution yet.
+### Slice 0: Candidate And Question Audit
 
-Validation:
+- Inventory existing variant-bearing slots for a representative native
+  auto-detected profile.
+- Map recent fallback-to-composition changes to bodies that still coexist and
+  bodies that were replaced.
+- Choose one or two pure-register candidates and state whether the pilot
+  measures latency, throughput, or both.
+- Preserve a previous semantically equivalent fallback as a named variant only
+  for the reviewed pilot where necessary.
+- Confirm all pilot candidates pass authored and differential correctness tests.
+
+Exit criterion: at least one meaningful current-machine candidate set exists.
+
+### Slice 1: Report-Only C++ Pilot
+
+- Add typed `SpecializationKey`, candidate-set, correctness-case, scenario, and
+  project-plan values.
+- Plan from finalized lowered/emitted facts without parsing rendered names.
+- Generate one policy-free C++ benchmark executable for the selected profile.
+- Add deterministic batched inputs, direct detail calls, correctness gating,
+  calibrated/interleaved timing, and JSONL output.
+- Add `TSL_BUILD_BENCHMARKS`; do not change public wrappers.
+
+Exit criterion: repeated pilot runs expose either a stable difference or an
+honest inconclusive result, and the raw evidence is inspectable.
+
+### Slice 2: Conservative Reducer
+
+- Parse result JSON into typed records.
+- Validate candidate, manifest, scenario, and tune-context identity.
+- Reduce paired samples to `selected`, `default`, or `inconclusive`.
+- Emit neutral policy JSON and a human-readable summary.
+- Test noisy, conflicting, stale, failed-correctness, and missing-result cases.
+
+Exit criterion: the reducer never selects from incomplete, invalid, or unstable
+evidence.
+
+### Slice 3: Manual C++ Policy Consumption
+
+- Add selector primaries and the render-order hook.
+- Convert a validated neutral policy to a build-local C++ header in
+  compiler/backend-owned code.
+- Add `TSL_VARIANT_POLICY_FILE` consumption.
+- Verify compile-time selection and optimized elimination of the unselected
+  branch.
+
+Exit criterion: a precomputed policy changes only the intended wrapper
+specialization; default builds remain deterministic.
+
+### Slice 4: Explicit One-Build CMake Autotune
+
+- Add the policy-free benchmark target and generated policy target chain.
+- Reuse `TSL_SELECTED_PROFILE` from existing auto detection.
+- Make the public interface depend on policy generation only when explicitly
+  enabled.
+- Reject cross-compilation and context mismatches.
+- Test ordering in a standalone generated project and as a consuming CMake
+  subproject.
+
+Exit criterion: consumer objects cannot start before a valid policy header
+exists, and the benchmark target has no dependency cycle through the public
+target.
+
+### Slice 5: Broader Scenario Coverage
+
+- Add more pure-register signature shapes.
+- Add typed mask, reduction, memory, and gather/scatter scenarios one family at
+  a time.
+- Add source-authored benchmark metadata only where typed signature-derived
+  scenarios are insufficient.
+- Track benchmark eligibility/skip coverage separately from primitive compile
+  and value-test coverage.
+
+### Slice 6: Rust Policy Evaluation
+
+- Decide whether stable Rust can express zero-overhead per-specialization
+  selection cleanly.
+- Add policy consumption before considering Rust benchmark generation.
+- Keep all Rust benchmark execution outside normal `cargo build` and
+  `build.rs`.
+
+## Validation
+
+Every implementation slice runs the normal compiler checks:
 
 ```bash
 python -m compileall -q tslc/src/tslc
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_render_model.py tslc/tests/test_generation_conditionals.py
-./dev.sh build --primitives gather_narrow_partial --profiles skylake --backends cpp
+PYTHONPATH=tslc/src python -m pytest -q tslc/tests
+(cd tslc && python -m mypy)
+git diff --check
 ```
 
-### Slice 2: C++ Policy Header Consumption
-
-- Add generated include hook for a build-local policy header.
-- Add CMake option for `TSL_VARIANT_POLICY_FILE`.
-- Convert a neutral JSON policy or explicit CMake input into selector
-  specializations.
-- Add tests proving unknown variants/specializations diagnose clearly.
-
-Validation:
-
-```bash
-./dev.sh build --primitives gather_narrow_partial --profiles skylake --backends cpp
-```
-
-Plus one generated-project test that forces `intrinsic_gather` and checks the
-public wrapper compiles.
-
-### Slice 3: Benchmark Case Planning From Value Tests
-
-- Add a typed benchmark planner that consumes value-test plans.
-- Produce `BenchmarkCasePlan` values with default and variant detail-call
-  targets.
-- Support only value-test case kinds that can be repeated safely.
-- Emit diagnostics or skip records for cases that cannot become benchmarks yet.
-- Do not add benchmark-specific source syntax.
-
-Validation:
-
-```bash
-PYTHONPATH=tslc/src python -m pytest -q tslc/tests/test_value_test_planning.py
-```
-
-Add focused benchmark-planner tests with fake value-test plans and one real
-`gather_narrow_partial` corpus case.
-
-### Slice 4: C++ Benchmark Build
-
-- Generate benchmark manifest.
-- Generate/build a C++ benchmark executable from `BenchmarkCasePlan` values for
-  one representative primitive: `gather_narrow_partial`.
-- Call default and variant detail symbols directly.
-- Run correctness checks before timing.
-- Write JSONL result records.
-- Add `TSL_BUILD_BENCHMARKS`.
-- Do not run benchmarks automatically yet.
-
-Validation:
-
-```bash
-cmake --build ... --target tsl_variant_benchmarks
-```
-
-### Slice 5: C++ Autotune
-
-- Add `TSL_AUTOTUNE_VARIANTS`.
-- Run benchmark executable only when explicitly enabled.
-- Emit build-local policy header.
-- Keep default fallback when benchmark fails, unless strict autotune is enabled.
-
-Suggested additional option:
-
-```cmake
-option(TSL_AUTOTUNE_STRICT "Fail build when variant autotune fails" OFF)
-```
-
-### Slice 6: Rust Policy File Consumption
-
-- Generate Rust variant enums/constants or policy module hooks.
-- Add Cargo `build.rs` support to read neutral JSON policy.
-- Write `OUT_DIR/variant_policy.rs`.
-- Dispatch wrappers through compile-time constants.
-
-Validation:
-
-```bash
-./dev.sh build --primitives gather_narrow_partial --profiles skylake --backends rust
-cargo test
-```
-
-### Slice 7: Rust Benchmark Build And Optional Autotune
-
-- Generate Rust benchmark binary or bench target from `BenchmarkCasePlan`
-  values.
-- Call default and variant detail traits/functions directly.
-- Run correctness checks before timing.
-- Write JSONL result records.
-- Add opt-in Cargo/environment controls.
-- Emit neutral JSON policy.
-- Keep benchmark execution out of default `cargo build`.
-
-## Open Questions
-
-- How much benchmark scenario metadata can be reused from existing value tests?
-- Do memory-heavy primitives need authored benchmark scenarios before results
-  are meaningful?
-- Should policies select one variant per specialization, or allow scenario-
-  dependent selection later?
-- Should release artifacts ship precomputed policies for named profiles?
-- Should autotune produce both JSON and backend-native headers/modules?
+Slices touching generated C++ layout or executable benchmarks additionally run
+the generated build/value gates and focused native benchmark-project tests.
+Timing assertions must not enter ordinary CI; CI checks planning, compilation,
+correctness, schema handling, and reducer behavior with synthetic samples.
 
 ## Acceptance Criteria
 
 The feature is healthy when:
 
-- normal generated library inclusion remains deterministic and non-executing;
-- autotune is opt-in and build-local;
-- C++ uses typed selector templates rather than global variant macros;
-- Rust uses Cargo-native generated policy modules;
-- policies are generated from benchmark results, not committed source edits;
-- stale policies are detected or conservatively ignored;
-- every selected variant still has a default fallback;
-- benchmark failures produce clear diagnostics rather than broken generated code.
+- ordinary generation and builds remain deterministic and non-executing;
+- only explicit, coexisting, semantically equivalent candidates are compared;
+- candidate correctness is established before timing;
+- timing scenarios are typed, repeatable, and separate from tiny correctness
+  examples;
+- auto detection selects the profile once and autotune only selects a body
+  within that profile;
+- report-only mode is useful without wrapper changes;
+- the reducer defaults on noisy or conflicting evidence;
+- policies are bound to exact candidate and tune contexts;
+- C++ selection is compile-time and adds no runtime dispatch;
+- the one-build dependency graph is tested and cycle-free; and
+- unsupported scenarios produce structured skips rather than invented results.
+
+## Open Decisions To Resolve With The Pilot
+
+- Which recent pure-register refactor gives the first meaningful coexisting
+  default/variant pair on an auto-detected native profile?
+- Which canonical latency/throughput scenarios are valid for that signature?
+- What paired-noise metric and practical improvement threshold match observed
+  run-to-run behavior?
+- Which compile options constitute the supported tune context for downstream
+  consumers?
+- Is one-build autotune sufficiently valuable after the two-phase workflow is
+  available, or does its additional CMake ordering surface outweigh the
+  convenience?
