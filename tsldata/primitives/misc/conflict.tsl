@@ -95,37 +95,30 @@ prim<v:=v> conflict(data):
               let<type>(UBase, type(base::unsigned_of(type(base::in))));
               let<type>(UVec, type(vector::as_base(UBase)));
               let<type>(ConflictT, type(scalar::size));
-              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-              var<const_infer>(all, call<primitive=mask_true[Vec]>());
-              var<const_infer>(indexes, intrin<svindex, build[suffix=UBase]>(
-                cast<static>(UBase, 0),
-                cast<static>(UBase, 1)
-              ));
+              var<const_infer>(lanes, value(generic::runtime_length(UVec)));
+              var<const_infer>(indexes, call<primitive=sequence[UVec]>());
               var<infer>(result, call<primitive=set_zero[UVec]>());
               loop<backend>(cur, 0, (sizeof(Base) * 8), 1) {
                 if (cur < lanes) {
-                  var<const_infer>(through_current, intrin<svwhilelt_b8>(
-                    cast<static>(type(scalar::size), 0),
-                    cast<static>(type(scalar::size), cur + 1)
-                  ));
-                  var<const_infer>(current, intrin<svlastb, build>(through_current, data));
-                  var<const_infer>(matches, intrin<svcmpeq_n, build[suffix=base::in]>(
-                    all,
-                    data,
-                    current
-                  ));
-                  var<const_infer>(later, intrin<svcmpgt_n, build[suffix=UBase]>(
-                    all,
+                  var<const_infer>(current_lane, call<primitive=equal[UVec]>(
                     indexes,
-                    cast<static>(UBase, cur)
+                    call<primitive=set1[UVec]>(cast<static>(UBase, cur))
                   ));
-                  var<const_infer>(active, intrin<svand_b_z>(all, matches, later));
-                  result = intrin<svorr_n, build[suffix=UBase, post=m]>(
+                  var<const_infer>(current, intrin<svlastb, build>(current_lane, data));
+                  var<const_infer>(matches, call<primitive=equal[Vec]>(
+                    data,
+                    call<primitive=set1[Vec]>(current)
+                  ));
+                  var<const_infer>(later, call<primitive=greater_than[UVec]>(
+                    indexes,
+                    call<primitive=set1[UVec]>(cast<static>(UBase, cur))
+                  ));
+                  var<const_infer>(active, call<primitive=mask_binary_and[UVec]>(matches, later));
+                  result = call<primitive=binary_or[UVec], attrs[mask=pass_through]>(
                     active,
                     result,
-                    cast<static>(
-                      UBase,
-                      (cast<static>(ConflictT, 1)) << cur
+                    call<primitive=set1[UVec]>(
+                      cast<static>(UBase, (cast<static>(ConflictT, 1)) << cur)
                     )
                   );
                 }
@@ -144,37 +137,30 @@ prim<v:=v> conflict(data):
               let<type>(UBase, type(base::unsigned_of(type(base::in))));
               let<type>(UVec, type(vector::as_base(UBase)));
               let<type>(ConflictT, type(scalar::size));
-              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-              var<const_infer>(all, call<primitive=mask_true[Vec]>());
-              var<const_infer>(indexes, intrin<svindex, build[suffix=UBase]>(
-                cast<static>(UBase, 0),
-                cast<static>(UBase, 1)
-              ));
+              var<const_infer>(lanes, value(generic::runtime_length(UVec)));
+              var<const_infer>(indexes, call<primitive=sequence[UVec]>());
               var<infer>(result, call<primitive=set_zero[UVec]>());
               loop<backend>(cur, 0, (sizeof(Base) * 8), 1) {
                 if (cur < lanes) {
-                  var<const_infer>(through_current, intrin<svwhilelt_b16>(
-                    cast<static>(type(scalar::size), 0),
-                    cast<static>(type(scalar::size), cur + 1)
-                  ));
-                  var<const_infer>(current, intrin<svlastb, build>(through_current, data));
-                  var<const_infer>(matches, intrin<svcmpeq_n, build[suffix=base::in]>(
-                    all,
-                    data,
-                    current
-                  ));
-                  var<const_infer>(later, intrin<svcmpgt_n, build[suffix=UBase]>(
-                    all,
+                  var<const_infer>(current_lane, call<primitive=equal[UVec]>(
                     indexes,
-                    cast<static>(UBase, cur)
+                    call<primitive=set1[UVec]>(cast<static>(UBase, cur))
                   ));
-                  var<const_infer>(active, intrin<svand_b_z>(all, matches, later));
-                  result = intrin<svorr_n, build[suffix=UBase, post=m]>(
+                  var<const_infer>(current, intrin<svlastb, build>(current_lane, data));
+                  var<const_infer>(matches, call<primitive=equal[Vec]>(
+                    data,
+                    call<primitive=set1[Vec]>(current)
+                  ));
+                  var<const_infer>(later, call<primitive=greater_than[UVec]>(
+                    indexes,
+                    call<primitive=set1[UVec]>(cast<static>(UBase, cur))
+                  ));
+                  var<const_infer>(active, call<primitive=mask_binary_and[UVec]>(matches, later));
+                  result = call<primitive=binary_or[UVec], attrs[mask=pass_through]>(
                     active,
                     result,
-                    cast<static>(
-                      UBase,
-                      (cast<static>(ConflictT, 1)) << cur
+                    call<primitive=set1[UVec]>(
+                      cast<static>(UBase, (cast<static>(ConflictT, 1)) << cur)
                     )
                   );
                 }
@@ -193,37 +179,30 @@ prim<v:=v> conflict(data):
               let<type>(UBase, type(base::unsigned_of(type(base::in))));
               let<type>(UVec, type(vector::as_base(UBase)));
               let<type>(ConflictT, type(scalar::size));
-              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-              var<const_infer>(all, call<primitive=mask_true[Vec]>());
-              var<const_infer>(indexes, intrin<svindex, build[suffix=UBase]>(
-                cast<static>(UBase, 0),
-                cast<static>(UBase, 1)
-              ));
+              var<const_infer>(lanes, value(generic::runtime_length(UVec)));
+              var<const_infer>(indexes, call<primitive=sequence[UVec]>());
               var<infer>(result, call<primitive=set_zero[UVec]>());
               loop<backend>(cur, 0, (sizeof(Base) * 8), 1) {
                 if (cur < lanes) {
-                  var<const_infer>(through_current, intrin<svwhilelt_b32>(
-                    cast<static>(type(scalar::size), 0),
-                    cast<static>(type(scalar::size), cur + 1)
-                  ));
-                  var<const_infer>(current, intrin<svlastb, build>(through_current, data));
-                  var<const_infer>(matches, intrin<svcmpeq_n, build[suffix=base::in]>(
-                    all,
-                    data,
-                    current
-                  ));
-                  var<const_infer>(later, intrin<svcmpgt_n, build[suffix=UBase]>(
-                    all,
+                  var<const_infer>(current_lane, call<primitive=equal[UVec]>(
                     indexes,
-                    cast<static>(UBase, cur)
+                    call<primitive=set1[UVec]>(cast<static>(UBase, cur))
                   ));
-                  var<const_infer>(active, intrin<svand_b_z>(all, matches, later));
-                  result = intrin<svorr_n, build[suffix=UBase, post=m]>(
+                  var<const_infer>(current, intrin<svlastb, build>(current_lane, data));
+                  var<const_infer>(matches, call<primitive=equal[Vec]>(
+                    data,
+                    call<primitive=set1[Vec]>(current)
+                  ));
+                  var<const_infer>(later, call<primitive=greater_than[UVec]>(
+                    indexes,
+                    call<primitive=set1[UVec]>(cast<static>(UBase, cur))
+                  ));
+                  var<const_infer>(active, call<primitive=mask_binary_and[UVec]>(matches, later));
+                  result = call<primitive=binary_or[UVec], attrs[mask=pass_through]>(
                     active,
                     result,
-                    cast<static>(
-                      UBase,
-                      (cast<static>(ConflictT, 1)) << cur
+                    call<primitive=set1[UVec]>(
+                      cast<static>(UBase, (cast<static>(ConflictT, 1)) << cur)
                     )
                   );
                 }
@@ -242,37 +221,30 @@ prim<v:=v> conflict(data):
               let<type>(UBase, type(base::unsigned_of(type(base::in))));
               let<type>(UVec, type(vector::as_base(UBase)));
               let<type>(ConflictT, type(scalar::size));
-              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-              var<const_infer>(all, call<primitive=mask_true[Vec]>());
-              var<const_infer>(indexes, intrin<svindex, build[suffix=UBase]>(
-                cast<static>(UBase, 0),
-                cast<static>(UBase, 1)
-              ));
+              var<const_infer>(lanes, value(generic::runtime_length(UVec)));
+              var<const_infer>(indexes, call<primitive=sequence[UVec]>());
               var<infer>(result, call<primitive=set_zero[UVec]>());
               loop<backend>(cur, 0, (sizeof(Base) * 8), 1) {
                 if (cur < lanes) {
-                  var<const_infer>(through_current, intrin<svwhilelt_b64>(
-                    cast<static>(type(scalar::size), 0),
-                    cast<static>(type(scalar::size), cur + 1)
-                  ));
-                  var<const_infer>(current, intrin<svlastb, build>(through_current, data));
-                  var<const_infer>(matches, intrin<svcmpeq_n, build[suffix=base::in]>(
-                    all,
-                    data,
-                    current
-                  ));
-                  var<const_infer>(later, intrin<svcmpgt_n, build[suffix=UBase]>(
-                    all,
+                  var<const_infer>(current_lane, call<primitive=equal[UVec]>(
                     indexes,
-                    cast<static>(UBase, cur)
+                    call<primitive=set1[UVec]>(cast<static>(UBase, cur))
                   ));
-                  var<const_infer>(active, intrin<svand_b_z>(all, matches, later));
-                  result = intrin<svorr_n, build[suffix=UBase, post=m]>(
+                  var<const_infer>(current, intrin<svlastb, build>(current_lane, data));
+                  var<const_infer>(matches, call<primitive=equal[Vec]>(
+                    data,
+                    call<primitive=set1[Vec]>(current)
+                  ));
+                  var<const_infer>(later, call<primitive=greater_than[UVec]>(
+                    indexes,
+                    call<primitive=set1[UVec]>(cast<static>(UBase, cur))
+                  ));
+                  var<const_infer>(active, call<primitive=mask_binary_and[UVec]>(matches, later));
+                  result = call<primitive=binary_or[UVec], attrs[mask=pass_through]>(
                     active,
                     result,
-                    cast<static>(
-                      UBase,
-                      (cast<static>(ConflictT, 1)) << cur
+                    call<primitive=set1[UVec]>(
+                      cast<static>(UBase, (cast<static>(ConflictT, 1)) << cur)
                     )
                   );
                 }
@@ -306,40 +278,26 @@ prim<v:=v> conflict(data):
       ?i?:
         requires [simd128]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(ConflictT, type(scalar::size));
-            let<type>(CarrierBase, type(base::signed_of(type(base::in))));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation, scoped>(idx, 1, value(vector::length), 1) {
-              var<const_infer>(current, cast<static>(
-                type(base::in),
-                intrin<extract_lane, build[suffix=base::in, immediate(1)=idx]>(
-                  data,
-                  value(idx)
-                )
-              ));
+              var<const_infer>(current, call<primitive=extract_value[Vec, idx]>(data));
               var<infer>(conflict, cast<static>(ConflictT, 0));
               loop<generation, scoped>(cur, 0, value(idx), 1) {
-                var<const_infer>(previous, cast<static>(
-                  type(base::in),
-                  intrin<extract_lane, build[suffix=base::in, immediate(1)=cur]>(
-                    data,
-                    value(cur)
-                  )
-                ));
+                var<const_infer>(previous, call<primitive=extract_value[Vec, cur]>(data));
                 if ((value(cur) < (value(type::size_bytes(type(base::in))) * 8)) &&
                     (current == previous)) {
                   conflict |= (cast<static>(ConflictT, 1)) << value(cur);
                 }
               }
-              result = intrin<replace_lane, build[suffix=base::in, immediate(1)=idx]>(
+              result = call<primitive=insert_value[Vec, idx]>(
                 result,
-                value(idx),
-                cast<static>(CarrierBase, conflict)
+                cast<static>(type(base::in), conflict)
               );
             }
             complete(result);
@@ -348,33 +306,26 @@ prim<v:=v> conflict(data):
       ?i?:
         requires [neon]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(ConflictT, type(scalar::size));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation, scoped>(idx, 1, value(vector::length), 1) {
-              var<const_infer>(current, intrin<
-                vgetq_lane,
-                build[suffix=base::in, immediate(1)=idx]
-              >(data, value(idx)));
+              var<const_infer>(current, call<primitive=extract_value[Vec, idx]>(data));
               var<infer>(conflict, cast<static>(ConflictT, 0));
               loop<generation, scoped>(cur, 0, value(idx), 1) {
-                var<const_infer>(previous, intrin<
-                  vgetq_lane,
-                  build[suffix=base::in, immediate(1)=cur]
-                >(data, value(cur)));
+                var<const_infer>(previous, call<primitive=extract_value[Vec, cur]>(data));
                 if ((value(cur) < (value(type::size_bytes(type(base::in))) * 8)) &&
                     (current == previous)) {
                   conflict |= (cast<static>(ConflictT, 1)) << value(cur);
                 }
               }
-              result = intrin<vsetq_lane, build[suffix=base::in, immediate(2)=idx]>(
-                cast<static>(type(base::in), conflict),
+              result = call<primitive=insert_value[Vec, idx]>(
                 result,
-                value(idx)
+                cast<static>(type(base::in), conflict)
               );
             }
             complete(result);

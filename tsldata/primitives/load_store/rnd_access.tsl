@@ -434,6 +434,7 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
         implementation:
           tsil """
             let<type>(Base, type(base::in));
+            let<type>(DataVec, type(vector::as_base(Base)));
             let<type>(IndexBase, type(base::generic(IndicesType)));
             if constexpr (
               std::is_same_v<typename IndicesType::extension_type, typename Vec::extension_type> &&
@@ -469,19 +470,15 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
                 _ => {}
               }
             }
-            var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+            var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
             var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
             var<runtime_array>(IndexBase, idx_array, index_lanes);
             var<runtime_array>(Base, result, lanes);
-            intrin<svst1>(
-              call<primitive=mask_true[IndicesType]>(),
-              idx_array,
-              index
-            );
+            call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
             loop<backend>(i, 0, lanes, 1) {
               result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
             }
-            var<const_infer>(loaded, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result));
+            var<const_infer>(loaded, call<primitive=load[Vec], attrs[aligned=false]>(result));
             complete(loaded);
           """
     clang_v128:
@@ -512,7 +509,7 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
@@ -525,10 +522,9 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
                   idx_offset(idx_array[value(i)], scale)
                 )
               )));
-              result = intrin<vsetq_lane, build[suffix=base::in, immediate(2)=i]>(
-                lane,
+              result = call<primitive=insert_value[Vec, i]>(
                 result,
-                value(i)
+                lane
               );
             }
             complete(result);
@@ -539,18 +535,9 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
-            let<type>(CarrierBase, type(select(
-              value(type::is_same(type(base::in), f32)),
-              f32,
-              select(
-                value(type::is_same(type(base::in), f64)),
-                f64,
-                type(base::signed_of(type(base::in)))
-              )
-            )));
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
@@ -561,10 +548,9 @@ prim<v:=(cptr,vidx,sImm)> gather(base_ptr, index, scale):
                   idx_offset(idx_array[value(i)], scale)
                 )
               )));
-              result = intrin<replace_lane, build[suffix=base::in, immediate(1)=i]>(
+              result = call<primitive=insert_value[Vec, i]>(
                 result,
-                value(i),
-                cast<static>(CarrierBase, lane)
+                lane
               );
             }
             complete(result);
@@ -678,6 +664,7 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
               reasons [intrinsic]
             tsil """
               let<type>(SignedBase, type(base::signed_of(base::in)));
+              let<type>(LowVec, type(vector::as(avx2, type(base::in))));
               switch<compile>(scale) {
                 1 => {
                   var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=1]>(
@@ -685,7 +672,9 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
                     cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
                     1
                   ));
-                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                  complete(call<primitive=insert[LowVec, Vec, 0]>(
+                    call<primitive=set_zero[Vec]>(), loaded
+                  ));
                 }
                 2 => {
                   var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=2]>(
@@ -693,7 +682,9 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
                     cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
                     2
                   ));
-                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                  complete(call<primitive=insert[LowVec, Vec, 0]>(
+                    call<primitive=set_zero[Vec]>(), loaded
+                  ));
                 }
                 4 => {
                   var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=4]>(
@@ -701,7 +692,9 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
                     cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
                     4
                   ));
-                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                  complete(call<primitive=insert[LowVec, Vec, 0]>(
+                    call<primitive=set_zero[Vec]>(), loaded
+                  ));
                 }
                 8 => {
                   var<const_infer>(loaded, intrin<i64gather, build[suffix=base::signed_of(base::in), immediate(2)=8]>(
@@ -709,7 +702,9 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
                     cast<reinterpret, type=const_ptr>(SignedBase, base_ptr),
                     8
                   ));
-                  complete(intrin<_mm512_zextsi256_si512>(loaded));
+                  complete(call<primitive=insert[LowVec, Vec, 0]>(
+                    call<primitive=set_zero[Vec]>(), loaded
+                  ));
                 }
                 _ => {
                   var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
@@ -792,7 +787,7 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
             let<type>(Base, type(base::in));
@@ -801,18 +796,14 @@ prim<v:=(cptr,vidx,sImm)> gather_narrow_partial(base_ptr, index, scale):
             var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
             var<runtime_array>(IndexBase, idx_array, index_lanes);
             var<runtime_array>(Base, result, lanes);
-            intrin<svst1>(
-              call<primitive=mask_true[IndicesType]>(),
-              idx_array,
-              index
-            );
+            call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
             loop<backend>(i, 0, lanes, 1) {
               result[i] = cast<static>(Base, 0);
             }
             loop<backend>(i, 0, index_lanes, 1) {
               result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
             }
-            var<const_infer>(loaded, intrin<svld1>(call<primitive=mask_true[Vec]>(), result));
+            var<const_infer>(loaded, call<primitive=load[Vec], attrs[aligned=false]>(result));
             complete(loaded);
           """
     scalar:
@@ -897,7 +888,7 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<infer>(result, call<primitive=set_zero[Vec]>());
@@ -909,10 +900,9 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
                   idx_offset(*(ptr_add(index_ptr, value(i))), scale)
                 )
               )));
-              result = intrin<vsetq_lane, build[suffix=base::in, immediate(2)=i]>(
-                lane,
+              result = call<primitive=insert_value[Vec, i]>(
                 result,
-                value(i)
+                lane
               );
             }
             complete(result);
@@ -923,18 +913,9 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
-            let<type>(CarrierBase, type(select(
-              value(type::is_same(type(base::in), f32)),
-              f32,
-              select(
-                value(type::is_same(type(base::in), f64)),
-                f64,
-                type(base::signed_of(type(base::in)))
-              )
-            )));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               var<const_infer>(lane, *(cast<reinterpret, type=const_ptr>(
@@ -944,10 +925,9 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
                   idx_offset(*(ptr_add(index_ptr, value(i))), scale)
                 )
               )));
-              result = intrin<replace_lane, build[suffix=base::in, immediate(1)=i]>(
+              result = call<primitive=insert_value[Vec, i]>(
                 result,
-                value(i),
-                cast<static>(CarrierBase, lane)
+                lane
               );
             }
             complete(result);
@@ -997,7 +977,7 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
             let<type>(Base, type(base::in));
@@ -1006,7 +986,7 @@ prim<v:=(cptr,cptr,sImm)> gather_narrow(base_ptr, index_ptr, scale):
             loop<backend>(i, 0, lanes, 1) {
               result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(*(ptr_add(index_ptr, i)), scale))));
             }
-            complete(intrin<svld1>(call<primitive=mask_true[Vec]>(), result));
+            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
           """
     scalar:
       [bword, dword]:
@@ -1328,7 +1308,7 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
@@ -1343,10 +1323,9 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
                     idx_offset(idx_array[value(i)], scale)
                   )
                 )));
-                result = intrin<vsetq_lane, build[suffix=base::in, immediate(2)=i]>(
-                  lane,
+                result = call<primitive=insert_value[Vec, i]>(
                   result,
-                  value(i)
+                  lane
                 );
               }
             }
@@ -1358,18 +1337,9 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
-            let<type>(CarrierBase, type(select(
-              value(type::is_same(type(base::in), f32)),
-              f32,
-              select(
-                value(type::is_same(type(base::in), f64)),
-                f64,
-                type(base::signed_of(type(base::in)))
-              )
-            )));
             var<const_infer>(idx_array, call<primitive=to_array[IndicesType]>(index));
             var<const_infer>(imask, call<primitive=to_integral[Vec]>(mask));
             var<infer>(result, source);
@@ -1382,10 +1352,9 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
                     idx_offset(idx_array[value(i)], scale)
                   )
                 )));
-                result = intrin<replace_lane, build[suffix=base::in, immediate(1)=i]>(
+                result = call<primitive=insert_value[Vec, i]>(
                   result,
-                  value(i),
-                  cast<static>(CarrierBase, lane)
+                  lane
                 );
               }
             }
@@ -1401,6 +1370,7 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
         implementation:
           tsil """
             let<type>(Base, type(base::in));
+            let<type>(DataVec, type(vector::as_base(Base)));
             let<type>(IndexBase, type(base::generic(IndicesType)));
             if constexpr (
               std::is_same_v<typename IndicesType::extension_type, typename Vec::extension_type> &&
@@ -1430,29 +1400,25 @@ prim<v:=(m,cptr,vidx,v,sImm)>[mask=pass_through] gather(mask, base_ptr, index, s
                 _ => {}
               }
             }
-            var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+            var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
             var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
             var<runtime_array>(IndexBase, idx_array, index_lanes);
             var<runtime_array>(Base, result, lanes);
             var<runtime_array>(Base, active_array, lanes);
-            intrin<svst1>(
-              call<primitive=mask_true[IndicesType]>(),
-              idx_array,
-              index
-            );
-            intrin<svst1, build>(call<primitive=mask_true[Vec]>(), result, source);
+            call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
+            call<primitive=store[Vec], attrs[aligned=false]>(result, source);
             var<const_infer>(active, call<primitive=blend[Vec]>(
               mask,
               call<primitive=set_zero[Vec]>(),
               call<primitive=set1[Vec]>(cast<static>(Base, 1))
             ));
-            intrin<svst1, build>(call<primitive=mask_true[Vec]>(), active_array, active);
+            call<primitive=store[Vec], attrs[aligned=false]>(active_array, active);
             loop<backend>(i, 0, lanes, 1) {
               if (active_array[i] != cast<static>(Base, 0)) {
                 result[i] = *(cast<reinterpret, type=const_ptr>(Base, ptr_add(cast<reinterpret, type=const_ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale))));
               }
             }
-            complete(intrin<svld1, build>(call<primitive=mask_true[Vec]>(), result));
+            complete(call<primitive=load[Vec], attrs[aligned=false]>(result));
           """
     [avx512, avx2, avx2_vl, sse, sse_vl]:
       arith:
@@ -1796,21 +1762,18 @@ prim<void:=(ptr,vidx,v,sImm)> scatter(base_ptr, index, a, scale):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
             let<type>(Base, type(base::in));
+            let<type>(DataVec, type(vector::as_base(Base)));
             let<type>(IndexBase, type(base::generic(IndicesType)));
-            var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+            var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
             var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
             var<runtime_array>(Base, val_array, lanes);
             var<runtime_array>(IndexBase, idx_array, index_lanes);
-            intrin<svst1, build>(call<primitive=mask_true[Vec]>(), val_array, a);
-            intrin<svst1>(
-              call<primitive=mask_true[IndicesType]>(),
-              idx_array,
-              index
-            );
+            call<primitive=store[Vec], attrs[aligned=false]>(val_array, a);
+            call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
             loop<backend>(i, 0, lanes, 1) {
               *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];
             }
@@ -2248,28 +2211,25 @@ prim<void:=(m,ptr,vidx,v,sImm)>[mask=zero] scatter(mask, base_ptr, index, a, sca
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
             let<type>(Base, type(base::in));
+            let<type>(DataVec, type(vector::as_base(Base)));
             let<type>(IndexBase, type(base::generic(IndicesType)));
-            var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+            var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
             var<const_infer>(index_lanes, value(generic::runtime_length(IndicesType)));
             var<runtime_array>(Base, val_array, lanes);
             var<runtime_array>(IndexBase, idx_array, index_lanes);
             var<runtime_array>(Base, active_array, lanes);
-            intrin<svst1, build>(call<primitive=mask_true[Vec]>(), val_array, a);
-            intrin<svst1>(
-              call<primitive=mask_true[IndicesType]>(),
-              idx_array,
-              index
-            );
+            call<primitive=store[Vec], attrs[aligned=false]>(val_array, a);
+            call<primitive=store[IndicesType], attrs[aligned=false]>(idx_array, index);
             var<const_infer>(active, call<primitive=blend[Vec]>(
               mask,
               call<primitive=set_zero[Vec]>(),
               call<primitive=set1[Vec]>(cast<static>(Base, 1))
             ));
-            intrin<svst1, build>(call<primitive=mask_true[Vec]>(), active_array, active);
+            call<primitive=store[Vec], attrs[aligned=false]>(active_array, active);
             loop<backend>(i, 0, lanes, 1) {
               if (active_array[i] != cast<static>(Base, 0)) {
                 *(cast<reinterpret, type=ptr>(Base, ptr_add_mut(cast<reinterpret, type=ptr>(type(scalar::ui8), base_ptr), idx_offset(idx_array[i], scale)))) = val_array[i];

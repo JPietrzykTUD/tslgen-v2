@@ -148,15 +148,25 @@ def cpp_artifacts(
                 emitted_profile.extensions,
                 header_group,
             )
+            grouped_declarations = "\n\n".join(
+                backend.render_declarations(name, grouped[name])
+                for name in sorted(grouped)
+                if name not in by_primitive
+            )
             grouped_definitions = "\n\n".join(
                 backend.render_definitions(name, grouped[name])
                 for name in sorted(grouped)
+            )
+            grouped_bodies = (
+                grouped_declarations + "\n\n" + grouped_definitions
+                if grouped_declarations
+                else grouped_definitions
             )
             grouped_content = assets.fill(
                 "cpp_profile_header.hpp.tmpl",
                 includes=grouped_includes,
                 registrations=grouped_registrations,
-                bodies=grouped_definitions,
+                bodies=grouped_bodies,
             )
             grouped_content = _guard_cpp_profile(
                 grouped_content,

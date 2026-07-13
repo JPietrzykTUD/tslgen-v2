@@ -417,17 +417,16 @@ prim<v:=()> sequence():
       arith:
         requires [neon]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation>(i, 1, value(vector::length), 1) {
-              result = intrin<vsetq_lane, build[suffix=base::in, immediate(2)=i]>(
-                cast<static>(type(base::in), value(i)),
+              result = call<primitive=insert_value[Vec, i]>(
                 result,
-                value(i)
+                cast<static>(type(base::in), value(i))
               );
             }
             complete(result);
@@ -436,18 +435,16 @@ prim<v:=()> sequence():
       ?i?:
         requires [simd128]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-            let<type>(CarrierBase, type(base::signed_of(type(base::in))));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation>(i, 1, value(vector::length), 1) {
-              result = intrin<replace_lane, build[suffix=base::in, immediate(1)=i]>(
+              result = call<primitive=insert_value[Vec, i]>(
                 result,
-                value(i),
-                cast<static>(CarrierBase, value(i))
+                cast<static>(type(base::in), value(i))
               );
             }
             complete(result);
@@ -455,16 +452,15 @@ prim<v:=()> sequence():
       f?:
         requires [simd128]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation>(i, 1, value(vector::length), 1) {
-              result = intrin<replace_lane, build[suffix=base::in, immediate(1)=i]>(
+              result = call<primitive=insert_value[Vec, i]>(
                 result,
-                value(i),
                 cast<static>(type(base::in), value(i))
               );
             }
@@ -557,21 +553,14 @@ prim<v:=(s,s)> custom_sequence(start, stepwidth):
               cast<static>(IndexBase, 0),
               cast<static>(IndexBase, 1)
             ));
-            var<const_infer>(scale, intrin<svcvt_, build[infix=base::in, suffix=IndexBase, post=x]>(
-              call<primitive=mask_true[Vec]>(),
-              indexes
-            ));
-            complete(
-              intrin<svadd, build[post=x]>(
-                call<primitive=mask_true[Vec]>(),
-                intrin<svdup_n, build>(start),
-                intrin<svmul_n, build[post=x]>(
-                  call<primitive=mask_true[Vec]>(),
-                  scale,
-                  stepwidth
-                )
+            var<const_infer>(scale, call<primitive=cast[IndexVec, type(base::in)]>(indexes));
+            complete(call<primitive=add[Vec]>(
+              call<primitive=set1[Vec]>(start),
+              call<primitive=mul[Vec]>(
+                scale,
+                call<primitive=set1[Vec]>(stepwidth)
               )
-            );
+            ));
           """
     [clang_v128, avx512, avx2, avx2_vl, sse, sse_vl, neon, generic, oneapi_fpga, wasm128]:
       arith:

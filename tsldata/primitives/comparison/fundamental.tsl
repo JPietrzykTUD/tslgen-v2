@@ -189,18 +189,20 @@ prim<m:=(v,v)> equal(left, right):
       arith:
         requires [sse, sse2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-            var<const_infer>(halves_equal, intrin<_mm_cmpeq_epi32>(left, right));
-            complete(
-              intrin<_mm_and_si128>(
-                halves_equal,
-                intrin<_mm_shuffle_epi32>(halves_equal, 0xB1)
-              )
-            );
+            let<type>(WordVec, type(vector::as_base(ui32)));
+            var<const_infer>(word_equal, call<primitive=@self[WordVec]>(
+              call<primitive=reinterpret[Vec, WordVec]>(left),
+              call<primitive=reinterpret[Vec, WordVec]>(right)
+            ));
+            var<const_infer>(word_bits, call<primitive=to_integral[WordVec]>(word_equal));
+            var<const_infer>(paired, word_bits & (word_bits >> 1));
+            var<const_infer>(compact, (paired & 1) | ((paired >> 1) & 2));
+            complete(call<primitive=to_mask[Vec]>(compact));
           """
     neon:
       arith:
@@ -664,48 +666,21 @@ prim<m:=(v,v)> less_than(left, right):
       ui?:
         requires [avx2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-            if<generation>(type::is_same(type(base::in), ui8)) {
-              var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x80)));
-              complete(
-                intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                  call<primitive=binary_xor>(right, sign_bit),
-                  call<primitive=binary_xor>(left, sign_bit)
-                )
-              );
-            } else<generation> {
-              if<generation>(type::is_same(type(base::in), ui16)) {
-                var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000)));
-                complete(
-                  intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                    call<primitive=binary_xor>(right, sign_bit),
-                    call<primitive=binary_xor>(left, sign_bit)
-                  )
-                );
-              } else<generation> {
-                if<generation>(type::is_same(type(base::in), ui32)) {
-                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x80000000)));
-                  complete(
-                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                      call<primitive=binary_xor>(right, sign_bit),
-                      call<primitive=binary_xor>(left, sign_bit)
-                    )
-                  );
-                } else<generation> {
-                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000000000000000)));
-                  complete(
-                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                      call<primitive=binary_xor>(right, sign_bit),
-                      call<primitive=binary_xor>(left, sign_bit)
-                    )
-                  );
-                }
-              }
-            }
+            let<type>(SignedVec, type(vector::as_base(type(base::signed_of(type(base::in))))));
+            var<const_infer>(sign_bit, call<primitive=set1[Vec]>(
+              (cast<static>(type(base::in), 1)) << (value(type::size_bits(base::in)) - 1)
+            ));
+            var<const_infer>(left_biased, call<primitive=binary_xor[Vec]>(left, sign_bit));
+            var<const_infer>(right_biased, call<primitive=binary_xor[Vec]>(right, sign_bit));
+            complete(call<primitive=@self[SignedVec]>(
+              call<primitive=reinterpret[Vec, SignedVec]>(left_biased),
+              call<primitive=reinterpret[Vec, SignedVec]>(right_biased)
+            ));
           """
     sse:
       [si8, si16, si32]:
@@ -741,48 +716,21 @@ prim<m:=(v,v)> less_than(left, right):
           [ui8, ui16, ui32] [sse2]
           ui64              [sse2, sse4_2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-            if<generation>(type::is_same(type(base::in), ui8)) {
-              var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x80)));
-              complete(
-                intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                  call<primitive=binary_xor>(right, sign_bit),
-                  call<primitive=binary_xor>(left, sign_bit)
-                )
-              );
-            } else<generation> {
-              if<generation>(type::is_same(type(base::in), ui16)) {
-                var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000)));
-                complete(
-                  intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                    call<primitive=binary_xor>(right, sign_bit),
-                    call<primitive=binary_xor>(left, sign_bit)
-                  )
-                );
-              } else<generation> {
-                if<generation>(type::is_same(type(base::in), ui32)) {
-                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x80000000)));
-                  complete(
-                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                      call<primitive=binary_xor>(right, sign_bit),
-                      call<primitive=binary_xor>(left, sign_bit)
-                    )
-                  );
-                } else<generation> {
-                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000000000000000)));
-                  complete(
-                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                      call<primitive=binary_xor>(right, sign_bit),
-                      call<primitive=binary_xor>(left, sign_bit)
-                    )
-                  );
-                }
-              }
-            }
+            let<type>(SignedVec, type(vector::as_base(type(base::signed_of(type(base::in))))));
+            var<const_infer>(sign_bit, call<primitive=set1[Vec]>(
+              (cast<static>(type(base::in), 1)) << (value(type::size_bits(base::in)) - 1)
+            ));
+            var<const_infer>(left_biased, call<primitive=binary_xor[Vec]>(left, sign_bit));
+            var<const_infer>(right_biased, call<primitive=binary_xor[Vec]>(right, sign_bit));
+            complete(call<primitive=@self[SignedVec]>(
+              call<primitive=reinterpret[Vec, SignedVec]>(left_biased),
+              call<primitive=reinterpret[Vec, SignedVec]>(right_biased)
+            ));
           """
       arith:
         requires [sse, sse2]
@@ -792,27 +740,28 @@ prim<m:=(v,v)> less_than(left, right):
           reasons [intrinsic]
         implementation:
           tsil """
+            let<type>(WordVec, type(vector::as_base(si32)));
             var<const_infer>(left_high, intrin<_mm_shuffle_epi32>(left, 0xF5));
             var<const_infer>(right_high, intrin<_mm_shuffle_epi32>(right, 0xF5));
             var<const_infer>(left_low, intrin<_mm_shuffle_epi32>(left, 0xA0));
             var<const_infer>(right_low, intrin<_mm_shuffle_epi32>(right, 0xA0));
-            var<const_infer>(sign_bit, intrin<_mm_set1_epi32>(-2147483648));
-            var<const_infer>(low_less, intrin<_mm_cmpgt_epi32>(
-              intrin<_mm_xor_si128>(right_low, sign_bit),
-              intrin<_mm_xor_si128>(left_low, sign_bit)
+            var<const_infer>(sign_bit, call<primitive=set1[WordVec]>(cast<static>(si32, -2147483648)));
+            var<const_infer>(low_less, call<primitive=@self[WordVec]>(
+              call<primitive=binary_xor[WordVec]>(left_low, sign_bit),
+              call<primitive=binary_xor[WordVec]>(right_low, sign_bit)
             ));
-            var<const_infer>(high_equal, intrin<_mm_cmpeq_epi32>(left_high, right_high));
+            var<const_infer>(high_equal, call<primitive=equal[WordVec]>(left_high, right_high));
             if<generation>(value(type::is_signed(type(base::in)))) {
-              var<const_infer>(high_less, intrin<_mm_cmpgt_epi32>(right_high, left_high));
+              var<const_infer>(high_less, call<primitive=@self[WordVec]>(left_high, right_high));
             } else {
-              var<const_infer>(high_less, intrin<_mm_cmpgt_epi32>(
-                intrin<_mm_xor_si128>(right_high, sign_bit),
-                intrin<_mm_xor_si128>(left_high, sign_bit)
+              var<const_infer>(high_less, call<primitive=@self[WordVec]>(
+                call<primitive=binary_xor[WordVec]>(left_high, sign_bit),
+                call<primitive=binary_xor[WordVec]>(right_high, sign_bit)
               ));
             }
-            complete(intrin<_mm_or_si128>(
+            complete(call<primitive=binary_or[WordVec]>(
               high_less,
-              intrin<_mm_and_si128>(high_equal, low_less)
+              call<primitive=binary_and[WordVec]>(high_equal, low_less)
             ));
           """
     neon:
@@ -1055,48 +1004,21 @@ prim<m:=(v,v)> greater_than(left, right):
       ui?:
         requires [avx2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-            if<generation>(type::is_same(type(base::in), ui8)) {
-              var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x80)));
-              complete(
-                intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                  call<primitive=binary_xor>(left, sign_bit),
-                  call<primitive=binary_xor>(right, sign_bit)
-                )
-              );
-            } else<generation> {
-              if<generation>(type::is_same(type(base::in), ui16)) {
-                var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000)));
-                complete(
-                  intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                    call<primitive=binary_xor>(left, sign_bit),
-                    call<primitive=binary_xor>(right, sign_bit)
-                  )
-                );
-              } else<generation> {
-                if<generation>(type::is_same(type(base::in), ui32)) {
-                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x80000000)));
-                  complete(
-                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                      call<primitive=binary_xor>(left, sign_bit),
-                      call<primitive=binary_xor>(right, sign_bit)
-                    )
-                  );
-                } else<generation> {
-                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000000000000000)));
-                  complete(
-                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                      call<primitive=binary_xor>(left, sign_bit),
-                      call<primitive=binary_xor>(right, sign_bit)
-                    )
-                  );
-                }
-              }
-            }
+            let<type>(SignedVec, type(vector::as_base(type(base::signed_of(type(base::in))))));
+            var<const_infer>(sign_bit, call<primitive=set1[Vec]>(
+              (cast<static>(type(base::in), 1)) << (value(type::size_bits(base::in)) - 1)
+            ));
+            var<const_infer>(left_biased, call<primitive=binary_xor[Vec]>(left, sign_bit));
+            var<const_infer>(right_biased, call<primitive=binary_xor[Vec]>(right, sign_bit));
+            complete(call<primitive=@self[SignedVec]>(
+              call<primitive=reinterpret[Vec, SignedVec]>(left_biased),
+              call<primitive=reinterpret[Vec, SignedVec]>(right_biased)
+            ));
           """
     sse:
       [si8, si16, si32]:
@@ -1132,48 +1054,21 @@ prim<m:=(v,v)> greater_than(left, right):
           [ui8, ui16, ui32] [sse2]
           ui64              [sse2, sse4_2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-            if<generation>(type::is_same(type(base::in), ui8)) {
-              var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x80)));
-              complete(
-                intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                  call<primitive=binary_xor>(left, sign_bit),
-                  call<primitive=binary_xor>(right, sign_bit)
-                )
-              );
-            } else<generation> {
-              if<generation>(type::is_same(type(base::in), ui16)) {
-                var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000)));
-                complete(
-                  intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                    call<primitive=binary_xor>(left, sign_bit),
-                    call<primitive=binary_xor>(right, sign_bit)
-                  )
-                );
-              } else<generation> {
-                if<generation>(type::is_same(type(base::in), ui32)) {
-                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x80000000)));
-                  complete(
-                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                      call<primitive=binary_xor>(left, sign_bit),
-                      call<primitive=binary_xor>(right, sign_bit)
-                    )
-                  );
-                } else<generation> {
-                  var<const_infer>(sign_bit, call<primitive=set1[Vec]>(cast<static>(type(base::in), 0x8000000000000000)));
-                  complete(
-                    intrin<cmpgt, build[suffix=base::signed_of(base::in)]>(
-                      call<primitive=binary_xor>(left, sign_bit),
-                      call<primitive=binary_xor>(right, sign_bit)
-                    )
-                  );
-                }
-              }
-            }
+            let<type>(SignedVec, type(vector::as_base(type(base::signed_of(type(base::in))))));
+            var<const_infer>(sign_bit, call<primitive=set1[Vec]>(
+              (cast<static>(type(base::in), 1)) << (value(type::size_bits(base::in)) - 1)
+            ));
+            var<const_infer>(left_biased, call<primitive=binary_xor[Vec]>(left, sign_bit));
+            var<const_infer>(right_biased, call<primitive=binary_xor[Vec]>(right, sign_bit));
+            complete(call<primitive=@self[SignedVec]>(
+              call<primitive=reinterpret[Vec, SignedVec]>(left_biased),
+              call<primitive=reinterpret[Vec, SignedVec]>(right_biased)
+            ));
           """
     neon:
       arith:

@@ -158,7 +158,22 @@ def concrete_target_candidates(
                 )
         return tuple(sorted(t for t in targets if t in catalog.extensions))
     if dim == RESULT_DIM_BASE and primitive.attributes.get("cast") == "reinterpret":
-        return tuple(sorted(t for t in targets if support.same_type_width(t, type_tag)))
+        extension = catalog.extensions.get(extension_name)
+        # Scalar and lane-count-parametric vectors preserve their lane count
+        # when rebased, so a different scalar width would change total
+        # storage and cannot be a bit reinterpretation. Fixed/scalable
+        # register extensions preserve register width instead; rebasing them
+        # legitimately regroups the same bits into a different lane width.
+        if (
+            extension is None
+            or extension.vector_bits <= 0
+            or support.uses_sized_vector(extension)
+        ):
+            targets = {
+                target
+                for target in targets
+                if support.same_type_width(target, type_tag)
+            }
     return tuple(sorted(targets))
 
 

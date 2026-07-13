@@ -87,6 +87,8 @@ prim<im:=m> to_integral(mask):
           reasons []
         implementation:
           tsil "complete(mask);"
+    # `insert_value` is implemented through `to_mask`; keep these lane-building
+    # implementations as intrinsic leaves to avoid a dependency cycle.
     wasm128:
       ?i?:
         requires [simd128]
@@ -121,51 +123,43 @@ prim<im:=m> to_integral(mask):
           reasons [intrinsic]
         implementation:
           tsil "complete(cast<static>(type(vector::imask), intrin<_mm256_movemask_epi8>(mask)));"
-      ?i8:
+      [?i8, ?i16]:
         requires [avx, sse2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-            var<const_infer>(low_half, intrin<_mm256_castsi256_si128>(mask));
-            var<const_infer>(high_half, intrin<_mm256_extractf128_si256>(mask, 1));
-            var<const_infer>(low, cast<static>(type(vector::imask), intrin<_mm_movemask_epi8>(low_half)));
-            var<const_infer>(high, cast<static>(type(vector::imask), intrin<_mm_movemask_epi8>(high_half)));
-            complete(cast<static>(type(vector::imask), low | (high << 16)));
+            let<type>(HalfVec, type(vector::as_extension(sse)));
+            var<const_infer>(low, cast<static>(type(vector::imask), call<primitive=@self[HalfVec]>(
+              call<primitive=extract[Vec, sse, 0]>(mask)
+            )));
+            var<const_infer>(high, cast<static>(type(vector::imask), call<primitive=@self[HalfVec]>(
+              call<primitive=extract[Vec, sse, 1]>(mask)
+            )));
+            complete(cast<static>(
+              type(vector::imask),
+              low | (high << (128 / value(type::size_bits(base::in))))
+            ));
           """
       ?i16:
         requires [avx, avx2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-               var<const_infer>(packed, intrin<_mm256_packs_epi16>(mask, intrin<_mm256_setzero_si256>()));
-               var<const_infer>(mm, intrin<_mm256_movemask_epi8>(packed));
-               var<const_infer>(low, cast<static>(type(vector::imask), (mm & 0xFF)));
-               var<const_infer>(high, cast<static>(type(vector::imask), ((mm >> 16) & 0xFF)));
-               complete(cast<static>(type(vector::imask), (low | (high << 8)))) ;
+              let<type>(SignedVec, type(vector::as_base(si16)));
+              let<type>(ByteVec, type(vector::as_base(si8)));
+              var<const_infer>(signed_mask, call<primitive=reinterpret[Vec, SignedVec]>(mask));
+              var<const_infer>(packed, call<primitive=convert_down[SignedVec, si8, 0]>(signed_mask));
+              complete(cast<static>(
+                type(vector::imask),
+                call<primitive=@self[ByteVec]>(packed)
+              ));
             """
-      ?i16:
-        requires [avx, sse2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            var<const_infer>(zero, intrin<_mm_setzero_si128>());
-            var<const_infer>(low_half, intrin<_mm256_castsi256_si128>(mask));
-            var<const_infer>(high_half, intrin<_mm256_extractf128_si256>(mask, 1));
-            var<const_infer>(low_packed, intrin<_mm_packs_epi16>(low_half, zero));
-            var<const_infer>(high_packed, intrin<_mm_packs_epi16>(high_half, zero));
-            var<const_infer>(low, cast<static>(type(vector::imask), intrin<_mm_movemask_epi8>(low_packed) & 0xFF));
-            var<const_infer>(high, cast<static>(type(vector::imask), intrin<_mm_movemask_epi8>(high_packed) & 0xFF));
-            complete(cast<static>(type(vector::imask), low | (high << 8)));
-          """
       f32:
         requires [avx]
         safety:
@@ -181,7 +175,13 @@ prim<im:=m> to_integral(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(vector::imask), intrin<_mm256_movemask_ps>(intrin<_mm256_castsi256_ps>(mask))));"
+          tsil """
+            let<type>(FloatVec, type(vector::as_base(f32)));
+            complete(cast<static>(
+              type(vector::imask),
+              intrin<_mm256_movemask_ps>(call<primitive=reinterpret[Vec, FloatVec]>(mask))
+            ));
+          """
       ?i64:
         requires [avx]
         safety:
@@ -189,7 +189,13 @@ prim<im:=m> to_integral(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(vector::imask), intrin<_mm256_movemask_pd>(intrin<_mm256_castsi256_pd>(mask))));"
+          tsil """
+            let<type>(FloatVec, type(vector::as_base(f64)));
+            complete(cast<static>(
+              type(vector::imask),
+              intrin<_mm256_movemask_pd>(call<primitive=reinterpret[Vec, FloatVec]>(mask))
+            ));
+          """
       f64:
         requires [avx]
         safety:
@@ -227,13 +233,19 @@ prim<im:=m> to_integral(mask):
       ?i16:
         requires [sse2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-               var<const_infer>(packed, intrin<_mm_packs_epi16>(mask, intrin<_mm_setzero_si128>()));
-               complete(cast<static>(type(vector::imask), intrin<_mm_movemask_epi8>(packed))) ;
+              let<type>(SignedVec, type(vector::as_base(si16)));
+              let<type>(ByteVec, type(vector::as_base(si8)));
+              var<const_infer>(signed_mask, call<primitive=reinterpret[Vec, SignedVec]>(mask));
+              var<const_infer>(packed, call<primitive=convert_down[SignedVec, si8, 0]>(signed_mask));
+              complete(cast<static>(
+                type(vector::imask),
+                call<primitive=@self[ByteVec]>(packed)
+              ));
             """
       f32:
         requires [sse]
@@ -250,7 +262,13 @@ prim<im:=m> to_integral(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(vector::imask), intrin<_mm_movemask_ps>(intrin<_mm_castsi128_ps>(mask))));"
+          tsil """
+            let<type>(FloatVec, type(vector::as_base(f32)));
+            complete(cast<static>(
+              type(vector::imask),
+              intrin<_mm_movemask_ps>(call<primitive=reinterpret[Vec, FloatVec]>(mask))
+            ));
+          """
       ?i64:
         requires [sse, sse2]
         safety:
@@ -258,7 +276,13 @@ prim<im:=m> to_integral(mask):
           caller_unsafe false
           reasons [intrinsic]
         implementation:
-          tsil "complete(cast<static>(type(vector::imask), intrin<_mm_movemask_pd>(intrin<_mm_castsi128_pd>(mask))));"
+          tsil """
+            let<type>(FloatVec, type(vector::as_base(f64)));
+            complete(cast<static>(
+              type(vector::imask),
+              intrin<_mm_movemask_pd>(call<primitive=reinterpret[Vec, FloatVec]>(mask))
+            ));
+          """
       f64:
         requires [sse, sse2]
         safety:
@@ -278,9 +302,9 @@ prim<im:=m> to_integral(mask):
           tsil """
             let<type>(UVec, type(vector::as_base(type(scalar::ui8))));
             var<const_infer>(unsigned_mask, call<primitive=reinterpret[Vec, UVec]>(mask));
-            var<const_infer>(bits, intrin<vshrq_n_u8>(unsigned_mask, 7));
+            var<const_infer>(bits, call<primitive=shift_right[UVec, false]>(unsigned_mask, 7));
             var<const_infer>(weights8, intrin<vcreate_u8>(cast<static>(type(scalar::ui64), 0x8040201008040201)));
-            var<const_infer>(weighted, intrin<vmulq_u8>(bits, intrin<vcombine_u8>(weights8, weights8)));
+            var<const_infer>(weighted, call<primitive=mul[UVec]>(bits, intrin<vcombine_u8>(weights8, weights8)));
             var<const_infer>(low, cast<static>(type(vector::imask), intrin<vaddv_u8>(intrin<vget_low_u8>(weighted))));
             var<const_infer>(high, cast<static>(type(vector::imask), intrin<vaddv_u8>(intrin<vget_high_u8>(weighted))));
             complete(cast<static>(type(vector::imask), low | (high << 8)));
@@ -295,12 +319,12 @@ prim<im:=m> to_integral(mask):
           tsil """
             let<type>(UVec, type(vector::as_base(type(scalar::ui16))));
             var<const_infer>(unsigned_mask, call<primitive=reinterpret[Vec, UVec]>(mask));
-            var<const_infer>(bits, intrin<vshrq_n_u16>(unsigned_mask, 15));
+            var<const_infer>(bits, call<primitive=shift_right[UVec, false]>(unsigned_mask, 15));
             var<const_infer>(weights, intrin<vcombine_u16>(
               intrin<vcreate_u16>(cast<static>(type(scalar::ui64), 0x0008000400020001)),
               intrin<vcreate_u16>(cast<static>(type(scalar::ui64), 0x0080004000200010))
             ));
-            complete(cast<static>(type(vector::imask), intrin<vaddvq_u16>(intrin<vmulq_u16>(bits, weights))));
+            complete(cast<static>(type(vector::imask), call<primitive=hadd[UVec]>(call<primitive=mul[UVec]>(bits, weights))));
           """
       ?i32:
         requires [neon]
@@ -312,26 +336,26 @@ prim<im:=m> to_integral(mask):
           tsil """
             let<type>(UVec, type(vector::as_base(type(scalar::ui32))));
             var<const_infer>(unsigned_mask, call<primitive=reinterpret[Vec, UVec]>(mask));
-            var<const_infer>(bits, intrin<vshrq_n_u32>(unsigned_mask, 31));
+            var<const_infer>(bits, call<primitive=shift_right[UVec, false]>(unsigned_mask, 31));
             var<const_infer>(weights, intrin<vcombine_u32>(
               intrin<vcreate_u32>(cast<static>(type(scalar::ui64), 0x0000000200000001)),
               intrin<vcreate_u32>(cast<static>(type(scalar::ui64), 0x0000000800000004))
             ));
-            complete(cast<static>(type(vector::imask), intrin<vaddvq_u32>(intrin<vmulq_u32>(bits, weights))));
+            complete(cast<static>(type(vector::imask), call<primitive=hadd[UVec]>(call<primitive=mul[UVec]>(bits, weights))));
           """
       ?i64:
         requires [neon]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(UVec, type(vector::as_base(type(scalar::ui64))));
             var<const_infer>(unsigned_mask, call<primitive=reinterpret[Vec, UVec]>(mask));
-            var<const_infer>(bits, intrin<vshrq_n_u64>(unsigned_mask, 63));
-            var<const_infer>(low, cast<static>(type(vector::imask), intrin<vgetq_lane, build[suffix=ui64, immediate(1)=0]>(bits, 0)));
-            var<const_infer>(high, cast<static>(type(vector::imask), intrin<vgetq_lane, build[suffix=ui64, immediate(1)=1]>(bits, 1)));
+            var<const_infer>(bits, call<primitive=shift_right[UVec, false]>(unsigned_mask, 63));
+            var<const_infer>(low, cast<static>(type(vector::imask), call<primitive=extract_value[UVec, 0]>(bits)));
+            var<const_infer>(high, cast<static>(type(vector::imask), call<primitive=extract_value[UVec, 1]>(bits)));
             complete(cast<static>(type(vector::imask), low | (high << 1)));
           """
       f?:
@@ -656,21 +680,26 @@ prim<m:=im> to_mask(mask):
                   cast<static>(type(scalar::si16), (cast<static>(type(scalar::ui64), 1)) << value(i))
                 );
               }
-              var<const_infer>(low_data, intrin<splat, build[suffix="i16x8"]>(
+              var<const_infer>(low_data, call<primitive=set1[WordVec]>(
                 cast<static>(type(scalar::si16), mask)
               ));
-              var<const_infer>(high_data, intrin<splat, build[suffix="i16x8"]>(
+              var<const_infer>(high_data, call<primitive=set1[WordVec]>(
                 cast<static>(type(scalar::si16), (cast<static>(type(scalar::ui64), mask) >> 8))
               ));
-              var<const_infer>(low_mask, intrin<eq, build[suffix="i16x8"]>(
-                intrin<v128_and, build[suffix=""]>(low_data, and_vec),
+              var<const_infer>(low_mask, call<primitive=equal[WordVec]>(
+                call<primitive=binary_and[WordVec]>(low_data, and_vec),
                 and_vec
               ));
-              var<const_infer>(high_mask, intrin<eq, build[suffix="i16x8"]>(
-                intrin<v128_and, build[suffix=""]>(high_data, and_vec),
+              var<const_infer>(high_mask, call<primitive=equal[WordVec]>(
+                call<primitive=binary_and[WordVec]>(high_data, and_vec),
                 and_vec
               ));
-              complete(intrin<narrow_i16x8, build[suffix="i8x16"]>(low_mask, high_mask));
+              let<type>(ByteVec, type(vector::as_base(type(scalar::si8))));
+              var<const_infer>(low_chunk, call<primitive=convert_down[WordVec, si8, 0]>(low_mask));
+              var<const_infer>(high_chunk, call<primitive=convert_down[WordVec, si8, 1]>(high_mask));
+              complete(call<primitive=reinterpret[ByteVec, Vec]>(
+                call<primitive=binary_or[ByteVec]>(low_chunk, high_chunk)
+              ));
             """
         variants:
           generic_fallback:
@@ -736,9 +765,9 @@ prim<m:=im> to_mask(mask):
                   cast<static>(type(scalar::si32), (cast<static>(type(scalar::ui64), 1)) << value(i))
                 );
               }
-              var<const_infer>(data_vec, intrin<splat, build[suffix="i32x4"]>(cast<static>(type(scalar::si32), mask)));
-              var<const_infer>(anded_vec, intrin<v128_and, build[suffix=""]>(data_vec, and_vec));
-              complete(intrin<eq, build[suffix="i32x4"]>(anded_vec, and_vec));
+              var<const_infer>(data_vec, call<primitive=set1[MaskVec]>(cast<static>(type(scalar::si32), mask)));
+              var<const_infer>(anded_vec, call<primitive=binary_and[MaskVec]>(data_vec, and_vec));
+              complete(call<primitive=equal[MaskVec]>(anded_vec, and_vec));
             """
         variants:
           generic_fallback:
@@ -770,9 +799,9 @@ prim<m:=im> to_mask(mask):
                   cast<static>(type(scalar::si64), (cast<static>(type(scalar::ui64), 1)) << value(i))
                 );
               }
-              var<const_infer>(data_vec, intrin<splat, build[suffix="i64x2"]>(cast<static>(type(scalar::si64), mask)));
-              var<const_infer>(anded_vec, intrin<v128_and, build[suffix=""]>(data_vec, and_vec));
-              complete(intrin<eq, build[suffix="i64x2"]>(anded_vec, and_vec));
+              var<const_infer>(data_vec, call<primitive=set1[MaskVec]>(cast<static>(type(scalar::si64), mask)));
+              var<const_infer>(anded_vec, call<primitive=binary_and[MaskVec]>(data_vec, and_vec));
+              complete(call<primitive=equal[MaskVec]>(anded_vec, and_vec));
             """
         variants:
           generic_fallback:
@@ -796,12 +825,14 @@ prim<m:=im> to_mask(mask):
           reasons [intrinsic]
         implementation:
           tsil """
+              let<type>(WordVec, type(vector::as_base(ui32)));
+              let<type>(QwordVec, type(vector::as_base(ui64)));
               var<const_infer>(permute_vec, intrin<_mm256_set_epi64x>(0x303030303030303, 0x202020202020202, 0x101010101010101, 0x0));
-              var<const_infer>(data_vec, intrin<_mm256_set1_epi32>(cast<static>(si32, mask)));
+              var<const_infer>(data_vec, call<primitive=set1[WordVec]>(cast<static>(ui32, mask)));
               var<const_infer>(shuffled_vec, intrin<_mm256_shuffle_epi8>(data_vec, permute_vec));
-              var<const_infer>(and_vec, intrin<_mm256_set1_epi64x>(cast<static>(si64, cast<static>(ui64, 0x8040201008040201))));
-              var<const_infer>(and_shuffled_vec, intrin<_mm256_and_si256>(shuffled_vec, and_vec));
-              complete(intrin<_mm256_cmpeq_epi8>(and_shuffled_vec, and_vec));
+              var<const_infer>(and_vec, call<primitive=set1[QwordVec]>(cast<static>(ui64, 0x8040201008040201)));
+              var<const_infer>(and_shuffled_vec, call<primitive=binary_and[Vec]>(shuffled_vec, and_vec));
+              complete(call<primitive=equal[Vec]>(and_shuffled_vec, and_vec));
             """
       ?i16:
         requires [avx, avx2]
@@ -859,10 +890,11 @@ prim<m:=im> to_mask(mask):
           reasons [intrinsic]
         implementation:
           tsil """
+              let<type>(BitVec, type(vector::as_base(ui32)));
               var<const_infer>(and_vec, intrin<_mm256_set_epi64x>(0x8000000040, 0x2000000010, 0x800000004, 0x200000001));
-              var<const_infer>(data_vec, intrin<_mm256_set1_epi32>(cast<static>(si32, mask)));
-              var<const_infer>(anded_vec, intrin<_mm256_and_si256>(data_vec, and_vec));
-              complete(intrin<_mm256_castsi256_ps>(intrin<_mm256_cmpeq_epi32>(anded_vec, and_vec)));
+              var<const_infer>(data_vec, call<primitive=set1[BitVec]>(cast<static>(ui32, mask)));
+              var<const_infer>(anded_vec, call<primitive=binary_and[BitVec]>(data_vec, and_vec));
+              complete(call<primitive=reinterpret[BitVec, Vec]>(call<primitive=equal[BitVec]>(anded_vec, and_vec)));
             """
       f64:
         requires [avx, avx2]
@@ -872,10 +904,11 @@ prim<m:=im> to_mask(mask):
           reasons [intrinsic]
         implementation:
           tsil """
+              let<type>(BitVec, type(vector::as_base(ui64)));
               var<const_infer>(and_vec, intrin<_mm256_set_epi64x>(cast<static>(si64, cast<static>(ui64, 0x8)), cast<static>(si64, cast<static>(ui64, 0x4)), cast<static>(si64, cast<static>(ui64, 0x2)), cast<static>(si64, cast<static>(ui64, 0x1))));
-              var<const_infer>(data_vec, intrin<_mm256_set1_epi64x>(cast<static>(si64, mask)));
-              var<const_infer>(anded_vec, intrin<_mm256_and_si256>(data_vec, and_vec));
-              complete(intrin<_mm256_castsi256_pd>(intrin<_mm256_cmpeq_epi64>(anded_vec, and_vec)));
+              var<const_infer>(data_vec, call<primitive=set1[BitVec]>(cast<static>(ui64, mask)));
+              var<const_infer>(anded_vec, call<primitive=binary_and[BitVec]>(data_vec, and_vec));
+              complete(call<primitive=reinterpret[BitVec, Vec]>(call<primitive=equal[BitVec]>(anded_vec, and_vec)));
             """
     sse:
       ?i8:
@@ -961,10 +994,11 @@ prim<m:=im> to_mask(mask):
           reasons [intrinsic]
         implementation:
           tsil """
+              let<type>(BitVec, type(vector::as_base(ui32)));
               var<const_infer>(and_vec, intrin<_mm_set_epi32>(0x8, 0x4, 0x2, 0x1));
-              var<const_infer>(data_vec, intrin<_mm_set1_epi32>(cast<static>(si32, mask)));
-              var<const_infer>(anded_vec, intrin<_mm_and_si128>(data_vec, and_vec));
-              complete(intrin<_mm_castsi128_ps>(intrin<_mm_cmpeq_epi32>(anded_vec, and_vec)));
+              var<const_infer>(data_vec, call<primitive=set1[BitVec]>(cast<static>(ui32, mask)));
+              var<const_infer>(anded_vec, call<primitive=binary_and[BitVec]>(data_vec, and_vec));
+              complete(call<primitive=reinterpret[BitVec, Vec]>(call<primitive=equal[BitVec]>(anded_vec, and_vec)));
             """
       f64:
         requires [sse, sse2, sse4_1]
@@ -974,10 +1008,11 @@ prim<m:=im> to_mask(mask):
           reasons [intrinsic]
         implementation:
           tsil """
+              let<type>(BitVec, type(vector::as_base(ui64)));
               var<const_infer>(and_vec, intrin<_mm_set_epi64x>(cast<static>(si64, cast<static>(ui64, 0x2)), cast<static>(si64, cast<static>(ui64, 0x1))));
-              var<const_infer>(data_vec, intrin<_mm_set1_epi64x>(cast<static>(si64, mask)));
-              var<const_infer>(anded_vec, intrin<_mm_and_si128>(data_vec, and_vec));
-              complete(intrin<_mm_castsi128_pd>(intrin<_mm_cmpeq_epi64>(anded_vec, and_vec)));
+              var<const_infer>(data_vec, call<primitive=set1[BitVec]>(cast<static>(ui64, mask)));
+              var<const_infer>(anded_vec, call<primitive=binary_and[BitVec]>(data_vec, and_vec));
+              complete(call<primitive=reinterpret[BitVec, Vec]>(call<primitive=equal[BitVec]>(anded_vec, and_vec)));
             """
       f64:
         requires [sse, sse2]
@@ -987,11 +1022,16 @@ prim<m:=im> to_mask(mask):
           reasons [intrinsic]
         implementation:
           tsil """
-              complete(intrin<_mm_castsi128_pd>(intrin<_mm_set_epi64x>(
-                select_expr(mask<test, imask>(mask, 1), cast<static>(type(scalar::si64), -1), cast<static>(type(scalar::si64), 0)),
-                select_expr(mask<test, imask>(mask, 0), cast<static>(type(scalar::si64), -1), cast<static>(type(scalar::si64), 0))
-              )));
+              let<type>(BitVec, type(vector::as_base(si64)));
+              complete(call<primitive=reinterpret[BitVec, Vec]>(
+                intrin<_mm_set_epi64x>(
+                  select_expr(mask<test, imask>(mask, 1), cast<static>(type(scalar::si64), -1), cast<static>(type(scalar::si64), 0)),
+                  select_expr(mask<test, imask>(mask, 0), cast<static>(type(scalar::si64), -1), cast<static>(type(scalar::si64), 0))
+                )
+              ));
             """
+    # `insert_value` is implemented through `to_mask`; keep these lane-building
+    # implementations as intrinsic leaves to avoid a dependency cycle.
     neon:
       ?i8:
         requires [neon]
@@ -1011,12 +1051,18 @@ prim<m:=im> to_mask(mask):
                   value(i)
                 );
               }
-              var<const_infer>(low_data, intrin<vdupq_n_u16>(cast<static>(type(scalar::ui16), mask)));
-              var<const_infer>(high_data, intrin<vdupq_n_u16>(
+              var<const_infer>(low_data, call<primitive=set1[WordVec]>(cast<static>(type(scalar::ui16), mask)));
+              var<const_infer>(high_data, call<primitive=set1[WordVec]>(
                 cast<static>(type(scalar::ui16), cast<static>(type(scalar::ui64), mask) >> 8)
               ));
-              var<const_infer>(low_mask, intrin<vceqq_u16>(intrin<vandq_u16>(low_data, and_vec), and_vec));
-              var<const_infer>(high_mask, intrin<vceqq_u16>(intrin<vandq_u16>(high_data, and_vec), and_vec));
+              var<const_infer>(low_mask, call<primitive=equal[WordVec]>(
+                call<primitive=binary_and[WordVec]>(low_data, and_vec),
+                and_vec
+              ));
+              var<const_infer>(high_mask, call<primitive=equal[WordVec]>(
+                call<primitive=binary_and[WordVec]>(high_data, and_vec),
+                and_vec
+              ));
               var<const_infer>(bytes, intrin<vcombine_u8>(
                 intrin<vmovn_u16>(low_mask),
                 intrin<vmovn_u16>(high_mask)

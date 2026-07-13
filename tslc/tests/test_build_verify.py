@@ -1111,11 +1111,12 @@ def test_reinterpret_integer_builds(
 ) -> None:
     # `reinterpret` is the `base`-dimension of the target-vector second axis: `return_type: base:
     # ToBase` makes the result the source vector with its base type replaced. Delivered for
-    # same-width integer targets (signedness flips `si32<->ui32`) — the corpus `?i?: ToBase: ?i?`
-    # `bit_cast` branch. The backend emits a SECOND type param (C++ `reinterpret_impl<simd<i32,
+    # same-register-width targets (including lane regrouping on fixed-width extensions) — the
+    # corpus `?i?: ToBase: ?i?` `bit_cast` branch. The backend emits a SECOND type param (C++ `reinterpret_impl<simd<i32,
     # avx2>, simd<u32,avx2>>` / Rust `ReinterpretImpl<ToVec>`); `register::generic(ToType)` resolves
-    # the target register. Scalar + sse2 + avx2. Different-width / float / cross-domain reinterpret
-    # and the generic (LANES-sized) vector are deferred. Both backends.
+    # the target register. Scalar + sse2 + avx2. Scalar and the generic (LANES-sized) vector keep
+    # same-scalar-width targets because rebasing them would otherwise change total storage. Both
+    # backends.
     result = generate_project(
         [data_root],
         machine_profiles_path=machine_profiles_path,

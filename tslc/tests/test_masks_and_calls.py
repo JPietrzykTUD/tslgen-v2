@@ -183,6 +183,30 @@ def test_lowering_dependency_facts_use_shared_query_functions(
     )
 
 
+def test_target_extension_dependency_preserves_source_vector_base(
+    catalog: Catalog, machine_profiles
+) -> None:
+    body = """
+      let<type>(BitBase, type(base::unsigned_of(type(base::in))));
+      let<type>(BitVec, type(vector::as_base(BitBase)));
+      var<const_infer>(low, call<primitive=extract[BitVec, sse, 0]>(left));
+      complete(left);
+    """
+
+    dependencies = _dependencies_for_body(catalog, machine_profiles, body)
+
+    assert dependencies == frozenset(
+        {
+            CallDependency(
+                "extract",
+                None,
+                VectorIdentity("ui32", "avx2"),
+                VectorIdentity("ui32", "sse"),
+            )
+        }
+    )
+
+
 def test_dependency_closure_ignores_dead_generation_branch_calls(
     data_root: Path,
     machine_profiles_path: Path,

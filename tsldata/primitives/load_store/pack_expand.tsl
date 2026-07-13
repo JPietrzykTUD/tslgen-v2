@@ -113,25 +113,18 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
             let<type>(Base, type(base::in));
             let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
             let<type>(IndexVec, type(vector::as_base(IndexBase)));
-            var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-            var<const_infer>(all, call<primitive=mask_true[IndexVec]>());
-            var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
-              cast<static>(IndexBase, 0),
-              cast<static>(IndexBase, 1)
-            ));
+            var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
+            var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
             var<infer>(offset, 0);
             loop<backend>(i, 0, lanes, 1) {
-              var<const_infer>(lane, intrin<svcmpeq_n, build[suffix=IndexBase]>(
-                all,
+              var<const_infer>(lane, call<primitive=equal[IndexVec]>(
                 indexes,
-                cast<static>(IndexBase, i)
+                call<primitive=set1[IndexVec]>(cast<static>(IndexBase, i))
               ));
-              if (intrin<svptest_any>(lane, m)) {
-                var<const_infer>(through_source, intrin<svwhilelt_b8>(
-                  cast<static>(type(scalar::size), 0),
-                  cast<static>(type(scalar::size), i + 1)
-                ));
-                *ptr_add_mut(ptr, offset) = intrin<svlastb, build>(through_source, a);
+              if (call<primitive=mask_population_count[IndexVec]>(
+                call<primitive=mask_binary_and[IndexVec]>(lane, m)
+              ) != 0) {
+                *ptr_add_mut(ptr, offset) = intrin<svlastb, build>(lane, a);
                 offset += 1;
               }
             }
@@ -147,25 +140,18 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
             let<type>(Base, type(base::in));
             let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
             let<type>(IndexVec, type(vector::as_base(IndexBase)));
-            var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-            var<const_infer>(all, call<primitive=mask_true[IndexVec]>());
-            var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
-              cast<static>(IndexBase, 0),
-              cast<static>(IndexBase, 1)
-            ));
+            var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
+            var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
             var<infer>(offset, 0);
             loop<backend>(i, 0, lanes, 1) {
-              var<const_infer>(lane, intrin<svcmpeq_n, build[suffix=IndexBase]>(
-                all,
+              var<const_infer>(lane, call<primitive=equal[IndexVec]>(
                 indexes,
-                cast<static>(IndexBase, i)
+                call<primitive=set1[IndexVec]>(cast<static>(IndexBase, i))
               ));
-              if (intrin<svptest_any>(lane, m)) {
-                var<const_infer>(through_source, intrin<svwhilelt_b16>(
-                  cast<static>(type(scalar::size), 0),
-                  cast<static>(type(scalar::size), i + 1)
-                ));
-                *ptr_add_mut(ptr, offset) = intrin<svlastb, build>(through_source, a);
+              if (call<primitive=mask_population_count[IndexVec]>(
+                call<primitive=mask_binary_and[IndexVec]>(lane, m)
+              ) != 0) {
+                *ptr_add_mut(ptr, offset) = intrin<svlastb, build>(lane, a);
                 offset += 1;
               }
             }
@@ -176,17 +162,14 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<const_infer>(imask, call<primitive=to_integral[Vec]>(m));
             var<infer>(offset, 0);
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(imask, value(i))) {
-                var<const_infer>(lane, cast<static>(
-                  type(base::in),
-                  intrin<extract_lane, build[suffix=base::in, immediate(1)=i]>(a, value(i))
-                ));
+                var<const_infer>(lane, call<primitive=extract_value[Vec, i]>(a));
                 *ptr_add_mut(ptr, offset) = lane;
                 offset += 1;
               }
@@ -198,17 +181,14 @@ prim<void:=(m,ptr,v)>[aligned=true, op=pack] compress_store(m, ptr, a):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<const_infer>(imask, call<primitive=to_integral[Vec]>(m));
             var<infer>(offset, 0);
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(imask, value(i))) {
-                *ptr_add_mut(ptr, offset) = intrin<
-                  vgetq_lane,
-                  build[suffix=base::in, immediate(1)=i]
-                >(a, value(i));
+                *ptr_add_mut(ptr, offset) = call<primitive=extract_value[Vec, i]>(a);
                 offset += 1;
               }
             }
@@ -381,30 +361,27 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
                let<type>(Base, type(base::in));
                let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
                let<type>(IndexVec, type(vector::as_base(IndexBase)));
-               var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-               var<const_infer>(all, call<primitive=mask_true[IndexVec]>());
-               var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
-                 cast<static>(IndexBase, 0),
-                 cast<static>(IndexBase, 1)
-               ));
+               var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
+               var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
                var<infer>(result, call<primitive=set_zero[Vec]>());
                var<infer>(offset, 0);
                loop<backend>(i, 0, lanes, 1) {
-                 var<const_infer>(lane, intrin<svcmpeq_n, build[suffix=IndexBase]>(
-                   all,
+                 var<const_infer>(lane, call<primitive=equal[IndexVec]>(
                    indexes,
-                   cast<static>(IndexBase, i)
+                   call<primitive=set1[IndexVec]>(cast<static>(IndexBase, i))
                  ));
-                 if (intrin<svptest_any>(lane, m)) {
-                   result = intrin<svdup_n, build[post=m]>(
-                     result,
+                 if (call<primitive=mask_population_count[IndexVec]>(
+                   call<primitive=mask_binary_and[IndexVec]>(lane, m)
+                 ) != 0) {
+                   result = call<primitive=masked_set1[Vec]>(
                      lane,
+                     result,
                      *ptr_add(ptr, offset)
                    );
                    offset += 1;
@@ -418,28 +395,18 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
-            let<type>(CarrierBase, type(select(
-              value(type::is_same(type(base::in), f32)),
-              f32,
-              select(
-                value(type::is_same(type(base::in), f64)),
-                f64,
-                type(base::signed_of(type(base::in)))
-              )
-            )));
             var<const_infer>(imask, call<primitive=to_integral[Vec]>(m));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             var<infer>(offset, 0);
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(imask, value(i))) {
                 var<const_infer>(lane, *ptr_add(ptr, offset));
-                result = intrin<replace_lane, build[suffix=base::in, immediate(1)=i]>(
+                result = call<primitive=insert_value[Vec, i]>(
                   result,
-                  value(i),
-                  cast<static>(CarrierBase, lane)
+                  lane
                 );
                 offset += 1;
               }
@@ -452,7 +419,7 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
             var<const_infer>(imask, call<primitive=to_integral[Vec]>(m));
@@ -460,10 +427,9 @@ prim<v:=(m,cptr)>[aligned=true, op=expand] expand_load(m, ptr):
             var<infer>(offset, 0);
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
               if (mask<test, imask>(imask, value(i))) {
-                result = intrin<vsetq_lane, build[suffix=base::in, immediate(2)=i]>(
-                  *ptr_add(ptr, offset),
+                result = call<primitive=insert_value[Vec, i]>(
                   result,
-                  value(i)
+                  *ptr_add(ptr, offset)
                 );
                 offset += 1;
               }
@@ -1307,7 +1273,7 @@ prim<v:=cptr+> load_convert_up(ptr):
             implementation:
               tsil """
                    let<type>(OutVec, type(vector::as_base(ToBase)));
-                   var<const_infer>(loaded, intrin<svld1, build>(call<primitive=mask_true[Vec]>(), ptr));
+                   var<const_infer>(loaded, call<primitive=load[Vec], attrs[aligned=false]>(ptr));
                    complete(intrin<svcvt_, build[infix=ToBase, suffix=base::in, post=x]>(call<primitive=mask_true[OutVec]>(), loaded));
                 """
     clang_v128:

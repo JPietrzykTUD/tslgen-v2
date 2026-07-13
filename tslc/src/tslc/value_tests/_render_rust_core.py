@@ -307,7 +307,10 @@ def _scalar_vector(case: ValueTestCasePlan) -> str:
         f"        type Vec = Simd<{case.base_spelling}, Generic<{case.lanes}>>;",
     ]
     args = append_call_args(lines, case)
-    template_args = ["Vec", *case.invocation.generic_defaults]
+    template_args = ["Vec"]
+    if case.index is not None and case.index.value is not None:
+        template_args.append(case.index.value)
+    template_args.extend(case.invocation.generic_defaults)
     template_args.extend("_" for _ in range(case.invocation.inferred_type_args))
     lines.append(f"        let expected: [{case.base_spelling}; {case.lanes}] = [{expected}];")
     lines.append(

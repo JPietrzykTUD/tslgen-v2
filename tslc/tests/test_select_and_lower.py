@@ -181,11 +181,11 @@ def test_oneapi_fpga_is_compile_mode_opt_in(catalog: Catalog) -> None:
 
 
 def test_type_group_specificity_resolves_hadd(catalog: Catalog, machine_profiles) -> None:
-    # hadd avx2 has both an f64-specific body and an arith-general body; the
-    # specific one must win at generation time.
+    # hadd avx2 has both an f?-specific body and an arith-general body; the
+    # narrower floating-point group must win at generation time.
     slots = _by_key(catalog, machine_profiles["avx2"], "hadd")
     chosen = slots[("f64", "avx2")]
-    assert chosen.implementation.type_group == "f64"
+    assert chosen.implementation.type_group == "f?"
 
 
 def test_clang_hadd_prefers_compiler_reduction_builtin(
@@ -272,19 +272,28 @@ def test_clang_set_uses_native_vector_initializer(
     assert "::tsl::load" not in cpp.body_text
 
 
+def _assert_x86_shift_register_path(cpp, expected_fragment: str) -> None:
+    assert cpp is not None
+    assert expected_fragment in cpp.body_text
+    if expected_fragment == "::tsl::extract<Vec":
+        assert "::tsl::insert<" in cpp.body_text
+        assert "_mm" not in cpp.body_text
+    assert "to_array" not in cpp.body_text
+    assert "from_array" not in cpp.body_text
+
+
 @pytest.mark.parametrize(
-    ("profile", "extension", "intrinsic", "lanes"),
+    ("profile", "extension", "lanes"),
     [
-        ("neon", "neon", "vsetq_lane_u32", 4),
-        ("wasm32-simd128", "wasm128", "i32x4_replace_lane", 4),
+        ("neon", "neon", 4),
+        ("wasm32-simd128", "wasm128", 4),
     ],
 )
-def test_fixed_width_set_unrolls_native_lane_replacement(
+def test_fixed_width_set_unrolls_insert_value_calls(
     catalog: Catalog,
     machine_profiles,
     profile: str,
     extension: str,
-    intrinsic: str,
     lanes: int,
 ) -> None:
     slot = next(
@@ -301,7 +310,9 @@ def test_fixed_width_set_unrolls_native_lane_replacement(
         ).specialization
 
         assert lowered is not None
-        assert lowered.body_text.count(intrinsic) == lanes
+        assert lowered.body_text.count("insert_value") == lanes
+        assert "replace_lane" not in lowered.body_text
+        assert "vsetq_lane" not in lowered.body_text
         assert "values[3]" in lowered.body_text
         assert "values[0]" in lowered.body_text
         assert "::<i>" not in lowered.body_text
@@ -334,18 +345,17 @@ def test_clang_sequence_uses_native_vector_initializer(
 
 
 @pytest.mark.parametrize(
-    ("profile", "extension", "intrinsic"),
+    ("profile", "extension"),
     [
-        ("neon", "neon", "vsetq_lane_u32"),
-        ("wasm32-simd128", "wasm128", "i32x4_replace_lane"),
+        ("neon", "neon"),
+        ("wasm32-simd128", "wasm128"),
     ],
 )
-def test_fixed_width_sequence_unrolls_native_lane_replacement(
+def test_fixed_width_sequence_unrolls_insert_value_calls(
     catalog: Catalog,
     machine_profiles,
     profile: str,
     extension: str,
-    intrinsic: str,
 ) -> None:
     slot = next(
         selected
@@ -361,7 +371,9 @@ def test_fixed_width_sequence_unrolls_native_lane_replacement(
         ).specialization
 
         assert lowered is not None
-        assert lowered.body_text.count(intrinsic) == 3
+        assert lowered.body_text.count("insert_value") == 3
+        assert "replace_lane" not in lowered.body_text
+        assert "vsetq_lane" not in lowered.body_text
         assert "::<i>" not in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
@@ -441,10 +453,10 @@ def test_sse_extract_value_stays_in_register(
 
 
 @pytest.mark.parametrize(
-    ("profile", "extension", "needle"),
+    ("profile", "extension", "chunk_count"),
     [
-        ("avx", "avx2", "extractf128_si256"),
-        ("knl", "avx512", "extracti32x4_epi32"),
+        ("avx", "avx2", 2),
+        ("knl", "avx512", 4),
     ],
 )
 @pytest.mark.parametrize("type_tag", ["ui8", "si16", "f32", "f64"])
@@ -453,7 +465,7 @@ def test_wide_x86_extract_value_uses_register_chunks(
     machine_profiles,
     profile: str,
     extension: str,
-    needle: str,
+    chunk_count: int,
     type_tag: str,
 ) -> None:
     slot = next(
@@ -470,7 +482,9 @@ def test_wide_x86_extract_value_uses_register_chunks(
         ).specialization
 
         assert lowered is not None
-        assert needle in lowered.body_text
+        assert lowered.body_text.count("extract") == chunk_count
+        assert "_mm256_extract" not in lowered.body_text
+        assert "_mm512_extract" not in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "store" not in lowered.body_text
 
@@ -503,6 +517,10 @@ def test_wasm_to_mask_builds_lane_bit_constants_without_memory(
         assert "v128_load" not in lowered.body_text
         assert "and_values" not in lowered.body_text
         assert "replace_lane" in lowered.body_text
+        if type_tag == "ui8":
+            assert "convert_down" in lowered.body_text
+            assert "binary_or" in lowered.body_text
+            assert "narrow_i16x8" not in lowered.body_text
 
 
 @pytest.mark.parametrize("type_tag", ["ui8", "ui16", "ui32", "ui64", "f32", "f64"])
@@ -532,9 +550,9 @@ def test_neon_to_mask_builds_lane_bit_constants_without_memory(
     ("type_tag", "evidence"),
     [
         ("ui8", "vaddv_u8"),
-        ("ui16", "vaddvq_u16"),
-        ("ui32", "vaddvq_u32"),
-        ("ui64", "vgetq_lane_u64"),
+        ("ui16", "hadd"),
+        ("ui32", "hadd"),
+        ("ui64", "extract_value"),
         ("f32", "to_integral"),
         ("f64", "to_integral"),
     ],
@@ -558,6 +576,8 @@ def test_neon_to_integral_uses_native_mask_pack(
         assert lowered is not None
         assert "for " not in lowered.body_text
         assert evidence in lowered.body_text
+        if type_tag == "ui64":
+            assert "vgetq_lane" not in lowered.body_text
 
 
 @pytest.mark.parametrize(
@@ -588,6 +608,9 @@ def test_avx2_to_mask_builds_lane_bit_constants_without_memory(
         assert "and_values" not in lowered.body_text
         assert "::tsl::load" not in lowered.body_text
         assert intrinsic in lowered.body_text
+        if type_tag == "f64":
+            assert "reinterpret" in lowered.body_text
+            assert "castsi128_pd" not in lowered.body_text
 
 
 @pytest.mark.parametrize("type_tag", ["ui8", "ui16"])
@@ -608,9 +631,80 @@ def test_avx_to_integral_uses_sse_half_width_composition(
         ).specialization
 
         assert lowered is not None
-        assert "_mm256_extractf128_si256" in lowered.body_text
-        assert "_mm_movemask_epi8" in lowered.body_text
+        assert lowered.body_text.count("extract") == 2
+        assert "_mm256_extract" not in lowered.body_text
+        assert lowered.body_text.count("to_integral") == 2
+        assert "_mm_movemask_epi8" not in lowered.body_text
         assert "for " not in lowered.body_text
+
+
+@pytest.mark.parametrize(
+    ("profile", "extension", "type_tag", "movemask"),
+    [
+        ("avx2", "avx2", "ui32", "movemask_ps"),
+        ("avx2", "avx2", "ui64", "movemask_pd"),
+        ("sse2", "sse", "ui32", "movemask_ps"),
+        ("sse2", "sse", "ui64", "movemask_pd"),
+    ],
+)
+def test_x86_integer_to_integral_uses_semantic_reinterpret(
+    catalog: Catalog,
+    machine_profiles,
+    profile: str,
+    extension: str,
+    type_tag: str,
+    movemask: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles[profile], "to_integral", (type_tag,))
+        .selected
+        if selected.extension.name == extension
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "reinterpret" in lowered.body_text
+        assert movemask in lowered.body_text
+        assert "castsi" not in lowered.body_text
+
+
+@pytest.mark.parametrize(
+    ("profile", "extension", "packs"),
+    [
+        ("avx2", "avx2", "_mm256_packs_epi16"),
+        ("sse2", "sse", "_mm_packs_epi16"),
+    ],
+)
+def test_x86_word_to_integral_uses_convert_down_and_byte_path(
+    catalog: Catalog,
+    machine_profiles,
+    profile: str,
+    extension: str,
+    packs: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles[profile], "to_integral", ("ui16",))
+        .selected
+        if selected.extension.name == extension
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "convert_down" in lowered.body_text
+        assert "to_integral" in lowered.body_text
+        assert packs not in lowered.body_text
 
 
 @pytest.mark.parametrize("primitive", ["hadd", "hand", "hor"])
@@ -633,7 +727,8 @@ def test_knl_masked_small_reductions_use_sse_quarter_composition(
         ).specialization
 
         assert lowered is not None
-        assert lowered.body_text.count("extracti32x4") == 3
+        assert lowered.body_text.count("extract") == 4
+        assert "_mm512_" not in lowered.body_text
         assert "to_mask" in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "for " not in lowered.body_text
@@ -664,7 +759,7 @@ def test_clang_masked_extrema_unroll_direct_lane_access(
 
 @pytest.mark.parametrize("primitive", ["hmax", "hmin"])
 @pytest.mark.parametrize("type_tag", ["ui8", "si32", "f32", "f64"])
-def test_neon_masked_extrema_unroll_native_lane_extracts(
+def test_neon_masked_extrema_unroll_semantic_lane_extracts(
     catalog: Catalog, machine_profiles, primitive: str, type_tag: str
 ) -> None:
     slot = next(
@@ -682,7 +777,8 @@ def test_neon_masked_extrema_unroll_native_lane_extracts(
         ).specialization
 
         assert lowered is not None
-        assert "vgetq_lane" in lowered.body_text
+        assert "extract_value" in lowered.body_text
+        assert "vgetq_lane" not in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "for " not in lowered.body_text
 
@@ -747,13 +843,14 @@ def test_x86_masked_float_extrema_unroll_native_lane_extracts(
         ).specialization
 
         assert lowered is not None
-        assert "shuffle" in lowered.body_text
+        assert "extract_value" in lowered.body_text
+        assert "shuffle" not in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "for " not in lowered.body_text
 
 
 @pytest.mark.parametrize("type_tag", ["si8", "ui16", "si32", "ui64", "f32", "f64"])
-def test_sve_extract_value_uses_predicated_last_lane(
+def test_sve_extract_value_uses_semantic_singleton_lane_mask(
     catalog: Catalog,
     machine_profiles,
     type_tag: str,
@@ -770,10 +867,57 @@ def test_sve_extract_value_uses_predicated_last_lane(
     ).specialization
 
     assert lowered is not None
-    assert "svwhilelt_b" in lowered.body_text
+    assert "::tsl::sequence<" in lowered.body_text
+    assert "::tsl::equal<" in lowered.body_text
+    assert "::tsl::set1<" in lowered.body_text
     assert "svlastb_" in lowered.body_text
+    assert "svwhilelt_b" not in lowered.body_text
     assert "malloc" not in lowered.body_text
     assert "svst1" not in lowered.body_text
+
+
+def test_sve_runtime_lane_counts_use_typed_query(catalog: Catalog) -> None:
+    offenders: list[str] = []
+    typed_query_bodies = 0
+    for primitive in catalog.primitives:
+        for implementation in primitive.implementations:
+            bodies = [implementation.body_text]
+            bodies.extend(variant.body_text for variant in implementation.variants)
+            for body in bodies:
+                if "value(generic::runtime_length(" in body:
+                    typed_query_bodies += 1
+                if "intrin<svcntb>" in body:
+                    offenders.append(
+                        f"{primitive.name}:{'/'.join(implementation.selector_path)}"
+                    )
+
+    assert typed_query_bodies > 0
+    assert offenders == []
+
+
+def test_sve_plain_load_store_intrinsics_stay_in_owning_primitives(
+    catalog: Catalog,
+) -> None:
+    offenders: list[str] = []
+    for primitive in catalog.primitives:
+        for implementation in primitive.implementations:
+            bodies = [implementation.body_text]
+            bodies.extend(variant.body_text for variant in implementation.variants)
+            for body in bodies:
+                has_plain_load = any(
+                    token in body for token in ("intrin<svld1>", "intrin<svld1,")
+                )
+                has_plain_store = any(
+                    token in body for token in ("intrin<svst1>", "intrin<svst1,")
+                )
+                if (has_plain_load and primitive.name != "load") or (
+                    has_plain_store and primitive.name != "store"
+                ):
+                    offenders.append(
+                        f"{primitive.name}:{'/'.join(implementation.selector_path)}"
+                    )
+
+    assert offenders == []
 
 
 def test_clang_unpacked_mask_load_uses_vector_comparison(
@@ -798,6 +942,69 @@ def test_clang_unpacked_mask_load_uses_vector_comparison(
     assert "::tsl::nequal<" in lowered.body_text
     assert "for " not in lowered.body_text
     assert "mask<set>" not in lowered.body_text
+
+
+@pytest.mark.parametrize(
+    ("packed", "semantic"),
+    [("false", "nequal"), ("true", "mask_false")],
+)
+def test_sve_mask_load_uses_semantic_mask_operations(
+    catalog: Catalog,
+    machine_profiles,
+    packed: str,
+    semantic: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["sve128"],
+            "load_mask_repr",
+            ("ui32",),
+        )
+        .selected
+        if selected.extension.name == "sve128"
+        and selected.primitive.attributes["packed"] == packed
+        and selected.primitive.attributes["aligned"] == "false"
+    )
+
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert semantic in lowered.body_text
+    assert "svcmpne_n" not in lowered.body_text
+    assert "svpfalse_b" not in lowered.body_text
+
+
+def test_sve_packed_mask_store_uses_semantic_any_test(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["sve128"],
+            "store_mask_repr",
+            ("ui32",),
+        )
+        .selected
+        if selected.extension.name == "sve128"
+        and selected.primitive.attributes["packed"] == "true"
+        and selected.primitive.attributes["aligned"] == "false"
+    )
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert "mask_population_count" in lowered.body_text
+    assert "mask_binary_and" in lowered.body_text
+    assert "svptest_any" not in lowered.body_text
 
 
 @pytest.mark.parametrize("primitive", ["compress", "expand"])
@@ -848,20 +1055,18 @@ def test_clang_conflict_unrolls_direct_vector_lanes(
 
 
 @pytest.mark.parametrize(
-    ("profile", "extension", "extract", "replace"),
+    ("profile", "extension"),
     [
-        ("wasm32-simd128", "wasm128", "extract_lane", "replace_lane"),
-        ("neon", "neon", "vgetq_lane", "vsetq_lane"),
+        ("wasm32-simd128", "wasm128"),
+        ("neon", "neon"),
     ],
 )
 @pytest.mark.parametrize("type_tag", ["ui8", "si16", "ui32", "si64"])
-def test_conflict_unrolls_native_lane_intrinsics(
+def test_conflict_unrolls_semantic_lane_primitives(
     catalog: Catalog,
     machine_profiles,
     profile: str,
     extension: str,
-    extract: str,
-    replace: str,
     type_tag: str,
 ) -> None:
     slot = next(
@@ -878,8 +1083,12 @@ def test_conflict_unrolls_native_lane_intrinsics(
         ).specialization
 
         assert lowered is not None
-        assert extract in lowered.body_text
-        assert replace in lowered.body_text
+        assert "extract_value" in lowered.body_text
+        assert "insert_value" in lowered.body_text
+        assert "extract_lane" not in lowered.body_text
+        assert "replace_lane" not in lowered.body_text
+        assert "vgetq_lane" not in lowered.body_text
+        assert "vsetq_lane" not in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
         assert "for " not in lowered.body_text
@@ -904,9 +1113,18 @@ def test_sve_conflict_accumulates_vector_matches_without_memory(
 
     assert lowered is not None
     assert "svlastb_" in lowered.body_text
-    assert "svcmpeq_n_" in lowered.body_text
-    assert "svcmpgt_n_" in lowered.body_text
-    assert "svorr_n_" in lowered.body_text
+    assert "::tsl::sequence<" in lowered.body_text
+    assert "::tsl::equal<" in lowered.body_text
+    assert "::tsl::greater_than<" in lowered.body_text
+    assert "::tsl::mask_binary_and<" in lowered.body_text
+    assert "::tsl::binary_or_mask<" in lowered.body_text
+    assert "::tsl::set1<" in lowered.body_text
+    assert "svindex_" not in lowered.body_text
+    assert "svcmpeq_n_" not in lowered.body_text
+    assert "svcmpgt_n_" not in lowered.body_text
+    assert "svwhilelt_b" not in lowered.body_text
+    assert "svand_b_z" not in lowered.body_text
+    assert "svorr_n_" not in lowered.body_text
     assert "malloc" not in lowered.body_text
     assert "svst1" not in lowered.body_text
     assert "svld1" not in lowered.body_text
@@ -919,7 +1137,7 @@ def test_sve_conflict_accumulates_vector_matches_without_memory(
         ("expand", "si16", "svlastb_s16"),
         ("expand", "f64", "svlastb_f64"),
         ("compress_store", "ui8", "svlastb_u8"),
-        ("expand_load", "f32", "svdup_n_f32_m"),
+        ("expand_load", "f32", "::tsl::masked_set1<"),
     ],
 )
 def test_sve_pack_expand_paths_stay_register_only(
@@ -946,6 +1164,11 @@ def test_sve_pack_expand_paths_stay_register_only(
     assert "std::free" not in lowered.body_text
     assert "svst1" not in lowered.body_text
     assert "svld1" not in lowered.body_text
+    assert "mask_population_count" in lowered.body_text
+    assert "mask_binary_and" in lowered.body_text
+    assert "::tsl::equal<" in lowered.body_text
+    assert "svwhilelt_b" not in lowered.body_text
+    assert "svptest_any" not in lowered.body_text
 
 
 @pytest.mark.parametrize("type_tag", ["si16", "ui32", "si64", "f64"])
@@ -967,7 +1190,11 @@ def test_sve_convert_down_stays_register_only(
 
     assert lowered is not None
     assert "svlastb_" in lowered.body_text
-    assert "svdup_n_" in lowered.body_text
+    assert "masked_set1" in lowered.body_text
+    assert "::tsl::sequence<" in lowered.body_text
+    assert "::tsl::equal<" in lowered.body_text
+    assert "svwhilelt_b" not in lowered.body_text
+    assert "svdup_n_" not in lowered.body_text
     assert "saturating_cast" in lowered.body_text
     assert "malloc" not in lowered.body_text
     assert "svst1" not in lowered.body_text
@@ -1042,20 +1269,19 @@ def test_clang_repr_chunk_operations_use_direct_vector_lanes(
 
 
 @pytest.mark.parametrize(
-    ("type_tag", "to_target", "intrinsic"),
+    ("type_tag", "to_target"),
     [
-        ("si8", "si16", "vmovl_s8"),
-        ("ui16", "ui32", "vmovl_u16"),
-        ("si32", "si64", "vmovl_s32"),
-        ("f32", "f64", "vcvt_f64_f32"),
+        ("si8", "si16"),
+        ("ui16", "ui32"),
+        ("si32", "si64"),
+        ("f32", "f64"),
     ],
 )
-def test_neon_widening_cast_uses_native_low_half_conversion(
+def test_neon_widening_cast_reuses_convert_up_low_chunk(
     catalog: Catalog,
     machine_profiles,
     type_tag: str,
     to_target: str,
-    intrinsic: str,
 ) -> None:
     slot = next(
         selected
@@ -1071,10 +1297,152 @@ def test_neon_widening_cast_uses_native_low_half_conversion(
         ).specialization
 
         assert lowered is not None
-        assert intrinsic in lowered.body_text
-        assert "vget_low" in lowered.body_text
+        assert "convert_up" in lowered.body_text
+        assert "vget_low" not in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
+
+
+@pytest.mark.parametrize("source_type", ["si64", "ui64"])
+def test_avx2_i64_to_f64_cast_composes_semantic_operations(
+    catalog: Catalog,
+    machine_profiles,
+    source_type: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "cast", (source_type,))
+        .selected
+        if selected.extension.name == "avx2" and selected.to_target == "f64"
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        for primitive in (
+            "set1",
+            "shift_right",
+            "binary_xor",
+            "reinterpret",
+            "to_mask",
+            "blend",
+            "sub",
+            "add",
+        ):
+            assert primitive in lowered.body_text
+        assert "_mm256_blend_epi32" not in lowered.body_text
+        assert "_mm256_set1_epi64x" not in lowered.body_text
+        assert "_mm256_srli_epi64" not in lowered.body_text
+        assert "_mm256_xor_si256" not in lowered.body_text
+        assert "_mm256_sub_pd" not in lowered.body_text
+        assert "_mm256_add_pd" not in lowered.body_text
+
+
+@pytest.mark.parametrize("source_type", ["si64", "ui64"])
+def test_sse_i64_to_f64_cast_is_pure_primitive_composition(
+    catalog: Catalog,
+    machine_profiles,
+    source_type: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "cast", (source_type,))
+        .selected
+        if selected.extension.name == "sse" and selected.to_target == "f64"
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        for primitive in (
+            "set1",
+            "shift_right",
+            "binary_or" if source_type == "ui64" else "set_zero",
+            "reinterpret",
+            "to_mask",
+            "blend",
+            "sub",
+            "add",
+        ):
+            assert primitive in lowered.body_text
+        assert "_mm" not in lowered.body_text
+
+
+@pytest.mark.parametrize(
+    ("profile", "extension", "source_type", "target_type", "forbidden"),
+    [
+        ("avx2", "avx2", "f64", "si32", "zextsi128"),
+        ("avx2", "avx2", "f64", "ui32", "zextsi128"),
+        ("skylake", "avx512", "f64", "si32", "zextsi256"),
+        ("skylake", "avx512", "f64", "ui32", "zextsi256"),
+        ("skylake", "avx512", "si64", "f32", "zextps256"),
+        ("skylake", "avx512", "ui64", "f32", "zextps256"),
+    ],
+)
+def test_x86_narrow_result_cast_uses_semantic_zero_and_insert(
+    catalog: Catalog,
+    machine_profiles,
+    profile: str,
+    extension: str,
+    source_type: str,
+    target_type: str,
+    forbidden: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles[profile], "cast", (source_type,))
+        .selected
+        if selected.extension.name == extension and selected.to_target == target_type
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "set_zero" in lowered.body_text
+        assert "insert" in lowered.body_text
+        assert forbidden not in lowered.body_text
+
+
+def test_avx512_partial_narrow_gather_uses_semantic_zero_and_insert(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["skylake"],
+            "gather_narrow_partial",
+            ("ui32",),
+        )
+        .selected
+        if selected.extension.name == "avx512"
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        variant = next(
+            body for body in lowered.variant_bodies if body.name == "intrinsic_gather"
+        )
+        assert "set_zero" in variant.body_text
+        assert "insert" in variant.body_text
+        assert "zextsi256" not in variant.body_text
 
 
 @pytest.mark.parametrize("primitive", ["compress_store", "expand_load"])
@@ -1102,15 +1470,15 @@ def test_clang_pack_memory_paths_unroll_direct_vector_lanes(
 
 
 @pytest.mark.parametrize(
-    ("primitive", "intrinsic"),
-    [("compress_store", "extract_lane"), ("expand_load", "replace_lane")],
+    ("primitive", "lane_primitive"),
+    [("compress_store", "extract_value"), ("expand_load", "insert_value")],
 )
 @pytest.mark.parametrize("type_tag", ["ui8", "ui32", "f32", "f64"])
-def test_wasm_pack_memory_paths_use_immediate_lane_intrinsics(
+def test_wasm_pack_memory_paths_compose_lane_primitives(
     catalog: Catalog,
     machine_profiles,
     primitive: str,
-    intrinsic: str,
+    lane_primitive: str,
     type_tag: str,
 ) -> None:
     slot = next(
@@ -1132,7 +1500,9 @@ def test_wasm_pack_memory_paths_use_immediate_lane_intrinsics(
         ).specialization
 
         assert lowered is not None
-        assert intrinsic in lowered.body_text
+        assert lane_primitive in lowered.body_text
+        assert "extract_lane" not in lowered.body_text
+        assert "replace_lane" not in lowered.body_text
         assert "to_integral" in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
@@ -1140,15 +1510,15 @@ def test_wasm_pack_memory_paths_use_immediate_lane_intrinsics(
 
 
 @pytest.mark.parametrize(
-    ("primitive", "intrinsic"),
-    [("compress_store", "vgetq_lane"), ("expand_load", "vsetq_lane")],
+    ("primitive", "lane_primitive"),
+    [("compress_store", "extract_value"), ("expand_load", "insert_value")],
 )
 @pytest.mark.parametrize("type_tag", ["ui8", "ui32", "f32", "f64"])
-def test_neon_pack_memory_paths_use_immediate_lane_intrinsics(
+def test_neon_pack_memory_paths_compose_lane_primitives(
     catalog: Catalog,
     machine_profiles,
     primitive: str,
-    intrinsic: str,
+    lane_primitive: str,
     type_tag: str,
 ) -> None:
     slot = next(
@@ -1165,7 +1535,9 @@ def test_neon_pack_memory_paths_use_immediate_lane_intrinsics(
         ).specialization
 
         assert lowered is not None
-        assert intrinsic in lowered.body_text
+        assert lane_primitive in lowered.body_text
+        assert "vgetq_lane" not in lowered.body_text
+        assert "vsetq_lane" not in lowered.body_text
         assert "to_integral" in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
@@ -1385,20 +1757,16 @@ def test_clang_gather_writes_result_vector_directly(
 
 
 @pytest.mark.parametrize(
-    ("profile", "extension", "intrinsic"),
-    [
-        ("neon", "neon", "vsetq_lane"),
-        ("wasm32-simd128", "wasm128", "replace_lane"),
-    ],
+    ("profile", "extension"),
+    [("neon", "neon"), ("wasm32-simd128", "wasm128")],
 )
 @pytest.mark.parametrize("masked", [False, True])
 @pytest.mark.parametrize("type_tag", ["ui8", "ui32", "f32", "f64"])
-def test_neon_wasm_gather_replaces_result_lanes_without_result_array(
+def test_neon_wasm_gather_composes_lane_insertion_without_result_array(
     catalog: Catalog,
     machine_profiles,
     profile: str,
     extension: str,
-    intrinsic: str,
     masked: bool,
     type_tag: str,
 ) -> None:
@@ -1417,7 +1785,9 @@ def test_neon_wasm_gather_replaces_result_lanes_without_result_array(
         ).specialization
 
         assert lowered is not None
-        assert intrinsic in lowered.body_text
+        assert "insert_value" in lowered.body_text
+        assert "vsetq_lane" not in lowered.body_text
+        assert "replace_lane" not in lowered.body_text
         assert "idx_array" in lowered.body_text
         assert "to_array" in lowered.body_text
         assert "from_array" not in lowered.body_text
@@ -1426,19 +1796,15 @@ def test_neon_wasm_gather_replaces_result_lanes_without_result_array(
 
 
 @pytest.mark.parametrize(
-    ("profile", "extension", "intrinsic"),
-    [
-        ("neon", "neon", "vsetq_lane"),
-        ("wasm32-simd128", "wasm128", "replace_lane"),
-    ],
+    ("profile", "extension"),
+    [("neon", "neon"), ("wasm32-simd128", "wasm128")],
 )
 @pytest.mark.parametrize("type_tag", ["ui8", "si16", "ui32", "f32"])
-def test_neon_wasm_gather_narrow_replaces_result_lanes_directly(
+def test_neon_wasm_gather_narrow_composes_lane_insertion_directly(
     catalog: Catalog,
     machine_profiles,
     profile: str,
     extension: str,
-    intrinsic: str,
     type_tag: str,
 ) -> None:
     slot = next(
@@ -1457,7 +1823,9 @@ def test_neon_wasm_gather_narrow_replaces_result_lanes_directly(
         ).specialization
 
         assert lowered is not None
-        assert intrinsic in lowered.body_text
+        assert "insert_value" in lowered.body_text
+        assert "vsetq_lane" not in lowered.body_text
+        assert "replace_lane" not in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
         assert "for " not in lowered.body_text
@@ -2528,19 +2896,18 @@ def test_mul_avx512_unsigned_uses_low_product_intrinsic(
 
 
 @pytest.mark.parametrize(
-    ("profile", "extension", "expected_fragment"),
+    ("profile", "extension"),
     [
-        ("sse2", "sse", "_mm_mullo_epi16"),
-        ("avx2", "avx2", "_mm256_mullo_epi16"),
-        ("skylake", "avx512", "_mm512_mullo_epi16"),
+        ("sse2", "sse"),
+        ("avx2", "avx2"),
+        ("skylake", "avx512"),
     ],
 )
-def test_x86_byte_mul_uses_word_products_in_register(
+def test_x86_byte_mul_composes_word_primitives_in_register(
     catalog: Catalog,
     machine_profiles,
     profile: str,
     extension: str,
-    expected_fragment: str,
 ) -> None:
     slot = next(
         selected
@@ -2555,9 +2922,49 @@ def test_x86_byte_mul_uses_word_products_in_register(
     ).specialization
 
     assert cpp is not None
-    assert expected_fragment in cpp.body_text
+    word_vec = f"tsl::simd<uint16_t, tsl::{extension}>"
+    assert f"::tsl::mul<{word_vec}>" in cpp.body_text
+    assert f"::tsl::shift_left<{word_vec}, 8>" in cpp.body_text
+    assert f"::tsl::shift_right<{word_vec}, 8, false>" in cpp.body_text
+    assert "_mullo_epi16" not in cpp.body_text
     assert "to_array" not in cpp.body_text
     assert "from_array" not in cpp.body_text
+
+
+@pytest.mark.parametrize(
+    ("profile", "extension", "type_tag"),
+    [
+        ("avx2", "avx2", "si32"),
+        ("neon", "neon", "ui16"),
+        ("wasm32-simd128", "wasm128", "f32"),
+    ],
+)
+def test_insert_value_composes_masked_move(
+    catalog: Catalog,
+    machine_profiles,
+    profile: str,
+    extension: str,
+    type_tag: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles[profile], "insert_value", (type_tag,))
+        .selected
+        if selected.extension.name == extension
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "to_mask" in lowered.body_text
+        assert "mov" in lowered.body_text
+        assert "set1" in lowered.body_text
+        assert "to_array" not in lowered.body_text
+        assert "from_array" not in lowered.body_text
 
 
 @pytest.mark.parametrize(
@@ -2565,9 +2972,19 @@ def test_x86_byte_mul_uses_word_products_in_register(
     [
         ("sse2", "sse", "ui32", "_mm_unpacklo_epi64"),
         ("sse2", "sse", "si64", "_mm_mul_epu32"),
-        ("avx", "avx2", "ui16", "_mm256_extractf128_si256"),
+        (
+            "avx",
+            "avx2",
+            "ui16",
+            "::tsl::extract<Vec, tsl::simd<uint16_t, tsl::sse>, 0>",
+        ),
         ("avx2", "avx2", "si64", "_mm256_mul_epu32"),
-        ("knl", "avx512", "ui16", "_mm512_extracti32x4_epi32"),
+        (
+            "knl",
+            "avx512",
+            "ui16",
+            "::tsl::extract<Vec, tsl::simd<uint16_t, tsl::sse>, 0>",
+        ),
         ("knl", "avx512", "ui64", "_mm512_mul_epu32"),
     ],
 )
@@ -2647,7 +3064,7 @@ def test_neon_horizontal_reductions_use_across_vector_intrinsics(
         ("hmin", "ui64"),
     ],
 )
-def test_neon_horizontal_64_uses_two_lane_extraction(
+def test_neon_horizontal_64_composes_two_lane_extractions(
     catalog: Catalog,
     machine_profiles,
     primitive: str,
@@ -2669,7 +3086,8 @@ def test_neon_horizontal_64_uses_two_lane_extraction(
 
     assert cpp is not None
     assert "to_array" not in cpp.body_text
-    assert "vgetq_lane" in cpp.body_text
+    assert cpp.body_text.count("extract_value") == 2
+    assert "vgetq_lane" not in cpp.body_text
     assert f"::tsl::{primitive[1:]}<tsl::simd" in cpp.body_text
 
 
@@ -2915,10 +3333,10 @@ def test_avx_popcnt_composes_two_sse_halves(
         ).specialization
 
         assert cpp is not None
-        assert "_mm256_castsi256_si128" in cpp.body_text
-        assert "_mm256_extractf128_si256" in cpp.body_text
+        assert cpp.body_text.count("::tsl::extract<Vec") == 2
         assert "::tsl::popcnt<tsl::simd<" in cpp.body_text
-        assert "_mm256_insertf128_si256" in cpp.body_text
+        assert cpp.body_text.count("::tsl::insert<") == 2
+        assert "_mm256_" not in cpp.body_text
         assert "to_array" not in cpp.body_text
 
 
@@ -3002,6 +3420,34 @@ def test_masked_bitwise_horizontal_reductions_compose_masked_vectors(
         assert "::tsl::binary_and<Vec>(mask_vector, vec)" in cpp.body_text
 
 
+@pytest.mark.parametrize("type_tag", ["ui32", "f32"])
+def test_sve_masked_bitwise_horizontal_uses_semantic_empty_test(
+    catalog: Catalog,
+    machine_profiles,
+    type_tag: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["sve128"],
+            "hand",
+            (type_tag,),
+        )
+        .selected
+        if selected.extension.name == "sve128"
+        and selected.primitive.signature == "s:=(m,v)"
+    )
+    lowered = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert lowered is not None
+    assert "mask_population_count" in lowered.body_text
+    assert "svptest_any" not in lowered.body_text
+
+
 @pytest.mark.parametrize(
     ("profile", "extension", "type_tag"),
     [
@@ -3043,9 +3489,6 @@ def test_masked_hadd_composes_masked_vector_with_unmasked_reduction(
     [
         ("sse2", "sse", "si8", "_mm_sad_epu8"),
         ("sse2", "sse", "ui16", "_mm_madd_epi16"),
-        ("avx2", "avx2", "ui8", "_mm256_sad_epu8"),
-        ("avx2", "avx2", "si16", "_mm256_madd_epi16"),
-        ("knl", "avx512", "ui8", "_mm512_extracti32x4_epi32"),
         ("skylake", "avx512", "ui8", "_mm512_sad_epu8"),
         ("skylake", "avx512", "si16", "_mm512_madd_epi16"),
     ],
@@ -3075,13 +3518,61 @@ def test_x86_small_integer_hadd_reduces_in_register(
     assert "to_array" not in cpp.body_text
 
 
+@pytest.mark.parametrize("type_tag", ["ui8", "si16", "si32", "ui64", "f32", "f64"])
+def test_avx2_hadd_composes_from_half_vector_primitives(
+    catalog: Catalog,
+    machine_profiles,
+    type_tag: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["avx2"], "hadd", (type_tag,))
+        .selected
+        if selected.extension.name == "avx2"
+        and selected.primitive.signature == "s:=v"
+    )
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert cpp.body_text.count("::tsl::extract<Vec") == 2
+    assert "::tsl::add<tsl::simd<" in cpp.body_text
+    assert "::tsl::hadd<tsl::simd<" in cpp.body_text
+    assert "_mm256_" not in cpp.body_text
+
+
+def test_knl_small_integer_hadd_composes_from_sse_quarters(
+    catalog: Catalog,
+    machine_profiles,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles["knl"], "hadd", ("ui8",))
+        .selected
+        if selected.extension.name == "avx512"
+        and selected.primitive.signature == "s:=v"
+    )
+    cpp = Lowerer().lower(
+        slot, catalog, create_backend_dialect(catalog, "cpp")
+    ).specialization
+
+    assert cpp is not None
+    assert cpp.body_text.count("::tsl::extract<Vec") == 4
+    assert "::tsl::add<tsl::simd<uint8_t, tsl::sse>>" in cpp.body_text
+    assert "::tsl::hadd<tsl::simd<uint8_t, tsl::sse>>" in cpp.body_text
+    assert "_mm512_" not in cpp.body_text
+
+
 @pytest.mark.parametrize(
     ("profile", "extension", "type_tag", "expected_fragment"),
     [
         ("sse2", "sse", "si8", "_mm_slli_epi16"),
-        ("avx", "avx2", "si32", "_mm256_extractf128_si256"),
-        ("avx2", "avx2", "ui8", "_mm256_extractf128_si256"),
-        ("knl", "avx512", "ui8", "_mm512_extracti32x4_epi32"),
+        ("avx", "avx2", "si32", "::tsl::extract<Vec"),
+        ("avx2", "avx2", "ui8", "::tsl::extract<Vec"),
+        ("knl", "avx512", "ui8", "::tsl::extract<Vec"),
         ("skylake", "avx512", "ui8", "_mm512_slli_epi16"),
         ("avx2", "avx2", "f32", "::tsl::reinterpret<Vec"),
     ],
@@ -3107,10 +3598,7 @@ def test_x86_immediate_shift_left_avoids_array_fallback(
         slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
 
-    assert cpp is not None
-    assert expected_fragment in cpp.body_text
-    assert "to_array" not in cpp.body_text
-    assert "from_array" not in cpp.body_text
+    _assert_x86_shift_register_path(cpp, expected_fragment)
 
 
 @pytest.mark.parametrize(
@@ -3118,9 +3606,9 @@ def test_x86_immediate_shift_left_avoids_array_fallback(
     [
         ("sse2", "sse", "si8", "_mm_srli_epi16"),
         ("sse2", "sse", "si64", "_mm_srai_epi32"),
-        ("avx", "avx2", "si32", "_mm256_extractf128_si256"),
+        ("avx", "avx2", "si32", "::tsl::extract<Vec"),
         ("avx2", "avx2", "si64", "_mm256_srai_epi32"),
-        ("knl", "avx512", "si16", "_mm512_extracti32x4_epi32"),
+        ("knl", "avx512", "si16", "::tsl::extract<Vec"),
         ("skylake", "avx512", "ui8", "_mm512_srli_epi16"),
         ("avx2", "avx2", "f32", "::tsl::reinterpret<Vec"),
     ],
@@ -3145,10 +3633,7 @@ def test_x86_immediate_shift_right_avoids_array_fallback(
         slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
 
-    assert cpp is not None
-    assert expected_fragment in cpp.body_text
-    assert "to_array" not in cpp.body_text
-    assert "from_array" not in cpp.body_text
+    _assert_x86_shift_register_path(cpp, expected_fragment)
 
 
 @pytest.mark.parametrize(
@@ -3156,9 +3641,9 @@ def test_x86_immediate_shift_right_avoids_array_fallback(
     [
         ("sse2", "sse", "si8", "_mm_sll_epi16"),
         ("sse2", "sse", "ui32", "_mm_sll_epi32"),
-        ("avx", "avx2", "si64", "_mm256_extractf128_si256"),
+        ("avx", "avx2", "si64", "::tsl::extract<Vec"),
         ("avx2", "avx2", "ui16", "_mm256_sll_epi16"),
-        ("knl", "avx512", "ui16", "_mm512_extracti32x4_epi32"),
+        ("knl", "avx512", "ui16", "::tsl::extract<Vec"),
         ("skylake", "avx512", "ui8", "_mm512_sll_epi16"),
         ("avx2", "avx2", "f64", "::tsl::reinterpret<Vec"),
     ],
@@ -3183,10 +3668,7 @@ def test_x86_scalar_shift_left_avoids_array_fallback(
         slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
 
-    assert cpp is not None
-    assert expected_fragment in cpp.body_text
-    assert "to_array" not in cpp.body_text
-    assert "from_array" not in cpp.body_text
+    _assert_x86_shift_register_path(cpp, expected_fragment)
 
 
 @pytest.mark.parametrize(
@@ -3194,9 +3676,9 @@ def test_x86_scalar_shift_left_avoids_array_fallback(
     [
         ("sse2", "sse", "si8", "_mm_srl_epi16"),
         ("sse2", "sse", "si64", "_mm_srai_epi32"),
-        ("avx", "avx2", "ui32", "_mm256_extractf128_si256"),
+        ("avx", "avx2", "ui32", "::tsl::extract<Vec"),
         ("avx2", "avx2", "si64", "_mm256_srai_epi32"),
-        ("knl", "avx512", "si8", "_mm512_extracti32x4_epi32"),
+        ("knl", "avx512", "si8", "::tsl::extract<Vec"),
         ("skylake", "avx512", "ui8", "_mm512_srl_epi16"),
         ("avx2", "avx2", "f64", "::tsl::reinterpret<Vec"),
     ],
@@ -3221,10 +3703,100 @@ def test_x86_scalar_shift_right_avoids_array_fallback(
         slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
 
-    assert cpp is not None
-    assert expected_fragment in cpp.body_text
-    assert "to_array" not in cpp.body_text
-    assert "from_array" not in cpp.body_text
+    _assert_x86_shift_register_path(cpp, expected_fragment)
+
+
+@pytest.mark.parametrize(
+    ("primitive", "profile", "extension", "signature", "type_tag", "forbidden"),
+    [
+        ("shift_left", "sse2", "sse", "v:=(v,s)", "ui32", "_mm_cvtsi32_si128"),
+        ("shift_left", "sse2", "sse", "v:=(v,s)", "si8", "_mm_cvtsi32_si128"),
+        ("shift_left", "avx2", "avx2", "v:=(v,s)", "ui32", "_mm_cvtsi32_si128"),
+        ("shift_left", "skylake", "avx512", "v:=(v,s)", "ui32", "_mm_cvtsi32_si128"),
+        ("shift_left", "skylake", "avx512", "v:=(v,s)", "si8", "_mm_cvtsi32_si128"),
+        ("shift_right", "sse2", "sse", "v:=(v,s)", "ui32", "_mm_cvtsi32_si128"),
+        ("shift_right", "sse2", "sse", "v:=(v,s)", "si16", "_mm_cvtsi32_si128"),
+        ("shift_right", "sse2", "sse", "v:=(v,s)", "si64", "_mm_cvtsi32_si128"),
+        ("shift_right", "sse2", "sse", "v:=(v,s)", "si8", "_mm_cvtsi32_si128"),
+        ("shift_right", "avx2", "avx2", "v:=(v,s)", "ui32", "_mm_cvtsi32_si128"),
+        ("shift_right", "avx2", "avx2", "v:=(v,s)", "si16", "_mm_cvtsi32_si128"),
+        ("shift_right", "avx2", "avx2", "v:=(v,s)", "si64", "_mm_cvtsi32_si128"),
+        ("shift_right", "avx2", "avx2", "v:=(v,s)", "si8", "_mm_cvtsi32_si128"),
+        ("shift_right", "skylake", "avx512", "v:=(v,s)", "ui32", "_mm_cvtsi32_si128"),
+        ("shift_right", "skylake", "avx512", "v:=(v,s)", "si16", "_mm_cvtsi32_si128"),
+        ("shift_right", "skylake", "avx512", "v:=(v,s)", "si64", "_mm_cvtsi32_si128"),
+        ("shift_right", "skylake", "avx512", "v:=(v,s)", "si8", "_mm_cvtsi32_si128"),
+        ("shift_right", "sse2", "sse", "v:=(v,sImm)", "si64", "_mm_cvtsi32_si128"),
+        ("shift_right", "avx2", "avx2", "v:=(v,sImm)", "si64", "_mm_cvtsi32_si128"),
+        ("shift_left", "neon", "neon", "v:=(v,sImm)", "ui32", "vdupq_n"),
+        ("shift_left", "neon", "neon", "v:=(v,s)", "ui32", "vdupq_n"),
+    ],
+)
+def test_scalar_shift_count_uses_semantic_broadcast(
+    catalog: Catalog,
+    machine_profiles,
+    primitive: str,
+    profile: str,
+    extension: str,
+    signature: str,
+    type_tag: str,
+    forbidden: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(catalog, machine_profiles[profile], primitive, (type_tag,))
+        .selected
+        if selected.extension.name == extension
+        and selected.primitive.signature == signature
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "set1" in lowered.body_text
+        assert forbidden not in lowered.body_text
+
+
+@pytest.mark.parametrize("signature", ["v:=(v,sImm)", "v:=(v,s)"])
+@pytest.mark.parametrize(
+    ("profile", "extension"),
+    [("sse2", "sse"), ("avx2", "avx2"), ("skylake", "avx512")],
+)
+def test_x86_byte_shift_right_composes_sign_mask(
+    catalog: Catalog,
+    machine_profiles,
+    profile: str,
+    extension: str,
+    signature: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles[profile],
+            "shift_right",
+            ("si8",),
+        )
+        .selected
+        if selected.extension.name == extension
+        and selected.primitive.signature == signature
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "greater_than" in lowered.body_text
+        assert "to_vector" in lowered.body_text
+        assert "cmpgt_epi8" not in lowered.body_text
+        assert "movm_epi8" not in lowered.body_text
 
 
 @pytest.mark.parametrize(
@@ -3241,10 +3813,10 @@ def test_x86_scalar_shift_right_avoids_array_fallback(
         ("skylake", "sse_vl", "ui16", "_mm_sllv_epi16"),
         ("avx2", "avx2", "f32", "::tsl::reinterpret<Vec"),
         ("skylake", "avx512", "f64", "::tsl::reinterpret<Vec"),
-        ("sse", "sse", "f32", "_mm_setr_ps"),
-        ("sse2", "sse", "si32", "_mm_setr_epi32"),
-        ("avx", "avx2", "si16", "_mm256_extractf128_si256"),
-        ("knl", "avx512", "ui8", "_mm512_extracti32x4_epi32"),
+        ("sse", "sse", "f32", "::tsl::shift_left<tsl::simd<float, tsl::scalar>"),
+        ("sse2", "sse", "si32", "::tsl::shift_left<tsl::simd<int32_t, tsl::scalar>"),
+        ("avx", "avx2", "si16", "::tsl::extract<Vec"),
+        ("knl", "avx512", "ui8", "::tsl::extract<Vec"),
     ],
 )
 def test_x86_vector_shift_left_uses_native_or_bit_pattern_composition(
@@ -3267,10 +3839,7 @@ def test_x86_vector_shift_left_uses_native_or_bit_pattern_composition(
         slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
 
-    assert cpp is not None
-    assert expected_fragment in cpp.body_text
-    assert "to_array" not in cpp.body_text
-    assert "from_array" not in cpp.body_text
+    _assert_x86_shift_register_path(cpp, expected_fragment)
 
 
 @pytest.mark.parametrize(
@@ -3288,10 +3857,10 @@ def test_x86_vector_shift_left_uses_native_or_bit_pattern_composition(
         ("skylake", "avx512", "si16", "_mm512_srav_epi16"),
         ("skylake", "sse_vl", "ui16", "_mm_srlv_epi16"),
         ("avx2", "avx2", "f64", "::tsl::reinterpret<Vec"),
-        ("sse", "sse", "f32", "_mm_setr_ps"),
-        ("sse2", "sse", "si64", "_mm_set_epi64x"),
-        ("avx", "avx2", "si16", "_mm256_extractf128_si256"),
-        ("kml", "avx512", "si8", "_mm512_extracti32x4_epi32"),
+        ("sse", "sse", "f32", "::tsl::shift_right<tsl::simd<float, tsl::scalar>"),
+        ("sse2", "sse", "si64", "::tsl::shift_right<tsl::simd<int64_t, tsl::scalar>"),
+        ("avx", "avx2", "si16", "::tsl::extract<Vec"),
+        ("kml", "avx512", "si8", "::tsl::extract<Vec"),
     ],
 )
 def test_x86_vector_shift_right_uses_native_or_bit_pattern_composition(
@@ -3314,10 +3883,40 @@ def test_x86_vector_shift_right_uses_native_or_bit_pattern_composition(
         slot, catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
 
-    assert cpp is not None
-    assert expected_fragment in cpp.body_text
-    assert "to_array" not in cpp.body_text
-    assert "from_array" not in cpp.body_text
+    _assert_x86_shift_register_path(cpp, expected_fragment)
+
+
+@pytest.mark.parametrize("type_tag", ["si32", "ui32"])
+def test_neon_vector_shift_right_composes_count_negation(
+    catalog: Catalog,
+    machine_profiles,
+    type_tag: str,
+) -> None:
+    slots = [
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["neon"],
+            "shift_right",
+            (type_tag,),
+        )
+        .selected
+        if selected.extension.name == "neon"
+        and selected.primitive.signature == "v:=(v,v)"
+    ]
+
+    assert slots
+    for slot in slots:
+        cpp = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, "cpp")
+        ).specialization
+
+        assert cpp is not None
+        assert "::tsl::sub<" in cpp.body_text
+        assert "::tsl::set_zero<" in cpp.body_text
+        assert "vshlq" in cpp.body_text
+        assert "vnegq" not in cpp.body_text
 
 
 def test_compile_time_branches_keep_type_aliases_lexically_scoped(
@@ -3358,7 +3957,8 @@ def test_clang_vector_shift_left_uses_builtin_vector_operator(
     ).specialization
 
     assert cpp is not None
-    assert "__builtin_elementwise_min(counts, max_count)" in cpp.body_text
+    assert "::tsl::min<" in cpp.body_text
+    assert "__builtin_elementwise_min" not in cpp.body_text
     assert "bits << safe_counts" in cpp.body_text
     assert "valid ? shifted" in cpp.body_text
     assert "for (" not in cpp.body_text
@@ -3382,7 +3982,8 @@ def test_clang_vector_shift_right_uses_builtin_vector_operator(
     ).specialization
 
     assert cpp is not None
-    assert "__builtin_elementwise_min(counts, max_count)" in cpp.body_text
+    assert "::tsl::min<" in cpp.body_text
+    assert "__builtin_elementwise_min" not in cpp.body_text
     assert "data >> safe_counts" in cpp.body_text
     assert "for (" not in cpp.body_text
     assert "to_array" not in cpp.body_text
@@ -3393,10 +3994,10 @@ def test_clang_vector_shift_right_uses_builtin_vector_operator(
     ("profile", "extension", "type_tag", "expected_fragment"),
     [
         ("sse2", "sse", "ui8", "_mm_srli_si128"),
-        ("sse2", "sse", "si64", "_mm_cvtsi128_si64"),
+        ("sse2", "sse", "si64", "extract_value"),
         ("avx2", "avx2", "ui16", "tsl::sse"),
-        ("skylake", "avx512", "ui8", "_mm512_extracti64x4_epi64"),
-        ("knl", "avx512", "si16", "_mm512_extracti32x4_epi32"),
+        ("skylake", "avx512", "ui8", "tsl::avx2"),
+        ("knl", "avx512", "si16", "tsl::sse"),
         ("skylake", "avx2_vl", "si8", "_mm256_reduce_"),
     ],
 )
@@ -3569,7 +4170,8 @@ def test_x86_lzc_without_avx512cd_uses_register_bit_propagation(
         ).specialization
 
         assert lowered is not None
-        assert "srli" in lowered.body_text
+        assert "shift_right" in lowered.body_text
+        assert "srli" not in lowered.body_text
         assert "binary_andnot" in lowered.body_text
         assert "popcnt" in lowered.body_text
         assert "to_array" not in lowered.body_text
@@ -3579,10 +4181,10 @@ def test_x86_lzc_without_avx512cd_uses_register_bit_propagation(
 @pytest.mark.parametrize(
     ("profile", "extension", "type_tag", "evidence"),
     [
-        ("avx", "avx2", "ui8", "_mm256_extractf128_si256"),
-        ("avx", "avx2", "f64", "_mm256_extractf128_pd"),
-        ("kml", "avx512", "si8", "_mm512_srli_epi32"),
-        ("kml", "avx512", "ui16", "_mm512_srli_epi32"),
+        ("avx", "avx2", "ui8", "extract"),
+        ("avx", "avx2", "f64", "extract"),
+        ("kml", "avx512", "si8", "shift_right"),
+        ("kml", "avx512", "ui16", "shift_right"),
     ],
 )
 def test_x86_lzc_handles_avx1_and_avx512f_without_bw_in_registers(
@@ -3609,6 +4211,13 @@ def test_x86_lzc_handles_avx1_and_avx512f_without_bw_in_registers(
 
         assert lowered is not None
         assert evidence in lowered.body_text
+        if profile == "avx":
+            assert "_mm256_" not in lowered.body_text
+            assert lowered.body_text.count("insert") == 2
+        else:
+            assert "_mm512_" not in lowered.body_text
+            assert "binary_or" in lowered.body_text
+            assert "reinterpret" in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
 
@@ -3681,7 +4290,7 @@ def test_neon_lzc_64_composes_native_word_intrinsics(
 
 
 @pytest.mark.parametrize(("type_tag", "lanes"), [("ui8", 16), ("si64", 2)])
-def test_wasm_integer_lzc_unrolls_native_lane_extract_and_replace(
+def test_wasm_integer_lzc_unrolls_semantic_lane_primitives(
     catalog: Catalog,
     machine_profiles,
     type_tag: str,
@@ -3707,8 +4316,10 @@ def test_wasm_integer_lzc_unrolls_native_lane_extract_and_replace(
         ).specialization
 
         assert lowered is not None
-        assert lowered.body_text.count("extract_lane") == lanes
-        assert lowered.body_text.count("replace_lane") == lanes
+        assert lowered.body_text.count("extract_value") == lanes
+        assert lowered.body_text.count("insert_value") == lanes
+        assert "extract_lane" not in lowered.body_text
+        assert "replace_lane" not in lowered.body_text
         assert "::<i>" not in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
@@ -3786,7 +4397,8 @@ def test_neon_unmasked_bitwise_horizontal_reduces_in_register(
         assert "to_array" not in lowered.body_text
         assert lowered.body_text.count("vextq") == reduction_steps
         assert binary_primitive in lowered.body_text
-        assert "vgetq_lane" in lowered.body_text
+        assert lowered.body_text.count("extract_value") == 1
+        assert "vgetq_lane" not in lowered.body_text
 
 
 @pytest.mark.parametrize(
@@ -3814,7 +4426,8 @@ def test_avx512_small_integer_bitwise_horizontal_folds_sse_quarters(
     ).specialization
 
     assert cpp is not None
-    assert "_mm512_extracti32x4_epi32" in cpp.body_text
+    assert cpp.body_text.count("::tsl::extract<") == 4
+    assert "_mm512_extracti32x4_epi32" not in cpp.body_text
     assert f"::tsl::{binary_primitive}<tsl::simd" in cpp.body_text
     assert f"::tsl::{primitive}<tsl::simd" in cpp.body_text
     assert "to_array" not in cpp.body_text
@@ -3852,7 +4465,11 @@ def test_vl_bitwise_horizontal_inherits_fixed_width_register_reduction(
         ).specialization
 
         assert lowered is not None
-        assert intrinsic in lowered.body_text
+        if extension == "avx2_vl":
+            assert lowered.body_text.count("extract") == 2
+            assert "_mm256_extracti128_si256" not in lowered.body_text
+        else:
+            assert intrinsic in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
 
@@ -3885,7 +4502,7 @@ def test_sve_float_hand_bitcasts_native_integer_reduction(
     ("type_tag", "shift_steps"),
     [("ui8", 3), ("si16", 2), ("f32", 1), ("f64", 0)],
 )
-def test_wasm_bitwise_horizontal_folds_extracted_packed_words(
+def test_wasm_bitwise_horizontal_composes_packed_word_extraction(
     catalog: Catalog,
     machine_profiles,
     primitive: str,
@@ -3912,7 +4529,9 @@ def test_wasm_bitwise_horizontal_folds_extracted_packed_words(
         ).specialization
 
         assert lowered is not None
-        assert lowered.body_text.count("i64x2_extract_lane") == 2
+        assert lowered.body_text.count("extract_value") == 2
+        assert "i64x2_extract_lane" not in lowered.body_text
+        assert "reinterpret" in lowered.body_text
         assert lowered.body_text.count("result >>") == shift_steps
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
@@ -3921,7 +4540,7 @@ def test_wasm_bitwise_horizontal_folds_extracted_packed_words(
 
 @pytest.mark.parametrize("primitive", ["hadd", "hmax", "hmin"])
 @pytest.mark.parametrize(("type_tag", "lanes"), [("ui8", 16), ("f32", 4)])
-def test_wasm_arithmetic_horizontal_unrolls_native_lane_extraction(
+def test_wasm_arithmetic_horizontal_unrolls_semantic_lane_extraction(
     catalog: Catalog,
     machine_profiles,
     primitive: str,
@@ -3948,7 +4567,8 @@ def test_wasm_arithmetic_horizontal_unrolls_native_lane_extraction(
         ).specialization
 
         assert lowered is not None
-        assert lowered.body_text.count("extract_lane") == lanes
+        assert lowered.body_text.count("extract_value") == lanes
+        assert "extract_lane" not in lowered.body_text
         assert "::<i>" not in lowered.body_text
         assert "(vec, i)" not in lowered.body_text
         assert "to_array" not in lowered.body_text
@@ -3958,7 +4578,7 @@ def test_wasm_arithmetic_horizontal_unrolls_native_lane_extraction(
 
 @pytest.mark.parametrize("primitive", ["hmax", "hmin"])
 @pytest.mark.parametrize(("type_tag", "lanes"), [("ui8", 16), ("si64", 2)])
-def test_wasm_masked_minmax_unrolls_mask_tests_and_lane_extraction(
+def test_wasm_masked_minmax_unrolls_mask_tests_and_semantic_lane_extraction(
     catalog: Catalog,
     machine_profiles,
     primitive: str,
@@ -3985,7 +4605,8 @@ def test_wasm_masked_minmax_unrolls_mask_tests_and_lane_extraction(
         ).specialization
 
         assert lowered is not None
-        assert lowered.body_text.count("extract_lane") == lanes
+        assert lowered.body_text.count("extract_value") == lanes
+        assert "extract_lane" not in lowered.body_text
         assert "::<i>" not in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
@@ -4015,8 +4636,12 @@ def test_neon_mul_64_composes_widening_32_bit_products(
         assert lowered is not None
         assert "to_array" not in lowered.body_text
         assert lowered.body_text.count("vmull_u32") == 3
-        assert "vshlq_n_u64" in lowered.body_text
-        assert "vaddq_u64" in lowered.body_text
+        assert "shift_left" in lowered.body_text
+        assert "shift_right" in lowered.body_text
+        assert "add" in lowered.body_text
+        assert "vshlq_n_u64" not in lowered.body_text
+        assert "vshrq_n_u64" not in lowered.body_text
+        assert "vaddq_u64" not in lowered.body_text
 
 
 @pytest.mark.parametrize("primitive", ["shift_left", "shift_right"])
@@ -4218,7 +4843,7 @@ def test_lower_wasm128_bitwise_slice_for_all_arith_types(
             "set_zero",
             "f32",
             "return ::tsl::set1<Vec>(static_cast<float>(0));",
-            "unsafe { return set1::<Self>((0) as f32); }",
+            "return set1::<Self>((0) as f32);",
         ),
     ),
 )
@@ -4395,28 +5020,19 @@ def test_lower_wasm128_expanded_direct_primitives(
 
 
 @pytest.mark.parametrize(
-    ("profile", "extension", "type_tag", "lanes", "extract", "replace"),
+    ("profile", "extension", "type_tag", "lanes"),
     [
-        ("neon", "neon", "si32", 4, "vgetq_lane", "vsetq_lane"),
-        (
-            "wasm32-simd128",
-            "wasm128",
-            "ui32",
-            4,
-            "extract_lane",
-            "replace_lane",
-        ),
+        ("neon", "neon", "si32", 4),
+        ("wasm32-simd128", "wasm128", "ui32", 4),
     ],
 )
-def test_integer_div_uses_unrolled_register_lane_operations(
+def test_integer_div_composes_unrolled_lane_primitives(
     catalog: Catalog,
     machine_profiles,
     profile: str,
     extension: str,
     type_tag: str,
     lanes: int,
-    extract: str,
-    replace: str,
 ) -> None:
     slot = next(
         selected
@@ -4433,44 +5049,30 @@ def test_integer_div_uses_unrolled_register_lane_operations(
         ).specialization
 
         assert lowered is not None
-        assert lowered.body_text.count(extract) == lanes * 2
-        assert lowered.body_text.count(replace) == lanes
+        assert lowered.body_text.count("extract_value") == lanes * 2
+        assert lowered.body_text.count("insert_value") == lanes
+        assert "replace_lane" not in lowered.body_text
+        assert "vsetq_lane" not in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
         assert "for " not in lowered.body_text
 
 
 @pytest.mark.parametrize(
-    ("profile", "extension", "type_tag", "lanes", "extract", "replace"),
+    ("profile", "extension", "type_tag", "lanes"),
     [
-        ("neon", "neon", "ui8", 16, "vgetq_lane", "vsetq_lane"),
-        (
-            "wasm32-simd128",
-            "wasm128",
-            "ui32",
-            4,
-            "extract_lane",
-            "replace_lane",
-        ),
-        (
-            "wasm32-simd128",
-            "wasm128",
-            "f32",
-            4,
-            "extract_lane",
-            "replace_lane",
-        ),
+        ("neon", "neon", "ui8", 16),
+        ("wasm32-simd128", "wasm128", "ui32", 4),
+        ("wasm32-simd128", "wasm128", "f32", 4),
     ],
 )
-def test_mod_uses_unrolled_register_lane_operations(
+def test_mod_composes_unrolled_lane_primitives(
     catalog: Catalog,
     machine_profiles,
     profile: str,
     extension: str,
     type_tag: str,
     lanes: int,
-    extract: str,
-    replace: str,
 ) -> None:
     slot = next(
         selected
@@ -4487,8 +5089,10 @@ def test_mod_uses_unrolled_register_lane_operations(
         ).specialization
 
         assert lowered is not None
-        assert lowered.body_text.count(extract) == lanes * 2
-        assert lowered.body_text.count(replace) == lanes
+        assert lowered.body_text.count("extract_value") == lanes * 2
+        assert lowered.body_text.count("insert_value") == lanes
+        assert "replace_lane" not in lowered.body_text
+        assert "vsetq_lane" not in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
         assert "for " not in lowered.body_text
@@ -4514,31 +5118,46 @@ def test_sve_narrow_mod_uses_register_lane_predicates(
 
     assert lowered is not None
     assert "svlastb" in lowered.body_text
-    assert "svdup_n" in lowered.body_text
+    assert "masked_set1" in lowered.body_text
+    assert "::tsl::sequence<" in lowered.body_text
+    assert "::tsl::equal<" in lowered.body_text
+    assert "svwhilelt_b" not in lowered.body_text
+    assert "svdup_n" not in lowered.body_text
     assert "malloc" not in lowered.body_text
     assert "free" not in lowered.body_text
 
 
 @pytest.mark.parametrize(
-    ("profile", "extension", "type_tag", "evidence"),
+    (
+        "profile",
+        "extension",
+        "type_tag",
+        "extract_operation",
+        "extract_count",
+        "insert_operation",
+        "insert_count",
+    ),
     [
-        ("sse2", "sse", "ui8", "_mm_setr_epi8"),
-        ("sse2", "sse", "f32", "_mm_setr_ps"),
-        ("avx", "avx2", "si32", "_mm256_extractf128_si256"),
-        ("avx2", "avx2", "f64", "_mm256_extractf128_pd"),
-        ("skylake", "avx512", "ui8", "_mm512_extracti64x4_epi64"),
-        ("skylake", "avx512", "f64", "_mm512_extractf64x4_pd"),
-        ("kml", "avx512", "ui8", "_mm512_extracti32x4_epi32"),
-        ("knl", "avx512", "f64", "_mm512_extracti32x4_epi32"),
+        ("sse2", "sse", "ui8", "extract_value", 32, "insert_value", 16),
+        ("sse2", "sse", "f32", "extract_value", 8, "insert_value", 4),
+        ("avx", "avx2", "si32", "extract", 4, "insert", 2),
+        ("avx2", "avx2", "f64", "extract", 4, "insert", 2),
+        ("skylake", "avx512", "ui8", "extract", 4, "insert", 2),
+        ("skylake", "avx512", "f64", "extract", 4, "insert", 2),
+        ("kml", "avx512", "ui8", "extract", 8, "insert", 4),
+        ("knl", "avx512", "f64", "extract", 8, "insert", 4),
     ],
 )
-def test_x86_mod_extracts_register_lanes_without_array_roundtrip(
+def test_x86_mod_composes_through_semantic_register_operations(
     catalog: Catalog,
     machine_profiles,
     profile: str,
     extension: str,
     type_tag: str,
-    evidence: str,
+    extract_operation: str,
+    extract_count: int,
+    insert_operation: str,
+    insert_count: int,
 ) -> None:
     slot = next(
         selected
@@ -4555,7 +5174,9 @@ def test_x86_mod_extracts_register_lanes_without_array_roundtrip(
         ).specialization
 
         assert lowered is not None
-        assert evidence in lowered.body_text
+        assert lowered.body_text.count(extract_operation) == extract_count
+        assert lowered.body_text.count(insert_operation) == insert_count
+        assert "_mm" not in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
 
@@ -4584,8 +5205,12 @@ def test_lower_wasm128_lzc_uses_scalar_lane_helper(
         (
             "mul",
             "si8",
-            ("wasm_u16x8_extmul_low_u8x16", "wasm_u8x16_narrow_i16x8"),
-            ("u16x8_extmul_low_u8x16", "u8x16_narrow_i16x8"),
+            (
+                "wasm_u16x8_extmul_low_u8x16",
+                "::tsl::convert_down<",
+                "::tsl::binary_or<",
+            ),
+            ("u16x8_extmul_low_u8x16", "convert_down::<", "binary_or::<"),
         ),
             (
                 "max",
@@ -4677,13 +5302,17 @@ def test_lower_wasm128_shift_overloads_keep_scalar_and_vector_counts_distinct(
     )
 
     assert left_vector is not None
-    assert left_vector.body_text.count("wasm_i32x4_extract_lane") == 8
-    assert left_vector.body_text.count("wasm_i32x4_replace_lane") == 4
+    assert left_vector.body_text.count("extract_value") == 8
+    assert left_vector.body_text.count("insert_value") == 4
+    assert "wasm_i32x4_extract_lane" not in left_vector.body_text
+    assert "wasm_i32x4_replace_lane" not in left_vector.body_text
     assert "to_array" not in left_vector.body_text
 
     assert left_vector_rust is not None
-    assert left_vector_rust.body_text.count("i32x4_extract_lane") == 8
-    assert left_vector_rust.body_text.count("i32x4_replace_lane") == 4
+    assert left_vector_rust.body_text.count("extract_value") == 8
+    assert left_vector_rust.body_text.count("insert_value") == 4
+    assert "i32x4_extract_lane" not in left_vector_rust.body_text
+    assert "i32x4_replace_lane" not in left_vector_rust.body_text
     assert "to_array" not in left_vector_rust.body_text
 
     assert imm is not None
@@ -4697,13 +5326,17 @@ def test_lower_wasm128_shift_overloads_keep_scalar_and_vector_counts_distinct(
     assert "generic_shift" not in scalar.body_text
 
     assert vector is not None
-    assert vector.body_text.count("wasm_i32x4_extract_lane") == 8
-    assert vector.body_text.count("wasm_i32x4_replace_lane") == 4
+    assert vector.body_text.count("extract_value") == 8
+    assert vector.body_text.count("insert_value") == 4
+    assert "wasm_i32x4_extract_lane" not in vector.body_text
+    assert "wasm_i32x4_replace_lane" not in vector.body_text
     assert "to_array" not in vector.body_text
 
     assert vector_rust is not None
-    assert vector_rust.body_text.count("i32x4_extract_lane") == 8
-    assert vector_rust.body_text.count("i32x4_replace_lane") == 4
+    assert vector_rust.body_text.count("extract_value") == 8
+    assert vector_rust.body_text.count("insert_value") == 4
+    assert "i32x4_extract_lane" not in vector_rust.body_text
+    assert "i32x4_replace_lane" not in vector_rust.body_text
     assert "to_array" not in vector_rust.body_text
 
 
@@ -5134,6 +5767,15 @@ def test_x86_float_to_i32_cast_uses_register_only_truncation(
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
         assert "round_" not in lowered.body_text
+        if profile == "avx2" and source_type == "f64" and target_type == "ui32":
+            expected_half = (
+                "tsl::simd<uint32_t, tsl::sse>"
+                if backend_id == "cpp"
+                else "Simd<u32, Sse>"
+            )
+            expected_extract = "extract<" if backend_id == "cpp" else "extract::<"
+            assert expected_extract in lowered.body_text
+            assert expected_half in lowered.body_text
 
         if target_type == "ui32":
             assert "2147483648" in lowered.body_text
@@ -5327,10 +5969,10 @@ def test_avx512_convert_down_places_native_narrow_result_without_arrays(
 @pytest.mark.parametrize(
     ("profile", "extension", "source_type", "target_type", "expected"),
     [
-        ("sse2", "sse", "ui16", "ui8", "_mm_subs_epu16"),
-        ("avx", "sse", "ui32", "ui16", "_mm_min_epu32"),
-        ("avx2", "avx2", "ui16", "ui8", "_mm256_subs_epu16"),
-        ("avx2", "avx2", "ui32", "ui16", "_mm256_min_epu32"),
+        ("sse2", "sse", "ui16", "ui8", "min"),
+        ("avx", "sse", "ui32", "ui16", "min"),
+        ("avx2", "avx2", "ui16", "ui8", "min"),
+        ("avx2", "avx2", "ui32", "ui16", "min"),
     ],
 )
 def test_x86_unsigned_convert_down_clamps_before_signed_input_pack(
@@ -5363,6 +6005,13 @@ def test_x86_unsigned_convert_down_clamps_before_signed_input_pack(
 
         assert lowered is not None
         assert expected in lowered.body_text
+        assert "set1" in lowered.body_text
+        if source_type == "ui16":
+            assert "min" in lowered.body_text
+            assert "subs_epu16" not in lowered.body_text
+            assert "set1_epi16" not in lowered.body_text
+        else:
+            assert "_min_epu32" not in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
 
@@ -5371,13 +6020,13 @@ def test_x86_unsigned_convert_down_clamps_before_signed_input_pack(
     ("profile", "extension", "source_type", "target_type", "expected"),
     [
         ("sse2", "sse", "si16", "ui8", "_mm_packus_epi16"),
-        ("sse2", "sse", "ui16", "si8", "_mm_subs_epu16"),
+        ("sse2", "sse", "ui16", "si8", "min"),
         ("avx", "sse", "si32", "ui16", "_mm_packus_epi32"),
-        ("avx", "sse", "ui32", "si16", "_mm_min_epu32"),
+        ("avx", "sse", "ui32", "si16", "min"),
         ("avx2", "avx2", "si16", "ui8", "_mm_packus_epi16"),
-        ("avx2", "avx2", "ui16", "si8", "_mm256_subs_epu16"),
+        ("avx2", "avx2", "ui16", "si8", "min"),
         ("avx2", "avx2", "si32", "ui16", "_mm_packus_epi32"),
-        ("avx2", "avx2", "ui32", "si16", "_mm256_min_epu32"),
+        ("avx2", "avx2", "ui32", "si16", "min"),
     ],
 )
 def test_x86_cross_signed_convert_down_uses_register_saturating_packs(
@@ -5410,24 +6059,85 @@ def test_x86_cross_signed_convert_down_uses_register_saturating_packs(
 
         assert lowered is not None
         assert expected in lowered.body_text
+        if source_type == "ui16":
+            assert "set1" in lowered.body_text
+            assert "min" in lowered.body_text
+            assert "subs_epu16" not in lowered.body_text
+            assert "set1_epi16" not in lowered.body_text
+        elif source_type == "ui32":
+            assert "set1" in lowered.body_text
+            assert "_min_epu32" not in lowered.body_text
         assert "to_array" not in lowered.body_text
         assert "from_array" not in lowered.body_text
 
 
 @pytest.mark.parametrize(
+    ("source_type", "target_type"),
+    [
+        ("si32", "ui16"),
+        ("ui32", "si16"),
+    ],
+)
+def test_sse_cross_signed_dword_narrowing_composes_range_clamp(
+    catalog: Catalog,
+    machine_profiles,
+    source_type: str,
+    target_type: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["sse2"],
+            "convert_down",
+            (source_type,),
+        )
+        .selected
+        if selected.extension.name == "sse" and selected.to_target == target_type
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        for primitive in ("equal", "shift_right", "blend", "set1"):
+            assert primitive in lowered.body_text
+        if source_type == "si32":
+            for primitive in ("greater_than", "to_vector", "binary_andnot", "sub", "binary_xor"):
+                assert primitive in lowered.body_text
+        assert "_mm_packs_epi32" in lowered.body_text
+        for duplicated in (
+            "_mm_cmpgt_epi32",
+            "_mm_cmpeq_epi32",
+            "_mm_srli_epi32",
+            "_mm_and_si128",
+            "_mm_andnot_si128",
+            "_mm_or_si128",
+            "_mm_sub_epi32",
+            "_mm_xor_si128",
+            "_mm_set1_epi32",
+            "_mm_set1_epi16",
+        ):
+            assert duplicated not in lowered.body_text
+
+
+@pytest.mark.parametrize(
     ("profile", "extension", "source_type", "target_type", "expected"),
     [
-        ("sse2", "sse", "ui32", "ui16", "_mm_xor_si128"),
-        ("sse2", "sse", "ui32", "si16", "_mm_srli_epi32"),
+        ("sse2", "sse", "ui32", "ui16", "binary_xor"),
+        ("sse2", "sse", "ui32", "si16", "shift_right"),
         ("sse2", "sse", "si32", "ui8", "convert_down"),
         ("sse2", "sse", "si64", "ui16", "convert_down"),
-        ("sse2", "sse", "ui64", "si32", "_mm_cvtsi128_si64"),
+        ("sse2", "sse", "ui64", "si32", "insert_value"),
         ("sse2", "sse", "f64", "f32", "_mm_cvtpd_ps"),
-        ("avx", "sse", "ui32", "ui16", "_mm_min_epu32"),
+        ("avx", "sse", "ui32", "ui16", "min"),
         ("avx", "sse", "si32", "ui16", "_mm_packus_epi32"),
         ("avx2", "avx2", "ui32", "si8", "convert_down"),
         ("avx2", "avx2", "si64", "ui8", "convert_down"),
-        ("avx2", "avx2", "ui64", "si32", "_mm_slli_si128"),
+        ("avx2", "avx2", "ui64", "si32", "insert_value"),
     ],
 )
 def test_x86_convert_down_complete_integer_matrix_stays_in_registers(
@@ -5464,19 +6174,111 @@ def test_x86_convert_down_complete_integer_matrix_stays_in_registers(
         assert "from_array" not in lowered.body_text
 
 
+@pytest.mark.parametrize("source_type", ["si64", "ui64"])
+@pytest.mark.parametrize("target_type", ["si32", "ui32"])
+def test_sse_qword_to_dword_convert_down_is_pure_primitive_composition(
+    catalog: Catalog,
+    machine_profiles,
+    source_type: str,
+    target_type: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["sse2"],
+            "convert_down",
+            (source_type,),
+        )
+        .selected
+        if selected.extension.name == "sse" and selected.to_target == target_type
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "extract_value" in lowered.body_text
+        assert "insert_value" in lowered.body_text
+        assert "_mm" not in lowered.body_text
+
+
+@pytest.mark.parametrize("source_type", ["si64", "ui64"])
+@pytest.mark.parametrize("target_type", ["si32", "ui32"])
+def test_avx2_qword_to_dword_convert_down_is_pure_primitive_composition(
+    catalog: Catalog,
+    machine_profiles,
+    source_type: str,
+    target_type: str,
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["avx2"],
+            "convert_down",
+            (source_type,),
+        )
+        .selected
+        if selected.extension.name == "avx2" and selected.to_target == target_type
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "extract_value" in lowered.body_text
+        assert "insert_value" in lowered.body_text
+        assert "_mm" not in lowered.body_text
+
+
+def test_sse_f64_to_f32_convert_down_composes_lane_placement(
+    catalog: Catalog, machine_profiles
+) -> None:
+    slot = next(
+        selected
+        for selected in Selector()
+        .select_profile(
+            catalog,
+            machine_profiles["sse2"],
+            "convert_down",
+            ("f64",),
+        )
+        .selected
+        if selected.extension.name == "sse" and selected.to_target == "f32"
+    )
+
+    for backend_id in ("cpp", "rust"):
+        lowered = Lowerer().lower(
+            slot, catalog, create_backend_dialect(catalog, backend_id)
+        ).specialization
+
+        assert lowered is not None
+        assert "_mm_cvtpd_ps" in lowered.body_text
+        assert "extract_value" in lowered.body_text
+        assert "insert_value" in lowered.body_text
+        assert "_mm_movelh_ps" not in lowered.body_text
+
+
 @pytest.mark.parametrize(
     ("profile", "source_type", "target_type", "expected"),
     [
-        ("skylake", "si16", "ui8", "_mm512_max_epi16"),
-        ("skylake", "ui16", "ui8", "_mm512_min_epu16"),
+        ("skylake", "si16", "ui8", "max"),
+        ("skylake", "ui16", "ui8", "min"),
         ("skylake", "ui16", "si8", "_mm512_cvtsepi16_epi8"),
         ("knl", "si16", "ui8", "convert_down"),
         ("knl", "ui16", "si8", "convert_down"),
-        ("knl", "si32", "ui16", "_mm512_max_epi32"),
-        ("knl", "ui32", "ui16", "_mm512_min_epu32"),
+        ("knl", "si32", "ui16", "max"),
+        ("knl", "ui32", "ui16", "min"),
         ("knl", "ui32", "si16", "_mm512_cvtsepi32_epi16"),
-        ("knl", "si64", "ui32", "_mm512_max_epi64"),
-        ("knl", "ui64", "ui32", "_mm512_min_epu64"),
+        ("knl", "si64", "ui32", "max"),
+        ("knl", "ui64", "ui32", "min"),
         ("knl", "ui64", "si32", "_mm512_cvtsepi64_epi32"),
     ],
 )
@@ -5516,8 +6318,8 @@ def test_avx512_cross_signed_and_unsigned_narrowing_stays_in_registers(
 @pytest.mark.parametrize(
     ("source_type", "target_type", "expected"),
     [
-        ("si16", "ui8", "i16x8_max"),
-        ("ui16", "si8", "u16x8_min"),
+        ("si16", "ui8", "max"),
+        ("ui16", "si8", "min"),
         ("si32", "si16", "i16x8_narrow_i32x4"),
         ("si32", "ui8", "convert_down"),
         ("ui64", "si32", "saturating_cast"),
@@ -5736,10 +6538,10 @@ def test_neon_load_convert_up_uses_exact_64_bit_load_and_widen(
     ("source_type", "target_type", "expected"),
     [
         ("si16", "ui8", "vqmovun_s16"),
-        ("ui16", "si8", "vminq_u16"),
+        ("ui16", "si8", "min"),
         ("si32", "si16", "vqmovn_s32"),
         ("si32", "ui8", "convert_down"),
-        ("ui64", "si32", "vcgtq_u64"),
+        ("ui64", "si32", "min"),
         ("si64", "ui8", "convert_down"),
         ("f64", "f32", "vcvt_f32_f64"),
     ],
@@ -5797,10 +6599,11 @@ def test_sse41_to_mask_fast_paths_win_over_portable_fallback(
         slots[("f64", "sse")], catalog, create_backend_dialect(catalog, "cpp")
     ).specialization
     assert cpp_f64 is not None
-    assert "_mm_cmpeq_epi64" in cpp_f64.body_text
+    assert "::tsl::equal<tsl::simd<uint64_t, tsl::sse>>" in cpp_f64.body_text
+    assert "::tsl::reinterpret<tsl::simd<uint64_t, tsl::sse>" in cpp_f64.body_text
 
 
-def test_sse2_equal_64_compares_and_combines_both_32_bit_halves(
+def test_sse2_equal_64_composes_word_equality_and_mask_conversion(
     catalog: Catalog, machine_profiles
 ) -> None:
     for type_tag in ("si64", "ui64"):
@@ -5817,9 +6620,10 @@ def test_sse2_equal_64_compares_and_combines_both_32_bit_halves(
         ).specialization
 
         assert cpp is not None
-        assert "_mm_cmpeq_epi32" in cpp.body_text
-        assert "_mm_shuffle_epi32(halves_equal, 0xB1)" in cpp.body_text
-        assert "_mm_and_si128" in cpp.body_text
+        assert "::tsl::equal<tsl::simd<uint32_t, tsl::sse>>" in cpp.body_text
+        assert "::tsl::to_integral<tsl::simd<uint32_t, tsl::sse>>" in cpp.body_text
+        assert "::tsl::to_mask<Vec>(compact)" in cpp.body_text
+        assert "intrin<" not in cpp.body_text
         assert "to_array" not in cpp.body_text
 
 
@@ -5846,12 +6650,14 @@ def test_sse2_less_than_64_compares_high_then_unsigned_low_words(
     for body in bodies.values():
         assert "_mm_shuffle_epi32(left, 0xF5)" in body
         assert "_mm_shuffle_epi32(left, 0xA0)" in body
-        assert "_mm_cmpeq_epi32" in body
-        assert "_mm_and_si128" in body
-        assert "_mm_or_si128" in body
+        assert "::tsl::equal<tsl::simd<int32_t, tsl::sse>>" in body
+        assert "::tsl::binary_and<tsl::simd<int32_t, tsl::sse>>" in body
+        assert "::tsl::binary_or<tsl::simd<int32_t, tsl::sse>>" in body
+        assert "::tsl::binary_xor<tsl::simd<int32_t, tsl::sse>>" in body
+        assert "::tsl::less_than<tsl::simd<int32_t, tsl::sse>>" in body
         assert "to_array" not in body
-    assert "_mm_cmpgt_epi32(right_high, left_high)" in bodies["si64"]
-    assert "_mm_xor_si128(right_high, sign_bit)" in bodies["ui64"]
+    assert "::tsl::less_than<tsl::simd<int32_t, tsl::sse>>(left_high, right_high)" in bodies["si64"]
+    assert "::tsl::binary_xor<tsl::simd<int32_t, tsl::sse>>(left_high, sign_bit)" in bodies["ui64"]
 
 
 def test_masked_set1_reuses_blend_and_set1_on_x86(
@@ -6588,9 +7394,9 @@ def test_hadd_reduction_lowers_for_f64(catalog: Catalog, machine_profiles) -> No
     assert cpp is not None
     assert cpp.result_kind == "s"  # s:=v -> scalar result
     assert cpp.param_names == ("vec",)
-    # multi-statement body: var declarations + assignment + scalar return
-    assert "auto const lo = _mm256_extractf128_pd(vec, 0);" in cpp.body_text
-    assert "return _mm_cvtsd_f64(temp);" in cpp.body_text
+    assert cpp.body_text.count("::tsl::extract<Vec") == 2
+    assert "::tsl::add<tsl::simd<double, tsl::sse>>" in cpp.body_text
+    assert "return ::tsl::hadd<tsl::simd<double, tsl::sse>>(folded);" in cpp.body_text
 
 
 def test_ambiguous_specificity_warns(machine_profiles) -> None:

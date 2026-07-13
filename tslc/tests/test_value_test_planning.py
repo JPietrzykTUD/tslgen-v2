@@ -1139,6 +1139,26 @@ def test_renderers_consume_prebuilt_plans_without_catalog(
     assert "let s0: i32 = 3;" in rust_scalar_vector_source
     assert "sequence::<Vec>(s0)" in rust_scalar_vector_source
 
+    rust_indexed_vector_case = ValueTestCasePlan(
+        kind="scalar_vector",
+        function_name="test_insert_value",
+        case_name="insert_value",
+        call_name="insert_value",
+        type_tag="si32",
+        base_spelling="i32",
+        lanes=4,
+        vector_inputs=(("1", "2", "3", "4"),),
+        scalar_inputs=("9",),
+        expected=("1", "2", "9", "4"),
+        param_kinds=("v", "s"),
+        index_value="2",
+    )
+    rust_indexed_vector_source = render_rust_values_file(
+        (ValueTestProfilePlan("rust", "unit-profile", (rust_indexed_vector_case,)),),
+        render_assets,
+    )
+    assert "insert_value::<Vec, 2>(v0, s0)" in rust_indexed_vector_source
+
     rust_scalar_case = ValueTestCasePlan(
         kind="scalar_result",
         function_name="test_extract_value",

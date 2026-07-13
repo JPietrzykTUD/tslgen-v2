@@ -305,8 +305,10 @@ def test_unsigned_compare_resolves_branch_no_dead_code(catalog: Catalog, machine
     assert spec is not None, "unsigned avx2 greater_than should lower"
     body = spec.body_text
     assert "if<generation>" not in body and "else<generation>" not in body
-    assert "0x8000" in body and "0x80000000" not in body  # only the ui16 sign bit
-    assert "_mm256_cmpgt_epi16" in body  # compared as signed int16
+    assert "::tsl::set1<Vec>" in body
+    assert "16 - 1" in body and "32 - 1" not in body  # only the ui16 sign bit
+    assert "::tsl::greater_than<tsl::simd<int16_t" in body
+    assert "_mm256_cmpgt_epi16" not in body
 
 
 def test_signed_and_float_compares_lower_on_avx2(catalog: Catalog, machine_profiles) -> None:

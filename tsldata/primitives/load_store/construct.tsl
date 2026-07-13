@@ -423,9 +423,9 @@ prim<v:=()>[value=zero] set_zero():
       arith:
         requires [simd128]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             complete(
@@ -724,17 +724,16 @@ prim<v:=(lanes<s>)> set(values):
       arith:
         requires [neon]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation>(i, 0, value(vector::length), 1) {
-              result = intrin<vsetq_lane, build[suffix=base::in, immediate(2)=i]>(
-                lanes<at>(values, value(vector::length) - 1 - i),
+              result = call<primitive=insert_value[Vec, i]>(
                 result,
-                value(i)
+                lanes<at>(values, value(vector::length) - 1 - i)
               );
             }
             complete(result);
@@ -743,18 +742,16 @@ prim<v:=(lanes<s>)> set(values):
       ?i?:
         requires [simd128]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-            let<type>(CarrierBase, type(base::signed_of(type(base::in))));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation>(i, 0, value(vector::length), 1) {
-              result = intrin<replace_lane, build[suffix=base::in, immediate(1)=i]>(
+              result = call<primitive=insert_value[Vec, i]>(
                 result,
-                value(i),
-                cast<static>(CarrierBase, lanes<at>(values, value(vector::length) - 1 - i))
+                lanes<at>(values, value(vector::length) - 1 - i)
               );
             }
             complete(result);
@@ -762,16 +759,15 @@ prim<v:=(lanes<s>)> set(values):
       f?:
         requires [simd128]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation>(i, 0, value(vector::length), 1) {
-              result = intrin<replace_lane, build[suffix=base::in, immediate(1)=i]>(
+              result = call<primitive=insert_value[Vec, i]>(
                 result,
-                value(i),
                 cast<static>(type(base::in), lanes<at>(values, value(vector::length) - 1 - i))
               );
             }

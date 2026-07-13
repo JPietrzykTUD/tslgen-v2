@@ -121,6 +121,31 @@ def test_clang_vector_overlay_is_split_guarded_and_uses_hardware_facade(
     assert "&& __clang__ == 1" not in cmake
 
 
+def test_clang_overlay_declares_primitive_missing_from_hardware_profile(
+    data_root: Path, machine_profiles_path: Path
+) -> None:
+    result = _gen(
+        data_root,
+        machine_profiles_path,
+        primitives=["insert"],
+        profiles=["wasm32-simd128"],
+        backends=["cpp"],
+    )
+    assert not has_errors(result.diagnostics), result.diagnostics
+    by = {artifact.logical_path: artifact.content for artifact in result.artifacts.artifacts}
+
+    base = by["cpp/include/tsl_wasm32_simd128.hpp"]
+    overlay = by["cpp/include/tsl_wasm32_simd128_clang.hpp"]
+    declaration = "struct insert_impl;"
+    specialization = "struct insert_impl<tsl::simd<int8_t, tsl::clang_v128>"
+
+    assert declaration not in base
+    assert declaration in overlay
+    assert "inline typename ToVec::register_type insert(" in overlay
+    assert specialization in overlay
+    assert overlay.index(declaration) < overlay.index(specialization)
+
+
 def test_profile_name_sanitized_to_valid_identifiers(
     data_root: Path, machine_profiles_path: Path
 ) -> None:

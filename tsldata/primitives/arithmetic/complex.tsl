@@ -76,27 +76,28 @@ prim<v:=(v,v)> mul(factor1, factor2):
           avx2 [avx, avx2]
           sse [sse, sse2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-            let<type>(UBase, type(base::unsigned_of(type(base::in))));
-            let<type>(UVec, type(vector::as_base(UBase)));
-            var<const_infer>(left, call<primitive=reinterpret[Vec, UVec]>(factor1));
-            var<const_infer>(right, call<primitive=reinterpret[Vec, UVec]>(factor2));
-            var<const_infer>(word_mask, intrin<set1, build[suffix=epi16]>(255));
-            var<const_infer>(even_left, call<primitive=binary_and[UVec]>(left, word_mask));
-            var<const_infer>(even_right, call<primitive=binary_and[UVec]>(right, word_mask));
-            var<const_infer>(even_product, intrin<mullo, build[suffix=epi16]>(even_left, even_right));
-            var<const_infer>(even_result, call<primitive=binary_and[UVec]>(even_product, word_mask));
-            var<const_infer>(odd_left, intrin<srli, build[suffix=epi16]>(left, 8));
-            var<const_infer>(odd_right, intrin<srli, build[suffix=epi16]>(right, 8));
-            var<const_infer>(odd_product, intrin<mullo, build[suffix=epi16]>(odd_left, odd_right));
-            var<const_infer>(odd_low, call<primitive=binary_and[UVec]>(odd_product, word_mask));
-            var<const_infer>(odd_result, intrin<slli, build[suffix=epi16]>(odd_low, 8));
-            complete(call<primitive=reinterpret[UVec, Vec]>(
-              call<primitive=binary_or[UVec]>(even_result, odd_result)
+            let<type>(WordVec, type(vector::as_base(type(scalar::ui16))));
+            var<const_infer>(left, call<primitive=reinterpret[Vec, WordVec]>(factor1));
+            var<const_infer>(right, call<primitive=reinterpret[Vec, WordVec]>(factor2));
+            var<const_infer>(word_mask, call<primitive=set1[WordVec]>(
+              cast<static>(type(scalar::ui16), 255)
+            ));
+            var<const_infer>(even_left, call<primitive=binary_and[WordVec]>(left, word_mask));
+            var<const_infer>(even_right, call<primitive=binary_and[WordVec]>(right, word_mask));
+            var<const_infer>(even_product, call<primitive=@self[WordVec]>(even_left, even_right));
+            var<const_infer>(even_result, call<primitive=binary_and[WordVec]>(even_product, word_mask));
+            var<const_infer>(odd_left, call<primitive=shift_right[WordVec, 8, false]>(left));
+            var<const_infer>(odd_right, call<primitive=shift_right[WordVec, 8, false]>(right));
+            var<const_infer>(odd_product, call<primitive=@self[WordVec]>(odd_left, odd_right));
+            var<const_infer>(odd_low, call<primitive=binary_and[WordVec]>(odd_product, word_mask));
+            var<const_infer>(odd_result, call<primitive=shift_left[WordVec, 8]>(odd_low));
+            complete(call<primitive=reinterpret[WordVec, Vec]>(
+              call<primitive=binary_or[WordVec]>(even_result, odd_result)
             ));
           """
       ?i64:
@@ -114,8 +115,8 @@ prim<v:=(v,v)> mul(factor1, factor2):
             let<type>(UVec, type(vector::as_base(UBase)));
             var<const_infer>(left, call<primitive=reinterpret[Vec, UVec]>(factor1));
             var<const_infer>(right, call<primitive=reinterpret[Vec, UVec]>(factor2));
-            var<const_infer>(left_high, intrin<srli, build[suffix=epi64]>(left, 32));
-            var<const_infer>(right_high, intrin<srli, build[suffix=epi64]>(right, 32));
+            var<const_infer>(left_high, call<primitive=shift_right[UVec, false]>(left, 32));
+            var<const_infer>(right_high, call<primitive=shift_right[UVec, false]>(right, 32));
             var<const_infer>(low_product, intrin<mul, build[suffix=epu32]>(left, right));
             var<const_infer>(cross_product, call<primitive=add[UVec]>(
               intrin<mul, build[suffix=epu32]>(left, right_high),
@@ -123,7 +124,7 @@ prim<v:=(v,v)> mul(factor1, factor2):
             ));
             var<const_infer>(result, call<primitive=add[UVec]>(
               low_product,
-              intrin<slli, build[suffix=epi64]>(cross_product, 32)
+              call<primitive=shift_left[UVec]>(cross_product, 32)
             ));
             complete(call<primitive=reinterpret[UVec, Vec]>(result));
           """
@@ -137,12 +138,23 @@ prim<v:=(v,v)> mul(factor1, factor2):
         implementation:
           tsil """
             let<type>(UVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
+            let<type>(QwordVec, type(vector::as_base(type(scalar::ui64))));
             var<const_infer>(left, call<primitive=reinterpret[Vec, UVec]>(factor1));
             var<const_infer>(right, call<primitive=reinterpret[Vec, UVec]>(factor2));
             var<const_infer>(even, intrin<_mm_mul_epu32>(left, right));
+            var<const_infer>(left_odd, call<primitive=reinterpret[QwordVec, UVec]>(
+              call<primitive=shift_right[QwordVec, false]>(
+                call<primitive=reinterpret[UVec, QwordVec]>(left), 32
+              )
+            ));
+            var<const_infer>(right_odd, call<primitive=reinterpret[QwordVec, UVec]>(
+              call<primitive=shift_right[QwordVec, false]>(
+                call<primitive=reinterpret[UVec, QwordVec]>(right), 32
+              )
+            ));
             var<const_infer>(odd, intrin<_mm_mul_epu32>(
-              intrin<_mm_srli_epi64>(left, 32),
-              intrin<_mm_srli_epi64>(right, 32)
+              left_odd,
+              right_odd
             ));
             var<const_infer>(low_pair, intrin<_mm_unpacklo_epi32>(even, odd));
             var<const_infer>(high_pair, intrin<_mm_unpackhi_epi32>(even, odd));
@@ -190,28 +202,30 @@ prim<v:=(v,v)> mul(factor1, factor2):
       arith:
         requires [avx512f, sse, sse2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(HalfVec, type(vector::as_extension(sse)));
-            var<const_infer>(a0, intrin<_mm512_castsi512_si128>(factor1));
-            var<const_infer>(a1, intrin<extracti32x4, build[suffix=epi32, immediate(1)=1]>(factor1, 1));
-            var<const_infer>(a2, intrin<extracti32x4, build[suffix=epi32, immediate(1)=2]>(factor1, 2));
-            var<const_infer>(a3, intrin<extracti32x4, build[suffix=epi32, immediate(1)=3]>(factor1, 3));
-            var<const_infer>(b0, intrin<_mm512_castsi512_si128>(factor2));
-            var<const_infer>(b1, intrin<extracti32x4, build[suffix=epi32, immediate(1)=1]>(factor2, 1));
-            var<const_infer>(b2, intrin<extracti32x4, build[suffix=epi32, immediate(1)=2]>(factor2, 2));
-            var<const_infer>(b3, intrin<extracti32x4, build[suffix=epi32, immediate(1)=3]>(factor2, 3));
+            var<const_infer>(a0, call<primitive=extract[Vec, sse, 0]>(factor1));
+            var<const_infer>(a1, call<primitive=extract[Vec, sse, 1]>(factor1));
+            var<const_infer>(a2, call<primitive=extract[Vec, sse, 2]>(factor1));
+            var<const_infer>(a3, call<primitive=extract[Vec, sse, 3]>(factor1));
+            var<const_infer>(b0, call<primitive=extract[Vec, sse, 0]>(factor2));
+            var<const_infer>(b1, call<primitive=extract[Vec, sse, 1]>(factor2));
+            var<const_infer>(b2, call<primitive=extract[Vec, sse, 2]>(factor2));
+            var<const_infer>(b3, call<primitive=extract[Vec, sse, 3]>(factor2));
             var<const_infer>(p0, call<primitive=@self[HalfVec]>(a0, b0));
             var<const_infer>(p1, call<primitive=@self[HalfVec]>(a1, b1));
             var<const_infer>(p2, call<primitive=@self[HalfVec]>(a2, b2));
             var<const_infer>(p3, call<primitive=@self[HalfVec]>(a3, b3));
-            var<infer>(result, intrin<_mm512_castsi128_si512>(p0));
-            result = intrin<inserti32x4, build[suffix="", immediate(2)=1]>(result, p1, 1);
-            result = intrin<inserti32x4, build[suffix="", immediate(2)=2]>(result, p2, 2);
-            result = intrin<inserti32x4, build[suffix="", immediate(2)=3]>(result, p3, 3);
+            var<infer>(result, call<primitive=insert[HalfVec, Vec, 0]>(
+              call<primitive=set_zero[Vec]>(), p0
+            ));
+            result = call<primitive=insert[HalfVec, Vec, 1]>(result, p1);
+            result = call<primitive=insert[HalfVec, Vec, 2]>(result, p2);
+            result = call<primitive=insert[HalfVec, Vec, 3]>(result, p3);
             complete(result);
           """
       arith:
@@ -279,21 +293,24 @@ prim<v:=(v,v)> mul(factor1, factor2):
       ?i?:
         requires [avx]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(HalfVec, type(vector::as_extension(sse)));
-            var<const_infer>(lo1, intrin<_mm256_extractf128_si256>(factor1, 0));
-            var<const_infer>(hi1, intrin<_mm256_extractf128_si256>(factor1, 1));
-            var<const_infer>(lo2, intrin<_mm256_extractf128_si256>(factor2, 0));
-            var<const_infer>(hi2, intrin<_mm256_extractf128_si256>(factor2, 1));
+            var<const_infer>(lo1, call<primitive=extract[Vec, sse, 0]>(factor1));
+            var<const_infer>(hi1, call<primitive=extract[Vec, sse, 1]>(factor1));
+            var<const_infer>(lo2, call<primitive=extract[Vec, sse, 0]>(factor2));
+            var<const_infer>(hi2, call<primitive=extract[Vec, sse, 1]>(factor2));
             var<const_infer>(lo_product, call<primitive=@self[HalfVec]>(lo1, lo2));
             var<const_infer>(hi_product, call<primitive=@self[HalfVec]>(hi1, hi2));
-            var<infer>(result, intrin<_mm256_castsi128_si256>(lo_product));
-            result = intrin<_mm256_insertf128_si256>(result, hi_product, 1);
-            complete(result);
+            complete(call<primitive=insert[HalfVec, Vec, 1]>(
+              call<primitive=insert[HalfVec, Vec, 0]>(
+                call<primitive=set_zero[Vec]>(), lo_product
+              ),
+              hi_product
+            ));
           """
       arith:
         requires [avx]
@@ -404,20 +421,20 @@ prim<v:=(v,v)> mul(factor1, factor2):
             var<const_infer>(right, call<primitive=reinterpret[Vec, UVec]>(factor2));
             var<const_infer>(left_low, intrin<vmovn_u64>(left));
             var<const_infer>(left_high, intrin<vmovn_u64>(
-              intrin<vshrq_n_u64>(left, 32)
+              call<primitive=shift_right[UVec, false]>(left, 32)
             ));
             var<const_infer>(right_low, intrin<vmovn_u64>(right));
             var<const_infer>(right_high, intrin<vmovn_u64>(
-              intrin<vshrq_n_u64>(right, 32)
+              call<primitive=shift_right[UVec, false]>(right, 32)
             ));
             var<const_infer>(low_product, intrin<vmull_u32>(left_low, right_low));
-            var<const_infer>(cross_product, intrin<vaddq_u64>(
+            var<const_infer>(cross_product, call<primitive=add[UVec]>(
               intrin<vmull_u32>(left_low, right_high),
               intrin<vmull_u32>(left_high, right_low)
             ));
-            var<const_infer>(result, intrin<vaddq_u64>(
+            var<const_infer>(result, call<primitive=add[UVec]>(
               low_product,
-              intrin<vshlq_n_u64>(cross_product, 32)
+              call<primitive=shift_left[UVec]>(cross_product, 32)
             ));
             complete(
               call<primitive=reinterpret[UVec, Vec]>(result)
@@ -440,12 +457,18 @@ prim<v:=(v,v)> mul(factor1, factor2):
           reasons [intrinsic]
         implementation:
           tsil """
+            let<type>(WordVec, type(vector::as_base(ui16)));
+            let<type>(ByteVec, type(vector::as_base(ui8)));
             var<const_infer>(low_products, intrin<extmul_low_u8x16, build[suffix="u16x8"]>(factor1, factor2));
             var<const_infer>(high_products, intrin<extmul_high_u8x16, build[suffix="u16x8"]>(factor1, factor2));
-            var<const_infer>(low_byte_mask, intrin<splat, build[suffix="i16x8"]>(cast<static>(type(scalar::si16), 0x00ff)));
-            var<const_infer>(low_bytes, intrin<v128_and, build[suffix=""]>(low_products, low_byte_mask));
-            var<const_infer>(high_bytes, intrin<v128_and, build[suffix=""]>(high_products, low_byte_mask));
-            complete(intrin<narrow_i16x8, build[suffix="u8x16"]>(low_bytes, high_bytes));
+            var<const_infer>(low_byte_mask, call<primitive=set1[WordVec]>(cast<static>(ui16, 0x00ff)));
+            var<const_infer>(low_bytes, call<primitive=binary_and[WordVec]>(low_products, low_byte_mask));
+            var<const_infer>(high_bytes, call<primitive=binary_and[WordVec]>(high_products, low_byte_mask));
+            var<const_infer>(low_chunk, call<primitive=convert_down[WordVec, ui8, 0]>(low_bytes));
+            var<const_infer>(high_chunk, call<primitive=convert_down[WordVec, ui8, 1]>(high_bytes));
+            complete(call<primitive=reinterpret[ByteVec, Vec]>(
+              call<primitive=binary_or[ByteVec]>(low_chunk, high_chunk)
+            ));
           """
         variants:
           generic_fallback:
@@ -894,20 +917,18 @@ prim<v:=(v,v)> div(divident, divisor):
       ?i?:
         requires [neon]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(ScalarVec, type(vector::as_extension(scalar)));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
-              var<const_infer>(lane_dividend, intrin<vgetq_lane, build[suffix=base::in, immediate(1)=i]>(divident, value(i)));
-              var<const_infer>(lane_divisor, intrin<vgetq_lane, build[suffix=base::in, immediate(1)=i]>(divisor, value(i)));
+              var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(divident));
+              var<const_infer>(lane_divisor, call<primitive=extract_value[Vec, i]>(divisor));
               var<const_infer>(quotient, call<primitive=@self[ScalarVec]>(lane_dividend, lane_divisor));
-              result = intrin<vsetq_lane, build[suffix=base::in, immediate(2)=i]>(
-                quotient, result, value(i)
-              );
+              result = call<primitive=insert_value[Vec, i]>(result, quotient);
             }
             complete(result);
           """
@@ -923,22 +944,18 @@ prim<v:=(v,v)> div(divident, divisor):
       ?i?:
         requires [simd128]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(ScalarVec, type(vector::as_extension(scalar)));
-            let<type>(LaneBase, type(base::in));
-            let<type>(SignedBase, type(base::signed_of(type(base::in))));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
-              var<const_infer>(lane_dividend, cast<static>(LaneBase, intrin<extract_lane, build[suffix=base::in, immediate(1)=i]>(divident, value(i))));
-              var<const_infer>(lane_divisor, cast<static>(LaneBase, intrin<extract_lane, build[suffix=base::in, immediate(1)=i]>(divisor, value(i))));
+              var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(divident));
+              var<const_infer>(lane_divisor, call<primitive=extract_value[Vec, i]>(divisor));
               var<const_infer>(quotient, call<primitive=@self[ScalarVec]>(lane_dividend, lane_divisor));
-              result = intrin<replace_lane, build[suffix=base::in, immediate(1)=i]>(
-                result, value(i), cast<static>(SignedBase, quotient)
-              );
+              result = call<primitive=insert_value[Vec, i]>(result, quotient);
             }
             complete(result);
           """
@@ -1206,334 +1223,19 @@ prim<v:=(v,sImm)> mul_imm(data, factor):
     - {tags [basic], type "ui16", case {inputs [[1, 2, 3, 4, 5, 6, 7, 8], 5], expected [5, 10, 15, 20, 25, 30, 35, 40]}}
     - {tags [zero], type "ui16", case {inputs [[0, 1, 2, 3, 4, 5, 6, 7], 0], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
   impls:
-    scalar:
-      arith:
-        requires []
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil "complete(helper<arith_mul>(data, cast<static>(type(base::in), factor)));"
-    clang_v128:
-      arith:
-        requires []
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil "complete(op<mul>(data, cast<static>(type(base::in), factor)));"
-    [generic, oneapi_fpga]:
+    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, wasm128, sve]:
       arith:
         requires:
+          scalar []
           generic []
+          clang_v128 []
           oneapi_fpga []
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            var<init_register>(result);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = helper<arith_mul>(data[i], cast<static>(type(base::in), factor));
-            }
-            complete(result);
-          """
-    avx512:
-      f?:
-        requires [avx512f]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            complete(
-              intrin<mul, build>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-      ?i16:
-        requires [avx512bw, avx512f]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            complete(
-              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-      ?i32:
-        requires [avx512f]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            complete(
-              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-      ?i64:
-        requires [avx512dq, avx512f]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            complete(
-              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-      arith:
-        requires [avx512f]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            complete(
-              call<primitive=mul>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-    avx2:
-      f?:
-        requires [avx]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            complete(
-              intrin<mul, build>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-      ?i16:
-        requires [avx, avx2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            complete(
-              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-      ?i32:
-        requires [avx, avx2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            complete(
-              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-      ?i64:
-        requires [avx, avx512dq, avx512vl]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            complete(
-              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-      arith:
-        requires [avx]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            complete(
-              call<primitive=mul>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-    sse:
-      f32:
-        requires [sse]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            complete(
-              intrin<mul, build>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-      f64:
-        requires [sse, sse2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            complete(
-              intrin<mul, build>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-      ?i16:
-        requires [sse, sse2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            complete(
-              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-      ?i32:
-        requires [sse, sse4_1]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            complete(
-              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-      ?i64:
-        requires [avx512dq, avx512vl, sse]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            complete(
-              intrin<mullo, build[suffix=base::signed_of(base::in)]>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-      arith:
-        requires [sse]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            complete(
-              call<primitive=mul>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-    neon:
-      [si8, si16, si32, ui8, ui16, ui32, f32, f64]:
-        requires [neon]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            complete(
-              intrin<vmulq, build>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-      arith:
-        requires [neon]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            complete(
-              call<primitive=mul>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-    wasm128:
-      arith:
-        requires [simd128]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            complete(
-              call<primitive=mul>(
-                data,
-                call<primitive=set1>(cast<static>(type(base::in), factor))
-              )
-            );
-          """
-    sve:
-      arith:
-        requires [sve]
+          avx512 [avx512f]
+          avx2 [avx]
+          sse [sse]
+          neon [neon]
+          wasm128 [simd128]
+          sve [sve]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1568,23 +1270,10 @@ prim<v:=(m,v,sImm)>[mask=zero] mul_imm(mask, data, factor):
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [0, 6, 0, 12]}}
     - {tags [maskz, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.0, -4.0], -2.0], expected [0.0, 4.0, 0.0, 8.0]}}
   impls:
-    scalar:
-      arith:
-        requires []
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            if (mask) {
-              complete(helper<arith_mul>(data, cast<static>(type(base::in), factor)));
-            }
-            complete(call<primitive=set_zero[Vec]>());
-          """
-    [generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
       arith:
         requires:
+          scalar []
           generic []
           clang_v128 []
           oneapi_fpga []
@@ -1629,23 +1318,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mul_imm(mask, data, factor):
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [1, 2, 3, 4], 3], expected [1, 6, 3, 12]}}
     - {tags [mask, basic], type "f32", case {inputs [10, [1.0, -2.0, 3.0, -4.0], -2.0], expected [1.0, 4.0, 3.0, 8.0]}}
   impls:
-    scalar:
-      arith:
-        requires []
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            if (mask) {
-              complete(helper<arith_mul>(data, cast<static>(type(base::in), factor)));
-            }
-            complete(data);
-          """
-    [generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
+    [scalar, generic, clang_v128, oneapi_fpga, avx512, avx2, sse, neon, sve, wasm128]:
       arith:
         requires:
+          scalar []
           generic []
           clang_v128 []
           oneapi_fpga []
@@ -1700,224 +1376,95 @@ prim<v:=(v,v)> mod(dividend, divisor):
     - {tags [basic, float], type "f64", case {inputs [[5.5, -7.0], [2.0, 3.0]], expected [1.5, -1.0]}}
   impls:
     sse:
-      [?i8, ?i16, ?i32]:
+      [?i?, f64]:
         requires [sse, sse2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(ScalarVec, type(vector::as_extension(scalar)));
-            let<type>(Base, type(base::in));
-            let<type>(SignedBase, type(base::signed_of(type(base::in))));
-            complete(intrin<setr, build[suffix=base::signed_of(base::in)]>(
-              cast<static>(SignedBase, call<primitive=@self[ScalarVec]>(
-                cast<static>(Base, intrin<_mm_cvtsi128_si32>(dividend)),
-                cast<static>(Base, intrin<_mm_cvtsi128_si32>(divisor))
-              ))
-              loop<generation>(offset, value(type::size_bytes(base::in)), 16, value(type::size_bytes(base::in))) {
-                , cast<static>(SignedBase, call<primitive=@self[ScalarVec]>(
-                  cast<static>(Base, intrin<_mm_cvtsi128_si32>(intrin<srli_si128, build[suffix="", immediate(1)=offset]>(dividend, value(offset)))),
-                  cast<static>(Base, intrin<_mm_cvtsi128_si32>(intrin<srli_si128, build[suffix="", immediate(1)=offset]>(divisor, value(offset))))
-                ))
-              }
-            ));
-          """
-      ?i64:
-        requires [sse, sse2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
-            let<type>(Base, type(base::in));
-            let<type>(SignedBase, type(base::signed_of(type(base::in))));
-            var<const_infer>(low, call<primitive=@self[ScalarVec]>(
-              cast<static>(Base, intrin<_mm_cvtsi128_si64>(dividend)),
-              cast<static>(Base, intrin<_mm_cvtsi128_si64>(divisor))
-            ));
-            var<const_infer>(high, call<primitive=@self[ScalarVec]>(
-              cast<static>(Base, intrin<_mm_cvtsi128_si64>(intrin<srli_si128, build[suffix="", immediate(1)=8]>(dividend, 8))),
-              cast<static>(Base, intrin<_mm_cvtsi128_si64>(intrin<srli_si128, build[suffix="", immediate(1)=8]>(divisor, 8)))
-            ));
-            complete(intrin<_mm_set_epi64x>(
-              cast<static>(SignedBase, high), cast<static>(SignedBase, low)
-            ));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(dividend));
+              var<const_infer>(lane_divisor, call<primitive=extract_value[Vec, i]>(divisor));
+              var<const_infer>(remainder, call<primitive=@self[ScalarVec]>(lane_dividend, lane_divisor));
+              result = call<primitive=insert_value[Vec, i]>(result, remainder);
+            }
+            complete(result);
           """
       f32:
         requires [sse]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(ScalarVec, type(vector::as_extension(scalar)));
-            complete(intrin<setr, build[suffix=f32]>(
-              call<primitive=@self[ScalarVec]>(intrin<_mm_cvtss_f32>(dividend), intrin<_mm_cvtss_f32>(divisor))
-              loop<generation>(i, 1, 4, 1) {
-                , call<primitive=@self[ScalarVec]>(
-                  intrin<_mm_cvtss_f32>(intrin<_mm_shuffle_ps>(dividend, dividend, value(i))),
-                  intrin<_mm_cvtss_f32>(intrin<_mm_shuffle_ps>(divisor, divisor, value(i)))
-                )
-              }
-            ));
-          """
-      f64:
-        requires [sse, sse2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
-            complete(intrin<setr, build[suffix=f64]>(
-              call<primitive=@self[ScalarVec]>(intrin<_mm_cvtsd_f64>(dividend), intrin<_mm_cvtsd_f64>(divisor)),
-              call<primitive=@self[ScalarVec]>(
-                intrin<_mm_cvtsd_f64>(intrin<_mm_unpackhi_pd>(dividend, dividend)),
-                intrin<_mm_cvtsd_f64>(intrin<_mm_unpackhi_pd>(divisor, divisor))
-              )
-            ));
+            var<infer>(result, call<primitive=set_zero[Vec]>());
+            loop<generation, scoped>(i, 0, value(vector::length), 1) {
+              var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(dividend));
+              var<const_infer>(lane_divisor, call<primitive=extract_value[Vec, i]>(divisor));
+              var<const_infer>(remainder, call<primitive=@self[ScalarVec]>(lane_dividend, lane_divisor));
+              result = call<primitive=insert_value[Vec, i]>(result, remainder);
+            }
+            complete(result);
           """
     avx2:
-      ?i?:
+      arith:
         requires [avx]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(HalfVec, type(vector::as(sse, type(base::in))));
             var<const_infer>(low, call<primitive=@self[HalfVec]>(
-              intrin<_mm256_castsi256_si128>(dividend),
-              intrin<_mm256_castsi256_si128>(divisor)
+              call<primitive=extract[Vec, sse, 0]>(dividend),
+              call<primitive=extract[Vec, sse, 0]>(divisor)
             ));
             var<const_infer>(high, call<primitive=@self[HalfVec]>(
-              intrin<_mm256_extractf128_si256>(dividend, 1),
-              intrin<_mm256_extractf128_si256>(divisor, 1)
+              call<primitive=extract[Vec, sse, 1]>(dividend),
+              call<primitive=extract[Vec, sse, 1]>(divisor)
             ));
-            complete(intrin<_mm256_insertf128_si256>(
-              intrin<_mm256_castsi128_si256>(low), high, 1
+            var<infer>(result, call<primitive=insert[HalfVec, Vec, 0]>(
+              call<primitive=set_zero[Vec]>(), low
             ));
-          """
-      f32:
-        requires [avx]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            let<type>(HalfVec, type(vector::as(sse, type(base::in))));
-            var<const_infer>(low, call<primitive=@self[HalfVec]>(
-              intrin<_mm256_castps256_ps128>(dividend),
-              intrin<_mm256_castps256_ps128>(divisor)
-            ));
-            var<const_infer>(high, call<primitive=@self[HalfVec]>(
-              intrin<_mm256_extractf128_ps>(dividend, 1),
-              intrin<_mm256_extractf128_ps>(divisor, 1)
-            ));
-            complete(intrin<_mm256_insertf128_ps>(
-              intrin<_mm256_castps128_ps256>(low), high, 1
-            ));
-          """
-      f64:
-        requires [avx]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            let<type>(HalfVec, type(vector::as(sse, type(base::in))));
-            var<const_infer>(low, call<primitive=@self[HalfVec]>(
-              intrin<_mm256_castpd256_pd128>(dividend),
-              intrin<_mm256_castpd256_pd128>(divisor)
-            ));
-            var<const_infer>(high, call<primitive=@self[HalfVec]>(
-              intrin<_mm256_extractf128_pd>(dividend, 1),
-              intrin<_mm256_extractf128_pd>(divisor, 1)
-            ));
-            complete(intrin<_mm256_insertf128_pd>(
-              intrin<_mm256_castpd128_pd256>(low), high, 1
-            ));
+            complete(call<primitive=insert[HalfVec, Vec, 1]>(result, high));
           """
     avx512:
-      ?i?:
+      arith:
         requires [avx, avx2, avx512dq, avx512f]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(HalfVec, type(vector::as(avx2, type(base::in))));
             var<const_infer>(low, call<primitive=@self[HalfVec]>(
-              intrin<_mm512_castsi512_si256>(dividend),
-              intrin<_mm512_castsi512_si256>(divisor)
+              call<primitive=extract[Vec, avx2, 0]>(dividend),
+              call<primitive=extract[Vec, avx2, 0]>(divisor)
             ));
             var<const_infer>(high, call<primitive=@self[HalfVec]>(
-              intrin<_mm512_extracti64x4_epi64>(dividend, 1),
-              intrin<_mm512_extracti64x4_epi64>(divisor, 1)
+              call<primitive=extract[Vec, avx2, 1]>(dividend),
+              call<primitive=extract[Vec, avx2, 1]>(divisor)
             ));
-            complete(intrin<_mm512_inserti64x4>(
-              intrin<_mm512_castsi256_si512>(low), high, 1
+            var<infer>(result, call<primitive=insert[HalfVec, Vec, 0]>(
+              call<primitive=set_zero[Vec]>(), low
             ));
-          """
-      f32:
-        requires [avx, avx2, avx512dq, avx512f]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            let<type>(HalfVec, type(vector::as(avx2, type(base::in))));
-            var<const_infer>(low, call<primitive=@self[HalfVec]>(
-              intrin<_mm512_castps512_ps256>(dividend),
-              intrin<_mm512_castps512_ps256>(divisor)
-            ));
-            var<const_infer>(high, call<primitive=@self[HalfVec]>(
-              intrin<_mm512_extractf32x8_ps>(dividend, 1),
-              intrin<_mm512_extractf32x8_ps>(divisor, 1)
-            ));
-            complete(intrin<_mm512_insertf32x8>(
-              intrin<_mm512_castps256_ps512>(low), high, 1
-            ));
-          """
-      f64:
-        requires [avx, avx2, avx512dq, avx512f]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            let<type>(HalfVec, type(vector::as(avx2, type(base::in))));
-            var<const_infer>(low, call<primitive=@self[HalfVec]>(
-              intrin<_mm512_castpd512_pd256>(dividend),
-              intrin<_mm512_castpd512_pd256>(divisor)
-            ));
-            var<const_infer>(high, call<primitive=@self[HalfVec]>(
-              intrin<_mm512_extractf64x4_pd>(dividend, 1),
-              intrin<_mm512_extractf64x4_pd>(divisor, 1)
-            ));
-            complete(intrin<_mm512_insertf64x4>(
-              intrin<_mm512_castpd256_pd512>(low), high, 1
-            ));
+            complete(call<primitive=insert[HalfVec, Vec, 1]>(result, high));
           """
     avx512:
       arith:
         requires [avx512f, sse, sse2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           # KNL/KML lack AVX-512DQ, so decompose the register through the
           # AVX-512F 128-bit integer quarter operations. Reinterpreting each
@@ -1930,14 +1477,14 @@ prim<v:=(v,v)> mod(dividend, divisor):
             let<type>(QuarterBitVec, type(vector::as(sse, BitBase)));
             var<const_infer>(dividend_bits, call<primitive=reinterpret[Vec, BitVec]>(dividend));
             var<const_infer>(divisor_bits, call<primitive=reinterpret[Vec, BitVec]>(divisor));
-            var<const_infer>(a0_bits, intrin<_mm512_castsi512_si128>(dividend_bits));
-            var<const_infer>(a1_bits, intrin<extracti32x4, build[suffix=epi32, immediate(1)=1]>(dividend_bits, 1));
-            var<const_infer>(a2_bits, intrin<extracti32x4, build[suffix=epi32, immediate(1)=2]>(dividend_bits, 2));
-            var<const_infer>(a3_bits, intrin<extracti32x4, build[suffix=epi32, immediate(1)=3]>(dividend_bits, 3));
-            var<const_infer>(b0_bits, intrin<_mm512_castsi512_si128>(divisor_bits));
-            var<const_infer>(b1_bits, intrin<extracti32x4, build[suffix=epi32, immediate(1)=1]>(divisor_bits, 1));
-            var<const_infer>(b2_bits, intrin<extracti32x4, build[suffix=epi32, immediate(1)=2]>(divisor_bits, 2));
-            var<const_infer>(b3_bits, intrin<extracti32x4, build[suffix=epi32, immediate(1)=3]>(divisor_bits, 3));
+            var<const_infer>(a0_bits, call<primitive=extract[BitVec, sse, 0]>(dividend_bits));
+            var<const_infer>(a1_bits, call<primitive=extract[BitVec, sse, 1]>(dividend_bits));
+            var<const_infer>(a2_bits, call<primitive=extract[BitVec, sse, 2]>(dividend_bits));
+            var<const_infer>(a3_bits, call<primitive=extract[BitVec, sse, 3]>(dividend_bits));
+            var<const_infer>(b0_bits, call<primitive=extract[BitVec, sse, 0]>(divisor_bits));
+            var<const_infer>(b1_bits, call<primitive=extract[BitVec, sse, 1]>(divisor_bits));
+            var<const_infer>(b2_bits, call<primitive=extract[BitVec, sse, 2]>(divisor_bits));
+            var<const_infer>(b3_bits, call<primitive=extract[BitVec, sse, 3]>(divisor_bits));
             var<const_infer>(r0, call<primitive=@self[QuarterVec]>(
               call<primitive=reinterpret[QuarterBitVec, QuarterVec]>(a0_bits),
               call<primitive=reinterpret[QuarterBitVec, QuarterVec]>(b0_bits)
@@ -1958,21 +1505,20 @@ prim<v:=(v,v)> mod(dividend, divisor):
             var<const_infer>(r1_bits, call<primitive=reinterpret[QuarterVec, QuarterBitVec]>(r1));
             var<const_infer>(r2_bits, call<primitive=reinterpret[QuarterVec, QuarterBitVec]>(r2));
             var<const_infer>(r3_bits, call<primitive=reinterpret[QuarterVec, QuarterBitVec]>(r3));
-            var<infer>(result_bits, intrin<_mm512_castsi128_si512>(r0_bits));
-            result_bits = intrin<inserti32x4, build[suffix="", immediate(2)=1]>(
-              result_bits, r1_bits, 1
-            );
-            result_bits = intrin<inserti32x4, build[suffix="", immediate(2)=2]>(
-              result_bits, r2_bits, 2
-            );
-            result_bits = intrin<inserti32x4, build[suffix="", immediate(2)=3]>(
-              result_bits, r3_bits, 3
-            );
+            var<infer>(result_bits, call<primitive=insert[QuarterBitVec, BitVec, 0]>(
+              call<primitive=set_zero[BitVec]>(), r0_bits
+            ));
+            result_bits = call<primitive=insert[QuarterBitVec, BitVec, 1]>(result_bits, r1_bits);
+            result_bits = call<primitive=insert[QuarterBitVec, BitVec, 2]>(result_bits, r2_bits);
+            result_bits = call<primitive=insert[QuarterBitVec, BitVec, 3]>(result_bits, r3_bits);
             complete(call<primitive=reinterpret[BitVec, Vec]>(result_bits));
           """
-    avx512:
+    [avx512, avx2, sse]:
       arith:
-        requires [avx512f]
+        requires:
+          avx512 [avx512f]
+          avx2 [avx]
+          sse [sse]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -1988,103 +1534,24 @@ prim<v:=(v,v)> mod(dividend, divisor):
               )
             );
           """
-    avx2:
+    [neon, wasm128]:
       arith:
-        requires [avx]
+        requires:
+          neon [neon]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
           reasons []
         implementation:
           tsil """
-            let<type>(GenericVec, type(vector::as_extension(generic)));
-            var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(dividend)));
-            var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divisor)));
-            complete(
-              call<primitive=from_array[Vec]>(
-                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
-              )
-            );
-          """
-    sse:
-      arith:
-        requires [sse]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            let<type>(GenericVec, type(vector::as_extension(generic)));
-            var<const_infer>(generic_dividend, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(dividend)));
-            var<const_infer>(generic_divisor, call<primitive=from_array[GenericVec]>(call<primitive=to_array>(divisor)));
-            complete(
-              call<primitive=from_array[Vec]>(
-                call<primitive=@self[GenericVec]>(generic_dividend, generic_divisor)
-              )
-            );
-          """
-    neon:
-      arith:
-        requires [neon]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
             let<type>(ScalarVec, type(vector::as_extension(scalar)));
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<generation, scoped>(i, 0, value(vector::length), 1) {
-              var<const_infer>(lane_dividend, intrin<vgetq_lane, build[suffix=base::in, immediate(1)=i]>(dividend, value(i)));
-              var<const_infer>(lane_divisor, intrin<vgetq_lane, build[suffix=base::in, immediate(1)=i]>(divisor, value(i)));
+              var<const_infer>(lane_dividend, call<primitive=extract_value[Vec, i]>(dividend));
+              var<const_infer>(lane_divisor, call<primitive=extract_value[Vec, i]>(divisor));
               var<const_infer>(remainder, call<primitive=@self[ScalarVec]>(lane_dividend, lane_divisor));
-              result = intrin<vsetq_lane, build[suffix=base::in, immediate(2)=i]>(
-                remainder, result, value(i)
-              );
-            }
-            complete(result);
-          """
-    wasm128:
-      ?i?:
-        requires [simd128]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
-            let<type>(LaneBase, type(base::in));
-            let<type>(SignedBase, type(base::signed_of(type(base::in))));
-            var<infer>(result, call<primitive=set_zero[Vec]>());
-            loop<generation, scoped>(i, 0, value(vector::length), 1) {
-              var<const_infer>(lane_dividend, cast<static>(LaneBase, intrin<extract_lane, build[suffix=base::in, immediate(1)=i]>(dividend, value(i))));
-              var<const_infer>(lane_divisor, cast<static>(LaneBase, intrin<extract_lane, build[suffix=base::in, immediate(1)=i]>(divisor, value(i))));
-              var<const_infer>(remainder, call<primitive=@self[ScalarVec]>(lane_dividend, lane_divisor));
-              result = intrin<replace_lane, build[suffix=base::in, immediate(1)=i]>(
-                result, value(i), cast<static>(SignedBase, remainder)
-              );
-            }
-            complete(result);
-          """
-      f?:
-        requires [simd128]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            let<type>(ScalarVec, type(vector::as_extension(scalar)));
-            var<infer>(result, call<primitive=set_zero[Vec]>());
-            loop<generation, scoped>(i, 0, value(vector::length), 1) {
-              var<const_infer>(lane_dividend, intrin<extract_lane, build[suffix=base::in, immediate(1)=i]>(dividend, value(i)));
-              var<const_infer>(lane_divisor, intrin<extract_lane, build[suffix=base::in, immediate(1)=i]>(divisor, value(i)));
-              var<const_infer>(remainder, call<primitive=@self[ScalarVec]>(lane_dividend, lane_divisor));
-              result = intrin<replace_lane, build[suffix=base::in, immediate(1)=i]>(
-                result, value(i), remainder
-              );
+              result = call<primitive=insert_value[Vec, i]>(result, remainder);
             }
             complete(result);
           """
@@ -2100,24 +1567,20 @@ prim<v:=(v,v)> mod(dividend, divisor):
             let<type>(Base, type(base::in));
             let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
             let<type>(IndexVec, type(vector::as_base(IndexBase)));
-            var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-            var<const_infer>(all, call<primitive=mask_true[IndexVec]>());
-            var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
-              cast<static>(IndexBase, 0), cast<static>(IndexBase, 1)
-            ));
+            var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
+            var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<backend>(i, 0, lanes, 1) {
-              var<const_infer>(through_lane, intrin<svwhilelt_b8>(
-                cast<static>(type(scalar::size), 0),
-                cast<static>(type(scalar::size), i + 1)
+              var<const_infer>(target_lane, call<primitive=equal[IndexVec]>(
+                indexes,
+                call<primitive=set1[IndexVec]>(cast<static>(IndexBase, i))
               ));
-              var<const_infer>(lane_dividend, intrin<svlastb, build>(through_lane, dividend));
-              var<const_infer>(lane_divisor, intrin<svlastb, build>(through_lane, divisor));
-              var<const_infer>(target_lane, intrin<svcmpeq_n, build[suffix=IndexBase]>(
-                all, indexes, cast<static>(IndexBase, i)
-              ));
-              result = intrin<svdup_n, build[post=m]>(
-                result, target_lane, helper<arith_rem>(lane_dividend, lane_divisor)
+              var<const_infer>(lane_dividend, intrin<svlastb, build>(target_lane, dividend));
+              var<const_infer>(lane_divisor, intrin<svlastb, build>(target_lane, divisor));
+              result = call<primitive=masked_set1[Vec]>(
+                target_lane,
+                result,
+                helper<arith_rem>(lane_dividend, lane_divisor)
               );
             }
             complete(result);
@@ -2133,24 +1596,20 @@ prim<v:=(v,v)> mod(dividend, divisor):
             let<type>(Base, type(base::in));
             let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
             let<type>(IndexVec, type(vector::as_base(IndexBase)));
-            var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-            var<const_infer>(all, call<primitive=mask_true[IndexVec]>());
-            var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
-              cast<static>(IndexBase, 0), cast<static>(IndexBase, 1)
-            ));
+            var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
+            var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
             var<infer>(result, call<primitive=set_zero[Vec]>());
             loop<backend>(i, 0, lanes, 1) {
-              var<const_infer>(through_lane, intrin<svwhilelt_b16>(
-                cast<static>(type(scalar::size), 0),
-                cast<static>(type(scalar::size), i + 1)
+              var<const_infer>(target_lane, call<primitive=equal[IndexVec]>(
+                indexes,
+                call<primitive=set1[IndexVec]>(cast<static>(IndexBase, i))
               ));
-              var<const_infer>(lane_dividend, intrin<svlastb, build>(through_lane, dividend));
-              var<const_infer>(lane_divisor, intrin<svlastb, build>(through_lane, divisor));
-              var<const_infer>(target_lane, intrin<svcmpeq_n, build[suffix=IndexBase]>(
-                all, indexes, cast<static>(IndexBase, i)
-              ));
-              result = intrin<svdup_n, build[post=m]>(
-                result, target_lane, helper<arith_rem>(lane_dividend, lane_divisor)
+              var<const_infer>(lane_dividend, intrin<svlastb, build>(target_lane, dividend));
+              var<const_infer>(lane_divisor, intrin<svlastb, build>(target_lane, divisor));
+              result = call<primitive=masked_set1[Vec]>(
+                target_lane,
+                result,
+                helper<arith_rem>(lane_dividend, lane_divisor)
               );
             }
             complete(result);
@@ -2176,23 +1635,20 @@ prim<v:=(v,v)> mod(dividend, divisor):
       f?:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(QuotientBase, type(base::signed_of(type(base::in))));
-            var<const_infer>(pg, call<primitive=mask_true[Vec]>());
-            var<const_infer>(quotient, intrin<svdiv, build[post=x]>(pg, dividend, divisor));
-            var<const_infer>(truncated, intrin<svcvt_, build[infix=QuotientBase, suffix=base::in, post=z]>(pg, quotient));
-            var<const_infer>(truncated_float, intrin<svcvt_, build[infix=base::in, suffix=QuotientBase, post=x]>(pg, truncated));
-            complete(
-              intrin<svsub, build[post=x]>(
-                pg,
-                dividend,
-                intrin<svmul, build[post=x]>(pg, truncated_float, divisor)
-              )
-            );
+            let<type>(QuotientVec, type(vector::as_base(QuotientBase)));
+            var<const_infer>(quotient, call<primitive=div[Vec]>(dividend, divisor));
+            var<const_infer>(truncated, call<primitive=cast[Vec, QuotientBase]>(quotient));
+            var<const_infer>(truncated_float, call<primitive=cast[QuotientVec, type(base::in)]>(truncated));
+            complete(call<primitive=sub[Vec]>(
+              dividend,
+              call<primitive=mul[Vec]>(truncated_float, divisor)
+            ));
           """
     scalar:
       arith:
@@ -2385,13 +1841,17 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
     - {tags [basic], type "ui16", case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], 5], expected [0, 4, 3, 2, 1, 0, 4, 3]}}
     - {tags [one], type "ui16", case {inputs [[10, 9, 8, 7, 6, 5, 4, 3], 1], expected [0, 0, 0, 0, 0, 0, 0, 0]}}
   impls:
-    [avx512, avx2, sse, sve]:
+    [scalar, generic, clang_v128, avx512, avx2, sse, sve, wasm128]:
       arith:
         requires:
+          scalar []
+          generic []
+          clang_v128 []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse]
           sve [sve]
+          wasm128 [simd128]
         safety:
           internal_unsafe false
           caller_unsafe false
@@ -2405,77 +1865,6 @@ prim<v:=(v,sImm)> mod_imm(dividend, divisor):
               )
             );
           """
-    wasm128:
-      arith:
-        requires [simd128]
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            complete(
-              call<primitive=mod>(
-                dividend,
-                call<primitive=set1>(cast<static>(type(base::in), divisor))
-              )
-            );
-          """
-    scalar:
-      arith:
-        requires []
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil "complete(helper<arith_rem>(dividend, cast<static>(type(base::in), divisor)));"
-    generic:
-      ?i?:
-        requires []
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            var<init_register>(result);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = helper<arith_rem>(dividend[i], cast<static>(type(base::in), divisor));
-            }
-            complete(result);
-          """
-      f?:
-        requires []
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            var<init_register>(result);
-            loop<backend, unroll>(i, 0, value(vector::length), 1) {
-              result[i] = helper<arith_rem>(dividend[i], cast<static>(type(base::in), divisor));
-            }
-            complete(result);
-          """
-    clang_v128:
-      ?i?:
-        requires []
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil "complete(dividend % cast<static>(type(base::in), divisor));"
-      f?:
-        requires []
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [compiler_builtin, intrinsic]
-        implementation:
-          tsil "complete(intrin<__builtin_elementwise_fmod>(dividend, call<primitive=set1[Vec]>(cast<static>(type(base::in), divisor))));"
 prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
   brief_description "Computes the scalar-divisor remainder for active lanes and writes zero to inactive mask lanes."
   detailed_description """
@@ -2496,23 +1885,10 @@ prim<v:=(m,v,sImm)>[mask=zero] mod_imm(mask, dividend, divisor):
   tests:
     - {tags [maskz, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [0, 0, 0, -1]}}
   impls:
-    scalar:
-      arith:
-        requires []
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            if (mask) {
-              complete(helper<arith_rem>(dividend, cast<static>(type(base::in), divisor)));
-            }
-            complete(call<primitive=set_zero[Vec]>());
-          """
-    [avx512, avx2, sse, sve, generic, clang_v128, wasm128]:
+    [scalar, avx512, avx2, sse, sve, generic, clang_v128, wasm128]:
       arith:
         requires:
+          scalar []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse]
@@ -2555,23 +1931,10 @@ prim<v:=(m,v,sImm)>[mask=pass_through] mod_imm(mask, dividend, divisor):
   tests:
     - {tags [mask, basic], extension "generic", type "si32", case {inputs [10, [10, -9, 8, -7], 3], expected [10, 0, 8, -1]}}
   impls:
-    scalar:
-      arith:
-        requires []
-        safety:
-          internal_unsafe false
-          caller_unsafe false
-          reasons []
-        implementation:
-          tsil """
-            if (mask) {
-              complete(helper<arith_rem>(dividend, cast<static>(type(base::in), divisor)));
-            }
-            complete(dividend);
-          """
-    [avx512, avx2, sse, sve, generic, clang_v128, wasm128]:
+    [scalar, avx512, avx2, sse, sve, generic, clang_v128, wasm128]:
       arith:
         requires:
+          scalar []
           avx512 [avx512f]
           avx2 [avx]
           sse [sse]

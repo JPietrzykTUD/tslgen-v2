@@ -69,15 +69,16 @@ prim<o:=(o,v,s)> to_ostream(out, data, ostream_modifier):
       arith:
         requires [sve]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic, raw_pointer]
+          reasons []
         implementation:
           tsil """
                let<type>(Base, type(base::in));
-               var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
+               let<type>(DataVec, type(vector::as_base(Base)));
+               var<const_infer>(lanes, value(generic::runtime_length(DataVec)));
                var<runtime_array>(Base, values, lanes);
-               intrin<svst1, build>(call<primitive=mask_true[Vec]>(), values, data);
+               call<primitive=store[Vec], attrs[aligned=false]>(values, data);
                var<const_infer>(modifier, cast<static>(si32, ostream_modifier));
                var<const_infer>(bits, sizeof(Base) * 8);
                var<const_infer>(fmt_base, (modifier == 16) ? 16u : (modifier == 8) ? 8u : (modifier == 0) ? 2u : 10u);

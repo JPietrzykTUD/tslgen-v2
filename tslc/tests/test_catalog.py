@@ -61,6 +61,32 @@ def test_scalar_extension_has_no_intrinsic_compose(catalog: Catalog) -> None:
     assert scalar.compose_prefix == {}  # scalar has no intrinsic prefix
 
 
+@pytest.mark.parametrize(("name", "operation"), (("mul_imm", "mul"), ("mod_imm", "mod")))
+def test_immediate_arithmetic_composes_semantic_primitives(
+    catalog: Catalog, name: str, operation: str
+) -> None:
+    variants = catalog.primitives_named(name, unmasked=False)
+    assert variants
+    for primitive in variants:
+        for implementation in primitive.implementations:
+            assert f"call<primitive={operation}" in implementation.body_text
+            assert "call<primitive=set1" in implementation.body_text
+            assert "intrin<" not in implementation.body_text
+            assert "helper<arith_" not in implementation.body_text
+
+
+def test_insert_value_has_semantic_index_contract(catalog: Catalog) -> None:
+    primitive = catalog.primitive("insert_value")
+    assert primitive is not None
+    assert primitive.signature == "v:=(v,s)"
+    params = tuple(
+        (param.name, param.kind, param.default) for param in primitive.generic_params
+    )
+    assert params == (
+        ("Index", "int", "0"),
+    )
+
+
 def test_native_extension_register_metadata_promoted(catalog: Catalog) -> None:
     neon = catalog.extensions["neon"]
     assert neon.direct_vector_register_type("cpp", "si32") == "int32x4_t"

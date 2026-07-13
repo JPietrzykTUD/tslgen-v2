@@ -341,6 +341,11 @@ def scalar_vector_case(
         return None
     if not _args_match(case, specs[0].param_kinds):
         return None
+    generic_defaults: tuple[str, ...] = ()
+    if case.index is None:
+        generic_defaults = tuple(
+            default for _name, _type, default in specs[0].generic_params
+        )
     return _plan(
         "scalar_vector",
         name,
@@ -351,9 +356,7 @@ def scalar_vector_case(
         vector_inputs=_vector_inputs(case),
         mask_inputs=_mask_inputs(case),
         scalar_inputs=_scalar_inputs(case),
-        generic_defaults=tuple(
-            default for _name, _type, default in specs[0].generic_params
-        ),
+        generic_defaults=generic_defaults,
     )
 
 def immediate_case(

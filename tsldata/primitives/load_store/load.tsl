@@ -676,42 +676,46 @@ prim<m:=cptr>[aligned=*, packed=*] load_mask_repr(ptr):
         safety:
           internal_unsafe true
           caller_unsafe true
-          reasons [intrinsic, raw_pointer]
+          reasons [raw_pointer]
         implementation:
           tsil """
             if<generation>(value(primitive::attribute(packed))) {
               let<type>(MaskT, type(vector::mask));
               let<type>(UVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
-              var<typed>(MaskT, out, intrin<svpfalse_b>());
-              var<const_infer>(all, call<primitive=mask_true[Vec]>());
+              var<typed>(MaskT, out, call<primitive=mask_false[Vec]>());
               var<const_infer>(idx, call<primitive=sequence[UVec]>());
               var<const_infer>(
                 lanes,
-                (intrin<svcntb>() / sizeof(type(base::unsigned_of(type(base::in)))))
+                value(generic::runtime_length(UVec))
               );
               var<const_infer>(bytes, cast<reinterpret, type=const_ptr>(type(scalar::ui8), ptr));
 
               loop<backend>(lane, 0, lanes, 1) {
                 var<const_infer>(set, (((*ptr_add(bytes, lane >> 3)) >> (lane & 7)) & 1));
                 if (set) {
-                  var<const_infer>(one, intrin<svcmpeq_n, build[suffix=base::unsigned_of(base::in)]>(
-                    all, idx, cast<static>(type(base::unsigned_of(type(base::in))), lane)
+                  var<const_infer>(one, call<primitive=equal[UVec]>(
+                    idx,
+                    call<primitive=set1[UVec]>(
+                      cast<static>(type(base::unsigned_of(type(base::in))), lane)
+                    )
                   ));
-                  out = intrin<svorr_b_z>(all, out, one);
+                  out = call<primitive=mask_binary_or[Vec]>(out, one);
                 }
               }
               complete(out);
             } else<generation> {
               let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
               let<type>(UVec, type(vector::as_base(type(base::unsigned_of(type(base::in))))));
-              var<const_infer>(pg, call<primitive=mask_true[Vec]>());
               var<infer>(vec, call<primitive=set_zero[UVec]>());
               if<generation>(value(primitive::attribute(aligned))) {
                 vec = call<primitive=load[UVec], attrs[aligned=true]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
               } else<generation> {
                 vec = call<primitive=load[UVec], attrs[aligned=false]>(cast<reinterpret, type=const_ptr>(UnsignedT, ptr));
               }
-              complete(intrin<svcmpne_n, build[suffix=base::unsigned_of(base::in)]>(pg, vec, cast<static>(UnsignedT, 0)));
+              complete(call<primitive=nequal[UVec]>(
+                vec,
+                call<primitive=set_zero[UVec]>()
+              ));
             }
           """
 

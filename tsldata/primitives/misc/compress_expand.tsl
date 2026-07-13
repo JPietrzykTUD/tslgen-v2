@@ -104,36 +104,24 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
               let<type>(Base, type(base::in));
               let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
               let<type>(IndexVec, type(vector::as_base(IndexBase)));
-              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-              var<const_infer>(all, call<primitive=mask_true[IndexVec]>());
-              var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
-                cast<static>(IndexBase, 0),
-                cast<static>(IndexBase, 1)
-              ));
+              var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
+              var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, call<primitive=set_zero[Vec]>());
               var<infer>(out_idx, 0);
               loop<backend>(i, 0, lanes, 1) {
-                var<const_infer>(source_lane, intrin<svcmpeq_n, build[suffix=IndexBase]>(
-                  all,
+                var<const_infer>(source_lane, call<primitive=equal[IndexVec]>(
                   indexes,
-                  cast<static>(IndexBase, i)
+                  call<primitive=set1[IndexVec]>(cast<static>(IndexBase, i))
                 ));
-                if (intrin<svptest_any>(source_lane, mask)) {
-                  var<const_infer>(through_source, intrin<svwhilelt_b8>(
-                    cast<static>(type(scalar::size), 0),
-                    cast<static>(type(scalar::size), i + 1)
-                  ));
-                  var<const_infer>(current, intrin<svlastb, build>(through_source, data));
-                  var<const_infer>(target_lane, intrin<svcmpeq_n, build[suffix=IndexBase]>(
-                    all,
+                if (call<primitive=mask_population_count[IndexVec]>(
+                  call<primitive=mask_binary_and[IndexVec]>(source_lane, mask)
+                ) != 0) {
+                  var<const_infer>(current, intrin<svlastb, build>(source_lane, data));
+                  var<const_infer>(target_lane, call<primitive=equal[IndexVec]>(
                     indexes,
-                    cast<static>(IndexBase, out_idx)
+                    call<primitive=set1[IndexVec]>(cast<static>(IndexBase, out_idx))
                   ));
-                  result = intrin<svdup_n, build[post=m]>(
-                    result,
-                    target_lane,
-                    current
-                  );
+                  result = call<primitive=masked_set1[Vec]>(target_lane, result, current);
                   out_idx = out_idx + 1;
                 }
               }
@@ -150,36 +138,24 @@ prim<v:=(m,v)>[mask=zero, op=pack] compress(mask, data):
               let<type>(Base, type(base::in));
               let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
               let<type>(IndexVec, type(vector::as_base(IndexBase)));
-              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-              var<const_infer>(all, call<primitive=mask_true[IndexVec]>());
-              var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
-                cast<static>(IndexBase, 0),
-                cast<static>(IndexBase, 1)
-              ));
+              var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
+              var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, call<primitive=set_zero[Vec]>());
               var<infer>(out_idx, 0);
               loop<backend>(i, 0, lanes, 1) {
-                var<const_infer>(source_lane, intrin<svcmpeq_n, build[suffix=IndexBase]>(
-                  all,
+                var<const_infer>(source_lane, call<primitive=equal[IndexVec]>(
                   indexes,
-                  cast<static>(IndexBase, i)
+                  call<primitive=set1[IndexVec]>(cast<static>(IndexBase, i))
                 ));
-                if (intrin<svptest_any>(source_lane, mask)) {
-                  var<const_infer>(through_source, intrin<svwhilelt_b16>(
-                    cast<static>(type(scalar::size), 0),
-                    cast<static>(type(scalar::size), i + 1)
-                  ));
-                  var<const_infer>(current, intrin<svlastb, build>(through_source, data));
-                  var<const_infer>(target_lane, intrin<svcmpeq_n, build[suffix=IndexBase]>(
-                    all,
+                if (call<primitive=mask_population_count[IndexVec]>(
+                  call<primitive=mask_binary_and[IndexVec]>(source_lane, mask)
+                ) != 0) {
+                  var<const_infer>(current, intrin<svlastb, build>(source_lane, data));
+                  var<const_infer>(target_lane, call<primitive=equal[IndexVec]>(
                     indexes,
-                    cast<static>(IndexBase, out_idx)
+                    call<primitive=set1[IndexVec]>(cast<static>(IndexBase, out_idx))
                   ));
-                  result = intrin<svdup_n, build[post=m]>(
-                    result,
-                    target_lane,
-                    current
-                  );
+                  result = call<primitive=masked_set1[Vec]>(target_lane, result, current);
                   out_idx = out_idx + 1;
                 }
               }
@@ -362,31 +338,24 @@ prim<v:=(m,v,v)>[mask=pass_through, op=expand] expand(mask, to_keep, to_expand):
               let<type>(Base, type(base::in));
               let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
               let<type>(IndexVec, type(vector::as_base(IndexBase)));
-              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-              var<const_infer>(all, call<primitive=mask_true[IndexVec]>());
-              var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
-                cast<static>(IndexBase, 0),
-                cast<static>(IndexBase, 1)
-              ));
+              var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
+              var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, to_keep);
               var<infer>(in_idx, 0);
               loop<backend>(i, 0, lanes, 1) {
-                var<const_infer>(target_lane, intrin<svcmpeq_n, build[suffix=IndexBase]>(
-                  all,
+                var<const_infer>(target_lane, call<primitive=equal[IndexVec]>(
                   indexes,
-                  cast<static>(IndexBase, i)
+                  call<primitive=set1[IndexVec]>(cast<static>(IndexBase, i))
                 ));
-                if (intrin<svptest_any>(target_lane, mask)) {
-                  var<const_infer>(through_source, intrin<svwhilelt_b8>(
-                    cast<static>(type(scalar::size), 0),
-                    cast<static>(type(scalar::size), in_idx + 1)
+                if (call<primitive=mask_population_count[IndexVec]>(
+                  call<primitive=mask_binary_and[IndexVec]>(target_lane, mask)
+                ) != 0) {
+                  var<const_infer>(source_lane, call<primitive=equal[IndexVec]>(
+                    indexes,
+                    call<primitive=set1[IndexVec]>(cast<static>(IndexBase, in_idx))
                   ));
-                  var<const_infer>(current, intrin<svlastb, build>(through_source, to_expand));
-                  result = intrin<svdup_n, build[post=m]>(
-                    result,
-                    target_lane,
-                    current
-                  );
+                  var<const_infer>(current, intrin<svlastb, build>(source_lane, to_expand));
+                  result = call<primitive=masked_set1[Vec]>(target_lane, result, current);
                   in_idx = in_idx + 1;
                 }
               }
@@ -403,31 +372,24 @@ prim<v:=(m,v,v)>[mask=pass_through, op=expand] expand(mask, to_keep, to_expand):
               let<type>(Base, type(base::in));
               let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
               let<type>(IndexVec, type(vector::as_base(IndexBase)));
-              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-              var<const_infer>(all, call<primitive=mask_true[IndexVec]>());
-              var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
-                cast<static>(IndexBase, 0),
-                cast<static>(IndexBase, 1)
-              ));
+              var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
+              var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, to_keep);
               var<infer>(in_idx, 0);
               loop<backend>(i, 0, lanes, 1) {
-                var<const_infer>(target_lane, intrin<svcmpeq_n, build[suffix=IndexBase]>(
-                  all,
+                var<const_infer>(target_lane, call<primitive=equal[IndexVec]>(
                   indexes,
-                  cast<static>(IndexBase, i)
+                  call<primitive=set1[IndexVec]>(cast<static>(IndexBase, i))
                 ));
-                if (intrin<svptest_any>(target_lane, mask)) {
-                  var<const_infer>(through_source, intrin<svwhilelt_b16>(
-                    cast<static>(type(scalar::size), 0),
-                    cast<static>(type(scalar::size), in_idx + 1)
+                if (call<primitive=mask_population_count[IndexVec]>(
+                  call<primitive=mask_binary_and[IndexVec]>(target_lane, mask)
+                ) != 0) {
+                  var<const_infer>(source_lane, call<primitive=equal[IndexVec]>(
+                    indexes,
+                    call<primitive=set1[IndexVec]>(cast<static>(IndexBase, in_idx))
                   ));
-                  var<const_infer>(current, intrin<svlastb, build>(through_source, to_expand));
-                  result = intrin<svdup_n, build[post=m]>(
-                    result,
-                    target_lane,
-                    current
-                  );
+                  var<const_infer>(current, intrin<svlastb, build>(source_lane, to_expand));
+                  result = call<primitive=masked_set1[Vec]>(target_lane, result, current);
                   in_idx = in_idx + 1;
                 }
               }
@@ -444,31 +406,24 @@ prim<v:=(m,v,v)>[mask=pass_through, op=expand] expand(mask, to_keep, to_expand):
               let<type>(Base, type(base::in));
               let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
               let<type>(IndexVec, type(vector::as_base(IndexBase)));
-              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-              var<const_infer>(all, call<primitive=mask_true[IndexVec]>());
-              var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
-                cast<static>(IndexBase, 0),
-                cast<static>(IndexBase, 1)
-              ));
+              var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
+              var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, to_keep);
               var<infer>(in_idx, 0);
               loop<backend>(i, 0, lanes, 1) {
-                var<const_infer>(target_lane, intrin<svcmpeq_n, build[suffix=IndexBase]>(
-                  all,
+                var<const_infer>(target_lane, call<primitive=equal[IndexVec]>(
                   indexes,
-                  cast<static>(IndexBase, i)
+                  call<primitive=set1[IndexVec]>(cast<static>(IndexBase, i))
                 ));
-                if (intrin<svptest_any>(target_lane, mask)) {
-                  var<const_infer>(through_source, intrin<svwhilelt_b32>(
-                    cast<static>(type(scalar::size), 0),
-                    cast<static>(type(scalar::size), in_idx + 1)
+                if (call<primitive=mask_population_count[IndexVec]>(
+                  call<primitive=mask_binary_and[IndexVec]>(target_lane, mask)
+                ) != 0) {
+                  var<const_infer>(source_lane, call<primitive=equal[IndexVec]>(
+                    indexes,
+                    call<primitive=set1[IndexVec]>(cast<static>(IndexBase, in_idx))
                   ));
-                  var<const_infer>(current, intrin<svlastb, build>(through_source, to_expand));
-                  result = intrin<svdup_n, build[post=m]>(
-                    result,
-                    target_lane,
-                    current
-                  );
+                  var<const_infer>(current, intrin<svlastb, build>(source_lane, to_expand));
+                  result = call<primitive=masked_set1[Vec]>(target_lane, result, current);
                   in_idx = in_idx + 1;
                 }
               }
@@ -485,31 +440,24 @@ prim<v:=(m,v,v)>[mask=pass_through, op=expand] expand(mask, to_keep, to_expand):
               let<type>(Base, type(base::in));
               let<type>(IndexBase, type(base::unsigned_of(type(base::in))));
               let<type>(IndexVec, type(vector::as_base(IndexBase)));
-              var<const_infer>(lanes, (intrin<svcntb>() / sizeof(Base)));
-              var<const_infer>(all, call<primitive=mask_true[IndexVec]>());
-              var<const_infer>(indexes, intrin<svindex, build[suffix=IndexBase]>(
-                cast<static>(IndexBase, 0),
-                cast<static>(IndexBase, 1)
-              ));
+              var<const_infer>(lanes, value(generic::runtime_length(IndexVec)));
+              var<const_infer>(indexes, call<primitive=sequence[IndexVec]>());
               var<infer>(result, to_keep);
               var<infer>(in_idx, 0);
               loop<backend>(i, 0, lanes, 1) {
-                var<const_infer>(target_lane, intrin<svcmpeq_n, build[suffix=IndexBase]>(
-                  all,
+                var<const_infer>(target_lane, call<primitive=equal[IndexVec]>(
                   indexes,
-                  cast<static>(IndexBase, i)
+                  call<primitive=set1[IndexVec]>(cast<static>(IndexBase, i))
                 ));
-                if (intrin<svptest_any>(target_lane, mask)) {
-                  var<const_infer>(through_source, intrin<svwhilelt_b64>(
-                    cast<static>(type(scalar::size), 0),
-                    cast<static>(type(scalar::size), in_idx + 1)
+                if (call<primitive=mask_population_count[IndexVec]>(
+                  call<primitive=mask_binary_and[IndexVec]>(target_lane, mask)
+                ) != 0) {
+                  var<const_infer>(source_lane, call<primitive=equal[IndexVec]>(
+                    indexes,
+                    call<primitive=set1[IndexVec]>(cast<static>(IndexBase, in_idx))
                   ));
-                  var<const_infer>(current, intrin<svlastb, build>(through_source, to_expand));
-                  result = intrin<svdup_n, build[post=m]>(
-                    result,
-                    target_lane,
-                    current
-                  );
+                  var<const_infer>(current, intrin<svlastb, build>(source_lane, to_expand));
+                  result = call<primitive=masked_set1[Vec]>(target_lane, result, current);
                   in_idx = in_idx + 1;
                 }
               }

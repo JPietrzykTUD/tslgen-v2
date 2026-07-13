@@ -129,20 +129,22 @@ prim<s:=v> hand(vec):
               temp,
               intrin<vextq, build[suffix=base::in, immediate(2)=1]>(temp, temp, 1)
             );
-            complete(intrin<vgetq_lane, build[suffix=base::in, immediate(1)=0]>(temp, 0));
+            complete(call<primitive=extract_value[Vec, 0]>(temp));
           """
     wasm128:
       arith:
         requires [simd128]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
-            var<infer>(result, cast<static>(ui64, intrin<extract_lane, build[suffix=ui64, immediate(1)=0]>(vec, 0)));
-            result &= cast<static>(ui64, intrin<extract_lane, build[suffix=ui64, immediate(1)=1]>(vec, 1));
+            let<type>(WordVec, type(vector::as_base(ui64)));
+            var<const_infer>(words, call<primitive=reinterpret[Vec, WordVec]>(vec));
+            var<infer>(result, call<primitive=extract_value[WordVec, 0]>(words));
+            result &= call<primitive=extract_value[WordVec, 1]>(words);
             if<generation>(value(type::same_size(type(base::in), ui8))) {
               result &= result >> 32;
               result &= result >> 16;
@@ -177,67 +179,20 @@ prim<s:=v> hand(vec):
             complete(cast<bitcast>(type(base::in), call<primitive=hand[BitVec]>(bits)));
           """
     avx2:
-      ?i8:
+      ?i?:
         requires [avx2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
-            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
-            var<infer>(temp, intrin<_mm_and_si128>(lo, hi));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 1));
-            complete(cast<static>(type(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
-          """
-      ?i16:
-        requires [avx2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
-            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
-            var<infer>(temp, intrin<_mm_and_si128>(lo, hi));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            complete(cast<static>(type(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
-          """
-      ?i32:
-        requires [avx2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
-            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
-            var<infer>(temp, intrin<_mm_and_si128>(lo, hi));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si32>(temp)));
-          """
-      ?i64:
-        requires [avx2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
-            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
-            var<infer>(temp, intrin<_mm_and_si128>(lo, hi));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_unpackhi_epi64>(temp, temp));
-            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si64>(temp)));
+            let<type>(HalfVec, type(vector::as_extension(sse)));
+            var<const_infer>(folded, call<primitive=binary_and[HalfVec]>(
+              call<primitive=extract[Vec, sse, 0]>(vec),
+              call<primitive=extract[Vec, sse, 1]>(vec)
+            ));
+            complete(call<primitive=@self[HalfVec]>(folded));
           """
     sse:
       ?i8:
@@ -249,11 +204,11 @@ prim<s:=v> hand(vec):
         implementation:
           tsil """
             var<infer>(temp, vec);
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 1));
-            complete(cast<static>(type(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
+            temp = call<primitive=binary_and[Vec]>(temp, intrin<_mm_srli_si128>(temp, 8));
+            temp = call<primitive=binary_and[Vec]>(temp, intrin<_mm_srli_si128>(temp, 4));
+            temp = call<primitive=binary_and[Vec]>(temp, intrin<_mm_srli_si128>(temp, 2));
+            temp = call<primitive=binary_and[Vec]>(temp, intrin<_mm_srli_si128>(temp, 1));
+            complete(cast<static>(type(base::in), cast<static>(ui8, call<primitive=extract_value[Vec, 0]>(temp))));
           """
       ?i16:
         requires [sse2]
@@ -264,10 +219,10 @@ prim<s:=v> hand(vec):
         implementation:
           tsil """
             var<infer>(temp, vec);
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            complete(cast<static>(type(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
+            temp = call<primitive=binary_and[Vec]>(temp, intrin<_mm_srli_si128>(temp, 8));
+            temp = call<primitive=binary_and[Vec]>(temp, intrin<_mm_srli_si128>(temp, 4));
+            temp = call<primitive=binary_and[Vec]>(temp, intrin<_mm_srli_si128>(temp, 2));
+            complete(cast<static>(type(base::in), cast<static>(ui16, call<primitive=extract_value[Vec, 0]>(temp))));
           """
       ?i32:
         requires [sse2]
@@ -278,9 +233,9 @@ prim<s:=v> hand(vec):
         implementation:
           tsil """
             var<infer>(temp, vec);
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
-            temp = intrin<_mm_and_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            temp = call<primitive=binary_and[Vec]>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
+            temp = call<primitive=binary_and[Vec]>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
+            complete(cast<static>(type(base::in), call<primitive=extract_value[Vec, 0]>(temp)));
           """
       ?i64:
         requires [sse2]
@@ -290,31 +245,34 @@ prim<s:=v> hand(vec):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<const_infer>(temp, intrin<_mm_and_si128>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)));
-            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si64>(temp)));
+            var<const_infer>(temp, call<primitive=binary_and[Vec]>(
+              vec,
+              intrin<_mm_unpackhi_epi64>(vec, vec)
+            ));
+            complete(cast<static>(type(base::in), call<primitive=extract_value[Vec, 0]>(temp)));
           """
     avx512:
       [si8, ui8, si16, ui16]:
         requires [avx512f, sse, sse2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(QuarterVec, type(vector::as_extension(sse)));
-            var<infer>(folded, intrin<_mm512_castsi512_si128>(vec));
+            var<infer>(folded, call<primitive=extract[Vec, sse, 0]>(vec));
             folded = call<primitive=binary_and[QuarterVec]>(
               folded,
-              intrin<extracti32x4, build[suffix=epi32, immediate(1)=1]>(vec, 1)
+              call<primitive=extract[Vec, sse, 1]>(vec)
             );
             folded = call<primitive=binary_and[QuarterVec]>(
               folded,
-              intrin<extracti32x4, build[suffix=epi32, immediate(1)=2]>(vec, 2)
+              call<primitive=extract[Vec, sse, 2]>(vec)
             );
             folded = call<primitive=binary_and[QuarterVec]>(
               folded,
-              intrin<extracti32x4, build[suffix=epi32, immediate(1)=3]>(vec, 3)
+              call<primitive=extract[Vec, sse, 3]>(vec)
             );
             complete(call<primitive=@self[QuarterVec]>(folded));
           """
@@ -504,20 +462,22 @@ prim<s:=v> hor(vec):
               temp,
               intrin<vextq, build[suffix=base::in, immediate(2)=1]>(temp, temp, 1)
             );
-            complete(intrin<vgetq_lane, build[suffix=base::in, immediate(1)=0]>(temp, 0));
+            complete(call<primitive=extract_value[Vec, 0]>(temp));
           """
     wasm128:
       arith:
         requires [simd128]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(UnsignedT, type(base::unsigned_of(type(base::in))));
-            var<infer>(result, cast<static>(ui64, intrin<extract_lane, build[suffix=ui64, immediate(1)=0]>(vec, 0)));
-            result |= cast<static>(ui64, intrin<extract_lane, build[suffix=ui64, immediate(1)=1]>(vec, 1));
+            let<type>(WordVec, type(vector::as_base(ui64)));
+            var<const_infer>(words, call<primitive=reinterpret[Vec, WordVec]>(vec));
+            var<infer>(result, call<primitive=extract_value[WordVec, 0]>(words));
+            result |= call<primitive=extract_value[WordVec, 1]>(words);
             if<generation>(value(type::same_size(type(base::in), ui8))) {
               result |= result >> 32;
               result |= result >> 16;
@@ -553,67 +513,20 @@ prim<s:=v> hor(vec):
             complete(cast<bitcast>(type(base::in), call<primitive=hor[BitVec]>(bits)));
           """
     avx2:
-      ?i8:
+      ?i?:
         requires [avx2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
-            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
-            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
-            var<infer>(temp, intrin<_mm_or_si128>(lo, hi));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 1));
-            complete(cast<static>(type(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
-          """
-      ?i16:
-        requires [avx2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
-            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
-            var<infer>(temp, intrin<_mm_or_si128>(lo, hi));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            complete(cast<static>(type(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
-          """
-      ?i32:
-        requires [avx2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
-            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
-            var<infer>(temp, intrin<_mm_or_si128>(lo, hi));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si32>(temp)));
-          """
-      ?i64:
-        requires [avx2]
-        safety:
-          internal_unsafe true
-          caller_unsafe false
-          reasons [intrinsic]
-        implementation:
-          tsil """
-            var<const_infer>(lo, intrin<_mm256_extracti128_si256>(vec, 0));
-            var<const_infer>(hi, intrin<_mm256_extracti128_si256>(vec, 1));
-            var<infer>(temp, intrin<_mm_or_si128>(lo, hi));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_unpackhi_epi64>(temp, temp));
-            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si64>(temp)));
+            let<type>(HalfVec, type(vector::as_extension(sse)));
+            var<const_infer>(folded, call<primitive=binary_or[HalfVec]>(
+              call<primitive=extract[Vec, sse, 0]>(vec),
+              call<primitive=extract[Vec, sse, 1]>(vec)
+            ));
+            complete(call<primitive=@self[HalfVec]>(folded));
           """
     sse:
       ?i8:
@@ -625,11 +538,11 @@ prim<s:=v> hor(vec):
         implementation:
           tsil """
             var<infer>(temp, vec);
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 1));
-            complete(cast<static>(type(base::in), cast<static>(ui8, intrin<_mm_cvtsi128_si32>(temp))));
+            temp = call<primitive=binary_or[Vec]>(temp, intrin<_mm_srli_si128>(temp, 8));
+            temp = call<primitive=binary_or[Vec]>(temp, intrin<_mm_srli_si128>(temp, 4));
+            temp = call<primitive=binary_or[Vec]>(temp, intrin<_mm_srli_si128>(temp, 2));
+            temp = call<primitive=binary_or[Vec]>(temp, intrin<_mm_srli_si128>(temp, 1));
+            complete(cast<static>(type(base::in), cast<static>(ui8, call<primitive=extract_value[Vec, 0]>(temp))));
           """
       ?i16:
         requires [sse2]
@@ -640,10 +553,10 @@ prim<s:=v> hor(vec):
         implementation:
           tsil """
             var<infer>(temp, vec);
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 8));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 4));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_srli_si128>(temp, 2));
-            complete(cast<static>(type(base::in), cast<static>(ui16, intrin<_mm_cvtsi128_si32>(temp))));
+            temp = call<primitive=binary_or[Vec]>(temp, intrin<_mm_srli_si128>(temp, 8));
+            temp = call<primitive=binary_or[Vec]>(temp, intrin<_mm_srli_si128>(temp, 4));
+            temp = call<primitive=binary_or[Vec]>(temp, intrin<_mm_srli_si128>(temp, 2));
+            complete(cast<static>(type(base::in), cast<static>(ui16, call<primitive=extract_value[Vec, 0]>(temp))));
           """
       ?i32:
         requires [sse2]
@@ -654,9 +567,9 @@ prim<s:=v> hor(vec):
         implementation:
           tsil """
             var<infer>(temp, vec);
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
-            temp = intrin<_mm_or_si128>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
-            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si32>(temp)));
+            temp = call<primitive=binary_or[Vec]>(temp, intrin<_mm_shuffle_epi32>(temp, 0x4E));
+            temp = call<primitive=binary_or[Vec]>(temp, intrin<_mm_shuffle_epi32>(temp, 0xB1));
+            complete(cast<static>(type(base::in), call<primitive=extract_value[Vec, 0]>(temp)));
           """
       ?i64:
         requires [sse2]
@@ -666,31 +579,34 @@ prim<s:=v> hor(vec):
           reasons [intrinsic]
         implementation:
           tsil """
-            var<const_infer>(temp, intrin<_mm_or_si128>(vec, intrin<_mm_unpackhi_epi64>(vec, vec)));
-            complete(cast<static>(type(base::in), intrin<_mm_cvtsi128_si64>(temp)));
+            var<const_infer>(temp, call<primitive=binary_or[Vec]>(
+              vec,
+              intrin<_mm_unpackhi_epi64>(vec, vec)
+            ));
+            complete(cast<static>(type(base::in), call<primitive=extract_value[Vec, 0]>(temp)));
           """
     avx512:
       [si8, ui8, si16, ui16]:
         requires [avx512f, sse, sse2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           tsil """
             let<type>(QuarterVec, type(vector::as_extension(sse)));
-            var<infer>(folded, intrin<_mm512_castsi512_si128>(vec));
+            var<infer>(folded, call<primitive=extract[Vec, sse, 0]>(vec));
             folded = call<primitive=binary_or[QuarterVec]>(
               folded,
-              intrin<extracti32x4, build[suffix=epi32, immediate(1)=1]>(vec, 1)
+              call<primitive=extract[Vec, sse, 1]>(vec)
             );
             folded = call<primitive=binary_or[QuarterVec]>(
               folded,
-              intrin<extracti32x4, build[suffix=epi32, immediate(1)=2]>(vec, 2)
+              call<primitive=extract[Vec, sse, 2]>(vec)
             );
             folded = call<primitive=binary_or[QuarterVec]>(
               folded,
-              intrin<extracti32x4, build[suffix=epi32, immediate(1)=3]>(vec, 3)
+              call<primitive=extract[Vec, sse, 3]>(vec)
             );
             complete(call<primitive=@self[QuarterVec]>(folded));
           """
@@ -794,7 +710,7 @@ prim<s:=(m,v)> hand(mask, vec):
           reasons [intrinsic]
         implementation:
           tsil """
-            if (!intrin<svptest_any>(call<primitive=mask_true[Vec]>(), mask)) {
+            if (call<primitive=mask_population_count[Vec]>(mask) == 0) {
               complete(cast<static>(type(base::in), 0));
             }
             complete(cast<static>(type(base::in), intrin<svandv, build>(mask, vec)));
@@ -807,7 +723,7 @@ prim<s:=(m,v)> hand(mask, vec):
           reasons [intrinsic]
         implementation:
           tsil """
-            if (!intrin<svptest_any>(call<primitive=mask_true[Vec]>(), mask)) {
+            if (call<primitive=mask_population_count[Vec]>(mask) == 0) {
               complete(cast<static>(type(base::in), 0));
             }
             let<type>(BitBase, type(base::unsigned_of(type(base::in))));
@@ -912,9 +828,9 @@ prim<s:=(m,v)> hand(mask, vec):
       ?i?:
         requires [avx512f, sse2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           # AVX-512F without BW: make four SSE2 masks. Inactive lanes become
           # all-ones (AND's identity), then the existing quarter reduction applies.
@@ -935,19 +851,19 @@ prim<s:=(m,v)> hand(mask, vec):
             var<const_infer>(m2, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar >> (2 * quarter_lanes))));
             var<const_infer>(m3, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar >> (3 * quarter_lanes))));
             var<infer>(folded, call<primitive=binary_or[QuarterVec]>(
-              intrin<_mm512_castsi512_si128>(vec),
+              call<primitive=extract[Vec, sse, 0]>(vec),
               call<primitive=inv[QuarterVec]>(m0)
             ));
             folded = call<primitive=binary_and[QuarterVec]>(folded, call<primitive=binary_or[QuarterVec]>(
-              intrin<extracti32x4, build[suffix=epi32, immediate(1)=1]>(vec, 1),
+              call<primitive=extract[Vec, sse, 1]>(vec),
               call<primitive=inv[QuarterVec]>(m1)
             ));
             folded = call<primitive=binary_and[QuarterVec]>(folded, call<primitive=binary_or[QuarterVec]>(
-              intrin<extracti32x4, build[suffix=epi32, immediate(1)=2]>(vec, 2),
+              call<primitive=extract[Vec, sse, 2]>(vec),
               call<primitive=inv[QuarterVec]>(m2)
             ));
             folded = call<primitive=binary_and[QuarterVec]>(folded, call<primitive=binary_or[QuarterVec]>(
-              intrin<extracti32x4, build[suffix=epi32, immediate(1)=3]>(vec, 3),
+              call<primitive=extract[Vec, sse, 3]>(vec),
               call<primitive=inv[QuarterVec]>(m3)
             ));
             complete(call<primitive=hand[QuarterVec]>(folded));
@@ -1213,9 +1129,9 @@ prim<s:=(m,v)> hor(mask, vec):
       ?i?:
         requires [avx512f, sse2]
         safety:
-          internal_unsafe true
+          internal_unsafe false
           caller_unsafe false
-          reasons [intrinsic]
+          reasons []
         implementation:
           # AVX-512F without BW: split the predicate into four SSE2 lane masks,
           # zero inactive lanes, then OR-fold the four register quarters.
@@ -1233,19 +1149,19 @@ prim<s:=(m,v)> hor(mask, vec):
             var<const_infer>(m2, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar >> (2 * quarter_lanes))));
             var<const_infer>(m3, call<primitive=to_mask[QuarterVec]>(cast<static>(QuarterImask, mask_scalar >> (3 * quarter_lanes))));
             var<infer>(folded, call<primitive=binary_and[QuarterVec]>(
-              intrin<_mm512_castsi512_si128>(vec),
+              call<primitive=extract[Vec, sse, 0]>(vec),
               m0
             ));
             folded = call<primitive=binary_or[QuarterVec]>(folded, call<primitive=binary_and[QuarterVec]>(
-              intrin<extracti32x4, build[suffix=epi32, immediate(1)=1]>(vec, 1),
+              call<primitive=extract[Vec, sse, 1]>(vec),
               m1
             ));
             folded = call<primitive=binary_or[QuarterVec]>(folded, call<primitive=binary_and[QuarterVec]>(
-              intrin<extracti32x4, build[suffix=epi32, immediate(1)=2]>(vec, 2),
+              call<primitive=extract[Vec, sse, 2]>(vec),
               m2
             ));
             folded = call<primitive=binary_or[QuarterVec]>(folded, call<primitive=binary_and[QuarterVec]>(
-              intrin<extracti32x4, build[suffix=epi32, immediate(1)=3]>(vec, 3),
+              call<primitive=extract[Vec, sse, 3]>(vec),
               m3
             ));
             complete(call<primitive=hor[QuarterVec]>(folded));

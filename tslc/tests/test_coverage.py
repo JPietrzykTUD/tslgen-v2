@@ -94,8 +94,9 @@ def test_scalable_fixed_lane_signatures_are_policy_deferred(
 
     report = format_coverage_report(result)
     # Compile/runtime branch-local type aliases no longer leak into the opposite arm's
-    # dependency closure, so only the dependencies reachable with each arm's own types count.
-    assert "2018 emitted / 2018 attempted" in report
+    # dependency closure. Fixed/scalable reinterpret dependencies may regroup the same
+    # register bits across lane widths, so those reachable target-base slots count too.
+    assert "2150 emitted / 2150 attempted" in report
     assert "30 policy-deferred slots" in report
     assert "skipped because" not in report
     assert "policy-deferred because" in report

@@ -66,7 +66,12 @@ def resolve_lowered_call_dependency(
                 resolved
                 for entry in entries[1:]
                 if (
-                    resolved := _resolve_lowered_vector(entry, context, evaluator)
+                    resolved := _resolve_lowered_vector(
+                        entry,
+                        context,
+                        evaluator,
+                        extension_base_tag=source.base_tag,
+                    )
                 )
                 is not None
             ),
@@ -98,6 +103,8 @@ def _resolve_lowered_vector(
     expression: str,
     context: LoweringSession,
     evaluator: QueryEvaluator,
+    *,
+    extension_base_tag: str | None = None,
 ) -> VectorIdentity | None:
     expression = expression.strip()
     if expression == "Vec":
@@ -117,7 +124,7 @@ def _resolve_lowered_vector(
         return VectorIdentity(vector.base_tag, vector.extension_isa)
     extension = _resolve_lowered_extension_isa(expression, context)
     if extension is not None:
-        return VectorIdentity(context.env.type_tag, extension)
+        return VectorIdentity(extension_base_tag or context.env.type_tag, extension)
 
     value = evaluator.evaluate(expression, context)
     if isinstance(value, VectorValue):
